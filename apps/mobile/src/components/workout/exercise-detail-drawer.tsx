@@ -1,25 +1,42 @@
 import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Pencil } from 'lucide-react-native';
+import {
+  feelingOf,
+  formatBestSet,
+  formatDecimal,
+  workoutApi,
+  type Exercise,
+} from '@fatia/api-client';
+import { MarkdownLite } from '@/components/content/markdown-lite';
 import { Text } from '@/components/ui/text';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Pencil } from 'lucide-react-native';
-import { workoutApi, type Exercise } from '@fatia/api-client';
 import {
   Button,
   Drawer,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerScrollView,
   DrawerTitle,
+  LoadingState,
+  Segmented,
 } from '@/components/ui';
-import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
+import { ExerciseVideo } from './exercise-media';
+import { muscleLabelPt } from './muscle-labels';
 import { MuscleDiagram } from './muscle-diagram';
+import { groupColorName } from './workout-home';
 import { colors } from '@/theme/colors';
 
 /**
- * Réplica de `apps/web/src/components/workout/exercise-detail-drawer.tsx`.
+ * "Como fazer" (prancha `Al-T9-Como-fazer`, #377): o vídeo, o nome com o
+ * grupo e "equipamento · nível · mecânica", e três abas — Passos (com a dica
+ * da comunidade), Músculos e Seu histórico (recorde, última vez, máximo
+ * estimado).
+ *
+ * TODO(#378): a estrela de favorito do canvas entra com os favoritos.
  */
 
 interface Props {
@@ -29,54 +46,46 @@ interface Props {
 }
 
 const LEVEL_LABEL: Record<string, string> = {
-  beginner: 'Iniciante',
-  intermediate: 'Intermediário',
-  advanced: 'Avançado',
+  beginner: 'iniciante',
+  intermediate: 'intermediário',
+  advanced: 'avançado',
 };
 
 const MECHANIC_LABEL: Record<string, string> = {
-  compound: 'Composto',
-  isolation: 'Isolado',
+  compound: 'composto',
+  isolation: 'isolado',
 };
 
-function Badge({ children }: { children: string }) {
-  return (
-    <View className="rounded-full bg-muted px-3 py-1">
-      <Text className="text-xs font-semibold capitalize text-foreground">{children}</Text>
-    </View>
-  );
-}
+type Tab = 'steps' | 'muscles' | 'history';
 
-function SectionTitle({ children }: { children: string }) {
-  return (
-    <Text className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-      {children}
-    </Text>
-  );
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'steps', label: 'Passos' },
+  { value: 'muscles', label: 'Músculos' },
+  { value: 'history', label: 'Seu histórico' },
+];
+
+function shortDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return format(d, 'd MMM', { locale: ptBR }).replace('.', '');
 }
 
 export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Exercise | null>(null);
+  const [tab, setTab] = useState<Tab>('steps');
 
-  // Editar um exercício base cria uma cópia editável (a base some das listagens
-  // do usuário e aparece a cópia). Exercício custom é editado direto.
+  // Editar um exercício base cria uma cópia editável; o custom é editado direto.
   const clone = useMutation({
     mutationFn: (id: number) => workoutApi.cloneExercise(id),
     onSuccess: (copy) => {
-      qc.invalidateQueries({ queryKey: ['workout', 'exercises'] });
-      if (exercise) qc.invalidateQueries({ queryKey: ['workout', 'exercise', exercise.id] });
+      void qc.invalidateQueries({ queryKey: ['workout', 'exercises'] });
+      if (exercise) void qc.invalidateQueries({ queryKey: ['workout', 'exercise', exercise.id] });
       onOpenChange(false);
       setEditing(copy);
     },
   });
-
-  const guia = exercise?.community ?? null;
-  // O vídeo da comunidade substitui o do YouTube (Fase 7b).
-  const videoId =
-    exercise && !guia?.video?.url
-      ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null)
-      : null;
 
   function handleEdit() {
     if (!exercise) return;
@@ -88,94 +97,55 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     }
   }
 
+  const meta = exercise
+    ? [
+        exercise.equipment,
+        exercise.level ? (LEVEL_LABEL[exercise.level] ?? exercise.level) : null,
+        exercise.mechanic ? (MECHANIC_LABEL[exercise.mechanic] ?? exercise.mechanic) : null,
+      ].filter(Boolean)
+    : [];
+
   return (
     <>
       {exercise ? (
-        <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
+        <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['90%']}>
           <DrawerHeader>
             <DrawerTitle>{exercise.name}</DrawerTitle>
-            {exercise.muscleGroup ? (
-              <DrawerDescription className="capitalize">{exercise.muscleGroup}</DrawerDescription>
-            ) : null}
           </DrawerHeader>
 
           <DrawerScrollView className="flex-1 px-4">
-            <View className="gap-5 pb-6">
-              {guia ? <CommunityGuideSection guide={guia} exerciseName={exercise.name} /> : null}
+            <View className="gap-4 pb-6">
+              <ExerciseVideo exerciseId={exercise.id} exerciseName={exercise.name} height={180} />
 
-              {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 ? (
-                <MuscleDiagram
-                  primaryMuscles={exercise.primaryMuscles}
-                  secondaryMuscles={exercise.secondaryMuscles ?? []}
-                />
-              ) : null}
-
-              <View className="flex-row flex-wrap gap-2">
-                {exercise.level ? (
-                  <Badge>{LEVEL_LABEL[exercise.level] ?? exercise.level}</Badge>
+              <View className="gap-1.5">
+                {exercise.muscleGroup ? (
+                  <View className="flex-row items-center gap-1.5 self-start rounded-full bg-muted px-3 py-1">
+                    <View
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: colors[groupColorName(exercise.muscleGroup)] }}
+                    />
+                    <Text className="text-[12px] font-sans-bold capitalize text-foreground">
+                      {exercise.muscleGroup}
+                    </Text>
+                  </View>
                 ) : null}
-                {exercise.mechanic ? (
-                  <Badge>{MECHANIC_LABEL[exercise.mechanic] ?? exercise.mechanic}</Badge>
+                {meta.length > 0 ? (
+                  <Text className="text-[13px] text-muted-foreground">{meta.join(' · ')}</Text>
                 ) : null}
-                {exercise.equipment ? <Badge>{exercise.equipment}</Badge> : null}
               </View>
 
-              {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 ? (
-                <View className="gap-1">
-                  <SectionTitle>Músculos principais</SectionTitle>
-                  <Text className="text-sm capitalize text-foreground">
-                    {exercise.primaryMuscles.join(', ')}
-                  </Text>
-                  {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 ? (
-                    <>
-                      <View className="mt-2">
-                        <SectionTitle>Músculos secundários</SectionTitle>
-                      </View>
-                      <Text className="text-sm capitalize text-foreground">
-                        {exercise.secondaryMuscles.join(', ')}
-                      </Text>
-                    </>
-                  ) : null}
-                </View>
-              ) : null}
+              <Segmented
+                label="Seções do Como fazer"
+                options={TABS}
+                value={tab}
+                onChange={setTab}
+              />
 
-              {exercise.instructions && exercise.instructions.length > 0 ? (
-                <View className="gap-2">
-                  <SectionTitle>Instruções</SectionTitle>
-                  {exercise.instructions.map((step, i) => (
-                    <View key={`${i}-${step.slice(0, 12)}`} className="flex-row gap-3">
-                      <View className="mt-0.5 h-5 w-5 items-center justify-center rounded-full bg-accent">
-                        <Text className="text-[10px] font-bold text-primary">{i + 1}</Text>
-                      </View>
-                      <Text className="flex-1 text-sm leading-snug text-foreground">{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
+              {tab === 'steps' ? <StepsTab exercise={exercise} /> : null}
+              {tab === 'muscles' ? <MusclesTab exercise={exercise} /> : null}
+              {tab === 'history' ? <HistoryTab exerciseId={exercise.id} /> : null}
 
-              {videoId ? (
-                <View className="gap-2">
-                  <SectionTitle>Vídeo demonstrativo</SectionTitle>
-                  {/* O PWA embute um iframe do YouTube. Aqui não há WebView no
-                      projeto e adicionar uma é uma dependência nova — o vídeo
-                      abre no app do YouTube, que é o comportamento que a pessoa
-                      espera de um link de vídeo no celular. */}
-                  <Button
-                    variant="outline"
-                    accessibilityLabel={`Abrir demonstração de ${exercise.name} no YouTube`}
-                    onPress={() => {
-                      void Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
-                    }}
-                  >
-                    <ExternalLink size={16} color={colors.foreground} />
-                    <Text className="text-sm font-medium text-foreground">Assistir no YouTube</Text>
-                  </Button>
-                </View>
-              ) : null}
-
-              {/* Por último, rolando com o conteúdo. Fixo no topo, o "editar"
-                  era a primeira coisa do detalhe e empurrava para baixo o que a
-                  pessoa veio ver — como se faz o exercício. Editar é raro. */}
+              {/* Por último, rolando com o conteúdo: editar é raro. */}
               <Button
                 variant="ghost"
                 loading={clone.isPending}
@@ -208,5 +178,148 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
         }}
       />
     </>
+  );
+}
+
+function StepsTab({ exercise }: { exercise: Exercise }) {
+  const guide = exercise.community ?? null;
+  const photos = guide?.photos.filter((f) => f.url) ?? [];
+  return (
+    <View className="gap-3">
+      {exercise.instructions.length > 0 ? (
+        exercise.instructions.map((step, i) => (
+          <View key={`${i}-${step.slice(0, 12)}`} className="flex-row gap-3">
+            <View className="h-6 w-6 items-center justify-center rounded-full bg-muted">
+              <Text className="text-[12px] font-sans-bold text-foreground">{i + 1}</Text>
+            </View>
+            <Text className="flex-1 text-sm leading-snug text-foreground">{step}</Text>
+          </View>
+        ))
+      ) : (
+        <Text className="text-sm text-muted-foreground">
+          Sem passo a passo para este exercício.
+        </Text>
+      )}
+
+      {guide?.tips ? (
+        <View className="gap-1 rounded-2xl bg-muted p-3">
+          <Text className="font-sans-bold text-[13px] text-foreground">
+            Dica da {guide.groupName}
+          </Text>
+          <MarkdownLite source={guide.tips} />
+        </View>
+      ) : null}
+
+      {photos.length > 0 ? (
+        <View className="flex-row flex-wrap gap-2">
+          {photos.map((f, i) => (
+            <Image
+              key={f.id}
+              source={{ uri: f.url! }}
+              accessibilityLabel={`${exercise.name}, foto ${i + 1} da ${guide!.groupName}`}
+              accessibilityIgnoresInvertColors
+              className="h-36 w-[48%] rounded-xl"
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function MusclesTab({ exercise }: { exercise: Exercise }) {
+  if (exercise.primaryMuscles.length === 0) {
+    return <Text className="text-sm text-muted-foreground">Sem músculos cadastrados.</Text>;
+  }
+  return (
+    <View className="flex-row items-center gap-4">
+      <MuscleDiagram
+        primaryMuscles={exercise.primaryMuscles}
+        secondaryMuscles={exercise.secondaryMuscles}
+        width={72}
+      />
+      <View className="min-w-0 flex-1 gap-3">
+        <View className="gap-1">
+          <Text className="text-[12px] font-sans-bold text-muted-foreground">Principal</Text>
+          {exercise.primaryMuscles.map((m) => (
+            <View key={m} className="flex-row items-center gap-2">
+              <View className="h-2 w-2 rounded-full bg-primary" />
+              <Text className="text-sm text-foreground">{muscleLabelPt(m)}</Text>
+            </View>
+          ))}
+        </View>
+        {exercise.secondaryMuscles.length > 0 ? (
+          <View className="gap-1">
+            <Text className="text-[12px] font-sans-bold text-muted-foreground">Ajudam</Text>
+            {exercise.secondaryMuscles.map((m) => (
+              <View key={m} className="flex-row items-center gap-2">
+                <View className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.water }} />
+                <Text className="text-sm text-foreground">{muscleLabelPt(m)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function HistoryTab({ exerciseId }: { exerciseId: number }) {
+  const stats = useQuery({
+    queryKey: ['workout', 'exercise', exerciseId, 'stats'],
+    queryFn: () => workoutApi.getExerciseStats(exerciseId),
+  });
+  if (stats.isLoading) return <LoadingState />;
+  const s = stats.data;
+  if (!s || (!s.record && !s.last)) {
+    return (
+      <Text className="text-sm text-muted-foreground">
+        Você ainda não fez este exercício. O histórico aparece depois da primeira série.
+      </Text>
+    );
+  }
+  const lastFeeling = feelingOf(s.last?.feeling);
+  return (
+    <View className="gap-2">
+      {s.record ? (
+        <Row
+          label="Recorde"
+          detail={shortDate(s.record.date)}
+          value={formatBestSet({ ...s.record, avgHeartRate: null })}
+        />
+      ) : null}
+      {s.last ? (
+        <Row
+          label="Última vez"
+          detail={[
+            shortDate(s.last.date),
+            `${s.last.sets} ${s.last.sets === 1 ? 'série' : 'séries'}`,
+            lastFeeling?.emoji,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          value={formatBestSet({ ...s.last.best, avgHeartRate: null })}
+        />
+      ) : null}
+      {s.estimated1RM != null ? (
+        <Row label="Máximo estimado" value={`~${formatDecimal(s.estimated1RM, 0)} kg`} />
+      ) : null}
+    </View>
+  );
+}
+
+function Row({ label, detail, value }: { label: string; detail?: string; value: string }) {
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${label}${detail ? `, ${detail}` : ''}: ${value}`}
+      className="flex-row items-center gap-3 rounded-2xl bg-muted px-4 py-3"
+    >
+      <View className="min-w-0 flex-1">
+        <Text className="font-sans-bold text-sm text-foreground">{label}</Text>
+        {detail ? <Text className="text-[12px] text-muted-foreground">{detail}</Text> : null}
+      </View>
+      <Text className="font-sans-bold text-base text-foreground">{value}</Text>
+    </View>
   );
 }

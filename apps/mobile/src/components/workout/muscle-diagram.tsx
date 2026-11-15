@@ -29,6 +29,13 @@ interface MuscleDiagramProps {
   view?: 'front' | 'back' | 'both';
   /** Largura de cada boneco. O PWA usa `w-32` (128px). */
   width?: number;
+  /**
+   * Cor por músculo (chave `data-muscle`), no lugar de principal/secundário:
+   * o "Seus músculos hoje" pinta cada um no tom do descanso. Os de fora apagam.
+   */
+  colors?: Record<string, string>;
+  /** Descrição para leitor de tela quando `colors` substitui as listas. */
+  accessibilityLabel?: string;
 }
 
 function BodyView({
@@ -74,21 +81,24 @@ export function MuscleDiagram({
   secondaryMuscles = [],
   view = 'both',
   width = 128,
+  colors: muscleColors,
+  accessibilityLabel,
 }: MuscleDiagramProps) {
   // Secundário entra primeiro para que um músculo listado nos dois acabe
   // vermelho, como no PWA (lá o segundo `paint` sobrescreve o primeiro).
   const highlight = useMemo(() => {
+    if (muscleColors) return new Map(Object.entries(muscleColors));
     const map = new Map<string, string>();
     for (const m of secondaryMuscles) map.set(m, colors.water);
     for (const m of primaryMuscles) map.set(m, colors.primary);
     return map;
-  }, [primaryMuscles, secondaryMuscles]);
+  }, [primaryMuscles, secondaryMuscles, muscleColors]);
 
   return (
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={describeMuscles(primaryMuscles, secondaryMuscles)}
+      accessibilityLabel={accessibilityLabel ?? describeMuscles(primaryMuscles, secondaryMuscles)}
       className="flex-row justify-center gap-2"
     >
       {view === 'front' || view === 'both' ? (

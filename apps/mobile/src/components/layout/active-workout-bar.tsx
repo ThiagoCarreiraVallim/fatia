@@ -5,9 +5,11 @@ import { useRouter } from 'expo-router';
 import {
   activeWorkoutBarLabel,
   activeWorkoutBarView,
+  buildExerciseGroups,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Icon } from '@/components/ui';
+import { setProgress } from '@/components/workout/session/guided-session';
 import { useSessionRestTimer } from '@/components/workout/session/rest-timer-provider';
 import { colors } from '@/theme/colors';
 
@@ -31,15 +33,32 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
   const now = useNow();
   const view = activeWorkoutBarView(session, rest, now);
   const resting = view.mode === 'rest';
+  // A linha fina embaixo (prancha `Al-T1b`): séries feitas sobre a meta do plano.
+  const progress = setProgress(buildExerciseGroups(session.plannedExercises, session.sets, []));
 
   return (
     <View
       style={{ bottom, elevation: 10 }}
-      className="absolute inset-x-4 z-40 h-14 flex-row items-center gap-1 rounded-[22px] border border-border bg-muted pr-1.5"
+      className="absolute inset-x-4 z-40 h-14 flex-row items-center gap-1 overflow-hidden rounded-[22px] border border-border bg-muted pr-1.5"
     >
+      {progress.target > 0 ? (
+        <View
+          importantForAccessibility="no-hide-descendants"
+          className="absolute inset-x-0 bottom-0 h-[3px] bg-border"
+        >
+          <View
+            className="h-full bg-primary"
+            style={{ width: `${Math.round(progress.ratio * 100)}%` }}
+          />
+        </View>
+      ) : null}
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel={activeWorkoutBarLabel(view)}
+        accessibilityLabel={
+          progress.target > 0
+            ? `${activeWorkoutBarLabel(view)}. ${progress.done} de ${progress.target} séries`
+            : activeWorkoutBarLabel(view)
+        }
         onPress={() => router.push(`/workout/session/${session.id}`)}
         className="h-full min-w-0 flex-1 flex-row items-center gap-3 rounded-[22px] pl-3"
       >

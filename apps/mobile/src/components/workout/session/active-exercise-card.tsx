@@ -1,80 +1,74 @@
-import { useState } from 'react';
-import { AccessibilityInfo, Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { AccessibilityInfo, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Check, Minus, Plus } from 'lucide-react-native';
+import { Check, Trophy } from 'lucide-react-native';
 import {
   describePrescription,
+  feelingToRpe,
   loadFieldValue,
   loadToKg,
   loadUnitLabel,
+  newSetClientKey,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
   type LoadPrescription,
-  type SessionSet,
 } from '@fatia/api-client';
-import { Button, Input } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
-import {
-  formatNumber,
-  formatPreviousSet,
-  loadValue,
-  parseDecimalInput,
-  parseFirstRep,
-  previousCells,
-  targetSetsOf,
-} from './format';
-import { ExerciseTitle } from './exercise-title';
-import { RestTimer } from './rest-timer';
-import { SetRow } from './set-row';
+import { isExerciseComplete, loadValue, parseFirstRep, targetSetsOf } from './format';
+import { FeelingPicker } from './feeling-picker';
+import { setHeadline, STEPS } from './guided-session';
+import { SetChips } from './set-chips';
+import { SetEditor } from './set-editor';
+import { ValueStepper } from './value-stepper';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
 import { colors } from '@/theme/colors';
 
 /**
- * Réplica de `apps/web/src/components/workout/active-exercise-card.tsx`.
+ * A série de força da sessão guiada (prancha `Al-T3-Sessao`): "Série N de M ·
+ * meta · última vez", os chips das séries (tocar numa feita corrige), e — no
+ * estado de trabalho — carga e reps digitáveis, o recorde, "Como foi a série?"
+ * e "Concluir série N".
  *
- * Só campos de força: carga, repetições e RPE. O `log_set` da API é um schema
- * discriminado por tipo, e cardio tem card próprio (`active-cardio-card.tsx`) —
- * um formulário único mostraria "carga (kg)" numa esteira.
+ * O palpite de carga segue o de antes (`prefillForNextSet`, #187/#190); o RPE
+ * agora é a carinha escolhida antes de concluir, gravada como RPE 6–10.
  *
- * O que muda em relação ao web:
- *
- * - o descanso é controlado pela tela (ver `use-rest-timer.ts`), para não zerar
- *   quando o foco passa para o próximo exercício.
- * - o RPE é pedido pela tela, num drawer montado fora do card — o bottom sheet
- *   nativo não é portal (ver `ui/drawer.tsx`).
+ * Cada toque em "Concluir série" leva uma `clientKey`: a mesma é reaproveitada
+ * se o envio falhar e a pessoa tocar de novo, então a rede que cai depois de o
+ * servidor gravar não vira série dobrada.
  */
-
 export function ActiveExerciseCard({
   sessionId,
   sessionStartedAt,
   group,
   rest,
-  onFinishExercise,
-  onAskRpe,
+  working,
+  onLogged,
 }: {
   sessionId: string;
   /** Início da sessão em ISO. Recorta o histórico no que veio **antes** dela. */
   sessionStartedAt: string;
   group: ExerciseGroup;
   rest: RestTimerState;
-  onFinishExercise: () => void;
-  onAskRpe: (set: SessionSet) => void;
+  /** Falso no descanso e na escolha do próximo: só os chips aparecem. */
+  working: boolean;
+  /** `completed`: esta série fechou o exercício. */
+  onLogged: (completed: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const units = useUnitPrefs();
+  const unitLabel = loadUnitLabel(units.loadUnit);
 
   const targetSets = targetSetsOf(group);
   const doneSets = group.sets.length;
-  const isComplete = doneSets >= targetSets;
   const sessionLastSet = group.sets[doneSets - 1];
+  const [editing, setEditing] = useState<number | null>(null);
 
-  // A referência é a última série deste exercício **antes** desta sessão. O
-  // recorte é do servidor, via `before`: filtrar no cliente exigiria manter a
-  // resposta em cache para sempre e, quando o cache expirasse no meio do treino,
-  // a única candidata seria a série de hoje — que o filtro descartaria, fazendo
-  // a referência sumir sozinha.
+  // A referência é a última série deste exercício **antes** desta sessão — o
+  // recorte é do servidor, via `before` (ver o histórico desta decisão no git).
   const previous = useQuery({
     queryKey: ['workout', 'last-set', group.exerciseId, sessionStartedAt],
     queryFn: () => workoutApi.getLastSet(group.exerciseId, sessionStartedAt),
@@ -90,313 +84,180 @@ export function ActiveExerciseCard({
     pr.data && 'weightKg' in pr.data && pr.data.weightKg != null ? pr.data.weightKg : null;
   const prReps = pr.data && 'reps' in pr.data && pr.data.reps != null ? pr.data.reps : null;
 
-  // A prescrição depende da faixa alvo do exercício no plano, que esta tela já
-  // tem — por isso ela vai na chave do cache junto com o id.
   const prescriptionQuery = useQuery({
     queryKey: ['workout', 'prescription', group.exerciseId, group.targetReps],
     queryFn: () => workoutApi.getPrescription(group.exerciseId, group.targetReps),
     staleTime: 60_000,
   });
-  // O tipo é anotado à mão: sem ele, o `data` chega ao teste de `status` como
-  // inferência ainda pendente do `useQuery` e o TypeScript não estreita a
-  // união — a anotação é o que faz `status: 'ok'` valer como discriminante.
   const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
   const prescription = prescribed?.status === 'ok' ? prescribed : null;
-  // A sugestão sai da tela assim que existe série **desta** sessão: o
-  // `prefillForNextSet` dá precedência a ela, e a prescrição parte da última
-  // sessão concluída. Manter o texto seria contradizer o campo — 70 kg × 8 no
-  // stepper e "Sugestão: 62,5 kg × 8" logo abaixo.
   const hint = prescription && doneSets === 0 ? describePrescription(prescription) : null;
 
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
+  const [feeling, setFeeling] = useState<number | null>(null);
   const [touched, setTouched] = useState(false);
 
-  // A regra do palpite mora no `@fatia/api-client`, compartilhada com o web.
-  // Calculada no render e não dentro do efeito para que as dependências sejam
-  // só os dois números: os objetos de série trocam de identidade a cada refetch
-  // do React Query e reescreveriam o campo por cima do que a pessoa digita.
+  // O palpite é aplicado durante o render, comparando os dois números (#187):
+  // os objetos de série trocam de identidade a cada refetch e reescreveriam o
+  // que a pessoa digitou.
   const prefill = prefillForNextSet({
     touched,
     sessionLastSet,
     previousSessionSet: reference,
     prescription,
   });
-  const prefillWeight = prefill.weightKg;
-  const prefillReps = prefill.reps;
-
-  // Ajuste durante o render, e não num efeito (#187). A comparação é a **mesma**
-  // que o efeito fazia no array de dependências, então o palpite é aplicado
-  // exatamente nos mesmos momentos — só que antes de pintar, em vez de um quadro
-  // depois. O estado anterior começa em `null/null`, e não no palpite atual, para
-  // reproduzir também a passagem de montagem que o `useEffect` fazia: sem isso, o
-  // card montado já com série da sessão nasceria com os campos zerados.
   const [prevPrefill, setPrevPrefill] = useState<{ weightKg: number | null; reps: number | null }>({
     weightKg: null,
     reps: null,
   });
   if (
-    !Object.is(prevPrefill.weightKg, prefillWeight) ||
-    !Object.is(prevPrefill.reps, prefillReps)
+    !Object.is(prevPrefill.weightKg, prefill.weightKg) ||
+    !Object.is(prevPrefill.reps, prefill.reps)
   ) {
-    setPrevPrefill({ weightKg: prefillWeight, reps: prefillReps });
-    if (prefillWeight != null) setWeight(prefillWeight);
-    if (prefillReps != null) setReps(prefillReps);
+    setPrevPrefill({ weightKg: prefill.weightKg, reps: prefill.reps });
+    if (prefill.weightKg != null) setWeight(prefill.weightKg);
+    if (prefill.reps != null) setReps(prefill.reps);
   }
 
+  // Uma chave por toque; sobrevive à falha para o reenvio ser o mesmo pedido.
+  const clientKey = useRef<string | null>(null);
+
   const logSet = useMutation({
-    mutationFn: () =>
+    mutationFn: (key: string) =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
-        // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
-        // peso corporal, e um `||` gravaria `null` — o exercício nunca teria
-        // histórico e a referência da próxima vez nunca apareceria. Reps 0 não
-        // tem essa leitura: é campo em branco, e segue sem ser enviado.
+        // `??` e não `||`: carga 0 é carga (peso do corpo).
         weightKg: weight ?? undefined,
         reps: reps || undefined,
+        rpe: feeling != null ? feelingToRpe(feeling) : undefined,
+        clientKey: key,
       }),
-    onSuccess: (created) => {
+    onSuccess: () => {
+      clientKey.current = null;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const completed = group.targetSets ? doneSets + 1 >= group.targetSets : false;
       AccessibilityInfo.announceForAccessibility(
         `Série ${doneSets + 1} de ${targetSets} registrada. Descanso iniciado.`,
       );
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      // O descanso prescrito ganha do padrão da tela: 180s depois de uma tripla
-      // pesada e 60s depois de rosca direta não são a mesma pausa.
+      void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
+      void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      // O descanso prescrito ganha do padrão: 180 s depois de uma tripla
+      // pesada e 60 s depois de rosca não são a mesma pausa.
       rest.start(prescription?.restSeconds);
-      onAskRpe(created);
+      setFeeling(null);
+      onLogged(completed);
     },
   });
 
-  // Carga na unidade da pessoa (Você › Unidades, #387): o estado e a API
-  // continuam em kg; só o campo e as dicas mostram em lb.
-  const units = useUnitPrefs();
-  const unitLabel = loadUnitLabel(units.loadUnit);
-  const previousLabel = formatPreviousSet(reference, false, units);
-  const referenceCells = previousCells(reference, false, units);
-
-  return (
-    <View className="rounded-2xl border border-border bg-card p-4">
-      <View className="items-center">
-        <ExerciseTitle
-          kicker="EM ANDAMENTO"
-          exerciseId={group.exerciseId}
-          exerciseName={group.exerciseName}
-        />
-        <View className="mt-2 rounded-full bg-muted px-3 py-1">
-          <Text className="text-[10px] font-extrabold text-foreground">
-            SÉRIE {Math.min(doneSets + 1, targetSets)} DE {targetSets}
-          </Text>
-        </View>
-      </View>
-
-      <View className="mt-4 flex-row gap-3">
-        <Stepper
-          label={`CARGA (${unitLabel.toUpperCase()})`}
-          accessibilityLabel={`Carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
-          value={loadFieldValue(weight, units.loadUnit)}
-          step={1}
-          onChange={(next) => {
-            setTouched(true);
-            setWeight(loadToKg(Math.max(0, next), units.loadUnit));
-          }}
-          hint={
-            reference?.weightKg != null
-              ? `Anterior: ${loadValue(reference.weightKg, units)} ${unitLabel}`
-              : prWeight != null
-                ? `🏆 Recorde: ${loadValue(prWeight, units)} ${unitLabel}`
-                : undefined
-          }
-        />
-        <Stepper
-          label="REPETIÇÕES"
-          accessibilityLabel={`Repetições para ${group.exerciseName}`}
-          value={reps}
-          step={1}
-          integer
-          onChange={(next) => {
-            setTouched(true);
-            setReps(Math.max(0, Math.round(next)));
-          }}
-          hint={
-            reference?.reps != null
-              ? `Anterior: ${reference.reps} reps`
-              : prReps != null
-                ? `🏆 Recorde: ${prReps} reps`
-                : undefined
-          }
-        />
-      </View>
-
-      {hint ? (
-        <View className="mt-2">
-          <Text className="text-center text-[10px] font-bold text-primary">{hint.label}</Text>
-          <Text className="text-center text-[10px] text-muted-foreground">{hint.reason}</Text>
-        </View>
-      ) : null}
-
-      <RestTimer timer={rest} />
-
-      <View className="mt-4 gap-1.5">
-        <Text className="text-[10px] font-extrabold tracking-wide text-muted-foreground">
-          SÉRIES REALIZADAS
-        </Text>
-
-        <View className="flex-row items-center gap-2">
-          <ColumnHeader>Série</ColumnHeader>
-          <ColumnHeader wide>Reps</ColumnHeader>
-          <ColumnHeader wide>{`Carga (${unitLabel})`}</ColumnHeader>
-          <ColumnHeader wide>RPE</ColumnHeader>
-          <View className="w-10" />
-        </View>
-
-        {previousLabel ? (
-          <View
-            accessibilityLabel={`Última vez: ${previousLabel}`}
-            className="flex-row items-center gap-2 rounded-lg border border-dashed border-border px-1 py-2"
-          >
-            <View className="w-10 items-center">
-              <Text className="text-[10px] font-bold text-muted-foreground">ant.</Text>
-            </View>
-            {referenceCells.map((value, index) => (
-              <View key={index} className="flex-1">
-                <Text className="text-sm text-muted-foreground">{value}</Text>
-              </View>
-            ))}
-            <View className="w-10" />
-          </View>
-        ) : null}
-
-        {group.sets.map((set, index) => (
-          <SetRow
-            key={set.id}
-            set={set}
-            index={index}
-            isCardio={false}
-            sessionId={sessionId}
-            showDelete
-            onEditRpe={onAskRpe}
-          />
-        ))}
-
-        {group.sets.length === 0 ? (
-          <Text className="py-2 text-xs text-muted-foreground">
-            Nenhuma série registrada neste exercício ainda.
-          </Text>
-        ) : null}
-      </View>
-
-      <View className="mt-4 gap-2">
-        <Button
-          className="h-12 rounded-full"
-          disabled={isComplete}
-          loading={logSet.isPending}
-          onPress={() => logSet.mutate()}
-        >
-          <Check size={16} color={colors.background} />
-          <Text className="text-sm font-extrabold text-primary-foreground">
-            {isComplete ? 'Exercício completo' : 'Concluir série'}
-          </Text>
-        </Button>
-        <Button variant="outline" className="h-12 rounded-full" onPress={onFinishExercise}>
-          Finalizar exercício
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-function ColumnHeader({ children, wide }: { children: string; wide?: boolean }) {
-  return (
-    <View className={wide ? 'flex-1' : 'w-10'}>
-      <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{children}</Text>
-    </View>
-  );
-}
-
-function Stepper({
-  label,
-  accessibilityLabel,
-  value,
-  step,
-  integer,
-  hint,
-  onChange,
-}: {
-  label: string;
-  accessibilityLabel: string;
-  value: number;
-  step: number;
-  integer?: boolean;
-  hint?: string;
-  onChange: (value: number) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  function commit() {
-    const parsed = parseDecimalInput(draft);
-    if (parsed != null) onChange(integer ? Math.round(parsed) : parsed);
-    setEditing(false);
+  function conclude() {
+    if (logSet.isPending) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    clientKey.current ??= newSetClientKey();
+    logSet.mutate(clientKey.current);
   }
 
+  const lastTime = reference
+    ? reference.weightKg
+      ? `${loadValue(reference.weightKg, units)} ${unitLabel} × ${reference.reps ?? 0}`
+      : `${reference.reps ?? 0} reps`
+    : null;
+  const record =
+    prWeight != null
+      ? `recorde ${loadValue(prWeight, units)} ${unitLabel}${prReps != null ? ` × ${prReps}` : ''}`
+      : prReps != null
+        ? `recorde ${prReps} reps`
+        : null;
+  const isComplete = isExerciseComplete(group);
+  const editingSet = editing != null ? group.sets[editing] : undefined;
+
   return (
-    <View className="flex-1 rounded-xl bg-muted px-2 py-2">
-      <Text className="text-center text-[10px] font-bold tracking-wide text-muted-foreground">
-        {label}
+    <View className="gap-3">
+      <Text className="text-[13px] text-muted-foreground">
+        {setHeadline({
+          done: doneSets,
+          target: targetSets,
+          targetReps: group.targetReps,
+          lastTime,
+        })}
       </Text>
 
-      <View className="mt-1 flex-row items-center justify-between">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Diminuir ${accessibilityLabel}`}
-          onPress={() => onChange(value - step)}
-          className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
-        >
-          <Minus size={16} color={colors.foreground} />
-        </Pressable>
+      <SetChips group={group} editing={editingSet ? editing : null} onEdit={setEditing} />
 
-        {editing ? (
-          <Input
-            autoFocus
-            value={draft}
-            onChangeText={setDraft}
-            onBlur={commit}
-            onSubmitEditing={commit}
-            returnKeyType="done"
-            keyboardType={integer ? 'numeric' : 'decimal-pad'}
-            accessibilityLabel={accessibilityLabel}
-            className="w-16 border-0 bg-transparent px-0 text-center text-2xl font-extrabold"
-          />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${accessibilityLabel}: ${formatNumber(value)}. Tocar para digitar`}
-            onPress={() => {
-              setDraft(formatNumber(value));
-              setEditing(true);
-            }}
-            className="min-h-[44px] min-w-[56px] justify-center"
-          >
-            <Text className="text-center text-2xl font-extrabold text-foreground">
-              {formatNumber(value)}
+      {editingSet && editing != null ? (
+        <SetEditor
+          key={editingSet.id}
+          set={editingSet}
+          index={editing}
+          isCardio={false}
+          sessionId={sessionId}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+
+      {working && !isComplete ? (
+        <>
+          <View className="flex-row gap-2">
+            <ValueStepper
+              label="Carga"
+              unit={unitLabel}
+              accessibilityLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
+              value={loadFieldValue(weight, units.loadUnit)}
+              step={STEPS.load}
+              onChange={(next) => {
+                setTouched(true);
+                setWeight(loadToKg(next, units.loadUnit));
+              }}
+            />
+            <ValueStepper
+              label="Repetições"
+              accessibilityLabel={`repetições para ${group.exerciseName}`}
+              value={reps}
+              step={STEPS.reps}
+              integer
+              onChange={(next) => {
+                setTouched(true);
+                setReps(next);
+              }}
+            />
+          </View>
+
+          {record || hint ? (
+            <View className="flex-row flex-wrap items-center gap-2">
+              {record ? (
+                <View className="min-h-[28px] flex-row items-center gap-1.5 rounded-full bg-muted px-3">
+                  <Trophy size={13} color={colors.steps} />
+                  <Text className="text-[12px] font-sans-bold text-foreground">{record}</Text>
+                </View>
+              ) : null}
+              {hint ? (
+                <Text className="flex-1 text-[12px] text-muted-foreground">
+                  {hint.label} · {hint.reason}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <FeelingPicker title="Como foi a série?" value={feeling} onChange={setFeeling} />
+
+          {logSet.error ? (
+            <Text className="text-xs text-danger">
+              Não deu para registrar. Toque de novo — a série não sai dobrada.
             </Text>
-          </Pressable>
-        )}
+          ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Aumentar ${accessibilityLabel}`}
-          onPress={() => onChange(value + step)}
-          className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
-        >
-          <Plus size={16} color={colors.foreground} />
-        </Pressable>
-      </View>
-
-      {hint ? (
-        <Text className="mt-1 text-center text-[10px] text-muted-foreground">{hint}</Text>
+          <Button
+            className="h-14 rounded-full"
+            disabled={logSet.isPending}
+            loading={logSet.isPending}
+            onPress={conclude}
+          >
+            <Check size={18} color={colors.primaryForeground} />
+            <Text className="font-sans-bold text-base text-primary-foreground">
+              Concluir série {doneSets + 1}
+            </Text>
+          </Button>
+        </>
       ) : null}
     </View>
   );
