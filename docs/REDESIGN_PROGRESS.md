@@ -62,11 +62,11 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
 
 ## Etapa 3: Nutrição (`em andamento`)
 
-| Issue | Título                              | Estado   | Superfícies                                  |
-| ----- | ----------------------------------- | -------- | -------------------------------------------- |
-| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app           |
-| #375  | Adicionar comida                    | a fazer  |                                              |
-| #376  | Metas, nutrientes e plano alimentar | validado | api, db, MCP (5 tools), api-client, web, app |
+| Issue | Título                              | Estado   | Superfícies                                          |
+| ----- | ----------------------------------- | -------- | ---------------------------------------------------- |
+| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app                   |
+| #375  | Adicionar comida                    | validado | api, db, MCP (2 tools), agente, api-client, web, app |
+| #376  | Metas, nutrientes e plano alimentar | validado | api, db, MCP (5 tools), api-client, web, app         |
 
 Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
 
@@ -76,6 +76,14 @@ Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
 - **Removidos:** anel de calorias, bento de macros, card de metas de nutrientes, timeline e drawer de ações da refeição (web e app), trocados pelas telas novas.
 - **Foto em refeição existente:** foto tirada para adicionar itens a uma refeição existente não é ligada (o app não manda `photoFileId`; a limpeza a apaga).
 - **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+
+Pendências da #375 (branch `redesign/375-busca-quantidade-alimentos`):
+
+- **Fora desta issue (ficam com a #374):** trocar tipo e hora da refeição (lápis e relógio do Al-N8) e a estrela de favorito do Al-N14.
+- **Benchmark do rótulo:** os casos (`apps/agent/src/fatia_agent/eval/label_cases.py`) e o manifesto de exemplo estão prontos; falta rodar contra fotos reais de rótulo, que não vão ao repositório.
+- **Desvio do canvas:** porção, macros e micronutrientes digitáveis (vírgula decimal, teclado numérico) em vez de "−/+"; o vínculo ao código é caixa explícita, desmarcada no cadastro à mão e marcada quando o cadastro vem de um código lido; guardar o produto lido em Meus alimentos já liga o código.
+- **Sem "Lidos" (ADR 017):** a aba e o item "lido no código" não existem; o produto do Open Food Facts não é guardado.
+- **Capturas** (Playwright e emulador) contra as pranchas e o teste da aba Rótulo no Expo Go: não feitos nesta sessão.
 
 Pendências da #376:
 

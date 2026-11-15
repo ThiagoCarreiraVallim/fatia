@@ -159,20 +159,31 @@ sem cache do OFF.
 Continua sem tool MCP de consulta por código: a IA externa não tem câmera, e quem tem o número em mãos
 o digita no app.
 
-## Nota — redesign (#375, 2026-11-14)
+## Atualização — o código é da pessoa, e o leitor também lê o rótulo (#375, 2026-11-15)
 
-O redesign mostra um selo de origem em cada resultado da busca: **TACO**, **código de barras** ou
-**seu** (`Dados-Alimentacao`, [`DADOS_REDESIGN.md`](../DADOS_REDESIGN.md)). Nada da decisão
-principal muda:
+Substitui a nota de 2026-11-14. A decisão principal continua: o Open Food Facts é consultado sob
+demanda, por código, e **nada do que ele devolve é guardado** no catálogo.
 
-- O selo **"código de barras" é só do resultado da sessão**: o produto lido no Open Food Facts
-  aparece com ele enquanto a tela está aberta, e o resultado continua **não guardado** (seção 3).
-- Ao **criar um alimento** a partir do código ou da **foto do rótulo** (botão novo da #375), o
-  `Food` nasce com `source = CUSTOM` — selo "seu" —, privado da pessoa, como na atualização de
-  2026-10. Não há valor novo em `FoodSource`; `USDA` continua no enum sem uso (ADR 005).
-- A **foto do rótulo** vai à IA e é descartada ([ADR 020](./020-foto-e-audio-trafegam-sem-persistencia.md);
-  [ADR 038](./038-foto-da-refeicao-guardada.md), item 4): só a foto que vira refeição pode ser
-  guardada.
+1. **`Food.barcode` existe, mas só no alimento da própria pessoa.** É opcional, único por pessoa
+   (`@@unique([createdByUserId, barcode])`) e nasce de uma escolha explícita: a caixa "Vincular a um
+   código de barras" no cadastro, ou "Guardar em Meus alimentos" no painel do produto lido (que agora
+   diz que o alimento fica ligado ao código). Não é cache do Open Food Facts: o vínculo é da pessoa,
+   como o nome que ela deu ao alimento, e só ela o vê (isolamento por usuário). Duas pessoas podem
+   ligar o mesmo código cada uma ao seu alimento; a mesma pessoa não pode ligar um código a dois (409).
+2. **`GET /nutrition/foods/barcode/:code` procura primeiro nos alimentos da pessoa.** Achou, devolve
+   `{ status: 'own', food }` e a tela vai direto para a quantidade, com `MealItem.source = BARCODE`.
+   Só se não achar consulta o Open Food Facts. Fecha o ciclo "cadastrei à mão, escaneio de novo e
+   acho pelo código" que a atualização de 2026-10 deixou aberto.
+3. **O leitor também lê o rótulo.** A aba "Rótulo" fotografa a tabela nutricional e manda a foto à IA
+   hospedada (`POST /nutrition/foods/label`): passa pelo plano e pela cota (`AiAccessService`), conta
+   em `AiUsage` (`label_photo`), sai pelo OpenRouter como o resto da IA e **não grava nada** — a foto é
+   recodificada sem EXIF, vai ao agente e é descartada ([ADR 020](./020-foto-e-audio-trafegam-sem-persistencia.md));
+   a resposta são valores para conferir no formulário, e só o que a pessoa salvar vira `Food`. No Free,
+   a aba mostra o caminho do PRO e o atalho de digitar os valores.
+4. **Selo de origem:** só **TACO** e **seu**. O produto lido no Open Food Facts não é guardado, então
+   não aparece na busca; não há aba "Lidos" em Meus alimentos nem item "lido no código" na tela. Não há
+   valor novo em `FoodSource`; `USDA` continua no enum sem uso (ADR 005).
 
-Guardar o selo "código de barras" no alimento exigiria migração (`Food.barcode` ou valor novo no
-enum) e revisão desta ADR, inclusive da obrigação da ODbL (seção 4).
+Continua sem tool MCP de consulta por código ou de leitura de rótulo: a IA externa não tem câmera.
+`create_custom_food` e `update_custom_food` aceitam `barcode` e `nutrients`, para quem tem o número
+e o rótulo em mãos.
