@@ -9,6 +9,8 @@ import {
   onboardingPending,
   onboardingReminderInputs,
   onboardingSteps,
+  photoTestMealItems,
+  photoTestSummary,
   previousOnboardingStep,
   progressSegment,
   remindersCta,
@@ -240,6 +242,56 @@ describe('quando voltar ao onboarding', () => {
       true,
     );
     expect(onboardingPending({ onboardedAt: '2026-11-04', onboardingStep: null })).toBe(false);
+  });
+});
+
+describe('o teste da foto (Onb-10a)', () => {
+  const rec = {
+    observacao: null,
+    itens: [
+      {
+        nomeReconhecido: 'Arroz',
+        foodId: 3,
+        nomeDoCatalogo: 'Arroz, tipo 1, cozido',
+        grams: 120,
+        confidence: 0.9,
+        estimado: false,
+        kcal: 154,
+        proteinG: 3,
+        carbsG: 34,
+        fatG: 0.3,
+      },
+      {
+        nomeReconhecido: 'Frango grelhado',
+        foodId: null,
+        nomeDoCatalogo: null,
+        grams: 100,
+        confidence: 0.7,
+        estimado: true,
+        kcal: 165,
+        proteinG: 31,
+        carbsG: null,
+        fatG: 3.6,
+      },
+    ],
+  };
+
+  it('resume em etiquetas, kcal e macros', () => {
+    expect(photoTestSummary(rec)).toEqual({
+      items: [
+        { name: 'Arroz', grams: 120 },
+        { name: 'Frango grelhado', grams: 100 },
+      ],
+      kcal: 319,
+      macros: 'P 34 · C 34 · G 4',
+    });
+  });
+
+  it('o item casado vai só com foodId e gramas; o livre leva os macros do modelo', () => {
+    expect(photoTestMealItems(rec)).toEqual([
+      { foodId: 3, grams: 120 },
+      { foodName: 'Frango grelhado', grams: 100, kcal: 165, proteinG: 31, carbsG: 0, fatG: 3.6 },
+    ]);
   });
 });
 

@@ -1,6 +1,8 @@
 import { apiFetch } from './http';
 import type { BillingInterval, MyPlan } from './billing';
+import type { MealRecognition } from './nutrition';
 import type { ReminderInput } from './reminders';
+import type { ShareScope } from './sharing';
 import type { ActivityLevel, BiologicalSex, BodyObjective, GoalsInput } from './users';
 
 /**
@@ -361,6 +363,91 @@ export function remindersCta(count: number): string {
   return `Ligar ${count} ${count === 1 ? 'lembrete' : 'lembretes'}`;
 }
 
+// --- compartilhar (Onb-03) ----------------------------------------------------
+
+/** As categorias como a prancha escreve, com o ícone de cada uma. */
+export const SHARE_SCOPE_ROWS: {
+  scope: ShareScope;
+  label: string;
+  subtitle: string;
+  icon: 'dumbbell' | 'apple' | 'scale' | 'drop' | 'target';
+}[] = [
+  { scope: 'WORKOUT', label: 'Treino', subtitle: 'Planos, sessões e volume', icon: 'dumbbell' },
+  {
+    scope: 'NUTRITION',
+    label: 'Alimentação',
+    subtitle: 'Refeições e totais do dia',
+    icon: 'apple',
+  },
+  { scope: 'BODY', label: 'Corpo', subtitle: 'Peso e medidas', icon: 'scale' },
+  { scope: 'HABITS', label: 'Hábitos', subtitle: 'Água e passos', icon: 'drop' },
+  { scope: 'GOALS', label: 'Metas', subtitle: 'Metas e objetivos', icon: 'target' },
+];
+
+export const SHARE_STEP_COPY = {
+  title: 'O que a equipe vê',
+  required: 'Obrigatório nesta comunidade',
+  optional: 'Você escolhe',
+  aggregate: 'Contar nos números da comunidade',
+  aggregateNote: 'Só agregado, sem seu nome',
+  accept: 'Aceitar e continuar',
+  decline: 'Não aceito · seguir sem a comunidade',
+} as const;
+
+const ROLE_WORD: Record<string, string> = {
+  OWNER: 'dono',
+  PROFESSIONAL: 'profissional',
+  CREATOR: 'criador',
+  MEMBER: 'membro',
+};
+
+/** "Bruno (dono) e Helena (profissional)". */
+export function teamLine(team: readonly { name: string; role: string }[]): string {
+  const parts = team.map((m) => `${firstNameOf(m.name) ?? m.name} (${ROLE_WORD[m.role] ?? ''})`);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
+}
+
+/** "Bruno, Helena e Marina". */
+export function namesLine(names: readonly string[]): string {
+  const first = names.map((n) => firstNameOf(n) ?? n);
+  if (first.length <= 1) return first[0] ?? '';
+  return `${first.slice(0, -1).join(', ')} e ${first[first.length - 1]}`;
+}
+
+// --- boas-vindas (Onb-02) -----------------------------------------------------
+
+export function welcomeHighlights(input: {
+  groupName: string;
+  sponsored: boolean;
+  activeChallenge: { title: string; participants: number } | null;
+}): { icon: 'trophy' | 'dumbbell' | 'spark'; title: string; subtitle: string; badge?: string }[] {
+  const items: {
+    icon: 'trophy' | 'dumbbell' | 'spark';
+    title: string;
+    subtitle: string;
+    badge?: string;
+  }[] = [
+    {
+      icon: 'trophy',
+      title: 'Desafios com a turma',
+      subtitle: input.activeChallenge
+        ? `${input.activeChallenge.title} · ${input.activeChallenge.participants} participando`
+        : 'Quando a equipe abrir um',
+    },
+    { icon: 'dumbbell', title: 'Treino e dieta da equipe', subtitle: 'Direto no app' },
+  ];
+  if (input.sponsored) {
+    items.push({
+      icon: 'spark',
+      title: `IA pela ${input.groupName}`,
+      subtitle: 'Foto, voz e chat, quando a academia libera um assento PRO para você',
+      badge: 'se liberado',
+    });
+  }
+  return items;
+}
+
 // --- notificações (Onb-09) ----------------------------------------------------
 
 export const NOTIFICATIONS_STEP_COPY = {
@@ -459,6 +546,55 @@ export const TRIAL_BENEFITS = [
   { icon: 'bell', label: 'Avisamos 2 dias antes' },
   { icon: 'x', label: 'Cancela em 1 toque' },
 ] as const;
+
+/** As etiquetas sobre a foto e a linha de kcal e macros do teste (Onb-10a). */
+export function photoTestSummary(rec: MealRecognition): {
+  items: { name: string; grams: number }[];
+  kcal: number;
+  macros: string;
+} {
+  const sum = (key: 'kcal' | 'proteinG' | 'carbsG' | 'fatG') =>
+    rec.itens.reduce((acc, it) => acc + (it[key] ?? 0), 0);
+  return {
+    items: rec.itens.map((it) => ({ name: it.nomeReconhecido, grams: it.grams })),
+    kcal: Math.round(sum('kcal')),
+    macros: `P ${Math.round(sum('proteinG'))} · C ${Math.round(sum('carbsG'))} · G ${Math.round(sum('fatG'))}`,
+  };
+}
+
+/**
+ * Os itens do teste → `createMeal`. O que casou com a TACO vai só com `foodId` e
+ * gramas (a API calcula, como no registro manual); o resto leva os macros do
+ * modelo. A confiança não é gravada.
+ */
+export function photoTestMealItems(
+  rec: MealRecognition,
+): Array<
+  | { foodId: number; grams: number }
+  | {
+      foodName: string;
+      grams: number;
+      kcal: number;
+      proteinG: number;
+      carbsG: number;
+      fatG: number;
+    }
+> {
+  return rec.itens
+    .filter((it) => it.grams > 0)
+    .map((it) =>
+      it.foodId !== null
+        ? { foodId: it.foodId, grams: it.grams }
+        : {
+            foodName: it.nomeReconhecido,
+            grams: it.grams,
+            kcal: it.kcal ?? 0,
+            proteinG: it.proteinG ?? 0,
+            carbsG: it.carbsG ?? 0,
+            fatG: it.fatG ?? 0,
+          },
+    );
+}
 
 export const AI_COMMUNITY_COPY = {
   review:
