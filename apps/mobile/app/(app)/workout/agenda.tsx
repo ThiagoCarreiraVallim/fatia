@@ -2,13 +2,21 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, Trophy } from 'lucide-react-native';
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Moon,
+  Trophy,
+  X,
+} from 'lucide-react-native';
 import {
   agendaApi,
   agendaDayLabel,
   agendaItemCopy,
   agendaPlanLabel,
-  dayMonth,
   endedText,
   type Agenda,
   type AgendaItem,
@@ -57,8 +65,8 @@ const dotColor = (state: AgendaState) =>
   ({
     done: colors.primary,
     missed: colors.danger,
-    today: colors.foreground,
-    planned: colors.faintForeground,
+    today: colors.brand,
+    planned: colors.protein,
   })[state];
 
 const MODES = [
@@ -140,7 +148,8 @@ export default function AgendaScreen() {
               <CalendarDays size={28} color={colors.faintForeground} />
               <Text className="font-sans-bold text-[15px] text-foreground">Nada planejado</Text>
               <Text className="text-center text-sm text-muted-foreground">
-                Quando sua equipe mandar um plano com datas, as sessões aparecem aqui.
+                Quando a equipe enviar um plano com datas, as sessões aparecem aqui. Planos
+                flexíveis seguem no seu ritmo.
               </Text>
               <Button
                 variant="secondary"
@@ -155,13 +164,16 @@ export default function AgendaScreen() {
 
           {agenda?.ended ? <EndedCard ended={agenda.ended} /> : null}
 
-          {day && !agenda?.empty ? (
+          {day && !agenda?.empty && !agenda?.ended ? (
             <View className="gap-2">
-              <Text accessibilityRole="header" className="font-sans-bold text-sm text-foreground">
-                {day.date === agenda?.today ? 'Hoje' : agendaDayLabel(day.date).long}
+              <Text
+                accessibilityRole="header"
+                className="font-sans-bold text-xs uppercase tracking-wide text-faint"
+              >
+                {agendaDayLabel(day.date).long}
               </Text>
               {day.items.length === 0 ? (
-                <Text className="text-sm text-faint">Sem sessão neste dia.</Text>
+                <RestCard />
               ) : (
                 day.items.map((item) => (
                   <ItemCard
@@ -174,9 +186,11 @@ export default function AgendaScreen() {
             </View>
           ) : null}
 
-          <Text className="pb-4 text-xs text-faint">
-            Plano de calendário: cada sessão tem dia. Plano flexível: aparece só a próxima sessão.
-          </Text>
+          {agenda && !agenda.empty && !agenda.ended ? (
+            <Text className="pb-4 text-xs text-muted-foreground">
+              Plano de calendário: cada sessão tem dia. Plano flexível: aparece só a próxima sessão.
+            </Text>
+          ) : null}
         </View>
       </Screen>
 
@@ -213,11 +227,14 @@ function NavButton({
   );
 }
 
-function Dot({ state }: { state: AgendaState | null }) {
+/** Sem sessão no dia: ponto cinza (descanso) enquanto há plano; nada sem plano. */
+function Dot({ state, rest }: { state: AgendaState | null; rest: boolean }) {
   return (
     <View
-      className="h-1.5 w-1.5 rounded-full"
-      style={{ backgroundColor: state ? dotColor(state) : 'transparent' }}
+      className="h-1.5 w-1.5 rounded-[3px]"
+      style={{
+        backgroundColor: state ? dotColor(state) : rest ? colors.borderStrong : 'transparent',
+      }}
     />
   );
 }
@@ -232,7 +249,7 @@ function WeekStrip({
   onSelect: (d: string) => void;
 }) {
   return (
-    <View className="flex-row gap-1.5">
+    <View className="flex-row gap-1">
       {agenda.days.map((d) => {
         const label = agendaDayLabel(d.date);
         const on = d.date === selected;
@@ -246,23 +263,19 @@ function WeekStrip({
             accessibilityState={{ selected: on }}
             onPress={() => onSelect(d.date)}
             className={cn(
-              'flex-1 items-center gap-1 rounded-[14px] py-2.5',
-              on ? 'bg-foreground' : 'bg-card',
+              'h-[72px] flex-1 items-center justify-center gap-1 rounded-[16px]',
+              on ? 'bg-muted' : 'bg-card',
             )}
-            style={isToday && !on ? { borderWidth: 1.5, borderColor: colors.primary } : undefined}
+            style={on ? { borderWidth: 1.5, borderColor: colors.borderStrong } : undefined}
           >
-            <Text className={cn('text-[11px]', on ? 'text-background' : 'text-faint')}>
-              {label.weekday}
-            </Text>
+            <Text className="text-[11px] text-muted-foreground">{label.weekday}</Text>
             <Text
-              className={cn(
-                'font-sans-bold text-[15px]',
-                on ? 'text-background' : 'text-foreground',
-              )}
+              className="font-sans-bold text-base text-foreground"
+              style={{ fontVariant: ['tabular-nums'] }}
             >
               {label.day}
             </Text>
-            <Dot state={dot} />
+            <Dot state={dot} rest={!agenda.empty} />
           </Pressable>
         );
       })}
@@ -285,8 +298,8 @@ function MonthGrid({
   const rows: Agenda['days'][] = [];
   for (let i = 0; i < agenda.days.length; i += 7) rows.push(agenda.days.slice(i, i + 7));
   return (
-    <View className="gap-1 rounded-card bg-card p-2">
-      <View className="flex-row">
+    <View className="gap-1">
+      <View className="flex-row gap-1">
         {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((l, i) => (
           <Text key={i} className="flex-1 text-center text-[11px] text-faint">
             {l}
@@ -294,7 +307,7 @@ function MonthGrid({
         ))}
       </View>
       {rows.map((row) => (
-        <View key={row[0]!.date} className="flex-row">
+        <View key={row[0]!.date} className="flex-row gap-1">
           {row.map((d) => {
             const on = d.date === selected;
             const inMonth = d.date.startsWith(month);
@@ -307,25 +320,18 @@ function MonthGrid({
                 accessibilityState={{ selected: on }}
                 onPress={() => onSelect(d.date)}
                 className={cn(
-                  'h-11 flex-1 items-center justify-center gap-0.5 rounded-[10px]',
-                  on && 'bg-foreground',
+                  'h-12 flex-1 items-center justify-center gap-1 rounded-[16px]',
+                  on ? 'bg-muted' : 'bg-card',
+                  !inMonth && 'opacity-40',
                 )}
+                style={on ? { borderWidth: 1.5, borderColor: colors.borderStrong } : undefined}
               >
                 <Text
-                  className={cn(
-                    'text-[13px]',
-                    on
-                      ? 'font-sans-bold text-background'
-                      : isToday
-                        ? 'font-sans-bold text-primary-text'
-                        : inMonth
-                          ? 'text-foreground'
-                          : 'text-faint',
-                  )}
+                  className={cn('font-sans-bold text-sm text-foreground', isToday && 'underline')}
                 >
                   {Number(d.date.slice(8, 10))}
                 </Text>
-                <Dot state={dayDot(d.items)} />
+                <Dot state={dayDot(d.items)} rest={!agenda.empty} />
               </Pressable>
             );
           })}
@@ -335,12 +341,24 @@ function MonthGrid({
   );
 }
 
-const TONE_TEXT: Record<AgendaState, string> = {
-  done: 'text-primary-text',
-  missed: 'text-danger',
-  today: 'text-foreground',
-  planned: 'text-faint',
-};
+/** O quadrado do ícone, como no web e na prancha (chipic). */
+function toneChip(tone: AgendaState) {
+  if (tone === 'done') return { bg: `${colors.primary}26`, fg: colors.primary, Icon: Check };
+  if (tone === 'missed') return { bg: `${colors.danger}24`, fg: colors.danger, Icon: X };
+  if (tone === 'today') return { bg: `${colors.brand}29`, fg: colors.brand, Icon: Dumbbell };
+  return { bg: colors.muted, fg: colors.mutedForeground, Icon: Dumbbell };
+}
+
+function ChipIcon({ bg, fg, Icon }: ReturnType<typeof toneChip>) {
+  return (
+    <View
+      className="h-10 w-10 items-center justify-center rounded-[12px]"
+      style={{ backgroundColor: bg }}
+    >
+      <Icon size={16} color={fg} />
+    </View>
+  );
+}
 
 function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () => void }) {
   const copy = agendaItemCopy(item);
@@ -348,14 +366,16 @@ function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () =
   return (
     <View
       className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3"
-      style={copy.tone === 'today' ? { borderWidth: 1.5, borderColor: colors.primary } : undefined}
+      style={copy.tone === 'today' ? { borderWidth: 1.5, borderColor: colors.brand } : undefined}
     >
-      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: dotColor(copy.tone) }} />
+      <ChipIcon {...toneChip(copy.tone)} />
       <View className="min-w-0 flex-1">
-        <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
+        <Text numberOfLines={1} className="font-sans-bold text-[15px] text-foreground">
           {copy.title}
         </Text>
-        <Text className={cn('text-xs', TONE_TEXT[copy.tone])}>{copy.subtitle}</Text>
+        <Text numberOfLines={1} className="text-xs text-muted-foreground">
+          {copy.subtitle}
+        </Text>
       </View>
       {copy.open ? (
         <Button
@@ -375,18 +395,29 @@ function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () =
   );
 }
 
+/** Dia sem sessão: descanso (prancha Al-T24). */
+function RestCard() {
+  return (
+    <View className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3">
+      <ChipIcon bg={colors.muted} fg={colors.mutedForeground} Icon={Moon} />
+      <View className="min-w-0 flex-1">
+        <Text className="font-sans-bold text-[15px] text-foreground">Descanso</Text>
+        <Text className="text-xs text-muted-foreground">sem sessão neste dia</Text>
+      </View>
+    </View>
+  );
+}
+
 function EndedCard({ ended }: { ended: NonNullable<Agenda['ended']> }) {
   const router = useRouter();
   const copy = endedText(ended);
   return (
-    <View className="gap-2 rounded-card bg-card p-4">
-      <View className="flex-row items-center gap-3">
-        <View
-          className="h-9 w-9 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${colors.warning}24` }}
-        >
-          <Trophy size={18} color={colors.warning} />
-        </View>
+    <View
+      className="gap-2 rounded-card bg-card p-4"
+      style={{ borderWidth: 1, borderColor: `${colors.primary}59` }}
+    >
+      <View className="flex-row items-center gap-2">
+        <Trophy size={16} color={colors.steps} />
         <Text className="min-w-0 flex-1 font-sans-bold text-[15px] text-foreground">
           {copy.title}
         </Text>
@@ -394,11 +425,10 @@ function EndedCard({ ended }: { ended: NonNullable<Agenda['ended']> }) {
       <Text className="text-sm text-muted-foreground">{copy.body}</Text>
       <Button
         variant="secondary"
-        size="xs"
-        className="self-start"
-        onPress={() => router.push(`/workout/plans/${ended.planId}` as Href)}
+        className="h-10 min-h-0 rounded-[12px]"
+        onPress={() => router.push(copy.action.href as Href)}
       >
-        Ver o plano
+        {copy.action.label}
       </Button>
     </View>
   );
@@ -441,14 +471,12 @@ function RescheduleDrawer({
     );
 
   return (
-    <Drawer open={moving != null} onOpenChange={(open) => !open && close()}>
+    <Drawer open={moving != null} onOpenChange={(open) => !open && close()} snapPoints={['85%']}>
       <DrawerContent className="px-4">
         <DrawerHeader className="px-0">
           <DrawerTitle>Remarcar {moving?.item.planName ?? ''}</DrawerTitle>
           <DrawerDescription>
-            {moving?.item.endDate
-              ? `Escolha um dia até ${dayMonth(moving.item.endDate)}, o fim do plano. É só para você se organizar: nada é reservado.`
-              : 'Escolha um dia.'}
+            Escolha um dia até o fim do plano. A agenda só informa: nada é reservado.
           </DrawerDescription>
         </DrawerHeader>
         <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-1.5 py-2">
@@ -490,7 +518,7 @@ function RescheduleDrawer({
             {mensagemDeErro(move.error, { alternativa: 'Não deu para remarcar. Tente de novo.' })}
           </FormMessage>
         ) : null}
-        <DrawerFooter className="px-0 pt-4">
+        <DrawerFooter className="px-0 pb-8 pt-4">
           <Button
             disabled={!target}
             loading={move.isPending}
@@ -499,7 +527,7 @@ function RescheduleDrawer({
             {target ? `Remarcar para ${agendaDayLabel(target).long}` : 'Escolha um dia'}
           </Button>
           <Button variant="ghost" onPress={close}>
-            Voltar
+            Cancelar
           </Button>
         </DrawerFooter>
       </DrawerContent>

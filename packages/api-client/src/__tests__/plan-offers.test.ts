@@ -54,7 +54,7 @@ describe('plano recebido (Al-T2, Al-T2b)', () => {
 
   it('calendário: semanas e datas; flexível: sem datas', () => {
     expect(offerWhen(version())).toEqual({
-      label: '4 semanas · 10 nov – 07 dez',
+      label: '4 semanas · 10 nov – 7 dez',
       sub: 'as sessões entram na sua agenda',
       tone: 'calendar',
     });
@@ -72,7 +72,7 @@ describe('plano recebido (Al-T2, Al-T2b)', () => {
     expect(offerSentLine('Academia Demo', '2025-11-10T12:12:00.000Z', agora, tz)).toBe(
       'Academia Demo · hoje 09:12',
     );
-    expect(offerSentLine(null, '2025-11-08T12:12:00.000Z', agora, tz)).toBe('08 nov 09:12');
+    expect(offerSentLine(null, '2025-11-08T12:12:00.000Z', agora, tz)).toBe('8 nov 09:12');
   });
 
   it('séries × repetições, com o traço de faixa', () => {
@@ -170,7 +170,8 @@ describe('agenda (Al-T24)', () => {
   it('rótulos do intervalo e do dia', () => {
     expect(agendaRangeLabel('2025-11-10', '2025-11-16')).toBe('10 – 16 nov');
     expect(agendaRangeLabel('2025-11-24', '2025-11-30')).toBe('24 – 30 nov');
-    expect(agendaRangeLabel('2025-12-29', '2026-01-04')).toBe('29 dez – 04 jan');
+    expect(agendaRangeLabel('2025-12-29', '2026-01-04')).toBe('29 dez – 4 jan');
+    expect(agendaRangeLabel('2026-11-09', '2026-11-15')).toBe('9 – 15 nov');
     expect(agendaDayLabel('2025-11-13')).toEqual({ weekday: 'qui', day: 13, long: 'qui, 13 nov' });
   });
 
@@ -256,6 +257,8 @@ describe('agenda (Al-T24)', () => {
     ).toEqual({
       title: 'Hipertrofia A/B terminou',
       body: '15 de 16 sessões em 4 semanas. Helena pode mandar o próximo plano.',
+      // Não há tela de resumo do bloco: web e app levam ao histórico.
+      action: { label: 'Ver o histórico', href: '/workout/history' },
     });
   });
 });

@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Dumbbell, Trophy, X } from 'lucide-react';
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Moon,
+  Trophy,
+  X,
+} from 'lucide-react';
 import {
   addDays,
   agendaApi,
@@ -216,19 +225,15 @@ function AgendaBody({
             {l.weekday}
           </span>
         )}
-        <b
-          aria-hidden
-          className={cn(
-            'tabular-nums',
-            compact ? 'text-sm' : 'text-base',
-            date === agenda.today && 'text-primary',
-          )}
-        >
+        <b aria-hidden className={cn('tabular-nums', compact ? 'text-sm' : 'text-base')}>
           {l.day}
         </b>
         <span
           aria-hidden
-          className={cn('h-1.5 w-1.5 rounded-[3px]', first ? DOT[first.state] : 'bg-transparent')}
+          className={cn(
+            'h-1.5 w-1.5 rounded-[3px]',
+            first ? DOT[first.state] : agenda.empty ? 'bg-transparent' : 'bg-border-strong',
+          )}
         />
       </button>
     );
@@ -270,7 +275,8 @@ function AgendaBody({
 
       {agenda.ended && <EndedCard ended={agenda.ended} />}
 
-      {!agenda.empty && (
+      {/* Como a prancha T24c: com o plano encerrado, só o cartão do fim. */}
+      {!agenda.empty && !agenda.ended && (
         <>
           <span className="block text-xs font-bold uppercase tracking-[0.04em] text-faint">
             {label.long}
@@ -288,9 +294,18 @@ function AgendaBody({
               ))}
             </ul>
           ) : (
-            <p className="rounded-card bg-card px-4 py-3.5 text-sm text-muted-foreground">
-              Nenhuma sessão neste dia.
-            </p>
+            <div className="flex items-center gap-3 rounded-card bg-card px-4 py-3">
+              <span
+                aria-hidden
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-muted text-muted-foreground"
+              >
+                <Moon size={16} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-[15px]">Descanso</b>
+                <span className="block text-xs text-muted-foreground">sem sessão neste dia</span>
+              </span>
+            </div>
           )}
           <p className="text-xs text-muted-foreground">
             Plano de calendário: cada sessão tem dia. Plano flexível: aparece só a próxima sessão.
@@ -311,10 +326,10 @@ function EndedCard({ ended }: { ended: NonNullable<Agenda['ended']> }) {
       </p>
       <p className="text-sm text-muted-foreground">{text.body}</p>
       <Link
-        href="/workout/history"
-        className="anim-press inline-flex h-10 items-center rounded-[12px] bg-muted px-4 text-sm font-bold"
+        href={text.action.href}
+        className="anim-press flex h-10 w-full items-center justify-center rounded-[12px] bg-muted px-4 text-sm font-bold"
       >
-        Ver o histórico
+        {text.action.label}
       </Link>
     </div>
   );
@@ -346,7 +361,7 @@ function ItemCard({
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]',
           copy.tone === 'done' && 'bg-primary/15 text-primary',
           copy.tone === 'missed' && 'bg-[hsl(var(--danger)/0.14)] text-danger',
-          copy.tone === 'today' && 'bg-brand text-brand-foreground',
+          copy.tone === 'today' && 'bg-[hsl(var(--brand)/0.16)] text-brand',
           copy.tone === 'planned' && 'bg-muted text-muted-foreground',
         )}
       >

@@ -134,7 +134,7 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Inferior' })).toBeInTheDocument();
     expect(screen.getByText('Helena Personal')).toBeInTheDocument();
-    expect(screen.getByText('4 semanas · 10 nov – 07 dez')).toBeInTheDocument();
+    expect(screen.getByText('4 semanas · 10 nov – 7 dez')).toBeInTheDocument();
     expect(screen.getByText('as sessões entram na sua agenda')).toBeInTheDocument();
     expect(screen.getByText('~40′')).toBeInTheDocument();
     expect(screen.getByText('Coloquei stiff e panturrilha.')).toBeInTheDocument();

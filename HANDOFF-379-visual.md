@@ -10,14 +10,15 @@ Pranchas renderizadas: todas em `board/`.
 - [x] Al-T1 aviso no Treino (ae7a3e99): cmp-Al-T1-aviso. Botão Agenda (calendário) no header não está na prancha: única entrada da agenda, mantido
 - [ ] Al-T23 Modelos
 - [ ] Al-T12 Periodização
-- [ ] Al-T24 / T24b / T24c Agenda + Remarcar
+- [x] Al-T24 / T24b / T24c Agenda + Remarcar: cmp-Al-T24-Agenda, cmp-Al-T24-hoje, cmp-Al-T24-Remarcar, cmp-Al-T24b-Agenda-vazia, cmp-Al-T24c-Agenda-plano-terminado
 - [ ] verificação final (lint, typecheck, testes)
 
 ## Dados do demo
 
 - Oferta `567d357f-b6d3-44e7-afba-28f954c6dee0` (CALENDAR, v1). Recusada e desfeita; virou FLEXIBLE só para o print e voltou; ACEITA no app às 17:52 (gera plano + 8 PlannedSession).
+- Agenda: para os prints as datas das PlannedSession foram deslocadas (−1 dia, −35, −365) e o startDate da versão mudado; tudo restaurado (16/11..10/12, startDate 2026-11-15, PLANNED). Um Remarcar real no app (14→21 nov) também foi desfeito no banco.
 - Comparações: `/tmp/fatia-vis-tools/cmp.sh <saída> <prancha> <web> <app>` (magick).
 
 ## Próximo passo
 
-Al-T24 agenda (com sessões do aceite), Remarcar, T24b, T24c.
+Al-T23 Modelos, depois Al-T12 Periodização.

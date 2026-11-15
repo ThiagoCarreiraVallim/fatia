@@ -1,8 +1,11 @@
 import { apiFetch } from './http';
-import { dayMonth } from './format';
+import { dayMonth as paddedDayMonth } from './format';
 import { PLAN_LEVEL_LABEL } from './content-panel';
 import type { PlanLevel } from './community-content';
 import type { TrainingBlock, TrainingBlockKind } from './workout';
+
+/** "7 dez", sem o zero na frente, como nas pranchas Al-T2 e Al-T24. */
+const dayMonth = (iso: string | null | undefined) => paddedDayMonth(iso).replace(/^0/, '');
 
 /**
  * Plano de treino recebido da equipe, agenda de treinos, modelos das
@@ -407,7 +410,7 @@ export function agendaWeek(day: string): { from: string; to: string } {
 
 /** "10 – 16 nov", ou "29 dez – 04 jan" quando atravessa o mês. */
 export function agendaRangeLabel(from: string, to: string): string {
-  if (from.slice(0, 7) === to.slice(0, 7)) return `${from.slice(8, 10)} – ${dayMonth(to)}`;
+  if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8, 10))} – ${dayMonth(to)}`;
   return `${dayMonth(from)} – ${dayMonth(to)}`;
 }
 
@@ -483,12 +486,19 @@ export function monthGrid(day: string): { from: string; to: string; label: strin
 }
 
 /** Al-T24c: o plano de calendário que terminou. */
-export function endedText(e: AgendaEnded): { title: string; body: string } {
+export function endedText(e: AgendaEnded): {
+  title: string;
+  body: string;
+  action: { label: string; href: string };
+} {
   const who = firstName(e.authorName);
   const next = who ? `${who} pode mandar o próximo plano.` : 'Sua equipe pode mandar o próximo.';
   return {
     title: `${e.planName} terminou`,
     body: `${e.done} de ${e.total} sessões em ${e.weeks} ${e.weeks === 1 ? 'semana' : 'semanas'}. ${next}`,
+    // A prancha T24c diz "Ver o resumo do bloco", mas essa tela não existe:
+    // web e app levam ao histórico de treinos.
+    action: { label: 'Ver o histórico', href: '/workout/history' },
   };
 }
 
