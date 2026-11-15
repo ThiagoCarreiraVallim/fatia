@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -6,22 +6,11 @@ import {
   type GestureResponderEvent,
   type PressableProps,
 } from 'react-native';
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import { cssInterop } from 'nativewind';
 import { Text } from './text';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';
 import { pressScale } from '@/theme/motion-values';
-import { duration } from '@fatia/design';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-cssInterop(AnimatedPressable, { className: 'style' });
 
 /**
  * Botão do app nativo.
@@ -110,18 +99,13 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
   ref,
 ) {
   const isDisabled = Boolean(disabled || loading);
-  // Pressionado = escala .97 (prancha Componentes); com "reduzir movimento" o
-  // tamanho troca sem animar.
-  const scale = useSharedValue(1);
-  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const press = (pressed: boolean) => {
-    scale.value = withTiming(pressScale(pressed), {
-      duration: duration.fast,
-      reduceMotion: ReduceMotion.System,
-    });
-  };
+  // Pressionado = escala .97 (prancha Componentes). Sem animar: o Pressable
+  // animado do Reanimated perdia o `className` (fundo do botão sumia) no
+  // NativeWind, e a troca instantânea também respeita "reduzir movimento".
+  const [pressed, setPressed] = useState(false);
+  const press = (p: boolean) => setPressed(p);
   return (
-    <AnimatedPressable
+    <Pressable
       ref={ref}
       accessibilityRole="button"
       // `disabled` no `accessibilityState` é o que faz o leitor de tela anunciar
@@ -129,7 +113,10 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       className={cn(buttonVariants({ variant, size, disabled: isDisabled }), className)}
-      style={[typeof style === 'function' ? undefined : style, pressStyle]}
+      style={[
+        typeof style === 'function' ? undefined : style,
+        { transform: [{ scale: pressScale(pressed) }] },
+      ]}
       onPressIn={(e: GestureResponderEvent) => {
         press(true);
         onPressIn?.(e);
@@ -150,7 +137,7 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       ) : (
         children
       )}
-    </AnimatedPressable>
+    </Pressable>
   );
 });
 
