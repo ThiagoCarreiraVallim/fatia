@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { Pencil, Star } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -50,6 +50,27 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
+  // A estrela do Como fazer (#378): otimista, e volta atrás se a API recusar.
+  // O estado é local porque o `exercise` chega de quem abriu o drawer (busca,
+  // card do plano, sessão) e cada um guarda num cache diferente.
+  const [favorite, setFavorite] = useState<boolean | null>(null);
+  const [lastId, setLastId] = useState(exercise?.id);
+  if (lastId !== exercise?.id) {
+    setLastId(exercise?.id);
+    setFavorite(null);
+  }
+  const isFavorite = favorite ?? exercise?.favorite ?? false;
+  const favoriteMutation = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean }) =>
+      workoutApi.setExerciseFavorite(id, value),
+    onMutate: ({ value }) => setFavorite(value),
+    onError: (_e, { value }) => setFavorite(!value),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['workout', 'exercises'] });
+      qc.invalidateQueries({ queryKey: ['workout', 'exercise', id] });
+    },
+  });
+
   const guia = exercise?.community ?? null;
   // O vídeo da comunidade substitui o do YouTube: é o tutorial que a academia
   // (ou quem a pessoa segue) gravou para este exercício.
@@ -74,9 +95,30 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
         <Drawer open={open} onOpenChange={onOpenChange}>
           <DrawerContent className="px-4 pb-6">
             <DrawerHeader className="px-0">
-              <DrawerTitle>{exercise.name}</DrawerTitle>
+              <div className="flex items-start justify-between gap-3">
+                <DrawerTitle>{exercise.name}</DrawerTitle>
+                <button
+                  type="button"
+                  aria-pressed={isFavorite}
+                  aria-label={`Favoritar ${exercise.name}`}
+                  disabled={favoriteMutation.isPending}
+                  onClick={() => favoriteMutation.mutate({ id: exercise.id, value: !isFavorite })}
+                  className="-mt-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-accent"
+                >
+                  <Star
+                    size={20}
+                    aria-hidden
+                    className={isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground'}
+                  />
+                </button>
+              </div>
               {exercise.muscleGroup && (
                 <DrawerDescription className="capitalize">{exercise.muscleGroup}</DrawerDescription>
+              )}
+              {favoriteMutation.isError && (
+                <p role="alert" className="text-xs text-danger">
+                  Não foi possível salvar o favorito. Tente de novo.
+                </p>
               )}
             </DrawerHeader>
 
