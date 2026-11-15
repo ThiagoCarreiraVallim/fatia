@@ -31,6 +31,7 @@ export * from './custom-food';
 export * from './barcode';
 export * from './goals';
 export * from './nutrition';
+export * from './nutrition-plan';
 export * from './progress';
 export * from './sharing';
 export * from './community';
