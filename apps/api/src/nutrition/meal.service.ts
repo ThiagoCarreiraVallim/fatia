@@ -5,7 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { MediaStatus, type MealItemSource, type Prisma } from '@prisma/client';
+import { MediaStatus, Prisma, type MealItemSource } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { MEAL_PHOTO_PURPOSE, MediaService, type MediaView } from '../storage/media.service';
 import { presentMeal } from './meal-presenter';
@@ -67,21 +67,27 @@ export class MealService {
     const eatenAt = parseInstant(dto.eatenAt, 'eatenAt');
     const items = await this.resolveItems(userId, dto.items);
     const photoFileId = dto.photoFileId
-      ? await this.assertUnlinkedPhoto(userId, dto.photoFileId)
+      ? await this.findUnlinkedPhoto(userId, dto.photoFileId)
       : undefined;
-    return this.createResolved(
-      userId,
-      { mealType: dto.mealType, eatenAt, notes: dto.notes, photoFileId },
-      items,
-    );
+    const meal = { mealType: dto.mealType, eatenAt, notes: dto.notes };
+    try {
+      return await this.createResolved(userId, { ...meal, photoFileId }, items);
+    } catch (error) {
+      // Dois salvamentos ao mesmo tempo com a mesma foto: o segundo perde só a
+      // foto (uma por refeição), não a refeição.
+      if (!photoFileId || !isPhotoTaken(error)) throw error;
+      return this.createResolved(userId, meal, items);
+    }
   }
 
   /**
    * A foto que vai virar desta refeição: guardada pelo reconhecimento para esta
-   * pessoa e ainda sem refeição. A de outra pessoa, a já usada e a inexistente
-   * respondem igual (#92); um id do corpo nunca liga o arquivo de outro.
+   * pessoa e ainda sem refeição. A de outra pessoa, a já usada e a que a limpeza
+   * já levou dão no mesmo: a refeição é gravada sem foto, sem dizer qual foi o
+   * caso (#92). Um id do corpo nunca liga o arquivo de outro, e perder a foto
+   * não pode custar a refeição que a pessoa revisou.
    */
-  private async assertUnlinkedPhoto(userId: string, fileId: string): Promise<string> {
+  private async findUnlinkedPhoto(userId: string, fileId: string): Promise<string | undefined> {
     const file = await this.prisma.mediaFile.findFirst({
       where: {
         id: fileId,
@@ -93,8 +99,7 @@ export class MealService {
       },
       select: { id: true },
     });
-    if (!file) throw new NotFoundException('Photo not found');
-    return file.id;
+    return file?.id;
   }
 
   /**
@@ -403,4 +408,12 @@ export class MealService {
       portionQuantity: item.quantity,
     };
   }
+}
+
+/** A violação de unicidade de `Meal.photoFileId`: outra refeição levou a foto antes. */
+function isPhotoTaken(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+  return JSON.stringify(error.meta ?? {}).includes('photoFileId');
 }

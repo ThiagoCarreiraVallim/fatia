@@ -3044,14 +3044,16 @@ describe('isolamento entre usuários', () => {
     it('o user-B não liga a foto do user-A a uma refeição dele', async () => {
       // A foto solta é a candidata perfeita: pronta e sem refeição. Só o dono
       // a liga; o id vindo do corpo não atravessa contas.
-      await expect(
-        meals.create(owned.userB, {
-          mealType: MealType.SNACK,
-          eatenAt: new Date().toISOString(),
-          photoFileId: fotoSoltaA,
-          items: [{ foodName: 'Banana', grams: 100, kcal: 90 }],
-        }),
-      ).rejects.toThrow(NotFoundException);
+      // A refeição do B é gravada sem foto: o id alheio é ignorado, sem dizer
+      // se o arquivo existe.
+      const doB = await meals.create(owned.userB, {
+        mealType: MealType.SNACK,
+        eatenAt: new Date().toISOString(),
+        photoFileId: fotoSoltaA,
+        items: [{ foodName: 'Banana', grams: 100, kcal: 90 }],
+      });
+      expect(doB.hasPhoto).toBe(false);
+      await prisma.meal.delete({ where: { id: doB.id } });
       const solta = await prisma.mediaFile.findUniqueOrThrow({
         where: { id: fotoSoltaA },
         include: { mealPhotoOf: true },

@@ -131,6 +131,9 @@ describe('campo numérico digitável', () => {
     expect(parseDecimalInput('12,')).toBeNull();
     expect(parseDecimalInput('abc')).toBeNull();
     expect(parseDecimalInput('-3')).toBeNull();
+    // Ponto de milhar, como se escreve no Brasil: "1.500" g é mil e quinhentos.
+    expect(parseDecimalInput('1.500')).toBe(1500);
+    expect(parseDecimalInput('1.500,5')).toBe(1500.5);
   });
 });
 

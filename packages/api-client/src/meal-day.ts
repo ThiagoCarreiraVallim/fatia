@@ -102,11 +102,14 @@ export function mealHasAiItems(meal: Pick<Meal, 'items' | 'origin'>): boolean {
 }
 
 /**
- * Lê o que a pessoa digitou num campo numérico: "1,5" ou "1.5". Vazio, negativo
- * ou incompleto ("12,") volta `null` para a tela dizer o erro.
+ * Lê o que a pessoa digitou num campo numérico: "1,5", "1.5" ou "1.500" (ponto
+ * de milhar, como se escreve no Brasil). Com vírgula, os pontos são milhar.
+ * Vazio, negativo ou incompleto ("12,") volta `null` para a tela dizer o erro.
  */
 export function parseDecimalInput(input: string): number | null {
-  const text = input.trim().replace(',', '.');
+  const raw = input.trim();
+  const thousands = /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw) || /^\d+,\d+$/.test(raw);
+  const text = thousands ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(',', '.');
   if (!/^\d+(\.\d+)?$/.test(text)) return null;
   const value = Number(text);
   return Number.isFinite(value) ? value : null;

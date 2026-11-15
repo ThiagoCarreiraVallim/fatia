@@ -111,8 +111,23 @@ describe('foto da refeição guardada (integração)', () => {
     expect(dia.meals.find((m) => m.id === meal.id)).toMatchObject({ hasPhoto: true });
     expect(dia.nutrients[0]).toMatchObject({ key: 'kcal', value: 620 });
 
-    // Uma foto por refeição: a mesma foto não vira outra refeição.
-    await expect(meals.create(userId, almoco(r.photoFileId!))).rejects.toThrow(NotFoundException);
+    // Uma foto por refeição: a mesma foto não vira outra refeição, e a outra
+    // refeição é gravada sem foto em vez de se perder.
+    const outra = await meals.create(userId, {
+      ...almoco(r.photoFileId!),
+      eatenAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    expect(outra.hasPhoto).toBe(false);
+  });
+
+  it('a foto que a limpeza já levou não derruba a refeição: grava sem foto', async () => {
+    const userId = await pessoa(true);
+    const r = await recognition.recognize(userId, await fotoDoCelular());
+    await prisma.mediaFile.delete({ where: { id: r.photoFileId! } });
+
+    const meal = await meals.create(userId, almoco(r.photoFileId!));
+    expect(meal.hasPhoto).toBe(false);
+    expect(meal.items).toHaveLength(1);
   });
 
   it('"Apagar só a foto" tira o arquivo do bucket e deixa os números', async () => {
