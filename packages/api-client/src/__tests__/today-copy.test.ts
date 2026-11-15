@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   dailyGoalTarget,
+  dayShareCard,
+  dayShareMessage,
   dailyGoalValue,
   goalsChipLabel,
   nextWorkoutDetail,
@@ -112,5 +114,29 @@ describe('Hoje (Al-H1/H3/H4/H5)', () => {
     expect(path).toBe('M0 6 L150 38.6 L300 54');
     // Um ponto só vira uma linha reta no meio.
     expect(weightSparkPath([70], 300, 60)).toBe('M0 30 L300 30');
+  });
+
+  it('"Compartilhar meu dia": metas batidas e hábitos, nunca peso nem comida', () => {
+    const card = dayShareCard({
+      dailyGoals: { met: 2, total: 5 },
+      water: { todayMl: 1250 },
+      steps: { today: 4231 },
+      streakDays: 12,
+    });
+    expect(card).toEqual({
+      kind: 'day',
+      headline: '2 de 5',
+      caption: 'Metas de hoje batidas',
+      stats: [
+        { label: 'Água', value: '1,3 L' },
+        { label: 'Passos', value: '4.231' },
+        { label: 'Sequência', value: '12 dias' },
+      ],
+    });
+    expect(JSON.stringify(card)).not.toMatch(/kg|kcal/);
+    expect(dayShareMessage(card, 'Ana')).toBe(
+      'Ana · Metas de hoje batidas: 2 de 5 · Água 1,3 L · Passos 4.231 · Sequência 12 dias — fatia',
+    );
+    expect(dayShareMessage(card, null)).toMatch(/^Metas de hoje batidas: 2 de 5/);
   });
 });

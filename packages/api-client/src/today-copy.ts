@@ -163,3 +163,42 @@ export function weightSparkPath(values: readonly number[], width: number, height
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+/** O cartão de "Compartilhar meu dia" (Al-H5-Metas): o formato de `ShareCard` das duas apps. */
+export interface DayShareCard {
+  kind: 'day';
+  headline: string;
+  caption: string;
+  stats: { label: string; value: string }[];
+}
+
+/**
+ * Metas batidas, água, passos e sequência. Peso e comida não entram: o cartão
+ * de compartilhar nunca leva corpo (prancha Compartilhar), e caloria é comida.
+ */
+export function dayShareCard(input: {
+  dailyGoals: { met: number; total: number };
+  water: { todayMl: number };
+  steps: { today: number };
+  streakDays: number;
+}): DayShareCard {
+  return {
+    kind: 'day',
+    headline: `${input.dailyGoals.met} de ${input.dailyGoals.total}`,
+    caption: 'Metas de hoje batidas',
+    stats: [
+      { label: 'Água', value: `${formatDecimal(input.water.todayMl / 1000)} L` },
+      { label: 'Passos', value: formatInteger(input.steps.today) },
+      {
+        label: 'Sequência',
+        value: input.streakDays === 1 ? '1 dia' : `${input.streakDays} dias`,
+      },
+    ],
+  };
+}
+
+/** O texto que vai junto (WhatsApp, folha de compartilhar do sistema). */
+export function dayShareMessage(card: DayShareCard, who: string | null): string {
+  const stats = card.stats.map((s) => `${s.label} ${s.value}`).join(' · ');
+  return `${who ? `${who} · ` : ''}${card.caption}: ${card.headline} · ${stats} — fatia`;
+}
