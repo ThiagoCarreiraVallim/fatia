@@ -1,11 +1,14 @@
 'use client';
 
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, HeartPulse, History, Plus, Zap } from 'lucide-react';
+import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react';
 import {
+  blockRow,
   dayOfMonth,
   planCardInfo,
+  planExercisePreview,
   planMuscleBars,
   QUICK_TEMPLATES,
   trainingWeekLabel,
@@ -23,51 +26,58 @@ import { BlockTimeline } from './block-timeline';
 import { useStartSession, WorkoutCardsCarousel } from './cards/workout-cards';
 import { groupTone } from './group-tone';
 
-const sectionTitle = 'text-base font-extrabold text-foreground';
+const sectionTitle = 'font-display text-[17px] font-semibold text-foreground';
 
-/** A faixa da semana (prancha Al-T1): segunda a domingo, treinados em destaque. */
+/**
+ * A faixa da semana (prancha Al-T1), no mesmo desenho do `DayStrip` da
+ * Nutrição: hoje em verde, os dias treinados contornados.
+ */
 function WeekStrip({ week }: { week: TrainingWeek }) {
   return (
-    <section aria-labelledby="treino-semana" className="space-y-2">
+    <section aria-labelledby="treino-semana" className="space-y-2.5">
       <div className="flex items-baseline justify-between">
         <h2 id="treino-semana" className={sectionTitle}>
           Semana
         </h2>
         <span className="text-[13px] text-muted-foreground">{trainingWeekLabel(week)}</span>
       </div>
-      <ol className="grid grid-cols-7 gap-1.5">
+      <ol className="flex justify-between gap-1.5">
         {week.days.map((d, i) => {
           const day = dayOfMonth(d.date);
           const chip = (
             <>
-              <span className="text-[11px] font-bold opacity-70">{WEEKDAY_LETTERS[i]}</span>
-              <span className="text-sm font-extrabold tabular-nums">{day}</span>
+              <span aria-hidden className="text-xs font-semibold">
+                {WEEKDAY_LETTERS[i]}
+              </span>
+              <b
+                aria-hidden
+                className={cn('font-display text-base tabular-nums', !d.today && 'text-foreground')}
+              >
+                {day}
+              </b>
             </>
           );
           const tone = cn(
-            'flex h-14 flex-col items-center justify-center rounded-2xl',
-            d.trained
+            'flex h-16 flex-col items-center justify-center gap-0.5 rounded-field',
+            d.today
               ? 'bg-primary text-primary-foreground'
-              : d.active
-                ? 'bg-primary-soft text-primary-text'
-                : 'bg-muted text-muted-foreground',
-            d.today && 'ring-2 ring-foreground',
+              : cn(
+                  'bg-muted text-faint',
+                  (d.trained || d.active) &&
+                    'shadow-[inset_0_0_0_1.5px_hsl(var(--primary-text)/0.5)]',
+                ),
           );
+          const label = `Dia ${day}${d.today ? ', hoje' : ''}${
+            d.active ? ', treino em andamento' : d.trained ? ', treinou' : ''
+          }`;
           return (
-            <li key={d.date} aria-current={d.today ? 'date' : undefined}>
+            <li key={d.date} className="flex-1" aria-current={d.today ? 'date' : undefined}>
               {d.trained ? (
-                <Link
-                  href="/workout/history"
-                  aria-label={`Dia ${day}, treinou`}
-                  className={cn(tone, 'anim-press')}
-                >
+                <Link href="/workout/history" aria-label={label} className={cn(tone, 'anim-press')}>
                   {chip}
                 </Link>
               ) : (
-                <div
-                  aria-label={`Dia ${day}${d.today ? ', hoje' : d.active ? ', se mexeu' : ''}`}
-                  className={tone}
-                >
+                <div aria-label={label} className={tone}>
                   {chip}
                 </div>
               )}
@@ -79,23 +89,25 @@ function WeekStrip({ week }: { week: TrainingWeek }) {
   );
 }
 
+/** O cartão do plano (prancha Al-T1): o cartão inteiro abre o plano. */
 function PlanCard({ plan }: { plan: WorkoutPlan }) {
-  const start = useStartSession();
-  const names = (plan.exercises ?? [])
-    .slice(0, 3)
-    .map((e) => e.exercise?.name)
-    .filter(Boolean)
-    .join(' · ');
+  const preview = planExercisePreview(plan);
   const bars = planMuscleBars(plan);
   return (
-    <div className="flex h-full flex-col gap-3 rounded-3xl border border-subtle bg-card p-4">
-      <Link href={`/workout/plans/${plan.id}`} className="min-w-0 space-y-1">
-        <p className="truncate text-base font-extrabold text-foreground">{plan.name}</p>
-        <p className="text-xs text-muted-foreground">{planCardInfo(plan)}</p>
-        {names && <p className="truncate text-[13px] text-foreground/80">{names}</p>}
-      </Link>
+    <Link
+      href={`/workout/plans/${plan.id}`}
+      className="anim-press flex h-full min-w-0 flex-col gap-2.5 rounded-card bg-card p-4"
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span className="truncate text-[17px] font-bold text-foreground">{plan.name}</span>
+        <span className="shrink-0 rounded-pill bg-primary-soft px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-primary-text">
+          Seu
+        </span>
+      </span>
+      <span className="text-[13px] text-muted-foreground">{planCardInfo(plan)}</span>
+      {preview && <span className="truncate text-sm text-foreground">{preview}</span>}
       {bars.length > 0 && (
-        <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-surface-3">
+        <span aria-hidden className="mt-auto flex h-1.5 gap-0.5 overflow-hidden rounded-full">
           {bars.map((b) => (
             <span
               key={b.group}
@@ -103,18 +115,9 @@ function PlanCard({ plan }: { plan: WorkoutPlan }) {
               className="block h-full"
             />
           ))}
-        </div>
+        </span>
       )}
-      <button
-        type="button"
-        aria-label={`Começar ${plan.name}`}
-        disabled={start.isPending}
-        onClick={() => start.mutate(plan.id)}
-        className="anim-press mt-auto h-11 rounded-2xl bg-primary text-sm font-extrabold text-primary-foreground disabled:opacity-60"
-      >
-        {start.isPending ? 'Começando…' : 'Começar'}
-      </button>
-    </div>
+    </Link>
   );
 }
 
@@ -151,18 +154,20 @@ function PlansSection() {
         <Carousel opts={{ align: 'start', dragFree: true }}>
           <CarouselContent>
             {plans.data.map((plan) => (
-              <CarouselItem key={plan.id} className="basis-[72%] sm:basis-1/2">
+              <CarouselItem key={plan.id} className="basis-[58%] sm:basis-1/3">
                 <PlanCard plan={plan} />
               </CarouselItem>
             ))}
-            <CarouselItem className="basis-[44%] sm:basis-1/3">
+            <CarouselItem className="basis-[36%] sm:basis-1/4">
               {/* As telas de plano são da #378: daqui só se chega até elas. */}
               <Link
                 href="/workout/plans"
-                className="anim-press flex h-full min-h-44 flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-subtle text-muted-foreground"
+                className="anim-press flex h-full min-h-32 flex-col items-center justify-center gap-2 rounded-card text-muted-foreground shadow-[inset_0_0_0_1.5px_hsl(var(--border-strong))]"
               >
-                <Plus size={22} aria-hidden />
-                <span className="text-sm font-bold">Novo plano</span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <Plus size={16} aria-hidden />
+                </span>
+                <span className="text-sm font-bold text-foreground">Novo plano</span>
               </Link>
             </CarouselItem>
           </CarouselContent>
@@ -172,46 +177,83 @@ function PlansSection() {
   );
 }
 
+/** Um jeito de começar (prancha Al-T1): ícone num quadrado de cor, nome e dica. */
+function WayTile({
+  title,
+  hint,
+  icon,
+  tone,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  hint: string;
+  icon: ReactNode;
+  tone: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="anim-press flex min-w-0 items-center gap-2.5 rounded-[18px] bg-card p-3 text-left disabled:opacity-60"
+    >
+      <span
+        aria-hidden
+        className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', tone)}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-foreground">{title}</span>
+        <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
 function OtherWays({ onCardio }: { onCardio: () => void }) {
   const start = useStartSession();
-  const option =
-    'anim-press flex min-h-[72px] flex-col items-start justify-between gap-2 rounded-3xl bg-card p-4 text-left border border-subtle disabled:opacity-60';
   return (
-    <section aria-labelledby="treino-outros" className="space-y-2">
+    <section aria-labelledby="treino-outros" className="space-y-2.5">
       <h2 id="treino-outros" className={sectionTitle}>
         Outros jeitos de treinar
       </h2>
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className={option}
+      {/* Circuito e Modelos entram com a #380 e a #379. */}
+      <div className="grid grid-cols-2 gap-2">
+        <WayTile
+          title="Livre"
+          hint="monte na hora"
+          icon={<Zap size={16} />}
+          tone="bg-primary-soft text-primary-text"
           disabled={start.isPending}
           onClick={() => start.mutate(null)}
-        >
-          <Dumbbell size={18} className="text-primary" aria-hidden />
-          <span>
-            <span className="block text-sm font-extrabold text-foreground">Livre</span>
-            <span className="block text-xs text-muted-foreground">Monte na hora</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={option}
+        />
+        <WayTile
+          title="Só cardio"
+          hint="esteira, bike…"
+          icon={<Heart size={16} />}
+          tone="bg-danger/15 text-danger"
           disabled={start.isPending}
           onClick={() => start.mutate(null, { onSuccess: onCardio })}
-        >
-          <HeartPulse size={18} className="text-primary" aria-hidden />
-          <span>
-            <span className="block text-sm font-extrabold text-foreground">Só cardio</span>
-            <span className="block text-xs text-muted-foreground">Corrida, bike, escada</span>
-          </span>
-        </button>
+        />
       </div>
+    </section>
+  );
+}
 
-      <div className="flex items-center gap-2 pt-2">
-        <Zap size={14} className="text-muted-foreground" aria-hidden />
-        <h3 className="text-[13px] font-bold text-muted-foreground">Treinos rápidos</h3>
-      </div>
+/**
+ * Os treinos rápidos não estão na prancha (os "Modelos" da #379 tomam o lugar
+ * deles): ficam no fim, depois do bloco, para não sumirem antes disso.
+ */
+function QuickTemplates() {
+  return (
+    <section aria-labelledby="treino-rapidos" className="space-y-2.5">
+      <h2 id="treino-rapidos" className={sectionTitle}>
+        Treinos rápidos
+      </h2>
       <Carousel opts={{ align: 'start', dragFree: true }}>
         <CarouselContent>
           {QUICK_TEMPLATES.map((q) => (
@@ -241,6 +283,60 @@ function OtherWays({ onCardio }: { onCardio: () => void }) {
           ))}
         </CarouselContent>
       </Carousel>
+    </section>
+  );
+}
+
+/**
+ * O bloco numa linha (prancha Al-T1: "Bloco hipertrofia · semana 2 de 4" e as
+ * barras de volume). O toque abre o detalhe e o encerrar, ou o montar sem bloco.
+ */
+function BlockRow() {
+  const [open, setOpen] = useState(false);
+  const block = useQuery({
+    queryKey: ['workout', 'block'],
+    queryFn: () => workoutApi.getActiveBlock(),
+    retry: false,
+  });
+  if (block.isLoading) return null;
+  const row = block.data ? blockRow(block.data) : null;
+  return (
+    <section aria-label="Periodização" className="space-y-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="anim-press flex w-full items-center gap-3 rounded-card bg-card px-4 py-3.5 text-left"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-foreground">
+            {row ? row.title : 'Periodização em blocos'}
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            {row ? row.detail : '4 semanas planejadas, com deload no fim'}
+          </span>
+        </span>
+        {row && (
+          <span aria-hidden className="flex h-7 items-end gap-1">
+            {row.bars.map((b, i) => (
+              <span
+                key={i}
+                style={{ height: `${Math.max(0.3, b.ratio) * 100}%` }}
+                className={cn(
+                  'block w-2.5 rounded-[3px]',
+                  b.reached ? 'bg-primary' : 'bg-surface-3',
+                )}
+              />
+            ))}
+          </span>
+        )}
+        <ChevronRight
+          size={16}
+          aria-hidden
+          className={cn('shrink-0 text-faint transition-transform', open && 'rotate-90')}
+        />
+      </button>
+      {open && <BlockTimeline />}
     </section>
   );
 }
@@ -276,12 +372,9 @@ export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
 
       <OtherWays onCardio={onCardio} />
 
-      <section aria-labelledby="treino-periodizacao" className="space-y-2">
-        <h2 id="treino-periodizacao" className={sectionTitle}>
-          Periodização
-        </h2>
-        <BlockTimeline />
-      </section>
+      <BlockRow />
+
+      <QuickTemplates />
     </div>
   );
 }

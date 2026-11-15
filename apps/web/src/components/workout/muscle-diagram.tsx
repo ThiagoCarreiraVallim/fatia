@@ -1,7 +1,35 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { figureTone } from '@fatia/api-client';
 import { describeMuscles } from './muscle-labels';
+
+/** Os cinzas fixos do desenho, como estão escritos nos dois SVGs. */
+const FIGURE_FILLS = ['#F5F5F5', '#BDBDBD', '#AEAEB2', '#E0E0E0'];
+
+/**
+ * Troca os cinzas de tema claro do SVG pelos tokens do tema (`figureTone`):
+ * sem isso o boneco é uma caixa `#F5F5F5` no card escuro. O SVG é outro
+ * documento, então os tokens são lidos aqui e entram prontos numa folha de
+ * estilo dele; a pintura dos grupos é estilo inline e continua vencendo.
+ */
+function themeFigure(doc: Document) {
+  const root = getComputedStyle(document.documentElement);
+  const css = (tone: string) =>
+    tone === 'transparent' ? 'transparent' : `hsl(${root.getPropertyValue(`--${tone}`).trim()})`;
+  const rules = FIGURE_FILLS.map((fill) => {
+    const tone = figureTone(fill);
+    return tone ? `[fill="${fill}"]{fill:${css(tone)}}` : '';
+  });
+  rules.push(`[stroke="black"]{stroke:${css(figureTone('black') ?? 'card')}}`);
+  let style: Element | null = doc.getElementById('fatia-tema');
+  if (!style) {
+    style = doc.createElementNS('http://www.w3.org/2000/svg', 'style');
+    style.id = 'fatia-tema';
+    doc.documentElement.appendChild(style);
+  }
+  style.textContent = rules.join('');
+}
 
 interface MuscleDiagramProps {
   primaryMuscles?: string[];
@@ -40,12 +68,16 @@ export function MuscleDiagram({
       // fill herdado do <g>. Por isso pintamos/limpamos o fill em cada path
       // descendente (inline style sobrescreve o attribute).
       const paint = (group: Element, color: string | null) => {
-        (group as SVGElement).style.opacity = color ? '1' : '0.2';
+        // Apagado já é o cinza do tema (`figureTone`): sem a opacidade de
+        // antes, que no escuro deixava o boneco claro e lavado.
+        (group as SVGElement).style.opacity = '1';
         group.querySelectorAll('path, polygon, rect, circle, ellipse').forEach((shape) => {
           if (color) (shape as SVGElement).style.fill = color;
           else (shape as SVGElement).style.removeProperty('fill');
         });
       };
+
+      themeFigure(doc);
 
       // Reset: todos os grupos esmaecidos e sem cor
       doc.querySelectorAll('g[data-muscle]').forEach((el) => paint(el, null));
@@ -92,6 +124,9 @@ export function MuscleDiagram({
     if (backEl?.contentDocument?.readyState === 'complete') highlight(backEl);
   }, [primaryMuscles, secondaryMuscles, colors]);
 
+  // `[color-scheme:normal]` nos `<object>`: o SVG não declara esquema de cor e,
+  // com a página no escuro, o navegador pinta um fundo branco opaco atrás de
+  // documento embutido de esquema diferente — era a caixa branca no card.
   return (
     // Os dois `<object>` são desenho: o grupo fala por eles, como no app.
     <div
@@ -104,7 +139,7 @@ export function MuscleDiagram({
           ref={frontRef}
           data="/muscle-front.svg"
           type="image/svg+xml"
-          className={`pointer-events-none h-auto ${sizeClassName}`}
+          className={`pointer-events-none h-auto [color-scheme:normal] ${sizeClassName}`}
           aria-hidden
           tabIndex={-1}
         />
@@ -114,7 +149,7 @@ export function MuscleDiagram({
           ref={backRef}
           data="/muscle-back.svg"
           type="image/svg+xml"
-          className={`pointer-events-none h-auto ${sizeClassName}`}
+          className={`pointer-events-none h-auto [color-scheme:normal] ${sizeClassName}`}
           aria-hidden
           tabIndex={-1}
         />

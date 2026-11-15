@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/segmented';
 import { MarkdownLite } from '@/components/content/markdown-lite';
+import { groupTone } from './group-tone';
 import { MuscleDiagram } from './muscle-diagram';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { ExerciseVideo } from './exercise-media';
@@ -116,12 +117,19 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
             </div>
 
             <DrawerHeader className="px-0">
-              <DrawerTitle>{exercise.name}</DrawerTitle>
+              <DrawerTitle className="font-display text-[26px] font-semibold leading-tight">
+                {exercise.name}
+              </DrawerTitle>
               {/* TODO(#378): a estrela de favorito entra aqui, ao lado do nome. */}
               <DrawerDescription className="sr-only">Como fazer {exercise.name}</DrawerDescription>
               <div className="flex flex-wrap items-center gap-2">
                 {exercise.muscleGroup && (
-                  <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-bold text-primary-text">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <span
+                      aria-hidden
+                      className="h-[7px] w-[7px] rounded-[2px]"
+                      style={{ background: groupTone(exercise.muscleGroup) }}
+                    />
                     {groupLabel(exercise.muscleGroup)}
                   </span>
                 )}
@@ -203,13 +211,16 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
   return (
     <>
       {hasSteps ? (
-        <ol className="list-none space-y-2">
+        <ol className="list-none rounded-card bg-card px-4">
           {exercise.instructions.map((step, i) => (
-            <li key={i} className="flex gap-3 text-sm leading-snug">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
+            <li
+              key={i}
+              className="flex gap-3 border-border py-3.5 text-sm leading-snug text-foreground [&:not(:first-child)]:border-t"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-primary-foreground">
                 {i + 1}
               </span>
-              <span>{step}</span>
+              <span className="pt-1">{step}</span>
             </li>
           ))}
         </ol>
@@ -217,8 +228,8 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
         <p className="text-sm text-muted-foreground">Sem passo a passo para este exercício.</p>
       )}
       {guide?.tips && (
-        <div className="rounded-2xl bg-muted p-3 text-sm">
-          <p className="mb-1 text-[11px] font-bold text-primary">Dica da {guide.groupName}</p>
+        <div className="rounded-card bg-card p-4 text-sm">
+          <p className="mb-1 text-xs font-bold text-primary-text">Dica da {guide.groupName}</p>
           <MarkdownLite source={guide.tips} />
         </div>
       )}

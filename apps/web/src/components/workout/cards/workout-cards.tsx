@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Play, Repeat } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
@@ -68,9 +69,9 @@ export function BodyToneLegend() {
 const card = 'flex h-full flex-col gap-3.5 rounded-3xl bg-card p-[18px]';
 const eyebrow = 'text-[13px] font-bold text-muted-foreground';
 const primaryBtn =
-  'anim-press flex h-11 flex-1 items-center justify-center rounded-full bg-primary px-3 text-sm font-extrabold text-primary-foreground disabled:opacity-60';
+  'anim-press flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-3 text-sm font-extrabold text-primary-foreground disabled:opacity-60';
 const secondaryBtn =
-  'anim-press flex h-11 flex-1 items-center justify-center rounded-full bg-muted px-3 text-sm font-extrabold text-foreground';
+  'anim-press flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-muted px-3 text-sm font-extrabold text-foreground';
 
 /**
  * Começa uma sessão: a tela de Treino passa a mostrar a sessão aberta. Se já
@@ -123,6 +124,7 @@ export function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary })
             onClick={() => start.mutate(plan.id)}
             className={primaryBtn}
           >
+            <Play size={16} aria-hidden />
             {plan.name}
           </button>
         ) : null}
@@ -168,6 +170,7 @@ export function RepeatLastCard({ session }: { session: WorkoutSession }) {
           onClick={() => start.mutate(session.planId)}
           className={secondaryBtn}
         >
+          <Repeat size={16} aria-hidden />
           Repetir
         </button>
         <Link href="/workout/plans" className={primaryBtn}>

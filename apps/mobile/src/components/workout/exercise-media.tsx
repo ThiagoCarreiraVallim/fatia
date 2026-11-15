@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
-import { BookOpen, Play } from 'lucide-react-native';
+import { BookOpen, Info, Play } from 'lucide-react-native';
 import {
   SIGNED_VIDEO_REFRESH_MS,
   workoutApi,
@@ -168,6 +168,83 @@ export function ExerciseVisual({
           <BookOpen size={15} color={colors.foreground} />
           <Text className="font-sans-bold text-[13px] text-foreground">Como fazer</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * O topo do exercício na sessão (pranchas `Al-T3` e `Al-T3d`): o grupo com a
+ * cor e o equipamento, o nome grande, a dica da comunidade e o "Como fazer".
+ * Sem vídeo, os músculos no boneco à direita; com vídeo, a miniatura vem antes.
+ */
+export function ExerciseHeading({
+  exerciseId,
+  exerciseName,
+  groupColor,
+  groupLabel,
+}: {
+  exerciseId: number;
+  exerciseName: string;
+  groupColor: string;
+  groupLabel: string | null;
+}) {
+  const detail = useExerciseDetail(exerciseId);
+  const openDetail = useOpenExerciseDetail();
+  const exercise = detail.data;
+  const hasVideo = exerciseVideo(exercise) != null;
+  const tip = exercise?.community?.tips?.trim();
+  return (
+    <View className="gap-3">
+      {hasVideo ? <ExerciseVideo exerciseId={exerciseId} exerciseName={exerciseName} /> : null}
+      <View className="flex-row items-center gap-3 px-1">
+        <View className="min-w-0 flex-1 gap-2">
+          <View className="flex-row flex-wrap items-center gap-2">
+            {groupLabel ? (
+              <View className="flex-row items-center gap-1.5">
+                <View
+                  className="h-[7px] w-[7px] rounded-[2px]"
+                  style={{ backgroundColor: groupColor }}
+                />
+                <Text className="font-sans-semibold text-[12px] text-muted-foreground">
+                  {groupLabel}
+                </Text>
+              </View>
+            ) : null}
+            {exercise?.equipment ? (
+              <Text className="text-[12px] text-faint">{exercise.equipment}</Text>
+            ) : null}
+          </View>
+          <Text
+            accessibilityRole="header"
+            className="font-display text-[26px] leading-[29px] text-foreground"
+          >
+            {exerciseName}
+          </Text>
+          {tip ? (
+            <Text numberOfLines={4} className="text-[13px] leading-[18px] text-foreground">
+              {exercise?.community?.groupName ? `Dica da ${exercise.community.groupName}: ` : ''}
+              {tip}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Como fazer ${exerciseName}`}
+            onPress={() => openDetail(exerciseId)}
+            className="h-[34px] flex-row items-center gap-1.5 self-start rounded-full bg-muted px-3 active:opacity-80"
+          >
+            <Info size={16} color={colors.foreground} />
+            <Text className="font-sans-bold text-[13px] text-foreground">Como fazer</Text>
+          </Pressable>
+        </View>
+        {!hasVideo && exercise && exercise.primaryMuscles.length > 0 ? (
+          <MuscleDiagram
+            primaryMuscles={exercise.primaryMuscles}
+            secondaryMuscles={exercise.secondaryMuscles}
+            view="front"
+            width={84}
+          />
+        ) : null}
       </View>
     </View>
   );

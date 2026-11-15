@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Dumbbell, HeartPulse, History, Plus } from 'lucide-react-native';
+import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
 import {
+  blockRow,
   planCardInfo,
+  planExercisePreview,
   planMuscleBars,
   QUICK_TEMPLATES,
   trainingWeekLabel,
@@ -22,6 +25,7 @@ import { useStartSession } from '@/components/workout/use-start-session';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
+import { cn } from '@/components/ui/utils';
 
 /**
  * A aba Treino do redesign (prancha `Al-T1-Treino`, #377): a semana, os cards,
@@ -35,7 +39,10 @@ import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 function SectionTitle({ children, action }: { children: string; action?: React.ReactNode }) {
   return (
     <View className="flex-row items-center justify-between">
-      <Text accessibilityRole="header" className="font-sans-bold text-lg text-foreground">
+      <Text
+        accessibilityRole="header"
+        className="font-display-semibold text-[17px] text-foreground"
+      >
         {children}
       </Text>
       {action}
@@ -43,13 +50,20 @@ function SectionTitle({ children, action }: { children: string; action?: React.R
   );
 }
 
+/**
+ * A faixa da semana (prancha Al-T1), no desenho do `DayStrip` da Nutrição:
+ * hoje em verde, os dias treinados (e o do treino aberto) contornados.
+ */
 function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionId?: string }) {
   const router = useRouter();
   const chips = weekChips(week);
   return (
     <View className="gap-2.5">
       <View className="flex-row items-baseline justify-between">
-        <Text accessibilityRole="header" className="font-sans-bold text-lg text-foreground">
+        <Text
+          accessibilityRole="header"
+          className="font-display-semibold text-[17px] text-foreground"
+        >
           Semana
         </Text>
         <Text className="text-[13px] text-muted-foreground">{trainingWeekLabel(week)}</Text>
@@ -62,18 +76,7 @@ function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionI
               : chip.state === 'trained'
                 ? '/workout/history'
                 : null;
-          const bg =
-            chip.state === 'trained'
-              ? colors.primary
-              : chip.state === 'active'
-                ? colors.foreground
-                : colors.muted;
-          const fg =
-            chip.state === 'trained'
-              ? colors.primaryForeground
-              : chip.state === 'active'
-                ? colors.background
-                : colors.mutedForeground;
+          const outlined = !chip.today && chip.state !== 'rest';
           return (
             <Pressable
               key={chip.date}
@@ -81,17 +84,28 @@ function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionI
               accessibilityLabel={chip.label}
               disabled={!target}
               onPress={() => target && router.push(target as never)}
-              className="h-14 min-w-[40px] flex-1 items-center justify-center rounded-2xl"
-              style={{
-                backgroundColor: bg,
-                borderWidth: chip.today ? 2 : 0,
-                borderColor: colors.foreground,
-              }}
+              className={cn(
+                'h-16 flex-1 items-center justify-center gap-0.5 rounded-field',
+                chip.today ? 'bg-primary' : 'bg-muted',
+              )}
+              style={
+                outlined ? { borderWidth: 1.5, borderColor: `${colors.primaryText}80` } : undefined
+              }
             >
-              <Text className="text-[11px] font-sans-bold" style={{ color: fg }}>
+              <Text
+                className={cn(
+                  'font-sans-semibold text-xs',
+                  chip.today ? 'text-primary-foreground' : 'text-faint',
+                )}
+              >
                 {chip.letter}
               </Text>
-              <Text className="font-display-semibold text-base" style={{ color: fg }}>
+              <Text
+                className={cn(
+                  'font-display-semibold text-base',
+                  chip.today ? 'text-primary-foreground' : 'text-foreground',
+                )}
+              >
                 {chip.day}
               </Text>
             </Pressable>
@@ -117,36 +131,40 @@ function MuscleShareBar({ plan }: { plan: WorkoutPlan }) {
   );
 }
 
+/** O cartão do plano (prancha Al-T1): nome e "SEU", resumo, prévia e a barra de músculos. */
 function PlanCard({ plan, width }: { plan: WorkoutPlan; width: number }) {
   const router = useRouter();
   const info = planCardInfo(plan);
-  const names = (plan.exercises ?? [])
-    .slice()
-    .sort((a, b) => a.order - b.order)
-    .slice(0, 3)
-    .map((e) => e.exercise?.name)
-    .filter(Boolean);
+  const preview = planExercisePreview(plan);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${plan.name}, ${info}`}
       onPress={() => router.push(`/workout/plans/${plan.id}`)}
       style={{ width }}
-      className="min-h-[168px] gap-2 rounded-3xl bg-card p-4 active:opacity-80"
+      className="gap-2.5 rounded-card bg-card p-4 active:opacity-80"
     >
-      <Text numberOfLines={1} className="font-display text-[22px] leading-[26px] text-foreground">
-        {plan.name}
-      </Text>
-      <Text numberOfLines={1} className="text-[12px] text-muted-foreground">
+      <View className="flex-row items-center justify-between gap-2">
+        <Text numberOfLines={1} className="flex-1 font-sans-bold text-[17px] text-foreground">
+          {plan.name}
+        </Text>
+        <View
+          className="rounded-pill px-2.5 py-0.5"
+          style={{ backgroundColor: `${colors.primary}29` }}
+        >
+          <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-primary">
+            Seu
+          </Text>
+        </View>
+      </View>
+      <Text numberOfLines={1} className="text-[13px] text-muted-foreground">
         {info}
       </Text>
-      <View className="gap-0.5">
-        {names.map((name) => (
-          <Text key={name} numberOfLines={1} className="text-[13px] text-foreground">
-            {name}
-          </Text>
-        ))}
-      </View>
+      {preview ? (
+        <Text numberOfLines={1} className="text-sm text-foreground">
+          {preview}
+        </Text>
+      ) : null}
       <View className="mt-auto">
         <MuscleShareBar plan={plan} />
       </View>
@@ -161,25 +179,30 @@ function NewPlanCard({ width }: { width: number }) {
       accessibilityRole="button"
       accessibilityLabel="Novo plano"
       onPress={() => router.push('/workout/plans')}
-      style={{ width }}
-      className="min-h-[168px] items-center justify-center gap-2 rounded-3xl border border-dashed border-border active:opacity-80"
+      style={{ width, borderWidth: 1.5, borderColor: colors.borderStrong }}
+      className="items-center justify-center gap-2 rounded-card p-4 active:opacity-80"
     >
-      <Plus size={22} color={colors.foreground} />
+      <View className="h-10 w-10 items-center justify-center rounded-full bg-muted">
+        <Plus size={16} color={colors.foreground} />
+      </View>
       <Text className="font-sans-bold text-sm text-foreground">Novo plano</Text>
     </Pressable>
   );
 }
 
+/** Um jeito de começar (prancha Al-T1): ícone num quadrado de cor, nome e dica. */
 function WayCard({
   title,
   subtitle,
   icon: Icon,
+  tone,
   disabled,
   onPress,
 }: {
   title: string;
   subtitle: string;
   icon: typeof Plus;
+  tone: string;
   disabled?: boolean;
   onPress: () => void;
 }) {
@@ -190,15 +213,75 @@ function WayCard({
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
-      className="min-h-[88px] flex-1 justify-between rounded-3xl bg-card p-4 active:opacity-80"
+      className="min-w-0 flex-1 flex-row items-center gap-2.5 rounded-[18px] bg-card p-3 active:opacity-80"
       style={disabled ? { opacity: 0.6 } : undefined}
     >
-      <Icon size={20} color={colors.foreground} />
-      <View>
+      <View
+        className="h-9 w-9 items-center justify-center rounded-xl"
+        style={{ backgroundColor: `${tone}29` }}
+      >
+        <Icon size={16} color={tone} />
+      </View>
+      <View className="min-w-0 flex-1">
         <Text className="font-sans-bold text-sm text-foreground">{title}</Text>
-        <Text className="text-xs text-muted-foreground">{subtitle}</Text>
+        <Text numberOfLines={1} className="text-xs text-muted-foreground">
+          {subtitle}
+        </Text>
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * O bloco numa linha (prancha Al-T1: "Bloco hipertrofia · semana 2 de 4" e as
+ * barras de volume). O toque abre o detalhe e o encerrar, ou o montar sem bloco.
+ */
+function BlockRow() {
+  const [open, setOpen] = useState(false);
+  const block = useQuery({
+    queryKey: ['workout', 'block'],
+    queryFn: () => workoutApi.getActiveBlock(),
+    retry: false,
+  });
+  if (block.isLoading) return null;
+  const row = block.data ? blockRow(block.data) : null;
+  return (
+    <View className="gap-2">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={row ? `${row.title}, ${row.detail}` : 'Periodização em blocos'}
+        onPress={() => setOpen((v) => !v)}
+        className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3.5 active:opacity-80"
+      >
+        <View className="min-w-0 flex-1">
+          <Text className="font-sans-bold text-sm text-foreground">
+            {row ? row.title : 'Periodização em blocos'}
+          </Text>
+          <Text className="text-xs text-muted-foreground">
+            {row ? row.detail : '4 semanas planejadas, com deload no fim'}
+          </Text>
+        </View>
+        {row ? (
+          <View className="h-7 flex-row items-end gap-1">
+            {row.bars.map((b, i) => (
+              <View
+                key={i}
+                className="w-2.5 rounded-[3px]"
+                style={{
+                  height: `${Math.max(0.3, b.ratio) * 100}%`,
+                  backgroundColor: b.reached ? colors.primary : colors.surface3,
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+        <View style={open ? { transform: [{ rotate: '90deg' }] } : undefined}>
+          <ChevronRight size={16} color={colors.faintForeground} />
+        </View>
+      </Pressable>
+      {open ? <BlockTimeline /> : null}
+    </View>
   );
 }
 
@@ -252,7 +335,7 @@ export default function WorkoutScreen() {
     queryFn: () => workoutApi.listPlans(),
   });
 
-  const planWidth = Math.round((width - 40) * 0.62);
+  const planWidth = Math.min(240, Math.round((width - 40) * 0.62));
   const quickCardWidth = Math.round((width - 40) * 0.7);
 
   return (
@@ -310,45 +393,51 @@ export default function WorkoutScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 12 }}
+              contentContainerStyle={{ gap: 10 }}
             >
               {plans.data.map((plan) => (
                 <PlanCard key={plan.id} plan={plan} width={planWidth} />
               ))}
-              <NewPlanCard width={plans.data.length ? Math.round(planWidth * 0.6) : planWidth} />
+              <NewPlanCard width={plans.data.length ? 140 : planWidth} />
             </ScrollView>
           ) : null}
         </View>
 
         <View className="gap-3">
           <SectionTitle>Outros jeitos de treinar</SectionTitle>
-          <View className="flex-row gap-3">
+          {/* Circuito e Modelos entram com a #380 e a #379. */}
+          <View className="flex-row gap-2">
             <WayCard
               title="Livre"
               subtitle="monte na hora"
-              icon={Dumbbell}
+              icon={Zap}
+              tone={colors.primaryText}
               disabled={start.isPending}
               onPress={() => start.mutate({})}
             />
             <WayCard
               title="Só cardio"
               subtitle="esteira, bike…"
-              icon={HeartPulse}
+              icon={Heart}
+              tone={colors.danger}
               disabled={start.isPending}
               onPress={() => start.mutate({ then: 'cardio' })}
             />
           </View>
+        </View>
+
+        <BlockRow />
+
+        {/* Os treinos rápidos não estão na prancha (os "Modelos" da #379 tomam o
+            lugar deles): ficam no fim, depois do bloco, para não sumirem antes. */}
+        <View className="gap-3">
+          <SectionTitle>Treinos rápidos</SectionTitle>
           <Carousel
             data={QUICK_TEMPLATES}
             itemWidth={quickCardWidth}
             keyExtractor={(t) => t.id}
             renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
           />
-        </View>
-
-        <View className="gap-3">
-          <SectionTitle>Periodização</SectionTitle>
-          <BlockTimeline />
         </View>
       </View>
     </Screen>

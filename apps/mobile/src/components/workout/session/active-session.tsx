@@ -3,18 +3,20 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import {
   buildExerciseGroups,
+  muscleGroupLabel,
   orderExerciseGroups,
   pickFocusedGroup,
   type MuscleGroup,
+  type StrengthMuscleGroup,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
-import { Button, ConfirmDrawer, DrawerLayer, Switch, cn, useConfirm } from '@/components/ui';
+import { Button, ConfirmDrawer, DrawerLayer, cn, useConfirm } from '@/components/ui';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
-import { ExerciseVisual, useExerciseDetail } from '@/components/workout/exercise-media';
+import { ExerciseHeading, useExerciseDetail } from '@/components/workout/exercise-media';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { groupColorName } from '@/components/workout/workout-home';
 import { ActiveCardioCard } from './active-cardio-card';
@@ -161,6 +163,54 @@ export function ActiveSession({
   })();
 
   const groupName = detail.data?.muscleGroup;
+  const openOverview = () => router.push(`/workout/session/${session.id}/edit`);
+
+  // "1/7" e as setas, na linha da série (prancha `Al-T3d`).
+  const exerciseNav = (
+    <View className="flex-row items-center gap-1.5">
+      <Text className="text-[12px] text-faint" style={{ fontVariant: ['tabular-nums'] }}>
+        {index + 1}/{groups.length}
+      </Text>
+      <NavArrow label="Exercício anterior" disabled={index <= 0} onPress={() => goTo(index - 1)}>
+        <ChevronLeft size={16} color={colors.foreground} />
+      </NavArrow>
+      <NavArrow
+        label="Próximo exercício"
+        disabled={index >= groups.length - 1}
+        onPress={() => goTo(index + 1)}
+      >
+        <ChevronRight size={16} color={colors.foreground} />
+      </NavArrow>
+    </View>
+  );
+
+  // O "Passar sozinho" é um check, como na prancha; o rótulo explica o efeito.
+  const autoToggle = (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: autoAdvance }}
+      accessibilityLabel="Passar sozinho para o próximo exercício"
+      onPress={() => setAutoAdvance(!autoAdvance)}
+      className="min-h-[48px] flex-row items-center gap-3 px-1"
+    >
+      <View
+        className={cn(
+          'h-6 w-6 items-center justify-center rounded-md',
+          autoAdvance ? 'bg-primary' : 'border-[1.5px] border-border-strong',
+        )}
+      >
+        {autoAdvance ? <Check size={16} color={colors.primaryForeground} /> : null}
+      </View>
+      <View className="flex-1">
+        <Text className="text-[13px] text-foreground">Passar sozinho para o próximo exercício</Text>
+        <Text className="text-[12px] text-muted-foreground">
+          {autoAdvance
+            ? 'ao terminar as séries, já abre o seguinte'
+            : 'ao terminar, você escolhe qual fazer'}
+        </Text>
+      </View>
+    </Pressable>
+  );
   const remaining = groups.filter((g, i) => i !== index && !isExerciseComplete(g));
 
   return (
@@ -170,7 +220,6 @@ export function ActiveSession({
           <SessionHeader
             startedAt={session.startedAt}
             onMinimize={exit.leave}
-            onOverview={() => router.push(`/workout/session/${session.id}/edit`)}
             onFinish={requestFinish}
           />
           <ScrollView
@@ -189,49 +238,20 @@ export function ActiveSession({
           >
             {current ? (
               <>
-                <View className="gap-1">
-                  <View className="flex-row items-center">
-                    <NavArrow
-                      label="Exercício anterior"
-                      disabled={index <= 0}
-                      onPress={() => goTo(index - 1)}
-                    >
-                      <ChevronLeft size={20} color={colors.foreground} />
-                    </NavArrow>
-                    <Text className="flex-1 text-center text-[13px] text-muted-foreground">
-                      exercício {index + 1} de {groups.length}
-                    </Text>
-                    <NavArrow
-                      label="Próximo exercício"
-                      disabled={index >= groups.length - 1}
-                      onPress={() => goTo(index + 1)}
-                    >
-                      <ChevronRight size={20} color={colors.foreground} />
-                    </NavArrow>
-                  </View>
-                  <Text
-                    accessibilityRole="header"
-                    className="text-center font-display text-[28px] leading-[32px] text-foreground"
-                  >
-                    {current.exerciseName}
-                  </Text>
-                  {groupName ? (
-                    <View className="flex-row items-center justify-center gap-1.5">
-                      <View
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: colors[groupColorName(groupName)] }}
-                      />
-                      <Text className="text-[12px] capitalize text-muted-foreground">
-                        {groupName}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <ExerciseVisual
-                  key={`visual-${current.exerciseId}`}
+                <ExerciseHeading
+                  key={`heading-${current.exerciseId}`}
                   exerciseId={current.exerciseId}
                   exerciseName={current.exerciseName}
+                  groupColor={
+                    groupName ? colors[groupColorName(groupName)] : colors.faintForeground
+                  }
+                  groupLabel={
+                    groupName
+                      ? groupName === 'cardio'
+                        ? 'Cardio'
+                        : muscleGroupLabel(groupName as StrengthMuscleGroup)
+                      : null
+                  }
                 />
 
                 {current.isCardio ? (
@@ -243,6 +263,9 @@ export function ActiveSession({
                     onLogged={(completed) => {
                       if (completed) setAdvanceFrom(current.exerciseId);
                     }}
+                    nav={exerciseNav}
+                    onAll={openOverview}
+                    beforeSubmit={autoToggle}
                   />
                 ) : (
                   // `key` por exercício: sem ela a carga digitada no anterior
@@ -257,6 +280,9 @@ export function ActiveSession({
                     onLogged={(completed) => {
                       if (completed) setAdvanceFrom(current.exerciseId);
                     }}
+                    nav={exerciseNav}
+                    onAll={openOverview}
+                    beforeSubmit={autoToggle}
                   />
                 )}
               </>
@@ -341,23 +367,7 @@ export function ActiveSession({
               </View>
             ) : null}
 
-            <View className="flex-row items-center gap-3 rounded-2xl bg-card px-4 py-3">
-              <View className="flex-1">
-                <Text className="text-sm text-foreground">
-                  Passar sozinho para o próximo exercício
-                </Text>
-                <Text className="text-[12px] text-muted-foreground">
-                  {autoAdvance
-                    ? 'Quando o descanso da última série acaba'
-                    : 'Você escolhe o próximo na lista'}
-                </Text>
-              </View>
-              <Switch
-                checked={autoAdvance}
-                onCheckedChange={setAutoAdvance}
-                label="Passar sozinho para o próximo exercício"
-              />
-            </View>
+            {state === 'working' && current ? null : autoToggle}
           </ScrollView>
         </View>
       </ExerciseDetailHost>
@@ -405,7 +415,7 @@ function NavArrow({
       disabled={disabled}
       onPress={onPress}
       style={disabled ? { opacity: 0.3 } : undefined}
-      className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
+      className="h-9 w-9 items-center justify-center rounded-full bg-muted active:opacity-80"
     >
       {children}
     </Pressable>

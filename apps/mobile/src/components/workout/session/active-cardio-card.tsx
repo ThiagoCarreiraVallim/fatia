@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,11 +28,20 @@ export function ActiveCardioCard({
   group,
   working,
   onLogged,
+  nav,
+  onAll,
+  beforeSubmit,
 }: {
   sessionId: string;
   group: ExerciseGroup;
   working: boolean;
   onLogged: (completed: boolean) => void;
+  /** "1/7" e as setas do exercício, à direita da linha da série (prancha `Al-T3d`). */
+  nav?: ReactNode;
+  /** "Todas ›", ao lado dos chips das séries. */
+  onAll?: () => void;
+  /** O "Passar sozinho", que a prancha põe logo acima do "Concluir série". */
+  beforeSubmit?: ReactNode;
 }) {
   const qc = useQueryClient();
   const units = useUnitPrefs();
@@ -94,16 +103,24 @@ export function ActiveCardioCard({
 
   return (
     <View className="gap-3">
-      <Text className="text-[13px] text-muted-foreground">
-        {setHeadline({
-          done: group.sets.length,
-          target: 1,
-          targetReps: group.targetReps,
-          lastTime,
-        })}
-      </Text>
+      <View className="flex-row items-center gap-2">
+        <Text className="flex-1 text-[13px] text-muted-foreground">
+          {setHeadline({
+            done: group.sets.length,
+            target: 1,
+            targetReps: group.targetReps,
+            lastTime,
+          })}
+        </Text>
+        {nav}
+      </View>
 
-      <SetChips group={group} editing={editingSet ? editing : null} onEdit={setEditing} />
+      <SetChips
+        group={group}
+        editing={editingSet ? editing : null}
+        onEdit={setEditing}
+        onAll={onAll}
+      />
 
       {editingSet && editing != null ? (
         <SetEditor
@@ -122,6 +139,7 @@ export function ActiveCardioCard({
             <ValueStepper
               label="Distância"
               unit="km"
+              stacked={{ shortLabel: 'km' }}
               accessibilityLabel={`distância em km de ${group.exerciseName}`}
               value={km}
               step={STEPS.distance}
@@ -130,6 +148,7 @@ export function ActiveCardioCard({
             <ValueStepper
               label="Tempo"
               unit="min"
+              stacked={{ shortLabel: 'min' }}
               accessibilityLabel={`minutos de ${group.exerciseName}`}
               value={minutes}
               step={STEPS.minutes}
@@ -165,8 +184,10 @@ export function ActiveCardioCard({
             <Text className="text-xs text-danger">Não deu para salvar. Toque de novo.</Text>
           ) : null}
 
+          {beforeSubmit}
+
           <Button
-            className="h-14 rounded-full"
+            className="h-[60px] rounded-full"
             disabled={save.isPending || nothing}
             loading={save.isPending}
             onPress={() => {

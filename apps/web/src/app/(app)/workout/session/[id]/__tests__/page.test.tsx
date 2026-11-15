@@ -149,7 +149,8 @@ describe('Treino feito! (#377)', () => {
     expect(screen.getByRole('img', { name: 'Músculos: chest' })).toBeInTheDocument();
 
     const list = screen.getByRole('list', { name: 'Exercícios do treino' });
-    expect(within(list).getByText('52,5 × 10')).toBeInTheDocument();
+    // Como na prancha Al-T5: "4 séries · melhor 52,5 × 10" embaixo do nome.
+    expect(within(list).getByText(/· melhor 52,5 × 10$/)).toBeInTheDocument();
     expect(within(list).getByLabelText('Recorde')).toBeInTheDocument();
   });
 

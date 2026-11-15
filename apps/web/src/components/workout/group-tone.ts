@@ -1,15 +1,17 @@
 /**
- * A cor de cada grupo muscular nas barras do Treino (cartão do plano, músculos
- * do treino feito). Só tokens do tema: nenhum hex solto.
+ * A cor de cada grupo muscular no Treino (barras do plano, o quadradinho do
+ * grupo no topo da sessão e no Como fazer, os músculos e exercícios do treino
+ * feito). As cores do canvas — peito azul, ombro verde-água, braço verde,
+ * cardio rosa — e as mesmas do app (`groupColorName`). Só tokens do tema.
  */
 const GROUP_TONE: Record<string, string> = {
-  peito: 'hsl(var(--primary))',
-  costas: 'hsl(var(--info))',
-  pernas: 'hsl(var(--steps))',
-  ombro: 'hsl(var(--warning))',
-  braço: 'hsl(var(--protein))',
-  core: 'hsl(var(--carbs))',
-  cardio: 'hsl(var(--water))',
+  peito: 'hsl(var(--protein))',
+  costas: 'hsl(var(--water))',
+  pernas: 'hsl(var(--primary))',
+  ombro: 'hsl(var(--steps))',
+  braço: 'hsl(var(--carbs))',
+  core: 'hsl(var(--fat))',
+  cardio: 'hsl(var(--danger))',
 };
 
 export function groupTone(group: string): string {

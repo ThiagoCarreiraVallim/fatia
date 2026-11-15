@@ -2,81 +2,50 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
-import { formatClock, pluralize, type SessionProgress } from './format';
+import { Check, ChevronDown } from 'lucide-react';
+import { formatClock } from './format';
 
 /**
  * Cabeçalho da sessão (prancha Al-T3): minimizar (a barra do treino em
- * andamento segue nas outras telas), o relógio do treino e o finalizar. O
- * progresso fica logo abaixo, numa linha fina.
+ * andamento segue nas outras telas), o relógio do treino numa pílula e o
+ * finalizar, redondo. O "Cancelar treino" mora no "Treino atual".
  */
 export function SessionHeader({
   startedAt,
-  progress,
-  onCancel,
   onFinish,
 }: {
   startedAt: string;
-  progress: SessionProgress;
-  onCancel: () => void;
   onFinish: () => void;
 }) {
   const seconds = useElapsedSeconds(startedAt);
-  const progressLabel = `${progress.done}/${progress.total} ${pluralize(progress.total, 'exercício', 'exercícios')}`;
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <Link
-          href="/"
-          aria-label="Minimizar treino"
-          className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+    <div className="flex items-center justify-between gap-2">
+      <Link
+        href="/"
+        aria-label="Minimizar treino"
+        className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+      >
+        <ChevronDown size={20} aria-hidden />
+      </Link>
+      <span className="flex h-11 items-center gap-2 rounded-full bg-muted px-4">
+        <span aria-hidden className="anim-pulse-dot block h-2 w-2 rounded-full bg-primary" />
+        <span
+          role="timer"
+          aria-label="Tempo de treino"
+          className="font-display text-lg font-semibold text-foreground tabular-nums"
         >
-          <ChevronDown size={20} aria-hidden />
-        </Link>
-        <div className="flex flex-col items-center">
-          <span
-            role="timer"
-            aria-label="Tempo de treino"
-            className="font-display text-xl font-extrabold text-foreground tabular-nums"
-          >
-            {formatClock(seconds)}
-          </span>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="min-h-8 px-2 text-[11px] font-bold text-muted-foreground"
-          >
-            Cancelar treino
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={onFinish}
-          aria-label="Finalizar treino"
-          className="anim-press h-11 rounded-full bg-primary px-4 text-sm font-extrabold text-primary-foreground"
-        >
-          Finalizar
-        </button>
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <div
-          role="progressbar"
-          aria-label="Progresso do treino"
-          aria-valuemin={0}
-          aria-valuemax={progress.total}
-          aria-valuenow={progress.done}
-          aria-valuetext={progressLabel}
-          className="h-1 flex-1 overflow-hidden rounded-full bg-muted"
-        >
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${Math.round(progress.ratio * 100)}%` }}
-          />
-        </div>
-        <p className="text-[11px] font-bold text-muted-foreground tabular-nums">{progressLabel}</p>
-      </div>
+          {formatClock(seconds)}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onFinish}
+        aria-label="Finalizar treino"
+        className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+      >
+        <Check size={20} aria-hidden />
+      </button>
     </div>
   );
 }

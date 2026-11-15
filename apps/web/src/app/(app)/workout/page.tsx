@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ListChecks, Plus } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   buildExerciseGroups,
   moveExerciseInOrder,
@@ -15,21 +15,17 @@ import {
   type SessionSet,
   type WorkoutSession,
 } from '@fatia/api-client';
-import { Button } from '@/components/ui/button';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { FinishSessionModal } from '@/components/workout/finish-session-modal';
 import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
 import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
-import { ExerciseActions } from '@/components/workout/exercise-actions';
 import { RemoveExerciseModal } from '@/components/workout/remove-exercise-modal';
 import { RpeModal } from '@/components/workout/rpe-modal';
 import { SessionHeader } from '@/components/workout/session-header';
-import { groupCardItem } from '@/components/workout/group-card-item';
-import { isExerciseComplete, sessionProgress } from '@/components/workout/format';
+import { isExerciseComplete } from '@/components/workout/format';
 import { CurrentWorkoutSheet } from '@/components/workout/current-workout-sheet';
-import { ExerciseMedia } from '@/components/workout/exercise-media';
+import { ExerciseHeading } from '@/components/workout/exercise-title';
 import { useAutoAdvance } from '@/components/workout/use-auto-advance';
 import { Switch } from '@/components/ui/switch';
 import { useSessionRestTimer } from '@/components/workout/rest-timer-provider';
@@ -37,7 +33,6 @@ import { useSessionLayout } from '@/components/workout/use-session-layout';
 import { useWakeLock } from '@/components/workout/use-wake-lock';
 import { WorkoutHome } from '@/components/workout/workout-home';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTopBarTitle } from '@/components/layout/app-top-bar';
 
 /**
  * Sessão em andamento — no PWA ela vive aqui, porque não existe rota de sessão.
@@ -87,9 +82,6 @@ function ActiveSession({
   );
   const focused = pickFocusedGroup(groups, skippedExerciseIds, pickedId);
 
-  const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);
-  useTopBarTitle('Treino em andamento');
-
   function skipExercise(exerciseId: number) {
     setSkippedExerciseIds((prev) => new Set(prev).add(exerciseId));
     if (pickedId === exerciseId) setPickedId(null);
@@ -120,22 +112,8 @@ function ActiveSession({
     });
     setPickedId(exerciseId);
     setPicking(false);
-    // O card em foco fica no topo; quem clicou estava lá embaixo na lista.
+    // O card em foco fica no topo: quem escolheu pode ter rolado a página.
     topRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }
-
-  /**
-   * Move entre os cards de baixo, e o que está em foco fica onde estava na
-   * ordem: senão, mexer em dois exercícios lá embaixo mudaria qual vem depois
-   * do atual.
-   */
-  function move(exerciseId: number, direction: 'up' | 'down') {
-    const ids = moveExerciseInOrder(others, exerciseId, direction);
-    if (focused) {
-      const index = groups.findIndex((g) => g.exerciseId === focused.exerciseId);
-      ids.splice(index, 0, focused.exerciseId);
-    }
-    layout.reorder.mutate(ids);
   }
 
   function removeExercise(group: ExerciseGroup) {
@@ -153,14 +131,75 @@ function ActiveSession({
     else setRemoveTarget(group);
   }
 
+  // "1/7" e as setas, na linha da série (prancha Al-T3d): andam até o vizinho
+  // ainda por fazer.
+  const exerciseNav = focused ? (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <span className="me-1 text-[13px] font-bold text-muted-foreground tabular-nums">
+        <span aria-hidden>
+          {focusedIndex + 1}/{groups.length}
+        </span>
+        <span className="sr-only">
+          Exercício {focusedIndex + 1} de {groups.length}
+        </span>
+      </span>
+      <button
+        type="button"
+        aria-label="Exercício anterior"
+        disabled={!previousOpen}
+        onClick={() => previousOpen && doNow(previousOpen.exerciseId)}
+        className="anim-press flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
+      >
+        <ChevronLeft size={18} aria-hidden />
+      </button>
+      <button
+        type="button"
+        aria-label="Próximo exercício"
+        disabled={!nextOpen}
+        onClick={() => nextOpen && doNow(nextOpen.exerciseId)}
+        className="anim-press flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
+      >
+        <ChevronRight size={18} aria-hidden />
+      </button>
+    </div>
+  ) : null;
+
+  // O "Passar sozinho" logo acima do "Concluir série" (prancha Al-T3), como
+  // caixa de marcar; a dica diz o que acontece em cada caso.
+  const autoToggle = (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={autoAdvance}
+      onClick={() => setAutoAdvance(!autoAdvance)}
+      className="anim-press flex w-full items-center gap-3 text-left"
+    >
+      <span
+        aria-hidden
+        className={
+          autoAdvance
+            ? 'flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] bg-primary text-primary-foreground'
+            : 'flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] shadow-[inset_0_0_0_1.5px_hsl(var(--border-strong))]'
+        }
+      >
+        {autoAdvance && <Check size={16} strokeWidth={3} />}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold text-foreground">
+          Passar sozinho para o próximo exercício
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          {autoAdvance
+            ? 'ao terminar as séries, já abre o seguinte'
+            : 'ao terminar, você escolhe qual fazer'}
+        </span>
+      </span>
+    </button>
+  );
+
   return (
     <div ref={topRef} className="scroll-mt-20 space-y-4 px-5 pt-4 pb-4">
-      <SessionHeader
-        startedAt={session.startedAt}
-        progress={sessionProgress(groups)}
-        onCancel={() => setCancelOpen(true)}
-        onFinish={() => setFinishOpen(true)}
-      />
+      <SessionHeader startedAt={session.startedAt} onFinish={() => setFinishOpen(true)} />
 
       {/* Montada sempre, e não junto com o texto: um `aria-live` que nasce já
           preenchido costuma não ser anunciado. */}
@@ -235,34 +274,8 @@ function ActiveSession({
       )}
 
       {!picking && focused && (
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            aria-label="Exercício anterior"
-            disabled={!previousOpen}
-            onClick={() => previousOpen && doNow(previousOpen.exerciseId)}
-            className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-          >
-            <ChevronLeft size={18} aria-hidden />
-          </button>
-          <p className="text-[13px] font-bold text-muted-foreground tabular-nums">
-            Exercício {focusedIndex + 1} de {groups.length}
-          </p>
-          <button
-            type="button"
-            aria-label="Próximo exercício"
-            disabled={!nextOpen}
-            onClick={() => nextOpen && doNow(nextOpen.exerciseId)}
-            className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-          >
-            <ChevronRight size={18} aria-hidden />
-          </button>
-        </div>
-      )}
-
-      {!picking && focused && (
-        <ExerciseMedia
-          key={`media-${focused.exerciseId}`}
+        <ExerciseHeading
+          key={`heading-${focused.exerciseId}`}
           exerciseId={focused.exerciseId}
           exerciseName={focused.exerciseName}
         />
@@ -285,6 +298,9 @@ function ActiveSession({
           }}
           onAskRpe={setRpeTarget}
           onAnnounce={setAnnouncement}
+          nav={exerciseNav}
+          onAll={() => setCurrentOpen(true)}
+          beforeSubmit={autoToggle}
         />
       )}
 
@@ -294,29 +310,8 @@ function ActiveSession({
           sessionId={session.id}
           group={focused}
           onFinishExercise={() => skipExercise(focused.exerciseId)}
+          nav={exerciseNav}
         />
-      )}
-
-      {!picking && focused && (
-        <div className="-mt-2 flex justify-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground"
-            onClick={() => setCurrentOpen(true)}
-          >
-            <ListChecks size={16} aria-hidden />
-            Treino atual
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => requestRemove(focused)}
-          >
-            Tirar este exercício do treino
-          </Button>
-        </div>
       )}
 
       {!picking && !focused && groups.length > 0 && (
@@ -328,43 +323,20 @@ function ActiveSession({
         </div>
       )}
 
-      {others.length > 0 && (
-        <div className="space-y-3">
-          <p className="mt-2 text-[11px] font-extrabold tracking-wide text-muted-foreground">
-            {focused ? 'PRÓXIMOS' : 'EXERCÍCIOS DO TREINO'}
-          </p>
-          {others.map((g, index) => (
-            <ExerciseDetailCard
-              key={g.exerciseId}
-              mode="readonly"
-              isCardio={g.isCardio}
-              sessionId={session.id}
-              item={groupCardItem(g)}
-              loggedSets={g.sets}
-              footer={
-                <ExerciseActions
-                  group={g}
-                  isFirst={index === 0}
-                  isLast={index === others.length - 1}
-                  disabled={layout.reorder.isPending}
-                  onDoNow={() => doNow(g.exerciseId)}
-                  onMove={(direction) => move(g.exerciseId, direction)}
-                  onRemove={() => requestRemove(g)}
-                />
-              }
-            />
-          ))}
-        </div>
+      {/* Sem exercício em foco (treino livre vazio, ou tudo feito) não há o
+          "Todas ›" do card: adicionar fica aqui. Com foco, a prancha Al-T3 não
+          tem lista embaixo — fazer outro agora, reordenar, tirar e pôr
+          exercício moram no "Treino atual". */}
+      {!picking && !focused && (
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="anim-press flex h-12 w-full items-center justify-center gap-2 rounded-full bg-muted text-sm font-bold text-foreground"
+        >
+          <Plus size={16} aria-hidden />
+          Adicionar exercício
+        </button>
       )}
-
-      <button
-        type="button"
-        onClick={() => setSearchOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground hover:border-foreground hover:text-foreground"
-      >
-        <Plus size={16} />
-        Adicionar exercício
-      </button>
 
       <ExerciseSearchDrawer
         open={searchOpen}
@@ -396,6 +368,10 @@ function ActiveSession({
           setSearchOpen(true);
         }}
         onRemove={requestRemove}
+        onCancel={() => {
+          setCurrentOpen(false);
+          setCancelOpen(true);
+        }}
         onFinish={() => {
           setCurrentOpen(false);
           setFinishOpen(true);

@@ -24,6 +24,7 @@ import {
   DrawerTitle,
   LoadingState,
   Segmented,
+  cn,
 } from '@/components/ui';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { ExerciseVideo } from './exercise-media';
@@ -113,21 +114,24 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
       {exercise ? (
         <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['90%']}>
           <DrawerHeader>
-            <DrawerTitle>{exercise.name}</DrawerTitle>
+            <DrawerTitle className="font-display text-[26px] leading-[30px]">
+              {exercise.name}
+            </DrawerTitle>
           </DrawerHeader>
 
           <DrawerScrollView className="flex-1 px-4">
             <View className="gap-4 pb-6">
               <ExerciseVideo exerciseId={exercise.id} exerciseName={exercise.name} height={180} />
 
-              <View className="gap-1.5">
+              {/* Prancha `Al-T9`: "■ Peito  barra · intermediário · composto" numa linha. */}
+              <View className="flex-row flex-wrap items-center gap-2">
                 {exercise.muscleGroup ? (
-                  <View className="flex-row items-center gap-1.5 self-start rounded-full bg-muted px-3 py-1">
+                  <View className="flex-row items-center gap-1.5">
                     <View
-                      className="h-2 w-2 rounded-full"
+                      className="h-[7px] w-[7px] rounded-[2px]"
                       style={{ backgroundColor: colors[groupColorName(exercise.muscleGroup)] }}
                     />
-                    <Text className="text-[12px] font-sans-bold capitalize text-foreground">
+                    <Text className="text-[13px] font-sans-semibold capitalize text-foreground">
                       {exercise.muscleGroup}
                     </Text>
                   </View>
@@ -190,14 +194,22 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
   return (
     <View className="gap-3">
       {exercise.instructions.length > 0 ? (
-        exercise.instructions.map((step, i) => (
-          <View key={`${i}-${step.slice(0, 12)}`} className="flex-row gap-3">
-            <View className="h-6 w-6 items-center justify-center rounded-full bg-muted">
-              <Text className="text-[12px] font-sans-bold text-foreground">{i + 1}</Text>
+        // Prancha `Al-T9`: os passos num cartão, número no círculo verde, linha entre eles.
+        <View className="rounded-card bg-card px-4">
+          {exercise.instructions.map((step, i) => (
+            <View
+              key={`${i}-${step.slice(0, 12)}`}
+              className={cn('flex-row gap-3 py-3.5', i > 0 && 'border-t border-border')}
+            >
+              <View className="h-6 w-6 items-center justify-center rounded-full bg-primary">
+                <Text className="text-[12px] font-sans-extrabold text-primary-foreground">
+                  {i + 1}
+                </Text>
+              </View>
+              <Text className="flex-1 text-sm leading-snug text-foreground">{step}</Text>
             </View>
-            <Text className="flex-1 text-sm leading-snug text-foreground">{step}</Text>
-          </View>
-        ))
+          ))}
+        </View>
       ) : (
         <Text className="text-sm text-muted-foreground">
           Sem passo a passo para este exercício.
@@ -205,10 +217,8 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
       )}
 
       {guide?.tips ? (
-        <View className="gap-1 rounded-2xl bg-muted p-3">
-          <Text className="font-sans-bold text-[13px] text-foreground">
-            Dica da {guide.groupName}
-          </Text>
+        <View className="gap-1 rounded-card bg-card p-4">
+          <Text className="font-sans-bold text-sm text-foreground">Dica da {guide.groupName}</Text>
           <MarkdownLite source={guide.tips} />
         </View>
       ) : null}

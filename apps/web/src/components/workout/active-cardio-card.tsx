@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Pause, Play, RotateCcw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { newSetClientKey, parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ExerciseTitle } from './exercise-title';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { formatClock, formatPace, formatPreviousSet } from './format';
 
@@ -14,9 +13,11 @@ interface Props {
   sessionId: string;
   group: ExerciseGroup;
   onFinishExercise: () => void;
+  /** "1/7" e as setas do exercício (prancha `Al-T3d`). */
+  nav?: ReactNode;
 }
 
-export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) {
+export function ActiveCardioCard({ sessionId, group, onFinishExercise, nav }: Props) {
   const qc = useQueryClient();
   const existing = group.sets[0];
 
@@ -140,18 +141,12 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
     <div className="rounded-2xl border border-subtle bg-card">
       {/* O "Recolher" que ficava à esquerda do nome não recolhia nada: saiu, e
           no lugar dele entrou o "Como fazer" e a última vez, como no app. */}
-      <div className="flex flex-col items-center px-4 pt-4">
-        <ExerciseTitle
-          kicker="CARDIO"
-          kickerClassName="text-water"
-          exerciseId={group.exerciseId}
-          exerciseName={group.exerciseName}
-        />
-        {previousLabel && (
-          <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-            Anterior: {previousLabel}
-          </p>
-        )}
+      {/* O nome e o "Como fazer" ficam no topo da página (`ExerciseHeading`). */}
+      <div className="flex items-center gap-2 px-4 pt-4">
+        <p className="min-w-0 flex-1 text-[13px] text-muted-foreground tabular-nums">
+          {previousLabel ? `Anterior: ${previousLabel}` : 'Cardio'}
+        </p>
+        {nav}
       </div>
 
       {/* Cronômetro */}

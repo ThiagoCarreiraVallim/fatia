@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Minus, Plus } from 'lucide-react';
+import { ChevronRight, Minus, Plus } from 'lucide-react';
 import {
   FEELINGS,
   feelingOf,
@@ -49,14 +49,14 @@ export function FeelingPicker({
             // Tocar de novo no marcado desmarca: a resposta é opcional.
             onClick={() => onChange(checked ? null : f.level)}
             className={cn(
-              'anim-press flex flex-col items-center justify-center gap-0.5 rounded-2xl border',
-              size === 'lg' ? 'h-16' : 'h-12',
+              'anim-press flex flex-col items-center justify-center gap-0.5 rounded-field border-2',
+              size === 'lg' ? 'h-16' : 'h-14',
               checked
                 ? 'border-primary bg-primary-soft text-foreground'
-                : 'border-subtle bg-card text-muted-foreground',
+                : 'border-transparent bg-card text-muted-foreground',
             )}
           >
-            <span aria-hidden className={size === 'lg' ? 'text-2xl' : 'text-xl'}>
+            <span aria-hidden className="text-2xl">
               {f.emoji}
             </span>
             {size === 'lg' && (
@@ -72,51 +72,91 @@ export function FeelingPicker({
 }
 
 /**
- * As séries feitas do exercício como chips (prancha Al-T3). Tocar abre o
- * editor da série ali mesmo, com carga e repetições digitáveis.
+ * As séries do exercício como chips numa linha (prancha Al-T3): as feitas em
+ * verde-claro ("1  50×10 🙂"), a da vez com contorno ("3 agora"), as que faltam
+ * apagadas e o "Todas ›" no fim, que abre o treino inteiro. Tocar numa feita
+ * abre o editor dela ali mesmo, com carga e repetições digitáveis.
  */
 export function SetChips({
   sessionId,
   sets,
   isCardio,
+  targetSets = 0,
+  onAll,
 }: {
   sessionId: string;
   sets: SessionSet[];
   isCardio: boolean;
+  /** Com meta, a linha mostra também a série da vez e as que faltam. */
+  targetSets?: number;
+  onAll?: () => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const units = useUnitPrefs();
   const open = sets.find((s) => s.id === openId) ?? null;
   const openIndex = open ? sets.indexOf(open) : -1;
+  const pending = Math.max(0, targetSets - sets.length);
 
   return (
     <div className="space-y-2">
-      <ul className="flex flex-wrap gap-2">
-        {sets.map((s, i) => {
-          const summary = formatPreviousSet({ ...s, rpe: null }, isCardio, units) ?? '—';
-          const feeling = feelingOf(rpeToFeeling(s.rpe));
-          return (
-            <li key={s.id}>
-              <button
-                type="button"
-                aria-expanded={openId === s.id}
-                aria-label={`Editar série ${i + 1}: ${summary}${feeling ? `, ${feeling.label}` : ''}`}
-                onClick={() => setOpenId(openId === s.id ? null : s.id)}
+      <div className="flex items-center gap-2">
+        <ul className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [scrollbar-width:none]">
+          {sets.map((s, i) => {
+            const summary = formatPreviousSet({ ...s, rpe: null }, isCardio, units) ?? '—';
+            const feeling = feelingOf(rpeToFeeling(s.rpe));
+            const editing = openId === s.id;
+            return (
+              <li key={s.id} className="shrink-0">
+                <button
+                  type="button"
+                  aria-expanded={editing}
+                  aria-label={`Editar série ${i + 1}: ${summary}${feeling ? `, ${feeling.label}` : ''}`}
+                  onClick={() => setOpenId(editing ? null : s.id)}
+                  className={cn(
+                    'anim-press flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-bold tabular-nums',
+                    editing
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-primary-soft text-foreground',
+                  )}
+                >
+                  <span className={editing ? '' : 'text-primary-text'}>{i + 1}</span>
+                  <span>{summary}</span>
+                  {feeling && <span aria-hidden>{feeling.emoji}</span>}
+                </button>
+              </li>
+            );
+          })}
+          {Array.from({ length: pending }, (_, k) => {
+            const n = sets.length + k + 1;
+            const current = k === 0;
+            return (
+              <li
+                key={`falta-${n}`}
+                aria-label={current ? `Série ${n}, a da vez` : `Série ${n}, falta`}
                 className={cn(
-                  'anim-press flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-bold tabular-nums',
-                  openId === s.id
-                    ? 'border-primary bg-primary-soft text-foreground'
-                    : 'border-subtle bg-muted text-foreground',
+                  'flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-bold',
+                  current
+                    ? 'shadow-[inset_0_0_0_1.5px_hsl(var(--foreground))] text-foreground'
+                    : 'bg-muted text-muted-foreground',
                 )}
               >
-                <span className="text-muted-foreground">{i + 1}</span>
-                <span>{summary}</span>
-                {feeling && <span aria-hidden>{feeling.emoji}</span>}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                <span className="text-muted-foreground">{n}</span>
+                <span>{current ? 'agora' : '—'}</span>
+              </li>
+            );
+          })}
+        </ul>
+        {onAll && (
+          <button
+            type="button"
+            onClick={onAll}
+            className="anim-press flex h-10 shrink-0 items-center gap-0.5 rounded-full bg-muted pe-2.5 ps-3.5 text-[13px] font-bold text-foreground"
+          >
+            Todas
+            <ChevronRight size={16} aria-hidden />
+          </button>
+        )}
+      </div>
       {open && (
         <SetEditor
           key={open.id}

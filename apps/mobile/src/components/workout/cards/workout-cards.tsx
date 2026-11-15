@@ -3,6 +3,7 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { Play, Repeat } from 'lucide-react-native';
 import {
   daysAgoLabel,
   feelingOf,
@@ -50,11 +51,13 @@ function Eyebrow({ children }: { children: ReactNode }) {
 function CardButton({
   label,
   primary,
+  icon: Icon,
   disabled,
   onPress,
 }: {
   label: string;
   primary?: boolean;
+  icon?: typeof Play;
   disabled?: boolean;
   onPress: () => void;
 }) {
@@ -66,11 +69,14 @@ function CardButton({
       onPress={onPress}
       className={
         primary
-          ? 'h-11 flex-1 items-center justify-center rounded-full bg-primary px-3'
-          : 'h-11 flex-1 items-center justify-center rounded-full bg-muted px-3'
+          ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-primary px-3'
+          : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-muted px-3'
       }
       style={disabled ? { opacity: 0.6 } : undefined}
     >
+      {Icon ? (
+        <Icon size={16} color={primary ? colors.primaryForeground : colors.foreground} />
+      ) : null}
       <Text
         numberOfLines={1}
         className={
@@ -137,6 +143,7 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
         {plan ? (
           <CardButton
             primary
+            icon={Play}
             label={plan.name}
             disabled={start.isPending}
             onPress={() => start.mutate({ planId: plan.id })}
@@ -171,6 +178,7 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
       <View className="mt-auto flex-row gap-2">
         <CardButton
           label="Repetir"
+          icon={Repeat}
           disabled={start.isPending}
           onPress={() => start.mutate({ planId: session.planId })}
         />

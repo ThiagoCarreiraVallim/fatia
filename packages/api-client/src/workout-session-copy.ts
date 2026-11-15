@@ -6,6 +6,7 @@ import type {
   RestedMuscle,
   StrengthMuscleGroup,
   SummaryBestSet,
+  TrainingBlock,
   TrainingWeek,
   WorkoutPlan,
   WorkoutSessionSummary,
@@ -114,6 +115,53 @@ export function planMuscleBars(
   }
   if (all === 0) return [];
   return [...totals.entries()].map(([group, sets]) => ({ group, share: sets / all }));
+}
+
+/**
+ * A linha de exercícios do cartão do plano: a primeira palavra dos três
+ * primeiros, na ordem do plano ("Supino, Desenvolvimento, Crucifixo…").
+ */
+export function planExercisePreview(plan: {
+  exercises?: { order: number; exercise?: { name: string } | null }[] | null;
+}): string {
+  const ordered = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
+  const words = ordered
+    .slice(0, 3)
+    .map((e) => e.exercise?.name.trim().split(/\s+/)[0])
+    .filter((w): w is string => Boolean(w));
+  return words.join(', ') + (ordered.length > 3 ? '…' : '');
+}
+
+const BLOCK_FOCUS: Record<TrainingBlock['weeks'][number]['focus'], string> = {
+  accumulation: 'acúmulo',
+  peak: 'pico',
+  deload: 'deload',
+};
+
+export interface BlockRow {
+  title: string;
+  detail: string;
+  /** Uma barra por semana: altura pelo volume, cheia até a semana atual. */
+  bars: { ratio: number; reached: boolean }[];
+}
+
+/** A linha compacta do bloco no início do Treino ("Bloco hipertrofia · semana 2 de 4"). */
+export function blockRow(
+  block: Pick<TrainingBlock, 'kindLabel' | 'weeksTotal' | 'startDate' | 'currentWeek' | 'weeks'>,
+): BlockRow {
+  const current = block.currentWeek?.weekNumber ?? 0;
+  const max = Math.max(...block.weeks.map((w) => w.volumeFactor), 0) || 1;
+  const [, mm, dd] = block.startDate.split('-');
+  return {
+    title: `Bloco de ${block.kindLabel}`,
+    detail: block.currentWeek
+      ? `semana ${current} de ${block.weeksTotal} · ${BLOCK_FOCUS[block.currentWeek.focus]}`
+      : `${block.weeksTotal} semanas · começa ${dd}/${mm}`,
+    bars: block.weeks.map((w) => ({
+      ratio: w.volumeFactor / max,
+      reached: current > 0 && w.weekNumber <= current,
+    })),
+  };
 }
 
 // ------------------------------------------------------------------ sessão

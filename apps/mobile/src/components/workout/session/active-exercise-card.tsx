@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +47,9 @@ export function ActiveExerciseCard({
   rest,
   working,
   onLogged,
+  nav,
+  onAll,
+  beforeSubmit,
 }: {
   sessionId: string;
   /** Início da sessão em ISO. Recorta o histórico no que veio **antes** dela. */
@@ -57,6 +60,12 @@ export function ActiveExerciseCard({
   working: boolean;
   /** `completed`: esta série fechou o exercício. */
   onLogged: (completed: boolean) => void;
+  /** "1/7" e as setas do exercício, à direita da linha da série (prancha `Al-T3d`). */
+  nav?: ReactNode;
+  /** "Todas ›", ao lado dos chips das séries. */
+  onAll?: () => void;
+  /** O "Passar sozinho", que a prancha põe logo acima do "Concluir série". */
+  beforeSubmit?: ReactNode;
 }) {
   const qc = useQueryClient();
   const units = useUnitPrefs();
@@ -173,16 +182,24 @@ export function ActiveExerciseCard({
 
   return (
     <View className="gap-3">
-      <Text className="text-[13px] text-muted-foreground">
-        {setHeadline({
-          done: doneSets,
-          target: targetSets,
-          targetReps: group.targetReps,
-          lastTime,
-        })}
-      </Text>
+      <View className="flex-row items-center gap-2">
+        <Text className="flex-1 text-[13px] text-muted-foreground">
+          {setHeadline({
+            done: doneSets,
+            target: targetSets,
+            targetReps: group.targetReps,
+            lastTime,
+          })}
+        </Text>
+        {nav}
+      </View>
 
-      <SetChips group={group} editing={editingSet ? editing : null} onEdit={setEditing} />
+      <SetChips
+        group={group}
+        editing={editingSet ? editing : null}
+        onEdit={setEditing}
+        onAll={onAll}
+      />
 
       {editingSet && editing != null ? (
         <SetEditor
@@ -197,10 +214,21 @@ export function ActiveExerciseCard({
 
       {working && !isComplete ? (
         <>
-          <View className="flex-row gap-2">
+          <View className="flex-row gap-2.5">
             <ValueStepper
               label="Carga"
               unit={unitLabel}
+              stacked={{ shortLabel: unitLabel }}
+              caption={
+                record ? (
+                  <View className="flex-row items-center gap-1">
+                    <Trophy size={13} color={colors.steps} />
+                    <Text numberOfLines={1} className="font-sans-bold text-[11px] text-steps">
+                      {record}
+                    </Text>
+                  </View>
+                ) : null
+              }
               accessibilityLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
               value={loadFieldValue(weight, units.loadUnit)}
               step={loadStep(units.loadUnit)}
@@ -211,6 +239,14 @@ export function ActiveExerciseCard({
             />
             <ValueStepper
               label="Repetições"
+              stacked={{ shortLabel: 'reps' }}
+              caption={
+                group.targetReps ? (
+                  <Text className="font-sans-bold text-[11px] text-muted-foreground">
+                    meta {group.targetReps}
+                  </Text>
+                ) : null
+              }
               accessibilityLabel={`repetições para ${group.exerciseName}`}
               value={reps}
               step={STEPS.reps}
@@ -222,20 +258,10 @@ export function ActiveExerciseCard({
             />
           </View>
 
-          {record || hint ? (
-            <View className="flex-row flex-wrap items-center gap-2">
-              {record ? (
-                <View className="min-h-[28px] flex-row items-center gap-1.5 rounded-full bg-muted px-3">
-                  <Trophy size={13} color={colors.steps} />
-                  <Text className="text-[12px] font-sans-bold text-foreground">{record}</Text>
-                </View>
-              ) : null}
-              {hint ? (
-                <Text className="flex-1 text-[12px] text-muted-foreground">
-                  {hint.label} · {hint.reason}
-                </Text>
-              ) : null}
-            </View>
+          {hint ? (
+            <Text className="text-[12px] text-muted-foreground">
+              {hint.label} · {hint.reason}
+            </Text>
           ) : null}
 
           <FeelingPicker title="Como foi a série?" value={feeling} onChange={setFeeling} />
@@ -246,8 +272,10 @@ export function ActiveExerciseCard({
             </Text>
           ) : null}
 
+          {beforeSubmit}
+
           <Button
-            className="h-14 rounded-full"
+            className="h-[60px] rounded-full"
             disabled={logSet.isPending}
             loading={logSet.isPending}
             onPress={conclude}

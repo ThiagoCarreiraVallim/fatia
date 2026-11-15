@@ -108,3 +108,30 @@ export function lastWorkoutWhen(startedAt: string, now: Date = new Date()): stri
   const diff = Math.round((day(now) - day(start)) / 86_400_000);
   return daysAgoLabel(diff);
 }
+
+export type FigureTone = 'surface-3' | 'border-strong' | 'card' | 'transparent';
+
+/**
+ * O boneco dos músculos (web e app) vem com cinzas fixos de tema claro: fundo
+ * `#F5F5F5`, músculo `#BDBDBD` (nas costas `#AEAEB2`), pele `#E0E0E0` e contorno preto. No escuro isso
+ * vira uma caixa branca no card. Cada cinza passa a ser um token do tema — o
+ * músculo apagado no cinza do card, a pele um tom acima, o contorno na cor do
+ * próprio card (vira o vão entre os músculos) e o fundo some. `null`: não mexe.
+ */
+export function figureTone(original: string | null | undefined): FigureTone | null {
+  switch (original?.toLowerCase()) {
+    case '#bdbdbd':
+    case '#aeaeb2':
+      return 'surface-3';
+    case '#e0e0e0':
+      return 'border-strong';
+    case 'black':
+    case '#000':
+    case '#000000':
+      return 'card';
+    case '#f5f5f5':
+      return 'transparent';
+    default:
+      return null;
+  }
+}

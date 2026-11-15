@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Exercise } from '@fatia/api-client';
-import { ExerciseMedia } from '../exercise-media';
+import { ExerciseHeading } from '../exercise-title';
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return { ...actual, workoutApi: { ...actual.workoutApi, getExercise: vi.fn() } };
 });
+// O "Como fazer" tem testes próprios; aqui só importa o topo da sessão.
+vi.mock('../exercise-detail-drawer', () => ({ ExerciseDetailDrawer: () => null }));
 vi.mock('../muscle-diagram', () => ({
   MuscleDiagram: ({ primaryMuscles }: { primaryMuscles: string[] }) => (
     <div role="img" aria-label={`Músculos: ${primaryMuscles.join(', ')}`} />
@@ -37,12 +39,16 @@ function renderMedia() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ExerciseMedia exerciseId={9} exerciseName="Leg press" />
+      <ExerciseHeading exerciseId={9} exerciseName="Leg press" />
     </QueryClientProvider>,
   );
 }
 
-describe('ExerciseMedia — vídeo na sessão (#377)', () => {
+/**
+ * O topo do exercício na sessão (pranchas Al-T3 e Al-T3d): o vídeo quando há,
+ * e sem vídeo o boneco dos músculos ao lado do nome. Era o `ExerciseMedia`.
+ */
+describe('ExerciseHeading — vídeo e músculos na sessão (#377)', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('YouTube em português primeiro, embutido', async () => {
@@ -50,6 +56,8 @@ describe('ExerciseMedia — vídeo na sessão (#377)', () => {
     renderMedia();
     const frame = await screen.findByTitle('Vídeo: Leg press');
     expect(frame.getAttribute('src')).toContain('/embed/pt1');
+    // Com vídeo, o boneco sai: o vídeo já mostra o movimento.
+    expect(screen.queryByRole('img', { name: /^Músculos/ })).toBeNull();
   });
 
   it('vídeo da comunidade com a URL assinada; erro pede uma URL nova', async () => {
@@ -76,7 +84,7 @@ describe('ExerciseMedia — vídeo na sessão (#377)', () => {
     await waitFor(() => expect(getExercise).toHaveBeenCalledTimes(2));
   });
 
-  it('sem vídeo: aparelho, dica da comunidade e o diagrama dos músculos', async () => {
+  it('sem vídeo: grupo, aparelho, nome, dica da comunidade e o boneco dos músculos', async () => {
     getExercise.mockResolvedValue({
       ...base,
       community: {
@@ -89,8 +97,12 @@ describe('ExerciseMedia — vídeo na sessão (#377)', () => {
     });
     renderMedia();
     expect(await screen.findByText('máquina')).toBeInTheDocument();
-    expect(screen.getByText('Dica da Academia Sol')).toBeInTheDocument();
-    expect(screen.getByText('Pés na largura do quadril.')).toBeInTheDocument();
+    expect(screen.getByText('Pernas')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Leg press' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Dica da Academia Sol: Pés na largura do quadril.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Como fazer Leg press' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Músculos: quadriceps' })).toBeInTheDocument();
   });
 });

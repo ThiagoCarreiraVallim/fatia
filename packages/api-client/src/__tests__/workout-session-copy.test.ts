@@ -14,7 +14,9 @@ import {
   musclesByRestTone,
   newSetClientKey,
   noteShortcutsFor,
+  blockRow,
   planCardInfo,
+  planExercisePreview,
   planMuscleBars,
   questionsAudience,
   questionsTitle,
@@ -24,7 +26,12 @@ import {
   trainingWeekLabel,
   youtubeThumbnail,
 } from '../workout-session-copy';
-import type { WorkoutPlan, WorkoutSessionSummary } from '../workout';
+import type {
+  TrainingBlock,
+  TrainingBlockWeek,
+  WorkoutPlan,
+  WorkoutSessionSummary,
+} from '../workout';
 
 const summary = (over: Partial<WorkoutSessionSummary> = {}): WorkoutSessionSummary => ({
   sessionId: 's1',
@@ -258,5 +265,65 @@ describe('sessão', () => {
 
   it('miniatura do YouTube para o vídeo sem player no app', () => {
     expect(youtubeThumbnail('abc123')).toBe('https://i.ytimg.com/vi/abc123/hqdefault.jpg');
+  });
+});
+
+describe('prévia do plano (prancha Al-T1)', () => {
+  const ex = (name: string, order: number) =>
+    ({ order, exercise: { name } }) as WorkoutPlan['exercises'][number];
+
+  it('primeira palavra dos três primeiros, na ordem do plano, com reticências', () => {
+    const plan = {
+      exercises: [
+        ex('Crucifixo no cabo', 3),
+        ex('Supino Reto com Barra - Pegada Média', 1),
+        ex('Desenvolvimento Militar com Barra', 2),
+        ex('Tríceps corda', 4),
+      ],
+    };
+    expect(planExercisePreview(plan)).toBe('Supino, Desenvolvimento, Crucifixo…');
+  });
+
+  it('até três exercícios: sem reticências; vazio: texto vazio', () => {
+    expect(planExercisePreview({ exercises: [ex('Remada curvada', 1)] })).toBe('Remada');
+    expect(planExercisePreview({ exercises: [] })).toBe('');
+  });
+});
+
+describe('linha do bloco (prancha Al-T1)', () => {
+  const week = (weekNumber: number, focus: TrainingBlockWeek['focus'], volumeFactor: number) =>
+    ({ weekNumber, focus, volumeFactor, state: 'upcoming' }) as TrainingBlockWeek;
+  const weeks = [
+    week(1, 'accumulation', 1),
+    week(2, 'accumulation', 1.2),
+    week(3, 'peak', 0.9),
+    week(4, 'deload', 0.6),
+  ];
+  const block = (over: Partial<TrainingBlock> = {}) =>
+    ({
+      kindLabel: 'hipertrofia',
+      weeksTotal: 4,
+      startDate: '2026-11-16',
+      currentWeek: null,
+      weeks,
+      ...over,
+    }) as TrainingBlock;
+
+  it('semana atual e o foco dela; barras pelo volume, cheias até a atual', () => {
+    const row = blockRow(block({ currentWeek: weeks[1]! }));
+    expect(row.title).toBe('Bloco de hipertrofia');
+    expect(row.detail).toBe('semana 2 de 4 · acúmulo');
+    expect(row.bars).toEqual([
+      { ratio: 1 / 1.2, reached: true },
+      { ratio: 1, reached: true },
+      { ratio: 0.9 / 1.2, reached: false },
+      { ratio: 0.6 / 1.2, reached: false },
+    ]);
+  });
+
+  it('antes de começar: a data de início, nenhuma barra cheia', () => {
+    const row = blockRow(block());
+    expect(row.detail).toBe('4 semanas · começa 16/11');
+    expect(row.bars.every((b) => !b.reached)).toBe(true);
   });
 });

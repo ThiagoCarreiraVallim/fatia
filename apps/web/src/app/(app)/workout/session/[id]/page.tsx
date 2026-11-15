@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Share2, Trophy } from 'lucide-react';
+import { Check, Plus, Share2, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ApiError,
@@ -13,6 +13,7 @@ import {
   comparisonFacts,
   feelingOf,
   formatBestSet,
+  lastWorkoutWhen,
   formatTrainingVolume,
   howItWentBody,
   muscleGroupLabel,
@@ -40,8 +41,8 @@ import { groupTone } from '@/components/workout/group-tone';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { cn } from '@/lib/utils';
 
-const card = 'rounded-3xl border border-subtle bg-card p-4';
-const title = 'text-base font-extrabold text-foreground';
+const card = 'rounded-card bg-card p-4';
+const title = 'text-[15px] font-semibold text-foreground';
 
 /**
  * "Treino feito!" (pranchas Al-T5 e Al-T5b): o fim do treino e, pelo
@@ -123,33 +124,51 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
   const totalGroupSets = summary.muscles.groups.reduce((acc, g) => acc + g.sets, 0);
 
   return (
-    <div className="space-y-4 px-5 pt-2 pb-6">
-      <header className="space-y-1">
-        <h1 className="font-display text-3xl font-extrabold text-foreground">Treino feito!</h1>
-        <p className="text-sm text-muted-foreground">{summaryHeadline(summary)}</p>
+    <div className="relative space-y-4 px-5 pt-2 pb-6">
+      {/* O brilho verde que desce do topo (prancha Al-T5). */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-16 h-64 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.28),transparent_70%)]"
+      />
+      <header className="relative flex flex-col items-center gap-2 pt-2 text-center">
+        <span
+          aria-hidden
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground"
+        >
+          <Check size={30} strokeWidth={3} />
+        </span>
+        <h1 className="font-display text-[28px] font-semibold text-foreground">Treino feito!</h1>
+        <p className="text-[13px] text-muted-foreground">{summaryHeadline(summary)}</p>
       </header>
 
       <dl className="grid grid-cols-4 gap-2">
         {facts.map((f) => (
-          <div key={f.label} className="rounded-2xl bg-muted/50 px-2 py-3 text-center">
-            <dd className="text-lg font-extrabold text-foreground tabular-nums">{f.value}</dd>
+          <div key={f.label} className="flex flex-col-reverse rounded-field bg-card px-3 py-3">
             <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+            <dd className="whitespace-nowrap font-display text-lg font-semibold text-foreground tabular-nums">
+              {f.value}
+            </dd>
           </div>
         ))}
       </dl>
 
       {summary.comparison && (
         <section aria-labelledby="feito-comparacao" className={card}>
-          <h2 id="feito-comparacao" className={title}>
-            Comparado ao último {summary.planName ?? 'treino'}
-          </h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 id="feito-comparacao" className={title}>
+              Comparado ao último {summary.planName ?? 'treino'}
+            </h2>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {lastWorkoutWhen(summary.comparison.startedAt)}
+            </span>
+          </div>
           <ul className="mt-3 grid grid-cols-3 gap-2">
             {comparisonFacts(summary.comparison).map((c) => (
-              <li key={c.label} className="text-center">
+              <li key={c.label} className="flex flex-col-reverse">
                 <p
                   className={cn(
-                    'text-base font-extrabold tabular-nums',
-                    c.tone === 'up' && 'text-success',
+                    'text-base font-bold tabular-nums',
+                    c.tone === 'up' && 'text-primary-text',
                     c.tone === 'down' && 'text-warning',
                     c.tone === 'flat' && 'text-foreground',
                   )}
@@ -164,9 +183,12 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
       )}
 
       {summary.records.length > 0 && (
-        <section aria-labelledby="feito-recordes" className={card}>
+        <section
+          aria-labelledby="feito-recordes"
+          className="rounded-card bg-primary-soft p-4 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.5)]"
+        >
           <h2 id="feito-recordes" className={cn(title, 'flex items-center gap-2')}>
-            <Trophy size={18} className="text-primary" aria-hidden />
+            <Trophy size={18} className="text-primary-text" aria-hidden />
             {recordsTitle(summary.records.length)}
           </h2>
           <ul className="mt-2 space-y-1">
@@ -221,7 +243,7 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
 
       {summary.exercises.length > 0 && (
         <section aria-labelledby="feito-exercicios" className={card}>
-          <h2 id="feito-exercicios" className={title}>
+          <h2 id="feito-exercicios" className="text-xs text-muted-foreground">
             Exercícios
           </h2>
           <ul aria-label="Exercícios do treino" className="mt-2 divide-y divide-subtle">
@@ -229,18 +251,29 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
               const feeling = feelingOf(e.feeling);
               return (
                 <li key={e.exerciseId} className="flex items-center gap-3 py-2.5">
+                  <span
+                    aria-hidden
+                    className="h-9 w-[3px] shrink-0 rounded-full"
+                    style={{ background: groupTone(e.isCardio ? 'cardio' : e.muscleGroup) }}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-foreground">{e.exerciseName}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <span className="truncate">{e.exerciseName}</span>
+                      {e.isRecord && (
+                        <Trophy
+                          size={14}
+                          className="shrink-0 text-primary-text"
+                          aria-label="Recorde"
+                          role="img"
+                        />
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
                       {e.sets} {e.sets === 1 ? 'série' : 'séries'}
+                      {e.isCardio ? ' · ' : ' · melhor '}
+                      {formatBestSet(e.best, unit)}
                     </p>
                   </div>
-                  <span className="text-sm font-bold tabular-nums text-foreground">
-                    {formatBestSet(e.best, unit)}
-                  </span>
-                  {e.isRecord && (
-                    <Trophy size={16} className="text-primary" aria-label="Recorde" role="img" />
-                  )}
                   {feeling && (
                     <span role="img" aria-label={feeling.label}>
                       {feeling.emoji}
@@ -321,7 +354,7 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
       <h2 id="feito-como-foi" className={title}>
         Como foi o treino?
       </h2>
-      <FeelingPicker label="Como foi o treino?" value={feeling} onChange={setFeeling} size="lg" />
+      <FeelingPicker label="Como foi o treino?" value={feeling} onChange={setFeeling} />
       <Textarea
         aria-label="Observação do treino"
         placeholder="Algo para lembrar no próximo? (opcional)"
@@ -337,8 +370,9 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
               key={label}
               type="button"
               onClick={() => setNote((current) => appendNoteShortcut(current, label))}
-              className="anim-press min-h-11 rounded-full bg-muted px-3 text-[13px] font-bold text-foreground"
+              className="anim-press flex min-h-11 items-center gap-1 rounded-full bg-muted px-3 text-[13px] font-bold text-foreground"
             >
+              <Plus size={14} aria-hidden />
               {label}
             </button>
           ))}
@@ -353,16 +387,16 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
         <button
           type="button"
           onClick={() => void share()}
-          className="anim-press flex h-12 items-center gap-2 rounded-full bg-muted px-4 text-sm font-bold text-foreground"
+          aria-label="Compartilhar"
+          className="anim-press flex h-14 w-14 items-center justify-center rounded-field bg-muted text-foreground"
         >
-          <Share2 size={16} aria-hidden />
-          Compartilhar
+          <Share2 size={18} aria-hidden />
         </button>
         <button
           type="button"
           disabled={save.isPending}
           onClick={() => save.mutate()}
-          className="anim-press h-12 rounded-full bg-primary text-sm font-extrabold text-primary-foreground disabled:opacity-60"
+          className="anim-press h-14 rounded-full bg-primary text-base font-extrabold text-primary-foreground disabled:opacity-60"
         >
           {save.isPending ? 'Salvando…' : 'Salvar'}
         </button>

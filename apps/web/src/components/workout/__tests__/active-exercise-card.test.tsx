@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ExerciseGroup, LoadPrescription, SessionSet } from '@fatia/api-client';
@@ -153,7 +153,7 @@ describe('ActiveExerciseCard', () => {
 
     // O recorde continua visível como referência — é por ele que se sabe que a
     // query já respondeu e que, mesmo assim, o campo não o adotou.
-    expect(await screen.findByText('🏆 Recorde: 100 kg')).toBeInTheDocument();
+    expect(await screen.findByText('recorde 100 kg × 3')).toBeInTheDocument();
     expect(weightValue()).toBe('0');
     expect(repsValue()).toBe('8');
   });
@@ -274,8 +274,31 @@ describe('ActiveExerciseCard', () => {
     expect(await screen.findByText('Sugestão: 62.5 kg × 8 · 180s')).toBeInTheDocument();
     // Sem RPE registrado, o texto não pode creditar o RPE.
     expect(screen.getByText(/sem RPE — todas as séries fecharam a faixa/)).toBeInTheDocument();
-    // E o descanso prescrito vale mais que o padrão de 90s da tela.
-    expect(screen.getByText('03:00')).toBeInTheDocument();
+  });
+
+  it('o descanso só aparece depois da série, e com o tempo prescrito', async () => {
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 180,
+      basis: 'reps',
+      action: 'increase_load',
+      capped: false,
+    });
+    logSet.mockResolvedValue(makeSet({ id: 'nova', weightKg: 62.5, reps: 8 }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await screen.findByText('Sugestão: 62.5 kg × 8 · 180s');
+    // Parado, o descanso não ocupa a tela (prancha Al-T3): só a série a fazer.
+    expect(screen.queryByRole('timer', { name: 'Descanso' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /concluir série/i }));
+
+    // E o prescrito vale mais que o padrão de 90 s da tela.
+    expect(await screen.findByRole('timer', { name: 'Descanso' })).toHaveTextContent('03:00');
+    expect(screen.getByRole('button', { name: 'Pular descanso' })).toBeInTheDocument();
   });
 
   it('esconde a sugestão depois de a pessoa registrar série nesta sessão', async () => {
@@ -290,9 +313,10 @@ describe('ActiveExerciseCard', () => {
     });
     renderCard(makeGroup({ sets: [makeSet({ id: 'de-hoje', weightKg: 70, reps: 8 })] }));
 
-    // Os 03:00 provam que a prescrição já chegou (o padrão da tela é 90s): sem
-    // essa âncora, a ausência do texto poderia ser só a resposta atrasada.
-    expect(await screen.findByText('03:00')).toBeInTheDocument();
+    // A prescrição precisa ter chegado: sem essa âncora, a ausência do texto
+    // poderia ser só a resposta atrasada.
+    await waitFor(() => expect(getPrescription).toHaveBeenCalled());
+    await act(async () => {});
     // O campo copia a série de hoje, que tem precedência no `prefillForNextSet`.
     // Manter "Sugestão: 62.5 kg × 8" logo abaixo contradiz o próprio campo.
     expect(weightValue()).toBe('70');
@@ -419,7 +443,8 @@ describe('ActiveExerciseCard', () => {
     expect(
       await screen.findByText('Série 1 de 3 · meta 8-12 reps · última vez 62,5 kg × 10 · RPE 8'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Nenhuma série registrada neste exercício ainda.')).toBeInTheDocument();
+    // Sem série hoje, a linha dos chips já mostra a da vez e as que faltam.
+    expect(screen.getByLabelText('Série 1, a da vez')).toHaveTextContent('1agora');
   });
 });
 
@@ -481,7 +506,7 @@ describe('ActiveExerciseCard — sessão guiada (#377)', () => {
     getPersonalRecord.mockResolvedValue({ weightKg: 2, reps: 5 } as never);
     const user = userEvent.setup();
     renderCard();
-    await screen.findByText(/Recorde: 2 kg/);
+    await screen.findByText(/recorde 2 kg/);
     expect(screen.queryByText('Recorde!')).toBeNull();
     await user.click(increaseWeight());
     expect(screen.getByText('Recorde!')).toBeInTheDocument();

@@ -1,65 +1,62 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, ListChecks } from 'lucide-react-native';
+import { Check, ChevronDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { formatClock } from './format';
 import { colors } from '@/theme/colors';
 
 /**
- * O topo da sessão guiada (prancha `Al-T3-Sessao`): minimizar à esquerda (o
- * treino segue na barra de baixo, `ActiveWorkoutBar`), o relógio no meio e,
- * à direita, o "Treino atual" (`Al-T17`) e o "Finalizar".
+ * O topo da sessão guiada (pranchas `Al-T3` e `Al-T3d`): minimizar à esquerda
+ * (o treino segue na barra de baixo, `ActiveWorkoutBar`), o relógio numa
+ * pílula no meio e, à direita, o check que finaliza. O "Treino atual" (`Al-T17`)
+ * abre pelo "Todas ›" ao lado das séries.
  */
 export function SessionHeader({
   startedAt,
   onMinimize,
-  onOverview,
   onFinish,
 }: {
   startedAt: string;
   onMinimize: () => void;
-  onOverview: () => void;
   onFinish: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const clock = useClock(startedAt);
   return (
     <View
-      style={{ paddingTop: insets.top + 6 }}
-      className="flex-row items-center gap-1 bg-background px-3 pb-2"
+      style={{ paddingTop: insets.top + 8 }}
+      className="flex-row items-center justify-between gap-2 bg-background px-4 pb-3"
     >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Minimizar treino"
         accessibilityHint="O treino continua na barra de baixo"
         onPress={onMinimize}
-        className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
       >
-        <ChevronDown size={24} color={colors.foreground} />
+        <ChevronDown size={20} color={colors.foreground} />
       </Pressable>
-      <Text
+      <View
+        accessible
         accessibilityLabel={`Tempo de treino ${clock}`}
-        className="flex-1 text-center font-display-semibold text-xl text-foreground"
-        style={{ fontVariant: ['tabular-nums'] }}
+        className="h-9 flex-row items-center gap-2 rounded-full bg-muted px-3.5"
       >
-        {clock}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Treino atual: ver e editar os exercícios"
-        onPress={onOverview}
-        className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
-      >
-        <ListChecks size={22} color={colors.foreground} />
-      </Pressable>
+        <View className="h-2 w-2 rounded-full bg-primary" />
+        <Text
+          className="font-sans-bold text-[15px] text-foreground"
+          style={{ fontVariant: ['tabular-nums'] }}
+        >
+          {clock}
+        </Text>
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Finalizar treino"
         onPress={onFinish}
-        className="h-11 justify-center rounded-full bg-muted px-4 active:opacity-80"
+        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
       >
-        <Text className="font-sans-bold text-sm text-foreground">Finalizar</Text>
+        <Check size={20} color={colors.foreground} />
       </Pressable>
     </View>
   );

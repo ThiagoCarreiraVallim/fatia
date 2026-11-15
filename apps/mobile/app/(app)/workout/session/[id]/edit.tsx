@@ -3,10 +3,13 @@ import { Pressable, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Pencil, Plus } from 'lucide-react-native';
 import {
   buildExerciseGroups,
+  feelingOf,
+  formatBestSet,
   moveExerciseInOrder,
+  rpeToFeeling,
   newSetClientKey,
   orderExerciseGroups,
   workoutApi,
@@ -29,7 +32,6 @@ import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawe
 import { groupColorName } from '@/components/workout/workout-home';
 import { isExerciseComplete, pluralize, targetSetsOf } from '@/components/workout/session/format';
 import { copyLastSet } from '@/components/workout/session/guided-session';
-import { SetChips } from '@/components/workout/session/set-chips';
 import { SetEditor } from '@/components/workout/session/set-editor';
 import { useCancelSession } from '@/components/workout/session/use-cancel-session';
 import { useFinishSession } from '@/components/workout/session/use-finish-session';
@@ -39,6 +41,7 @@ import {
 } from '@/components/workout/session/use-pending-exercises';
 import { useSessionLayout } from '@/components/workout/session/use-session-layout';
 import { colors } from '@/theme/colors';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 
 /**
  * "Treino atual" (prancha `Al-T17-Editar-sessao`, #377): todos os exercícios
@@ -165,9 +168,9 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
             accessibilityLabel="Finalizar treino"
             disabled={finish.isPending}
             onPress={requestFinish}
-            className="h-11 justify-center rounded-full bg-muted px-4 active:opacity-80"
+            className="h-11 justify-center rounded-full bg-primary px-4 active:opacity-80"
           >
-            <Text className="font-sans-bold text-sm text-foreground">Finalizar</Text>
+            <Text className="font-sans-bold text-sm text-primary-foreground">Finalizar</Text>
           </Pressable>
         }
         refreshing={refreshing}
@@ -179,23 +182,47 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
           {groups.map((group, position) => {
             const target = targetSetsOf(group);
             const done = isExerciseComplete(group);
+            const muscle =
+              group.sets[0]?.exercise?.muscleGroup ??
+              session.plannedExercises?.find((p) => p.exerciseId === group.exerciseId)
+                ?.muscleGroup ??
+              (group.isCardio ? 'cardio' : '');
+            const groupLabel = muscle ? muscle.charAt(0).toUpperCase() + muscle.slice(1) : null;
             const status = group.isCardio
               ? `Cardio · ${group.sets.length ? 'feito' : 'no fim do treino'}`
-              : `${group.sets.length} de ${target} ${pluralize(target, 'série', 'séries')}`;
-            const action = done ? '✓ Feito' : group.sets.length ? 'Retomar' : 'Iniciar';
+              : [
+                  groupLabel,
+                  `${group.sets.length} de ${target} ${pluralize(target, 'série', 'séries')}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+            // Prancha `Al-T17`: o que está pela metade é o "Continuar" em verde,
+            // com o cartão contornado; o que não começou é "Iniciar", discreto.
+            const inProgress = !done && group.sets.length > 0;
+            const action = done ? '✓ Feito' : inProgress ? 'Continuar' : 'Iniciar';
             const editingHere = editing?.exerciseId === group.exerciseId ? editing.index : null;
             const editingSet = editingHere != null ? group.sets[editingHere] : undefined;
-            const muscleGroup =
-              group.sets[0]?.exercise?.muscleGroup ?? (group.isCardio ? 'cardio' : '');
             return (
-              <View key={group.exerciseId} className="gap-3 rounded-3xl bg-card p-4">
+              <View
+                key={group.exerciseId}
+                className="gap-3 rounded-card bg-card px-4 pb-1 pt-4"
+                style={
+                  inProgress ? { borderWidth: 1.5, borderColor: `${colors.primary}80` } : undefined
+                }
+              >
                 <View className="flex-row items-center gap-3">
                   <View
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: colors[groupColorName(muscleGroup)] }}
+                    className="h-10 w-10 rounded-xl bg-muted"
+                    style={{
+                      borderBottomWidth: 3,
+                      borderBottomColor: colors[groupColorName(muscle)],
+                    }}
                   />
                   <View className="min-w-0 flex-1">
-                    <Text numberOfLines={1} className="font-sans-bold text-base text-foreground">
+                    <Text
+                      numberOfLines={2}
+                      className="font-sans-semibold text-[15px] text-foreground"
+                    >
                       {group.exerciseName}
                     </Text>
                     <Text className="text-[12px] text-muted-foreground">{status}</Text>
@@ -232,7 +259,7 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                     onPress={() => backToSession(group.exerciseId)}
                     className={cn(
                       'h-11 justify-center rounded-full px-4',
-                      done ? 'bg-transparent' : group.sets.length ? 'bg-muted' : 'bg-primary',
+                      done ? 'bg-transparent' : inProgress ? 'bg-primary' : 'bg-muted',
                     )}
                   >
                     <Text
@@ -240,9 +267,9 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                         'font-sans-bold text-[13px]',
                         done
                           ? 'text-muted-foreground'
-                          : group.sets.length
-                            ? 'text-foreground'
-                            : 'text-primary-foreground',
+                          : inProgress
+                            ? 'text-primary-foreground'
+                            : 'text-foreground',
                       )}
                     >
                       {action}
@@ -251,7 +278,7 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                 </View>
 
                 {group.sets.length > 0 ? (
-                  <SetChips
+                  <SetTable
                     group={group}
                     editing={editingSet ? editingHere : null}
                     onEdit={(index) =>
@@ -271,27 +298,28 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                   />
                 ) : null}
 
-                <View className="flex-row gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-11 flex-1 rounded-full"
+                <View className="flex-row items-center justify-between border-t border-border">
+                  <Pressable
+                    accessibilityRole="button"
                     disabled={addSet.isPending}
                     accessibilityLabel={`Mais uma série de ${group.exerciseName}`}
                     onPress={() => addSetTo(group)}
+                    className="min-h-[52px] flex-row items-center gap-1.5 active:opacity-70"
                   >
-                    <Plus size={15} color={colors.foreground} />
-                    <Text className="font-sans-bold text-[13px] text-foreground">Série</Text>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-11 flex-1 rounded-full"
+                    <Plus size={16} color={colors.primaryText} />
+                    <Text className="font-sans-bold text-sm text-primary">Série</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
                     disabled={layout.remove.isPending}
                     accessibilityLabel={`Tirar ${group.exerciseName} do treino`}
                     onPress={() => requestRemove(group)}
+                    className="min-h-[52px] justify-center active:opacity-70"
                   >
-                    <Trash2 size={15} color={colors.danger} />
-                    <Text className="font-sans-bold text-[13px] text-danger">Tirar do treino</Text>
-                  </Button>
+                    <Text className="font-sans-semibold text-[13px] text-muted-foreground">
+                      Tirar do treino
+                    </Text>
+                  </Pressable>
                 </View>
               </View>
             );
@@ -301,17 +329,24 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
             <Text className="text-sm text-muted-foreground">Nenhum exercício ainda.</Text>
           ) : null}
 
-          <Button
-            variant="outline"
-            className="h-12 rounded-full"
-            onPress={() => setSearchOpen(true)}
-          >
-            <Plus size={16} color={colors.foreground} />
-            <Text className="font-sans-bold text-sm text-foreground">Exercício</Text>
-          </Button>
-          <Button className="h-14 rounded-full" onPress={() => backToSession()}>
-            Voltar ao treino
-          </Button>
+          <View className="flex-row gap-2">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Adicionar exercício"
+              onPress={() => setSearchOpen(true)}
+              className="h-14 flex-row items-center justify-center gap-1.5 rounded-full bg-muted px-5 active:opacity-80"
+            >
+              <Plus size={16} color={colors.foreground} />
+              <Text className="font-sans-bold text-[15px] text-foreground">Exercício</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => backToSession()}
+              className="h-14 flex-1 items-center justify-center rounded-full bg-foreground active:opacity-80"
+            >
+              <Text className="font-sans-bold text-[15px] text-background">Voltar ao treino</Text>
+            </Pressable>
+          </View>
           <Button
             variant="ghost"
             className="self-center"
@@ -346,5 +381,63 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
         />
       </DrawerLayer>
     </>
+  );
+}
+
+/**
+ * As séries do exercício em linhas (prancha `Al-T17`): número, carga × reps,
+ * a carinha e o lápis, que abre o "Corrigir série" logo abaixo.
+ */
+function SetTable({
+  group,
+  editing,
+  onEdit,
+}: {
+  group: ExerciseGroup;
+  editing: number | null;
+  onEdit: (index: number | null) => void;
+}) {
+  const unit = useUnitPrefs().loadUnit;
+  return (
+    <View>
+      <View className="flex-row items-center gap-3 border-t border-border py-2">
+        <Text className="w-5 text-[12px] text-faint">#</Text>
+        <Text className="flex-1 text-[12px] text-faint">
+          {group.isCardio ? 'distância · tempo' : 'carga × reps'}
+        </Text>
+        <Text className="w-[76px] text-[12px] text-faint">como</Text>
+      </View>
+      {group.sets.map((set, i) => {
+        const feeling = feelingOf(rpeToFeeling(set.rpe));
+        const on = editing === i;
+        return (
+          <View
+            key={set.id}
+            className="min-h-[52px] flex-row items-center gap-3 border-t border-border"
+          >
+            <Text className="w-5 text-[13px] text-faint">{i + 1}</Text>
+            <Text
+              className="flex-1 font-sans-bold text-[15px] text-foreground"
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
+              {formatBestSet(set, unit)}
+            </Text>
+            <Text className="w-8 text-center text-lg">{feeling?.emoji ?? ''}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Corrigir série ${i + 1}`}
+              accessibilityState={{ expanded: on }}
+              onPress={() => onEdit(on ? null : i)}
+              className={cn(
+                'h-11 w-11 items-center justify-center rounded-xl',
+                on ? 'bg-primary' : 'bg-muted',
+              )}
+            >
+              <Pencil size={15} color={on ? colors.primaryForeground : colors.foreground} />
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
   );
 }

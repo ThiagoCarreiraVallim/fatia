@@ -3,7 +3,7 @@ import { Pressable, Share, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Share2, Trophy } from 'lucide-react-native';
+import { Check, Share2, Trophy } from 'lucide-react-native';
 import {
   appendNoteShortcut,
   buildExerciseGroups,
@@ -11,6 +11,7 @@ import {
   comparisonFacts,
   feelingOf,
   formatBestSet,
+  lastWorkoutWhen,
   howItWentBody,
   muscleGroupLabel,
   noteShortcutsFor,
@@ -63,7 +64,8 @@ export function CompletedSession({
 
   return (
     <Screen
-      title="Treino feito!"
+      // O título grande vem no topo do resumo, com o check (prancha Al-T5).
+      title=""
       refreshing={refreshing || summary.isRefetching}
       onRefresh={() => {
         onRefresh();
@@ -130,7 +132,15 @@ function Summary({
 
   return (
     <View className="gap-5 px-5 pb-6 pt-2">
-      <Text className="text-[13px] text-muted-foreground">{headline}</Text>
+      <View className="items-center gap-2">
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-primary">
+          <Check size={30} strokeWidth={3} color={colors.primaryForeground} />
+        </View>
+        <Text accessibilityRole="header" className="font-display text-[28px] text-foreground">
+          Treino feito!
+        </Text>
+        <Text className="text-center text-[13px] text-muted-foreground">{headline}</Text>
+      </View>
 
       <View className="flex-row gap-2">
         {facts.map((f) => (
@@ -138,7 +148,7 @@ function Summary({
             key={f.label}
             accessible
             accessibilityLabel={`${f.label}: ${f.value}`}
-            className="flex-1 items-center gap-0.5 rounded-2xl bg-card py-3"
+            className="flex-1 gap-0.5 rounded-[14px] bg-card px-3 py-3"
           >
             <Text className="font-display-semibold text-xl text-foreground">{f.value}</Text>
             <Text className="text-[11px] text-muted-foreground">{f.label}</Text>
@@ -148,12 +158,18 @@ function Summary({
 
       {summary.comparison ? (
         <View className="gap-2 rounded-3xl bg-card p-4">
-          <Text className="font-sans-bold text-[13px] text-muted-foreground">
-            Comparado ao último {summary.planName ?? 'treino'}
-          </Text>
+          <View className="flex-row items-baseline justify-between gap-2">
+            <Text className="flex-1 font-sans-semibold text-[15px] text-foreground">
+              Comparado ao último {summary.planName ?? 'treino'}
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              {lastWorkoutWhen(summary.comparison.startedAt)}
+            </Text>
+          </View>
           <View className="flex-row gap-2">
             {comparisonFacts(summary.comparison).map((c) => (
               <View key={c.label} className="flex-1">
+                <Text className="text-[11px] text-muted-foreground">{c.label}</Text>
                 <Text
                   className={cn(
                     'font-sans-bold text-base',
@@ -162,7 +178,6 @@ function Summary({
                 >
                   {c.value}
                 </Text>
-                <Text className="text-[11px] text-muted-foreground">{c.label}</Text>
               </View>
             ))}
           </View>
@@ -246,12 +261,19 @@ function Summary({
                 }}
                 className="min-h-[44px] flex-row items-center gap-3"
               >
+                <View
+                  className="h-9 w-[3px] rounded-full"
+                  style={{
+                    backgroundColor: colors[groupColorName(e.isCardio ? 'cardio' : e.muscleGroup)],
+                  }}
+                />
                 <View className="min-w-0 flex-1">
                   <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
                     {e.exerciseName}
                   </Text>
                   <Text className="text-[12px] text-muted-foreground">
-                    {e.sets} {e.sets === 1 ? 'série' : 'séries'} ·{' '}
+                    {e.sets} {e.sets === 1 ? 'série' : 'séries'}
+                    {e.isCardio ? ' · ' : ' · melhor '}
                     {formatBestSet(e.best, units.loadUnit)}
                   </Text>
                 </View>
@@ -288,7 +310,12 @@ function Summary({
       ) : null}
 
       <View className="gap-3 rounded-3xl bg-card p-4">
-        <FeelingPicker title="Como foi o treino?" value={feeling} onChange={setFeeling} />
+        <FeelingPicker
+          variant="workout"
+          title="Como foi o treino?"
+          value={feeling}
+          onChange={setFeeling}
+        />
         <Input
           multiline
           value={notes}
@@ -303,7 +330,8 @@ function Summary({
           {noteShortcutsFor(notes).map((label) => (
             <Chip
               key={label}
-              label={label}
+              // O "+" da prancha Al-T5: o atalho soma à observação.
+              label={`+ ${label}`}
               onPress={() => setNotes((current) => appendNoteShortcut(current, label))}
             />
           ))}
@@ -315,10 +343,14 @@ function Summary({
       ) : null}
 
       <View className="flex-row gap-2">
-        <Button variant="outline" className="h-14 flex-1 rounded-full" onPress={share}>
-          <Share2 size={16} color={colors.foreground} />
-          <Text className="font-sans-bold text-sm text-foreground">Compartilhar</Text>
-        </Button>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Compartilhar"
+          onPress={share}
+          className="h-14 w-14 items-center justify-center rounded-[14px] bg-muted active:opacity-80"
+        >
+          <Share2 size={18} color={colors.foreground} />
+        </Pressable>
         <Button
           className="h-14 flex-1 rounded-full"
           disabled={save.isPending}
