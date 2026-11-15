@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **144 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **145 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 144 tools): **121,6 k caracteres**
-hoje, dos quais **7.272 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 145 tools): **123,2 k caracteres**
+hoje, dos quais **7.326 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (100,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (101,4 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -278,6 +278,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `list_meals`                   | R        |
 |                            | `update_meal`                  | U        |
 |                            | `delete_meal`                  | D        |
+|                            | `delete_meal_photo`            | D        |
 |                            | `copy_meal`                    | C        |
 |                            | `copy_day`                     | C        |
 | **Refeições salvas**       | `list_meal_templates`          | R        |
@@ -389,7 +390,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **144 tools**. Cada uma documentada abaixo.
+Total: **145 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -852,6 +853,7 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
         portionId?: string;   // medida caseira (portions de get_food)
         quantity?: number;    // 0.25 a 20 medidas; grams = medida × quantity
         foodName?: string;    // override opcional do snapshot
+        source?: "MANUAL" | "AI" | "PLAN" | "BARCODE"; // padrão "AI" pelo MCP (#374)
       }
     | {
         // Item livre — Claude estima e envia tudo
@@ -862,10 +864,14 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
         carbsG: number;
         fatG: number;
         groupId?: number;
+        source?: "MANUAL" | "AI" | "PLAN" | "BARCODE"; // padrão "AI" pelo MCP (#374)
       }
   >;
 }
 ```
+
+Pelo MCP quem registra é uma IA: sem `source`, o item nasce `AI` e a refeição aparece com o selo
+"IA" no app. A refeição devolvida diz `hasPhoto` e `origin`, nunca o arquivo da foto.
 
 **Output:**
 
@@ -958,10 +964,20 @@ Atualiza metadados da refeição (não os itens — use as tools de itens).
 
 ### `delete_meal`
 
-Deleta refeição e todos os seus itens (cascade).
+Deleta refeição e todos os seus itens (cascade). A foto guardada, se houver, sai do bucket junto
+(ADR 038).
 
 **Input:** `{ mealId: string }`  
 **Output:** `{ deleted: true }`
+
+### `delete_meal_photo`
+
+"Apagar só a foto" (#374, ADR 038): apaga o arquivo da foto guardada e mantém a refeição com os
+itens e os números. Refeição sem foto, ou de outro usuário, responde `NOT_FOUND`. Não há tool
+que leia a foto: as tools de refeição dizem só `hasPhoto`.
+
+**Input:** `{ id: string }`  
+**Output:** `{ mealId: string; hasPhoto: false }`
 
 ### `copy_meal`
 
@@ -1125,6 +1141,8 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
   fatG?: number;
   // Micronutrientes por chave (ADR 009). Substitui os que o item tinha; {} apaga
   nutrients?: Record<string, number>;
+  // Origem do item (#374): "AI" pinta o selo "IA" na refeição
+  source?: "MANUAL" | "AI" | "PLAN" | "BARCODE";
 }
 ```
 

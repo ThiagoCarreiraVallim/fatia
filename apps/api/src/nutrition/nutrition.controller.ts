@@ -105,7 +105,9 @@ export class NutritionController {
   }
 
   /**
-   * Foto de refeição → alimentos candidatos. **Não grava nada.**
+   * Foto de refeição → alimentos candidatos. Não grava refeição; guarda a foto
+   * só com "Guardar as fotos das refeições" ligado (ADR 038), à espera do
+   * `POST /meals` com `photoFileId`.
    *
    * O corpo é a foto em **base64, com `Content-Type: text/plain`**, e não JSON.
    * O motivo é mecânico: o parser de JSON do Nest é global e tem teto de 100 kB;
@@ -258,9 +260,16 @@ export class NutritionController {
     return this.meals.create(user.id, dto);
   }
 
+  /** A refeição com a foto, quando guardada: URL assinada de curta duração (ADR 038). */
   @Get('meals/:id')
   getMeal(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
-    return this.meals.findById(user.id, id);
+    return this.meals.findWithPhoto(user.id, id);
+  }
+
+  /** "Apagar só a foto" (#374): o arquivo some e a refeição fica com os números. */
+  @Delete('meals/:id/photo')
+  deleteMealPhoto(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+    return this.meals.deletePhoto(user.id, id);
   }
 
   @Patch('meals/:id')
@@ -350,7 +359,7 @@ export class NutritionController {
   // -------- Summary & Goals --------
   @Get('summary')
   daySummary(@CurrentUser() user: CurrentUserPayload, @Query('date') date: string) {
-    return this.summary.getDay(user.id, date, user.timezone);
+    return this.summary.getDayView(user.id, date, user.timezone);
   }
 
   @Get('history')

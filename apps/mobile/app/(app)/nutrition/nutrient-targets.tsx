@@ -10,7 +10,7 @@ import {
   nutrientRangeError,
   nutrientStatusText,
   nutritionApi,
-  parseDecimalInput,
+  parseTypedDecimal,
   type NutrientPreset,
   type NutrientProgress,
   type NutrientTarget,
@@ -76,8 +76,8 @@ export default function NutrientTargetsScreen() {
     };
   const isCustom = preset.nutrientKey === CUSTOM;
 
-  const minValue = parseDecimalInput(min);
-  const maxValue = parseDecimalInput(max);
+  const minValue = parseTypedDecimal(min);
+  const maxValue = parseTypedDecimal(max);
   const rangeError = min.trim() || max.trim() ? nutrientRangeError(minValue, maxValue) : null;
   const customKey = customNutrientKey(customLabel, customUnit);
   const nameError =

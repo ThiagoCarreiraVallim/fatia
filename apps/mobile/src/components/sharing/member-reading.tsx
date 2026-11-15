@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react-native';
@@ -11,8 +11,16 @@ import {
 } from '@fatia/api-client';
 import { LoadingState, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { ROTULO_REFEICAO, formatarDiaCurto, formatarHora } from '@/components/nutrition/helpers';
 
-const ORDEM: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
+const SCOPE_ORDER: ShareScope[] = [
+  'WORKOUT',
+  'NUTRITION',
+  'MEAL_PHOTOS',
+  'BODY',
+  'HABITS',
+  'GOALS',
+];
 
 function Bloco({
   titulo,
@@ -48,7 +56,7 @@ function Linha({ titulo, detalhe }: { titulo: string; detalhe: string }) {
   );
 }
 
-function Corpo({ reading }: { reading: StudentReading }) {
+function ReadingBody({ reading }: { reading: StudentReading }) {
   switch (reading.scope) {
     case 'WORKOUT':
       return (
@@ -100,6 +108,39 @@ function Corpo({ reading }: { reading: StudentReading }) {
           </Bloco>
         </View>
       );
+    case 'MEAL_PHOTOS':
+      // Só as fotos: os números ficam em Alimentação (ADR 038). URL assinada e curta.
+      return (
+        <View className="gap-2 rounded-2xl border border-border bg-card p-4">
+          <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
+            Fotos das refeições
+          </Text>
+          {reading.photos.length === 0 ? (
+            <Text className="text-xs text-muted-foreground">Nenhuma foto guardada no período.</Text>
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {reading.photos.map((p) => {
+                const label = `${ROTULO_REFEICAO[p.mealType]}, ${formatarDiaCurto(p.eatenAt.slice(0, 10))} ${formatarHora(p.eatenAt)}`;
+                return (
+                  <View key={p.mealId} className="w-[48%] overflow-hidden rounded-xl bg-muted">
+                    {p.photo.url ? (
+                      <Image
+                        source={{ uri: p.photo.url }}
+                        accessibilityLabel={label}
+                        style={{ width: '100%', aspectRatio: 4 / 3 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text className="p-4 text-xs text-muted-foreground">Foto indisponível</Text>
+                    )}
+                    <Text className="px-2 py-1.5 text-[11px] text-muted-foreground">{label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      );
     case 'GOALS':
       return (
         <Bloco titulo="Metas" vazio="Nenhuma meta cadastrada.">
@@ -124,7 +165,7 @@ export function MemberReading({
   granted: ShareScope[];
 }) {
   const [scope, setScope] = useState<ShareScope | null>(null);
-  const ativo = scope ?? ORDEM.find((s) => granted.includes(s)) ?? null;
+  const ativo = scope ?? SCOPE_ORDER.find((s) => granted.includes(s)) ?? null;
   const leitura = useQuery({
     queryKey: ['professional', 'student', membershipId, ativo],
     queryFn: () => professionalApi.readStudent(membershipId, ativo as ShareScope),
@@ -148,7 +189,7 @@ export function MemberReading({
   return (
     <View className="gap-4">
       <View className="flex-row flex-wrap gap-2" accessibilityLabel="Categorias autorizadas">
-        {ORDEM.filter((s) => granted.includes(s)).map((s) => (
+        {SCOPE_ORDER.filter((s) => granted.includes(s)).map((s) => (
           <Pressable
             key={s}
             accessibilityRole="button"
@@ -179,7 +220,7 @@ export function MemberReading({
       ) : null}
       {leitura.data ? (
         <>
-          <Corpo reading={leitura.data.reading} />
+          <ReadingBody reading={leitura.data.reading} />
           <Text className="text-[11px] text-muted-foreground">
             {`Datas no fuso da pessoa (${leitura.data.timezone}).`}
           </Text>

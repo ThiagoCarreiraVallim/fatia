@@ -1,6 +1,14 @@
-import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import type { AgentRecognizedItem } from '../ai/agent.adapter';
 import { HostedAiService } from '../ai/hosted-ai.service';
+import { PrismaService } from '../common/prisma.service';
+import { MEAL_PHOTO_PURPOSE, MediaService } from '../storage/media.service';
 import { FoodService } from './food.service';
 import { calcMacrosFromFood } from './helpers/calc-macros';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from './helpers/strip-exif';
@@ -19,8 +27,13 @@ import { normalizeSearchText } from '../common/search-text';
  *   caminho de escrita novo a cobrir;
  * - **alimento não reconhecido cai no fluxo manual** porque nunca saiu dele.
  *
- * **A foto nunca toca disco.** Chega como Buffer, é limpa de metadados, vira
- * base64 na chamada ao agente e some com o fim da requisição — ADR 004.
+ * **A foto só fica quando a pessoa escolheu guardar** (ADR 038, #374). Chega
+ * como Buffer, é limpa de metadados e vira base64 na chamada ao agente. Com
+ * "Guardar as fotos das refeições" ligado e algo reconhecido no prato, ela é
+ * recodificada (WebP, sem EXIF) e guardada no bucket privado à espera da
+ * refeição: `photoFileId` volta na resposta e o `POST /meals` a liga. Se não
+ * virar refeição, a faxina da mídia a apaga em até duas horas. Sem resposta à
+ * pergunta, ou com recusa, some com o fim da requisição, como antes.
  *
  * Plano, cota, a chamada ao agente e o custo no livro-caixa são do
  * `HostedAiService` (`ai/`), o mesmo do chat e do ditado.
@@ -64,6 +77,11 @@ export interface ReconhecimentoDaFoto {
   itens: ItemReconhecido[];
   /** Frase curta do modelo sobre a foto, ou `null`. */
   observacao: string | null;
+  /**
+   * A foto guardada, para o `POST /meals` ligar à refeição. `null` quando a
+   * pessoa não escolheu guardar, quando nada foi reconhecido ou sem bucket.
+   */
+  photoFileId: string | null;
 }
 
 /**
@@ -97,9 +115,13 @@ function identidadeDoCatalogo(nome: string): string {
 
 @Injectable()
 export class MealRecognitionService {
+  private readonly logger = new Logger(MealRecognitionService.name);
+
   constructor(
     private readonly foods: FoodService,
     private readonly hostedAi: HostedAiService,
+    @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /** `true` quando o app deve mostrar a entrada por foto. */
@@ -109,7 +131,8 @@ export class MealRecognitionService {
 
   /**
    * Foto → alimentos candidatos, já casados com a TACO quando houve
-   * correspondência. **Não persiste nada.**
+   * correspondência. Não grava refeição; a foto só fica com a escolha da
+   * pessoa (ver o topo do arquivo).
    */
   async recognize(userId: string, photo: Buffer): Promise<ReconhecimentoDaFoto> {
     if (photo.length === 0) {
@@ -135,10 +158,34 @@ export class MealRecognitionService {
     // Plano e cota antes do agente (ADR 024), e o custo depois: Free recebe 402
     // e nada sai daqui.
     const { items, note } = await this.hostedAi.recognizeMeal(userId, withoutMetadata);
+    const itens = await this.casarComOCatalogo(userId, items);
     return {
-      itens: await this.casarComOCatalogo(userId, items),
+      itens,
       observacao: note,
+      photoFileId: itens.length > 0 ? await this.keepPhoto(userId, withoutMetadata) : null,
     };
+  }
+
+  /**
+   * Guarda a foto só com `keepMealPhotos === true`. Falhar aqui não derruba o
+   * reconhecimento: a pessoa registra a refeição sem foto, e o log diz por quê.
+   */
+  private async keepPhoto(userId: string, photo: Buffer): Promise<string | null> {
+    if (!this.prisma || !this.media?.enabled) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { keepMealPhotos: true },
+    });
+    if (user?.keepMealPhotos !== true) return null;
+    try {
+      const file = await this.media.storePersonalImage(userId, MEAL_PHOTO_PURPOSE, photo);
+      return file?.id ?? null;
+    } catch (err) {
+      this.logger.warn(
+        `Foto da refeição não guardada: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
   }
 
   /**

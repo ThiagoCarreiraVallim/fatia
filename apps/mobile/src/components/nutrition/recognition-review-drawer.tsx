@@ -75,7 +75,8 @@ export function RecognitionReviewDrawer({
 
   const gravar = useMutation({
     mutationFn: async () => {
-      const payload = itensDeRefeicao(itens);
+      // Origem `AI`: a refeição ganha o selo da IA e o aviso das porções (#374).
+      const payload = itensDeRefeicao(itens).map((item) => ({ ...item, source: 'AI' as const }));
       if (mealId) {
         // Um por vez: a API não tem rota de lote para item, e inventar uma aqui
         // seria caminho de escrita novo — justamente o que este desenho evita.
@@ -85,6 +86,8 @@ export function RecognitionReviewDrawer({
       await nutritionApi.createMeal({
         mealType: mealType ?? 'SNACK',
         eatenAt: instanteNoDia(date),
+        // A foto guardada (só com a preferência ligada) vai com a refeição nova.
+        photoFileId: resultado.photoFileId ?? undefined,
         items: payload,
       });
     },

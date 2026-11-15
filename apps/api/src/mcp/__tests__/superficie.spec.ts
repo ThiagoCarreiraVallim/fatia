@@ -38,12 +38,15 @@ import {
  * A #389 acrescentou seis tools de lembretes e preferências de aviso; `delete_reminder`, por
  * ser destrutiva, é servida também no braço B: mudam os dois braços (B passa a 43, 25 delas
  * compartilhadas).
+ * A #374 acrescentou `delete_meal_photo` (destrutiva, servida também no braço B) e a origem do
+ * item (`source`) em `log_meal`, `add_meal_item` e `update_meal_item`: mudam os dois braços (B
+ * passa a 44, 26 delas compartilhadas).
  * A #376 acrescentou cinco tools do plano alimentar (nenhuma destrutiva), e a revisão mudou a
  * descrição de `log_plan_meal` (repetir devolve o mesmo registro): muda o braço A.
  */
 
-const SHA_ENTIDADE = '5c49908a30faf08c59beca76288f9d78dbabe8e84c71344713f033a79c26d694';
-const SHA_INTENCAO = '30222b29b0e4131288fc6bc51ef147d027278cc45f274b66742ae691628af31e';
+const SHA_ENTIDADE = '41f3ff8317b51c953ae415d1e7959157167396230c6e7b536bc512eec37dc40d';
+const SHA_INTENCAO = 'a4eef950d1628fa4a250ec62089d20d02abde8897e1caf2ef5e4592b09c991d2';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
@@ -168,13 +171,13 @@ describe('superfície do /mcp', () => {
           .map((t) => t.name),
       ].sort();
       expect(intencao.map((t) => t.name).sort()).toEqual(esperadas);
-      expect(intencao).toHaveLength(43);
+      expect(intencao).toHaveLength(44);
       expect(shaDoCatalogo(intencao)).toBe(SHA_INTENCAO);
     });
 
     it('serve as de entidade compartilhadas byte a byte iguais nas duas superfícies', () => {
       const compartilhadas = intencao.filter((t) => !INTENT_TOOLS.some((i) => i.name === t.name));
-      expect(compartilhadas).toHaveLength(25);
+      expect(compartilhadas).toHaveLength(26);
       for (const tool of compartilhadas) {
         const naEntidade = entidade.find((t) => t.name === tool.name);
         expect(naEntidade).toEqual(tool);

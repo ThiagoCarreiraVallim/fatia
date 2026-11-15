@@ -10,10 +10,18 @@ import {
   type StudentReading,
 } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MEAL_TYPE_LABEL } from '@/components/nutrition/meal-labels';
 
-const ORDEM: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
+const SCOPE_ORDER: ShareScope[] = [
+  'WORKOUT',
+  'NUTRITION',
+  'MEAL_PHOTOS',
+  'BODY',
+  'HABITS',
+  'GOALS',
+];
 
-function Corpo({ reading }: { reading: StudentReading }) {
+function ReadingBody({ reading }: { reading: StudentReading }) {
   switch (reading.scope) {
     case 'WORKOUT':
       return (
@@ -54,6 +62,42 @@ function Corpo({ reading }: { reading: StudentReading }) {
             <Linha key={dia.date} titulo={dia.date} detalhe={`${Math.round(dia.kcal)} kcal`} />
           ))}
         </Bloco>
+      );
+    case 'MEAL_PHOTOS':
+      // Só as fotos: os números ficam em Alimentação (ADR 038). URL assinada e curta.
+      return reading.photos.length === 0 ? (
+        <Bloco titulo="Fotos das refeições" vazio="Nenhuma foto guardada no período.">
+          {[]}
+        </Bloco>
+      ) : (
+        <section className="rounded-2xl border border-subtle bg-card p-4">
+          <h2 className="text-sm font-bold text-foreground">Fotos das refeições</h2>
+          <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {reading.photos.map((p) => {
+              const label = `${MEAL_TYPE_LABEL[p.mealType]}, ${new Date(p.eatenAt).toLocaleString(
+                'pt-BR',
+                { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' },
+              )}`;
+              return (
+                <li key={p.mealId} className="overflow-hidden rounded-xl bg-muted/40">
+                  {p.photo.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador
+                    <img
+                      src={p.photo.url}
+                      alt={label}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex aspect-[4/3] items-center justify-center text-xs text-muted-foreground">
+                      Foto indisponível
+                    </div>
+                  )}
+                  <p className="px-2 py-1.5 text-[11px] text-muted-foreground">{label}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       );
     case 'BODY':
       return (
@@ -135,7 +179,7 @@ export function MemberReading({
   granted: ShareScope[];
 }) {
   const [scope, setScope] = useState<ShareScope | null>(null);
-  const ativo = scope ?? ORDEM.find((s) => granted.includes(s)) ?? null;
+  const ativo = scope ?? SCOPE_ORDER.find((s) => granted.includes(s)) ?? null;
 
   const leitura = useQuery({
     // A categoria entra na chave: cada uma é uma leitura própria na API e uma
@@ -164,7 +208,7 @@ export function MemberReading({
   return (
     <div className="space-y-4">
       <nav className="flex flex-wrap gap-2" aria-label="Categorias autorizadas">
-        {ORDEM.filter((s) => granted.includes(s)).map((s) => (
+        {SCOPE_ORDER.filter((s) => granted.includes(s)).map((s) => (
           <button
             key={s}
             type="button"
@@ -192,7 +236,7 @@ export function MemberReading({
 
       {leitura.data && (
         <>
-          <Corpo reading={leitura.data.reading} />
+          <ReadingBody reading={leitura.data.reading} />
           <p className="text-[11px] text-muted-foreground">
             Datas no fuso da pessoa ({leitura.data.timezone}).
           </p>

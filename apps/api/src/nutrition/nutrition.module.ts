@@ -9,6 +9,7 @@ import { FoodPortionService } from './food-portion.service';
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
 import { AiModule } from '../ai/ai.module';
+import { StorageModule } from '../storage/storage.module';
 import { OffFoodService } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
@@ -26,6 +27,7 @@ import { GetMealTool } from './mcp/get-meal.tool';
 import { ListMealsTool } from './mcp/list-meals.tool';
 import { UpdateMealTool } from './mcp/update-meal.tool';
 import { DeleteMealTool } from './mcp/delete-meal.tool';
+import { DeleteMealPhotoTool } from './mcp/delete-meal-photo.tool';
 import { AddMealItemTool } from './mcp/add-meal-item.tool';
 import { UpdateMealItemTool } from './mcp/update-meal-item.tool';
 import { DeleteMealItemTool } from './mcp/delete-meal-item.tool';
@@ -75,7 +77,7 @@ const TETO_DA_FOTO_BASE64 = '6mb';
 const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 });
 
 @Module({
-  imports: [AiModule],
+  imports: [AiModule, StorageModule],
   controllers: [NutritionController, OnboardingController, NutritionPlanController],
   providers: [
     // Do `sharing/`, mas só depende do Prisma: o aviso da troca (#376) sem ciclo de módulo.
@@ -113,6 +115,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     ListMealsTool,
     UpdateMealTool,
     DeleteMealTool,
+    DeleteMealPhotoTool,
     AddMealItemTool,
     UpdateMealItemTool,
     DeleteMealItemTool,

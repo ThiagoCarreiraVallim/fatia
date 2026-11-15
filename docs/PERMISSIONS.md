@@ -190,13 +190,14 @@ cobrança viva (#158).
 
 ## Leitura de dado de titular (papel NÃO decide — vínculo decide)
 
-| Escopo      | Quem pode receber vínculo    | Quem NUNCA recebe |
-| ----------- | ---------------------------- | ----------------- |
-| `WORKOUT`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `NUTRITION` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `BODY`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `HABITS`    | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `GOALS`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| Escopo        | Quem pode receber vínculo    | Quem NUNCA recebe |
+| ------------- | ---------------------------- | ----------------- |
+| `WORKOUT`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `NUTRITION`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `BODY`        | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `HABITS`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `GOALS`       | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `MEAL_PHOTOS` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
 
 Esta tabela é **igual em todas as linhas de propósito**, e é isso que ela tem a dizer: nenhum
 papel lê nada. A equipe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode receber", que
@@ -212,6 +213,11 @@ substitui os vínculos da pessoa naquele grupo. `MEMBER` continua nunca lendo ni
 
 Consentir um escopo não abre outro: a porta confere `scopes: { has: scope }`, um escopo por
 chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a dieta.
+
+`MEAL_PHOTOS` ("Fotos das refeições", [ADR 038](./ADR/038-foto-da-refeicao-guardada.md), #374) é
+a 6ª categoria e nunca vem junto de `NUTRITION`: quem já compartilhava a alimentação continua
+mostrando só os números. A leitura devolve uma URL assinada de curta duração por foto e entra na
+trilha como qualquer outra.
 
 ## Como isto não apodrece
 
@@ -263,11 +269,8 @@ treino, nutricionista, dono/criador). O vínculo de cada pessoa da equipe leva a
 papel dela; mudar de papel recalcula os vínculos e nunca acrescenta categoria sem aceite. Com
 "profissionais veem só quem acompanham" ligado, o profissional só lê quem acompanha.
 
-**6ª categoria de leitura — "Fotos das refeições"**
-([ADR 038](./ADR/038-foto-da-refeicao-guardada.md)). Valor novo de `ShareScope`, separado de
-`NUTRITION`: quem compartilha a alimentação continua mostrando só os números. Na tabela de
-leitura, a linha nova terá em "Quem NUNCA recebe" o `MEMBER`, o `ADMIN` da instância, o
-administrador e a recepção da comunidade.
+**6ª categoria de leitura — "Fotos das refeições".** Já está na tabela de leitura (#374). Com a
+#404, a coluna "Quem NUNCA recebe" ganha o administrador e a recepção da comunidade.
 
 **Plano alimentar do profissional (#376, [ADR 045](./ADR/045-plano-alimentar-autoral.md)).**
 Quem escreve é a equipe (OWNER/PROFESSIONAL/CREATOR ativo na comunidade do aluno); o plano é

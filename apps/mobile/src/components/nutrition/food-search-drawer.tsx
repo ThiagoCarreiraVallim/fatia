@@ -46,7 +46,7 @@ import {
   previaDoAlimento,
 } from './helpers';
 import { FormularioDeAlimento } from './formulario-de-alimento';
-import { SeletorDeQuantidade } from './seletor-de-quantidade';
+import { AmountPicker } from './amount-picker';
 import { colors } from '@/theme/colors';
 
 /**
@@ -403,7 +403,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             onAlternarFavorito={() => alternarFavorito(selecionado)}
             gramas={gramas}
             seletor={
-              <SeletorDeQuantidade
+              <AmountPicker
                 medidas={medidas}
                 quantidade={quantidade}
                 onChange={setQuantidade}

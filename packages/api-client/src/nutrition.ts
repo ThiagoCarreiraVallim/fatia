@@ -128,7 +128,15 @@ export interface RecognizedFoodItem {
 export interface MealRecognition {
   itens: RecognizedFoodItem[];
   observacao: string | null;
+  /**
+   * A foto guardada à espera da refeição (ADR 038): só com "Guardar as fotos
+   * das refeições" ligado. Vai no `createMeal`; sem ele, some na faxina.
+   */
+  photoFileId?: string | null;
 }
+
+/** De onde veio o item (#374). `AI` pinta o selo "IA" na refeição. */
+export type MealItemSource = 'MANUAL' | 'AI' | 'PLAN' | 'BARCODE';
 
 export interface MealItem {
   id: string;
@@ -144,6 +152,9 @@ export interface MealItem {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  /** Micronutrientes do item: `{ "fiber_g": 3, "sodium_mg": 410 }`. */
+  nutrients?: Record<string, number> | null;
+  source?: MealItemSource;
 }
 
 export interface Meal {
@@ -153,6 +164,37 @@ export interface Meal {
   eatenAt: string;
   notes: string | null;
   items: MealItem[];
+  /** Há foto guardada (ADR 038). O arquivo só vem em `nutritionApi.meal(id)`. */
+  hasPhoto?: boolean;
+  /** `AI` quando algum item veio da IA. */
+  origin?: MealItemSource;
+}
+
+/** A foto do prato, por URL assinada de curta duração. */
+export interface MealPhoto {
+  id: string;
+  url: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** A refeição aberta na tela dela, com a foto quando guardada. */
+export interface MealDetail extends Meal {
+  photo: MealPhoto | null;
+}
+
+export type DayNutrientStatus = 'under' | 'ok' | 'over' | 'none';
+
+/** Um nutriente no dia com a faixa da meta (#374). */
+export interface DayNutrient {
+  /** `kcal`, `protein_g`, `carbs_g`, `fat_g` ou a chave de `MealItem.nutrients`. */
+  key: string;
+  label: string;
+  unit: string;
+  value: number;
+  min: number | null;
+  max: number | null;
+  status: DayNutrientStatus;
 }
 
 export interface MealTemplateItem {
@@ -195,6 +237,8 @@ export interface DaySummary {
   totals: DayTotals;
   mealsCount: number;
   meals: Meal[];
+  /** Calorias, macros, fibra, sódio, cafeína e as outras metas, com a faixa. */
+  nutrients?: DayNutrient[];
 }
 
 export interface UserGoals {
@@ -255,6 +299,11 @@ export interface NutrientProgress {
 export const nutritionApi = {
   summary: (date: string) => apiFetch<DaySummary>(`/api/nutrition/summary?date=${date}`),
   meals: (date?: string) => apiFetch<Meal[]>(`/api/nutrition/meals${date ? `?date=${date}` : ''}`),
+  /** A refeição com a foto, quando guardada (URL assinada, vale minutos). */
+  meal: (id: string) => apiFetch<MealDetail>(`/api/nutrition/meals/${id}`),
+  /** "Apagar só a foto": o arquivo some e a refeição fica com os números. */
+  deleteMealPhoto: (id: string) =>
+    apiFetch<Meal>(`/api/nutrition/meals/${id}/photo`, { method: 'DELETE' }),
   searchFoods: (q: string, limit = 20) =>
     apiFetch<Food[]>(`/api/nutrition/foods?q=${encodeURIComponent(q)}&limit=${limit}`),
   groups: () => apiFetch<FoodGroup[]>('/api/nutrition/foods/groups'),
@@ -323,6 +372,8 @@ export const nutritionApi = {
     mealType: MealType;
     eatenAt: string;
     notes?: string;
+    /** A foto guardada pelo reconhecimento (`MealRecognition.photoFileId`). */
+    photoFileId?: string;
     items: Array<{
       foodId?: number;
       foodName?: string;
@@ -335,6 +386,7 @@ export const nutritionApi = {
       carbsG?: number;
       fatG?: number;
       nutrients?: Record<string, number>;
+      source?: MealItemSource;
     }>;
   }) =>
     apiFetch<Meal>('/api/nutrition/meals', {
@@ -378,13 +430,17 @@ export const nutritionApi = {
       carbsG?: number;
       fatG?: number;
       nutrients?: Record<string, number>;
+      source?: MealItemSource;
     },
   ) =>
     apiFetch<MealItem>(`/api/nutrition/meals/${mealId}/items`, {
       method: 'POST',
       body: JSON.stringify(item),
     }),
-  updateItem: (id: string, patch: { grams?: number; portionId?: string; quantity?: number }) =>
+  updateItem: (
+    id: string,
+    patch: { grams?: number; portionId?: string; quantity?: number; source?: MealItemSource },
+  ) =>
     apiFetch<MealItem>(`/api/nutrition/meal-items/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),

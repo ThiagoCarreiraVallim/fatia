@@ -18,11 +18,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Os cards têm teste próprio; aqui só importa o que a tela decide.
-vi.mock('@/components/nutrition/meal-timeline', () => ({ MealTimeline: () => null }));
 vi.mock('@/components/nutrition/weekly-trend-chart', () => ({ WeeklyTrendChart: () => null }));
-vi.mock('@/components/nutrition/nutrient-targets-card', () => ({
-  NutrientTargetsCard: () => null,
-}));
 vi.mock('@/components/nutrition/custom-foods-card', () => ({ CustomFoodsCard: () => null }));
 vi.mock('@/components/nutrition/copy-day-drawer', () => ({ CopyDayDrawer: () => null }));
 vi.mock('@/components/nutrition/food-search-drawer', () => ({
@@ -34,13 +30,12 @@ vi.mock('@/components/nutrition/food-search-drawer', () => ({
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
-  return { ...actual, nutritionApi: { summary: vi.fn(), goals: vi.fn() } };
+  return { ...actual, nutritionApi: { summary: vi.fn() } };
 });
 
 import { nutritionApi } from '@fatia/api-client';
 
 const summary = vi.mocked(nutritionApi.summary);
-const goals = vi.mocked(nutritionApi.goals);
 
 const emptyDay = {
   date: '2026-05-19',
@@ -60,7 +55,6 @@ function renderPage() {
 describe('NutritionPage', () => {
   beforeEach(() => {
     summary.mockReset().mockResolvedValue(emptyDay);
-    goals.mockReset().mockResolvedValue(null as never);
   });
 
   it('o atalho do topo abre a busca já no leitor, no tipo de refeição da hora', async () => {
@@ -83,6 +77,6 @@ describe('NutritionPage', () => {
     await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
 
     await waitFor(() => expect(summary).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('kcal consumidas')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'De onde veio' })).toBeInTheDocument();
   });
 });

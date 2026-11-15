@@ -139,7 +139,7 @@ const fmt = (n: number, digits = 0) =>
  * Sem vírgula, um ponto seguido de três dígitos é milhar (`1.800`) e qualquer
  * outro é decimal (`2.5`, do teclado em inglês). Vazio é `null`; o resto, `NaN`.
  */
-export function parseDecimalInput(text: string): number | null {
+export function parseTypedDecimal(text: string): number | null {
   const t = text.trim().replace(/\s/g, '');
   if (t === '') return null;
   let normalized: string;
@@ -223,8 +223,8 @@ export function parseGoalsDraft(draft: GoalsDraft): {
   const out: Partial<GoalsInput> = {};
 
   for (const r of GOAL_RANGES) {
-    const min = parseDecimalInput(draft[r.min]);
-    const max = parseDecimalInput(draft[r.max]);
+    const min = parseTypedDecimal(draft[r.min]);
+    const max = parseTypedDecimal(draft[r.max]);
     if (min == null || max == null) errors[r.min] = 'Preencha o mínimo e o máximo.';
     else if (Number.isNaN(min) || Number.isNaN(max)) errors[r.min] = NOT_A_NUMBER;
     else if (min > max) errors[r.min] = rangeText(min, max);
@@ -235,17 +235,17 @@ export function parseGoalsDraft(draft: GoalsDraft): {
     }
   }
 
-  const water = parseDecimalInput(draft.waterL);
+  const water = parseTypedDecimal(draft.waterL);
   if (water == null || Number.isNaN(water)) errors.water = NOT_A_NUMBER;
   else if (water > 10) errors.water = 'Até 10 litros.';
   else out.dailyWaterTargetMl = Math.round(water * 1000);
 
-  const workouts = parseDecimalInput(draft.weeklyWorkouts);
+  const workouts = parseTypedDecimal(draft.weeklyWorkouts);
   if (workouts == null || Number.isNaN(workouts)) errors.workouts = NOT_A_NUMBER;
   else if (workouts > 7) errors.workouts = 'Entre 0 e 7 dias.';
   else out.weeklyWorkouts = Math.round(workouts);
 
-  const steps = parseDecimalInput(draft.dailyStepsTarget);
+  const steps = parseTypedDecimal(draft.dailyStepsTarget);
   if (steps == null || Number.isNaN(steps)) errors.steps = NOT_A_NUMBER;
   else if (steps > 100_000) errors.steps = 'Até 100.000 passos.';
   else out.dailyStepsTarget = Math.round(steps);

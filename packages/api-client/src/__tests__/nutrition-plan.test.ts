@@ -12,7 +12,7 @@ import {
   planFoodMacros,
   planWeekText,
   optionTitle,
-  parseDecimalInput,
+  parseTypedDecimal,
   parseGoalsDraft,
   planFoodLine,
   planKcalPerDay,
@@ -28,19 +28,19 @@ import {
 
 describe('número digitado', () => {
   it('aceita vírgula decimal e ponto de milhar', () => {
-    expect(parseDecimalInput('2,5')).toBe(2.5);
-    expect(parseDecimalInput(' 1.800 ')).toBe(1800);
-    expect(parseDecimalInput('1.800,5')).toBe(1800.5);
-    expect(parseDecimalInput('2.5')).toBe(2.5);
-    expect(parseDecimalInput('140')).toBe(140);
+    expect(parseTypedDecimal('2,5')).toBe(2.5);
+    expect(parseTypedDecimal(' 1.800 ')).toBe(1800);
+    expect(parseTypedDecimal('1.800,5')).toBe(1800.5);
+    expect(parseTypedDecimal('2.5')).toBe(2.5);
+    expect(parseTypedDecimal('140')).toBe(140);
   });
 
   it('vazio é null; lixo é NaN', () => {
-    expect(parseDecimalInput('')).toBeNull();
-    expect(parseDecimalInput('   ')).toBeNull();
-    expect(parseDecimalInput('abc')).toBeNaN();
-    expect(parseDecimalInput('1,2,3')).toBeNaN();
-    expect(parseDecimalInput('-3')).toBeNaN();
+    expect(parseTypedDecimal('')).toBeNull();
+    expect(parseTypedDecimal('   ')).toBeNull();
+    expect(parseTypedDecimal('abc')).toBeNaN();
+    expect(parseTypedDecimal('1,2,3')).toBeNaN();
+    expect(parseTypedDecimal('-3')).toBeNaN();
   });
 
   it('volta para o campo com vírgula e sem milhar', () => {

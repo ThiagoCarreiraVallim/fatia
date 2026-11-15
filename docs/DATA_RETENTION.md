@@ -125,20 +125,16 @@ papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a
 
 ## Dados que NÃO são armazenados
 
-- **Fotos de refeição** — **até a #374 entrar.** A [ADR 038](./ADR/038-foto-da-refeicao-guardada.md)
-  supera a ADR 004: a foto que vira refeição passa a ser guardada quando a pessoa escolher
-  (tabela acima). Até lá, vale o que segue. Decisão registrada na
-  [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e estendida pela
-  [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket
-  para elas, não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O bucket que existe
-  desde a Fase 7a é só de mídia **publicada** pela comunidade
-  ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)), e foto de refeição nunca passa por ele. O que muda entre eles é se a
-  imagem chega a atravessar o Fatia; ver a seção seguinte.
-- **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
-  Continua valendo com o registro por foto do app nativo (#139): a imagem **transita**, é analisada
-  e é descartada — não há bucket, não há upload persistido, não há coluna de foto em `Meal`. O que
-  entra no banco são os dados estruturados que a pessoa confirma. Detalhe do trânsito na seção
-  "Reconhecimento de refeição por foto", abaixo.
+- **Fotos de refeição que não viraram refeição.** Com "Guardar as fotos das refeições" desligado
+  (ou ainda sem resposta), a imagem **transita**, é analisada e é descartada, como na
+  [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e na
+  [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). Ligada, a foto é guardada no
+  reconhecimento e espera a refeição; se a pessoa desistir, a faxina a apaga em até 2 h. Uma foto
+  guardada fica no bucket privado (`users/{userId}/…webp`, sem EXIF, lida só por URL assinada de
+  minutos) enquanto a refeição existir — ver a tabela acima e a
+  [ADR 038](./ADR/038-foto-da-refeicao-guardada.md). Backup do bucket segue o do armazenamento de
+  mídia; apagar a foto, a refeição ou a conta tira o arquivo do bucket na hora. No export, a refeição
+  leva os metadados da foto e, pelo link de baixar, uma URL assinada que vale 24 h.
 - **Fotos e áudio do chat.** A foto anexada a uma mensagem e o áudio do ditado vão ao provedor
   naquele turno e somem com a requisição; do banco e do checkpoint do agente, só sai que **houve**
   foto (quantas) e quanto o áudio durou. Ver "Chat com a IA hospedada", abaixo.

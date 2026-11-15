@@ -5,13 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Copy, ScanBarcode, Settings } from 'lucide-react';
-import { mealTypeForTime, nutritionApi, type MealType } from '@fatia/api-client';
+import { mealTypeForTime, nutritionApi, type DayNutrient, type MealType } from '@fatia/api-client';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
-import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
-import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
-import { MealTimeline } from '@/components/nutrition/meal-timeline';
+import { DayNutrientsCard } from '@/components/nutrition/day-nutrients-card';
+import { DayMealSources } from '@/components/nutrition/day-meal-sources';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
-import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
 import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
@@ -28,6 +26,19 @@ function todayIso(): string {
   }).format(new Date());
 }
 
+/** Uma API sem a faixa do dia (de antes da #374) ainda mostra as calorias. */
+function kcalFallback(kcal: number): DayNutrient {
+  return {
+    key: 'kcal',
+    label: 'Calorias',
+    unit: 'kcal',
+    value: kcal,
+    min: null,
+    max: null,
+    status: 'none',
+  };
+}
+
 function NutritionPageContent() {
   const params = useSearchParams();
   const date = params.get('date') ?? todayIso();
@@ -40,11 +51,11 @@ function NutritionPageContent() {
     queryKey: ['nutrition', 'summary', date],
     queryFn: () => nutritionApi.summary(date),
   });
-  const goals = useQuery({
-    queryKey: ['nutrition', 'goals'],
-    queryFn: () => nutritionApi.goals(),
-  });
   const mealCount = summary.data?.meals.filter((m) => m.items.length > 0).length ?? 0;
+  // O chip escolhido vale para o cartão e para o "De onde veio".
+  const [nutrientKey, setNutrientKey] = useState<string | null>(null);
+  const nutrients = summary.data?.nutrients ?? [];
+  const selectedNutrient = nutrientKey ? nutrients.find((n) => n.key === nutrientKey) : undefined;
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
@@ -77,7 +88,7 @@ function NutritionPageContent() {
 
       <DateNavigator date={date} />
 
-      {(summary.isLoading || goals.isLoading) && (
+      {summary.isLoading && (
         <div className="space-y-4">
           <Skeleton className="h-80" />
           <Skeleton className="h-28" />
@@ -89,13 +100,15 @@ function NutritionPageContent() {
 
       {summary.data && (
         <>
-          <CaloriesRingCard totals={summary.data.totals} goals={goals.data ?? null} />
-          <MacroBentoGrid totals={summary.data.totals} goals={goals.data ?? null} />
-          <NutrientTargetsCard date={date} />
-          <MealTimeline
+          <DayNutrientsCard
+            nutrients={nutrients}
+            selected={selectedNutrient?.key ?? null}
+            onSelect={setNutrientKey}
+          />
+          <DayMealSources
             meals={summary.data.meals}
+            nutrient={selectedNutrient ?? nutrients[0] ?? kcalFallback(summary.data.totals.kcal)}
             date={date}
-            today={todayIso()}
             onAddMeal={(mt) => setNewMealType(mt)}
           />
           <WeeklyTrendChart today={todayIso()} />
@@ -125,12 +138,6 @@ function NutritionPageContent() {
         today={todayIso()}
         mealCount={mealCount}
       />
-
-      {goals.error && (
-        <p role="alert" className="text-sm text-danger">
-          Não foi possível carregar suas metas.
-        </p>
-      )}
     </div>
   );
 }

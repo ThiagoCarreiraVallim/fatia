@@ -1,3 +1,4 @@
+import type { PrismaClient } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
 import { SubscriptionEntitlementsService } from '../subscription-entitlements.service';
 import { concederAssento, leArgumentosDoAssento } from '../grant-seat';
@@ -25,6 +26,9 @@ describe('billing:grant-seat — argumentos', () => {
 /** Contra o Postgres de teste: o assento dá PRO e o --purge não deixa rastro. */
 describe('billing:grant-seat (banco real)', () => {
   const prisma = new PrismaService();
+  // O script roda com o `PrismaClient` puro; o `PrismaService` omite `MealItem.seq`, e o
+  // tipo das relações profundas (mídia → refeição → itens) deixa de bater sem o cast.
+  const scriptDb = prisma as unknown as PrismaClient;
   const config = {
     get: (k: string, padrao?: unknown) => (k === 'AI_REQUIRES_PLAN' ? true : padrao),
   } as never;
@@ -69,26 +73,29 @@ describe('billing:grant-seat (banco real)', () => {
 
   it('dá o PRO pela comunidade, é idempotente, e o --purge apaga pool e atribuição', async () => {
     const args = leArgumentosDoAssento([`${stamp}-membro@test.local`, stamp]);
-    await concederAssento(prisma, args);
-    await concederAssento(prisma, args);
+    await concederAssento(scriptDb, args);
+    await concederAssento(scriptDb, args);
     expect(await prisma.groupSeatAssignment.count({ where: { pool: { groupId } } })).toBe(1);
     expect(await direitos.aiTierForUser(membro)).toMatchObject({ tier: 'PRO', source: 'GROUP' });
 
-    await concederAssento(prisma, { ...args, apagar: true });
+    await concederAssento(scriptDb, { ...args, apagar: true });
     expect(await prisma.groupSeatPool.count({ where: { groupId } })).toBe(0);
     expect(await direitos.aiTierForUser(membro)).toMatchObject({ tier: 'FREE' });
   });
 
   it('não dá assento a quem não é membro ativo', async () => {
     await expect(
-      concederAssento(prisma, leArgumentosDoAssento([`${stamp}-membro@test.local`, 'nao-existe'])),
+      concederAssento(
+        scriptDb,
+        leArgumentosDoAssento([`${stamp}-membro@test.local`, 'nao-existe']),
+      ),
     ).rejects.toThrow(/Nenhuma comunidade/);
     await prisma.groupMembership.update({
       where: { groupId_userId: { groupId, userId: membro } },
       data: { status: 'LEFT' },
     });
     await expect(
-      concederAssento(prisma, leArgumentosDoAssento([`${stamp}-membro@test.local`, stamp])),
+      concederAssento(scriptDb, leArgumentosDoAssento([`${stamp}-membro@test.local`, stamp])),
     ).rejects.toThrow(/não é membro ativo/);
   });
 });

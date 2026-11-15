@@ -5,6 +5,7 @@ import type { ProfessionalAccessService } from '../professional-access.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { GoalsService } from '../../goals/goals.service';
 import type { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
+import type { MealService } from '../../nutrition/meal.service';
 import type { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import type { ProgressService } from '../../progress/progress.service';
 import type { WorkoutPlanService } from '../../workout/workout-plan.service';
@@ -45,6 +46,7 @@ describe('StudentViewService', () => {
   };
   let nutrition: { getHistory: jest.Mock };
   let goals: { list: jest.Mock };
+  let meals: { listPhotos: jest.Mock };
   let nutritionPlans: { teamView: jest.Mock };
   let service: StudentViewService;
 
@@ -74,6 +76,7 @@ describe('StudentViewService', () => {
     };
     nutrition = { getHistory: jest.fn().mockResolvedValue({}) };
     goals = { list: jest.fn().mockResolvedValue([]) };
+    meals = { listPhotos: jest.fn().mockResolvedValue([]) };
     nutritionPlans = {
       teamView: jest.fn().mockResolvedValue({ plan: null, swaps: [], adherence: {} }),
     };
@@ -86,6 +89,7 @@ describe('StudentViewService', () => {
       progress as unknown as ProgressService,
       nutrition as unknown as NutritionSummaryService,
       goals as unknown as GoalsService,
+      meals as unknown as MealService,
       nutritionPlans as unknown as NutritionPlanService,
     );
   });
@@ -117,6 +121,8 @@ describe('StudentViewService', () => {
       [ShareScope.BODY]: ['progress.weightProgress'],
       [ShareScope.HABITS]: ['progress.stepsProgress', 'progress.waterProgress'],
       [ShareScope.GOALS]: ['goals.list'],
+      // Fotos só pela categoria própria (ADR 038): NUTRITION não chama isto.
+      [ShareScope.MEAL_PHOTOS]: ['meals.listPhotos'],
     };
 
     it.each(Object.values(ShareScope))('lê só o que %s cobre', async (scope) => {
@@ -131,6 +137,7 @@ describe('StudentViewService', () => {
         'progress.waterProgress': progress.waterProgress,
         'nutrition.getHistory': nutrition.getHistory,
         'goals.list': goals.list,
+        'meals.listPhotos': meals.listPhotos,
       };
 
       // A lista inteira de uma vez, e não um `expect` por mock: a falha diz qual

@@ -12,6 +12,8 @@ import type { CopyMealDto } from './dto/meal-template.dto';
 import { assertDay } from '../common/dates';
 
 type Meal = Awaited<ReturnType<MealService['findById']>>;
+/** O que a cópia lê da refeição de origem: a foto fica com a original. */
+type CopySource = Pick<Meal, 'eatenAt' | 'notes' | 'items'>;
 
 /**
  * "Comi o mesmo de ontem": copia uma refeição, ou o dia inteiro, para outro dia.
@@ -96,7 +98,7 @@ export class MealCopyService {
 
   private copy(
     userId: string,
-    source: Meal,
+    source: CopySource,
     toDate: string,
     timezone: string,
     mealType: Meal['mealType'],
