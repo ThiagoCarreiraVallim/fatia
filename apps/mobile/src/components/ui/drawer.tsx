@@ -13,6 +13,7 @@ import BottomSheet, {
 import { cssInterop } from 'nativewind';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';
+import { SHEET_ANIMATION } from '@/theme/motion';
 
 /**
  * Faz `className` funcionar nos componentes do `@gorhom/bottom-sheet`.
@@ -117,6 +118,8 @@ export function Drawer({
       snapPoints={snapPoints}
       enableDynamicSizing={!snapPoints}
       enablePanDownToClose
+      // 550 ms com a curva do DS; com reduzir movimento, pula para o fim.
+      animationConfigs={SHEET_ANIMATION}
       onChange={(index) => {
         if (index === -1) onOpenChange(false);
       }}

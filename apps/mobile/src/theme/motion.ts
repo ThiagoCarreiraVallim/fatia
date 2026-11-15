@@ -28,6 +28,13 @@ export function timing(kind: MotionKind): WithTimingConfig {
   };
 }
 
+/**
+ * Folha inferior subindo e descendo: 550 ms com a curva do DS (o mesmo
+ * `duration.sheet` da web). Vai no `animationConfigs` do @gorhom, que sem ele
+ * usa o padrão da biblioteca (250 ms no Android, mola no iOS).
+ */
+export const SHEET_ANIMATION: WithTimingConfig = timing('sheet');
+
 /** Anima um valor com a duração do tipo pedido. */
 export function animateTo(value: number, kind: MotionKind = 'base') {
   'worklet';
