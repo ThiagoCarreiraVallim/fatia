@@ -52,12 +52,14 @@ import { colors } from '@/theme/colors';
  * do plano, e pergunta antes.
  */
 
-const DOT: Record<AgendaState, string> = {
-  done: colors.primary,
-  missed: colors.danger,
-  today: colors.foreground,
-  planned: colors.faintForeground,
-};
+/** Função, não constante: os tokens de cor são getters do tema claro/escuro. */
+const dotColor = (state: AgendaState) =>
+  ({
+    done: colors.primary,
+    missed: colors.danger,
+    today: colors.foreground,
+    planned: colors.faintForeground,
+  })[state];
 
 const MODES = [
   { value: 'week' as const, label: 'Semana' },
@@ -215,7 +217,7 @@ function Dot({ state }: { state: AgendaState | null }) {
   return (
     <View
       className="h-1.5 w-1.5 rounded-full"
-      style={{ backgroundColor: state ? DOT[state] : 'transparent' }}
+      style={{ backgroundColor: state ? dotColor(state) : 'transparent' }}
     />
   );
 }
@@ -348,7 +350,7 @@ function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () =
       className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3"
       style={copy.tone === 'today' ? { borderWidth: 1.5, borderColor: colors.primary } : undefined}
     >
-      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: DOT[copy.tone] }} />
+      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: dotColor(copy.tone) }} />
       <View className="min-w-0 flex-1">
         <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
           {copy.title}

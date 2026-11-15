@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { ChevronRight, Layers, Play, Plus, Trash2, Users } from 'lucide-react-native';
 import {
   planExerciseChips,
@@ -121,13 +121,13 @@ export default function PlansScreen() {
           icon={<Users size={20} color={colors.primaryText} />}
           title="Modelos das comunidades"
           subtitle="planos prontos dos seus grupos"
-          onPress={() => router.push('/community')}
+          onPress={() => router.push('/workout/templates' as Href)}
         />
         <Shortcut
           icon={<Layers size={20} color={colors.primaryText} />}
           title="Bloco de semanas"
           subtitle="organize força, volume e deload"
-          onPress={() => router.push('/workout')}
+          onPress={() => router.push('/workout/block' as Href)}
         />
       </View>
     </Screen>

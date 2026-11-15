@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
+import { useRouter, type Href } from 'expo-router';
+import { CalendarDays, ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
 import {
   blockRow,
+  initialsOf,
   planCardInfo,
+  planOffersApi,
   planExercisePreview,
   planMuscleBars,
   QUICK_TEMPLATES,
@@ -23,6 +25,7 @@ import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { useStartSession } from '@/components/workout/use-start-session';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
+import { pendingOfferBanner } from '@/components/workout/offer-view';
 import { colors } from '@/theme/colors';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 import { cn } from '@/components/ui/utils';
@@ -335,6 +338,13 @@ export default function WorkoutScreen() {
     queryFn: () => workoutApi.listPlans(),
   });
 
+  // Plano recebido da equipe esperando resposta (#379): o aviso no topo.
+  const offers = useQuery({
+    queryKey: ['plan-offers'],
+    queryFn: () => planOffersApi.list(),
+  });
+  const offerBanner = pendingOfferBanner(offers.data?.pending ?? []);
+
   const planWidth = Math.min(240, Math.round((width - 40) * 0.62));
   const quickCardWidth = Math.round((width - 40) * 0.7);
 
@@ -342,6 +352,7 @@ export default function WorkoutScreen() {
     <Screen
       refreshing={active.isRefetching || plans.isRefetching || summary.isRefetching}
       onRefresh={() => {
+        void offers.refetch();
         void active.refetch();
         void plans.refetch();
         void summary.refetch();
@@ -349,6 +360,9 @@ export default function WorkoutScreen() {
     >
       <View className="gap-6 px-5 pb-4 pt-2">
         <TabHeader title="Treino">
+          <HeaderButton label="Agenda" onPress={() => router.push('/workout/agenda' as Href)}>
+            <CalendarDays size={20} color={colors.foreground} />
+          </HeaderButton>
           <HeaderButton
             label="Histórico de treinos"
             onPress={() => router.push('/workout/history')}
@@ -359,8 +373,31 @@ export default function WorkoutScreen() {
             <Plus size={22} color={colors.foreground} />
           </HeaderButton>
         </TabHeader>
-        {/* TODO(#379): o aviso "<treinador> enviou um plano · toque para ver e
-            aceitar" entra aqui, acima da semana, quando houver plano recebido. */}
+        {offerBanner ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`${offerBanner.title}. ${offerBanner.sub}`}
+            onPress={() => router.push(offerBanner.href as Href)}
+            className="flex-row items-center gap-3 rounded-card px-4 py-3.5 active:opacity-80"
+            style={{ backgroundColor: `${colors.primary}24` }}
+          >
+            <View
+              className="h-7 w-7 items-center justify-center rounded-full"
+              style={{ backgroundColor: `${colors.water}2e` }}
+            >
+              <Text className="font-sans-extrabold text-[11px]" style={{ color: colors.water }}>
+                {initialsOf(offerBanner.authorName)}
+              </Text>
+            </View>
+            <View className="min-w-0 flex-1">
+              <Text className="font-sans-bold text-sm text-foreground">{offerBanner.title}</Text>
+              <Text className="text-xs text-muted-foreground">{offerBanner.sub}</Text>
+            </View>
+            <View className="h-[34px] items-center justify-center rounded-chip bg-primary px-3.5">
+              <Text className="font-sans-bold text-[13px] text-primary-foreground">Ver</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         {summary.data?.week ? (
           <WeekRow week={summary.data.week} activeSessionId={active.data?.id} />
