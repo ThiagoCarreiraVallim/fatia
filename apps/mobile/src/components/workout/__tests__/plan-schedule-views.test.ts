@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { AgendaItem, TrainingBlock } from '@fatia/api-client';
-import { pendingOfferBanner } from '../offer-view';
 import {
   agendaWindow,
   dayDot,
@@ -10,35 +9,6 @@ import {
   shiftAnchor,
 } from '../agenda-view';
 import { activeWeekRows, blockScreenState, blockStatusCopy } from '../block-view';
-
-describe('plano recebido no app (Al-T2, Al-T2b)', () => {
-  it('o aviso no Treino: o primeiro pendente e quantos mais', () => {
-    const p = {
-      id: 'o1',
-      versionId: 'v1',
-      title: 'Inferior',
-      version: 1,
-      kind: 'new' as const,
-      status: 'PENDING' as const,
-      schedule: 'CALENDAR' as const,
-      authorName: 'Helena P',
-      groupName: 'Academia Demo',
-      sentAt: '2026-11-15T12:00:00.000Z',
-      planId: null,
-      href: '/workout/offers/o1',
-    };
-    expect(pendingOfferBanner([])).toBeNull();
-    expect(pendingOfferBanner([p])).toEqual({
-      title: 'Helena enviou Inferior',
-      sub: 'Toque para ver e aceitar',
-      href: '/workout/offers/o1',
-      authorName: 'Helena P',
-    });
-    expect(pendingOfferBanner([p, { ...p, id: 'o2' }])?.sub).toBe(
-      'Toque para ver e aceitar · mais 1 esperando',
-    );
-  });
-});
 
 describe('agenda no app (Al-T24)', () => {
   it('o dia de hoje no fuso, sem o UTC empurrar a data', () => {

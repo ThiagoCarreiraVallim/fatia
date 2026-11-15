@@ -58,13 +58,12 @@ describe('aviso de plano recebido no Treino (Al-T1)', () => {
       accepted: [],
     });
     renderNotice();
-    const nova = await screen.findByRole('link', { name: /Helena enviou Inferior/ });
+    const nova = await screen.findByRole('link', { name: /Helena enviou um plano/ });
     expect(nova).toHaveAttribute('href', '/workout/offers/o1');
-    expect(screen.getByText('Toque para ver e aceitar')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Helena atualizou Inferior v2/ })).toHaveAttribute(
-      'href',
-      '/workout/offers/o2',
-    );
+    expect(screen.getByText('Inferior · toque para ver e aceitar')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Helena atualizou um plano.*Inferior v2/ }),
+    ).toHaveAttribute('href', '/workout/offers/o2');
     expect(screen.getByText('novo')).toBeInTheDocument();
   });
 

@@ -9,6 +9,7 @@ import {
   initialsOf,
   planCardInfo,
   planOffersApi,
+  receivedOfferBanner,
   planExercisePreview,
   planMuscleBars,
   QUICK_TEMPLATES,
@@ -25,7 +26,6 @@ import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { useStartSession } from '@/components/workout/use-start-session';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
-import { pendingOfferBanner } from '@/components/workout/offer-view';
 import { colors } from '@/theme/colors';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 import { cn } from '@/components/ui/utils';
@@ -343,7 +343,7 @@ export default function WorkoutScreen() {
     queryKey: ['plan-offers'],
     queryFn: () => planOffersApi.list(),
   });
-  const offerBanner = pendingOfferBanner(offers.data?.pending ?? []);
+  const pendingOffers = offers.data?.pending ?? [];
 
   const planWidth = Math.min(240, Math.round((width - 40) * 0.62));
   const quickCardWidth = Math.round((width - 40) * 0.7);
@@ -373,31 +373,44 @@ export default function WorkoutScreen() {
             <Plus size={22} color={colors.foreground} />
           </HeaderButton>
         </TabHeader>
-        {offerBanner ? (
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={`${offerBanner.title}. ${offerBanner.sub}`}
-            onPress={() => router.push(offerBanner.href as Href)}
-            className="flex-row items-center gap-3 rounded-card px-4 py-3.5 active:opacity-80"
-            style={{ backgroundColor: `${colors.primary}24` }}
-          >
-            <View
-              className="h-7 w-7 items-center justify-center rounded-full"
-              style={{ backgroundColor: `${colors.water}2e` }}
+        {pendingOffers.map((offer) => {
+          const banner = receivedOfferBanner(offer);
+          return (
+            <Pressable
+              key={offer.id}
+              accessibilityRole="link"
+              accessibilityLabel={`${banner.title}. ${banner.sub}`}
+              onPress={() => router.push(offer.href as Href)}
+              className="flex-row items-center gap-3 rounded-card bg-card px-3.5 py-3 active:opacity-80"
+              style={{ borderWidth: 1, borderColor: `${colors.water}59` }}
             >
-              <Text className="font-sans-extrabold text-[11px]" style={{ color: colors.water }}>
-                {initialsOf(offerBanner.authorName)}
-              </Text>
-            </View>
-            <View className="min-w-0 flex-1">
-              <Text className="font-sans-bold text-sm text-foreground">{offerBanner.title}</Text>
-              <Text className="text-xs text-muted-foreground">{offerBanner.sub}</Text>
-            </View>
-            <View className="h-[34px] items-center justify-center rounded-chip bg-primary px-3.5">
-              <Text className="font-sans-bold text-[13px] text-primary-foreground">Ver</Text>
-            </View>
-          </Pressable>
-        ) : null}
+              <View
+                className="h-7 w-7 items-center justify-center rounded-full"
+                style={{ backgroundColor: `${colors.water}2e` }}
+              >
+                <Text className="font-sans-extrabold text-[11px]" style={{ color: colors.water }}>
+                  {initialsOf(offer.authorName)}
+                </Text>
+              </View>
+              <View className="min-w-0 flex-1">
+                <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
+                  {banner.title}
+                </Text>
+                <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                  {banner.sub}
+                </Text>
+              </View>
+              <View
+                className="h-[22px] justify-center rounded-pill px-[9px]"
+                style={{ backgroundColor: `${colors.info}1a` }}
+              >
+                <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-info">
+                  {offer.kind === 'update' ? 'nova versão' : 'novo'}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
 
         {summary.data?.week ? (
           <WeekRow week={summary.data.week} activeSessionId={active.data?.id} />

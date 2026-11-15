@@ -725,7 +725,7 @@ describe('WorkoutPage — sem sessão aberta', () => {
     });
     renderPage();
 
-    const notice = await screen.findByRole('link', { name: /Helena enviou Inferior/ });
+    const notice = await screen.findByRole('link', { name: /Helena enviou um plano/ });
     expect(notice).toHaveAttribute('href', '/workout/offers/o1');
     const week = await screen.findByRole('region', { name: 'Semana' });
     expect(notice.compareDocumentPosition(week) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -20,6 +20,7 @@ import {
   offerTitle,
   offerWhen,
   planOffersApi,
+  receivedOfferBanner,
   rescheduleDays,
   templatesSubtitle,
   type AgendaItem,
@@ -119,6 +120,21 @@ describe('resposta ao plano recebido: igual no web e no app', () => {
     planId: null as string | null,
     shown: version(shown),
     ...over,
+  });
+
+  it('o aviso no Treino segue a prancha Al-T1: quem, "um plano", e o nome embaixo', () => {
+    const base = { authorName: 'Helena Personal', title: 'Inferior', version: 1 };
+    expect(receivedOfferBanner({ ...base, kind: 'new' })).toEqual({
+      title: 'Helena enviou um plano',
+      sub: 'Inferior · toque para ver e aceitar',
+    });
+    expect(receivedOfferBanner({ ...base, kind: 'update', version: 2 })).toEqual({
+      title: 'Helena atualizou um plano',
+      sub: 'Inferior v2 · toque para ver o que mudou',
+    });
+    expect(receivedOfferBanner({ ...base, authorName: null, kind: 'new' }).title).toBe(
+      'Sua equipe enviou um plano',
+    );
   });
 
   it('o estágio sai do status da versão mostrada', () => {

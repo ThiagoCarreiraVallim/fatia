@@ -383,7 +383,7 @@ export function offerActions(offer: Pick<PlanOffer, 'shown' | 'kind' | 'planId'>
   return { primary: 'Voltar', secondary: null };
 }
 
-/** O aviso no início do Treino: "Helena enviou um plano · toque para ver". */
+/** O aviso no início do Treino (Al-T1): "Helena enviou um plano" / "Inferior · toque para ver e aceitar". */
 export function receivedOfferBanner(
   o: Pick<PlanOfferSummary, 'authorName' | 'kind' | 'title' | 'version'>,
 ): {
@@ -392,8 +392,8 @@ export function receivedOfferBanner(
 } {
   const who = firstName(o.authorName) ?? 'Sua equipe';
   return o.kind === 'update'
-    ? { title: `${who} atualizou ${offerTitle(o)}`, sub: 'Toque para ver o que mudou' }
-    : { title: `${who} enviou ${offerTitle(o)}`, sub: 'Toque para ver e aceitar' };
+    ? { title: `${who} atualizou um plano`, sub: `${offerTitle(o)} · toque para ver o que mudou` }
+    : { title: `${who} enviou um plano`, sub: `${offerTitle(o)} · toque para ver e aceitar` };
 }
 
 // ---------------------------------------------------------------------------
