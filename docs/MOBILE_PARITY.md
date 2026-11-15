@@ -172,8 +172,8 @@ Semana (S1).
 | —                        | `workout/session/session-header`       | ➕  | header fixo com o progresso dos exercícios                                                |
 
 Saíram na #377: `community-guide` e `cards/body-silhouette`, nos dois. No app saíram também
-`set-row`, `rpe-badge`, `rpe-drawer`, `finish-session-drawer`, `exercise-title`, `rest-timer` e o
-reordenar exercícios. No PWA, `set-row` e `rpe-modal` seguem fora da sessão (cartão de exercício do
+`set-row`, `rpe-badge`, `rpe-drawer`, `finish-session-drawer`, `exercise-title` e `rest-timer`. O
+reordenar exercícios foi para o Treino atual (setas), no app e no PWA. No PWA, `set-row` e `rpe-modal` seguem fora da sessão (cartão de exercício do
 plano e tela de treino).
 
 ### Progresso — 13 de 13

@@ -111,7 +111,9 @@ Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000
   - Carga e repetições são digitáveis (vírgula decimal), além do −/+.
   - A observação entra no treino feito (T5), não no fim do treino.
   - No app, o vídeo abre no navegador do app; na web, toca na página.
-  - O reordenar do app saiu.
+  - O reordenar fica no Treino atual (T17), com setas, nos dois.
+  - "+ Série" sem série para copiar leva à sessão; a API recusa série sem repetições, tempo nem distância.
+  - Carga, volume e máximo estimado saem na unidade da pessoa (kg ou lb); carga 0 é peso do corpo e não vira recorde.
   - O T9 não tem "Erros comuns".
 - **Concorrência:** a série é idempotente pela `clientKey`. Duas séries com chaves diferentes enviadas ao mesmo tempo ainda podem repetir o `setNumber`.
 - **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
