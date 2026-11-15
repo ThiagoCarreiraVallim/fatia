@@ -140,7 +140,11 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
 
       <p className="mt-3 text-sm text-foreground">{block.explanation}</p>
 
-      <ol className="mt-3 grid grid-cols-4 gap-2">
+      {/* Uma coluna por semana: o bloco tem de 3 a 6 (#379). */}
+      <ol
+        className="mt-3 grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${block.weeks.length}, minmax(0, 1fr))` }}
+      >
         {block.weeks.map((week) => (
           <li key={week.weekNumber} data-testid={`bloco-semana-${week.weekNumber}`}>
             <div
