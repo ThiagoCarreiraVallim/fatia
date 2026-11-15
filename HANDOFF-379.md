@@ -33,11 +33,11 @@ Legenda: [x] feito · [~] em andamento · [ ] não começado
 ### api-client / web / app
 
 - [x] api-client: tipos e chamadas (a16a4a63)
-- [~] Aviso de plano recebido (em andamento: forks web e mobile) no Treino (TODO(#379) em workout-home.tsx e app/(app)/workout/index.tsx)
-- [~] Al-T2 / (em andamento: forks web e mobile) Al-T2b plano recebido (aceitar, recusar, desfazer, atualização com o que mudou)
-- [~] Al-T23 (em andamento: forks web e mobile) Modelos (T6 e T19 passam a abrir esta tela)
-- [~] Al-T12 (em andamento: forks web e mobile) Periodização 3 a 6 semanas
-- [~] Al-T24 / (em andamento: forks web e mobile) T24b / T24c Agenda
+- [x] Aviso de plano recebido no Treino (TODO(#379) em workout-home.tsx e app/(app)/workout/index.tsx)
+- [x] Al-T2 / Al-T2b plano recebido (aceitar, recusar, desfazer, atualização com o que mudou)
+- [x] Al-T23 Modelos (T6 e T19 passam a abrir esta tela)
+- [x] Al-T12 Periodização 3 a 6 semanas
+- [x] Al-T24 / T24b / T24c Agenda
 
 ### Docs
 
@@ -73,7 +73,11 @@ cd apps/api && npx jest <caminho>
 
 ## Próximo passo exato
 
-api-client feito (a16a4a63). Agora: web (apps/web) e app (apps/mobile) em paralelo — telas /workout/offers/[id], /workout/agenda, /workout/templates, /workout/block; os dois TODO(#379) (workout-home.tsx e (app)/workout/index.tsx); T6 "Modelos das comunidades" e T19 "Começar de um modelo" apontam para /workout/templates; "Bloco de semanas" para /workout/block. Cada camada commita só o próprio diretório. Depois: REDESIGN_PROGRESS (decisões do dono), lint/typecheck/testes completos.
+Tudo implementado e commitado. Falta só o que é do dono/coordenador: passada visual contra as pranchas (web e app), apagar este arquivo e abrir a PR (`Closes #379`).
+
+Verificação final (2026-11-15): `pnpm lint` e `pnpm typecheck` verdes; api 2869/2869 (178 suítes, DATABASE_URL do `fatia_t379`), api-client 736, web 888, mobile 485.
+
+Diferenças entre web e app a decidir: no web, recusar não pede confirmação (o "Desfazer" cobre); no app, pede. O cartão "plano terminou" leva a "Ver o histórico" no web e a "Ver o plano" no app (não existe tela de resumo do bloco).
 
 ## Notas
 
