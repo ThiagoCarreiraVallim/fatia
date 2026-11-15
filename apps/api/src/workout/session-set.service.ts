@@ -82,6 +82,11 @@ export class SessionSetService {
     if (!isCardio && hasCardioFields) {
       throw new BadRequestException('Exercício de força requer weightKg e reps');
     }
+    // Série sem repetições, tempo nem distância não é série: contaria no
+    // progresso e no resumo sem nada feito (o "+ Série" sem série para copiar).
+    if (dto.reps == null && dto.durationSeconds == null && dto.distanceMeters == null) {
+      throw new BadRequestException('A série precisa de repetições, tempo ou distância');
+    }
 
     const agg = await this.prisma.sessionSet.aggregate({
       where: { sessionId: dto.sessionId, exerciseId: dto.exerciseId },

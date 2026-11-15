@@ -257,8 +257,9 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
           avgHeartRate: null,
         };
         const prior = priorStrength.get(id);
-        // Peso do corpo não vira recorde de carga: "recorde de 12 flexões" é outra conversa.
-        isRecord = !!prior && top.weightKg != null && isStrengthBetter(top, prior);
+        // Peso do corpo (sem carga ou carga 0, como as telas mostram) não vira
+        // recorde de carga: "recorde de 12 flexões" é outra conversa.
+        isRecord = !!prior && (top.weightKg ?? 0) > 0 && isStrengthBetter(top, prior);
         if (isRecord) {
           records.push({
             exerciseId: id,

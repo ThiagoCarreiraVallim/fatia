@@ -54,8 +54,8 @@ export class FinishSessionDto {
 export class UpdateSessionDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 
-  /** "Como foi o treino?" (#377), mudado depois do fim. */
-  @IsOptional() @IsInt() @Min(1) @Max(5) feeling?: number;
+  /** "Como foi o treino?" (#377), mudado depois do fim; `null` apaga. */
+  @IsOptional() @IsInt() @Min(1) @Max(5) feeling?: number | null;
 
   /**
    * Ordem dos exercícios nesta sessão, por id. Substitui a anterior inteira.

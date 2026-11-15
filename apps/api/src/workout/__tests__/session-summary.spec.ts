@@ -222,4 +222,15 @@ describe('summarizeSession', () => {
     expect(s.exercises[0]!.best).toMatchObject({ weightKg: null, reps: 15 });
     expect(s.volumeKg).toBe(0);
   });
+
+  it('carga 0 também é peso do corpo: mais repetições não vira recorde de carga', () => {
+    const s = summarizeSession({
+      ...base({ sets: [strength(BENCH, 1, 0, 15)] }),
+      priorSets: [
+        { exerciseId: BENCH.id, sessionId: 'x', weightKg: 0, reps: 12, distanceMeters: null },
+      ],
+    });
+    expect(s.records).toEqual([]);
+    expect(s.exercises[0]).toMatchObject({ isRecord: false });
+  });
 });
