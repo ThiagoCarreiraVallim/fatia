@@ -24,6 +24,9 @@ const assinanteComPro = (produto: string, expira: string, extra: Record<string, 
   },
 });
 
+// Data fixa venceu em 15/11/2026 e virou EXPIRED: o vencimento anda com o relógio.
+const EXPIRA_NO_FUTURO = new Date(Date.now() + 30 * 86_400_000).toISOString();
+
 describe('RevenueCatService (banco real)', () => {
   const fetchOriginal = globalThis.fetch;
   const stamp = `rc-${Date.now()}`;
@@ -75,7 +78,7 @@ describe('RevenueCatService (banco real)', () => {
   });
 
   it('compra: o webhook lê o assinante na REST e grava APPLE ativa', async () => {
-    responder(assinanteComPro('fatia_pro_mensal', '2026-11-15T00:00:00Z'));
+    responder(assinanteComPro('fatia_pro_mensal', EXPIRA_NO_FUTURO));
 
     expect(await service.processarWebhook(AUTH, webhook(`${stamp}-1`, userId))).toEqual({
       received: true,
@@ -134,7 +137,7 @@ describe('RevenueCatService (banco real)', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(await prisma.billingWebhookEvent.count({ where: { eventId: `${stamp}-4` } })).toBe(0);
 
-    responder(assinanteComPro('fatia_pro_mensal', '2026-11-15T00:00:00Z'));
+    responder(assinanteComPro('fatia_pro_mensal', EXPIRA_NO_FUTURO));
     expect(await service.processarWebhook(AUTH, webhook(`${stamp}-4`, outro))).toEqual({
       received: true,
     });
