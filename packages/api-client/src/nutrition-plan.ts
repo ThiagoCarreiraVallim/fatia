@@ -90,7 +90,7 @@ export interface NutritionPlanOverview {
   date: string;
   active: NutritionPlan | null;
   pending: NutritionPlan | null;
-  /** A pessoa compartilha Alimentação com quem escreveu o plano. */
+  /** Alguém da equipe (ativo, com Alimentação liberada) vê o diário. */
   teamSees: boolean;
   viewerName: string | null;
   week: { inRangeDays: number; days: number };
@@ -386,9 +386,10 @@ export function swappedLine(item: PlanItem): string {
  * não errar o gênero de quem atende.
  */
 export function swapToastText(r: Pick<PlanSwapResult, 'teamSees' | 'viewerName'>): string {
-  return r.teamSees && r.viewerName
+  if (!r.teamSees) return 'Troca registrada · fica só no seu diário';
+  return r.viewerName
     ? `Troca registrada · ${r.viewerName} vê no seu diário`
-    : 'Troca registrada · fica só no seu diário';
+    : 'Troca registrada · sua equipe vê no seu diário';
 }
 
 /** "C 25 · P 4,7 · G 1,7" — na ordem da folha de troca. */

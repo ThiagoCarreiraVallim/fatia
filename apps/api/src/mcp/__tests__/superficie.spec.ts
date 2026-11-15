@@ -38,10 +38,11 @@ import {
  * A #389 acrescentou seis tools de lembretes e preferências de aviso; `delete_reminder`, por
  * ser destrutiva, é servida também no braço B: mudam os dois braços (B passa a 43, 25 delas
  * compartilhadas).
- * A #376 acrescentou cinco tools do plano alimentar (nenhuma destrutiva): muda o braço A.
+ * A #376 acrescentou cinco tools do plano alimentar (nenhuma destrutiva), e a revisão mudou a
+ * descrição de `log_plan_meal` (repetir devolve o mesmo registro): muda o braço A.
  */
 
-const SHA_ENTIDADE = '4f87ceb7802d80b954f72acbe4eada77862a39814a507a492ff3e0e8192ca947';
+const SHA_ENTIDADE = '5c49908a30faf08c59beca76288f9d78dbabe8e84c71344713f033a79c26d694';
 const SHA_INTENCAO = '30222b29b0e4131288fc6bc51ef147d027278cc45f274b66742ae691628af31e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

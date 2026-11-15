@@ -33,7 +33,7 @@ describe('plano alimentar do profissional (integração)', () => {
   let groupId = '';
   let n = 0;
 
-  const ids = { ana: '', helena: '', colega: '', estranho: '', anaMembership: '' };
+  const ids = { ana: '', helena: '', colega: '', estranho: '', anaMembership: '', bruno: '' };
   const food = { pao: 0, tapioca: 0, aveia: 0, ovo: 0, arroz: 0, frango: 0, peixe: 0, custom: 0 };
 
   async function pessoa(nome: string) {
@@ -127,6 +127,7 @@ describe('plano alimentar do profissional (integração)', () => {
     ids.colega = await pessoa('Colega');
     ids.estranho = await pessoa('Estranho');
     const dono = await pessoa('Bruno');
+    ids.bruno = dono;
     const grupo = await prisma.group.create({
       data: { type: 'SPONSORED', name: 'Academia', slug: `${stamp}-g`, ownerId: dono },
     });
@@ -257,7 +258,7 @@ describe('plano alimentar do profissional (integração)', () => {
     });
 
     it('aceitar de novo o mesmo plano não muda nada', async () => {
-      await expect(plans.accept(ids.ana, planId)).rejects.toThrow(NotFoundException);
+      await expect(plans.accept(ids.ana, planId)).rejects.toThrow(ConflictException);
     });
 
     it('"comi isso" no almoço pede a opção, e a opção tem de ser desta refeição', async () => {
@@ -271,7 +272,7 @@ describe('plano alimentar do profissional (integração)', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('"comi isso" registra a opção escolhida no diário, uma vez por dia', async () => {
+    it('"comi isso" registra a opção escolhida no diário, uma vez por dia (o segundo toque devolve o mesmo)', async () => {
       const r = await plans.logMeal(ids.ana, lunchId, { optionId: lunchOption2 }, TZ);
       const refeicao = await meals.findById(ids.ana, r.mealId);
       expect(refeicao.mealType).toBe('LUNCH');
@@ -282,9 +283,10 @@ describe('plano alimentar do profissional (integração)', () => {
         mealId: r.mealId,
         optionId: lunchOption2,
       });
-      await expect(plans.logMeal(ids.ana, lunchId, { optionId: lunchOption2 }, TZ)).rejects.toThrow(
-        ConflictException,
-      );
+      // Toque repetido é o mesmo registro, não erro nem refeição nova.
+      await expect(
+        plans.logMeal(ids.ana, lunchId, { optionId: lunchOption2 }, TZ),
+      ).resolves.toEqual(r);
     });
 
     it('apagar a refeição do diário desfaz o "feito"', async () => {
@@ -398,6 +400,172 @@ describe('plano alimentar do profissional (integração)', () => {
       const antigo = await prisma.nutritionPlan.findUniqueOrThrow({ where: { id: planId } });
       expect(antigo.status).toBe('SUPERSEDED');
       expect(await prisma.mealTemplate.count({ where: { userId: ids.ana } })).toBe(3);
+    });
+  });
+
+  describe('concorrência, consentimento e vínculo com o diário (revisão da #376)', () => {
+    let bia = '';
+    let biaMembership = '';
+
+    async function novaAluna(nome: string) {
+      const id = await pessoa(nome);
+      const m = await prisma.groupMembership.create({
+        data: { groupId, userId: id, role: 'MEMBER', status: 'ACTIVE' },
+      });
+      return { id, membership: m.id };
+    }
+
+    async function emUso(userId: string) {
+      const v = await plans.overview(userId, TZ);
+      return v.active!;
+    }
+
+    beforeAll(async () => {
+      const a = await novaAluna('Bia');
+      bia = a.id;
+      biaMembership = a.membership;
+    });
+
+    it('dois "aceitar" ao mesmo tempo: um aceita, o outro é 409, e as refeições salvas não dobram', async () => {
+      const enviado = await plans.send(ids.helena, biaMembership, plano());
+      const r = await Promise.allSettled([
+        plans.accept(bia, enviado.id),
+        plans.accept(bia, enviado.id),
+      ]);
+      expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+      const recusa = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+      expect(recusa.reason).toBeInstanceOf(ConflictException);
+      expect(await prisma.mealTemplate.count({ where: { userId: bia } })).toBe(3);
+    });
+
+    it('plano substituído não volta a valer', async () => {
+      const antigo = (await emUso(bia)).id;
+      const novo = await plans.send(ids.helena, biaMembership, plano());
+      await plans.accept(bia, novo.id);
+      await expect(plans.accept(bia, antigo)).rejects.toThrow(ConflictException);
+      const linha = await prisma.nutritionPlan.findUniqueOrThrow({ where: { id: antigo } });
+      expect(linha.status).toBe('SUPERSEDED');
+      expect(await prisma.nutritionPlan.count({ where: { userId: bia, status: 'ACCEPTED' } })).toBe(
+        1,
+      );
+    });
+
+    it('aceitar dois planos pendentes ao mesmo tempo nunca dá 500 e deixa um só em uso', async () => {
+      for (let i = 0; i < 5; i += 1) {
+        const a = await plans.send(ids.helena, biaMembership, plano());
+        const b = await plans.send(ids.bruno, biaMembership, plano());
+        const r = await Promise.allSettled([plans.accept(bia, a.id), plans.accept(bia, b.id)]);
+        for (const x of r) {
+          if (x.status === 'rejected') expect(x.reason).toBeInstanceOf(ConflictException);
+        }
+        expect(
+          await prisma.nutritionPlan.count({ where: { userId: bia, status: 'ACCEPTED' } }),
+        ).toBe(1);
+      }
+    });
+
+    it('dois "comi isso" ao mesmo tempo: uma refeição só, e os dois toques devolvem ela', async () => {
+      const cafe = (await emUso(bia)).meals[0]!.id;
+      const r = await Promise.allSettled([
+        plans.logMeal(bia, cafe, {}, TZ),
+        plans.logMeal(bia, cafe, {}, TZ),
+      ]);
+      expect(r.map((x) => x.status)).toEqual(['fulfilled', 'fulfilled']);
+      const [a, b] = r.map((x) => (x as PromiseFulfilledResult<{ mealId: string }>).value.mealId);
+      expect(a).toBe(b);
+      expect(await prisma.meal.count({ where: { userId: bia, mealType: 'BREAKFAST' } })).toBe(1);
+    });
+
+    it('duas trocas do mesmo item no mesmo dia ao mesmo tempo: nunca 500, uma ativa só', async () => {
+      const item = (await emUso(bia)).meals[0]!.options[0]!.items[0]!;
+      for (let i = 0; i < 5; i += 1) {
+        const r = await Promise.allSettled([
+          plans.swap(bia, { itemId: item.id, equivalentId: item.equivalents[0]!.id }, TZ),
+          plans.swap(bia, { itemId: item.id, equivalentId: item.equivalents[1]!.id }, TZ),
+        ]);
+        for (const x of r) {
+          if (x.status === 'rejected') expect(x.reason).toBeInstanceOf(ConflictException);
+        }
+        expect(
+          await prisma.nutritionSwap.count({ where: { itemId: item.id, undoneAt: null } }),
+        ).toBe(1);
+      }
+    });
+
+    it('item do diário editado ainda é o trocado, e "Desfazer" devolve ele', async () => {
+      const cafe = (await emUso(bia)).meals[0]!;
+      const item = cafe.options[0]!.items[0]!;
+      const ativa = item.swap ?? null;
+      if (ativa) await plans.undoSwap(bia, ativa.id);
+      const mealId = (await emUso(bia)).meals[0]!.logged!.mealId;
+      const gravado = (await meals.findById(bia, mealId)).items[0]!;
+      // A pessoa corrigiu as gramas no diário: o nome e as gramas não batem mais com o plano.
+      await prisma.mealItem.update({ where: { id: gravado.id }, data: { grams: 65 } });
+
+      const r = await plans.swap(
+        bia,
+        { itemId: item.id, equivalentId: item.equivalents[0]!.id },
+        TZ,
+      );
+      const depois = (await meals.findById(bia, mealId)).items.find((i) => i.id === gravado.id)!;
+      expect(depois).toMatchObject({
+        foodName: item.equivalents[0]!.foodName,
+        grams: item.equivalents[0]!.grams,
+      });
+
+      await plans.undoSwap(bia, r.swap.id);
+      const desfeito = (await meals.findById(bia, mealId)).items.find((i) => i.id === gravado.id)!;
+      expect(desfeito).toMatchObject({ foodName: item.foodName, grams: item.grams });
+    });
+
+    it('a equipe vê se QUALQUER profissional ativo tem Alimentação, mesmo não sendo o autor', async () => {
+      const item = (await emUso(bia)).meals[0]!.options[0]!.items[0]!;
+      const trocar = () =>
+        plans.swap(bia, { itemId: item.id, equivalentId: item.equivalents[0]!.id }, TZ);
+
+      expect(await trocar()).toMatchObject({ teamSees: false, viewerName: null });
+
+      // Membro comum com vínculo (dado legado) não conta como equipe.
+      await prisma.professionalLink.create({
+        data: {
+          subjectUserId: bia,
+          professionalId: ids.colega,
+          groupId,
+          scopes: [ShareScope.NUTRITION],
+        },
+      });
+      expect(await trocar()).toMatchObject({ teamSees: false, viewerName: null });
+
+      // O dono da academia, que não escreveu o plano em uso, vê: equipe sem nome.
+      const autor = (await emUso(bia)).author?.name;
+      expect(autor).toBeDefined();
+      await prisma.professionalLink.create({
+        data: {
+          subjectUserId: bia,
+          professionalId: ids.bruno,
+          groupId,
+          scopes: [ShareScope.NUTRITION],
+        },
+      });
+      const autorEhBruno = autor === 'Bruno';
+      const r = await trocar();
+      expect(r.teamSees).toBe(true);
+      expect(r.viewerName).toBe(autorEhBruno ? 'Bruno' : null);
+      expect((await plans.overview(bia, TZ)).teamSees).toBe(true);
+
+      // Profissional que saiu da comunidade deixa de contar.
+      await prisma.groupMembership.update({
+        where: { groupId_userId: { groupId, userId: ids.bruno } },
+        data: { status: 'REMOVED' },
+      });
+      try {
+        expect(await trocar()).toMatchObject({ teamSees: false });
+      } finally {
+        await prisma.groupMembership.update({
+          where: { groupId_userId: { groupId, userId: ids.bruno } },
+          data: { status: 'ACTIVE' },
+        });
+      }
     });
   });
 

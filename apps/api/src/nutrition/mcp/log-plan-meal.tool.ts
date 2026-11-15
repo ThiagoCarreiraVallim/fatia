@@ -17,7 +17,7 @@ export class LogPlanMealTool implements McpToolDef {
   readonly hostedInference = false;
   readonly description =
     '"Comi isso": registra no diário uma refeição do plano alimentar em uso, com as trocas do dia ' +
-    'aplicadas. Refeição com mais de uma opção exige optionId. Uma vez por refeição e dia. ' +
+    'aplicadas. Refeição com mais de uma opção exige optionId. Repetir no dia devolve a mesma. ' +
     'Exemplo: {"planMealId":"11111111-2222-4333-8444-555555555555","optionId":"66666666-7777-4888-8999-000000000000"}';
   readonly inputSchema = {
     planMealId: z.string().uuid().describe('ID da refeição do plano (active.meals[].id)'),

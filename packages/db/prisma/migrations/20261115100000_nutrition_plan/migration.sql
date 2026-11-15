@@ -97,6 +97,7 @@ CREATE TABLE "NutritionPlanLog" (
     "optionId" TEXT NOT NULL,
     "mealId" TEXT NOT NULL,
     "date" TEXT NOT NULL,
+    "itemLinks" JSONB NOT NULL DEFAULT '{}',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "NutritionPlanLog_pkey" PRIMARY KEY ("id")
@@ -147,7 +148,7 @@ CREATE INDEX "NutritionPlanEquivalent_itemId_idx" ON "NutritionPlanEquivalent"("
 CREATE UNIQUE INDEX "NutritionPlanLog_mealId_key" ON "NutritionPlanLog"("mealId");
 
 -- CreateIndex
-CREATE INDEX "NutritionPlanLog_planMealId_date_idx" ON "NutritionPlanLog"("planMealId", "date");
+CREATE UNIQUE INDEX "NutritionPlanLog_planMealId_date_key" ON "NutritionPlanLog"("planMealId", "date");
 
 -- CreateIndex
 CREATE INDEX "NutritionSwap_planId_date_idx" ON "NutritionSwap"("planId", "date");

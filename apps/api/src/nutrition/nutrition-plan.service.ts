@@ -246,6 +246,21 @@ function firstName(name: string): string {
  * equivalente são procurados **através** do plano dele, e um id de outro plano
  * responde igual a um que não existe.
  */
+const PLAN_ALREADY_HANDLED =
+  'Esse plano já foi aceito ou substituído. Atualize a tela para ver o plano em uso.';
+const CONCURRENT_CHANGE = 'O plano mudou ao mesmo tempo em outro lugar. Tente de novo.';
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+/** O item do diário ligado ao item do plano, pelo `itemLinks` do registro. */
+function linkOf(links: Prisma.JsonValue, planItemId: string): string | null {
+  if (!links || typeof links !== 'object' || Array.isArray(links)) return null;
+  const value = (links as Prisma.JsonObject)[planItemId];
+  return typeof value === 'string' ? value : null;
+}
+
 @Injectable()
 export class NutritionPlanService {
   constructor(
@@ -384,7 +399,7 @@ export class NutritionPlanService {
         ? this.logsOf(active.id, day)
         : new Map<string, { mealId: string; optionId: string }>(),
       active ? this.swapsOf(active.id, day) : new Map<string, PlanSwapView>(),
-      active ? this.viewerOf(userId, active) : null,
+      active ? this.viewerOf(userId, active) : { teamSees: false, viewerName: null },
       this.week(userId, timezone),
     ]);
 
@@ -392,8 +407,7 @@ export class NutritionPlanService {
       date: day,
       active: active ? this.view(active, logs, swaps) : null,
       pending: pending ? this.view(pending, new Map(), new Map()) : null,
-      teamSees: viewer !== null,
-      viewerName: viewer,
+      ...viewer,
       week,
     };
   }
@@ -406,12 +420,25 @@ export class NutritionPlanService {
    */
   async accept(userId: string, planId: string): Promise<NutritionPlanView> {
     const plan = await this.prisma.nutritionPlan.findFirst({
-      where: { id: planId, userId, status: 'SENT' },
+      where: { id: planId, userId },
       include: PLAN_INCLUDE,
     });
     if (!plan) throw new NotFoundException(PLAN_NOT_FOUND);
+    // Já aceito ou substituído: 409, e nada muda (o mesmo que o segundo toque
+    // ao mesmo tempo recebe, lá dentro da transação).
+    if (plan.status !== 'SENT') throw new ConflictException(PLAN_ALREADY_HANDLED);
 
-    await this.prisma.$transaction(async (db) => {
+    await this.inTransaction(async (db) => {
+      // Primeiro, e dentro da transação: trava a linha e confere que o plano
+      // ainda espera aceite. Um segundo toque (ou um plano já substituído)
+      // para aqui, antes de mexer nas refeições salvas.
+      const now = new Date();
+      const claimed = await db.nutritionPlan.updateMany({
+        where: { id: plan.id, userId, status: 'SENT' },
+        data: { acceptedAt: now },
+      });
+      if (claimed.count !== 1) throw new ConflictException(PLAN_ALREADY_HANDLED);
+
       const fromPrevious = await db.nutritionPlanOption.findMany({
         where: { meal: { plan: { userId, status: 'ACCEPTED' } }, mealTemplateId: { not: null } },
         select: { mealTemplateId: true },
@@ -419,7 +446,6 @@ export class NutritionPlanService {
       await db.mealTemplate.deleteMany({
         where: { userId, id: { in: fromPrevious.map((o) => o.mealTemplateId!) } },
       });
-      const now = new Date();
       await db.nutritionPlan.updateMany({
         where: { userId, status: 'ACCEPTED' },
         data: { status: 'SUPERSEDED', supersededAt: now },
@@ -515,16 +541,13 @@ export class NutritionPlanService {
 
     const eatenAt = dto.eatenAt ? parseInstant(dto.eatenAt, 'eatenAt') : new Date();
     const date = dateInTz(eatenAt, timezone);
-    const already = await this.prisma.nutritionPlanLog.findFirst({
-      where: { planMealId, date },
+    // Toque repetido devolve o mesmo registro. A conferência é atalho; quem
+    // garante é o índice único (planMealId, date), lá embaixo.
+    const already = await this.prisma.nutritionPlanLog.findUnique({
+      where: { planMealId_date: { planMealId, date } },
       select: { mealId: true },
     });
-    if (already) {
-      throw new ConflictException(
-        `${planMeal.name} do plano já foi registrado em ${date} (refeição ${already.mealId}). ` +
-          'Para registrar de novo, apague a refeição do diário antes.',
-      );
-    }
+    if (already) return { mealId: already.mealId, date };
 
     const swaps = await this.prisma.nutritionSwap.findMany({
       where: { itemId: { in: chosen.items.map((i) => i.id) }, date, undoneAt: null },
@@ -540,10 +563,17 @@ export class NutritionPlanService {
       { mealType: planMeal.mealType, eatenAt },
       items,
     );
+    // Item do plano -> item gravado, para a troca achar o item mesmo depois de
+    // a pessoa editar nome ou gramas no diário.
+    const itemLinks: Record<string, string> = {};
+    for (const [index, item] of chosen.items.entries()) {
+      const mealItem = meal.items[index];
+      if (mealItem) itemLinks[item.id] = mealItem.id;
+    }
     try {
       await this.prisma.$transaction(async (db) => {
         await db.nutritionPlanLog.create({
-          data: { planMealId, optionId: chosen.id, mealId: meal.id, date },
+          data: { planMealId, optionId: chosen.id, mealId: meal.id, date, itemLinks },
         });
         // A troca passa a apontar o item gravado, para "Desfazer" devolvê-lo.
         for (const [index, item] of chosen.items.entries()) {
@@ -559,8 +589,16 @@ export class NutritionPlanService {
       });
     } catch (error) {
       // Refeição sem o vínculo com o plano ficaria "não feita" e duplicaria no
-      // próximo toque: desfaz e deixa o erro subir.
+      // próximo toque: desfaz.
       await this.prisma.meal.delete({ where: { id: meal.id } });
+      // Dois toques ao mesmo tempo: o outro gravou primeiro. É o mesmo registro.
+      if (isUniqueViolation(error)) {
+        const winner = await this.prisma.nutritionPlanLog.findUnique({
+          where: { planMealId_date: { planMealId, date } },
+          select: { mealId: true },
+        });
+        if (winner) return { mealId: winner.mealId, date };
+      }
       throw error;
     }
     return { mealId: meal.id, date };
@@ -597,10 +635,11 @@ export class NutritionPlanService {
     const date = dto.date ? assertDay(dto.date, 'date') : todayInTz(timezone);
     const log = await this.prisma.nutritionPlanLog.findFirst({
       where: { planMealId: item.option.mealId, optionId: item.optionId, date },
-      include: { meal: { include: { items: { orderBy: { seq: 'asc' } } } } },
+      select: { itemLinks: true },
     });
+    const linkedMealItemId = log ? linkOf(log.itemLinks, item.id) : null;
 
-    const swap = await this.prisma.$transaction(async (db) => {
+    const swap = await this.inTransaction(async (db) => {
       const previous = await db.nutritionSwap.findFirst({
         where: { itemId: item.id, date, undoneAt: null },
       });
@@ -611,20 +650,15 @@ export class NutritionPlanService {
         });
       }
       let mealItemId: string | null = null;
-      if (log) {
-        // O item gravado é o que a troca anterior apontou, ou o que ainda é o do plano.
-        const target =
-          (previous?.mealItemId
-            ? log.meal.items.find((i) => i.id === previous.mealItemId)
-            : undefined) ??
-          log.meal.items.find((i) => i.foodName === item.foodName && i.grams === item.grams);
-        if (target) {
-          await db.mealItem.updateMany({
-            where: { id: target.id, meal: { userId } },
-            data: mealItemData(equivalent),
-          });
-          mealItemId = target.id;
-        }
+      // O item gravado vem do vínculo do "comi isso", nunca de nome e gramas:
+      // a pessoa pode ter corrigido o item no diário.
+      const targetId = linkedMealItemId ?? previous?.mealItemId ?? null;
+      if (targetId) {
+        const changed = await db.mealItem.updateMany({
+          where: { id: targetId, meal: { userId } },
+          data: mealItemData(equivalent),
+        });
+        if (changed.count === 1) mealItemId = targetId;
       }
       return db.nutritionSwap.create({
         data: {
@@ -652,8 +686,7 @@ export class NutritionPlanService {
         kcal: swap.kcal,
       },
       replaced: item.foodName,
-      teamSees: viewer !== null,
-      viewerName: viewer,
+      ...viewer,
     };
   }
 
@@ -793,22 +826,35 @@ export class NutritionPlanService {
   }
 
   /**
-   * Primeiro nome do autor quando ele vê o diário: vínculo vivo com
-   * Alimentação, na comunidade em que o plano veio, e o autor ainda ativo nela.
-   * Nulo em qualquer outro caso — e o aviso diz "fica só no seu diário".
+   * Quem vê o diário: qualquer pessoa da equipe com Alimentação liberada,
+   * ativa na comunidade (a mesma regra da porta única, que é o que a
+   * `teamView` usa). Nomeia o autor do plano quando é ele; senão a tela diz
+   * "sua equipe". Só quando ninguém vê o aviso diz "fica só no seu diário".
    */
   private async viewerOf(
     userId: string,
-    plan: { authorId: string | null; groupId: string | null; author: { name: string } | null },
-  ): Promise<string | null> {
-    if (!plan.authorId || !plan.groupId || !plan.author) return null;
-    const sees = await this.sharedWith.sharesWith({
-      subjectUserId: userId,
-      professionalId: plan.authorId,
-      groupId: plan.groupId,
-      scope: ShareScope.NUTRITION,
-    });
-    return sees ? firstName(plan.author.name) : null;
+    plan: { authorId: string | null; author: { name: string } | null },
+  ): Promise<{ teamSees: boolean; viewerName: string | null }> {
+    const viewers = await this.sharedWith.viewersOf(userId, ShareScope.NUTRITION);
+    const authorSees = plan.authorId !== null && plan.author && viewers.includes(plan.authorId);
+    return {
+      teamSees: viewers.length > 0,
+      viewerName: authorSees ? firstName(plan.author!.name) : null,
+    };
+  }
+
+  /**
+   * Transação em que os índices únicos parciais (um plano aceito por pessoa,
+   * uma troca ativa por item e dia) são a última palavra: corrida perdida vira
+   * 409, nunca 500.
+   */
+  private async inTransaction<T>(fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(fn);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new ConflictException(CONCURRENT_CHANGE);
+      throw error;
+    }
   }
 
   private async week(userId: string, timezone: string) {

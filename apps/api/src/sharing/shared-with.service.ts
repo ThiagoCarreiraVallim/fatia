@@ -1,46 +1,53 @@
 import { Injectable } from '@nestjs/common';
 import { MembershipStatus, type ShareScope } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { canReceiveLink } from './permissions';
 
 /**
- * "Esse profissional vê esta categoria minha?" — a pergunta que o próprio
+ * "Quem da equipe vê esta categoria minha?" — a pergunta que o próprio
  * titular faz sobre o próprio consentimento, para a tela dizer a verdade (o
- * aviso da troca do plano alimentar, #376: "Helena vê no seu diário" ou "fica
- * só no seu diário").
+ * aviso da troca do plano alimentar, #376).
+ *
+ * Mesma regra da porta única (`ProfessionalAccessService.assertReadable`):
+ * vínculo vivo com a categoria, o titular ativo na comunidade do vínculo e o
+ * profissional ativo nela com papel de equipe. Errar para menos aqui seria
+ * dizer "fica só no seu diário" a quem está sendo lido.
  *
  * Mora em `sharing/` porque os services de domínio não conhecem
- * `ProfessionalLink` (ADR 014, guarda em `consent.service.spec.ts`). Não lê
- * dado de ninguém: responde só sim ou não, sempre a partir do `subjectUserId`.
- * Depende só do Prisma, então um módulo de domínio pode prover a classe sem
- * importar o `SharingModule` (que importa os domínios).
+ * `ProfessionalLink` (ADR 014, guarda em `consent.service.spec.ts`). Depende só
+ * do Prisma, então um módulo de domínio pode prover a classe sem importar o
+ * `SharingModule` (que importa os domínios).
  */
 @Injectable()
 export class SharedWithService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Vínculo vivo com a categoria, na comunidade, e o profissional ainda ativo nela. */
-  async sharesWith(params: {
-    subjectUserId: string;
-    professionalId: string;
-    groupId: string;
-    scope: ShareScope;
-  }): Promise<boolean> {
-    const [link, membership] = await Promise.all([
-      this.prisma.professionalLink.findFirst({
-        where: {
-          subjectUserId: params.subjectUserId,
-          professionalId: params.professionalId,
-          groupId: params.groupId,
-          revokedAt: null,
-          scopes: { has: params.scope },
-        },
-        select: { id: true },
-      }),
-      this.prisma.groupMembership.findUnique({
-        where: { groupId_userId: { groupId: params.groupId, userId: params.professionalId } },
-        select: { status: true },
-      }),
-    ]);
-    return link !== null && membership?.status === MembershipStatus.ACTIVE;
+  /** Ids dos profissionais que hoje leem `scope` do titular. */
+  async viewersOf(subjectUserId: string, scope: ShareScope): Promise<string[]> {
+    const links = await this.prisma.professionalLink.findMany({
+      where: { subjectUserId, revokedAt: null, scopes: { has: scope } },
+      select: { professionalId: true, groupId: true },
+    });
+    if (links.length === 0) return [];
+    const memberships = await this.prisma.groupMembership.findMany({
+      where: {
+        status: MembershipStatus.ACTIVE,
+        OR: links.flatMap((l) => [
+          { groupId: l.groupId, userId: subjectUserId },
+          { groupId: l.groupId, userId: l.professionalId },
+        ]),
+      },
+      select: { groupId: true, userId: true, role: true },
+    });
+    const active = new Map(memberships.map((m) => [`${m.groupId}:${m.userId}`, m.role]));
+    const viewers = links.filter((l) => {
+      const professionalRole = active.get(`${l.groupId}:${l.professionalId}`);
+      return (
+        active.has(`${l.groupId}:${subjectUserId}`) &&
+        professionalRole !== undefined &&
+        canReceiveLink(professionalRole)
+      );
+    });
+    return [...new Set(viewers.map((l) => l.professionalId))];
   }
 }

@@ -269,6 +269,10 @@ describe('plano alimentar', () => {
     expect(swapToastText({ teamSees: false, viewerName: null })).toBe(
       'Troca registrada · fica só no seu diário',
     );
+    // Alguém da equipe vê, mas não quem escreveu o plano: sem nome, nunca "só no diário".
+    expect(swapToastText({ teamSees: true, viewerName: null })).toBe(
+      'Troca registrada · sua equipe vê no seu diário',
+    );
     // Nome sem compartilhamento não vaza: quem manda é o teamSees.
     expect(swapToastText({ teamSees: false, viewerName: 'Helena' })).toBe(
       'Troca registrada · fica só no seu diário',

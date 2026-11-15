@@ -655,13 +655,18 @@ model NutritionPlanLog {
   mealId     String   @unique
   /// YYYY-MM-DD no fuso da pessoa.
   date       String
+  /// Item do plano -> item gravado no diário (`{ planItemId: mealItemId }`).
+  /// É o que a troca usa para achar o item mesmo depois de a pessoa editar
+  /// nome ou gramas no diário.
+  itemLinks  Json     @default("{}")
   createdAt  DateTime @default(now())
 
   planMeal NutritionPlanMeal   @relation(fields: [planMealId], references: [id], onDelete: Cascade)
   option   NutritionPlanOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
   meal     Meal                @relation(fields: [mealId], references: [id], onDelete: Cascade)
 
-  @@index([planMealId, date])
+  /// Um "comi isso" por refeição do plano e dia: o toque duplo não duplica.
+  @@unique([planMealId, date])
 }
 
 /// Troca registrada: num dia, o aluno comeu um equivalente no lugar do item.

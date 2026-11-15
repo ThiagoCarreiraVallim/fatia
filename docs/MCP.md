@@ -1041,7 +1041,8 @@ liberada) e `week` (dias com as calorias na faixa nos últimos 7, ADR 027).
 ### `accept_nutrition_plan`
 
 Aceita o `pending`. O plano em uso vira substituído, as faixas viram as metas do dia (com
-`applyGoals`) e cada opção vira refeição salva. Confirmável: as metas mudam.
+`applyGoals`) e cada opção vira refeição salva. Confirmável: as metas mudam. Plano já aceito ou
+substituído, ou dois aceites ao mesmo tempo: `CONFLICT`, sem mudar nada.
 
 **Input:** `{ planId: string }`  
 **Output:** `NutritionPlan`
@@ -1049,16 +1050,18 @@ Aceita o `pending`. O plano em uso vira substituído, as faixas viram as metas d
 ### `log_plan_meal`
 
 "Comi isso": registra a opção no diário com as trocas do dia, pelo mesmo caminho de
-`log_meal_template`. Com várias opções, `optionId` é obrigatório. Uma vez por refeição e dia
-(`CONFLICT`).
+`log_meal_template`. Com várias opções, `optionId` é obrigatório. Uma vez por refeição e dia:
+repetir (inclusive dois toques ao mesmo tempo) devolve o mesmo registro.
 
 **Input:** `{ planMealId: string; optionId?: string; eatenAt?: string /* ISO 8601 */ }`  
 **Output:** `{ mealId, date }`
 
 ### `swap_plan_item`
 
-Troca um item por um dos equivalentes dele, num dia. Uma troca por item e dia; com a refeição
-já registrada, o item do diário muda junto.
+Troca um item por um dos equivalentes dele, num dia. Uma troca por item e dia (duas ao mesmo
+tempo: `CONFLICT`); com a refeição já registrada, o item do diário muda junto, mesmo editado.
+`teamSees` é verdadeiro quando qualquer pessoa da equipe ativa lê Alimentação; `viewerName` só
+vem quando é quem escreveu o plano.
 
 **Input:** `{ itemId: string; equivalentId: string; date?: string /* YYYY-MM-DD */ }`  
 **Output:** `{ swap: { id, itemId, equivalentId, date, foodName, grams, kcal }, replaced, teamSees, viewerName }`
