@@ -72,7 +72,7 @@ cd apps/api && npx jest <caminho>
 
 ## Próximo passo exato
 
-api-client (`packages/api-client/src/plan-offers.ts`, agenda, templates, block preview/latest) com testes; depois web e app (telas: /workout/offers/[id], /workout/agenda, /workout/templates, /workout/block) e os dois TODO(#379).
+api-client feito (a16a4a63). Agora: web (apps/web) e app (apps/mobile) em paralelo — telas /workout/offers/[id], /workout/agenda, /workout/templates, /workout/block; os dois TODO(#379) (workout-home.tsx e (app)/workout/index.tsx); T6 "Modelos das comunidades" e T19 "Começar de um modelo" apontam para /workout/templates; "Bloco de semanas" para /workout/block. Cada camada commita só o próprio diretório. Depois: REDESIGN_PROGRESS (decisões do dono), lint/typecheck/testes completos.
 
 ## Notas
 
