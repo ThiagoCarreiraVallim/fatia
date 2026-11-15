@@ -18,10 +18,13 @@ import { MuscleDiagram } from './muscle-diagram';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { ExerciseVideo } from './exercise-media';
 import { muscleLabelPt } from './muscle-labels';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import {
   feelingOf,
   formatBestSet,
   formatDecimal,
+  kgToLoad,
+  loadUnitLabel,
   muscleGroupLabel,
   workoutApi,
   type Exercise,
@@ -271,6 +274,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
     queryKey: ['workout', 'exercise', exerciseId, 'stats'],
     queryFn: () => workoutApi.getExerciseStats(exerciseId),
   });
+  const unit = useUnitPrefs().loadUnit;
   if (stats.isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (stats.isError) {
     return (
@@ -292,7 +296,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
           <div>
             <p className="text-[11px] font-bold text-muted-foreground">Recorde</p>
             <p className="text-base font-extrabold tabular-nums text-foreground">
-              {formatBestSet({ ...data.record, avgHeartRate: null })}
+              {formatBestSet({ ...data.record, avgHeartRate: null }, unit)}
             </p>
           </div>
           {data.record.date && (
@@ -308,7 +312,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
               {[
                 longDate(data.last.date),
                 `${data.last.sets} ${data.last.sets === 1 ? 'série' : 'séries'}`,
-                formatBestSet({ ...data.last.best, avgHeartRate: null }),
+                formatBestSet({ ...data.last.best, avgHeartRate: null }, unit),
               ].join(' · ')}
             </p>
           </div>
@@ -324,7 +328,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
           <div>
             <p className="text-[11px] font-bold text-muted-foreground">Máximo estimado</p>
             <p className="text-base font-extrabold tabular-nums text-foreground">
-              {formatDecimal(data.estimated1RM, 1)} kg
+              {formatDecimal(kgToLoad(data.estimated1RM, unit), 1)} {loadUnitLabel(unit)}
             </p>
           </div>
         </li>

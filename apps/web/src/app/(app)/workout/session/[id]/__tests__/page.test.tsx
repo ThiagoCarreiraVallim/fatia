@@ -6,9 +6,10 @@ import { ApiError, type WorkoutSessionSummary } from '@fatia/api-client';
 import SessionDetailPage from '../page';
 
 const push = vi.fn();
+const replace = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'sessao-1' }),
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }));
 vi.mock('@/components/workout/muscle-diagram', () => ({
   MuscleDiagram: ({ primaryMuscles }: { primaryMuscles: string[] }) => (
@@ -26,10 +27,12 @@ vi.mock('@fatia/api-client', async () => {
       updateSession: vi.fn(),
       saveCheckin: vi.fn(),
     },
+    usersApi: { ...actual.usersApi, me: vi.fn() },
   };
 });
 
-import { workoutApi } from '@fatia/api-client';
+import { usersApi, workoutApi } from '@fatia/api-client';
+const me = vi.mocked(usersApi.me);
 
 const getSessionSummary = vi.mocked(workoutApi.getSessionSummary);
 const updateSession = vi.mocked(workoutApi.updateSession);
@@ -258,5 +261,77 @@ describe('Treino feito! (#377)', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Treino feito!' });
     expect(screen.queryByRole('region', { name: 'Perguntas da Helena' })).toBeNull();
+  });
+
+  it('as respostas enviadas ficam com o aviso, mesmo depois do resumo recarregar', async () => {
+    const questions = {
+      askedBy: ['Helena Prado'],
+      items: [
+        { key: 'pain' as const, kind: 'yes_no' as const, label: 'Sentiu dor ou desconforto?' },
+      ],
+    };
+    getSessionSummary.mockResolvedValueOnce(summary({ questions }));
+    getSessionSummary.mockResolvedValue(
+      summary({
+        questions,
+        checkin: {
+          id: 'c',
+          skipped: true,
+          difficulty: null,
+          fatigue: null,
+          pain: null,
+          painLocation: null,
+          motivation: null,
+          note: null,
+          answeredAt: '',
+          updatedAt: '',
+        },
+      }),
+    );
+    saveCheckin.mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    const card = await screen.findByRole('region', { name: 'Perguntas da Helena' });
+    await user.click(within(card).getByRole('button', { name: 'Pular' }));
+    await waitFor(() => expect(getSessionSummary).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByText('Perguntas puladas · a Helena vê só que você pulou'),
+    ).toBeInTheDocument();
+  });
+
+  it('sessão ainda aberta não é "Treino feito!": volta ao treino em andamento', async () => {
+    getSessionSummary.mockResolvedValue(
+      summary({
+        completedAt: null,
+        questions: { askedBy: ['Helena Prado'], items: [] },
+      }),
+    );
+    renderPage();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/workout'));
+    expect(screen.queryByRole('heading', { name: 'Treino feito!' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Perguntas da Helena' })).toBeNull();
+  });
+
+  it('desmarcar a sensação apaga a sensação gravada', async () => {
+    getSessionSummary.mockResolvedValue(summary({ feeling: 3 }));
+    updateSession.mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    const feelings = await screen.findByRole('radiogroup', { name: 'Como foi o treino?' });
+    await user.click(within(feelings).getByRole('radio', { name: /^Puxado/ }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(updateSession).toHaveBeenCalledWith('sessao-1', { feeling: null }));
+  });
+
+  it('em libras, recordes, melhor série e volume saem em lb', async () => {
+    me.mockResolvedValue({ loadUnit: 'LB', distanceUnit: 'KM' } as never);
+    getSessionSummary.mockResolvedValue(summary({ volumeKg: 400 }));
+    renderPage();
+
+    const records = await screen.findByRole('region', { name: /recorde/i });
+    expect(await within(records).findByText('115,7 × 10')).toBeInTheDocument();
+    expect(await screen.findByText('882 lb')).toBeInTheDocument();
   });
 });

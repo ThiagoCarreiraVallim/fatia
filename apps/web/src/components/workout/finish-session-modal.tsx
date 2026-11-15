@@ -11,7 +11,7 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { ApiError, workoutApi, type WorkoutSession } from '@fatia/api-client';
 import { elapsedLabel, formatInteger, totalVolumeKg } from './format';
 
 interface Props {
@@ -28,16 +28,19 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
   const totalVolume = totalVolumeKg(session.sets);
 
   const finish = useMutation({
-    mutationFn: async () => {
+    // A sensação e a observação vêm depois, no "Treino feito!" (#377). Sessão
+    // que já não existe (cancelada em outra aba) volta ao Treino: o "Treino
+    // feito!" dela seria uma página de "não encontrada".
+    mutationFn: async (): Promise<'finished' | 'gone'> => {
       try {
-        // A sensação e a observação vêm depois, no "Treino feito!" (#377).
         await workoutApi.finishSession(session.id);
+        return 'finished';
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '';
-        if (!/not found/i.test(msg)) throw err;
+        if (err instanceof ApiError && err.status === 404) return 'gone';
+        throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
@@ -46,7 +49,7 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
       qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
-      router.push(`/workout/session/${session.id}`);
+      router.push(result === 'gone' ? '/workout' : `/workout/session/${session.id}`);
     },
   });
 

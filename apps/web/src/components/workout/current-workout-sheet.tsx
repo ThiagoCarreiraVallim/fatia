@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { newSetClientKey, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import {
   Drawer,
@@ -16,7 +16,9 @@ import { SetChips } from './set-chips';
 /**
  * "Treino atual" (prancha Al-T17): o treino inteiro numa folha, para arrumar
  * sem sair da sessão. Cada exercício mostra as séries (tocar edita), ganha
- * "+ Série" (copia a última) e "Tirar do treino" — que a página confirma.
+ * "+ Série" (copia a última; sem nenhuma, leva à sessão para preencher),
+ * setas para mudar a ordem (só desta sessão) e "Tirar do treino" — que a
+ * página confirma.
  */
 export function CurrentWorkoutSheet({
   open,
@@ -26,6 +28,8 @@ export function CurrentWorkoutSheet({
   onAddExercise,
   onRemove,
   onFinish,
+  onMove,
+  onStart,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,6 +38,9 @@ export function CurrentWorkoutSheet({
   onAddExercise: () => void;
   onRemove: (group: ExerciseGroup) => void;
   onFinish: () => void;
+  onMove: (exerciseId: number, direction: 'up' | 'down') => void;
+  /** Leva o exercício para a sessão, onde a primeira série é preenchida. */
+  onStart: (exerciseId: number) => void;
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -46,12 +53,16 @@ export function CurrentWorkoutSheet({
         </DrawerHeader>
 
         <ul className="max-h-[60vh] space-y-3 overflow-y-auto py-2">
-          {groups.map((g) => (
+          {groups.map((g, index) => (
             <CurrentExercise
               key={g.exerciseId}
               sessionId={sessionId}
               group={g}
+              isFirst={index === 0}
+              isLast={index === groups.length - 1}
               onRemove={() => onRemove(g)}
+              onMove={(direction) => onMove(g.exerciseId, direction)}
+              onStart={() => onStart(g.exerciseId)}
             />
           ))}
         </ul>
@@ -88,18 +99,27 @@ export function CurrentWorkoutSheet({
 function CurrentExercise({
   sessionId,
   group,
+  isFirst,
+  isLast,
   onRemove,
+  onMove,
+  onStart,
 }: {
   sessionId: string;
   group: ExerciseGroup;
+  isFirst: boolean;
+  isLast: boolean;
   onRemove: () => void;
+  onMove: (direction: 'up' | 'down') => void;
+  onStart: () => void;
 }) {
   const qc = useQueryClient();
   const clientKey = useRef<string | null>(null);
   const last = group.sets[group.sets.length - 1];
 
-  // "+ Série": a mesma carga e as mesmas repetições da última (ou em branco),
-  // com chave própria — o duplo toque não grava duas.
+  // "+ Série": a mesma carga e as mesmas repetições da última, com chave
+  // própria — o duplo toque não grava duas. Sem última, não há o que copiar:
+  // uma série vazia contaria no progresso (a API também recusa).
   const addSet = useMutation({
     mutationFn: (key: string) =>
       workoutApi.logSet(sessionId, {
@@ -127,14 +147,34 @@ function CurrentExercise({
             {group.sets.length === 1 ? 'série' : 'séries'}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label={`Tirar ${group.exerciseName} do treino`}
-          onClick={onRemove}
-          className="anim-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-danger"
-        >
-          <Trash2 size={16} aria-hidden />
-        </button>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            aria-label={`Subir ${group.exerciseName}`}
+            disabled={isFirst}
+            onClick={() => onMove('up')}
+            className="anim-press flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronUp size={18} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label={`Descer ${group.exerciseName}`}
+            disabled={isLast}
+            onClick={() => onMove('down')}
+            className="anim-press flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronDown size={18} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label={`Tirar ${group.exerciseName} do treino`}
+            onClick={onRemove}
+            className="anim-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-danger"
+          >
+            <Trash2 size={16} aria-hidden />
+          </button>
+        </div>
       </div>
 
       {group.sets.length > 0 && (
@@ -146,6 +186,10 @@ function CurrentExercise({
         aria-label={`Mais uma série de ${group.exerciseName}`}
         disabled={addSet.isPending}
         onClick={() => {
+          if (!last) {
+            onStart();
+            return;
+          }
           clientKey.current ??= newSetClientKey();
           addSet.mutate(clientKey.current);
         }}

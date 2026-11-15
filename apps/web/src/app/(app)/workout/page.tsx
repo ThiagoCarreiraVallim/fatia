@@ -400,6 +400,13 @@ function ActiveSession({
           setCurrentOpen(false);
           setFinishOpen(true);
         }}
+        onMove={(exerciseId, direction) =>
+          layout.reorder.mutate(moveExerciseInOrder(groups, exerciseId, direction))
+        }
+        onStart={(exerciseId) => {
+          setCurrentOpen(false);
+          doNow(exerciseId);
+        }}
       />
       <RemoveExerciseModal
         group={removeTarget}

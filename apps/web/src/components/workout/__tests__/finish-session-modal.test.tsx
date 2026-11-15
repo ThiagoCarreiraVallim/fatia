@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { WorkoutSession } from '@fatia/api-client';
+import { ApiError, type WorkoutSession } from '@fatia/api-client';
 import { FinishSessionModal } from '../finish-session-modal';
 
 const push = vi.fn();
@@ -45,5 +45,20 @@ describe('FinishSessionModal (#377)', () => {
     resolve();
     await waitFor(() => expect(push).toHaveBeenCalledWith('/workout/session/s1'));
     expect(finishSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('sessão que já não existe (cancelada em outra aba) volta ao Treino, não a uma página quebrada', async () => {
+    push.mockClear();
+    finishSession.mockRejectedValue(new ApiError('Session not found', 404));
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinishSessionModal open onOpenChange={() => undefined} session={SESSION} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Finalizar treino' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/workout'));
+    expect(push).not.toHaveBeenCalledWith('/workout/session/s1');
   });
 });

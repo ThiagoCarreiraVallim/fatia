@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ import {
   feelingOf,
   formatBestSet,
   formatTrainingVolume,
+  howItWentBody,
   muscleGroupLabel,
   noteShortcutsFor,
   questionsAudience,
@@ -22,6 +23,7 @@ import {
   summaryFacts,
   summaryHeadline,
   workoutApi,
+  type LoadUnit,
   type PostWorkoutQuestion,
   type WorkoutCheckinInput,
   type WorkoutSessionSummary,
@@ -35,6 +37,7 @@ import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { MuscleDiagram } from '@/components/workout/muscle-diagram';
 import { FeelingPicker } from '@/components/workout/set-chips';
 import { groupTone } from '@/components/workout/group-tone';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { cn } from '@/lib/utils';
 
 const card = 'rounded-3xl border border-subtle bg-card p-4';
@@ -49,12 +52,19 @@ const title = 'text-base font-extrabold text-foreground';
  */
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
 
   const query = useQuery({
     queryKey: ['workout', 'session', id, 'summary'],
     queryFn: () => workoutApi.getSessionSummary(id),
   });
-  useTopBarTitle(query.data ? 'Treino feito' : null);
+  const stillOpen = query.data != null && query.data.completedAt == null;
+  useTopBarTitle(query.data && !stillOpen ? 'Treino feito' : null);
+  // Sessão ainda aberta (link antigo, outra aba): o lugar dela é o treino em
+  // andamento, não o "Treino feito!" nem as perguntas do fim.
+  useEffect(() => {
+    if (stillOpen) router.replace('/workout');
+  }, [stillOpen, router]);
 
   if (query.isLoading) {
     return (
@@ -99,11 +109,17 @@ export default function SessionDetailPage() {
     );
   }
 
+  if (stillOpen) return null;
+
   return <WorkoutDone summary={query.data} />;
 }
 
 function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
-  const facts = summaryFacts(summary);
+  const unit = useUnitPrefs().loadUnit;
+  const facts = summaryFacts(summary, unit);
+  // O aviso de "respostas enviadas" fica aqui: ao recarregar, o resumo já vem
+  // com o check-in e o cartão das perguntas sai da tela.
+  const [questionsSent, setQuestionsSent] = useState<string | null>(null);
   const totalGroupSets = summary.muscles.groups.reduce((acc, g) => acc + g.sets, 0);
 
   return (
@@ -158,7 +174,7 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
               <li key={r.exerciseId} className="flex justify-between gap-2 text-sm">
                 <span className="truncate text-foreground">{r.exerciseName}</span>
                 <span className="shrink-0 font-bold tabular-nums text-foreground">
-                  {formatBestSet({ ...r, avgHeartRate: null })}
+                  {formatBestSet({ ...r, avgHeartRate: null }, unit)}
                 </span>
               </li>
             ))}
@@ -220,7 +236,7 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
                     </p>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-foreground">
-                    {formatBestSet(e.best)}
+                    {formatBestSet(e.best, unit)}
                   </span>
                   {e.isRecord && (
                     <Trophy size={16} className="text-primary" aria-label="Recorde" role="img" />
@@ -237,22 +253,33 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
         </section>
       )}
 
-      {summary.questions && !summary.checkin && (
-        <TeamQuestions
-          sessionId={summary.sessionId}
-          askedBy={summary.questions.askedBy}
-          items={summary.questions.items}
-        />
+      {questionsSent ? (
+        <p
+          role="status"
+          className="rounded-3xl bg-muted/50 px-4 py-3 text-center text-sm text-foreground"
+        >
+          {questionsSent}
+        </p>
+      ) : (
+        summary.questions &&
+        !summary.checkin && (
+          <TeamQuestions
+            sessionId={summary.sessionId}
+            askedBy={summary.questions.askedBy}
+            items={summary.questions.items}
+            onSent={setQuestionsSent}
+          />
+        )
       )}
 
       {/* TODO(#desafios): o check-in do desafio da comunidade entra aqui. */}
 
-      <HowItWent summary={summary} />
+      <HowItWent summary={summary} unit={unit} />
     </div>
   );
 }
 
-function HowItWent({ summary }: { summary: WorkoutSessionSummary }) {
+function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: LoadUnit }) {
   const router = useRouter();
   const qc = useQueryClient();
   const [feeling, setFeeling] = useState<number | null>(summary.feeling);
@@ -260,10 +287,7 @@ function HowItWent({ summary }: { summary: WorkoutSessionSummary }) {
 
   const save = useMutation({
     mutationFn: async () => {
-      const body: { feeling?: number; notes?: string } = {};
-      if (feeling != null && feeling !== summary.feeling) body.feeling = feeling;
-      // Apagar a observação também grava; sem mudança, não manda nada.
-      if (note.trim() !== (summary.notes ?? '')) body.notes = note.trim();
+      const body = howItWentBody(summary, { feeling, notes: note });
       if (Object.keys(body).length > 0) await workoutApi.updateSession(summary.sessionId, body);
     },
     onSuccess: () => {
@@ -276,7 +300,7 @@ function HowItWent({ summary }: { summary: WorkoutSessionSummary }) {
   async function share() {
     const text = [
       `Treino feito! ${summaryHeadline(summary)}`,
-      `${summary.sets} séries · ${formatTrainingVolume(summary.volumeKg)}`,
+      `${summary.sets} séries · ${formatTrainingVolume(summary.volumeKg, unit)}`,
     ].join('\n');
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
@@ -352,35 +376,25 @@ function TeamQuestions({
   sessionId,
   askedBy,
   items,
+  onSent,
 }: {
   sessionId: string;
   askedBy: string[];
   items: readonly PostWorkoutQuestion[];
+  onSent: (message: string) => void;
 }) {
   const qc = useQueryClient();
   const [fatigue, setFatigue] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
   const [painLocation, setPainLocation] = useState('');
-  const [done, setDone] = useState<string | null>(null);
 
   const send = useMutation({
     mutationFn: (body: WorkoutCheckinInput) => workoutApi.saveCheckin(sessionId, body),
     onSuccess: (_r, body) => {
-      setDone(checkinDoneMessage(body.skipped === true, askedBy));
+      onSent(checkinDoneMessage(body.skipped === true, askedBy));
       void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
     },
   });
-
-  if (done) {
-    return (
-      <p
-        role="status"
-        className="rounded-3xl bg-muted/50 px-4 py-3 text-center text-sm text-foreground"
-      >
-        {done}
-      </p>
-    );
-  }
 
   function submit() {
     const body: WorkoutCheckinInput = {};
