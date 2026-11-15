@@ -41,7 +41,20 @@ export const MEDIA_PURPOSES = {
   post_image: { kinds: [MediaKind.IMAGE], action: 'post.create' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
-export type MediaPurpose = keyof typeof MEDIA_PURPOSES;
+/**
+ * Arquivo pessoal, sem comunidade: quem envia é o dono e só a rota que o usa
+ * (o perfil) decide quem lê. A foto de perfil é o primeiro (#387).
+ */
+export const PERSONAL_MEDIA_PURPOSES = {
+  user_avatar: { kinds: [MediaKind.IMAGE] },
+} as const satisfies Record<string, { kinds: readonly MediaKind[] }>;
+
+export type GroupMediaPurpose = keyof typeof MEDIA_PURPOSES;
+export type PersonalMediaPurpose = keyof typeof PERSONAL_MEDIA_PURPOSES;
+export type MediaPurpose = GroupMediaPurpose | PersonalMediaPurpose;
+
+const isPersonal = (purpose: string): purpose is PersonalMediaPurpose =>
+  purpose in PERSONAL_MEDIA_PURPOSES;
 
 export const MEDIA_LIMITS: Record<MediaKind, { mimes: readonly string[]; maxBytes: number }> = {
   IMAGE: { mimes: ['image/jpeg', 'image/png', 'image/webp'], maxBytes: 10 * 1024 * 1024 },
@@ -60,7 +73,8 @@ const PURGE_INTERVAL_MS = 60 * 60 * 1000;
 
 export interface RequestUploadInput {
   purpose: MediaPurpose;
-  groupId: string;
+  /** Obrigatório nos propósitos da comunidade; ignorado nos pessoais. */
+  groupId?: string | null;
   mime: string;
   bytes: number;
 }
@@ -131,7 +145,10 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
    */
   async requestUpload(userId: string, input: RequestUploadInput) {
     const store = this.requireStore();
-    const regra = MEDIA_PURPOSES[input.purpose];
+    const personal = isPersonal(input.purpose);
+    const regra = personal
+      ? PERSONAL_MEDIA_PURPOSES[input.purpose as PersonalMediaPurpose]
+      : MEDIA_PURPOSES[input.purpose as GroupMediaPurpose];
     if (!regra) throw new BadRequestException('Propósito de envio desconhecido.');
     const kind = kindOf(input.mime);
     if (!kind || !(regra.kinds as readonly MediaKind[]).includes(kind)) {
@@ -147,25 +164,32 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         `O arquivo passa do limite de ${Math.round(limite.maxBytes / 1024 / 1024)} MB.`,
       );
     }
-    const role = await this.assertGroupAction(userId, input.groupId, regra.action);
-    if (input.purpose === 'post_image' && !TEAM_ROLES.includes(role)) {
-      // Mural só da equipe: o bucket não guarda o que não vai virar post.
-      const g = await this.prisma.group.findUniqueOrThrow({
-        where: { id: input.groupId },
-        select: { postPolicy: true },
-      });
-      if (g.postPolicy === PostPolicy.TEAM_ONLY) {
-        throw new ForbiddenException('Nesta comunidade, só a equipe publica no mural');
+    // Arquivo pessoal não passa por comunidade nenhuma: o `groupId` que vier no
+    // corpo é ignorado, para não virar um arquivo "da comunidade" de outra pessoa.
+    const groupId = personal ? null : (input.groupId ?? null);
+    if (!personal) {
+      if (!groupId) throw new BadRequestException('Informe a comunidade do arquivo.');
+      const action = MEDIA_PURPOSES[input.purpose as GroupMediaPurpose].action;
+      const role = await this.assertGroupAction(userId, groupId, action);
+      if (input.purpose === 'post_image' && !TEAM_ROLES.includes(role)) {
+        // Mural só da equipe: o bucket não guarda o que não vai virar post.
+        const g = await this.prisma.group.findUniqueOrThrow({
+          where: { id: groupId },
+          select: { postPolicy: true },
+        });
+        if (g.postPolicy === PostPolicy.TEAM_ONLY) {
+          throw new ForbiddenException('Nesta comunidade, só a equipe publica no mural');
+        }
       }
     }
 
     const id = randomUUID();
-    const key = `groups/${input.groupId}/${id}/original`;
+    const key = groupId ? `groups/${groupId}/${id}/original` : `users/${userId}/${id}/original`;
     await this.prisma.mediaFile.create({
       data: {
         id,
         uploaderId: userId,
-        groupId: input.groupId,
+        groupId,
         purpose: input.purpose,
         kind,
         key,
@@ -234,7 +258,9 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Não deu para ler esta imagem. Tente outra.');
     }
 
-    const finalKey = `groups/${file.groupId}/${file.id}.webp`;
+    const finalKey = file.groupId
+      ? `groups/${file.groupId}/${file.id}.webp`
+      : `users/${file.uploaderId}/${file.id}.webp`;
     await store.put(finalKey, saida.data, 'image/webp');
     await store.delete([file.key]);
     const pronta = await this.prisma.mediaFile.update({
@@ -268,6 +294,24 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     });
     if (!file) throw new NotFoundException('File not found');
     return file;
+  }
+
+  /**
+   * O arquivo pessoal que o perfil vai usar: confirmado agora se ainda estava
+   * pendente, enviado pela própria pessoa e para este propósito. O de outra
+   * pessoa responde como inexistente (#92).
+   */
+  async resolvePersonal(
+    userId: string,
+    fileId: string,
+    purpose: PersonalMediaPurpose,
+  ): Promise<MediaFile> {
+    const file = await this.prisma.mediaFile.findFirst({
+      where: { id: fileId, uploaderId: userId, groupId: null, purpose },
+    });
+    if (!file) throw new NotFoundException('File not found');
+    if (file.status !== MediaStatus.READY) await this.confirm(userId, fileId);
+    return this.prisma.mediaFile.findUniqueOrThrow({ where: { id: fileId } });
   }
 
   /** URL assinada para quem a rota já autorizou a ver o conteúdo. */
@@ -320,6 +364,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             guideVideoOf: { is: null },
             guidePhotoOf: { is: null },
             postImageOf: { is: null },
+            userAvatarOf: { is: null },
           },
         ],
       },

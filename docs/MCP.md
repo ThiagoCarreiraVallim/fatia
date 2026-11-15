@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 131 tools): **108,1 k caracteres**
-hoje, dos quais **6.403 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 131 tools): **109,2 k caracteres**
+hoje, dos quais **6.409 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (88,4 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (89,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -409,6 +409,17 @@ Retorna dados do usuário logado.
   activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE' | null;
   objective: 'LOSE' | 'MAINTAIN' | 'GAIN' | null;
   onboardedAt: string | null; // quando passou (ou pulou) o assistente de primeira vez
+  // Você (#387). O apelido vale no mural, nos comentários e no ranking das comunidades.
+  nickname: string | null;
+  bio: string | null; // até 140 caracteres
+  avatarUrl: string | null; // URL assinada de curta duração
+  avatarVisibility: 'COMMUNITIES' | 'TEAM_ONLY';
+  keepMealPhotos: boolean | null; // "Guardar fotos das refeições" (ADR 038); nulo = não respondeu
+  whatsapp: string | null; // só dígitos, com DDI
+  whatsappOptIn: boolean;
+  // Unidades de exibição: o diário continua em kg e metros; converta só ao falar.
+  loadUnit: 'KG' | 'LB';
+  distanceUnit: 'KM' | 'M' | 'MI';
 }
 ```
 
@@ -427,12 +438,20 @@ Atualiza o perfil: nome, altura, fuso e os dados que alimentam `suggest_nutritio
   birthDate?: string; // AAAA-MM-DD, não pode ser futura
   activityLevel?: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
   objective?: 'LOSE' | 'MAINTAIN' | 'GAIN';
+  nickname?: string; // 2 a 30 caracteres; vazio apaga
+  bio?: string; // até 140 caracteres; vazio apaga
+  loadUnit?: 'KG' | 'LB'; // só a exibição: nada registrado é convertido
+  distanceUnit?: 'KM' | 'M' | 'MI';
 }
 ```
 
 **Output:** mesma forma de `get_me`.
 
-**Erros:** `INVALID_INPUT` se a data de nascimento não existe ou é futura.
+**Erros:** `INVALID_INPUT` se a data de nascimento não existe ou é futura, se o apelido não tem
+de 2 a 30 caracteres ou se a bio passa de 140.
+
+Foto, visibilidade da foto, WhatsApp e "Guardar fotos das refeições" ficam só no app (Você ›
+Editar perfil e Conta): são escolhas de privacidade que a pessoa faz vendo a prévia.
 
 ### `update_timezone`
 
@@ -453,21 +472,28 @@ Atualiza fuso horário do usuário. Afeta interpretação de "hoje" em todas as 
 ## Conta e dados (LGPD)
 
 Portabilidade e eliminação, expostos como tools para o usuário exercer os dois direitos
-conversando com o Claude. Também disponíveis via REST: `GET /users/me/export` e
-`DELETE /users/me`.
+conversando com o Claude. Também disponíveis via REST: `POST /users/me/exports` e
+`DELETE /users/me` (no app, a confirmação é a palavra `APAGAR`, prancha Al-V8).
 
 ### `export_my_data`
 
-Exporta **todos** os dados do usuário em JSON: perfil, metas (macros, nutrientes e pessoais),
-refeições com itens, treinos com séries, peso, passos, hidratação, conquistas desbloqueadas, e
-os alimentos e exercícios custom que ele criou.
+Gera um **link que vale 24 horas** para baixar **todos** os dados do usuário num arquivo JSON:
+perfil, metas (macros, nutrientes e pessoais), refeições com itens, treinos com séries, peso,
+passos, hidratação, conquistas desbloqueadas, conversas, comunidades, e os alimentos e
+exercícios custom que ele criou (#387).
+
+O link abre sem login (`GET /api/exports/:token`), então só vai para o próprio usuário. Só o
+hash do token fica no banco, e o arquivo é montado na hora do download: nenhuma cópia dos dados
+fica parada no servidor. Link vencido responde 410.
 
 O catálogo público (TACO e exercícios base) **não** vai no export: não é dado pessoal e
 inflaria o payload sem informação sobre o usuário.
 
 **Input:** `{}`
 
-**Output:**
+**Output:** `{ url: string; expiresAt: string }`
+
+**Conteúdo do arquivo:**
 
 ```typescript
 {

@@ -39,6 +39,28 @@ model User {
   // CPF e cartão ficam no Asaas, nunca aqui.
   asaasCustomerId String? @unique
 
+  // Perfil nas comunidades (Você › Editar perfil, #387). O apelido vale para
+  // mural, comentários e ranking quando a comunidade não tem um próprio
+  // (`GroupMembership.displayName` continua vencendo). A bio tem até 140
+  // caracteres, conferidos na API.
+  nickname         String?
+  bio              String?
+  /// Foto de perfil (mídia `user_avatar`, ADR 028): EXIF removido no servidor.
+  avatarFileId     String?          @unique
+  /// Quem vê a foto. Fora das comunidades da pessoa, ninguém.
+  avatarVisibility AvatarVisibility @default(COMMUNITIES)
+  /// "Guardar fotos das refeições" (ADR 038). Nulo = ainda não respondeu, e a
+  /// foto é usada e descartada como antes.
+  keepMealPhotos   Boolean?
+  /// WhatsApp para a equipe chamar (o Fatia não tem chat entre pessoas). Só
+  /// aparece para a equipe com `whatsappOptIn` ligado.
+  whatsapp         String?
+  whatsappOptIn    Boolean          @default(false)
+  /// Unidades de exibição (Você › Unidades). Banco e API continuam métricos: a
+  /// conversão é só no cliente, e a equipe vê na unidade dela.
+  loadUnit         LoadUnit         @default(KG)
+  distanceUnit     DistanceUnit     @default(KM)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -76,6 +98,14 @@ model User {
   pendingNotices          PendingNotice[]
   webPushSubscriptions    WebPushSubscription[]
 
+  // Você (#387): foto, novidades lidas, tutoriais vistos, ideias enviadas e os
+  // links de exportação.
+  avatarFile    MediaFile?         @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  newsReads     UserNewsRead[]
+  tutorialsSeen UserTutorialSeen[]
+  feedbackIdeas FeedbackIdea[]
+  dataExports   DataExport[]
+
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
   ownedGroups         Group[]                 @relation("GroupOwner")
@@ -109,6 +139,83 @@ enum BodyObjective {
 enum Role {
   USER
   ADMIN
+}
+
+/// Quem vê a foto de perfil (prancha Al-V9). Fora das comunidades da pessoa,
+/// ninguém vê, em nenhum dos dois.
+enum AvatarVisibility {
+  /// Membros e equipe das comunidades em que a pessoa está.
+  COMMUNITIES
+  /// Só a equipe; os outros membros veem as iniciais.
+  TEAM_ONLY
+}
+
+enum LoadUnit {
+  KG
+  LB
+}
+
+enum DistanceUnit {
+  KM
+  M
+  MI
+}
+
+/// Novidade que a pessoa já leu. O conteúdo das novidades vive em código
+/// (`news-catalog.ts`), como as conquistas: entra junto do deploy da função que
+/// ele anuncia, sem migration por entrada.
+model UserNewsRead {
+  userId String
+  newsId String
+  readAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, newsId])
+}
+
+/// Tutorial da ajuda que a pessoa já abriu (selo "assistido"). O conteúdo vive
+/// em `@fatia/api-client` (`tutorials.ts`), para o texto estar no aparelho sem
+/// internet.
+model UserTutorialSeen {
+  userId     String
+  tutorialId String
+  seenAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tutorialId])
+}
+
+/// "Sugerir uma ideia" (Você › Novidades). Texto da pessoa, lido pela equipe do
+/// Fatia; sai no export e com a conta.
+model FeedbackIdea {
+  id        String   @id @default(uuid())
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Link de exportação dos dados (LGPD art. 18, V), válido por 24 h. Só o hash do
+/// token fica no banco, como no convite; o arquivo é montado na hora do
+/// download, então nenhuma cópia dos dados fica parada no servidor.
+model DataExport {
+  id           String    @id @default(uuid())
+  userId       String
+  /// sha256 do token, em hex.
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  downloadedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 // OAuth facade pro MCP: Logto não expõe DCR público, então a API age
@@ -1396,6 +1503,7 @@ model MediaFile {
   guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
   guidePhotoOf   GroupExerciseGuidePhoto?
   postImageOf    GroupPostImage?          @relation("PostImage")
+  userAvatarOf   User?                    @relation("UserAvatar")
 
   @@index([groupId])
   @@index([uploaderId])

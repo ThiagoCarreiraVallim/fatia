@@ -12,8 +12,17 @@ import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
 import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 
-/** Frase exata que o usuário precisa confirmar para apagar a conta. */
+/**
+ * Frase exata que o `delete_my_account` (MCP) exige. Longa de propósito: quem
+ * chama é um LLM, e a frase obriga a intenção a ser inequívoca.
+ */
 export const DELETE_CONFIRMATION = 'DELETAR MINHA CONTA';
+
+/**
+ * O que a pessoa digita no app e na web para apagar (prancha Al-V8: "Digite
+ * APAGAR para confirmar"). Vale só no `DELETE /users/me`.
+ */
+export const APP_DELETE_CONFIRMATION = 'APAGAR';
 
 /**
  * Export e deleção de conta — direitos de portabilidade e eliminação da LGPD
@@ -53,6 +62,16 @@ export class AccountService {
         activityLevel: true,
         objective: true,
         onboardedAt: true,
+        // Você (#387): o perfil das comunidades, as preferências e as unidades.
+        // A foto entra em `mediaUploaded` (propósito `user_avatar`).
+        nickname: true,
+        bio: true,
+        avatarVisibility: true,
+        keepMealPhotos: true,
+        whatsapp: true,
+        whatsappOptIn: true,
+        loadUnit: true,
+        distanceUnit: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -88,6 +107,10 @@ export class AccountService {
       devices,
       notificationPreferences,
       webPushSubscriptions,
+      newsRead,
+      tutorialsSeen,
+      ideas,
+      dataExports,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -404,6 +427,28 @@ export class AccountService {
         select: { createdAt: true, lastSeenAt: true },
         orderBy: { createdAt: 'asc' },
       }),
+      // Você (#387): o que a pessoa leu e assistiu, as ideias que mandou e
+      // quando pediu exportações (sem o hash do token, que é segredo de uso).
+      this.prisma.userNewsRead.findMany({
+        where: { userId },
+        select: { newsId: true, readAt: true },
+        orderBy: { readAt: 'asc' },
+      }),
+      this.prisma.userTutorialSeen.findMany({
+        where: { userId },
+        select: { tutorialId: true, seenAt: true },
+        orderBy: { seenAt: 'asc' },
+      }),
+      this.prisma.feedbackIdea.findMany({
+        where: { userId },
+        select: { body: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.dataExport.findMany({
+        where: { userId },
+        select: { createdAt: true, expiresAt: true, downloadedAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -454,6 +499,10 @@ export class AccountService {
       devices,
       notificationPreferences,
       webPushSubscriptions,
+      newsRead,
+      tutorialsSeen,
+      ideas,
+      dataExports,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -476,6 +525,9 @@ export class AccountService {
         mediaUploaded: mediaUploaded.length,
         devices: devices.length,
         webPushSubscriptions: webPushSubscriptions.length,
+        newsRead: newsRead.length,
+        tutorialsSeen: tutorialsSeen.length,
+        ideas: ideas.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,
@@ -504,10 +556,10 @@ export class AccountService {
    * `User`. A identidade no Logto é apagada em seguida, num passo separado que
    * pode falhar sem desfazer o cascade — ver o comentário abaixo.
    */
-  async deleteAccount(userId: string, confirmation: string) {
-    if (confirmation !== DELETE_CONFIRMATION) {
+  async deleteAccount(userId: string, confirmation: string, expected = DELETE_CONFIRMATION) {
+    if (confirmation !== expected) {
       throw new BadRequestException(
-        `Confirmação inválida. Para apagar a conta, envie confirmation exatamente como "${DELETE_CONFIRMATION}". ` +
+        `Confirmação inválida. Para apagar a conta, envie confirmation exatamente como "${expected}". ` +
           'Confirme com o usuário antes de repetir — a operação é irreversível.',
       );
     }

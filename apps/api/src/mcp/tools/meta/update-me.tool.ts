@@ -1,9 +1,9 @@
 // apps/api/src/mcp/tools/meta/update-me.tool.ts
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { PrismaService } from '../../../common/prisma.service';
-import { USER_SELECT } from '../../../users/user-select';
-import { profileUpdateData, type ProfileUpdate } from '../../../users/profile-update';
+import { ProfileService } from '../../../users/profile.service';
+import { BIO_MAX, type ProfileUpdate } from '../../../users/profile-update';
+import { DISPLAY_NAME_MAX } from '../../../sharing/display-name';
 import {
   McpTool,
   type McpToolContext,
@@ -13,14 +13,16 @@ import {
 @Injectable()
 @McpTool()
 export class UpdateMeTool implements McpToolDef {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly profile: ProfileService) {}
   readonly name = 'update_me';
   readonly title = 'Atualizar meu perfil';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
-    'Atualiza o perfil do usuário (nome, estatura, fuso horário e os dados da sugestão de metas). ' +
-    'Exemplo: {"name":"Ana Souza","heightCm":178,"timezone":"America/Sao_Paulo"}';
+    'Atualiza o perfil do usuário (nome, estatura, fuso horário, os dados da sugestão de metas, o apelido e a bio ' +
+    'das comunidades e as unidades de exibição). Só o que vier é alterado; string vazia apaga apelido e bio. ' +
+    'As unidades mudam só como o app mostra: nada registrado é convertido. ' +
+    'Exemplo: {"nickname":"Ana","bio":"Correndo minha primeira 10 km","loadUnit":"LB"}';
   readonly inputSchema = {
     name: z.string().min(1).max(120).optional().describe('Novo nome de exibição do usuário'),
     heightCm: z
@@ -47,12 +49,28 @@ export class UpdateMeTool implements McpToolDef {
       .enum(['LOSE', 'MAINTAIN', 'GAIN'])
       .optional()
       .describe('Perder, manter ou ganhar peso'),
+    nickname: z
+      .string()
+      .max(DISPLAY_NAME_MAX)
+      .optional()
+      .describe(
+        `Como aparece no mural, nos comentários e no ranking das comunidades (2 a ${DISPLAY_NAME_MAX} caracteres; vazio apaga)`,
+      ),
+    bio: z
+      .string()
+      .max(BIO_MAX)
+      .optional()
+      .describe(`"Sobre você" do perfil, até ${BIO_MAX} caracteres (vazio apaga)`),
+    loadUnit: z
+      .enum(['KG', 'LB'])
+      .optional()
+      .describe('Unidade em que o app mostra a carga dos treinos'),
+    distanceUnit: z
+      .enum(['KM', 'M', 'MI'])
+      .optional()
+      .describe('Unidade em que o app mostra distância (km, metros ou milhas)'),
   } as const;
   execute(input: ProfileUpdate, { userId, timezone }: McpToolContext) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: profileUpdateData(input, timezone),
-      select: USER_SELECT,
-    });
+    return this.profile.updateMe(userId, input, timezone);
   }
 }

@@ -41,6 +41,14 @@ import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
 import { MuscleSummaryService } from '../../workout/muscle-summary.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
+import { MediaService } from '../../storage/media.service';
+import { MemoryObjectStore } from '../../storage/memory-object-store';
+import { ProfileService } from '../../users/profile.service';
+import { YouService } from '../../you/you.service';
+import { AccountService } from '../../users/account.service';
+import { DataExportService } from '../../users/data-export.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -2796,6 +2804,82 @@ describe('isolamento entre usuários', () => {
         NotFoundException,
       );
       expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
+    });
+  });
+
+  describe('Você: foto, preferências, novidades e exportação (#387)', () => {
+    const store = new MemoryObjectStore();
+    const media = new MediaService(prisma, store);
+    const perfil = new ProfileService(prisma, media);
+    const voce = new YouService(prisma);
+    const exportacoes = new DataExportService(
+      prisma,
+      new AccountService(prisma, {} as LogtoManagementService, {} as CheckpointPurgeService),
+    );
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    let fotoA = '';
+
+    beforeAll(async () => {
+      const t = await media.requestUpload(owned.userA, {
+        purpose: 'user_avatar',
+        mime: 'image/png',
+        bytes: PNG.length,
+      });
+      const f = await prisma.mediaFile.findUniqueOrThrow({ where: { id: t.fileId } });
+      store.upload(f.key, PNG, 'image/png');
+      fotoA = t.fileId;
+      await perfil.setAvatar(owned.userA, fotoA);
+      await perfil.updateMe(
+        owned.userA,
+        { nickname: 'Usuária A', bio: 'Só minha', loadUnit: 'LB', keepMealPhotos: true },
+        TZ,
+      );
+      await voce.markNewsRead(owned.userA);
+      await voce.markTutorialSeen(owned.userA, 'registrar-por-foto');
+    });
+
+    it('a foto do user-A não vira a do user-B, e continua do user-A', async () => {
+      await expect(perfil.setAvatar(owned.userB, fotoA)).rejects.toThrow(NotFoundException);
+      expect((await perfil.getMe(owned.userB)).avatarUrl).toBeNull();
+      const a = await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } });
+      expect(a.avatarFileId).toBe(fotoA);
+    });
+
+    it('remover a foto do user-B não apaga a do user-A', async () => {
+      await perfil.removeAvatar(owned.userB);
+      expect(await prisma.mediaFile.findUnique({ where: { id: fotoA } })).toBeTruthy();
+    });
+
+    it('as preferências do user-A não aparecem no perfil do user-B', async () => {
+      expect(await perfil.getMe(owned.userB)).toMatchObject({
+        nickname: null,
+        bio: null,
+        loadUnit: 'KG',
+        keepMealPhotos: null,
+      });
+    });
+
+    it('novidades lidas e tutoriais vistos do user-A não contam para o user-B', async () => {
+      const deA = await voce.news(owned.userA);
+      expect(deA.unreadCount).toBe(0);
+      await prisma.user.update({
+        where: { id: owned.userB },
+        data: { createdAt: new Date('2026-01-01') },
+      });
+      expect((await voce.news(owned.userB)).unreadCount).toBeGreaterThan(0);
+      expect(await voce.tutorialsSeen(owned.userB)).toEqual({ seen: [] });
+    });
+
+    it('o link de exportação do user-B só traz o dado do user-B', async () => {
+      const link = await exportacoes.createLink(owned.userB);
+      const { body } = await exportacoes.download(link.url.split('/').at(-1)!);
+      expect(body.user.id).toBe(owned.userB);
+      expect(body.meals).toEqual([]);
+      expect(body.newsRead).toEqual([]);
+      expect(body.mediaUploaded).toEqual([]);
     });
   });
 

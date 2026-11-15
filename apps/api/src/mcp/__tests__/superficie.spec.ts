@@ -30,10 +30,12 @@ import {
  * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
  * O `update_meal_item` ganhou `nutrients` (paridade com o REST, ADR 006): muda o braço A.
  * O redesign (#369) acrescentou `get_weekly_muscle_summary` (só leitura): muda o braço A.
+ * A #387 mudou `get_me`, `update_me` (apelido, bio e unidades) e `export_my_data` (link de
+ * 24 h): mudam os dois braços.
  */
 
-const SHA_ENTIDADE = '91de69ccede70d7125a90fea6c6de7f95aa4acfb6612433d36b465f0e573f550';
-const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
+const SHA_ENTIDADE = '9c58d2e30ed7dc36c1145d972c2bf1abf5b434edef5a71f847d00db10600d00d';
+const SHA_INTENCAO = 'fbb9a2de7c6b4ead937dc3e11e6cc37d1f657137615ee1271ee90c222cd3e351';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
