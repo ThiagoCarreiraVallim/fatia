@@ -37,6 +37,7 @@ import {
   WaterTile,
   WeightTile,
 } from '@/components/today/today-cards';
+import { FirstStepsCard } from '@/components/today/first-steps-card';
 import { GoalsSheet } from '@/components/today/goals-sheet';
 import { InboxSheet } from '@/components/today/inbox-sheet';
 import { WaterSheet } from '@/components/today/water-sheet';
@@ -201,6 +202,7 @@ export default function TodayScreen() {
             <ErrorState error={today.error} onRetry={() => today.refetch()} />
           ) : data ? (
             <>
+              <FirstStepsCard />
               {data.receivedPlan ? <ReceivedPlanBanner plan={data.receivedPlan} /> : null}
               {data.todo.count > 0 ? <TodoCard todo={data.todo} /> : null}
               {data.nextEvent ? <EventCard event={data.nextEvent} /> : null}

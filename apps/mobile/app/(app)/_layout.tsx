@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Slot, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { usersApi } from '@fatia/api-client';
-import { takePendingInvite } from '@/community/pending-invite';
+import { onboardingPending, usersApi } from '@fatia/api-client';
+import { peekPendingInvite, takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
 import { AiMenuProvider } from '@/components/layout/ai-menu';
@@ -32,31 +32,35 @@ export default function AppLayout() {
     if (status === 'signedOut') router.replace('/login');
   }, [status, router]);
 
-  // Quem ainda não passou pelo assistente vai para ele (mesma chave do
-  // dashboard: não custa requisição a mais). Erro ao ler o perfil não prende
-  // ninguém lá — só o `onboardedAt` nulo de verdade redireciona.
-  const eu = useQuery({
+  // Quem ainda não passou pelo onboarding (ou parou numa etapa pulável) volta a
+  // ele, na mesma tela (#371). Mesma chave do dashboard: não custa requisição a
+  // mais. Erro ao ler o perfil não prende ninguém lá. O convite aberto antes do
+  // login vira as boas-vindas da comunidade no onboarding.
+  const me = useQuery({
     queryKey: ['users', 'me'],
     queryFn: () => usersApi.me(),
     enabled: status === 'signedIn',
   });
-  const primeiraVez = eu.data !== undefined && eu.data.onboardedAt === null;
+  const pending = me.data !== undefined && onboardingPending(me.data);
   useEffect(() => {
-    if (primeiraVez) router.replace('/onboarding');
-  }, [primeiraVez, router]);
+    if (!pending) return;
+    void peekPendingInvite().then((token) =>
+      router.replace(token ? `/onboarding?convite=${token}` : '/onboarding'),
+    );
+  }, [pending, router]);
 
-  // Convite aberto antes do login (ou antes do assistente): volta para ele uma
-  // vez, quando a pessoa já está dentro e passou pelo assistente.
-  const pronto = eu.data !== undefined && eu.data.onboardedAt !== null;
+  // Convite aberto antes do login, de quem já tinha passado pelo onboarding:
+  // volta para ele uma vez.
+  const ready = me.data !== undefined && !onboardingPending(me.data);
   useEffect(() => {
-    if (!pronto) return;
+    if (!ready) return;
     void takePendingInvite().then((token) => {
       if (token) router.push(`/c/${token}`);
     });
-  }, [pronto, router]);
+  }, [ready, router]);
 
   // Avisos no celular (Fase 8c): refaz o cadastro e leva o toque à tela dele.
-  usePush(pronto);
+  usePush(ready);
 
   if (status !== 'signedIn') {
     return (

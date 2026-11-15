@@ -1,439 +1,782 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
 import {
-  ACTIVITY_OPTIONS,
-  GOAL_RANGES,
-  GOAL_SINGLES,
-  OBJECTIVE_OPTIONS,
-  ONBOARDING_STEPS,
-  SEX_OPTIONS,
+  ApiError,
+  RESUME_NOTE,
+  RESUME_TOAST,
+  aiStepVariant,
+  alreadyMemberGroupId,
+  billingApi,
   bodyFromForm,
   brDateToIso,
-  goalsFromForm,
-  goalsToForm,
-  initialBodyForm,
+  goalsRangeShift,
+  groupsApi,
+  isSkippableStep,
   isoToBrDate,
-  maskBrDate,
+  mealTypeForTime,
+  nextOnboardingStep,
+  normalizeCommunityCode,
   nutritionApi,
-  progressApi,
+  onboardingApi,
+  onboardingReminderInputs,
+  photoTestMealItems,
+  photoTestSummary,
+  previousOnboardingStep,
+  progressSegment,
+  remindersApi,
+  resumeOnboardingStep,
+  trialTerms,
   usersApi,
   type ActivityLevel,
-  type BodyErrors,
-  type BodyForm,
   type BodyObjective,
-  type GoalSuggestion,
-  type GoalsErrors,
-  type GoalsForm,
+  type CodeLookup,
+  type FlowContext,
   type GoalsInput,
+  type GroupPreview,
+  type JoinConsent,
+  type MealRecognition,
+  type OnboardingReminderKey,
+  type OnboardingStepKey,
+  type SaveOnboardingInput,
 } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
-import { Button, Input, Label, LoadingState } from '@/components/ui';
-import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
-import { colors } from '@/theme/colors';
+import { takePendingName } from '@/auth/pending-name';
+import {
+  comprar as purchasePackage,
+  inAppPurchaseAvailable,
+  pacotesDoPro as proPackages,
+  storeLogIn,
+  type PurchasesPackage,
+} from '@/billing/purchases';
+import { isInviteToken } from '@/community/invite-link';
+import { clearPendingInvite } from '@/community/pending-invite';
+import { hojeIso } from '@/components/nutrition/helpers';
+import {
+  ActivityStep,
+  AiCommunityStep,
+  AiTrialStep,
+  BodyStep,
+  CodeStep,
+  GoalsStep,
+  HealthStep,
+  NotificationsStep,
+  ObjectiveStep,
+  RemindersStep,
+  ResumeNote,
+  ShareStep,
+  WelcomeStep,
+  type BodyDraft,
+  type StepNav,
+} from '@/components/onboarding/onboarding-steps';
+import { QrScanModal } from '@/components/onboarding/qr-scan';
+import { openLegal } from '@/components/profile/legal';
+import { LoadingState, useToast } from '@/components/ui';
+import { healthStepsSource } from '@/health/health-steps';
+import { enablePush } from '@/notifications/push';
 
-const kcal = (n: number) => n.toLocaleString('pt-BR');
+const errorText = (err: unknown) =>
+  err instanceof ApiError ? err.message : 'Não deu para salvar agora. Tente de novo.';
 
 /**
- * Réplica de `apps/web/src/components/onboarding/onboarding-wizard.tsx`: mesmos
- * passos, opções e faixas (de `@fatia/api-client`), e a conta é da API.
+ * O onboarding das pranchas Onb-* (#371) no app, espelho de
+ * `apps/web/src/components/onboarding/onboarding-flow.tsx`: mesmas etapas,
+ * mesma ordem (de `@fatia/api-client`), cada "Continuar" salvo na API.
  *
- * Fora do grupo `(app)`, sem a barra de navegação. A data de nascimento é
- * digitada com máscara (DD/MM/AAAA): um seletor nativo seria dependência nova
- * para um campo que se preenche uma vez.
+ * Diferenças do app: a saúde do celular (Onb-P1) quando houver leitura de
+ * passos, o QR da recepção pela câmera e o teste grátis pela loja (RevenueCat),
+ * que some quando a compra no app está desligada.
  */
 export default function OnboardingScreen() {
   const { status } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
-  const { refazer } = useLocalSearchParams<{ refazer?: string }>();
-  const redo = refazer === '1';
-
-  const [passo, setPasso] = useState(0);
-  const [objetivo, setObjetivo] = useState<BodyObjective | null>(null);
-  const [atividade, setAtividade] = useState<ActivityLevel | null>(null);
-  const [corpo, setCorpo] = useState<BodyForm | null>(null);
-  const [errosDoCorpo, setErrosDoCorpo] = useState<BodyErrors>({});
-  const [sugestao, setSugestao] = useState<GoalSuggestion | null>(null);
-  const [metas, setMetas] = useState<GoalsForm | null>(null);
-  const [errosDasMetas, setErrosDasMetas] = useState<GoalsErrors>({});
+  const params = useLocalSearchParams<{ refazer?: string; convite?: string }>();
+  const redo = params.refazer === '1';
+  const token = isInviteToken(params.convite) ? params.convite : null;
+  const health = useMemo(() => healthStepsSource(), []);
+  const canPurchase = inAppPurchaseAvailable();
 
   useEffect(() => {
     if (status === 'signedOut') router.replace('/login');
   }, [status, router]);
 
-  const logado = status === 'signedIn';
-  const eu = useQuery({
+  const signedIn = status === 'signedIn';
+  const me = useQuery({
     queryKey: ['users', 'me'],
     queryFn: () => usersApi.me(),
-    enabled: logado,
+    enabled: signedIn,
   });
-  const pesos = useQuery({
-    queryKey: ['progress', 'weights', 'latest'],
-    queryFn: () => progressApi.listWeights(),
-    enabled: logado,
+  const progress = useQuery({
+    queryKey: ['onboarding', 'progress'],
+    queryFn: () => onboardingApi.progress(),
+    enabled: signedIn,
+    staleTime: Infinity,
+  });
+  const plan = useQuery({
+    queryKey: ['billing', 'plan'],
+    queryFn: () => billingApi.plan(),
+    enabled: signedIn,
+  });
+  const groups = useQuery({
+    queryKey: ['community', 'mine'],
+    queryFn: () => groupsApi.mine(),
+    enabled: signedIn,
+  });
+  const invite = useQuery({
+    queryKey: ['community', 'invite', token],
+    queryFn: () => groupsApi.previewInvite(token as string),
+    enabled: signedIn && Boolean(token),
+    retry: false,
   });
 
-  // Preenche uma vez; o que a pessoa digitar depois manda. A data fica em
-  // DD/MM/AAAA no campo e só vira ISO na hora de validar.
-  if (eu.isFetched && pesos.isFetched && corpo === null) {
-    const inicial = initialBodyForm(eu.data, pesos.data?.logs[0]?.weightKg ?? null);
-    setCorpo({ ...inicial, birthDate: isoToBrDate(inicial.birthDate) });
-    // Só se ainda não há escolha: um toque feito antes do perfil chegar manda.
-    const salvo = eu.data;
-    if (salvo?.objective) setObjetivo((atual) => atual ?? salvo.objective);
-    if (salvo?.activityLevel) setAtividade((atual) => atual ?? salvo.activityLevel);
+  // O nome digitado em "Criar conta" (Onb-01a/01b) vai para o perfil.
+  const nameSent = useRef(false);
+  useEffect(() => {
+    if (nameSent.current || !me.data) return;
+    nameSent.current = true;
+    const current = me.data.name;
+    void takePendingName().then((name) => {
+      if (name && name !== current) {
+        void usersApi
+          .updateMe({ name })
+          .then(() => qc.invalidateQueries({ queryKey: ['users', 'me'] }));
+      }
+    });
+  }, [me.data, qc]);
+
+  const [inviteAnswered, setInviteAnswered] = useState(false);
+  const activeGroups = (groups.data ?? []).filter((g) => g.status === 'ACTIVE');
+  const ctx: FlowContext = useMemo(
+    () => ({
+      invitePending: Boolean(invite.data) && !inviteAnswered && !redo,
+      inCommunity: activeGroups.length > 0,
+      healthAvailable: health.available,
+      aiVariant: aiStepVariant(plan.data ?? null, canPurchase),
+    }),
+    [
+      invite.data,
+      inviteAnswered,
+      redo,
+      activeGroups.length,
+      health.available,
+      plan.data,
+      canPurchase,
+    ],
+  );
+
+  const ready =
+    progress.isFetched &&
+    plan.isFetched &&
+    groups.isFetched &&
+    me.isFetched &&
+    (!token || invite.isFetched);
+
+  const [step, setStep] = useState<OnboardingStepKey | null>(null);
+  const [resumedAt, setResumedAt] = useState<OnboardingStepKey | null>(null);
+  const [objective, setObjective] = useState<BodyObjective | null>(null);
+  const [activity, setActivity] = useState<ActivityLevel | null>(null);
+  const [body, setBody] = useState<BodyDraft | null>(null);
+  const [goals, setGoals] = useState<GoalsInput | null>(null);
+  const [tdee, setTdee] = useState<number | null>(null);
+  const [goalSource, setGoalSource] = useState<'app' | 'team'>('app');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [autoFinish, setAutoFinish] = useState(false);
+
+  if (ready && step === null && progress.data) {
+    const saved = redo ? null : progress.data.step;
+    const p = progress.data.profile;
+    const start = redo ? 'objective' : resumeOnboardingStep(ctx, saved);
+    setObjective(p.objective);
+    setActivity(p.activityLevel);
+    setBody({
+      sex: p.sex,
+      birthDate: p.birthDate ? isoToBrDate(p.birthDate) : '',
+      heightCm: p.heightCm ?? 168,
+      weightKg: p.weightKg ?? 70,
+    });
+    if (progress.data.draft.goals) setGoals(progress.data.draft.goals);
+    if (progress.data.draft.goalSource) setGoalSource(progress.data.draft.goalSource);
+    setStep(start ?? 'ai');
+    if (saved && start) setResumedAt(start);
+    if (!start) setAutoFinish(true);
   }
 
-  const corpoValido = () =>
-    bodyFromForm({ ...corpo!, birthDate: brDateToIso(corpo!.birthDate) }, hojeIso());
+  // "Continuando de onde parou" (Onb-Retomada), uma vez.
+  useEffect(() => {
+    if (resumedAt) toast.show({ message: RESUME_TOAST });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumedAt]);
 
-  const concluir = () => {
-    void qc.invalidateQueries({ queryKey: ['users', 'me'] });
-    if (redo) router.back();
-    else router.replace('/');
+  useEffect(() => {
+    if (autoFinish) void finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFinish]);
+
+  const parsedBody = () =>
+    body
+      ? bodyFromForm(
+          {
+            sex: body.sex,
+            birthDate: brDateToIso(body.birthDate),
+            heightCm: String(body.heightCm),
+            weightKg: String(body.weightKg),
+          },
+          hojeIso(),
+        )
+      : null;
+
+  async function finish() {
+    setPending(true);
+    try {
+      if (!redo) await onboardingApi.finish();
+      await clearPendingInvite();
+      await qc.invalidateQueries({ queryKey: ['users', 'me'] });
+      void qc.invalidateQueries({ queryKey: ['onboarding'] });
+      if (redo && router.canGoBack()) router.back();
+      else router.replace('/');
+    } catch (err) {
+      setError(errorText(err));
+      setPending(false);
+    }
+  }
+
+  async function advance(data: Omit<SaveOnboardingInput, 'step'> = {}, from = step) {
+    if (!from) return;
+    const next = nextOnboardingStep(ctx, from);
+    setError(null);
+    if (!next) return finish();
+    setPending(true);
+    try {
+      if (!redo) await onboardingApi.save({ ...data, step: next });
+      setStep(next);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const back = () => {
+    if (!step) return;
+    const prev = previousOnboardingStep(ctx, step);
+    setError(null);
+    if (prev) setStep(prev);
+    else if (redo) router.back();
   };
 
-  const sugerir = useMutation({
-    mutationFn: () => {
-      const r = corpoValido();
-      if (!r.ok) throw new Error('Confira os seus dados.');
-      return nutritionApi.suggestGoals({
-        ...r.body,
-        objective: objetivo!,
-        activityLevel: atividade!,
-      });
-    },
-    onSuccess: (s) => {
-      setSugestao(s);
-      setMetas(goalsToForm(s.goals));
-      setErrosDasMetas({});
-      setPasso(3);
-    },
-  });
+  // --- convite -------------------------------------------------------------------
 
-  const salvar = useMutation({
-    mutationFn: (aceitas: GoalsInput) => {
-      const r = corpoValido();
-      if (!r.ok) throw new Error('Confira os seus dados.');
-      return usersApi.completeOnboarding({
-        ...r.body,
-        objective: objetivo!,
-        activityLevel: atividade!,
-        goals: aceitas,
+  async function acceptInvite(consent: JoinConsent) {
+    if (!token) return;
+    setPending(true);
+    setError(null);
+    try {
+      await groupsApi.acceptInvite(token, consent);
+    } catch (err) {
+      if (!alreadyMemberGroupId(err)) {
+        setError(
+          err instanceof ApiError && err.isConflict
+            ? err.message
+            : 'Não deu para aceitar agora. Tente de novo.',
+        );
+        setPending(false);
+        return;
+      }
+    }
+    setPending(false);
+    setInviteAnswered(true);
+    await clearPendingInvite();
+    void qc.invalidateQueries({ queryKey: ['community'] });
+    void qc.invalidateQueries({ queryKey: ['billing', 'plan'] });
+    await advance({}, 'share');
+  }
+
+  async function declineInvite() {
+    setInviteAnswered(true);
+    await clearPendingInvite();
+    await advance({}, 'share');
+  }
+
+  // --- metas ---------------------------------------------------------------------
+
+  const resumeBody = step === 'goals' && tdee === null ? parsedBody() : null;
+  const resumeSuggestion = useQuery({
+    queryKey: ['onboarding', 'suggestion', objective, activity, resumeBody],
+    queryFn: () =>
+      resumeBody?.ok && objective && activity
+        ? nutritionApi.suggestGoals({ ...resumeBody.body, objective, activityLevel: activity })
+        : null,
+    enabled: Boolean(resumeBody?.ok && objective && activity),
+    staleTime: Infinity,
+  });
+  const shownGoals = goals ?? resumeSuggestion.data?.goals ?? null;
+  const shownTdee = tdee ?? resumeSuggestion.data?.tdee ?? null;
+
+  async function submitActivity() {
+    const parsed = parsedBody();
+    if (!activity || !objective || !parsed?.ok) return;
+    setPending(true);
+    setError(null);
+    try {
+      const s = await nutritionApi.suggestGoals({
+        ...parsed.body,
+        objective,
+        activityLevel: activity,
       });
-    },
-    onSuccess: () => {
+      setTdee(s.tdee);
+      setGoals(s.goals);
+      setPending(false);
+      await advance({ activityLevel: activity });
+    } catch (err) {
+      setError(errorText(err));
+      setPending(false);
+    }
+  }
+
+  async function submitGoals() {
+    const parsed = parsedBody();
+    if (!shownGoals || !objective || !activity || !parsed?.ok) return;
+    const team = progress.data?.teamSuggestion;
+    const chosen = goalSource === 'team' && team ? { ...shownGoals, ...team.goals } : shownGoals;
+    setPending(true);
+    setError(null);
+    try {
+      await usersApi.completeOnboarding({
+        ...parsed.body,
+        objective,
+        activityLevel: activity,
+        goals: chosen,
+      });
       void qc.invalidateQueries({ queryKey: ['nutrition'] });
       void qc.invalidateQueries({ queryKey: ['dashboard'] });
       void qc.invalidateQueries({ queryKey: ['progress'] });
-      concluir();
+      setPending(false);
+      if (redo) return finish();
+      await advance({});
+    } catch (err) {
+      setError(errorText(err));
+      setPending(false);
+    }
+  }
+
+  // --- lembretes ---------------------------------------------------------------------
+
+  async function submitReminders(selected: OnboardingReminderKey[]) {
+    setPending(true);
+    setError(null);
+    try {
+      const existing = new Set((await remindersApi.list()).map((r) => r.kind));
+      const inputs = onboardingReminderInputs(selected, shownGoals?.weeklyWorkouts ?? 3).filter(
+        (i) => i.kind && !existing.has(i.kind),
+      );
+      for (const input of inputs) await remindersApi.create(input);
+      void qc.invalidateQueries({ queryKey: ['reminders'] });
+      setPending(false);
+      await advance({});
+    } catch (err) {
+      setError(errorText(err));
+      setPending(false);
+    }
+  }
+
+  // --- notificações e saúde ------------------------------------------------------------
+
+  async function enableNotifications() {
+    setPending(true);
+    await enablePush(true).catch(() => 'unavailable');
+    setPending(false);
+    await advance({});
+  }
+
+  async function connectHealth() {
+    setPending(true);
+    await health.requestAccess().catch(() => false);
+    setPending(false);
+    await advance({});
+  }
+
+  // --- código ---------------------------------------------------------------------
+
+  const [lookup, setLookup] = useState<CodeLookup>({ code: '', status: 'idle' });
+  const [found, setFound] = useState<GroupPreview | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const lookupSeq = useRef(0);
+
+  const onCode = (raw: string) => {
+    const code = raw.replace(/\s/g, '').toUpperCase().slice(0, 32);
+    const seq = ++lookupSeq.current;
+    setFound(null);
+    if (code.length < 3) {
+      setLookup({ code, status: 'idle' });
+      return;
+    }
+    setLookup({ code, status: 'searching' });
+    groupsApi
+      .previewBySlug(normalizeCommunityCode(code))
+      .then((g) => {
+        if (seq !== lookupSeq.current) return;
+        setFound(g);
+        setLookup({ code, status: 'found', groupName: g.name });
+      })
+      .catch((err: unknown) => {
+        if (seq !== lookupSeq.current) return;
+        setLookup({
+          code,
+          status: err instanceof ApiError && err.isNotFound ? 'not-found' : 'error',
+        });
+      });
+  };
+
+  async function joinByCode(consent: JoinConsent) {
+    if (!found) return;
+    setPending(true);
+    setError(null);
+    try {
+      await groupsApi.join(found.slug, consent);
+    } catch (err) {
+      if (!alreadyMemberGroupId(err)) {
+        setError(
+          err instanceof ApiError && err.isConflict
+            ? err.message
+            : 'Não deu para entrar agora. Tente de novo.',
+        );
+        setPending(false);
+        return;
+      }
+    }
+    setJoining(false);
+    setPending(false);
+    await qc.invalidateQueries({ queryKey: ['community'] });
+    await qc.invalidateQueries({ queryKey: ['billing', 'plan'] });
+    await advance({}, 'code');
+  }
+
+  // --- IA ---------------------------------------------------------------------------
+
+  const [photoPhase, setPhotoPhase] = useState<'idle' | 'scanning' | 'done'>('idle');
+  const [recognition, setRecognition] = useState<MealRecognition | null>(null);
+
+  async function testPhoto() {
+    setError(null);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      setError('Para testar, o Fatia precisa da câmera.');
+      return;
+    }
+    const shot = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 0.6,
+      exif: false,
+    });
+    const base64 = shot.canceled ? null : shot.assets?.[0]?.base64;
+    if (!base64) return;
+    setPhotoPhase('scanning');
+    try {
+      const rec = await nutritionApi.recognizeMealPhoto(base64);
+      setRecognition(rec);
+      setPhotoPhase(rec.itens.length > 0 ? 'done' : 'idle');
+      if (rec.itens.length === 0) setError('Nenhum alimento reconhecido. Tente outra foto.');
+    } catch (err) {
+      setError(errorText(err));
+      setPhotoPhase('idle');
+    }
+  }
+
+  async function savePhotoMeal() {
+    if (!recognition) return;
+    setPending(true);
+    try {
+      const now = new Date();
+      await nutritionApi.createMeal({
+        mealType: mealTypeForTime(now),
+        eatenAt: now.toISOString(),
+        items: photoTestMealItems(recognition),
+      });
+      void qc.invalidateQueries({ queryKey: ['nutrition'] });
+      setPending(false);
+      await advance({});
+    } catch (err) {
+      setError(errorText(err));
+      setPending(false);
+    }
+  }
+
+  // O preço do teste vem da loja (RevenueCat), nunca fixo: o pacote anual, ou o mensal.
+  const packages = useQuery({
+    queryKey: ['billing', 'store-packages', me.data?.id],
+    queryFn: async (): Promise<PurchasesPackage[]> => {
+      await storeLogIn(me.data!.id);
+      return proPackages();
     },
+    enabled: step === 'ai' && ctx.aiVariant === 'trial' && Boolean(me.data?.id),
+    staleTime: Infinity,
   });
+  const trialPackage =
+    packages.data?.find((p) => p.packageType === 'ANNUAL') ?? packages.data?.[0] ?? null;
 
-  const pular = useMutation({ mutationFn: () => usersApi.skipOnboarding(), onSuccess: concluir });
+  async function startTrial() {
+    if (!trialPackage) return;
+    setPending(true);
+    setError(null);
+    try {
+      const bought = await purchasePackage(trialPackage);
+      if (bought) {
+        await billingApi.revenueCatSync().catch(() => undefined);
+        void qc.invalidateQueries({ queryKey: ['billing', 'plan'] });
+      }
+      setPending(false);
+      if (bought) await advance({});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não deu para começar o teste agora.');
+      setPending(false);
+    }
+  }
 
-  if (!logado || !corpo) {
+  // --- desenho ---------------------------------------------------------------------
+
+  if (!ready || !step || !body) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <LoadingState label="" />
+        <LoadingState label="Carregando…" />
       </View>
     );
   }
 
-  const avancar = () => {
-    if (passo === 1) {
-      const r = corpoValido();
-      if (!r.ok) {
-        setErrosDoCorpo(r.errors);
-        return;
+  const nav: StepNav = {
+    segment: progressSegment(step),
+    onBack: previousOnboardingStep(ctx, step) || redo ? back : null,
+    onSkip: isSkippableStep(step) ? () => void advance({}) : null,
+  };
+  const inviteData = invite.data ?? null;
+  const communityName = inviteData?.group.name ?? activeGroups[0]?.name ?? null;
+
+  let screen: React.ReactNode;
+  switch (step) {
+    case 'welcome':
+      screen = inviteData ? (
+        <WelcomeStep
+          groupName={inviteData.group.name}
+          team={inviteData.team}
+          sponsored={inviteData.group.type === 'SPONSORED'}
+          activeChallenge={inviteData.activeChallenge}
+          segment={nav.segment}
+          onContinue={() => void advance({})}
+        />
+      ) : null;
+      break;
+    case 'share':
+      screen = inviteData ? (
+        <ShareStep
+          nav={nav}
+          team={inviteData.team}
+          required={inviteData.requiredSharingScopes}
+          pending={pending}
+          error={error}
+          onAccept={(c) => void acceptInvite(c)}
+          onDecline={() => void declineInvite()}
+        />
+      ) : null;
+      break;
+    case 'objective':
+      screen = (
+        <ObjectiveStep
+          nav={nav}
+          value={objective}
+          onChange={setObjective}
+          onContinue={() => objective && void advance({ objective })}
+        />
+      );
+      break;
+    case 'body':
+      screen = (
+        <BodyStep
+          nav={nav}
+          value={body}
+          error={error}
+          onChange={setBody}
+          onContinue={() => {
+            const parsed = parsedBody();
+            if (!parsed?.ok) {
+              setError(Object.values(parsed?.errors ?? {})[0] ?? 'Confira os dados.');
+              return;
+            }
+            void advance(parsed.body);
+          }}
+        />
+      );
+      break;
+    case 'activity':
+      screen = (
+        <ActivityStep
+          nav={nav}
+          value={activity}
+          pending={pending}
+          error={error}
+          onChange={setActivity}
+          onContinue={() => void submitActivity()}
+          resumed={
+            resumedAt === 'activity' ? (
+              <ResumeNote title={RESUME_NOTE.title} body={RESUME_NOTE.body} />
+            ) : undefined
+          }
+        />
+      );
+      break;
+    case 'goals':
+      screen = shownGoals ? (
+        <GoalsStep
+          nav={nav}
+          goals={shownGoals}
+          tdee={shownTdee}
+          team={progress.data?.teamSuggestion ?? null}
+          source={goalSource}
+          pending={pending}
+          error={error}
+          onShift={(d) => setGoals(goalsRangeShift(shownGoals, d))}
+          onWorkouts={(n) => setGoals({ ...shownGoals, weeklyWorkouts: n })}
+          onSource={(s) => {
+            setGoalSource(s);
+            if (!redo)
+              void onboardingApi
+                .save({ step: 'goals', goals: shownGoals, goalSource: s })
+                .catch(() => undefined);
+          }}
+          onContinue={() => void submitGoals()}
+        />
+      ) : (
+        <LoadingState label="Calculando…" />
+      );
+      break;
+    case 'reminders':
+      screen = (
+        <RemindersStep
+          nav={nav}
+          weeklyWorkouts={shownGoals?.weeklyWorkouts ?? 3}
+          pending={pending}
+          error={error}
+          onContinue={(sel) => void submitReminders(sel)}
+        />
+      );
+      break;
+    case 'notifications':
+      screen = (
+        <NotificationsStep
+          nav={nav}
+          communityName={communityName}
+          pending={pending}
+          onEnable={() => void enableNotifications()}
+          onLater={() => void advance({})}
+        />
+      );
+      break;
+    case 'health':
+      screen = (
+        <HealthStep
+          nav={nav}
+          sourceName={health.name}
+          pending={pending}
+          onConnect={() => void connectHealth()}
+          onLater={() => void advance({})}
+        />
+      );
+      break;
+    case 'code':
+      screen =
+        joining && found ? (
+          <ShareStep
+            nav={{ ...nav, onBack: () => setJoining(false) }}
+            team={found.team}
+            required={found.requiredSharingScopes}
+            pending={pending}
+            error={error}
+            onAccept={(c) => void joinByCode(c)}
+            onDecline={() => setJoining(false)}
+            declineLabel="Voltar"
+          />
+        ) : (
+          <CodeStep
+            nav={nav}
+            lookup={lookup}
+            onCode={onCode}
+            onScan={() => setScanning(true)}
+            onJoin={() => setJoining(true)}
+            onNoCode={() => void advance({})}
+          />
+        );
+      break;
+    case 'ai':
+      if (ctx.aiVariant === 'community') {
+        screen = (
+          <AiCommunityStep
+            nav={nav}
+            groupName={plan.data?.groupName ?? communityName ?? 'sua comunidade'}
+            phase={photoPhase}
+            result={recognition ? photoTestSummary(recognition) : null}
+            error={error}
+            saving={pending}
+            onTest={() => void testPhoto()}
+            onSave={() => void savePhotoMeal()}
+            onLater={() => void advance({})}
+            onOtherCode={() => setStep('code')}
+          />
+        );
+      } else {
+        screen = (
+          <AiTrialStep
+            nav={nav}
+            terms={
+              trialPackage
+                ? trialTerms({
+                    price: trialPackage.product.priceString,
+                    interval: trialPackage.packageType === 'ANNUAL' ? 'YEARLY' : 'MONTHLY',
+                    today: new Date(),
+                    channel: 'store',
+                  })
+                : null
+            }
+            pending={pending}
+            error={error ?? (packages.isError ? 'A loja não respondeu agora.' : null)}
+            onStart={() => void startTrial()}
+            onLater={() => void advance({})}
+            onLegal={openLegal}
+          />
+        );
       }
-      setErrosDoCorpo({});
-    }
-    if (passo === 2) {
-      sugerir.mutate();
-      return;
-    }
-    setPasso((p) => p + 1);
-  };
-
-  const usarMetas = () => {
-    const r = goalsFromForm(metas!);
-    if (!r.ok) {
-      setErrosDasMetas(r.errors);
-      return;
-    }
-    setErrosDasMetas({});
-    salvar.mutate(r.goals);
-  };
-
-  const podeAvancar =
-    (passo === 0 && objetivo !== null) || passo === 1 || (passo === 2 && atividade !== null);
-  const erro = sugerir.error ?? salvar.error ?? pular.error;
+      break;
+    default:
+      screen = null;
+  }
 
   return (
     <View className="flex-1 bg-background">
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+          paddingHorizontal: 20,
+        }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="gap-6 px-5">
-          <View className="gap-4">
-            <View className="flex-row items-center gap-2">
-              {passo > 0 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Voltar"
-                  onPress={() => setPasso((p) => p - 1)}
-                  className="h-11 w-11 items-center justify-center rounded-full"
-                >
-                  <ChevronLeft size={22} color={colors.mutedForeground} />
-                </Pressable>
-              ) : (
-                <View className="h-11 w-11" />
-              )}
-              <View
-                accessibilityRole="progressbar"
-                accessibilityLabel={`Passo ${passo + 1} de ${ONBOARDING_STEPS.length}`}
-                className="flex-1 flex-row gap-1.5"
-              >
-                {ONBOARDING_STEPS.map((s, i) => (
-                  <View
-                    key={s.key}
-                    className={`h-1.5 flex-1 rounded-full ${i <= passo ? 'bg-primary' : 'bg-secondary'}`}
-                  />
-                ))}
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => (redo ? router.back() : pular.mutate())}
-                disabled={pular.isPending}
-                className="min-h-11 justify-center px-3"
-              >
-                <Text className="text-sm font-semibold text-muted-foreground">
-                  {redo ? 'Cancelar' : 'Pular por agora'}
-                </Text>
-              </Pressable>
-            </View>
-            <Text accessibilityRole="header" className="text-2xl font-extrabold text-foreground">
-              {ONBOARDING_STEPS[passo].title}
-            </Text>
-          </View>
-
-          {passo === 0 ? (
-            <Escolhas opcoes={OBJECTIVE_OPTIONS} valor={objetivo} onChange={setObjetivo} />
-          ) : null}
-          {passo === 1 ? (
-            <PassoDoCorpo corpo={corpo} erros={errosDoCorpo} onChange={setCorpo} />
-          ) : null}
-          {passo === 2 ? (
-            <Escolhas opcoes={ACTIVITY_OPTIONS} valor={atividade} onChange={setAtividade} />
-          ) : null}
-          {passo === 3 && sugestao && metas ? (
-            <PassoDasMetas
-              sugestao={sugestao}
-              metas={metas}
-              erros={errosDasMetas}
-              onChange={setMetas}
-            />
-          ) : null}
-
-          {erro ? (
-            <Text accessibilityRole="alert" className="text-sm text-destructive">
-              {mensagemDeErro(erro)}
-            </Text>
-          ) : null}
-
-          {passo < 3 ? (
-            <Button
-              size="lg"
-              onPress={avancar}
-              disabled={!podeAvancar || sugerir.isPending}
-              loading={sugerir.isPending}
-            >
-              {passo === 2 ? 'Calcular minhas metas' : 'Continuar'}
-            </Button>
-          ) : (
-            <Button
-              size="lg"
-              onPress={usarMetas}
-              disabled={salvar.isPending}
-              loading={salvar.isPending}
-            >
-              Usar estas metas
-            </Button>
-          )}
-        </View>
+        {screen}
       </ScrollView>
-    </View>
-  );
-}
-
-function Escolhas<T extends string>({
-  opcoes,
-  valor,
-  onChange,
-}: {
-  opcoes: { value: T; label: string; description: string }[];
-  valor: T | null;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <View accessibilityRole="radiogroup" className="gap-3">
-      {opcoes.map((o) => {
-        const marcado = o.value === valor;
-        return (
-          <Pressable
-            key={o.value}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: marcado }}
-            accessibilityLabel={`${o.label}. ${o.description}`}
-            onPress={() => onChange(o.value)}
-            className={`gap-1 rounded-2xl border bg-card px-4 py-4 ${marcado ? 'border-primary' : 'border-border'}`}
-          >
-            <Text className="text-base font-bold text-foreground">{o.label}</Text>
-            <Text className="text-sm text-muted-foreground">{o.description}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function Campo({ rotulo, erro, children }: { rotulo: string; erro?: string; children: ReactNode }) {
-  return (
-    <View className="flex-1 gap-1.5">
-      <Label>{rotulo}</Label>
-      {children}
-      {erro ? <Text className="text-xs text-destructive">{erro}</Text> : null}
-    </View>
-  );
-}
-
-function PassoDoCorpo({
-  corpo,
-  erros,
-  onChange,
-}: {
-  corpo: BodyForm;
-  erros: BodyErrors;
-  onChange: (c: BodyForm) => void;
-}) {
-  const alterar = (patch: Partial<BodyForm>) => onChange({ ...corpo, ...patch });
-  return (
-    <View className="gap-5">
-      <Text className="text-sm text-muted-foreground">
-        Usados só para estimar quanto o seu corpo gasta. Ninguém mais vê.
-      </Text>
-      <View className="gap-2">
-        <Label>Sexo biológico</Label>
-        <View accessibilityRole="radiogroup" className="flex-row gap-3">
-          {SEX_OPTIONS.map((o) => (
-            <Pressable
-              key={o.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: corpo.sex === o.value }}
-              onPress={() => alterar({ sex: o.value })}
-              className={`h-12 flex-1 items-center justify-center rounded-xl border bg-card ${corpo.sex === o.value ? 'border-primary' : 'border-border'}`}
-            >
-              <Text className="text-sm font-semibold text-foreground">{o.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        {erros.sex ? <Text className="text-xs text-destructive">{erros.sex}</Text> : null}
-      </View>
-      <Campo rotulo="Data de nascimento" erro={erros.birthDate}>
-        <Input
-          accessibilityLabel="Data de nascimento"
-          placeholder="DD/MM/AAAA"
-          keyboardType="number-pad"
-          value={corpo.birthDate}
-          onChangeText={(t) => alterar({ birthDate: maskBrDate(t) })}
-        />
-      </Campo>
-      <View className="flex-row gap-3">
-        <Campo rotulo="Altura (cm)" erro={erros.heightCm}>
-          <Input
-            accessibilityLabel="Altura (cm)"
-            keyboardType="decimal-pad"
-            value={corpo.heightCm}
-            onChangeText={(t) => alterar({ heightCm: t })}
-          />
-        </Campo>
-        <Campo rotulo="Peso (kg)" erro={erros.weightKg}>
-          <Input
-            accessibilityLabel="Peso (kg)"
-            keyboardType="decimal-pad"
-            value={corpo.weightKg}
-            onChangeText={(t) => alterar({ weightKg: t })}
-          />
-        </Campo>
-      </View>
-    </View>
-  );
-}
-
-function PassoDasMetas({
-  sugestao,
-  metas,
-  erros,
-  onChange,
-}: {
-  sugestao: GoalSuggestion;
-  metas: GoalsForm;
-  erros: GoalsErrors;
-  onChange: (m: GoalsForm) => void;
-}) {
-  const campo = (chave: keyof GoalsForm, rotulo: string, nome = rotulo) => (
-    <Campo rotulo={rotulo} erro={erros[chave]}>
-      <Input
-        accessibilityLabel={nome}
-        keyboardType="number-pad"
-        value={metas[chave]}
-        onChangeText={(t) => onChange({ ...metas, [chave]: t })}
+      <QrScanModal
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onCode={(code) => {
+          setScanning(false);
+          onCode(code);
+        }}
       />
-    </Campo>
-  );
-  return (
-    <View className="gap-5">
-      <View className="gap-2 rounded-2xl border border-border bg-card p-4">
-        <Text className="text-xs font-bold text-muted-foreground">SEU GASTO ESTIMADO</Text>
-        <Text className="text-3xl font-extrabold text-foreground">
-          {kcal(sugestao.tdee)} <Text className="text-base font-semibold">kcal/dia</Text>
-        </Text>
-        <Text className="text-sm text-muted-foreground">
-          Para o seu objetivo, a sugestão é em torno de {kcal(sugestao.targetKcal)} kcal. É um ponto
-          de partida: ajuste o que quiser, e reveja daqui a umas semanas.
-        </Text>
-      </View>
-      {GOAL_RANGES.map((r) => (
-        <View key={r.min} className="gap-2">
-          <Text accessibilityRole="header" className="text-sm font-semibold text-foreground">
-            {r.label} ({r.unit} por dia)
-          </Text>
-          <View className="flex-row gap-3">
-            {campo(r.min, 'Mínimo', `${r.label}: mínimo`)}
-            {campo(r.max, 'Máximo', `${r.label}: máximo`)}
-          </View>
-        </View>
-      ))}
-      <View className="gap-2">
-        <Text accessibilityRole="header" className="text-sm font-semibold text-foreground">
-          Atividade e hidratação
-        </Text>
-        <View className="flex-row gap-3">
-          {GOAL_SINGLES.map((s) => (
-            <View key={s.key} className="flex-1">
-              {campo(s.key, s.label)}
-            </View>
-          ))}
-        </View>
-      </View>
     </View>
   );
 }
