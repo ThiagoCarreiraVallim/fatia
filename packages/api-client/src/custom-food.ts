@@ -120,6 +120,7 @@ export function customFoodFromForm(form: CustomFoodForm): CustomFoodParse {
   const nutrientValues: Record<string, number> = {};
   const nutrientErrors: Record<string, string> = {};
   for (const [key, text] of Object.entries(form.nutrients ?? {})) {
+    if (!NUTRIENT_KEY.test(key)) continue;
     const value = parseAmount(text);
     if (value === null) continue;
     if (Number.isNaN(value)) nutrientErrors[key] = NOT_A_NUMBER;
@@ -272,6 +273,9 @@ function fieldFromKey(key: string): MicronutrientField {
  * pessoa primeiro** (as metas da #376), depois os do rótulo, depois o que já
  * estiver preenchido (edição de um alimento com cálcio, por exemplo). Sem repetir.
  */
+/** O formato que a API aceita em `Food.nutrients`. Metas antigas podem não seguir. */
+const NUTRIENT_KEY = /^[a-z0-9_]{1,40}$/;
+
 export function micronutrientFields(
   targets: ReadonlyArray<{ nutrientKey: string; label: string; unit: string }>,
   filled: Readonly<Record<string, string>>,
@@ -279,7 +283,8 @@ export function micronutrientFields(
   const fields: MicronutrientField[] = [];
   const seen = new Set<string>();
   const push = (field: MicronutrientField) => {
-    if (seen.has(field.key)) return;
+    // Chave fora do formato (meta gravada antes da normalização) faria o salvar dar 400.
+    if (seen.has(field.key) || !NUTRIENT_KEY.test(field.key)) return;
     seen.add(field.key);
     fields.push(field);
   };

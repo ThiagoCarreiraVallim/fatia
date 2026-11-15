@@ -118,6 +118,8 @@ export function FoodSearchDrawer({
   // O alimento escolhido veio do código de barras (um alimento seu, vinculado).
   const [pickedByBarcode, setPickedByBarcode] = useState(false);
   const [savedOnly, setSavedOnly] = useState<string | null>(null);
+  // O cadastro aberto pelo leitor: o item que ele registrar entra com origem BARCODE.
+  const [createFromScan, setCreateFromScan] = useState(false);
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
   const [createdMealId, setCreatedMealId] = useState<string | null>(null);
@@ -151,6 +153,7 @@ export function FoodSearchDrawer({
       setCreateInitial(emptyCustomFoodForm());
       setPickedByBarcode(false);
       setSavedOnly(null);
+      setCreateFromScan(false);
       setManualNutrients({});
       setCreatedMealId(null);
       setAdded([]);
@@ -261,16 +264,19 @@ export function FoodSearchDrawer({
       qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
       qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
       setMode('search');
-      if (register) pick(food);
+      // Cadastrado a partir do leitor (rótulo ou código não achado): o item tem a
+      // origem do código, como no app.
+      if (register) pick(food, createFromScan);
       else setSavedOnly(food.name);
     },
   });
 
-  const startCreateWith = (initial: CustomFoodValues) => {
+  const startCreateWith = (initial: CustomFoodValues, fromScan = false) => {
     addItem.reset();
     createFood.reset();
     setSavedOnly(null);
     setCreateInitial(initial);
+    setCreateFromScan(fromScan);
     setMode('create');
   };
   const startCreate = (name: string) => startCreateWith(emptyCustomFoodForm(name));
@@ -385,12 +391,14 @@ export function FoodSearchDrawer({
             adding={addItem.isPending}
             addError={addError}
             addedCount={added.length}
-            onCreateManually={(barcode) => startCreateWith({ ...emptyCustomFoodForm(), barcode })}
+            onCreateManually={(barcode) =>
+              startCreateWith({ ...emptyCustomFoodForm(), barcode }, true)
+            }
             onPickOwn={(food) => {
               setMode('search');
               pick(food, true);
             }}
-            onLabelRead={startCreateWith}
+            onLabelRead={(form) => startCreateWith(form, true)}
             onBack={() => setMode('search')}
           />
         ) : mode === 'create' ? (

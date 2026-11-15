@@ -246,6 +246,19 @@ describe('campos de micronutriente', () => {
     ]);
   });
 
+  it('meta antiga com chave fora do formato não aparece: o salvar daria 400', () => {
+    const fields = micronutrientFields(
+      [{ nutrientKey: 'Vitamina-C', label: 'Vitamina C', unit: 'mg' }],
+      {},
+    );
+    expect(fields.map((f) => f.key)).not.toContain('Vitamina-C');
+  });
+
+  it('chave fora do formato no formulário não vai à API', () => {
+    const parsed = customFoodFromForm(rotulo({ nutrients: { 'Vitamina-C': '30', fiber_g: '4' } }));
+    expect(parsed.ok && parsed.input.nutrients).toEqual({ fiber_g: 10 });
+  });
+
   it('nutriente já preenchido fora da lista aparece, e sai do "adicionar outro"', () => {
     const fields = micronutrientFields([], { calcium_mg: '120' });
     expect(fields.map((f) => f.key)).toContain('calcium_mg');

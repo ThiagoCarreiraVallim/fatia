@@ -1028,6 +1028,31 @@ describe('FoodSearchDrawer', () => {
       vi.unstubAllGlobals();
     });
 
+    it('cadastrado a partir do código lido, "Salvar e registrar" registra com origem do código', async () => {
+      lookupBarcode.mockRejectedValue(new ApiError('Barcode not found', 404));
+      createCustomFood.mockResolvedValue(
+        food(901, 'Biscoito da vó', { source: 'CUSTOM', portions: [] }),
+      );
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.type(screen.getByLabelText('Digitar o código'), '7891000100103');
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+      await user.click(await screen.findByRole('button', { name: 'Cadastrar à mão' }));
+      await user.type(screen.getByLabelText('Nome'), 'Biscoito da vó');
+      await user.click(screen.getByRole('radio', { name: 'Por 100 g' }));
+      await user.type(screen.getByLabelText('Calorias (kcal)'), '450');
+      await user.click(screen.getByRole('button', { name: 'Salvar e registrar' }));
+      await user.click(await screen.findByRole('button', { name: /^adicionar/i }));
+
+      await waitFor(() => expect(createMeal).toHaveBeenCalledTimes(1));
+      expect(createMeal.mock.calls[0][0].items).toEqual([
+        { foodId: 901, grams: 100, source: 'BARCODE' },
+      ]);
+    });
+
     it('rótulo no Free mostra o caminho do PRO, sem tentar ler', async () => {
       photoRecognitionStatus.mockResolvedValue({
         available: true,
