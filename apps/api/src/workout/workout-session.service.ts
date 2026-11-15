@@ -21,7 +21,7 @@ const SESSION_INCLUDE = {
   plan: {
     include: {
       exercises: {
-        include: { exercise: true },
+        include: { exercise: true, sets: { orderBy: { order: 'asc' } } },
         orderBy: { order: 'asc' },
       },
     },
@@ -30,13 +30,42 @@ const SESSION_INCLUDE = {
 
 type SessionWithRelations = Prisma.WorkoutSessionGetPayload<{ include: typeof SESSION_INCLUDE }>;
 
+/**
+ * O que o plano manda fazer, como a sessão lê (#378). Além de séries e faixa,
+ * leva a configuração do exercício para a tela da sessão (#377) usar o
+ * descanso, a técnica, a carga inicial, o bi-set e a meta de cardio.
+ *
+ * `planExerciseId` identifica a linha: o mesmo exercício pode estar duas vezes
+ * no plano, e `exerciseId` sozinho não diz qual.
+ */
 export interface PlannedExerciseView {
+  planExerciseId: string;
   exerciseId: number;
   exerciseName: string;
   muscleGroup: string;
   order: number;
   targetSets: number;
   targetReps: string;
+  repUnit: 'REPS' | 'SECONDS';
+  loadMode: 'WEIGHT' | 'BODYWEIGHT';
+  startLoadKg: number | null;
+  /** Nulo = o descanso padrão da sessão. */
+  restSeconds: number | null;
+  technique: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
+  /** Já falso no último exercício: não há próximo com quem fazer o bi-set. */
+  biSetWithNext: boolean;
+  notes: string | null;
+  cardioTarget: 'TIME' | 'DISTANCE' | null;
+  cardioDurationSeconds: number | null;
+  cardioDistanceMeters: number | null;
+  cardioIntensity: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  /** Série por série; vazia = `targetSets` séries iguais. */
+  sets: Array<{
+    order: number;
+    kind: 'WARMUP' | 'NORMAL' | 'DROP';
+    reps: number;
+    loadKg: number | null;
+  }>;
 }
 
 @Injectable()
@@ -198,18 +227,28 @@ export class WorkoutSessionService {
     // web, MCP e o resumo do fim leem a mesma lista, e o progresso "3/5
     // exercícios" contaria o removido como pendente para sempre.
     const removed = new Set(session.removedExerciseIds ?? []);
-    const plannedExercises: PlannedExerciseView[] = plan
-      ? plan.exercises
-          .filter((pe) => !removed.has(pe.exerciseId))
-          .map((pe) => ({
-            exerciseId: pe.exerciseId,
-            exerciseName: pe.exercise.name,
-            muscleGroup: pe.exercise.muscleGroup,
-            order: pe.order,
-            targetSets: pe.targetSets,
-            targetReps: pe.targetReps,
-          }))
-      : [];
+    const kept = plan ? plan.exercises.filter((pe) => !removed.has(pe.exerciseId)) : [];
+    const plannedExercises: PlannedExerciseView[] = kept.map((pe, i) => ({
+      planExerciseId: pe.id,
+      exerciseId: pe.exerciseId,
+      exerciseName: pe.exercise.name,
+      muscleGroup: pe.exercise.muscleGroup,
+      order: pe.order,
+      targetSets: pe.targetSets,
+      targetReps: pe.targetReps,
+      repUnit: pe.repUnit,
+      loadMode: pe.loadMode,
+      startLoadKg: pe.startLoadKg,
+      restSeconds: pe.restSeconds,
+      technique: pe.technique,
+      biSetWithNext: pe.biSetWithNext && i < kept.length - 1,
+      notes: pe.notes,
+      cardioTarget: pe.cardioTarget,
+      cardioDurationSeconds: pe.cardioDurationSeconds,
+      cardioDistanceMeters: pe.cardioDistanceMeters,
+      cardioIntensity: pe.cardioIntensity,
+      sets: pe.sets.map((s) => ({ order: s.order, kind: s.kind, reps: s.reps, loadKg: s.loadKg })),
+    }));
     return { ...rest, plannedExercises };
   }
 

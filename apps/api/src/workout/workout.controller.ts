@@ -23,6 +23,7 @@ import { MuscleSummaryService } from './muscle-summary.service';
 import { CreateTrainingBlockDto } from './dto/training-block.dto';
 import {
   AddPlanExerciseDto,
+  AddPlanExercisesDto,
   CreatePlanDto,
   ReorderExercisesDto,
   UpdatePlanDto,
@@ -79,6 +80,27 @@ export class WorkoutController {
   @Get('exercises')
   searchExercises(@CurrentUser() user: CurrentUserPayload, @Query() q: SearchExercisesDto) {
     return this.exercises.search(user.id, q);
+  }
+
+  /** A aba Favoritos do "Adicionar exercício" (#378) — antes de `exercises/:id`. */
+  @Get('exercises/favorites')
+  listFavoriteExercises(@CurrentUser() user: CurrentUserPayload) {
+    return this.exercises.listFavorites(user.id);
+  }
+
+  @Put('exercises/:id/favorite')
+  @HttpCode(204)
+  favoriteExercise(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.exercises.setFavorite(user.id, id, true);
+  }
+
+  @Delete('exercises/:id/favorite')
+  @HttpCode(204)
+  unfavoriteExercise(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.exercises.setFavorite(user.id, id, false);
   }
 
   @Get('exercises/:id')
@@ -156,6 +178,16 @@ export class WorkoutController {
     @Body() dto: AddPlanExerciseDto,
   ) {
     return this.plans.addExercise(user.id, planId, dto);
+  }
+
+  /** Seleção múltipla (Al-T8): vários exercícios no fim do plano, numa escrita só. */
+  @Post('plans/:planId/exercises/batch')
+  addPlanExercises(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Body() dto: AddPlanExercisesDto,
+  ) {
+    return this.plans.addExercises(user.id, planId, dto);
   }
 
   @Patch('plans/:planId/exercises/:id')

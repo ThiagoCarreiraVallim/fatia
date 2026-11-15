@@ -79,6 +79,7 @@ describe('WorkoutSessionService', () => {
             targetSets: 3,
             targetReps: '10',
             exercise: { name: `Ex ${exerciseId}`, muscleGroup: 'costas' },
+            sets: [],
           })),
         },
       });
@@ -132,6 +133,7 @@ describe('WorkoutSessionService', () => {
               targetSets: 4,
               targetReps: '8-12',
               exercise: { id: 10, name: 'Supino', muscleGroup: 'CHEST' },
+              sets: [],
             },
             {
               exerciseId: 11,
@@ -139,6 +141,7 @@ describe('WorkoutSessionService', () => {
               targetSets: 3,
               targetReps: '10',
               exercise: { id: 11, name: 'Esteira', muscleGroup: 'CARDIO' },
+              sets: [],
             },
           ],
         },
@@ -146,7 +149,7 @@ describe('WorkoutSessionService', () => {
 
       const result = await service.findById(userId, 'sess-1');
 
-      expect(result.plannedExercises).toEqual([
+      expect(result.plannedExercises).toMatchObject([
         {
           exerciseId: 10,
           exerciseName: 'Supino',
@@ -207,6 +210,7 @@ describe('WorkoutSessionService', () => {
               targetSets: 3,
               targetReps: '5',
               exercise: { id: 7, name: 'Agachamento', muscleGroup: 'LEGS' },
+              sets: [],
             },
           ],
         },
@@ -214,7 +218,7 @@ describe('WorkoutSessionService', () => {
 
       const result = await service.findActive(userId);
 
-      expect(result?.plannedExercises).toEqual([
+      expect(result?.plannedExercises).toMatchObject([
         {
           exerciseId: 7,
           exerciseName: 'Agachamento',
@@ -340,6 +344,7 @@ describe('WorkoutSessionService', () => {
             targetSets: 3,
             targetReps: '10',
             exercise: { name: `Ex ${exerciseId}`, muscleGroup: 'peito' },
+            sets: [],
           })),
         },
       });

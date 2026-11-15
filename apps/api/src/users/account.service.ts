@@ -104,6 +104,7 @@ export class AccountService {
       mealTemplates,
       nutritionPlans,
       customExercises,
+      favoriteExercises,
       workoutPlans,
       workoutSessions,
       weightLogs,
@@ -197,9 +198,25 @@ export class AccountService {
         where: { createdByUserId: userId },
         orderBy: { name: 'asc' },
       }),
+      // Favoritos de exercício (#378), com o nome pelo mesmo motivo do favorito de alimento.
+      this.prisma.favoriteExercise.findMany({
+        where: { userId },
+        select: { exerciseId: true, exercise: { select: { name: true } }, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // A linha do plano leva a configuração inteira (descanso, técnica, carga
+      // inicial, meta de cardio, bi-set) e a série por série (#378).
       this.prisma.workoutPlan.findMany({
         where: { userId },
-        include: { exercises: { include: { exercise: { select: { id: true, name: true } } } } },
+        include: {
+          exercises: {
+            include: {
+              exercise: { select: { id: true, name: true } },
+              sets: { orderBy: { order: 'asc' } },
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.workoutSession.findMany({
@@ -556,6 +573,7 @@ export class AccountService {
       mealTemplates,
       nutritionPlans,
       customExercises,
+      favoriteExercises,
       workoutPlans,
       workoutSessions,
       weightLogs,
@@ -617,6 +635,7 @@ export class AccountService {
         nutritionPlans: nutritionPlans.length,
         nutritionSwaps: nutritionPlans.reduce((n, plan) => n + plan.swaps.length, 0),
         customExercises: customExercises.length,
+        favoriteExercises: favoriteExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,
         weightLogs: weightLogs.length,

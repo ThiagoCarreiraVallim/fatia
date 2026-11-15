@@ -15,6 +15,7 @@ type MockPrisma = {
   sessionSet: { count: jest.Mock };
   groupMembership: { findMany: jest.Mock };
   groupExerciseGuide: { findMany: jest.Mock };
+  favoriteExercise: { findMany: jest.Mock; count: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -31,6 +32,11 @@ const makePrisma = (): MockPrisma => ({
   // teste de integração (`group-exercises.integration.spec.ts`).
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
   groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
+  // Sem favoritos (#378): os casos com favorito estão em `plan-exercise-config.integration.spec.ts`.
+  favoriteExercise: {
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+  },
 });
 
 const makeExercise = (overrides: Partial<Record<string, unknown>> = {}) => ({

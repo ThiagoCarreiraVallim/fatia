@@ -818,6 +818,74 @@ describe('isolamento entre usuários', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    describe('planos e favoritos de exercício (#378)', () => {
+      it('add_exercise_to_plan em lote recusa o exercício pessoal de outro, no plano próprio, sem gravar', async () => {
+        const planB = await plans.create(owned.userB, { name: 'lote-do-b' });
+        await expect(
+          plans.addExercises(owned.userB, planB.id, {
+            exercises: [
+              { exerciseId: owned.sharedExerciseId },
+              { exerciseId: owned.customExerciseId },
+            ],
+          }),
+        ).rejects.toThrow(NotFoundException);
+        await expect(
+          plans.addExercise(owned.userB, planB.id, { exerciseId: owned.customExerciseId }),
+        ).rejects.toThrow(NotFoundException);
+        expect(await prisma.workoutPlanExercise.count({ where: { planId: planB.id } })).toBe(0);
+        await plans.delete(owned.userB, planB.id);
+      });
+
+      it('update_plan_exercise e remove recusam a linha do plano de outro com o plano próprio na URL', async () => {
+        const planB = await plans.create(owned.userB, { name: 'url-do-b' });
+        await expect(
+          plans.updatePlanExercise(owned.userB, planB.id, owned.planExerciseId, {
+            restSeconds: 5,
+            sets: [{ reps: 1 }],
+          }),
+        ).rejects.toThrow(NotFoundException);
+        await expect(
+          plans.removeExercise(owned.userB, planB.id, owned.planExerciseId),
+        ).rejects.toThrow(NotFoundException);
+        const alvo = await prisma.workoutPlanExercise.findUnique({
+          where: { id: owned.planExerciseId },
+          include: { sets: true },
+        });
+        expect(alvo?.restSeconds).toBeNull();
+        expect(alvo?.sets).toHaveLength(0);
+        await plans.delete(owned.userB, planB.id);
+      });
+
+      it('set_exercise_favorite recusa o exercício pessoal de outro', async () => {
+        await expect(
+          exercises.setFavorite(owned.userB, owned.customExerciseId, true),
+        ).rejects.toThrow(NotFoundException);
+        expect(
+          await prisma.favoriteExercise.count({ where: { exerciseId: owned.customExerciseId } }),
+        ).toBe(0);
+      });
+
+      it('o favorito do user-A não aparece para o user-B (lista, busca e detalhe)', async () => {
+        await exercises.setFavorite(owned.userA, owned.sharedExerciseId, true);
+        try {
+          expect(await exercises.listFavorites(owned.userB)).toEqual([]);
+          expect(await exercises.search(owned.userB, { favoritesOnly: true })).toEqual([]);
+          expect((await exercises.getWithMedia(owned.userB, owned.sharedExerciseId)).favorite).toBe(
+            false,
+          );
+          // Desmarcar como B não mexe no favorito de A.
+          await exercises.setFavorite(owned.userB, owned.sharedExerciseId, false);
+          expect(
+            await prisma.favoriteExercise.count({
+              where: { userId: owned.userA, exerciseId: owned.sharedExerciseId },
+            }),
+          ).toBe(1);
+        } finally {
+          await exercises.setFavorite(owned.userA, owned.sharedExerciseId, false);
+        }
+      });
+    });
+
     it('finish_workout_session recusa', async () => {
       await expect(sessions.finish(owned.userB, owned.sessionId, {})).rejects.toThrow(
         NotFoundException,

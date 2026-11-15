@@ -26,6 +26,7 @@ const makePrisma = () => ({
   conversation: { findMany: jest.fn().mockResolvedValue([]) },
   userMemory: { findMany: jest.fn().mockResolvedValue([]) },
   favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
+  favoriteExercise: { findMany: jest.fn().mockResolvedValue([]) },
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   nutritionPlan: { findMany: jest.fn().mockResolvedValue([]) },
@@ -75,6 +76,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // Plano alimentar recebido da equipe (#376): é do aluno, com as trocas e o "comi isso".
   nutritionPlans: 'nutritionPlans',
   customExercises: 'customExercises',
+  // Favoritos de exercício (#378): o atalho que a pessoa marcou no Como fazer.
+  favoriteExercises: 'favoriteExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
   trainingBlocks: 'trainingBlocks',
@@ -204,6 +207,7 @@ describe('AccountService', () => {
         'stepLog',
         'waterLog',
         'favoriteFood',
+        'favoriteExercise',
         'inboxNotice',
         'reminder',
         'nutritionPlan',

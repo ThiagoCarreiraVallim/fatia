@@ -99,4 +99,10 @@ export class SearchExercisesDto {
   @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
   @IsBoolean()
   onlyMyGym?: boolean;
+
+  /** Só os favoritos da pessoa (#378, aba Favoritos do Al-T8). */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  @IsBoolean()
+  favoritesOnly?: boolean;
 }

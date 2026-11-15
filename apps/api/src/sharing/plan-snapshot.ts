@@ -1,6 +1,21 @@
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import { muscleGroupSchema, muscleListSchema } from '../workout/helpers/muscle-group';
+import {
+  CARDIO_INTENSITIES,
+  CARDIO_TARGETS,
+  LOAD_MODES,
+  MAX_CARDIO_DISTANCE_METERS,
+  MAX_CARDIO_DURATION_SECONDS,
+  MAX_LOAD_KG,
+  MAX_PLAN_NOTES,
+  MAX_PLAN_SETS,
+  MAX_REST_SECONDS,
+  MAX_SET_REPS,
+  PLAN_SET_KINDS,
+  REP_UNITS,
+  TECHNIQUES,
+} from '../workout/helpers/plan-exercise-config';
 
 /**
  * Formato congelado de um plano de treino para atravessar contas (ADR 014).
@@ -72,6 +87,30 @@ const prescricao = {
   order: z.number().int().min(0).max(INT4_MAX),
   targetSets: z.number().int().min(1).max(INT4_MAX),
   targetReps: z.string().max(20),
+  // Configuração do exercício (#378). Opcionais dentro da v1: o retrato antigo
+  // continua válido e adota como antes (descanso no padrão, técnica normal).
+  // Os limites são os de `PlanExerciseConfigDto`, pela mesma razão acima.
+  repUnit: z.enum(REP_UNITS).optional(),
+  loadMode: z.enum(LOAD_MODES).optional(),
+  startLoadKg: z.number().min(0).max(MAX_LOAD_KG).optional(),
+  restSeconds: z.number().int().min(0).max(MAX_REST_SECONDS).optional(),
+  technique: z.enum(TECHNIQUES).optional(),
+  biSetWithNext: z.boolean().optional(),
+  notes: z.string().max(MAX_PLAN_NOTES).optional(),
+  cardioTarget: z.enum(CARDIO_TARGETS).optional(),
+  cardioDurationSeconds: z.number().int().min(1).max(MAX_CARDIO_DURATION_SECONDS).optional(),
+  cardioDistanceMeters: z.number().min(1).max(MAX_CARDIO_DISTANCE_METERS).optional(),
+  cardioIntensity: z.enum(CARDIO_INTENSITIES).optional(),
+  sets: z
+    .array(
+      z.object({
+        kind: z.enum(PLAN_SET_KINDS),
+        reps: z.number().int().min(1).max(MAX_SET_REPS),
+        loadKg: z.number().min(0).max(MAX_LOAD_KG).optional(),
+      }),
+    )
+    .max(MAX_PLAN_SETS)
+    .optional(),
 } as const;
 
 /**
@@ -128,49 +167,22 @@ const itemSchema = z.discriminatedUnion('source', [
   }),
 ]);
 
-export const planSnapshotSchema = z
-  .object({
-    version: z.literal(PLAN_SNAPSHOT_VERSION),
-    // Sem mínimo: `CreatePlanDto` é `@MaxLength(100)` sem `@MinLength`. Exigir
-    // título aqui seria política de publicação — e ela pertence à rota que
-    // publica, não ao formato congelado que atravessa contas.
-    name: z.string().max(100),
-    // O teto de exercícios é a outra regra deliberadamente mais estrita do que
-    // a escrita, e existe pela adoção: é ele que impede um `Json` forjado de
-    // virar um plano de 10 mil linhas. Quem esbarra nele é o autor, na
-    // publicação, com o plano na frente e um exercício a menos como conserto.
-    exercises: z.array(itemSchema).min(1).max(MAX_EXERCICIOS_NO_SNAPSHOT),
-  })
-  .superRefine((snap, ctx) => {
-    // `WorkoutPlanExercise` tem `@@unique([planId, exerciseId])`. Sem esta
-    // conferência, snapshot com o exercício repetido só falharia no `create`,
-    // depois de já ter criado o exercício custom do adotante — sobra sujeira e
-    // a mensagem sai como erro de banco.
-    //
-    // A chave do custom é o nome **cru**, exatamente o que `copyCustomExercise` usa no
-    // `findFirst` e o que o `@@unique([name, createdByUserId])` do Postgres
-    // compara — e o Postgres é case-sensitive. Normalizar aqui
-    // (`trim().toLowerCase()`) reprovava um plano legítimo: "Prancha" e
-    // "prancha" são duas linhas que o autor pode ter, viram dois ids diferentes
-    // na adoção e não colidem em `@@unique([planId, exerciseId])`.
-    const vistos = new Set<string>();
-    snap.exercises.forEach((item, i) => {
-      const chave =
-        item.source === 'catalog'
-          ? `catalog:${item.catalogExerciseId}`
-          : item.source === 'group'
-            ? `group:${item.groupExerciseId}`
-            : `custom:${item.exercise.name}`;
-      if (vistos.has(chave)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['exercises', i],
-          message: 'o mesmo exercício aparece duas vezes no plano',
-        });
-      }
-      vistos.add(chave);
-    });
-  });
+export const planSnapshotSchema = z.object({
+  version: z.literal(PLAN_SNAPSHOT_VERSION),
+  // Sem mínimo: `CreatePlanDto` é `@MaxLength(100)` sem `@MinLength`. Exigir
+  // título aqui seria política de publicação — e ela pertence à rota que
+  // publica, não ao formato congelado que atravessa contas.
+  name: z.string().max(100),
+  // O teto de exercícios é a outra regra deliberadamente mais estrita do que
+  // a escrita, e existe pela adoção: é ele que impede um `Json` forjado de
+  // virar um plano de 10 mil linhas. Quem esbarra nele é o autor, na
+  // publicação, com o plano na frente e um exercício a menos como conserto.
+  //
+  // O mesmo exercício pode aparecer mais de uma vez (#378): a linha do plano
+  // é identificada pela posição, não pelo exercício. Até a #378 o retrato
+  // recusava a repetição por causa do único (planId, exerciseId), que saiu.
+  exercises: z.array(itemSchema).min(1).max(MAX_EXERCICIOS_NO_SNAPSHOT),
+});
 
 export type PlanSnapshot = z.infer<typeof planSnapshotSchema>;
 
@@ -185,6 +197,22 @@ export type PlanoParaCongelar = {
     order: number;
     targetSets: number;
     targetReps: string;
+    repUnit?: (typeof REP_UNITS)[number];
+    loadMode?: (typeof LOAD_MODES)[number];
+    startLoadKg?: number | null;
+    restSeconds?: number | null;
+    technique?: (typeof TECHNIQUES)[number];
+    biSetWithNext?: boolean;
+    notes?: string | null;
+    cardioTarget?: (typeof CARDIO_TARGETS)[number] | null;
+    cardioDurationSeconds?: number | null;
+    cardioDistanceMeters?: number | null;
+    cardioIntensity?: (typeof CARDIO_INTENSITIES)[number] | null;
+    sets?: ReadonlyArray<{
+      kind: (typeof PLAN_SET_KINDS)[number];
+      reps: number;
+      loadKg: number | null;
+    }>;
     exercise: {
       id: number;
       name: string;
@@ -235,6 +263,26 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar, groupId?: string): P
       order: item.order,
       targetSets: item.targetSets,
       targetReps: item.targetReps,
+      // Só o que difere do padrão viaja: o retrato fica do tamanho de antes
+      // para o plano que não usa a configuração nova.
+      ...semVazios({
+        repUnit: item.repUnit === 'SECONDS' ? item.repUnit : null,
+        loadMode: item.loadMode === 'BODYWEIGHT' ? item.loadMode : null,
+        startLoadKg: item.startLoadKg ?? null,
+        restSeconds: item.restSeconds ?? null,
+        technique: item.technique && item.technique !== 'NORMAL' ? item.technique : null,
+        biSetWithNext: item.biSetWithNext ? true : null,
+        notes: item.notes ?? null,
+        cardioTarget: item.cardioTarget ?? null,
+        cardioDurationSeconds: item.cardioDurationSeconds ?? null,
+        cardioDistanceMeters: item.cardioDistanceMeters ?? null,
+        cardioIntensity: item.cardioIntensity ?? null,
+        sets: (item.sets ?? []).map((st) => ({
+          kind: st.kind,
+          reps: st.reps,
+          ...(st.loadKg !== null ? { loadKg: st.loadKg } : {}),
+        })),
+      }),
     };
     if (item.exercise.groupOwned) {
       if (groupId && item.exercise.groupId === groupId) {

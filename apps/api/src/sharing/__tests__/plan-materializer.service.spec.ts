@@ -311,7 +311,7 @@ describe('PlanMaterializerService.materialize', () => {
     expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });
 
-  it('recusa o exercício repetido antes de criar qualquer coisa', async () => {
+  it('aceita o exercício custom repetido (#378) e copia a definição uma vez só', async () => {
     const repetido = {
       version: PLAN_SNAPSHOT_VERSION,
       name: 'Plano repetido',
@@ -333,13 +333,19 @@ describe('PlanMaterializerService.materialize', () => {
       ],
     };
 
-    await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
-    // Sem esta checagem, a primeira cópia já teria sido criada quando o
-    // `create` do plano falhasse com P2002.
-    expect(exercises.createCustom).not.toHaveBeenCalled();
+    // Até a #378 o único (planId, exerciseId) obrigava a recusar. Agora a
+    // linha do plano é identificada pela posição, e a segunda cópia reaproveita
+    // o exercício que a primeira acabou de criar.
+    const plano = (await service.materialize(ADOTANTE, repetido)) as unknown as {
+      data: { exercises: { create: Array<{ exerciseId: number; order: number }> } };
+    };
+    const linhas = plano.data.exercises.create;
+    expect(linhas).toHaveLength(2);
+    expect(linhas[0].exerciseId).toBe(linhas[1].exerciseId);
+    expect(exercises.createCustom).toHaveBeenCalledTimes(1);
   });
 
-  it('recusa o exercício de CATÁLOGO repetido, em vez de deixar o P2002 virar 500', async () => {
+  it('aceita o exercício de CATÁLOGO repetido (#378): duas linhas, o mesmo id', async () => {
     // O ramo `catalog:` do dedupe não tinha teste: `assertCatalogExercises` faz
     // `new Set(ids)` antes da query, então um id repetido atravessa a
     // pré-passada inteira e só morre no `create`, em
@@ -367,8 +373,10 @@ describe('PlanMaterializerService.materialize', () => {
       ],
     };
 
-    await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
-    expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
+    const plano = (await service.materialize(ADOTANTE, repetido)) as unknown as {
+      data: { exercises: { create: Array<{ exerciseId: number }> } };
+    };
+    expect(plano.data.exercises.create.map((l) => l.exerciseId)).toEqual([SUPINO.id, SUPINO.id]);
   });
 
   it('aceita dois customs que só diferem por caixa — o `@@unique` do Postgres é case-sensitive', async () => {
@@ -610,9 +618,10 @@ describe('buildPlanSnapshot', () => {
       expect(buildPlanSnapshot(planoCom({ targetReps: '' })).exercises[0].targetReps).toBe('');
     });
 
-    it('`targetSets` acima de 50, que o REST aceita por não ter teto', () => {
-      // A tool MCP corta em 20, o `AddPlanExerciseDto` é `@Min(1)` sem `@Max`.
-      // O teto do snapshot é o da coluna (`Int` = int4), não um número redondo.
+    it('`targetSets` acima de 50: o REST passou a cortar (#378), o plano gravado antes continua publicável', () => {
+      // A tool MCP corta em 20 e, desde a #378, o `AddPlanExerciseDto` em 50.
+      // Plano gravado antes do teto pode ter mais, e o snapshot não pode
+      // reprová-lo: o teto do snapshot segue o da coluna (`Int` = int4).
       expect(
         problemasDoDto(AddPlanExerciseDto, {
           exerciseId: 1,
@@ -620,7 +629,7 @@ describe('buildPlanSnapshot', () => {
           targetSets: 60,
           targetReps: '10',
         }),
-      ).toEqual([]);
+      ).not.toEqual([]);
 
       expect(buildPlanSnapshot(planoCom({ targetSets: 60 })).exercises[0].targetSets).toBe(60);
     });

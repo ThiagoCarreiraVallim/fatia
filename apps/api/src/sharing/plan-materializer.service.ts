@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
@@ -11,8 +12,45 @@ import {
 } from './plan-snapshot';
 
 const PLAN_INCLUDE = {
-  exercises: { include: { exercise: true }, orderBy: { order: 'asc' as const } },
+  exercises: {
+    include: { exercise: true, sets: { orderBy: { order: 'asc' as const } } },
+    orderBy: { order: 'asc' as const },
+  },
 } as const;
+
+type SnapshotItem = PlanSnapshot['exercises'][number];
+
+/** Os campos de configuração do item (#378), sem a origem do exercício. */
+function configOf(item: SnapshotItem) {
+  const {
+    repUnit,
+    loadMode,
+    startLoadKg,
+    restSeconds,
+    technique,
+    biSetWithNext,
+    notes,
+    cardioTarget,
+    cardioDurationSeconds,
+    cardioDistanceMeters,
+    cardioIntensity,
+    sets,
+  } = item;
+  return {
+    repUnit,
+    loadMode,
+    startLoadKg,
+    restSeconds,
+    technique,
+    biSetWithNext,
+    notes,
+    cardioTarget,
+    cardioDurationSeconds,
+    cardioDistanceMeters,
+    cardioIntensity,
+    sets,
+  };
+}
 
 /**
  * A **única** máquina de materialização de plano entre contas (ADR 014).
@@ -76,23 +114,35 @@ export class PlanMaterializerService {
     await this.assertCatalogExercises(snap);
     await this.assertGroupExercises(snap, groupId);
 
-    const exercises: Array<{
-      exerciseId: number;
-      order: number;
-      targetSets: number;
-      targetReps: string;
-    }> = [];
+    const exercises: Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput[] = [];
     for (const item of snap.exercises) {
+      const exerciseId =
+        item.source === 'catalog'
+          ? item.catalogExerciseId
+          : item.source === 'group'
+            ? item.groupExerciseId
+            : await this.copyCustomExercise(userId, item.exercise);
+      // A configuração do exercício (#378) viaja junto; a série por série
+      // entra aninhada, na mesma escrita do plano.
+      const { sets, ...config } = configOf(item);
       exercises.push({
-        exerciseId:
-          item.source === 'catalog'
-            ? item.catalogExerciseId
-            : item.source === 'group'
-              ? item.groupExerciseId
-              : await this.copyCustomExercise(userId, item.exercise),
+        exerciseId,
         order: item.order,
         targetSets: item.targetSets,
         targetReps: item.targetReps,
+        ...config,
+        ...(sets?.length
+          ? {
+              sets: {
+                create: sets.map((st, i) => ({
+                  order: i + 1,
+                  kind: st.kind,
+                  reps: st.reps,
+                  loadKg: st.loadKg ?? null,
+                })),
+              },
+            }
+          : {}),
       });
     }
 

@@ -31,6 +31,8 @@ export interface CommunityGuideSummary {
 export type ExerciseListItem = Exercise & {
   /** A comunidade que destaca este exercício (é dela ou tem tutorial dela). */
   communityName: string | null;
+  /** A pessoa marcou como favorito (#378). */
+  favorite: boolean;
 };
 
 /** As comunidades ativas da pessoa, na ordem em que ela entrou, e o que elas destacam. */
@@ -75,7 +77,10 @@ export class ExerciseService {
   async search(userId: string, params: SearchExercisesDto): Promise<ExerciseListItem[]> {
     const limit = Math.min(params.limit ?? 20, 50);
     const term = params.q ? normalizeSearchText(params.q) : '';
-    const ctx = await this.communityContext(userId);
+    const [ctx, favoriteIds] = await Promise.all([
+      this.communityContext(userId),
+      this.favoriteIds(userId),
+    ]);
 
     const where: Prisma.ExerciseWhereInput = {
       AND: [
@@ -84,42 +89,98 @@ export class ExerciseService {
         ...(term ? [{ searchName: { contains: term } }] : []),
         ...(params.muscleGroup ? [{ muscleGroup: params.muscleGroup }] : []),
         ...(params.onlyMyGym && ctx.groupIds.length ? [this.myGymFilter(ctx)] : []),
+        ...(params.favoritesOnly ? [{ id: { in: [...favoriteIds] } }] : []),
       ],
     };
-    const destaque = [...ctx.featured.keys()];
     const marcar = (ex: Exercise): ExerciseListItem => ({
       ...ex,
       communityName: ctx.featured.get(ex.id) ?? null,
+      favorite: favoriteIds.has(ex.id),
     });
+    // Favoritos primeiro (#378), depois o que a comunidade destaca, depois o resto.
+    const faixa = (ex: { id: number }) =>
+      favoriteIds.has(ex.id) ? 0 : ctx.featured.has(ex.id) ? 1 : 2;
 
     if (term) {
       const matches = await this.prisma.exercise.findMany({ where, orderBy: { name: 'asc' } });
-      const primeiro = matches.filter((ex) => ctx.featured.has(ex.id));
-      const resto = matches.filter((ex) => !ctx.featured.has(ex.id));
-      return [
-        ...rankByRelevance(primeiro, term, (ex) => ex.name, limit),
-        ...rankByRelevance(resto, term, (ex) => ex.name, limit),
-      ]
+      return [0, 1, 2]
+        .flatMap((f) =>
+          rankByRelevance(
+            matches.filter((ex) => faixa(ex) === f),
+            term,
+            (ex) => ex.name,
+            limit,
+          ),
+        )
         .slice(0, limit)
         .map(marcar);
     }
 
-    const primeiro = destaque.length
-      ? await this.prisma.exercise.findMany({
-          where: { AND: [where, { id: { in: destaque } }] },
+    const favoritos = [...favoriteIds];
+    const destaque = [...ctx.featured.keys()].filter((id) => !favoriteIds.has(id));
+    const primeiros = [...favoritos, ...destaque];
+    // Cada faixa é uma consulta com `take`: sem termo não há ranqueamento, e a
+    // ordem alfabética dentro da faixa basta.
+    const grupos: Array<Prisma.ExerciseWhereInput | null> = [
+      favoritos.length ? { AND: [where, { id: { in: favoritos } }] } : null,
+      destaque.length ? { AND: [where, { id: { in: destaque } }] } : null,
+      primeiros.length ? { AND: [where, { id: { notIn: primeiros } }] } : where,
+    ];
+    const out: Exercise[] = [];
+    for (const grupo of grupos) {
+      if (!grupo || out.length >= limit) continue;
+      out.push(
+        ...(await this.prisma.exercise.findMany({
+          where: grupo,
           orderBy: { name: 'asc' },
-          take: limit,
-        })
-      : [];
-    const resto =
-      primeiro.length < limit
-        ? await this.prisma.exercise.findMany({
-            where: destaque.length ? { AND: [where, { id: { notIn: destaque } }] } : where,
-            orderBy: { name: 'asc' },
-            take: limit - primeiro.length,
-          })
-        : [];
-    return [...primeiro, ...resto].map(marcar);
+          take: limit - out.length,
+        })),
+      );
+    }
+    return out.map(marcar);
+  }
+
+  /** Os exercícios que a pessoa marcou (só os dela — o `userId` é o filtro). */
+  private async favoriteIds(userId: string): Promise<Set<number>> {
+    const rows = await this.prisma.favoriteExercise.findMany({
+      where: { userId },
+      select: { exerciseId: true },
+    });
+    return new Set(rows.map((r) => r.exerciseId));
+  }
+
+  /**
+   * Favorito de exercício (#378), espelho de `FoodShortcutsService.setFavorite`.
+   * Idempotente nos dois sentidos: marcar duas vezes (ou dois toques ao mesmo
+   * tempo) e desmarcar o que não existe não erram. Só se favorita o que se
+   * enxerga: o exercício pessoal de outra conta responde 404, como na busca.
+   */
+  async setFavorite(userId: string, exerciseId: number, favorite: boolean): Promise<void> {
+    if (!favorite) {
+      await this.prisma.favoriteExercise.deleteMany({ where: { userId, exerciseId } });
+      return;
+    }
+    await this.findReadable(userId, exerciseId);
+    try {
+      await this.prisma.favoriteExercise.upsert({
+        where: { userId_exerciseId: { userId, exerciseId } },
+        create: { userId, exerciseId },
+        update: {},
+      });
+    } catch (err) {
+      // Duas marcações ao mesmo tempo: a outra já gravou, que é o que se queria.
+      if ((err as { code?: string })?.code !== 'P2002') throw err;
+    }
+  }
+
+  /** A aba Favoritos (Al-T8): os mais recentes primeiro, só o que a pessoa ainda enxerga. */
+  async listFavorites(userId: string): Promise<ExerciseListItem[]> {
+    const rows = await this.prisma.favoriteExercise.findMany({
+      where: { userId, exercise: readableExercises(userId) },
+      include: { exercise: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => ({ ...r.exercise, communityName: null, favorite: true }));
   }
 
   async listByMuscle(userId: string, muscleGroup: string) {
@@ -135,6 +196,7 @@ export class ExerciseService {
     const guia = await this.guideRow(userId, ex);
     return {
       ...ex,
+      favorite: await this.isFavorite(userId, id),
       community: guia
         ? {
             groupName: guia.groupName,
@@ -143,7 +205,7 @@ export class ExerciseService {
             photoCount: guia.photos.length,
           }
         : null,
-    } satisfies Exercise & { community: CommunityGuideSummary | null };
+    } satisfies Exercise & { favorite: boolean; community: CommunityGuideSummary | null };
   }
 
   /** Para as telas: o tutorial da comunidade com as URLs assinadas do vídeo e das fotos. */
@@ -160,7 +222,12 @@ export class ExerciseService {
         photos: this.media ? await Promise.all(guia.photos.map((f) => this.media!.view(f))) : [],
       };
     }
-    return { ...ex, community };
+    return { ...ex, favorite: await this.isFavorite(userId, id), community };
+  }
+
+  private async isFavorite(userId: string, exerciseId: number): Promise<boolean> {
+    const n = await this.prisma.favoriteExercise.count({ where: { userId, exerciseId } });
+    return n > 0;
   }
 
   private async findReadable(userId: string, id: number): Promise<Exercise> {
