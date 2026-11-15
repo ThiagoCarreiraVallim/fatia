@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
-import { routeInfo } from '@fatia/api-client';
+import { hasTopBar, routeInfo } from '@fatia/api-client';
 
 /**
  * Barra de topo como no iOS: "voltar" e o título pequeno de onde a pessoa está.
@@ -83,9 +83,10 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
   const pathname = usePathname();
   const ctx = useTopBarContext();
   const info = routeInfo(pathname);
-  if (info.parent === null) return null;
+  if (!hasTopBar(pathname)) return null;
+  const parent = info.parent;
   const title = ctx?.title ?? info.title;
-  const label = `Voltar para ${info.parentTitle}`;
+  const label = `Voltar para ${info.parentTitle ?? ''}`;
   const backClass =
     'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -94,20 +95,25 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
       <div
         className={`mx-auto flex h-14 w-full items-center gap-1 px-2 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}
       >
-        <Link
-          href={info.parent}
-          aria-label={label}
-          className={backClass}
-          onClick={(e) => {
-            const intercept = ctx?.back;
-            if (intercept) {
-              e.preventDefault();
-              intercept();
-            }
-          }}
-        >
-          <ChevronLeft size={26} aria-hidden />
-        </Link>
+        {parent !== null ? (
+          <Link
+            href={parent}
+            aria-label={label}
+            className={backClass}
+            onClick={(e) => {
+              const intercept = ctx?.back;
+              if (intercept) {
+                e.preventDefault();
+                intercept();
+              }
+            }}
+          >
+            <ChevronLeft size={26} aria-hidden />
+          </Link>
+        ) : (
+          // Aba raiz (ADR 040): tela de ver, sem seta de voltar.
+          <span aria-hidden className="w-3 shrink-0" />
+        )}
         <h1 className="min-w-0 flex-1 truncate text-[17px] font-semibold text-foreground">
           {title}
         </h1>

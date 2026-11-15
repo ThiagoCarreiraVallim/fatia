@@ -7,6 +7,7 @@ import {
   menuSections,
   navBarMode,
   routeInfo,
+  hasTopBar,
 } from '../navigation';
 
 const hrefs = (s: ReturnType<typeof menuSections>) => s.flatMap((x) => x.items.map((i) => i.href));
@@ -173,8 +174,8 @@ describe('navegação', () => {
     });
 
     it.each([
-      ['/nutrition', 'Nutrição', '/', 'Hoje'],
-      ['/you', 'Você', '/', 'Hoje'],
+      ['/nutrition', 'Nutrição', null, null],
+      ['/you', 'Você', null, null],
       ['/profile', 'Perfil', '/you', 'Você'],
       ['/progress', 'Progresso', '/you', 'Você'],
       ['/goals', 'Metas pessoais', '/you', 'Você'],
@@ -206,17 +207,38 @@ describe('navegação', () => {
       expect(routeInfo('/desconhecida/a/b').parent).toBe('/');
     });
 
-    it('voltar sempre chega ao Hoje, sem ciclo', () => {
+    it('voltar sempre chega a uma aba raiz, sem ciclo', () => {
       for (const r of ROUTES) {
         let path: string | null = r.pattern.replace(/:\w+/g, 'x');
         const visitados = new Set<string>();
-        while (path !== null && path !== '/') {
+        let last = path;
+        while (path !== null) {
           expect(visitados.has(path)).toBe(false);
           visitados.add(path);
+          last = path;
           path = routeInfo(path).parent;
         }
-        expect(path).toBe('/');
+        expect(['/', '/nutrition', '/workout', '/community', '/you']).toContain(last);
       }
     });
+  });
+});
+
+describe('abas raiz', () => {
+  it('as 5 abas são telas de ver: sem seta de voltar', () => {
+    for (const tab of ['/', '/nutrition', '/workout', '/community', '/you']) {
+      expect(routeInfo(tab).parent, tab).toBeNull();
+    }
+  });
+
+  it('só o Hoje fica sem barra de topo: as outras abas têm título e ações', () => {
+    expect(hasTopBar('/')).toBe(false);
+    expect(hasTopBar('/workout')).toBe(true);
+    expect(hasTopBar('/workout/plans')).toBe(true);
+  });
+
+  it('o que fica dentro de uma aba volta para ela', () => {
+    expect(routeInfo('/workout/plans').parent).toBe('/workout');
+    expect(routeInfo('/nutrition/foods').parent).toBe('/nutrition');
   });
 });

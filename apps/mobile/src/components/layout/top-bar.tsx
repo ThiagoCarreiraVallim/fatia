@@ -4,15 +4,15 @@ import { Text } from '@/components/ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { routeInfo } from '@fatia/api-client';
+import { hasTopBar, routeInfo } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 
 /** Altura da barra de topo, sem a área segura. `Screen` reserva o mesmo. */
 export const TOP_BAR_HEIGHT = 52;
 
-/** Se a tela atual tem barra de topo: todas menos o Início, que é a raiz. */
+/** Se a tela atual tem barra de topo: todas menos o Hoje, que tem cabeçalho próprio. */
 export function useTopBarVisible(): boolean {
-  return routeInfo(usePathname()).parent !== null;
+  return hasTopBar(usePathname());
 }
 
 /**
@@ -41,9 +41,10 @@ export function TopBar({
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const info = routeInfo(usePathname());
+  const pathname = usePathname();
+  const info = routeInfo(pathname);
 
-  if (info.parent === null) return null;
+  if (!hasTopBar(pathname)) return null;
   const parent = info.parent;
 
   return (
@@ -52,14 +53,19 @@ export function TopBar({
       className="absolute inset-x-0 top-0 z-50 border-b border-white/5 bg-background"
     >
       <View style={{ height: TOP_BAR_HEIGHT }} className="flex-row items-center gap-1 px-2">
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel={`Voltar para ${info.parentTitle}`}
-          onPress={() => (onBack ? onBack() : router.navigate(parent))}
-          className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
-        >
-          <ChevronLeft size={26} color={colors.primaryText} />
-        </Pressable>
+        {parent !== null ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`Voltar para ${info.parentTitle ?? ''}`}
+            onPress={() => (onBack ? onBack() : router.navigate(parent))}
+            className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+          >
+            <ChevronLeft size={26} color={colors.primaryText} />
+          </Pressable>
+        ) : (
+          // Aba raiz (ADR 040): tela de ver, sem seta de voltar.
+          <View className="w-3" />
+        )}
         <Text
           accessibilityRole="header"
           numberOfLines={1}

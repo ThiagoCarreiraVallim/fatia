@@ -633,8 +633,7 @@ test('a barra leva a todas as telas, e o voltar do topo sobe até o Hoje', async
   await expect(page.getByRole('heading', { level: 1, name: 'Planos de treino' })).toBeVisible();
   await page.getByRole('link', { name: 'Voltar para Treino' }).click();
   await expect(page).toHaveURL(/\/workout$/);
-  await page.getByRole('link', { name: 'Voltar para Hoje' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Aba raiz é tela de ver (ADR 040): sem seta de voltar.
   await expect(page.getByRole('link', { name: /^Voltar para/ })).toHaveCount(0);
 });
 

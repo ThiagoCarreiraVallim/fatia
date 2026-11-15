@@ -259,7 +259,7 @@ interface RouteDef {
   /** Segmentos com `:param` para os dinâmicos. */
   pattern: string;
   title: string;
-  /** null só no Hoje. */
+  /** null nas 5 abas da barra (ADR 040): são telas de ver, sem seta de voltar. */
   parent: string | null;
 }
 
@@ -271,20 +271,20 @@ export const HOME_TITLE = 'Hoje';
  */
 export const ROUTES: readonly RouteDef[] = [
   { pattern: '/', title: HOME_TITLE, parent: null },
-  { pattern: '/nutrition', title: 'Nutrição', parent: '/' },
+  { pattern: '/nutrition', title: 'Nutrição', parent: null },
   { pattern: '/nutrition/foods', title: 'Meus alimentos', parent: '/nutrition' },
   { pattern: '/nutrition/goals', title: 'Metas do dia', parent: '/nutrition' },
   { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
   { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
   { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
-  { pattern: '/workout', title: 'Treino', parent: '/' },
+  { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
-  { pattern: '/you', title: 'Você', parent: '/' },
+  { pattern: '/you', title: 'Você', parent: null },
   { pattern: '/progress', title: 'Progresso', parent: '/you' },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
   { pattern: '/goals', title: 'Metas pessoais', parent: '/you' },
@@ -300,7 +300,7 @@ export const ROUTES: readonly RouteDef[] = [
   // Só no app: na web as memórias são uma gaveta da conversa. Antes do `:id`.
   { pattern: '/chat/memories', title: 'Memórias', parent: '/chat' },
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
-  { pattern: '/community', title: 'Comunidade', parent: '/' },
+  { pattern: '/community', title: 'Comunidade', parent: null },
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
@@ -364,6 +364,14 @@ function match(pattern: string, path: string[]): boolean {
 
 function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
+}
+
+/**
+ * Barra de topo (título e ações da tela): todas as telas menos o Hoje, que tem
+ * cabeçalho próprio. A seta de voltar é outra coisa: só aparece com `parent`.
+ */
+export function hasTopBar(pathname: string): boolean {
+  return segments(pathname).length > 0;
 }
 
 /** O caminho é de uma tela do mapa? Os `:param` casam qualquer segmento. */
