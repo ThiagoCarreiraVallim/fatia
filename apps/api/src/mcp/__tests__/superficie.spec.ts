@@ -43,10 +43,13 @@ import {
  * passa a 44, 26 delas compartilhadas).
  * A #376 acrescentou cinco tools do plano alimentar (nenhuma destrutiva), e a revisão mudou a
  * descrição de `log_plan_meal` (repetir devolve o mesmo registro): muda o braço A.
+ * A #375 acrescentou `nutrients` e `barcode` a `create_custom_food` e `update_custom_food`
+ * (nenhuma das duas é destrutiva nem de intenção, mas a de entidade é servida nos dois braços):
+ * mudam os dois.
  */
 
-const SHA_ENTIDADE = '41f3ff8317b51c953ae415d1e7959157167396230c6e7b536bc512eec37dc40d';
-const SHA_INTENCAO = 'a4eef950d1628fa4a250ec62089d20d02abde8897e1caf2ef5e4592b09c991d2';
+const SHA_ENTIDADE = '3df198db1b8e7f998ccf72bfcb2d995ad16a46d7be58f23a9c83f11e75bbb3f0';
+const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {

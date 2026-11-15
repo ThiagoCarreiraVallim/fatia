@@ -5,6 +5,7 @@ import type { AiCallUnits } from './ai-pricing';
 import {
   AgentAdapter,
   type AgentCapabilities,
+  type AgentLabel,
   type AgentMealRecognition,
   type AgentStream,
   type AgentUsage,
@@ -12,7 +13,7 @@ import {
 } from './agent.adapter';
 
 /** O que vai em `AiUsage.feature`. */
-type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo';
+type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo' | 'label_photo';
 
 /**
  * A IA hospedada, num lugar só: **portão de plano e cota → quem paga → agente →
@@ -94,6 +95,17 @@ export class HostedAiService {
     const { items, note, usage } = await this.agent.recognizeMeal(jpeg);
     await this.record(userId, payer, 'meal_photo', ...modelAndUnits(usage));
     return { items, note };
+  }
+
+  /**
+   * Foto JPEG já sem metadados da tabela nutricional → valores lidos (#375).
+   * Não grava nada: a pessoa confere e salva pelo caminho do alimento próprio.
+   */
+  async readLabel(userId: string, jpeg: Buffer): Promise<AgentLabel> {
+    const payer = await this.gate(userId);
+    const { label, usage } = await this.agent.readLabel(jpeg);
+    await this.record(userId, payer, 'label_photo', ...modelAndUnits(usage));
+    return label;
   }
 
   /**

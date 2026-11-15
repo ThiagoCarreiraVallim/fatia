@@ -21,6 +21,7 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { FoodService } from './food.service';
 import { MealRecognitionService } from './meal-recognition.service';
+import { LabelReadingService } from './label-reading.service';
 import { AiAccessService } from '../ai/ai-access.service';
 import { OffFoodService, atribuicaoDoOff } from './off-food.service';
 import { MealService } from './meal.service';
@@ -69,6 +70,20 @@ import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
 const TETO_DE_INFERENCIA = 5;
 const TETO_DE_INFERENCIA_MS = 60_000;
 
+/** O corpo `text/plain` das rotas de foto (prato e rótulo) → bytes. */
+function photoFromBody(corpo: unknown): Buffer {
+  if (typeof corpo !== 'string' || corpo.trim() === '') {
+    throw new BadRequestException('Envie a foto em base64 no corpo, com Content-Type: text/plain.');
+  }
+  // `base64` no `Buffer.from` do Node ignora caractere inválido em silêncio, e
+  // uma string truncada viraria bytes que não são JPEG — recusados adiante com
+  // uma mensagem errada. A validação explícita dá o erro certo.
+  if (!/^[A-Za-z0-9+/\s]+={0,2}$/.test(corpo)) {
+    throw new BadRequestException('O corpo não é base64 válido.');
+  }
+  return Buffer.from(corpo, 'base64');
+}
+
 @Controller('nutrition')
 export class NutritionController {
   constructor(
@@ -86,6 +101,7 @@ export class NutritionController {
     private readonly copies: MealCopyService,
     private readonly templates: MealTemplateService,
     private readonly onboarding: OnboardingService,
+    private readonly labels: LabelReadingService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -122,20 +138,21 @@ export class NutritionController {
   @UseGuards(InferenceThrottlerGuard)
   @Throttle({ default: { ttl: TETO_DE_INFERENCIA_MS, limit: TETO_DE_INFERENCIA } })
   async recognizeMealPhoto(@CurrentUser() user: CurrentUserPayload, @Body() corpo: unknown) {
-    if (typeof corpo !== 'string' || corpo.trim() === '') {
-      throw new BadRequestException(
-        'Envie a foto em base64 no corpo, com Content-Type: text/plain.',
-      );
-    }
+    return this.recognition.recognize(user.id, photoFromBody(corpo));
+  }
 
-    // `base64` no `Buffer.from` do Node ignora caractere inválido em silêncio, e
-    // uma string truncada viraria bytes que não são JPEG — recusados adiante com
-    // uma mensagem errada. A validação explícita dá o erro certo.
-    if (!/^[A-Za-z0-9+/\s]+={0,2}$/.test(corpo)) {
-      throw new BadRequestException('O corpo não é base64 válido.');
-    }
-
-    return this.recognition.recognize(user.id, Buffer.from(corpo, 'base64'));
+  /**
+   * Foto da tabela nutricional → valores para conferir (#375). **Não grava
+   * nada e não guarda a foto** (ADR 038, item 4): o alimento só nasce quando a
+   * pessoa salva o formulário (`POST foods`). Mesmo corpo, mesmo portão de plano
+   * e cota e mesmo teto de chamadas da foto do prato.
+   */
+  @Post('foods/label')
+  @HttpCode(200)
+  @UseGuards(InferenceThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_INFERENCIA_MS, limit: TETO_DE_INFERENCIA } })
+  readLabel(@CurrentUser() user: CurrentUserPayload, @Body() corpo: unknown) {
+    return this.labels.read(user.id, photoFromBody(corpo));
   }
 
   // -------- Foods --------
@@ -198,16 +215,19 @@ export class NutritionController {
   /**
    * Consulta um produto embalado pelo código de barras (#140, ADR 017).
    *
-   * Sem `@CurrentUser()` de propósito — e não por descuido: a consulta não lê
-   * nem escreve nada do usuário, e a rota continua atrás do guard global de
-   * autenticação. O que vai para o Open Food Facts é só o código escaneado.
+   * **Primeiro os alimentos próprios da pessoa** (#375): o código que ela ligou
+   * a um alimento seu (`Food.barcode`) responde `status: 'own'` sem consultar o
+   * Open Food Facts. Só os dela — o de outra conta não é achado. Fora isso, o
+   * que vai para o OFF é só o código escaneado, sem nada do usuário.
    *
-   * O resultado **não é persistido**: o cache em `Food` que a issue previa
-   * depende de colunas novas em `schema.prisma`, congelado nesta rodada. A
-   * proposta está no corpo da PR.
+   * O resultado do OFF **não é persistido** (ADR 017): só vira alimento quando a
+   * pessoa salva um alimento próprio.
    */
   @Get('foods/barcode/:code')
-  async lookupBarcode(@Param('code') code: string) {
+  async lookupBarcode(@CurrentUser() user: CurrentUserPayload, @Param('code') code: string) {
+    const own = await this.foods.findByBarcode(user.id, code);
+    if (own) return { status: 'own' as const, food: own };
+
     const resultado = await this.off.lookup(code);
 
     switch (resultado.status) {

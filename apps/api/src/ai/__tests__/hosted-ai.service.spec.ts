@@ -93,6 +93,7 @@ describe('HostedAiService — sem direito, o agente não é chamado', () => {
     turno: (s: HostedAiService) => s.openTurn(USER, turnInput),
     ditado: (s: HostedAiService) => s.transcribe(USER, Buffer.from('áudio'), 'audio/webm'),
     foto: (s: HostedAiService) => s.recognizeMeal(USER, JPEG),
+    rótulo: (s: HostedAiService) => s.readLabel(USER, JPEG),
   };
 
   it.each(Object.entries(calls))(
@@ -105,6 +106,7 @@ describe('HostedAiService — sem direito, o agente não é chamado', () => {
       expect(agent.openTurn).not.toHaveBeenCalled();
       expect(agent.transcribe).not.toHaveBeenCalled();
       expect(agent.recognizeMeal).not.toHaveBeenCalled();
+      expect(agent.readLabel).not.toHaveBeenCalled();
       expect(usage.assertDentroDaCota).not.toHaveBeenCalled();
       expect(usage.record).not.toHaveBeenCalled();
     },
@@ -157,6 +159,20 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
       ...comunidade,
       model: 'z-ai/glm-5.3-flash',
       units: { inputUnits: 1200, outputUnits: 90 },
+    });
+  });
+
+  it('rótulo (#375) sai precificado como label_photo, pago por quem tem o assento', async () => {
+    const { service, usage } = build();
+
+    await service.readLabel(USER, JPEG);
+
+    expect(usage.record).toHaveBeenCalledTimes(1);
+    expect(usage.record).toHaveBeenCalledWith(USER, {
+      feature: 'label_photo',
+      ...comunidade,
+      model: 'z-ai/glm-5.3-flash',
+      units: { inputUnits: 900, outputUnits: 60 },
     });
   });
 

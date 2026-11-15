@@ -16,6 +16,8 @@ import {
   AgentAdapter,
   AgentStreamError,
   type AgentCapabilities,
+  type AgentLabel,
+  type AgentLabelReading,
   type AgentMealRecognition,
   type AgentRecognizedItem,
   type AgentStream,
@@ -330,6 +332,33 @@ export class HttpAgentAdapter extends AgentAdapter {
       note: typeof body.note === 'string' ? body.note : null,
       usage: readUsage(body.usage),
     };
+  }
+
+  /** A tabela nutricional (#375). Mesmo transporte e mesmo silêncio de identidade da foto. */
+  async readLabel(jpeg: Buffer): Promise<AgentLabelReading> {
+    const base = this.requireBase('photo');
+    const timeout = Number(this.config.get<string>('AGENT_TIMEOUT_MS', '')) || PHOTO_TIMEOUT_MS;
+    const http = await this.send('photo', `${base}/read-label`, {
+      method: 'POST',
+      headers: {
+        ...this.keyHeader(),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ image_base64: jpeg.toString('base64'), media_type: 'image/jpeg' }),
+      signal: AbortSignal.timeout(timeout),
+    });
+
+    const body = (await http.json().catch(() => null)) as {
+      label?: unknown;
+      usage?: unknown;
+    } | null;
+    if (typeof body?.label !== 'object' || body.label === null) {
+      throw new BadGatewayException(
+        `A leitura do rótulo devolveu uma resposta inesperada. ${FEATURE_TEXT.photo.fallback}`,
+      );
+    }
+    return { label: body.label as AgentLabel, usage: readUsage(body.usage) };
   }
 
   async sendFeedback(

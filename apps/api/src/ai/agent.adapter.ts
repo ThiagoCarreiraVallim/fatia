@@ -37,6 +37,9 @@ export abstract class AgentAdapter {
   /** Foto JPEG já sem metadados → alimentos candidatos (#139). */
   abstract recognizeMeal(jpeg: Buffer): Promise<AgentMealRecognition>;
 
+  /** Foto JPEG já sem metadados da tabela nutricional → valores lidos (#375). */
+  abstract readLabel(jpeg: Buffer): Promise<AgentLabelReading>;
+
   /** O voto de uma resposta, para o trace do turno (ADR 034). **Nunca lança.** */
   abstract sendFeedback(
     runId: string,
@@ -123,3 +126,23 @@ export type AgentMealRecognition = {
   note: string | null;
   usage: AgentUsage | null;
 };
+
+/**
+ * A tabela nutricional como o modelo a leu (#375). Espelha
+ * `schemas/label_reading.py`. `per` diz a base dos números: a coluna "100 g"
+ * quando o rótulo a tem, senão a da porção. Campo ilegível vem `null`.
+ */
+export interface AgentLabel {
+  name: string | null;
+  per: 'serving' | '100g';
+  serving_grams: number | null;
+  kcal: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  sodium_mg: number | null;
+  note: string | null;
+}
+
+export type AgentLabelReading = { label: AgentLabel; usage: AgentUsage | null };

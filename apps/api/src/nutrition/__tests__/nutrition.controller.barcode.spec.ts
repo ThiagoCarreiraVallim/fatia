@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { NutritionController } from '../nutrition.controller';
 import type { OffFoodService, ResultadoDaConsulta } from '../off-food.service';
+import type { FoodService } from '../food.service';
+import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 /**
  * A tradução do resultado da consulta em status HTTP é contrato de UI, não
@@ -12,14 +14,21 @@ import type { OffFoodService, ResultadoDaConsulta } from '../off-food.service';
  * (503) pelo status, e trocar um pelo outro manda a pessoa preencher um
  * formulário inteiro só porque o Open Food Facts piscou.
  */
-function controller(resultado: ResultadoDaConsulta): {
+const USER = { id: 'user-a' } as CurrentUserPayload;
+
+function controller(
+  resultado: ResultadoDaConsulta,
+  proprio: unknown = null,
+): {
   ctrl: NutritionController;
   off: { lookup: jest.Mock };
+  foods: { findByBarcode: jest.Mock };
 } {
   const off = { lookup: jest.fn().mockResolvedValue(resultado) };
+  const foods = { findByBarcode: jest.fn().mockResolvedValue(proprio) };
   const nada = null as never;
   const ctrl = new NutritionController(
-    nada,
+    foods as unknown as FoodService,
     off as unknown as OffFoodService,
     nada,
     nada,
@@ -33,8 +42,9 @@ function controller(resultado: ResultadoDaConsulta): {
     nada,
     nada,
     nada,
+    nada,
   );
-  return { ctrl, off };
+  return { ctrl, off, foods };
 }
 
 describe('NutritionController — GET foods/barcode/:code', () => {
@@ -55,7 +65,7 @@ describe('NutritionController — GET foods/barcode/:code', () => {
       },
     });
 
-    const resposta = await ctrl.lookupBarcode('7891000100103');
+    const resposta = await ctrl.lookupBarcode(USER, '7891000100103');
 
     expect(resposta).toMatchObject({
       status: 'ok',
@@ -76,33 +86,49 @@ describe('NutritionController — GET foods/barcode/:code', () => {
       partial: { barcode: '7891910000197', basis: '100g', name: 'União Refinado' },
     });
 
-    const resposta = await ctrl.lookupBarcode('7891910000197');
+    const resposta = await ctrl.lookupBarcode(USER, '7891910000197');
 
     expect(resposta).toMatchObject({ status: 'incomplete', missing: ['proteinPer100g'] });
   });
 
   it('código não cadastrado no OFF vira 404', async () => {
     const { ctrl } = controller({ status: 'not_found' });
-    await expect(ctrl.lookupBarcode('7891962057014')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(ctrl.lookupBarcode(USER, '7891962057014')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('código malformado vira 400', async () => {
     const { ctrl } = controller({ status: 'invalid_barcode' });
-    await expect(ctrl.lookupBarcode('abc')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(ctrl.lookupBarcode(USER, 'abc')).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('OFF fora do ar vira 503, e não 404', async () => {
     // 404 aqui mandaria a pessoa cadastrar à mão um produto que o OFF conhece.
     const { ctrl } = controller({ status: 'unavailable' });
-    await expect(ctrl.lookupBarcode('7891000100103')).rejects.toBeInstanceOf(
+    await expect(ctrl.lookupBarcode(USER, '7891000100103')).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
   });
 
   it('repassa o código como veio, sem nada do usuário', async () => {
     const { ctrl, off } = controller({ status: 'not_found' });
-    await expect(ctrl.lookupBarcode('7891000100103')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(ctrl.lookupBarcode(USER, '7891000100103')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(off.lookup).toHaveBeenCalledWith('7891000100103');
     expect(off.lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it('o alimento próprio ligado ao código vem antes do OFF, que nem é consultado (#375)', async () => {
+    const meu = { id: 7, name: 'Granola da casa', barcode: '7891000100103', portions: [] };
+    const { ctrl, off, foods } = controller({ status: 'not_found' }, meu);
+
+    await expect(ctrl.lookupBarcode(USER, '7891000100103')).resolves.toEqual({
+      status: 'own',
+      food: meu,
+    });
+    expect(foods.findByBarcode).toHaveBeenCalledWith('user-a', '7891000100103');
+    expect(off.lookup).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import {
   AgentAdapter,
   type AgentCapabilities,
+  type AgentLabelReading,
   type AgentMealRecognition,
   type AgentStream,
   type AgentTitle,
@@ -34,6 +35,21 @@ export class FakeAgentAdapter extends AgentAdapter {
     items: [],
     note: null,
     usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 1200, outputUnits: 90 },
+  }));
+  readonly readLabel = jest.fn(async (_jpeg: Buffer): Promise<AgentLabelReading> => ({
+    label: {
+      name: null,
+      per: '100g',
+      serving_grams: null,
+      kcal: null,
+      protein_g: null,
+      carbs_g: null,
+      fat_g: null,
+      fiber_g: null,
+      sodium_mg: null,
+      note: null,
+    },
+    usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 900, outputUnits: 60 },
   }));
   readonly sendFeedback = jest.fn(
     async (_runId: string, _review: 'like' | 'dislike' | null, _reasons: string[]) => undefined,
