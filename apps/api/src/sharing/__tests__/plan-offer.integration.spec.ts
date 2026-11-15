@@ -441,3 +441,309 @@ describe('plano recebido da equipe (integração)', () => {
     });
   });
 });
+
+/**
+ * Revisão da #379: aceite que falha no meio, vínculo encerrado e corrida entre
+ * a resposta da pessoa e a versão nova da equipe.
+ */
+describe('plano recebido: falhas, vínculo e corrida (integração)', () => {
+  const prisma = new PrismaService();
+  const notify = jest.fn();
+  const materializer = new PlanMaterializerService(prisma, new ExerciseService(prisma));
+  const offers = new PlanOfferService(
+    prisma,
+    materializer,
+    { notify } as unknown as NotificationService,
+    new WorkoutPlanService(prisma),
+  );
+  const TZ = 'America/Sao_Paulo';
+  const today = todayInTz(TZ);
+  const stamp = `offer-r-${Date.now()}`;
+  const criados: string[] = [];
+  let groupId = '';
+  let helena = '';
+  let inferior = '';
+  let n = 0;
+
+  async function pessoa(nome: string) {
+    n += 1;
+    const user = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-${n}`,
+        email: `${stamp}-${n}@test.local`,
+        name: nome,
+        timezone: TZ,
+      },
+    });
+    criados.push(user.id);
+    return user.id;
+  }
+
+  /** Aluna da comunidade com vínculo ativo com a Helena. */
+  async function aluna(nome: string) {
+    const userId = await pessoa(nome);
+    const membership = await prisma.groupMembership.create({
+      data: { groupId, userId, role: 'MEMBER', status: 'ACTIVE' },
+    });
+    const link = await prisma.professionalLink.create({
+      data: { subjectUserId: userId, professionalId: helena, groupId, scopes: ['WORKOUT'] },
+    });
+    return { userId, membershipId: membership.id, linkId: link.id };
+  }
+
+  const revoke = (linkId: string) =>
+    prisma.professionalLink.update({
+      where: { id: linkId },
+      data: { revokedAt: new Date(), revokedReason: 'subject' },
+    });
+  const restore = (linkId: string) =>
+    prisma.professionalLink.update({
+      where: { id: linkId },
+      data: { revokedAt: null, revokedReason: null },
+    });
+
+  const statuses = async (offerId: string) =>
+    (
+      await prisma.planOfferVersion.findMany({ where: { offerId }, orderBy: { version: 'asc' } })
+    ).map((v) => v.status);
+
+  /** Versão nova gravada direto, como a equipe faria entre a leitura e a escrita da pessoa. */
+  async function versaoNova(offerId: string) {
+    const last = await prisma.planOfferVersion.findFirstOrThrow({
+      where: { offerId },
+      orderBy: { version: 'desc' },
+    });
+    await prisma.planOfferVersion.create({
+      data: {
+        offerId,
+        version: last.version + 1,
+        title: last.title,
+        snapshot: last.snapshot as object,
+        snapshotVersion: last.snapshotVersion,
+        schedule: 'FLEXIBLE',
+      },
+    });
+  }
+
+  /** A leitura da oferta volta "velha": a versão nova entra logo depois dela. */
+  function leituraVelha(offerId: string) {
+    const original = prisma.planOffer.findFirst.bind(prisma.planOffer);
+    jest.spyOn(prisma.planOffer, 'findFirst').mockImplementationOnce((async (
+      args: Parameters<typeof original>[0],
+    ) => {
+      const read = await original(args);
+      await versaoNova(offerId);
+      return read;
+    }) as never);
+  }
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    helena = await pessoa('Helena Personal');
+    const dono = await pessoa('Bruno');
+    const grupo = await prisma.group.create({
+      data: { type: 'SPONSORED', name: 'Academia Demo', slug: `${stamp}-g`, ownerId: dono },
+    });
+    groupId = grupo.id;
+    await prisma.groupMembership.createMany({
+      data: [
+        { groupId, userId: dono, role: 'OWNER', status: 'ACTIVE' },
+        { groupId, userId: helena, role: 'PROFESSIONAL', status: 'ACTIVE' },
+      ],
+    });
+    const catalogo = await prisma.exercise.findMany({
+      where: { createdByUserId: null, groupOwned: false, muscleGroup: { not: 'cardio' } },
+      take: 2,
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    const plan = await prisma.workoutPlan.create({
+      data: {
+        userId: helena,
+        name: 'Inferior',
+        exercises: {
+          create: catalogo.map((e, order) => ({
+            exerciseId: e.id,
+            order,
+            targetSets: 3,
+            targetReps: '10',
+          })),
+        },
+      },
+    });
+    inferior = plan.id;
+  });
+
+  afterAll(async () => {
+    await prisma.group.deleteMany({ where: { id: groupId } });
+    await prisma.user.deleteMany({ where: { id: { in: criados } } });
+    await prisma.$disconnect();
+  });
+
+  beforeEach(() => notify.mockClear());
+  afterEach(() => jest.restoreAllMocks());
+
+  describe('aceite que falha no meio', () => {
+    it('a agenda falha depois da cópia: a versão volta a esperar e só uma fica aceita', async () => {
+      const a = await aluna('Edu');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      await offers.accept(a.userId, sent.id, sent.versionId, TZ);
+      const v2 = await offers.update(helena, a.membershipId, sent.id, {
+        planId: inferior,
+        schedule: 'CALENDAR',
+        startDate: today,
+        weeks: 1,
+        weekdays: [1, 2, 3, 4, 5, 6, 7],
+      });
+      jest.spyOn(prisma.plannedSession, 'createMany').mockImplementationOnce(() => {
+        throw new Error('queda do banco');
+      });
+      await expect(offers.accept(a.userId, sent.id, v2.versionId, TZ)).rejects.toThrow(
+        'queda do banco',
+      );
+      expect(await statuses(sent.id)).toEqual(['ACCEPTED', 'PENDING']);
+
+      // A nova tentativa passa.
+      await offers.accept(a.userId, sent.id, v2.versionId, TZ);
+      expect(await statuses(sent.id)).toEqual(['SUPERSEDED', 'ACCEPTED']);
+    });
+
+    it('a primeira cópia falha na agenda: nenhum plano fica para trás', async () => {
+      const a = await aluna('Ivo');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'CALENDAR',
+        startDate: today,
+        weeks: 1,
+        weekdays: [1, 2, 3, 4, 5, 6, 7],
+      });
+      jest.spyOn(prisma.plannedSession, 'createMany').mockImplementationOnce(() => {
+        throw new Error('queda do banco');
+      });
+      await expect(offers.accept(a.userId, sent.id, sent.versionId, TZ)).rejects.toThrow(
+        'queda do banco',
+      );
+      expect(await statuses(sent.id)).toEqual(['PENDING']);
+      expect(await prisma.workoutPlan.count({ where: { userId: a.userId } })).toBe(0);
+    });
+
+    it('com duas versões aceitas (resto de uma falha antiga), vale a de maior número', async () => {
+      const a = await aluna('Juca');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      await offers.accept(a.userId, sent.id, sent.versionId, TZ);
+      await versaoNova(sent.id);
+      await prisma.planOfferVersion.updateMany({
+        where: { offerId: sent.id, version: 2 },
+        data: { status: 'ACCEPTED' },
+      });
+      const view = await offers.get(a.userId, sent.id);
+      expect(view.accepted).toMatchObject({ version: 2 });
+      expect(view.shown.version).toBe(2);
+      const list = await offers.list(a.userId);
+      expect(list.accepted.map((o) => o.version)).toEqual([2]);
+    });
+  });
+
+  describe('vínculo encerrado', () => {
+    it('aceitar, recusar e desfazer respondem 409, e a oferta sai da lista', async () => {
+      const a = await aluna('Fabi');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      await revoke(a.linkId);
+      await expect(offers.accept(a.userId, sent.id, sent.versionId, TZ)).rejects.toThrow(
+        new ConflictException('Esse plano não está mais disponível'),
+      );
+      await expect(offers.decline(a.userId, sent.id, sent.versionId)).rejects.toThrow(
+        new ConflictException('Esse plano não está mais disponível'),
+      );
+      expect((await offers.list(a.userId)).pending).toEqual([]);
+      expect(await statuses(sent.id)).toEqual(['PENDING']);
+      expect(await prisma.workoutPlan.count({ where: { userId: a.userId } })).toBe(0);
+
+      await restore(a.linkId);
+      expect((await offers.list(a.userId)).pending.map((o) => o.id)).toEqual([sent.id]);
+      await offers.decline(a.userId, sent.id, sent.versionId);
+      await revoke(a.linkId);
+      await expect(offers.undoDecline(a.userId, sent.id, sent.versionId)).rejects.toThrow(
+        new ConflictException('Esse plano não está mais disponível'),
+      );
+      expect(await statuses(sent.id)).toEqual(['DECLINED']);
+    });
+
+    it('vínculo com outra comunidade não vale', async () => {
+      const a = await aluna('Lia');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      const outro = await prisma.group.create({
+        data: { type: 'SPONSORED', name: 'Outra', slug: `${stamp}-o`, ownerId: helena },
+      });
+      await prisma.professionalLink.create({
+        data: { subjectUserId: a.userId, professionalId: helena, groupId: outro.id, scopes: [] },
+      });
+      await revoke(a.linkId);
+      await expect(offers.accept(a.userId, sent.id, sent.versionId, TZ)).rejects.toThrow(
+        ConflictException,
+      );
+      expect((await offers.list(a.userId)).pending).toEqual([]);
+      await prisma.group.delete({ where: { id: outro.id } });
+    });
+
+    it('vínculo encerrado durante o aceite: a profissional antiga não é avisada', async () => {
+      const a = await aluna('Gil');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      notify.mockClear();
+      const original = prisma.$transaction.bind(prisma) as (...args: unknown[]) => unknown;
+      jest.spyOn(prisma, '$transaction').mockImplementation((async (...args: unknown[]) => {
+        const result = await original(...args);
+        if (Array.isArray(args[0])) await revoke(a.linkId);
+        return result;
+      }) as never);
+      await offers.accept(a.userId, sent.id, sent.versionId, TZ);
+      expect(notify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('corrida com a versão nova', () => {
+    it('desfazer a recusa com leitura velha responde 409 e não deixa duas pendentes', async () => {
+      const a = await aluna('Hugo');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      await offers.decline(a.userId, sent.id, sent.versionId);
+      leituraVelha(sent.id);
+      await expect(offers.undoDecline(a.userId, sent.id, sent.versionId)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(await statuses(sent.id)).toEqual(['DECLINED', 'PENDING']);
+    });
+
+    it('aceitar a recusada com leitura velha responde 409 e não cria plano', async () => {
+      const a = await aluna('Nina');
+      const sent = await offers.send(helena, a.membershipId, {
+        planId: inferior,
+        schedule: 'FLEXIBLE',
+      });
+      await offers.decline(a.userId, sent.id, sent.versionId);
+      leituraVelha(sent.id);
+      await expect(offers.accept(a.userId, sent.id, sent.versionId, TZ)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(await statuses(sent.id)).toEqual(['DECLINED', 'PENDING']);
+      expect(await prisma.workoutPlan.count({ where: { userId: a.userId } })).toBe(0);
+    });
+  });
+});
