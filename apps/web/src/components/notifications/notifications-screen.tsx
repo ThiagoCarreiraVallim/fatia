@@ -73,12 +73,10 @@ export function NotificationsScreen() {
       {notificationGroups({ team }).map((group) => (
         <section key={group.title} aria-label={group.title} className="flex flex-col gap-2">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+            <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-faint">
               {group.title}
             </h2>
-            {group.detail && (
-              <span className="text-[13px] text-muted-foreground">{group.detail}</span>
-            )}
+            {group.detail && <span className="text-xs text-faint">{group.detail}</span>}
           </div>
           <ul className="divide-y divide-subtle overflow-hidden rounded-card bg-card">
             {group.items.map((item) => {
@@ -108,7 +106,7 @@ export function NotificationsScreen() {
       ))}
 
       <div className="flex flex-col gap-2 rounded-card bg-muted px-[18px] py-4">
-        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="text-xs font-bold uppercase tracking-[0.06em] text-faint">
           Avisos chegam agrupados
         </span>
         <div className="flex items-center gap-2">
@@ -123,9 +121,7 @@ export function NotificationsScreen() {
         </div>
       </div>
 
-      <p className="text-[13px] text-muted-foreground">
-        Nenhum aviso mostra dado de saúde ou o texto de um post.
-      </p>
+      <p className="text-xs text-faint">Nenhum aviso mostra dado de saúde ou o texto de um post.</p>
     </div>
   );
 }

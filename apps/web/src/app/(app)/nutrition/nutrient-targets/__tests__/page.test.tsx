@@ -74,6 +74,14 @@ describe('NutrientTargetsPage', () => {
     expect(within(row).queryByText('seu')).not.toBeInTheDocument();
   });
 
+  it('o nutriente que a pessoa já tem sai da lista de adicionar', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: 'Sódio' });
+    const form = screen.getByRole('region', { name: /Adicionar nutriente/ });
+    expect(within(form).queryByRole('button', { name: 'Sódio' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Fibra' })).toBeInTheDocument();
+  });
+
   it('nutriente que a pessoa criou leva o selo "seu"', async () => {
     nutrientTargets.mockResolvedValue([
       {

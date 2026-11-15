@@ -67,13 +67,11 @@ export default function NotificationsScreen() {
                 <View className="flex-row items-center justify-between px-1">
                   <Text
                     accessibilityRole="header"
-                    className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground"
+                    className="font-sans-bold text-xs uppercase tracking-[0.72px] text-faint"
                   >
                     {group.title}
                   </Text>
-                  {group.detail ? (
-                    <Text className="text-[13px] text-muted-foreground">{group.detail}</Text>
-                  ) : null}
+                  {group.detail ? <Text className="text-xs text-faint">{group.detail}</Text> : null}
                 </View>
                 <View className="overflow-hidden rounded-card bg-card">
                   {group.items.map((item, i) => {
@@ -106,7 +104,7 @@ export default function NotificationsScreen() {
             ))}
 
             <View className="gap-2 rounded-card bg-muted px-[18px] py-4">
-              <Text className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground">
+              <Text className="font-sans-bold text-xs uppercase tracking-[0.72px] text-faint">
                 Avisos chegam agrupados
               </Text>
               <View className="flex-row items-center gap-2">
@@ -127,7 +125,7 @@ export default function NotificationsScreen() {
               </View>
             </View>
 
-            <Text className="text-[13px] text-muted-foreground">
+            <Text className="text-xs text-faint">
               Nenhum aviso mostra dado de saúde ou o texto de um post.
             </Text>
           </>

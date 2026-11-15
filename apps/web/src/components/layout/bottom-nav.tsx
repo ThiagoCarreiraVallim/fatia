@@ -109,6 +109,8 @@ export function BottomNav() {
     'transition-[opacity,transform] [transition-duration:400ms,600ms] [transition-timing-function:ease,cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none',
     away && 'pointer-events-none translate-y-[60px] opacity-0',
   );
+  // z-40, abaixo das folhas, diálogos e menus (z-50): o fundo escuro deles
+  // cobre a barra e os botões do modal nunca ficam atrás dela.
   return (
     <>
       {workoutBar && session && !away && <ActiveWorkoutBar session={session} bottom={above} />}
@@ -121,7 +123,7 @@ export function BottomNav() {
         style={{ bottom: `calc(${NAV_BOTTOM}px + env(safe-area-inset-bottom))` }}
         inert={away || undefined}
         className={cn(
-          'fixed left-4 right-[96px] z-50 flex h-[68px] items-center gap-0.5 rounded-[22px] bg-muted/85 px-1.5 shadow-[0_0_0_1px_hsl(var(--border-subtle)),0_20px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl md:hidden',
+          'fixed left-4 right-[96px] z-40 flex h-[68px] items-center gap-0.5 rounded-[22px] bg-card/85 px-1.5 shadow-[0_0_0_1px_hsl(var(--border-subtle)),0_20px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl md:hidden',
           hide,
         )}
       >
@@ -131,7 +133,7 @@ export function BottomNav() {
       </nav>
       <div
         style={{ bottom: `calc(${NAV_BOTTOM}px + env(safe-area-inset-bottom))` }}
-        className={cn('fixed right-4 z-50 md:hidden', hide)}
+        className={cn('fixed right-4 z-40 md:hidden', hide)}
       >
         <AiFab />
       </div>
@@ -140,10 +142,17 @@ export function BottomNav() {
 }
 
 /**
- * O respiro embaixo do conteúdo: o `pb-24` do `<main>` cobre a barra; com a
- * barra do treino em andamento, mais 64 px (56 + 8) para nada ficar atrás dela.
+ * O respiro embaixo do conteúdo, para o fim da lista e o último botão nunca
+ * ficarem atrás da barra flutuante (22 + 68 px) nem do botão da IA: a altura
+ * da barra mais o `pb-8` do `<main>` dá ~32 px livres acima dela, como o
+ * `padding-bottom: 124–132px` das pranchas. Com a barra do treino em
+ * andamento, mais 66 px (56 + 10). Sem a barra (tarefas de foco) e no
+ * desktop, não ocupa nada.
  */
 export function BottomSpacer() {
-  const { workoutBar } = useBottomChrome();
-  return workoutBar ? <div aria-hidden className="h-16 md:hidden" /> : null;
+  const { visible, workoutBar } = useBottomChrome();
+  if (!visible) return null;
+  const height =
+    NAV_BOTTOM + NAV_HEIGHT + (workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0);
+  return <div aria-hidden style={{ height }} className="md:hidden" />;
 }

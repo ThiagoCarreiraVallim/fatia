@@ -108,7 +108,7 @@ describe('Meus alimentos', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Editar Granola' }));
     expect(screen.getByRole('heading', { name: 'Editar alimento' })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Por porção' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Porção' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Calorias (kcal)')).toHaveValue('450');
 
     await user.clear(screen.getByLabelText('Nome'));

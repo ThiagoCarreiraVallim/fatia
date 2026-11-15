@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { REMINDERS_KEY } from './keys';
 
 const ib =
-  'inline-flex items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40';
+  'inline-flex items-center justify-center rounded-[14px] text-foreground transition-colors hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40';
 
 /**
  * A folha de lembrete (pranchas Al-V3 e Al-V3b): tipo, intervalo ou horários
@@ -109,7 +109,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
   return (
     <div className="flex flex-col gap-3.5 overflow-y-auto px-6 pb-6 pt-4">
       <div className="flex items-center justify-between">
-        <DrawerTitle className="font-display text-xl font-semibold">
+        <DrawerTitle className="font-display text-h2">
           {editing ? 'Editar lembrete' : 'Novo lembrete'}
         </DrawerTitle>
         {reminder && (
@@ -118,9 +118,9 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
             aria-label="Apagar lembrete"
             disabled={busy}
             onClick={() => remove.mutate(reminder.id)}
-            className={cn(ib, 'h-11 w-11 text-danger')}
+            className={cn(ib, 'h-11 w-11 bg-muted text-danger')}
           >
-            <Icon name="trash" size={20} />
+            <Icon name="trash" size={16} />
           </button>
         )}
       </div>
@@ -133,6 +133,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
           <Chip
             key={t.kind}
             selected={draft.kind === t.kind}
+            className={draft.kind === t.kind ? undefined : 'bg-card'}
             onClick={() => setDraft((d) => ({ ...d, kind: t.kind }))}
           >
             <Icon name={t.icon as IconName} size={16} />
@@ -156,12 +157,12 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
 
       {interval && (
         <div className="flex items-center justify-between">
-          <span className="text-[15px] text-foreground">A cada</span>
-          <div className="flex items-center gap-1 rounded-pill bg-muted p-1">
+          <span className="text-b2 text-muted-foreground">A cada</span>
+          <div className="flex items-center gap-1.5 rounded-field bg-muted p-1">
             <button
               type="button"
               aria-label="Menos"
-              className={cn(ib, 'h-10 w-10')}
+              className={cn(ib, 'h-10 w-10 bg-card')}
               disabled={draft.everyHours <= EVERY_HOURS_MIN}
               onClick={() =>
                 setDraft((d) => ({ ...d, everyHours: Math.max(EVERY_HOURS_MIN, d.everyHours - 1) }))
@@ -169,13 +170,16 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
             >
               <span aria-hidden className="h-0.5 w-3 bg-current" />
             </button>
-            <span className="min-w-12 text-center font-bold tabular-nums" aria-live="polite">
+            <span
+              className="min-w-14 text-center font-display text-lg font-bold tabular-nums"
+              aria-live="polite"
+            >
               {draft.everyHours} h
             </span>
             <button
               type="button"
               aria-label="Mais"
-              className={cn(ib, 'h-10 w-10')}
+              className={cn(ib, 'h-10 w-10 bg-card')}
               disabled={draft.everyHours >= EVERY_HOURS_MAX}
               onClick={() =>
                 setDraft((d) => ({ ...d, everyHours: Math.min(EVERY_HOURS_MAX, d.everyHours + 1) }))
@@ -188,7 +192,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        <span className="w-full text-[13px] text-muted-foreground">
+        <span className="w-full text-xs text-faint">
           {interval ? 'Janela do dia · toque para mudar' : 'Horários · toque para mudar'}
         </span>
         {list.map((minute, i) => (
@@ -199,7 +203,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
             onClick={() => setEdit(edit === i ? -1 : i)}
             className={cn(
               'anim-press inline-flex h-10 items-center gap-1.5 rounded-chip px-3.5 text-sm font-extrabold tabular-nums transition-colors duration-fast',
-              edit === i ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+              edit === i ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground',
             )}
           >
             <Icon name="clock" size={16} />
@@ -215,7 +219,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
               setDraft((d) => ({ ...d, times: [...d.times, NEW_TIME] }));
               setEdit(draft.times.length);
             }}
-            className="anim-press inline-flex h-10 items-center gap-1.5 rounded-chip bg-muted px-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+            className="anim-press inline-flex h-10 items-center gap-1.5 rounded-chip bg-card px-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
           >
             <Icon name="plus" size={16} />
             Horário
@@ -268,7 +272,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
       )}
 
       <div className="flex flex-col gap-2">
-        <span className="text-[15px] text-foreground">Dias</span>
+        <span className="text-b2 text-muted-foreground">Dias</span>
         <div className="flex justify-between">
           {WEEKDAY_INITIALS.map((l, i) => {
             const on = draft.weekdays[i];
@@ -286,7 +290,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
                 }
                 className={cn(
                   'h-10 w-10 rounded-full text-sm font-bold transition-colors duration-fast',
-                  on ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                  on ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground',
                 )}
               >
                 {l}

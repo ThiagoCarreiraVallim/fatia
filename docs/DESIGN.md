@@ -47,18 +47,19 @@ Claro** em Perfil → Aparência. A escolha é preferência de interface, guarda
 ## Paleta e tokens
 
 Os nomes são os do shadcn que o código já usava, mais os novos do canvas. Mapa do canvas:
-`bg → background`, `s1 → muted`, `s2 → card` (escuro), `s3 → surface-3`, `line → border`,
+`bg → background`, `s1 → card`, `s2 → muted`, `s3 → surface-3`, `line → border`,
 `line2 → border-strong`, `tx → foreground`, `tx2 → muted-foreground`, `tx3 → faint-foreground`,
 `lime → primary`, `ink → primary-foreground`, `bad → danger`, `warn → warning`.
 
-No claro o cartão é branco (o `s1` do canvas) sobre o fundo `#f4f5f2`: é onde as cores de dado
-passam 4,5:1. No escuro o cartão continua `#2a2a2a`.
+O cartão é o `s1` do canvas nos dois temas: `#1f1f1f` sobre o fundo `#131313` no escuro, branco
+sobre `#f4f5f2` no claro (onde as cores de dado passam 4,5:1). O que fica dentro do cartão (campo,
+chip, ícone em quadrado) é o `s2`: `muted`.
 
 | Token                | Escuro    | Claro     | Uso                                                            |
 | -------------------- | --------- | --------- | -------------------------------------------------------------- |
 | `background`         | `#131313` | `#f4f5f2` | fundo das telas                                                |
-| `muted`              | `#1f1f1f` | `#eceee9` | campos, chips, trilhos                                         |
-| `card`               | `#2a2a2a` | `#ffffff` | cartões e linhas de lista                                      |
+| `muted`              | `#2a2a2a` | `#eceee9` | campos, chips, trilhos                                         |
+| `card`               | `#1f1f1f` | `#ffffff` | cartões e linhas de lista                                      |
 | `surface-3`          | `#343434` | `#e1e4dd` | segmento ativo, trilho de anel e barra, esqueleto              |
 | `border`             | `#383838` | `#e1e4dd` | linha entre itens, borda de campo                              |
 | `border-strong`      | `#3d3d3d` | `#cdd1c8` | contorno de botão, check vazio, alça da folha                  |

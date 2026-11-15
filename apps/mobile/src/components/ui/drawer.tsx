@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './text';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -74,6 +84,32 @@ cssInterop(BottomSheetFlatList, {
  * portal.
  */
 
+/**
+ * Quantos drawers estão abertos agora, no app inteiro.
+ *
+ * O sheet não tem portal: ele abre dentro da tela (o `Slot`), e a barra de
+ * baixo mora fora dela, por cima (com `elevation` no Android). Nenhum `zIndex`
+ * da tela passa da barra, que então cobria os botões do rodapé do sheet. Por
+ * isso a barra e o botão da IA somem enquanto houver um drawer aberto
+ * (`useAnyDrawerOpen`), como na web, onde o fundo escuro da folha os cobre.
+ */
+const DrawerPresence = createContext<{ add: () => () => void; count: number } | null>(null);
+
+export function DrawerPresenceProvider({ children }: { children: ReactNode }) {
+  const [count, setCount] = useState(0);
+  const add = useCallback(() => {
+    setCount((n) => n + 1);
+    return () => setCount((n) => n - 1);
+  }, []);
+  const value = useMemo(() => ({ add, count }), [add, count]);
+  return <DrawerPresence.Provider value={value}>{children}</DrawerPresence.Provider>;
+}
+
+/** Algum drawer aberto? Fora do provider, `false`. */
+export function useAnyDrawerOpen(): boolean {
+  return (useContext(DrawerPresence)?.count ?? 0) > 0;
+}
+
 export function Drawer({
   open,
   onOpenChange,
@@ -90,11 +126,15 @@ export function Drawer({
   snapPoints?: (string | number)[];
 }) {
   const ref = useRef<BottomSheet>(null);
+  const add = useContext(DrawerPresence)?.add;
 
   useEffect(() => {
     if (open) ref.current?.expand();
     else ref.current?.close();
   }, [open]);
+
+  // Aberto, esconde a barra de baixo (ver `DrawerPresence`).
+  useEffect(() => (open && add ? add() : undefined), [open, add]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -147,8 +187,9 @@ function SheetBackground({ style }: BottomSheetBackgroundProps) {
 /**
  * Camada onde os drawers de uma tela são montados, irmã do `<Screen>`.
  *
- * Ocupa a tela inteira e sobe acima da bottom nav (que é `z-50`), que de outro
- * modo cobriria os botões do rodapé do sheet. `box-none` deixa o toque passar
+ * Ocupa a tela inteira, acima do conteúdo da tela. A barra de baixo fica
+ * fora da tela e some enquanto um drawer está aberto (`DrawerPresence`), já
+ * que nenhum `zIndex` daqui passa dela. `box-none` deixa o toque passar
  * quando nenhum drawer está aberto — sem isso a camada engoliria todo toque da
  * tela.
  *
@@ -176,9 +217,16 @@ export function DrawerContent({
   className?: string;
   children: ReactNode;
 }) {
+  // O rodapé (botões) fica acima da barra de gestos/navegação do sistema.
+  const insets = useSafeAreaInsets();
   return (
     <BottomSheetView>
-      <View className={cn('bg-background pb-8', className)}>{children}</View>
+      <View
+        style={{ paddingBottom: insets.bottom + 24 }}
+        className={cn('bg-background', className)}
+      >
+        {children}
+      </View>
     </BottomSheetView>
   );
 }

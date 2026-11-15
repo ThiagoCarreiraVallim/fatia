@@ -17,6 +17,7 @@ import {
   type AvatarVisibility,
   type MeUser,
 } from '@fatia/api-client';
+import { TopBarActions } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Segmented } from '@/components/ui/segmented';
@@ -28,10 +29,10 @@ import { ToggleTrack } from './you-list';
 export const BIO_MAX = 140;
 
 const fieldClass =
-  'w-full rounded-field bg-card px-3.5 text-[15px] text-foreground placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'w-full rounded-field bg-card px-[18px] text-base text-foreground placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 const labelClass = 'text-[13px] font-semibold text-muted-foreground';
-const hintClass = 'text-[13px] text-muted-foreground';
-const eyebrowClass = 'text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground';
+const hintClass = 'text-xs text-faint';
+const eyebrowClass = 'text-xs font-bold uppercase tracking-[0.06em] text-faint';
 
 interface Form {
   name: string;
@@ -131,19 +132,34 @@ function EditProfileForm({ me }: { me: MeUser }) {
 
   return (
     <form
+      id="perfil-form"
       className="flex flex-col gap-[18px] px-6 pb-8 pt-4"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate();
       }}
     >
+      {/* Salvar fica no topo, à direita do título (prancha Al-V9). */}
+      <TopBarActions>
+        <Button
+          type="submit"
+          form="perfil-form"
+          size="lg"
+          className="px-4"
+          disabled={save.isPending || !form.name.trim()}
+        >
+          {save.isPending ? 'Salvando…' : 'Salvar'}
+        </Button>
+      </TopBarActions>
+
       <div className="flex flex-col items-center gap-3">
         <UserAvatar name={form.name || me.name} url={me.avatarUrl} size={112} />
         <div className="flex flex-wrap justify-center gap-2">
           <Button
             type="button"
             variant="secondary"
-            size="sm"
+            size="lg"
+            className="bg-muted"
             disabled={busy}
             onClick={() => camera.current?.click()}
           >
@@ -153,7 +169,8 @@ function EditProfileForm({ me }: { me: MeUser }) {
           <Button
             type="button"
             variant="secondary"
-            size="sm"
+            size="lg"
+            className="bg-muted"
             disabled={busy}
             onClick={() => gallery.current?.click()}
           >
@@ -164,8 +181,8 @@ function EditProfileForm({ me }: { me: MeUser }) {
             <Button
               type="button"
               variant="secondary"
-              size="sm"
-              className="text-danger"
+              size="lg"
+              className="bg-muted text-danger"
               disabled={busy}
               onClick={() => removePhoto.mutate()}
             >
@@ -199,13 +216,13 @@ function EditProfileForm({ me }: { me: MeUser }) {
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <label htmlFor="perfil-nome" className={labelClass}>
           Nome
         </label>
         <input
           id="perfil-nome"
-          className={`${fieldClass} h-12`}
+          className={`${fieldClass} h-[52px]`}
           value={form.name}
           maxLength={120}
           required
@@ -213,13 +230,13 @@ function EditProfileForm({ me }: { me: MeUser }) {
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <label htmlFor="perfil-apelido" className={labelClass}>
           Como aparece nas comunidades
         </label>
         <input
           id="perfil-apelido"
-          className={`${fieldClass} h-12`}
+          className={`${fieldClass} h-[52px]`}
           value={form.nickname}
           maxLength={60}
           placeholder={communityName({ name: form.name || me.name, nickname: null })}
@@ -228,13 +245,13 @@ function EditProfileForm({ me }: { me: MeUser }) {
         <span className={hintClass}>Vale para mural, comentários e ranking dos desafios.</span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <label htmlFor="perfil-bio" className={labelClass}>
           Sobre você (opcional)
         </label>
         <textarea
           id="perfil-bio"
-          className={`${fieldClass} h-[88px] resize-none py-3`}
+          className={`${fieldClass} h-[88px] resize-none px-3.5 py-3`}
           maxLength={BIO_MAX}
           placeholder="Ex.: treino de manhã, correndo minha primeira 10 km"
           value={form.bio}
@@ -268,21 +285,21 @@ function EditProfileForm({ me }: { me: MeUser }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <span className={labelClass}>E-mail</span>
-        <div className={`${fieldClass} flex h-12 items-center text-muted-foreground`}>
+        <div className={`${fieldClass} flex h-[52px] items-center text-muted-foreground`}>
           {me.email}
         </div>
         <span className={hintClass}>Para trocar o e-mail, fale com o suporte.</span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <label htmlFor="perfil-whatsapp" className={labelClass}>
           WhatsApp
         </label>
         <input
           id="perfil-whatsapp"
-          className={`${fieldClass} h-12`}
+          className={`${fieldClass} h-[52px]`}
           inputMode="tel"
           autoComplete="tel"
           placeholder="(65) 99999-9999"
@@ -311,10 +328,6 @@ function EditProfileForm({ me }: { me: MeUser }) {
       <p className={hintClass}>
         O Fatia não tem chat entre pessoas. Conversas com a equipe ficam no WhatsApp.
       </p>
-
-      <Button type="submit" size="xl" full disabled={save.isPending || !form.name.trim()}>
-        {save.isPending ? 'Salvando…' : 'Salvar'}
-      </Button>
     </form>
   );
 }

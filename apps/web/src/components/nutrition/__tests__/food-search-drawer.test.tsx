@@ -120,7 +120,7 @@ describe('FoodSearchDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+    await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
 
     expect(await screen.findByText(/Erro ao buscar alimentos/)).toBeInTheDocument();
     const retry = screen.getByRole('button', { name: /tentar novamente/i });
@@ -131,17 +131,17 @@ describe('FoodSearchDrawer', () => {
     await waitFor(() => expect(searchFoods).toHaveBeenCalledTimes(2));
   });
 
-  it('sem resultado mostra um só atalho de criar, e o formulário se chama "Criar alimento"', async () => {
+  it('sem resultado mostra um só atalho de criar, e o formulário se chama "Novo alimento"', async () => {
     searchFoods.mockResolvedValue([]);
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'granola da casa');
+    await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'granola da casa');
     const criar = await screen.findByRole('button', { name: /Criar “granola da casa”/ });
     expect(screen.queryByRole('button', { name: /^Criar meu alimento$/ })).not.toBeInTheDocument();
 
     await user.click(criar);
-    expect(await screen.findByRole('heading', { name: 'Criar alimento' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Novo alimento' })).toBeInTheDocument();
   });
 
   it('switches to the manual form when the user clicks "Registrar só desta vez"', async () => {
@@ -345,12 +345,14 @@ describe('FoodSearchDrawer', () => {
       expect(screen.getByLabelText(/Quantidade/)).toHaveValue('200');
     });
 
-    it('favorita um resultado da busca', async () => {
+    it('favorita um resultado da busca na quantidade', async () => {
       searchFoods.mockResolvedValue([food(7, 'Arroz, tipo 1, cozido')]);
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
+      // A estrela mora na quantidade (Al-N3), não na linha da busca (Al-N15).
+      await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
       await user.click(
         await screen.findByRole('button', { name: 'Favoritar Arroz, tipo 1, cozido' }),
       );
@@ -368,7 +370,8 @@ describe('FoodSearchDrawer', () => {
       renderDrawer();
 
       await screen.findByText('Favoritos');
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
+      await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
       await user.click(
         await screen.findByRole('button', { name: 'Desfavoritar Arroz, tipo 1, cozido' }),
       );
@@ -418,18 +421,20 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer({ mealType: 'LUNCH' });
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
       await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
       await user.click(screen.getByRole('radio', { name: /colher de sopa/ }));
 
-      expect(screen.getByText('= 25 g')).toBeInTheDocument();
+      expect(screen.getByText(/· 25 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
       // De meio em meio: 1 → 1½ → 2.
       await user.click(screen.getByRole('button', { name: 'Mais' }));
-      expect(screen.getByText('= 37,5 g')).toBeInTheDocument();
+      expect(screen.getByText(/· 37,5 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Mais' }));
-      expect(screen.getByText('= 50 g')).toBeInTheDocument();
+      expect(screen.getByText(/· 50 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
       // A prévia de macros acompanha as gramas da medida: 50 g de 130 kcal/100g.
-      expect(screen.getByText(/Total: 65 kcal/)).toBeInTheDocument();
+      expect(screen.getByText('kcal', { selector: 'span' }).previousSibling).toHaveTextContent(
+        '65',
+      );
 
       await user.click(screen.getByRole('button', { name: 'Adicionar ao almoço' }));
 
@@ -448,7 +453,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
       await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
       await user.click(screen.getByRole('radio', { name: /escumadeira/ }));
       await user.click(screen.getByRole('radio', { name: 'gramas' }));
@@ -473,11 +478,11 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      expect(await screen.findByText(/2 × colher de sopa da última vez/)).toBeInTheDocument();
+      expect(await screen.findByText(/2 × colher de sopa · da última vez/)).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
 
       expect(screen.getByRole('radio', { name: /colher de sopa/ })).toBeChecked();
-      expect(screen.getByText('= 50 g')).toBeInTheDocument();
+      expect(screen.getByText(/· 50 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
     });
 
     it('cria uma medida própria e já a seleciona', async () => {
@@ -486,9 +491,9 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
       await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
-      await user.click(screen.getByRole('button', { name: /nova medida/i }));
+      await user.click(screen.getByRole('button', { name: 'Medida' }));
       await user.type(screen.getByLabelText('Nome da medida'), 'concha');
       await user.type(screen.getByLabelText('Gramas da medida'), '140');
       await user.click(screen.getByRole('button', { name: /salvar medida/i }));
@@ -497,7 +502,7 @@ describe('FoodSearchDrawer', () => {
         expect(createPortion).toHaveBeenCalledWith(7, { label: 'concha', grams: 140 }),
       );
       expect(await screen.findByRole('radio', { name: /concha/ })).toBeChecked();
-      expect(screen.getByText('= 140 g')).toBeInTheDocument();
+      expect(screen.getByText(/· 140 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
     });
 
     it('alimento sem medida mostra só gramas e o atalho para criar', async () => {
@@ -505,12 +510,12 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'kefir');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'kefir');
       await user.click(await screen.findByRole('button', { name: /^Kefir/ }));
 
       expect(screen.getByRole('radio', { name: 'gramas' })).toBeChecked();
       expect(screen.getAllByRole('radio')).toHaveLength(1);
-      expect(screen.getByRole('button', { name: /nova medida/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Medida' })).toBeInTheDocument();
     });
   });
   describe('refeições salvas', () => {
@@ -569,7 +574,7 @@ describe('FoodSearchDrawer', () => {
       mealTemplates.mockResolvedValue([cafe]);
       renderDrawer({ mealId: 'meal-1' });
 
-      await screen.findByPlaceholderText(/arroz, frango/);
+      await screen.findByPlaceholderText(/arroz, frango/i);
       expect(screen.queryByText('Café de sempre')).not.toBeInTheDocument();
       expect(mealTemplates).not.toHaveBeenCalled();
     });
@@ -603,7 +608,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer({ mealType: 'BREAKFAST' });
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'Granola da casa');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'Granola da casa');
       expect(await screen.findByText('Nada com “Granola da casa”')).toBeInTheDocument();
       await user.click(
         screen.getByRole('button', { name: 'Criar “Granola da casa” como meu alimento' }),
@@ -641,7 +646,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Criar meu alimento' }));
+      await user.click(screen.getByRole('button', { name: 'Criar' }));
       await user.type(screen.getByLabelText('Nome'), 'Biscoito');
       await user.click(screen.getByRole('button', { name: 'Salvar e registrar' }));
 
@@ -659,9 +664,9 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Criar meu alimento' }));
+      await user.click(screen.getByRole('button', { name: 'Criar' }));
       await user.type(screen.getByLabelText('Nome'), 'Pão');
-      await user.click(screen.getByRole('radio', { name: 'Por 100 g' }));
+      await user.click(screen.getByRole('radio', { name: '100 g' }));
       expect(screen.queryByLabelText('Tamanho da porção (g)')).not.toBeInTheDocument();
       await user.type(screen.getByLabelText('Calorias (kcal)'), '300');
       await user.click(screen.getByRole('button', { name: 'Salvar e registrar' }));
@@ -696,7 +701,7 @@ describe('FoodSearchDrawer', () => {
     };
 
     async function lerCodigo(user: ReturnType<typeof userEvent.setup>, codigo = '7891000100103') {
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       await user.type(screen.getByLabelText('Digitar o código'), codigo);
       await user.click(screen.getByRole('button', { name: 'Buscar' }));
     }
@@ -736,7 +741,7 @@ describe('FoodSearchDrawer', () => {
       expect(createMeal.mock.calls[0][0].items[0]).not.toHaveProperty('foodId');
       // Volta à busca, pronto para o próximo item.
       expect(await screen.findByText('Leite Condensado (Moça) adicionado')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/Ex\.: arroz/)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/arroz, frango/i)).toBeInTheDocument();
     });
 
     it('aberto pelo atalho de escanear, começa no leitor e volta a ele depois de adicionar', async () => {
@@ -752,7 +757,7 @@ describe('FoodSearchDrawer', () => {
       expect(await screen.findByText('Leite Condensado (Moça) adicionado')).toBeInTheDocument();
       // A próxima embalagem: o leitor de novo, não a busca por nome.
       expect(await screen.findByLabelText('Digitar o código')).toBeInTheDocument();
-      expect(screen.queryByPlaceholderText(/Ex\.: arroz/)).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/arroz, frango/i)).not.toBeInTheDocument();
     });
 
     it('guardar em Meus alimentos cria o alimento e registra ligado a ele', async () => {
@@ -927,10 +932,24 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
       expect(await screen.findByText('2 resultados · TACO e seus alimentos')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Arroz da vó/ })).toHaveTextContent('seu');
       expect(screen.getByRole('button', { name: /^Arroz, tipo 1/ })).toHaveTextContent('TACO');
+    });
+
+    it('"Para" troca a refeição antes do primeiro item (Al-N15)', async () => {
+      searchFoods.mockResolvedValue([food(7, 'Feijão carioca', { kcalPer100g: 76 })]);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'LUNCH' });
+
+      expect(screen.getByRole('radio', { name: 'Almoço' })).toBeChecked();
+      await user.click(screen.getByRole('radio', { name: 'Jantar' }));
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'feijão');
+      await user.click(await screen.findByRole('button', { name: /^Feijão carioca/ }));
+
+      expect(screen.getByText(/para o jantar/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Adicionar ao jantar' })).toBeEnabled();
     });
 
     it('a quantidade mostra fibra e sódio, e o botão diz a refeição', async () => {
@@ -943,7 +962,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer({ mealType: 'DINNER' });
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'feijão');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'feijão');
       await user.click(await screen.findByRole('button', { name: /^Feijão carioca/ }));
 
       expect(screen.getByText(/Fibra 8,5 g · Sódio 2 mg/)).toBeInTheDocument();
@@ -955,7 +974,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.type(screen.getByPlaceholderText(/arroz, frango/i), 'arroz');
       await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1/ }));
       expect(screen.getByText(/Fibra — · Sódio —/)).toBeInTheDocument();
     });
@@ -965,15 +984,15 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Criar meu alimento' }));
+      await user.click(screen.getByRole('button', { name: 'Criar' }));
       await user.type(screen.getByLabelText('Nome'), 'Pão de queijo');
-      await user.click(screen.getByRole('radio', { name: 'Por 100 g' }));
+      await user.click(screen.getByRole('radio', { name: '100 g' }));
       await user.type(screen.getByLabelText('Calorias (kcal)'), '330');
       await user.click(screen.getByRole('button', { name: 'Só salvar' }));
 
       await waitFor(() => expect(createCustomFood).toHaveBeenCalledTimes(1));
       expect(await screen.findByText('Pão de queijo salvo em Meus alimentos')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/Ex\.: arroz/)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/arroz, frango/i)).toBeInTheDocument();
       expect(createMeal).not.toHaveBeenCalled();
     });
 
@@ -984,7 +1003,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       await user.type(screen.getByLabelText('Digitar o código'), '7891000100103');
       await user.click(screen.getByRole('button', { name: 'Buscar' }));
       await user.click(await screen.findByRole('button', { name: /^adicionar/i }));
@@ -1021,7 +1040,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       await user.type(screen.getByLabelText('Digitar o código'), '7891000100103');
       await user.click(screen.getByRole('button', { name: 'Buscar' }));
       await user.click(await screen.findByRole('button', { name: 'Ler o rótulo pela foto' }));
@@ -1050,12 +1069,12 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       await user.type(screen.getByLabelText('Digitar o código'), '7891000100103');
       await user.click(screen.getByRole('button', { name: 'Buscar' }));
       await user.click(await screen.findByRole('button', { name: 'Cadastrar à mão' }));
       await user.type(screen.getByLabelText('Nome'), 'Biscoito da vó');
-      await user.click(screen.getByRole('radio', { name: 'Por 100 g' }));
+      await user.click(screen.getByRole('radio', { name: '100 g' }));
       await user.type(screen.getByLabelText('Calorias (kcal)'), '450');
       await user.click(screen.getByRole('button', { name: 'Salvar e registrar' }));
       await user.click(await screen.findByRole('button', { name: /^adicionar/i }));
@@ -1075,7 +1094,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       await user.click(await screen.findByRole('tab', { name: 'Rótulo' }));
 
       expect(screen.getByRole('link', { name: 'Ver o plano PRO' })).toHaveAttribute(
@@ -1089,7 +1108,7 @@ describe('FoodSearchDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
       expect(await screen.findByLabelText('Digitar o código')).toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Rótulo' })).not.toBeInTheDocument();
     });

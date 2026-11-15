@@ -126,7 +126,7 @@ export function AiPendingCard({ enabled, bottom }: { enabled: boolean; bottom: n
       role="status"
       aria-label="Fatia esperando você"
       style={{ bottom: `calc(${bottom}px + env(safe-area-inset-bottom))` }}
-      className="anim-up fixed inset-x-4 z-50 mx-auto flex max-w-md flex-col gap-3 rounded-3xl bg-card p-3.5 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.45),0_16px_30px_-12px_rgba(0,0,0,0.8)] md:hidden"
+      className="anim-up fixed inset-x-4 z-40 mx-auto flex max-w-md flex-col gap-3 rounded-3xl bg-card p-3.5 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.45),0_16px_30px_-12px_rgba(0,0,0,0.8)] md:hidden"
     >
       <div className="flex items-start gap-3">
         <span

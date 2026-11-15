@@ -40,14 +40,15 @@ export function ChatScreen() {
   return (
     <div
       /*
-        `10.5rem` = a barra de topo (`h-14`, 3.5rem) + `pt-4` (1rem) + `pb-24`
-        (6rem), o respiro que o `<main>` de `(app)` reserva; mais as áreas
-        seguras que o wrapper do layout soma.
-        Subtrair menos faz a caixa terminar DENTRO da `bottom-nav`, que é
-        `fixed` com `z-50`: o campo fica visível e intocável (#255).
+        `6.5rem` = a barra de topo (`h-14`, 3.5rem) + `pt-4` (1rem) + `pb-8`
+        (2rem) do `<main>` de `(app)`; mais as áreas seguras que o wrapper do
+        layout soma. A barra de baixo some no chat (tarefa de foco), e o
+        respiro dela (`BottomSpacer`) também.
+        Subtrair menos faz a caixa passar da tela, e com a barra visível o
+        campo ficaria DENTRO dela: visível e intocável (#255).
         `chat-cabe-na-tela.test.ts` amarra esta conta à do layout.
       */
-      className="flex h-[calc(100dvh-10.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
+      className="flex h-[calc(100dvh-6.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
     >
       <TopBarActions>
         <GavetaDeMemorias />

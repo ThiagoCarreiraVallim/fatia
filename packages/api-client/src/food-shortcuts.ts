@@ -73,6 +73,20 @@ export function initialGrams(lastGrams: number | null | undefined): string {
 }
 
 /** Linha de apoio do atalho: a porção de sempre vale mais que o kcal/100g. */
+/**
+ * A linha da busca (prancha Al-N15): embaixo, a porção da última vez; à
+ * direita, as calorias dela. Sem última vez, 100 g.
+ */
+export function shortcutLine(food: FoodShortcut): { detail: string; kcal: number } {
+  if (!food.lastGrams) return { detail: '100 g', kcal: Math.round(food.kcalPer100g) };
+  const kcal = Math.round((food.kcalPer100g * food.lastGrams) / 100);
+  const amount =
+    food.lastPortionLabel && food.lastPortionQuantity
+      ? portionText(food.lastPortionLabel, food.lastPortionQuantity)
+      : `${Math.round(food.lastGrams)} g`;
+  return { detail: `${amount} · da última vez`, kcal };
+}
+
 export function shortcutDetail(food: FoodShortcut): string {
   const kcal = `${Math.round(food.kcalPer100g)} kcal/100g`;
   if (food.lastPortionLabel && food.lastPortionQuantity) {

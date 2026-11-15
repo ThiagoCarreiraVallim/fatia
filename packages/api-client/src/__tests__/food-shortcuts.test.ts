@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { initialGrams, shortcutDetail, shortcutRows, withFavorite } from '../food-shortcuts';
+import {
+  initialGrams,
+  shortcutDetail,
+  shortcutLine,
+  shortcutRows,
+  withFavorite,
+} from '../food-shortcuts';
 import type { FoodShortcut } from '../nutrition';
 
 const food = (id: number, extra: Partial<FoodShortcut> = {}): FoodShortcut => ({
@@ -86,5 +92,23 @@ describe('initialGrams e shortcutDetail', () => {
   it('descreve a porção de sempre quando existe', () => {
     expect(shortcutDetail(food(1, { lastGrams: 50 }))).toBe('50 g da última vez · 130 kcal/100g');
     expect(shortcutDetail(food(1))).toBe('130 kcal/100g');
+  });
+});
+
+describe('shortcutLine (linha da busca, Al-N15)', () => {
+  it('a porção da última vez embaixo e as calorias dela à direita', () => {
+    expect(shortcutLine(food(1, { lastGrams: 50 }))).toEqual({
+      detail: '50 g · da última vez',
+      kcal: 65,
+    });
+    expect(
+      shortcutLine(
+        food(1, { lastGrams: 40, lastPortionLabel: 'colher de sopa', lastPortionQuantity: 2 }),
+      ).detail,
+    ).toBe('2 × colher de sopa · da última vez');
+  });
+
+  it('sem última vez, 100 g', () => {
+    expect(shortcutLine(food(1))).toEqual({ detail: '100 g', kcal: 130 });
   });
 });

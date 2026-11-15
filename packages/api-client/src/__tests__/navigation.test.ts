@@ -59,7 +59,6 @@ describe('navegação', () => {
       '/progress',
       '/goals',
       '/progress/records',
-      '/nutrition/plan',
       '/nutrition/goals',
       '/nutrition/nutrient-targets',
       '/nutrition/foods',
@@ -181,6 +180,9 @@ describe('navegação', () => {
       '/workout/session/s1',
       '/nutrition/photo',
       '/nutrition/scan',
+      '/nutrition/goals',
+      '/you/edit',
+      '/you/delete',
       '/community/new',
       '/onboarding',
       '/org/g1/content/plans/t1',
@@ -281,10 +283,12 @@ describe('abas raiz', () => {
     }
   });
 
-  it('só o Hoje fica sem barra de topo: as outras abas têm título e ações', () => {
-    expect(hasTopBar('/')).toBe(false);
-    expect(hasTopBar('/workout')).toBe(true);
+  it('as abas abrem com o título grande da tela, sem a barra de topo pequena', () => {
+    for (const tab of ['/', '/nutrition', '/workout', '/community', '/you', '/you?x=1']) {
+      expect(hasTopBar(tab), tab).toBe(false);
+    }
     expect(hasTopBar('/workout/plans')).toBe(true);
+    expect(hasTopBar('/nutrition/goals')).toBe(true);
   });
 
   it('o que fica dentro de uma aba volta para ela', () => {

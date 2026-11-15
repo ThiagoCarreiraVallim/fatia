@@ -100,7 +100,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
   return (
     <View className="gap-3.5 pt-2">
       <View className="flex-row items-center justify-between">
-        <DrawerTitle className="text-xl">
+        <DrawerTitle className="font-display text-h2">
           {editing ? 'Editar lembrete' : 'Novo lembrete'}
         </DrawerTitle>
         {reminder ? (
@@ -109,7 +109,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
             accessibilityLabel="Apagar lembrete"
             disabled={busy}
             onPress={() => remove.mutate(reminder.id)}
-            className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
+            className="h-11 w-11 items-center justify-center rounded-[14px] bg-muted active:opacity-80"
           >
             <Icon name="trash" size={16} color={colors.destructive} />
           </Pressable>
@@ -127,7 +127,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
               onPress={() => setDraft((d) => ({ ...d, kind: t.kind }))}
               className={cn(
                 'h-9 flex-row items-center gap-1.5 rounded-chip px-3.5',
-                on ? 'bg-foreground' : 'bg-muted',
+                on ? 'bg-foreground' : 'bg-card',
               )}
             >
               <Icon
@@ -163,8 +163,8 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
 
       {interval ? (
         <View className="flex-row items-center justify-between">
-          <Text className="text-[15px] text-foreground">A cada</Text>
-          <View className="flex-row items-center gap-1 rounded-pill bg-muted p-1">
+          <Text className="text-b2 text-muted-foreground">A cada</Text>
+          <View className="flex-row items-center gap-1.5 rounded-field bg-muted p-1">
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Menos"
@@ -173,7 +173,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
                 setDraft((d) => ({ ...d, everyHours: Math.max(EVERY_HOURS_MIN, d.everyHours - 1) }))
               }
               className={cn(
-                'h-10 w-10 items-center justify-center rounded-full',
+                'h-10 w-10 items-center justify-center rounded-[14px] bg-card',
                 draft.everyHours <= EVERY_HOURS_MIN && 'opacity-40',
               )}
             >
@@ -181,7 +181,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
             </Pressable>
             <Text
               accessibilityLiveRegion="polite"
-              className="min-w-12 text-center font-sans-bold text-foreground"
+              className="min-w-14 text-center font-display text-lg text-foreground"
               style={TABULAR}
             >
               {draft.everyHours} h
@@ -194,7 +194,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
                 setDraft((d) => ({ ...d, everyHours: Math.min(EVERY_HOURS_MAX, d.everyHours + 1) }))
               }
               className={cn(
-                'h-10 w-10 items-center justify-center rounded-full',
+                'h-10 w-10 items-center justify-center rounded-[14px] bg-card',
                 draft.everyHours >= EVERY_HOURS_MAX && 'opacity-40',
               )}
             >
@@ -205,7 +205,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
       ) : null}
 
       <View className="flex-row flex-wrap gap-1.5">
-        <Text className="w-full text-[13px] text-muted-foreground">
+        <Text className="w-full text-xs text-faint">
           {interval ? 'Janela do dia · toque para mudar' : 'Horários · toque para mudar'}
         </Text>
         {list.map((minute, i) => {
@@ -218,7 +218,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
               onPress={() => setEdit(on ? -1 : i)}
               className={cn(
                 'h-10 flex-row items-center gap-1.5 rounded-chip px-3.5',
-                on ? 'bg-primary' : 'bg-muted',
+                on ? 'bg-primary' : 'bg-card',
               )}
             >
               <Icon
@@ -247,7 +247,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
               setDraft((d) => ({ ...d, times: [...d.times, NEW_TIME] }));
               setEdit(draft.times.length);
             }}
-            className="h-10 flex-row items-center gap-1.5 rounded-chip bg-muted px-3.5"
+            className="h-10 flex-row items-center gap-1.5 rounded-chip bg-card px-3.5"
           >
             <Icon name="plus" size={16} color={colors.mutedForeground} />
             <Text className="font-sans-semibold text-sm text-muted-foreground">Horário</Text>
@@ -298,7 +298,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
       ) : null}
 
       <View className="gap-2">
-        <Text className="text-[15px] text-foreground">Dias</Text>
+        <Text className="text-b2 text-muted-foreground">Dias</Text>
         <View className="flex-row justify-between">
           {WEEKDAY_INITIALS.map((l, i) => {
             const on = draft.weekdays[i];
@@ -316,7 +316,7 @@ function ReminderForm({ reminder, onClose }: { reminder: Reminder | null; onClos
                 }
                 className={cn(
                   'h-10 w-10 items-center justify-center rounded-full',
-                  on ? 'bg-primary' : 'bg-muted',
+                  on ? 'bg-primary' : 'bg-surface-3',
                 )}
               >
                 <Text

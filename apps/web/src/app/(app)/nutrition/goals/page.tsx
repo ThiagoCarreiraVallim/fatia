@@ -3,10 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { Calculator, ChevronRight, Dumbbell, Droplet, Footprints, Plus } from 'lucide-react';
+import { Calculator, ChevronRight, Dumbbell, Droplet, Footprints, Minus, Plus } from 'lucide-react';
 import {
   GOAL_RANGES,
+  GOAL_STEP,
+  goalBand,
   goalsToDraft,
+  stepGoalText,
   nutritionApi,
   parseGoalsDraft,
   type GoalErrorKey,
@@ -14,13 +17,12 @@ import {
   type NutrientProgress,
   type UserGoals,
 } from '@fatia/api-client';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadError } from '@/components/nutrition/load-error';
 import { errorMessage } from '@/components/nutrition/error-message';
 import { hojeIso } from '@/lib/dias';
+import { cn } from '@/lib/utils';
 
 const empty: GoalsDraft = goalsToDraft({
   kcalMin: 1800,
@@ -89,14 +91,15 @@ export default function GoalsPage() {
   };
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-5 p-4 pb-28">
-      <p className="text-sm text-muted-foreground">
-        Cada meta é uma faixa. Ajuste o mínimo e o máximo; dentro dela o dia conta como “na meta”.
+    <form onSubmit={onSubmit} noValidate className="space-y-5 px-5 pb-28 pt-2">
+      <p className="text-[13px] text-muted-foreground">
+        Cada meta é uma faixa. Ajuste o mínimo e o máximo, cada um na sua linha; dentro dela o dia
+        conta como “na meta”.
       </p>
 
       <Link
         href="/onboarding?refazer=1"
-        className="flex min-h-12 items-center gap-3 rounded-xl border border-subtle bg-card px-4 py-3 text-sm hover:bg-card/80"
+        className="flex min-h-12 items-center gap-3 rounded-card bg-card px-4 py-3 text-sm hover:bg-card/80"
       >
         <Calculator size={18} className="text-primary" aria-hidden />
         <span className="flex-1">
@@ -111,64 +114,69 @@ export default function GoalsPage() {
       {goals.error && <LoadError error={goals.error} onRetry={() => void goals.refetch()} />}
 
       {/* Enquanto as metas carregam, digitar seria apagado pela resposta. */}
-      <fieldset disabled={goals.isLoading} className="contents">
-        <section className="space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Calorias e macros
-          </h2>
+      <fieldset disabled={goals.isLoading} className="m-0 min-w-0 space-y-5 border-0 p-0">
+        <section className="space-y-2.5">
+          <h2 className="px-1 text-[13px] text-muted-foreground">Calorias e macros</h2>
           {GOAL_RANGES.map((r) => {
             const error = errorOf(r.min);
             const errorId = `${r.min}-erro`;
             const inputMode = r.unit === 'kcal' ? 'numeric' : 'decimal';
+            const band = goalBand(draft[r.min], draft[r.max]);
+            const color = RANGE_COLOR[r.min];
             return (
               <fieldset
                 key={r.min}
                 aria-describedby={error ? errorId : undefined}
-                className="space-y-3 rounded-2xl bg-card p-4"
+                className="rounded-card bg-card px-4 pb-1 pt-4"
               >
                 <legend className="sr-only">{r.label}</legend>
-                <div aria-hidden className="flex items-baseline justify-between">
-                  <span className="text-sm font-bold">{r.label}</span>
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    {draft[r.min] || '—'}–{draft[r.max] || '—'} {r.unit}
+                <div aria-hidden className="flex items-center gap-2.5">
+                  <span className="h-3 w-3 rounded-[3px]" style={{ background: color }} />
+                  <span className="flex-1 font-display text-[17px] font-semibold">{r.label}</span>
+                  <span className="text-sm font-bold tabular-nums">
+                    {draft[r.min] || '—'}–{draft[r.max] || '—'}{' '}
+                    <span className="font-normal text-muted-foreground">{r.unit}</span>
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor={r.min}>Mínimo</Label>
-                    <Input
-                      id={r.min}
-                      aria-label={`Mínimo de ${r.label}`}
-                      inputMode={inputMode}
-                      autoComplete="off"
-                      value={draft[r.min]}
-                      aria-invalid={error ? true : undefined}
-                      aria-describedby={error ? errorId : undefined}
-                      onChange={(e) => change(r.min, r.min)(e.target.value)}
+                <div aria-hidden className="relative mt-3 h-2 rounded-pill bg-muted">
+                  {band && (
+                    <span
+                      className="absolute inset-y-0 rounded-pill"
+                      style={{ left: `${band.left}%`, width: `${band.width}%`, background: color }}
                     />
-                    <span className="block text-[11px] text-muted-foreground">
-                      abaixo disso falta
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={r.max}>Máximo</Label>
-                    <Input
-                      id={r.max}
-                      aria-label={`Máximo de ${r.label}`}
-                      inputMode={inputMode}
-                      autoComplete="off"
-                      value={draft[r.max]}
-                      aria-invalid={error ? true : undefined}
-                      aria-describedby={error ? errorId : undefined}
-                      onChange={(e) => change(r.max, r.min)(e.target.value)}
-                    />
-                    <span className="block text-[11px] text-muted-foreground">
-                      acima disso passou
-                    </span>
-                  </div>
+                  )}
                 </div>
+                <StepRow
+                  id={r.min}
+                  label="Mínimo"
+                  ariaLabel={`Mínimo de ${r.label}`}
+                  hint="abaixo disso falta"
+                  inputMode={inputMode}
+                  value={draft[r.min]}
+                  invalid={Boolean(error)}
+                  describedBy={error ? errorId : undefined}
+                  onChange={change(r.min, r.min)}
+                  onStep={(d) =>
+                    change(r.min, r.min)(stepGoalText(draft[r.min], GOAL_STEP[r.min], d))
+                  }
+                />
+                <StepRow
+                  id={r.max}
+                  label="Máximo"
+                  divider
+                  ariaLabel={`Máximo de ${r.label}`}
+                  hint="acima disso passou"
+                  inputMode={inputMode}
+                  value={draft[r.max]}
+                  invalid={Boolean(error)}
+                  describedBy={error ? errorId : undefined}
+                  onChange={change(r.max, r.min)}
+                  onStep={(d) =>
+                    change(r.max, r.min)(stepGoalText(draft[r.max], GOAL_STEP[r.max], d))
+                  }
+                />
                 {error && (
-                  <p id={errorId} role="alert" className="text-sm text-danger">
+                  <p id={errorId} role="alert" className="pb-3 text-sm text-danger">
                     {error}
                   </p>
                 )}
@@ -177,40 +185,56 @@ export default function GoalsPage() {
           })}
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Água e movimento
-          </h2>
-          <div className="divide-y divide-subtle rounded-2xl bg-card">
+        <section className="space-y-2.5">
+          <h2 className="px-1 text-[13px] text-muted-foreground">Água e movimento</h2>
+          <div className="divide-y divide-border rounded-card bg-card px-4">
             <SingleField
               id="waterL"
-              icon={<Droplet size={18} className="text-info" aria-hidden />}
-              label="Água por dia (L)"
+              icon={<Droplet size={20} className="text-water" aria-hidden />}
+              label="Água por dia"
+              ariaLabel="Água por dia (L)"
+              unit="L"
               hint="conta no anel do Hoje"
               inputMode="decimal"
               value={draft.waterL}
               error={errorOf('water')}
               onChange={change('waterL', 'water')}
+              onStep={(d) =>
+                change('waterL', 'water')(stepGoalText(draft.waterL, GOAL_STEP.waterL, d))
+              }
             />
             <SingleField
               id="weeklyWorkouts"
-              icon={<Dumbbell size={18} className="text-muted-foreground" aria-hidden />}
+              icon={<Dumbbell size={20} className="text-foreground" aria-hidden />}
               label="Treinos por semana"
+              unit="dias"
               hint="dias que quer treinar"
               inputMode="numeric"
               value={draft.weeklyWorkouts}
               error={errorOf('workouts')}
               onChange={change('weeklyWorkouts', 'workouts')}
+              onStep={(d) =>
+                change(
+                  'weeklyWorkouts',
+                  'workouts',
+                )(stepGoalText(draft.weeklyWorkouts, GOAL_STEP.weeklyWorkouts, d))
+              }
             />
             <SingleField
               id="dailyStepsTarget"
-              icon={<Footprints size={18} className="text-primary" aria-hidden />}
+              icon={<Footprints size={20} className="text-steps" aria-hidden />}
               label="Passos por dia"
               hint="vem do celular"
               inputMode="numeric"
               value={draft.dailyStepsTarget}
               error={errorOf('steps')}
               onChange={change('dailyStepsTarget', 'steps')}
+              onStep={(d) =>
+                change(
+                  'dailyStepsTarget',
+                  'steps',
+                )(stepGoalText(draft.dailyStepsTarget, GOAL_STEP.dailyStepsTarget, d))
+              }
             />
           </div>
         </section>
@@ -218,7 +242,13 @@ export default function GoalsPage() {
 
       <YourNutrients />
 
-      <Button type="submit" size="xl" full disabled={save.isPending}>
+      <Button
+        type="submit"
+        size="xl"
+        full
+        disabled={save.isPending}
+        className="rounded-pill bg-foreground text-background hover:bg-foreground/90"
+      >
         {save.isPending ? 'Salvando…' : 'Salvar metas'}
       </Button>
       {submitted && !parsed && (
@@ -243,53 +273,186 @@ export default function GoalsPage() {
   );
 }
 
+/** A cor de cada faixa, a mesma do cartão do dia. */
+const RANGE_COLOR: Record<(typeof GOAL_RANGES)[number]['min'], string> = {
+  kcalMin: 'hsl(var(--foreground))',
+  proteinMinG: 'hsl(var(--protein))',
+  carbsMinG: 'hsl(var(--carbs))',
+  fatMinG: 'hsl(var(--fat))',
+};
+
+/**
+ * "− 1.800 +" da prancha. O número continua um campo: digitar 1.850 é mais
+ * rápido que tocar no + várias vezes.
+ */
+function Stepper({
+  id,
+  ariaLabel,
+  inputMode,
+  value,
+  invalid,
+  describedBy,
+  unit,
+  onChange,
+  onStep,
+}: {
+  id: string;
+  ariaLabel?: string;
+  inputMode: 'decimal' | 'numeric';
+  value: string;
+  invalid?: boolean;
+  describedBy?: string;
+  unit?: string;
+  onChange: (value: string) => void;
+  onStep: (direction: 1 | -1) => void;
+}) {
+  const name = ariaLabel ?? id;
+  return (
+    <div className="flex shrink-0 items-center">
+      <button
+        type="button"
+        aria-label={`Diminuir ${name}`}
+        onClick={() => onStep(-1)}
+        className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+      >
+        <Minus size={18} aria-hidden />
+      </button>
+      <span className="flex w-[68px] items-baseline justify-center gap-1">
+        <input
+          id={id}
+          aria-label={ariaLabel}
+          inputMode={inputMode}
+          autoComplete="off"
+          value={value}
+          aria-invalid={invalid ? true : undefined}
+          aria-describedby={describedBy}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(
+            'w-full min-w-0 rounded-chip bg-transparent text-center text-[17px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:text-danger',
+            unit && 'w-auto max-w-[56px] text-right',
+          )}
+          size={unit ? Math.max(value.length, 1) : undefined}
+        />
+        {unit && <span className="text-[17px] font-bold">{unit}</span>}
+      </span>
+      <button
+        type="button"
+        aria-label={`Aumentar ${name}`}
+        onClick={() => onStep(1)}
+        className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+      >
+        <Plus size={18} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function StepRow({
+  id,
+  label,
+  ariaLabel,
+  hint,
+  inputMode,
+  value,
+  invalid,
+  describedBy,
+  onChange,
+  onStep,
+  divider = false,
+}: {
+  id: string;
+  label: string;
+  ariaLabel: string;
+  divider?: boolean;
+  hint: string;
+  inputMode: 'decimal' | 'numeric';
+  value: string;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (value: string) => void;
+  onStep: (direction: 1 | -1) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex min-h-[78px] items-center gap-3 py-3',
+        divider ? 'border-t border-border' : 'mt-1',
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        <label htmlFor={id} className="block text-[15px]">
+          {label}
+        </label>
+        <span className="block text-[13px] text-muted-foreground">{hint}</span>
+      </span>
+      <Stepper
+        id={id}
+        ariaLabel={ariaLabel}
+        inputMode={inputMode}
+        value={value}
+        invalid={invalid}
+        describedBy={describedBy}
+        onChange={onChange}
+        onStep={onStep}
+      />
+    </div>
+  );
+}
+
 function SingleField({
   id,
   icon,
   label,
+  ariaLabel,
+  unit,
   hint,
   inputMode,
   value,
   error,
   onChange,
+  onStep,
 }: {
   id: string;
   icon: React.ReactNode;
   label: string;
+  ariaLabel?: string;
+  unit?: string;
   hint: string;
   inputMode: 'decimal' | 'numeric';
   value: string;
   error?: string;
   onChange: (value: string) => void;
+  onStep: (direction: 1 | -1) => void;
 }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-3">
-      <span className="mt-3">{icon}</span>
-      <span className="min-w-0 flex-1 pt-1">
-        <Label htmlFor={id} className="block text-sm font-bold">
-          {label}
-        </Label>
-        <span className="block text-xs text-muted-foreground">{hint}</span>
-      </span>
-      <div className="w-28">
-        {/* O erro fica fora do Input: com `error` ele troca de árvore e o campo
-          perde o foco no meio da digitação. */}
-        <Input
+    <div className="py-3">
+      <div className="flex min-h-[64px] items-center gap-3">
+        <span className="shrink-0">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <label htmlFor={id} className="block text-[15px] font-semibold">
+            {label}
+          </label>
+          <span className="block text-[13px] text-muted-foreground">{hint}</span>
+        </span>
+        {/* O erro fica fora do campo: trocar de árvore tiraria o foco no meio
+          da digitação. */}
+        <Stepper
           id={id}
+          ariaLabel={ariaLabel ?? label}
           inputMode={inputMode}
-          autoComplete="off"
-          className="text-right tabular-nums"
           value={value}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-erro` : undefined}
-          onChange={(e) => onChange(e.target.value)}
+          unit={unit}
+          invalid={Boolean(error)}
+          describedBy={error ? `${id}-erro` : undefined}
+          onChange={onChange}
+          onStep={onStep}
         />
-        {error && (
-          <p id={`${id}-erro`} role="alert" className="mt-1 text-right text-xs text-danger">
-            {error}
-          </p>
-        )}
       </div>
+      {error && (
+        <p id={`${id}-erro`} role="alert" className="text-right text-xs text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -305,10 +468,7 @@ function YourNutrients() {
   return (
     <section aria-labelledby="seus-nutrientes" className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2
-          id="seus-nutrientes"
-          className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-        >
+        <h2 id="seus-nutrientes" className="px-1 text-[13px] text-muted-foreground">
           Seus nutrientes
         </h2>
         <Link
@@ -318,7 +478,7 @@ function YourNutrients() {
           Gerenciar
         </Link>
       </div>
-      <div className="divide-y divide-subtle overflow-hidden rounded-2xl bg-card">
+      <div className="divide-y divide-border overflow-hidden rounded-card bg-card px-4">
         {q.isLoading && <Skeleton className="m-4 h-10" />}
         {q.error && <LoadError error={q.error} onRetry={() => void q.refetch()} className="m-4" />}
         {nutrients.map((n) => (
@@ -326,9 +486,9 @@ function YourNutrients() {
         ))}
         <Link
           href="/nutrition/nutrient-targets"
-          className="flex min-h-12 items-center gap-2 px-4 py-3 text-sm font-bold text-primary"
+          className="flex min-h-14 items-center gap-2 py-3 text-[15px] font-bold text-primary"
         >
-          <Plus size={16} aria-hidden />
+          <Plus size={18} aria-hidden />
           Adicionar nutriente
         </Link>
       </div>
@@ -347,19 +507,32 @@ function NutrientLink({ n }: { n: NutrientProgress }) {
         : n.min != null && n.max != null
           ? `${fmt(n.min)}–${fmt(n.max)} ${n.unit}`
           : '—';
+  // Abaixo do mínimo hoje: o "MÍN" acende em laranja, como na prancha.
+  const short = kind === 'mín' && n.total < (n.min as number);
   return (
     <Link
       href="/nutrition/nutrient-targets"
-      className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted/40"
+      aria-label={`${n.label}, hoje ${fmt(n.total)} ${n.unit}, ${kind ? `${kind} ` : ''}${target}`}
+      className="flex min-h-[72px] items-center gap-3 py-3"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold">{n.label}</span>
-        <span className="block text-xs text-muted-foreground tabular-nums">
+        <span className="block text-[17px] font-semibold">{n.label}</span>
+        <span className="block text-[13px] text-muted-foreground tabular-nums">
           hoje {fmt(n.total)} {n.unit}
         </span>
       </span>
-      <span className="text-sm tabular-nums">{kind ? `${kind} ${target}` : target}</span>
-      <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
+      {kind && (
+        <span
+          className={cn(
+            'rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold uppercase',
+            short ? 'bg-warning text-background' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {kind}
+        </span>
+      )}
+      <span className="text-[17px] font-bold tabular-nums">{target}</span>
+      <ChevronRight size={18} className="text-muted-foreground" aria-hidden />
     </Link>
   );
 }

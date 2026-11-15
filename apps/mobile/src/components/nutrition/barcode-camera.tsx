@@ -60,7 +60,7 @@ export function BarcodeCamera({
         onBarcodeScanned={ativo ? ({ data }) => onLido(data) : undefined}
       />
       <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
-        <View className="h-40 w-72 rounded-lg border-2 border-primary/80" />
+        <View className="h-40 w-72 rounded-card border-[3px] border-primary" />
       </View>
     </View>
   );
