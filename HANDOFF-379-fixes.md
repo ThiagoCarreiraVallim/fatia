@@ -12,15 +12,16 @@ da raiz; se `/tmp` sumiu, recrie: DATABASE_URL do `.env` com `/fatia` → `/fati
 - [x] 3. Remarcar recusa sessão já feita (409)
 - [x] 4. Falha parcial no aceite não deixa duas ACCEPTED; leitores pegam a maior ACCEPTED
 - [ ] 5. Oferta exige ProfessionalLink ativo (aceitar/recusar/desfazer, lista, Hoje, aviso)
-- [ ] 6. Corrida: claim exige que não haja versão maior (409)
+- [x] 6. Corrida: claim exige que não haja versão maior (409)
 - [ ] Final: lint, typecheck, testes api/api-client/web/mobile; apagar este arquivo
 
 ## Próximo passo
 
-Item 6 (antes do 5, mesmo método): claim de `accept`/`undoDecline` numa transação interativa com
-`SELECT ... FOR UPDATE` no `PlanOffer` e releitura da maior versão; `update` pega o mesmo lock.
-Testes vermelhos já commitados (wip d0b8e1d1): "corrida com a versão nova". Depois o 5
-("vínculo encerrado", também no wip).
+Item 5: vínculo ativo (`ProfessionalLink` autor↔aluno no grupo da oferta, `revokedAt: null`).
+Checar dentro do `claim` (aceitar/recusar/desfazer → 409 "Esse plano não está mais disponível"),
+filtrar `pending` em `list`, o Hoje (`dashboard.service.ts`, `receivedPlan` e "Para fazer") e
+`notifyTeam`. Testes "vínculo encerrado" já no wip d0b8e1d1; falta teste do Hoje
+(`progress/__tests__/dashboard.service.spec.ts`, mock `professionalLink.findMany`).
 
 ## Notas
 
