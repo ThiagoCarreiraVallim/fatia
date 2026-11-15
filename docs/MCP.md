@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **139 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **144 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 139 tools): **117,4 k caracteres**
-hoje, dos quais **6.902 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 144 tools): **121,6 k caracteres**
+hoje, dos quais **7.272 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (96,6 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (100,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -284,6 +284,11 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_meal_template`           | C        |
 |                            | `log_meal_template`            | C        |
 |                            | `delete_meal_template`         | D        |
+| **Plano alimentar**        | `get_nutrition_plan`           | R        |
+|                            | `accept_nutrition_plan`        | U        |
+|                            | `log_plan_meal`                | C        |
+|                            | `swap_plan_item`               | C        |
+|                            | `undo_plan_swap`               | U        |
 | **Itens de refeição**      | `add_meal_item`                | C        |
 |                            | `update_meal_item`             | U        |
 |                            | `delete_meal_item`             | D        |
@@ -384,7 +389,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **139 tools**. Cada uma documentada abaixo.
+Total: **144 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1013,6 +1018,57 @@ Apaga uma refeição salva. As refeições já registradas com ela não mudam.
 
 **Input:** `{ id: string }`  
 **Output:** `{ deleted: string }`
+
+---
+
+## Plano alimentar
+
+O plano que um profissional da equipe escreveu e enviou ao usuário (#376,
+[ADR 045](./ADR/045-plano-alimentar-autoral.md)): refeições, opções por refeição, alimentos da
+base com a quantidade e os equivalentes liberados para troca. É autoral: nenhuma tool cria,
+completa ou sugere plano. Ids de refeição, opção, item, equivalente e troca são procurados
+dentro do plano do próprio usuário (`NOT_FOUND` para o de outra pessoa).
+
+### `get_nutrition_plan`
+
+O plano em uso (`active`) e um novo esperando aceite (`pending`), com o "feito" (`logged`) e as
+trocas (`swap`) do dia, `teamSees`/`viewerName` (o autor vê as trocas só com Alimentação
+liberada) e `week` (dias com as calorias na faixa nos últimos 7, ADR 027).
+
+**Input:** `{ date?: string /* YYYY-MM-DD */ }`  
+**Output:** `{ date, active: NutritionPlan | null, pending: NutritionPlan | null, teamSees, viewerName, week: { inRangeDays, days } }`
+
+### `accept_nutrition_plan`
+
+Aceita o `pending`. O plano em uso vira substituído, as faixas viram as metas do dia (com
+`applyGoals`) e cada opção vira refeição salva. Confirmável: as metas mudam.
+
+**Input:** `{ planId: string }`  
+**Output:** `NutritionPlan`
+
+### `log_plan_meal`
+
+"Comi isso": registra a opção no diário com as trocas do dia, pelo mesmo caminho de
+`log_meal_template`. Com várias opções, `optionId` é obrigatório. Uma vez por refeição e dia
+(`CONFLICT`).
+
+**Input:** `{ planMealId: string; optionId?: string; eatenAt?: string /* ISO 8601 */ }`  
+**Output:** `{ mealId, date }`
+
+### `swap_plan_item`
+
+Troca um item por um dos equivalentes dele, num dia. Uma troca por item e dia; com a refeição
+já registrada, o item do diário muda junto.
+
+**Input:** `{ itemId: string; equivalentId: string; date?: string /* YYYY-MM-DD */ }`  
+**Output:** `{ swap: { id, itemId, equivalentId, date, foodName, grams, kcal }, replaced, teamSees, viewerName }`
+
+### `undo_plan_swap`
+
+Desfaz a troca: volta ao item do plano, inclusive no diário.
+
+**Input:** `{ swapId: string }`  
+**Output:** `{ undone: true, restored: string }`
 
 ---
 

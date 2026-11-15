@@ -5,6 +5,7 @@ import { ProfessionalAccessService } from './professional-access.service';
 import { TEAM_ROLES } from './permissions';
 import { GoalsService } from '../goals/goals.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
+import { NutritionPlanService } from '../nutrition/nutrition-plan.service';
 import { ProgressService } from '../progress/progress.service';
 import { WorkoutPlanService } from '../workout/workout-plan.service';
 import { WorkoutSessionService } from '../workout/workout-session.service';
@@ -118,6 +119,12 @@ export type StudentReading =
   | {
       scope: typeof ShareScope.NUTRITION;
       history: Sem<ReturnType<NutritionSummaryService['getHistory']>>;
+      /**
+       * Plano alimentar (#376): versão em uso, trocas da janela e dias na faixa
+       * (ADR 027). Só aqui, atrás de Alimentação — a troca não aparece em outro
+       * escopo nem sem o vínculo.
+       */
+      plan: Sem<ReturnType<NutritionPlanService['teamView']>>;
     }
   | { scope: typeof ShareScope.BODY; weight: SemIdentidade<WeightSeries> }
   | {
@@ -178,6 +185,7 @@ export class StudentViewService {
     private readonly progress: ProgressService,
     private readonly nutrition: NutritionSummaryService,
     private readonly goals: GoalsService,
+    private readonly nutritionPlans: NutritionPlanService,
   ) {}
 
   /**
@@ -287,7 +295,11 @@ export class StudentViewService {
 
     const ctx = { userId: subjectUserId, timezone: titular.timezone };
 
-    return { membershipId, timezone: ctx.timezone, reading: await this.ler(scope, ctx, days) };
+    return {
+      membershipId,
+      timezone: ctx.timezone,
+      reading: await this.readScope(scope, ctx, days),
+    };
   }
 
   /**
@@ -295,7 +307,7 @@ export class StudentViewService {
    * compilação aqui, e não devolve uma leitura vazia em silêncio depois de a
    * porta já ter autorizado.
    */
-  private async ler(
+  private async readScope(
     scope: ShareScope,
     ctx: { userId: string; timezone: string },
     days: number,
@@ -314,11 +326,17 @@ export class StudentViewService {
           volume: semIdentidade(volume),
         };
       }
-      case ShareScope.NUTRITION:
+      case ShareScope.NUTRITION: {
+        const [history, plan] = await Promise.all([
+          this.nutrition.getHistory(ctx.userId, days, ctx.timezone),
+          this.nutritionPlans.teamView(ctx.userId, ctx.timezone, days),
+        ]);
         return {
           scope: ShareScope.NUTRITION,
-          history: semIdentidade(await this.nutrition.getHistory(ctx.userId, days, ctx.timezone)),
+          history: semIdentidade(history),
+          plan: semIdentidade(plan),
         };
+      }
       case ShareScope.BODY:
         return {
           scope: ShareScope.BODY,

@@ -10,14 +10,14 @@
 | ----------------------------------------------------------- | ------: | ------------------------------------------- |
 | Workout (exercícios, planos, sessões, séries)               |      34 | `apps/api/src/workout/mcp/`                 |
 | Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`                |
-| Nutrition (alimentos, refeições, itens, metas de nutriente) |      22 | `apps/api/src/nutrition/mcp/`               |
+| Nutrition (alimentos, refeições, itens, metas, plano)       |      27 | `apps/api/src/nutrition/mcp/`               |
 | Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`                 |
 | Goals (metas pessoais)                                      |       6 | `apps/api/src/goals/mcp/`                   |
 | Meta (perfil)                                               |       3 | `apps/api/src/mcp/tools/meta/`              |
 | Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`                   |
 | Avisos (central do sino, #373; preferências de aviso, #389) |       4 | `apps/api/src/notifications/mcp/`           |
 | Lembretes pessoais (#389)                                   |       4 | `apps/api/src/notifications/reminders/mcp/` |
-| **Total**                                                   | **111** |                                             |
+| **Total**                                                   | **116** |                                             |
 
 ⚠️ Esta tabela é a única contagem da doc **sem guarda automática**: o
 `TOOL_COUNT_PATTERN` do `tool-catalog.spec.ts` só enxerga um número colado na palavra `tools`, e
@@ -40,12 +40,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-139 tools: **117,4 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 96,6 k e subestima o
+144 tools: **121,6 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 100,0 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 73 tools de escrita
-valem **6.902 caracteres** — média de **86** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 77 tools de escrita
+valem **7.272 caracteres** — média de **86** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -61,7 +61,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **139** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **144** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -188,6 +188,12 @@ preferências de aviso, nas mesmas rotas do app (`/users/me/reminders`, `/users/
 (`confirmableHint`); apagar lembrete é destrutiva. O lembrete de hábito fica fora do schema até os
 hábitos (#390). O `get_today_summary` passou a trazer as metas do dia (N de M, por meta), o contrato do
 "Para fazer" e os avisos não lidos — a mesma resposta do `GET /dashboard/today`.
+Também entregues: `get_nutrition_plan`, `accept_nutrition_plan`, `log_plan_meal`,
+`swap_plan_item` e `undo_plan_swap` (#376), o plano alimentar que o profissional enviou, nas
+mesmas rotas do app (`/nutrition/plan`). Só a leitura é livre; aceitar (muda as metas do dia),
+registrar, trocar e desfazer são escritas reversíveis (`confirmableHint`). Nenhuma tool cria ou
+sugere plano: ele é autoral da equipe ([ADR 045](./ADR/045-plano-alimentar-autoral.md)), e o
+editor (#407) fica no painel, em REST.
 
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -196,7 +202,6 @@ hábitos (#390). O `get_today_summary` passou a trazer as metas do dia (N de M, 
 | Agenda da comunidade (ADR 042)     | `list_group_agenda` (leitura), `set_agenda_interest` / `clear_agenda_interest` ("Vou"), `register_agenda_session`                      | #397  |
 | Circuitos                          | formato de circuito em `create_workout_plan` e rounds/tempo na sessão (tool própria só se a sessão não comportar)                      | #380  |
 | Plano recebido                     | `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`; `create_training_block` com 3 a 6 semanas                               | #379  |
-| Plano alimentar e substituições    | `get_nutrition_plan`, `accept_nutrition_plan`, `log_plan_meal`, `swap_plan_item`, `undo_plan_swap`                                     | #376  |
 | Questionários                      | `list_pending_questionnaires`, `get_questionnaire`, `answer_questionnaire`                                                             | #391  |
 | Foto da refeição (ADR 038, item 7) | as tools de refeição **só indicam** se há foto; `delete_meal_photo`; nenhuma tool manda a foto à IA hospedada (ADR 018)                | #374  |
 | Desafios por tipo (ADR 044)        | `get_my_challenge_progress`; sem tool de check-in com foto (câmera) nem de revisão (administração)                                     | #395  |

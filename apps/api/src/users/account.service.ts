@@ -97,6 +97,7 @@ export class AccountService {
       favoriteFoods,
       foodPortions,
       mealTemplates,
+      nutritionPlans,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -159,6 +160,33 @@ export class AccountService {
         where: { userId },
         include: { items: { orderBy: { position: 'asc' } } },
         orderBy: { createdAt: 'asc' },
+      }),
+      // Plano alimentar recebido da equipe (#376): é da pessoa, com as refeições,
+      // opções, itens, equivalentes, o "comi isso" e as trocas (inclusive as
+      // desfeitas). O autor vai pelo nome, nunca pelo id de outra conta.
+      this.prisma.nutritionPlan.findMany({
+        where: { userId },
+        omit: { authorId: true },
+        include: {
+          author: { select: { name: true } },
+          meals: {
+            orderBy: { position: 'asc' },
+            include: {
+              logs: { orderBy: { date: 'asc' } },
+              options: {
+                orderBy: { position: 'asc' },
+                include: {
+                  items: {
+                    orderBy: { position: 'asc' },
+                    include: { equivalents: { orderBy: { position: 'asc' } } },
+                  },
+                },
+              },
+            },
+          },
+          swaps: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
+        },
+        orderBy: { sentAt: 'asc' },
       }),
       this.prisma.exercise.findMany({
         where: { createdByUserId: userId },
@@ -519,6 +547,7 @@ export class AccountService {
       favoriteFoods,
       foodPortions,
       mealTemplates,
+      nutritionPlans,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -578,6 +607,8 @@ export class AccountService {
         favoriteFoods: favoriteFoods.length,
         foodPortions: foodPortions.length,
         mealTemplates: mealTemplates.length,
+        nutritionPlans: nutritionPlans.length,
+        nutritionSwaps: nutritionPlans.reduce((n, plan) => n + plan.swaps.length, 0),
         customExercises: customExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,

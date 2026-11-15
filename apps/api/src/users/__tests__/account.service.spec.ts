@@ -28,6 +28,7 @@ const makePrisma = () => ({
   favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+  nutritionPlan: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
   groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
@@ -71,6 +72,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   favoriteFoods: 'favoriteFoods',
   foodPortions: 'foodPortions',
   mealTemplates: 'mealTemplates',
+  // Plano alimentar recebido da equipe (#376): é do aluno, com as trocas e o "comi isso".
+  nutritionPlans: 'nutritionPlans',
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
@@ -117,6 +120,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
 const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
+  nutritionPlansAuthored:
+    'Planos alimentares que a pessoa escreveu como profissional (#376): cada um é dado do ' +
+    'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
     'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
@@ -200,6 +206,7 @@ describe('AccountService', () => {
         'favoriteFood',
         'inboxNotice',
         'reminder',
+        'nutritionPlan',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),

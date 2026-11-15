@@ -5,6 +5,7 @@ import type { ProfessionalAccessService } from '../professional-access.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { GoalsService } from '../../goals/goals.service';
 import type { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
+import type { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import type { ProgressService } from '../../progress/progress.service';
 import type { WorkoutPlanService } from '../../workout/workout-plan.service';
 import type { WorkoutSessionService } from '../../workout/workout-session.service';
@@ -44,6 +45,7 @@ describe('StudentViewService', () => {
   };
   let nutrition: { getHistory: jest.Mock };
   let goals: { list: jest.Mock };
+  let nutritionPlans: { teamView: jest.Mock };
   let service: StudentViewService;
 
   beforeEach(() => {
@@ -72,6 +74,9 @@ describe('StudentViewService', () => {
     };
     nutrition = { getHistory: jest.fn().mockResolvedValue({}) };
     goals = { list: jest.fn().mockResolvedValue([]) };
+    nutritionPlans = {
+      teamView: jest.fn().mockResolvedValue({ plan: null, swaps: [], adherence: {} }),
+    };
 
     service = new StudentViewService(
       prisma as unknown as PrismaService,
@@ -81,6 +86,7 @@ describe('StudentViewService', () => {
       progress as unknown as ProgressService,
       nutrition as unknown as NutritionSummaryService,
       goals as unknown as GoalsService,
+      nutritionPlans as unknown as NutritionPlanService,
     );
   });
 
