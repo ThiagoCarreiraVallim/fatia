@@ -38,12 +38,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-131 tools: **108,1 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 88,4 k e subestima o
+131 tools: **109,2 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 89,5 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 68 tools de escrita
-valem **6.403 caracteres** — média de **85** caracteres por tool, algo em torno de 6% do
+valem **6.409 caracteres** — média de **85** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque

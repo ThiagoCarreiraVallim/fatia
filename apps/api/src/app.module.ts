@@ -8,6 +8,7 @@ import { HealthModule } from './health/health.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { YouModule } from './you/you.module';
 import { NutritionModule } from './nutrition/nutrition.module';
 import { WorkoutModule } from './workout/workout.module';
 import { ProgressModule } from './progress/progress.module';
@@ -48,6 +49,7 @@ import { McpModule } from './mcp/mcp.module';
     HealthModule,
     AuthModule,
     UsersModule,
+    YouModule,
     NutritionModule,
     WorkoutModule,
     ProgressModule,

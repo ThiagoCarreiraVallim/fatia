@@ -39,6 +39,10 @@ const makePrisma = () => ({
   userDevice: { findMany: jest.fn().mockResolvedValue([]) },
   notificationPreference: { findMany: jest.fn().mockResolvedValue([]) },
   webPushSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+  userNewsRead: { findMany: jest.fn().mockResolvedValue([]) },
+  userTutorialSeen: { findMany: jest.fn().mockResolvedValue([]) },
+  feedbackIdea: { findMany: jest.fn().mockResolvedValue([]) },
+  dataExport: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -92,6 +96,13 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   memories: 'memories',
   // Plano Free/PRO (ADR 024): o histórico de assinatura é um contrato da pessoa.
   subscriptions: 'subscriptions',
+  // Você (#387): a foto de perfil é um arquivo enviado (metadados em `mediaUploaded`), o que a
+  // pessoa leu e assistiu, as ideias que mandou e os pedidos de exportação.
+  avatarFile: 'mediaUploaded',
+  newsReads: 'newsRead',
+  tutorialsSeen: 'tutorialsSeen',
+  feedbackIdeas: 'ideas',
+  dataExports: 'dataExports',
 };
 
 /**

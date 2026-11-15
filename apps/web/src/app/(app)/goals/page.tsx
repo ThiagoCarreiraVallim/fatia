@@ -349,10 +349,10 @@ export default function GoalsPage() {
       )}
 
       <Link
-        href="/profile"
+        href="/you"
         className="flex items-center justify-between rounded-xl border border-subtle bg-card/50 px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
       >
-        Voltar ao perfil
+        Voltar para Você
         <ChevronRight size={16} />
       </Link>
 

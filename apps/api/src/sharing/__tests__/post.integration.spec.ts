@@ -134,7 +134,12 @@ describe('mural da comunidade (integração)', () => {
 
       const visto = await posts.list(a.outro, a.groupId);
       expect(visto.posts.map((p) => p.id)).toEqual([post.id]);
-      expect(visto.posts[0]!.author).toEqual({ displayName: 'Ana', team: false, isMe: false });
+      expect(visto.posts[0]!.author).toEqual({
+        displayName: 'Ana',
+        team: false,
+        isMe: false,
+        avatarUrl: null,
+      });
 
       await expect(posts.list(estranho, a.groupId)).rejects.toBeInstanceOf(NotFoundException);
       await expect(posts.create(estranho, a.groupId, { body: 'Oi' })).rejects.toBeInstanceOf(
@@ -145,7 +150,12 @@ describe('mural da comunidade (integração)', () => {
     it('sem apelido, o primeiro post usa o primeiro nome; a equipe tem o selo', async () => {
       const a = await comunidade();
       const post = await posts.create(a.prof, a.groupId, { body: 'Aula extra no sábado' });
-      expect(post.author).toEqual({ displayName: 'Equipe', team: true, isMe: true });
+      expect(post.author).toEqual({
+        displayName: 'Equipe',
+        team: true,
+        isMe: true,
+        avatarUrl: null,
+      });
     });
 
     it('post vazio, longo demais ou com imagem repetida é recusado', async () => {

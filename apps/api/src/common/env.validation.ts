@@ -12,6 +12,9 @@ export const AppEnvSchema = z.object({
   LOGTO_MCP_APP_ID: z.string().min(1),
   LOGTO_MCP_APP_SECRET: z.string().min(1),
   WEB_ORIGIN: z.string().url().default('http://localhost:3030'),
+  // Endereço público da API, para os links que ela mesma entrega (exportação de dados, #387).
+  // Vazio = `http://localhost:<API_PORT>`, o do dev.
+  API_PUBLIC_URL: z.string().url().optional().or(z.literal('')),
   // E-mail da própria API (convites de comunidade). Separado do conector SMTP do Logto
   // (`EMAIL_SMTP_*`), que é configurado dentro do Logto e enxerga a rede do Docker; a API roda
   // fora dela no dev. Vazio = não envia: o convite continua valendo pelo link copiado.

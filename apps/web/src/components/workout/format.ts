@@ -1,4 +1,13 @@
-import type { ExerciseGroup, SessionSet } from '@fatia/api-client';
+import {
+  BRAZIL_UNITS,
+  formatDistanceIn,
+  kgToLoad,
+  loadUnitLabel,
+  type DistanceUnit,
+  type ExerciseGroup,
+  type SessionSet,
+  type UnitPrefs,
+} from '@fatia/api-client';
 
 /**
  * Contas e formatação da sessão de treino, fora dos componentes.
@@ -56,13 +65,30 @@ export function formatNumber(value: number | null | undefined): string {
   return String(Number(value.toFixed(2))).replace('.', ',');
 }
 
+/**
+ * A carga na unidade da pessoa, só o número: `82,5` em kg (como sempre) e uma
+ * casa em lb (`181,9`). O banco continua em kg.
+ */
+export function loadValue(kg: number, units: UnitPrefs = BRAZIL_UNITS): string {
+  if (units.loadUnit === 'KG') return formatNumber(kg);
+  return formatNumber(Math.round(kgToLoad(kg, units.loadUnit) * 10) / 10);
+}
+
 /** `12.340` — volume da sessão, com separador de milhar. */
 export function formatInteger(value: number): string {
   return Math.round(value).toLocaleString('pt-BR');
 }
 
-export function formatDistance(meters: number | null | undefined): string {
+/**
+ * `5,20 km` / `800 m`. Com a unidade da pessoa em metros ou milhas (Você ›
+ * Unidades, #387), o formato dela; em km, o de sempre.
+ */
+export function formatDistance(
+  meters: number | null | undefined,
+  unit: DistanceUnit = 'KM',
+): string {
   if (meters == null || !Number.isFinite(meters)) return '—';
+  if (unit !== 'KM') return formatDistanceIn(meters, unit);
   if (meters >= 1000) return `${(meters / 1000).toFixed(2).replace('.', ',')} km`;
   return `${Math.round(meters)} m`;
 }
@@ -86,22 +112,26 @@ export function formatPace(seconds: number, meters: number): string | null {
 export function formatPreviousSet(
   set: SessionSet | null | undefined,
   isCardio: boolean,
+  units: UnitPrefs = BRAZIL_UNITS,
 ): string | null {
   if (!set) return null;
+  const load = (kg: number) => `${loadValue(kg, units)} ${loadUnitLabel(units.loadUnit)}`;
 
   if (isCardio) {
     const parts: string[] = [];
     if (set.durationSeconds != null) parts.push(formatClock(set.durationSeconds));
-    if (set.distanceMeters != null) parts.push(formatDistance(set.distanceMeters));
+    if (set.distanceMeters != null) {
+      parts.push(formatDistance(set.distanceMeters, units.distanceUnit));
+    }
     if (set.avgHeartRate != null) parts.push(`${set.avgHeartRate} bpm`);
     return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   const parts: string[] = [];
   if (set.weightKg != null && set.reps != null) {
-    parts.push(`${formatNumber(set.weightKg)} kg × ${set.reps}`);
+    parts.push(`${load(set.weightKg)} × ${set.reps}`);
   } else if (set.weightKg != null) {
-    parts.push(`${formatNumber(set.weightKg)} kg`);
+    parts.push(load(set.weightKg));
   } else if (set.reps != null) {
     parts.push(`${set.reps} reps`);
   }
@@ -113,18 +143,19 @@ export function formatPreviousSet(
 export function previousCells(
   set: SessionSet | null | undefined,
   isCardio: boolean,
+  units: UnitPrefs = BRAZIL_UNITS,
 ): [string, string, string] {
   if (!set) return ['—', '—', '—'];
   if (isCardio) {
     return [
       set.durationSeconds != null ? formatClock(set.durationSeconds) : '—',
-      formatDistance(set.distanceMeters),
+      formatDistance(set.distanceMeters, units.distanceUnit),
       set.avgHeartRate != null ? String(set.avgHeartRate) : '—',
     ];
   }
   return [
     set.reps != null ? String(set.reps) : '—',
-    formatNumber(set.weightKg),
+    set.weightKg != null ? loadValue(set.weightKg, units) : '—',
     formatNumber(set.rpe),
   ];
 }

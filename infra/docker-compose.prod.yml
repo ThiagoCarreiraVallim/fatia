@@ -39,6 +39,8 @@ services:
       LOGTO_ENDPOINT: https://auth.${DOMAIN}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
       WEB_ORIGIN: https://app.${DOMAIN}
+      # Endereço público da API, para os links que ela entrega (exportação de dados, #387).
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-https://api.${DOMAIN}}
       LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
       LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
       # Management API do Logto: apagar a identidade junto da conta e ler o e-mail no

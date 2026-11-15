@@ -6,6 +6,9 @@ import * as Haptics from 'expo-haptics';
 import { Check, Minus, Plus } from 'lucide-react-native';
 import {
   describePrescription,
+  loadFieldValue,
+  loadToKg,
+  loadUnitLabel,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
@@ -13,9 +16,11 @@ import {
   type SessionSet,
 } from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import {
   formatNumber,
   formatPreviousSet,
+  loadValue,
   parseDecimalInput,
   parseFirstRep,
   previousCells,
@@ -164,8 +169,12 @@ export function ActiveExerciseCard({
     },
   });
 
-  const previousLabel = formatPreviousSet(reference, false);
-  const referenceCells = previousCells(reference, false);
+  // Carga na unidade da pessoa (Você › Unidades, #387): o estado e a API
+  // continuam em kg; só o campo e as dicas mostram em lb.
+  const units = useUnitPrefs();
+  const unitLabel = loadUnitLabel(units.loadUnit);
+  const previousLabel = formatPreviousSet(reference, false, units);
+  const referenceCells = previousCells(reference, false, units);
 
   return (
     <View className="rounded-2xl border border-border bg-card p-4">
@@ -184,19 +193,19 @@ export function ActiveExerciseCard({
 
       <View className="mt-4 flex-row gap-3">
         <Stepper
-          label="CARGA (KG)"
-          accessibilityLabel={`Carga em quilos para ${group.exerciseName}`}
-          value={weight}
+          label={`CARGA (${unitLabel.toUpperCase()})`}
+          accessibilityLabel={`Carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
+          value={loadFieldValue(weight, units.loadUnit)}
           step={1}
           onChange={(next) => {
             setTouched(true);
-            setWeight(Math.max(0, next));
+            setWeight(loadToKg(Math.max(0, next), units.loadUnit));
           }}
           hint={
             reference?.weightKg != null
-              ? `Anterior: ${formatNumber(reference.weightKg)} kg`
+              ? `Anterior: ${loadValue(reference.weightKg, units)} ${unitLabel}`
               : prWeight != null
-                ? `🏆 Recorde: ${formatNumber(prWeight)} kg`
+                ? `🏆 Recorde: ${loadValue(prWeight, units)} ${unitLabel}`
                 : undefined
           }
         />
@@ -237,7 +246,7 @@ export function ActiveExerciseCard({
         <View className="flex-row items-center gap-2">
           <ColumnHeader>Série</ColumnHeader>
           <ColumnHeader wide>Reps</ColumnHeader>
-          <ColumnHeader wide>Carga (kg)</ColumnHeader>
+          <ColumnHeader wide>{`Carga (${unitLabel})`}</ColumnHeader>
           <ColumnHeader wide>RPE</ColumnHeader>
           <View className="w-10" />
         </View>

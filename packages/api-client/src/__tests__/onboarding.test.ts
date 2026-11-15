@@ -28,6 +28,15 @@ const ME: MeUser = {
   activityLevel: null,
   objective: null,
   onboardedAt: null,
+  nickname: null,
+  bio: null,
+  avatarUrl: null,
+  avatarVisibility: 'COMMUNITIES',
+  keepMealPhotos: null,
+  whatsapp: null,
+  whatsappOptIn: false,
+  loadUnit: 'KG',
+  distanceUnit: 'KM',
 };
 
 const CORPO: BodyForm = {

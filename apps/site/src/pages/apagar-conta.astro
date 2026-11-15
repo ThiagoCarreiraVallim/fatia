@@ -1,0 +1,52 @@
+---
+import Base from '../layouts/Base.astro';
+import { site } from '../lib/site';
+
+/**
+ * `fat.ia.br/apagar-conta` (#387): o link público que o Google Play pede para quem quer apagar a
+ * conta sem o app. O site é estático e não tem sessão, então esta página explica o que some
+ * (texto da prancha Al-V8) e leva ao app web, que pede login, oferece o export e confirma com
+ * "APAGAR".
+ */
+const gone = ['Refeições', 'Treinos', 'Pesos e passos', 'Metas', 'Conversas com a IA', 'Foto e perfil'];
+---
+
+<Base
+  title="Apagar conta — Fatia"
+  description="Como apagar sua conta do Fatia e todos os seus dados, mesmo sem o app."
+>
+  <section class="mx-auto flex max-w-xl flex-col gap-5 px-6 py-20">
+    <h1 class="font-display text-4xl font-extrabold tracking-tight">Apagar sua conta</h1>
+    <p class="text-muted-foreground">
+      Apagar a conta remove tudo, e não dá para recuperar:
+    </p>
+    <ul class="flex flex-wrap gap-2">
+      {
+        gone.map((item) => (
+          <li class="rounded-full border border-border/60 px-3 py-1 text-sm">{item}</li>
+        ))
+      }
+    </ul>
+    <ol class="flex list-decimal flex-col gap-2 ps-5 text-muted-foreground">
+      <li>Entre com a conta que você quer apagar.</li>
+      <li>Se quiser, exporte uma cópia dos seus dados antes (o link vale 24 h).</li>
+      <li>Digite <strong class="text-foreground">APAGAR</strong> para confirmar.</li>
+    </ol>
+    <p class="rounded-2xl border border-border/60 bg-card/40 p-4 text-sm">
+      PRO assinado na loja: cancele também na App Store ou no Google Play. Assinatura feita na web é
+      cancelada junto.
+    </p>
+    <a
+      href={site.deleteAccountUrl}
+      class="font-display self-start rounded-xl bg-primary px-6 py-3.5 font-bold text-primary-foreground transition-opacity hover:opacity-90"
+    >
+      Entrar para apagar
+    </a>
+    <p class="text-sm text-muted-foreground">
+      No app, o caminho é Você › Apagar minha conta. Não consegue entrar? Fale com o suporte pelo
+      e-mail da <a href={site.privacyUrl} class="text-foreground underline underline-offset-4"
+        >política de privacidade</a
+      >.
+    </p>
+  </section>
+</Base>

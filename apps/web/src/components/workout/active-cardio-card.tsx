@@ -7,6 +7,7 @@ import { parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseTitle } from './exercise-title';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { formatClock, formatPace, formatPreviousSet } from './format';
 
 interface Props {
@@ -93,6 +94,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   // início da sessão, e aqui a referência é só rótulo — não vira valor de campo.
   // Basta buscar uma vez e descartar o que for desta sessão. O card de força usa
   // o `before` porque lá o dado é o palpite de carga (#190).
+  const units = useUnitPrefs();
   const lastSet = useQuery({
     queryKey: ['workout', 'last-set', group.exerciseId],
     queryFn: () => workoutApi.getLastSet(group.exerciseId),
@@ -101,6 +103,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   const previousLabel = formatPreviousSet(
     lastSet.data && lastSet.data.sessionId !== sessionId ? lastSet.data : null,
     true,
+    units,
   );
 
   const persist = useMutation({

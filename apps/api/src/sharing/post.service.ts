@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AvatarVisibility,
   MembershipStatus,
   PostPolicy,
   type GroupRole,
@@ -46,6 +47,12 @@ export interface AuthorView {
   /** Dono, profissional ou criador: o mural mostra o selo "Equipe". */
   team: boolean;
   isMe: boolean;
+  /**
+   * Foto de perfil, só quando a visibilidade escolhida deixa quem lê ver
+   * (prancha Al-V9): "Minhas comunidades" mostra a todos aqui; "Só a equipe",
+   * à equipe e à própria pessoa. Nulo = iniciais.
+   */
+  avatarUrl: string | null;
 }
 
 export interface PostView {
@@ -133,7 +140,9 @@ const AUTOR = {
     id: true,
     role: true,
     displayName: true,
-    user: { select: { name: true } },
+    user: {
+      select: { name: true, nickname: true, avatarVisibility: true, avatarFile: true },
+    },
   },
 } as const;
 
@@ -151,6 +160,8 @@ interface Eu {
   membershipId: string;
   displayName: string | null;
   userName: string;
+  /** O apelido do perfil (Você, #387), que vale em toda comunidade sem apelido próprio. */
+  userNickname: string | null;
   moderates: boolean;
 }
 
@@ -236,7 +247,7 @@ export class PostService {
       canPost: this.canPost(eu.role, policy),
       canModerate: eu.moderates,
       displayName: eu.displayName,
-      suggestedDisplayName: eu.displayName ?? firstName(eu.userName),
+      suggestedDisplayName: eu.displayName ?? eu.userNickname ?? firstName(eu.userName),
       posts: await Promise.all(rows.map((r) => this.view(r, eu))),
       nextCursor: temMais ? (pagina.at(-1)?.id ?? null) : null,
     };
@@ -257,15 +268,17 @@ export class PostService {
     const [comContagem] = await this.withCommentCounts([row], eu);
     return {
       ...(await this.view(comContagem!, eu)),
-      comments: comentarios.map((c) => ({
-        id: c.id,
-        body: c.body,
-        createdAt: c.createdAt,
-        author: this.author(c.author, eu),
-        removed: c.removedAt !== null,
-        canDelete: c.membershipId === eu.membershipId,
-        canModerate: eu.moderates && c.removedAt === null,
-      })),
+      comments: await Promise.all(
+        comentarios.map(async (c) => ({
+          id: c.id,
+          body: c.body,
+          createdAt: c.createdAt,
+          author: await this.author(c.author, eu),
+          removed: c.removedAt !== null,
+          canDelete: c.membershipId === eu.membershipId,
+          canModerate: eu.moderates && c.removedAt === null,
+        })),
+      ),
     };
   }
 
@@ -370,7 +383,7 @@ export class PostService {
       id: c.id,
       body: c.body,
       createdAt: c.createdAt,
-      author: this.author({ ...c.author, displayName: nome }, eu),
+      author: await this.author({ ...c.author, displayName: nome }, eu),
       removed: false,
       canDelete: true,
       canModerate: eu.moderates,
@@ -668,13 +681,18 @@ export class PostService {
     );
     const m = await this.prisma.groupMembership.findUniqueOrThrow({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, displayName: true, user: { select: { name: true } } },
+      select: {
+        id: true,
+        displayName: true,
+        user: { select: { name: true, nickname: true } },
+      },
     });
     return {
       role,
       membershipId: m.id,
       displayName: m.displayName,
       userName: m.user.name,
+      userNickname: m.user.nickname,
       moderates: can(role, 'content.moderate'),
     };
   }
@@ -687,9 +705,14 @@ export class PostService {
     return g.postPolicy;
   }
 
-  /** Quem ainda não tem apelido ganha um ao publicar: o escolhido ou o primeiro nome. */
+  /**
+   * Quem ainda não tem apelido ganha um ao publicar: o escolhido ou o primeiro
+   * nome. O apelido do perfil não é copiado para a comunidade: ele continua
+   * valendo pelo `nameOf`, e trocar no perfil troca aqui também.
+   */
   private async ensureDisplayName(eu: Eu, escolhido?: string): Promise<string> {
     if (eu.displayName && !escolhido) return eu.displayName;
+    if (!escolhido && eu.userNickname) return eu.userNickname;
     const nome = cleanDisplayName(escolhido ?? firstName(eu.userName));
     if (nome !== eu.displayName) {
       await this.prisma.groupMembership.update({
@@ -797,12 +820,20 @@ export class PostService {
     return rows.map((r) => ({ ...r, comments: porPost.get(r.id) ?? 0 }));
   }
 
+  /** Apelido da comunidade, senão o do perfil (Você, #387), senão o primeiro nome. */
   private nameOf(a: Autor): string {
-    return a.displayName ?? firstName(a.user.name);
+    return a.displayName ?? a.user.nickname ?? firstName(a.user.name);
   }
 
-  private author(a: Autor, eu: Eu): AuthorView {
+  private async author(a: Autor, eu: Eu): Promise<AuthorView> {
+    const isMe = a.id === eu.membershipId;
+    const podeVer =
+      a.user.avatarVisibility === AvatarVisibility.COMMUNITIES ||
+      isMe ||
+      TEAM_ROLES.includes(eu.role);
+    const foto = podeVer ? await this.media.viewOrNull(a.user.avatarFile) : null;
     return {
+      avatarUrl: foto?.url ?? null,
       displayName: this.nameOf(a),
       team: TEAM_ROLES.includes(a.role),
       isMe: a.id === eu.membershipId,
@@ -817,7 +848,7 @@ export class PostService {
       id: r.id,
       body: r.body,
       createdAt: r.createdAt,
-      author: this.author(r.author, eu),
+      author: await this.author(r.author, eu),
       images: await Promise.all(r.images.map((i) => this.media.view(i.file))),
       pinned: r.pinnedAt !== null && r.removedAt === null,
       removed: r.removedAt ? { reason: r.removedReason } : null,

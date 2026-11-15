@@ -3,7 +3,14 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Trophy, Dumbbell, Footprints } from 'lucide-react';
-import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
+import {
+  workoutApi,
+  type PersonalRecordEntry,
+  formatDistanceIn,
+  loadNumber,
+  loadUnitLabel,
+} from '@fatia/api-client';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 
@@ -186,6 +193,7 @@ function SortBtn({
 }
 
 function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
+  const units = useUnitPrefs();
   const isCardio = r.type === 'cardio';
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4">
@@ -207,8 +215,9 @@ function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
         {isCardio ? (
           <>
             <p className="text-lg font-extrabold tabular-nums text-primary">
-              {r.maxDistanceMeters != null ? (r.maxDistanceMeters / 1000).toFixed(2) : '—'}{' '}
-              <span className="text-xs text-muted-foreground">km</span>
+              {r.maxDistanceMeters != null
+                ? formatDistanceIn(r.maxDistanceMeters, units.distanceUnit)
+                : '—'}
             </p>
             <p className="text-[11px] text-muted-foreground tabular-nums">
               {fmtDuration(r.bestDurationSeconds)}
@@ -217,7 +226,8 @@ function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
         ) : (
           <>
             <p className="text-lg font-extrabold tabular-nums text-primary">
-              {r.maxWeightKg ?? '—'} <span className="text-xs text-muted-foreground">kg</span>
+              {r.maxWeightKg != null ? loadNumber(r.maxWeightKg, units.loadUnit) : '—'}{' '}
+              <span className="text-xs text-muted-foreground">{loadUnitLabel(units.loadUnit)}</span>
             </p>
             <p className="text-[11px] text-muted-foreground tabular-nums">
               {r.repsAtMax ?? '—'} reps · 1RM ~

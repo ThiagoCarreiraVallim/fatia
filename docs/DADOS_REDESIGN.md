@@ -74,7 +74,7 @@ Igual à tabela da #370. A coluna "Migração em" diz qual PR cria a tabela ou a
 
 Tabela ou coluna nova com dado de uma pessoa entra, **no mesmo PR da issue dona**:
 
-1. no export LGPD — `GET /users/me/export` (`apps/api/src/users/users.controller.ts` e
+1. no export LGPD — `AccountService.exportData` (montado pelo link de `POST /users/me/exports`, em
    `account.service.ts`) e a tool `export_my_data`;
 2. na exclusão — `DELETE /users/me` (cascata a partir de `User` ou hook de exclusão, como o do
    Asaas) e a tool `delete_my_account`;

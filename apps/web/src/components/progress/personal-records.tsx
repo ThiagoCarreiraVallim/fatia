@@ -4,7 +4,14 @@ import { useMemo } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Trophy, Dumbbell, Footprints, ChevronRight } from 'lucide-react';
-import { workoutApi, type SessionSet } from '@fatia/api-client';
+import {
+  workoutApi,
+  type SessionSet,
+  formatDistanceIn,
+  loadNumber,
+  loadUnitLabel,
+} from '@fatia/api-client';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const TOP_N = 3;
@@ -148,12 +155,13 @@ function PrRow({ exercise, pr }: { exercise: UsedExercise; pr: AnyPR }) {
 }
 
 function PrValue({ isCardio, pr }: { isCardio: boolean; pr: NonNullable<AnyPR> }) {
+  const units = useUnitPrefs();
   if (isCardio && isCardioPR(pr)) {
     const duration = pr.durationSeconds ?? 0;
     const min = Math.floor(duration / 60);
     const sec = duration % 60;
     const distance =
-      pr.distanceMeters !== null ? `${(pr.distanceMeters / 1000).toFixed(2)} km` : null;
+      pr.distanceMeters !== null ? formatDistanceIn(pr.distanceMeters, units.distanceUnit) : null;
     return (
       <>
         <p className="text-lg font-extrabold text-water tabular-nums">
@@ -170,7 +178,8 @@ function PrValue({ isCardio, pr }: { isCardio: boolean; pr: NonNullable<AnyPR> }
     return (
       <>
         <p className="text-lg font-extrabold text-primary tabular-nums">
-          {pr.weightKg ?? '—'} <span className="text-sm">kg</span>
+          {pr.weightKg != null ? loadNumber(pr.weightKg, units.loadUnit) : '—'}{' '}
+          <span className="text-sm">{loadUnitLabel(units.loadUnit)}</span>
         </p>
         <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
           {pr.reps ? `${pr.reps} reps` : 'PR'}
