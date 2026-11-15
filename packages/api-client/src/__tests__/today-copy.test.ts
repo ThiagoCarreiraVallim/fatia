@@ -15,6 +15,9 @@ import {
   weightChange30dLabel,
   weightDeltaSinceLabel,
   weightSparkPath,
+  weightSheetBase,
+  weightSheetSeries,
+  whatsappShareUrl,
   WATER_GLASS_ML,
 } from '../today-copy';
 import type { DailyGoal } from '../progress';
@@ -196,5 +199,51 @@ describe('Hoje (Al-H1/H3/H4/H5)', () => {
       'Ana · Metas de hoje batidas: 2 de 5 · Água 1,3 L · Passos 4.231 · Sequência 12 dias — fatia',
     );
     expect(dayShareMessage(card, null)).toMatch(/^Metas de hoje batidas: 2 de 5/);
+  });
+
+  describe('folha de peso (Al-H4)', () => {
+    const progress = {
+      points: [
+        { date: '2026-10-16', weightKg: 72.7 },
+        { date: '2026-11-13', weightKg: 70.2 },
+      ],
+      latest: { id: 'w1', weightKg: 70.2, date: '2026-11-13', loggedAt: '2026-11-13T10:00:00Z' },
+      previous: { weightKg: 70.4, date: '2026-11-06' },
+    };
+
+    it('sem pesagem hoje: parte da última, compara com ela e salvar cria', () => {
+      expect(weightSheetBase(progress, '2026-11-14')).toEqual({
+        startKg: 70.2,
+        todayLogId: null,
+        reference: { weightKg: 70.2, date: '2026-11-13' },
+        points: [72.7, 70.2],
+      });
+    });
+
+    it('já pesou hoje: compara com a anterior e salvar corrige o registro de hoje', () => {
+      const base = weightSheetBase(progress, '2026-11-13');
+      expect(base.todayLogId).toBe('w1');
+      expect(base.reference).toEqual({ weightKg: 70.4, date: '2026-11-06' });
+    });
+
+    it('sem registro nenhum: 70 kg, sem comparação nem traço', () => {
+      expect(weightSheetBase(undefined, '2026-11-14')).toEqual({
+        startKg: 70,
+        todayLogId: null,
+        reference: null,
+        points: [],
+      });
+    });
+
+    it('o traço termina no valor escolhido, trocando a pesagem de hoje', () => {
+      expect(weightSheetSeries([72.7, 70.2], 70.1, false)).toEqual([72.7, 70.2, 70.1]);
+      expect(weightSheetSeries([72.7, 70.2], 70.1, true)).toEqual([72.7, 70.1]);
+    });
+  });
+
+  it('link do WhatsApp com o texto codificado', () => {
+    expect(whatsappShareUrl('Metas 2 de 5 · Água 1,3 L')).toBe(
+      'https://wa.me/?text=Metas%202%20de%205%20%C2%B7%20%C3%81gua%201%2C3%20L',
+    );
   });
 });

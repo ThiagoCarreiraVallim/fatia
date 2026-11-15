@@ -1,5 +1,5 @@
 import { dayMonth, formatDecimal, formatInteger } from './format';
-import type { DailyGoal } from './progress';
+import type { DailyGoal, WeightProgress } from './progress';
 
 /**
  * Textos e contas da aba Hoje do redesign (#373): pranchas Al-H1-Hoje, Al-H3-Agua,
@@ -216,6 +216,49 @@ export function weightSparkPath(values: readonly number[], width: number, height
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * De onde a folha de peso parte (Al-H4-Peso). Pesou hoje: o valor é o de hoje,
+ * a comparação é com a pesagem anterior e salvar corrige o registro de hoje.
+ * Não pesou: parte da última pesagem e compara com ela; salvar cria.
+ */
+export function weightSheetBase(
+  progress: Pick<WeightProgress, 'points' | 'latest' | 'previous'> | undefined,
+  today: string,
+): {
+  startKg: number;
+  /** O registro de hoje, que salvar corrige em vez de duplicar. */
+  todayLogId: string | null;
+  reference: { weightKg: number; date: string } | null;
+  points: number[];
+} {
+  const latest = progress?.latest ?? null;
+  const loggedToday = latest?.date === today;
+  return {
+    startKg: latest?.weightKg ?? WEIGHT_FALLBACK_KG,
+    todayLogId: loggedToday && latest ? latest.id : null,
+    reference: loggedToday
+      ? (progress?.previous ?? null)
+      : latest
+        ? { weightKg: latest.weightKg, date: latest.date }
+        : null,
+    points: progress?.points.map((p) => p.weightKg) ?? [],
+  };
+}
+
+/** Os 30 dias terminando no valor escolhido: troca a pesagem de hoje, se houver. */
+export function weightSheetSeries(
+  points: readonly number[],
+  valueKg: number,
+  loggedToday: boolean,
+): number[] {
+  return loggedToday ? [...points.slice(0, -1), valueKg] : [...points, valueKg];
+}
+
+/** O link do WhatsApp com o texto pronto, igual no PWA e no app. */
+export function whatsappShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
 /** O cartão de "Compartilhar meu dia" (Al-H5-Metas): o formato de `ShareCard` das duas apps. */
