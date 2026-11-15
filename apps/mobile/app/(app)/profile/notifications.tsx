@@ -1,163 +1,137 @@
-import { useEffect, useState } from 'react';
-import { Linking, Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Fragment } from 'react';
+import { Image, Pressable, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react-native';
+import type { IconName } from '@fatia/design';
 import {
-  NOTIFICATION_KIND_INFO,
-  NOTIFICATION_KINDS,
+  notificationGroups,
+  notificationPreview,
   notificationsApi,
   type NotificationKind,
-  type NotificationPreferences,
+  type NotificationSettings,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, cn, ErrorState, LoadingState } from '@/components/ui';
-import { disablePush, enablePush, pushDeviceId, type PushSetup } from '@/notifications/push';
-import { colors } from '@/theme/colors';
+import { NOTIFICATION_SETTINGS_KEY } from '@/components/reminders/keys';
+import { ChipIcon } from '@/components/today/parts';
+import { ToggleTrack } from '@/components/you/you-list';
+import { ErrorState, LoadingState, useToast } from '@/components/ui';
+import { Text } from '@/components/ui/text';
 
-const PREFS_KEY = ['users', 'me', 'notifications'] as const;
-
-const AVISO_SETUP: Record<Exclude<PushSetup, 'enabled'>, string> = {
-  denied: 'O celular não deixou o Fatia mandar avisos. Libere nas configurações do sistema.',
-  unavailable: 'Esta versão do app não recebe avisos. Atualize pela loja quando puder.',
-};
-
-function Chave({
-  label,
-  hint,
-  ligado,
-  disabled,
-  onToggle,
-}: {
-  label: string;
-  hint: string;
-  ligado: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityState={{ checked: ligado, disabled }}
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      disabled={disabled}
-      onPress={onToggle}
-      className={cn(
-        'min-h-[44px] flex-row items-start gap-3 rounded-xl border border-border bg-card p-3 active:opacity-80',
-        disabled && 'opacity-50',
-      )}
-    >
-      <View
-        className={cn(
-          'mt-0.5 h-5 w-5 items-center justify-center rounded border',
-          ligado ? 'border-primary bg-primary' : 'border-muted-foreground',
-        )}
-      >
-        {ligado ? <Check size={14} color={colors.primaryForeground} /> : null}
-      </View>
-      <View className="flex-1 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
-        <Text className="text-xs text-muted-foreground">{hint}</Text>
-      </View>
-    </Pressable>
-  );
-}
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- asset estático do Metro
+const APP_ICON = require('../../../assets/icon.png') as number;
 
 /**
- * Perfil → Notificações (Fase 8c): ligar os avisos neste celular e escolher o
- * que chega. As chaves valem para todos os celulares da conta; a web mostra
- * as mesmas.
+ * Notificações (prancha Al-V4, #389) — réplica de
+ * `apps/web/src/components/notifications/notifications-screen.tsx`: três grupos
+ * com o liga-desliga de cada tipo, a prévia do aviso agrupado e a promessa de
+ * que nenhum aviso mostra dado de saúde nem o texto de um post.
  */
 export default function NotificationsScreen() {
   const qc = useQueryClient();
-  const [aqui, setAqui] = useState<boolean | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
-
-  useEffect(() => {
-    void pushDeviceId().then((id) => setAqui(id !== null));
-  }, []);
-
-  const prefs = useQuery({ queryKey: PREFS_KEY, queryFn: () => notificationsApi.preferences() });
-  const salvar = useMutation({
-    mutationFn: (input: Partial<NotificationPreferences>) => notificationsApi.setPreferences(input),
-    onSuccess: (r) => qc.setQueryData(PREFS_KEY, r),
+  const toast = useToast();
+  const settings = useQuery({
+    queryKey: NOTIFICATION_SETTINGS_KEY,
+    queryFn: () => notificationsApi.settings(),
   });
 
-  const alternarAqui = async () => {
-    setOcupado(true);
-    setAviso(null);
-    try {
-      if (aqui) {
-        await disablePush();
-        setAqui(false);
-      } else {
-        const r = await enablePush(true);
-        setAqui(r === 'enabled');
-        if (r !== 'enabled') setAviso(AVISO_SETUP[r]);
+  const save = useMutation({
+    mutationFn: ({ kind, on }: { kind: NotificationKind; on: boolean }) =>
+      notificationsApi.setPreferences({ [kind]: on }),
+    onMutate: async ({ kind, on }) => {
+      await qc.cancelQueries({ queryKey: NOTIFICATION_SETTINGS_KEY });
+      const before = qc.getQueryData<NotificationSettings>(NOTIFICATION_SETTINGS_KEY);
+      if (before) {
+        qc.setQueryData<NotificationSettings>(NOTIFICATION_SETTINGS_KEY, {
+          ...before,
+          preferences: { ...before.preferences, [kind]: on },
+        });
       }
-    } catch {
-      setAviso('Não deu para mudar agora. Tente de novo.');
-    } finally {
-      setOcupado(false);
-    }
-  };
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(NOTIFICATION_SETTINGS_KEY, ctx.before);
+      toast.show({ message: 'Não deu para salvar. Tente de novo.' });
+    },
+  });
 
   return (
-    <Screen>
-      <View className="gap-5 p-4">
-        <View className="gap-2">
-          <Chave
-            label="Avisos neste celular"
-            hint="Convites, desafios e o mural das suas comunidades. Nunca dado de saúde."
-            ligado={aqui === true}
-            disabled={aqui === null || ocupado}
-            onToggle={() => void alternarAqui()}
-          />
-          {aviso ? (
-            <View className="gap-2">
-              <Text accessibilityRole="alert" className="text-xs text-muted-foreground">
-                {aviso}
-              </Text>
-              {aviso === AVISO_SETUP.denied ? (
-                <Button variant="outline" size="sm" onPress={() => void Linking.openSettings()}>
-                  <Text className="text-sm font-semibold text-foreground">Abrir configurações</Text>
-                </Button>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+    <Screen onRefresh={() => void settings.refetch()} refreshing={settings.isRefetching}>
+      <View className="gap-4 px-6 pb-6 pt-4">
+        {settings.isPending ? <LoadingState /> : null}
+        {settings.isError ? (
+          <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
+        ) : null}
+        {settings.data ? (
+          <>
+            {notificationGroups({ team: settings.data.team }).map((group) => (
+              <View key={group.title} className="gap-2">
+                <View className="flex-row items-center justify-between px-1">
+                  <Text
+                    accessibilityRole="header"
+                    className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground"
+                  >
+                    {group.title}
+                  </Text>
+                  {group.detail ? (
+                    <Text className="text-[13px] text-muted-foreground">{group.detail}</Text>
+                  ) : null}
+                </View>
+                <View className="overflow-hidden rounded-card bg-card">
+                  {group.items.map((item, i) => {
+                    const on = settings.data.preferences[item.kind];
+                    return (
+                      <Fragment key={item.kind}>
+                        {i > 0 ? <View className="ml-[70px] h-px bg-border" /> : null}
+                        <Pressable
+                          accessibilityRole="switch"
+                          accessibilityLabel={item.label}
+                          accessibilityHint={item.hint}
+                          accessibilityState={{ checked: on }}
+                          onPress={() => save.mutate({ kind: item.kind, on: !on })}
+                          className="min-h-16 flex-row items-center gap-3.5 px-4 py-3 active:bg-surface-3"
+                        >
+                          <ChipIcon icon={item.icon as IconName} tone={item.tone} />
+                          <View className="flex-1">
+                            <Text className="font-sans-semibold text-[15px] text-foreground">
+                              {item.label}
+                            </Text>
+                            <Text className="text-[13px] text-muted-foreground">{item.hint}</Text>
+                          </View>
+                          <ToggleTrack on={on} />
+                        </Pressable>
+                      </Fragment>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
 
-        <View className="gap-2">
-          <Text accessibilityRole="header" className="text-sm font-semibold text-foreground">
-            O que chega
-          </Text>
-          {prefs.isPending ? <LoadingState /> : null}
-          {prefs.isError ? (
-            <ErrorState error={prefs.error} onRetry={() => prefs.refetch()} />
-          ) : null}
-          {prefs.data
-            ? NOTIFICATION_KINDS.map((k: NotificationKind) => (
-                <Chave
-                  key={k}
-                  label={NOTIFICATION_KIND_INFO[k].label}
-                  hint={NOTIFICATION_KIND_INFO[k].hint}
-                  ligado={prefs.data[k]}
-                  disabled={salvar.isPending}
-                  onToggle={() => salvar.mutate({ [k]: !prefs.data[k] })}
+            <View className="gap-2 rounded-card bg-muted px-[18px] py-4">
+              <Text className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground">
+                Avisos chegam agrupados
+              </Text>
+              <View className="flex-row items-center gap-2">
+                <Image
+                  source={APP_ICON}
+                  accessibilityIgnoresInvertColors
+                  style={{ width: 28, height: 28, borderRadius: 8 }}
                 />
-              ))
-            : null}
-          {salvar.isError ? (
-            <Text accessibilityRole="alert" className="text-xs text-destructive">
-              Não deu para salvar agora. Tente de novo.
+                <View className="flex-1">
+                  <Text className="font-sans-bold text-[13px] text-foreground">Fatia</Text>
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    className="text-[13px] text-muted-foreground"
+                  >
+                    {notificationPreview(settings.data.preferences, settings.data)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text className="text-[13px] text-muted-foreground">
+              Nenhum aviso mostra dado de saúde ou o texto de um post.
             </Text>
-          ) : null}
-          <Text className="text-xs text-muted-foreground">
-            Valem para todos os celulares em que você ligou os avisos.
-          </Text>
-        </View>
+          </>
+        ) : null}
       </View>
     </Screen>
   );

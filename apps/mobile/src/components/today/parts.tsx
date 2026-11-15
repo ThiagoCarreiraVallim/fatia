@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { View, type TextStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import type { GoalTone } from '@fatia/api-client';
+import type { IconTone } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
@@ -24,7 +24,7 @@ export const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 export const todayCard = 'gap-3 overflow-hidden rounded-card bg-card p-5';
 export const todayTile = 'flex-1 gap-2 overflow-hidden rounded-card bg-card px-[18px] py-4';
 
-export type Tone = GoalTone | 'brand';
+export type Tone = IconTone;
 
 /** A cor de cada tom, no tema que está valendo. */
 export function toneColor(tone: Tone): string {
@@ -39,6 +39,11 @@ export function toneColor(tone: Tone): string {
       return colors.steps;
     case 'brand':
       return colors.brand;
+    // `chipic pink` (Aniversário) e o `chipic` sem tom (Pesagem, Moderação).
+    case 'pink':
+      return colors.fat;
+    case 'neutral':
+      return colors.foreground;
   }
 }
 
@@ -49,6 +54,7 @@ export function toneInk(tone: Tone): string {
 
 /** Fundo do tom a 14%. */
 export function toneSoft(tone: Tone): string {
+  if (tone === 'neutral') return colors.surface3;
   return `${toneColor(tone)}24`;
 }
 
@@ -98,7 +104,7 @@ export function ChipIcon({
 }: {
   icon: IconName;
   tone: Tone;
-  size?: 34 | 40;
+  size?: 32 | 34 | 40;
 }) {
   return (
     <View
@@ -107,11 +113,11 @@ export function ChipIcon({
       style={{
         width: size,
         height: size,
-        borderRadius: size === 34 ? 11 : 14,
+        borderRadius: size === 40 ? 14 : size === 34 ? 11 : 10,
         backgroundColor: toneSoft(tone),
       }}
     >
-      <Icon name={icon} size={size === 34 ? 16 : 20} color={toneInk(tone)} />
+      <Icon name={icon} size={size === 40 ? 20 : 16} color={toneInk(tone)} />
     </View>
   );
 }
