@@ -104,3 +104,41 @@ export function aiGenerateLabel(state: AiGenerateState): string {
 
 export const AI_GENERATE_DRAFT_NOTE = 'Rascunho gerado pela IA. Revise antes de publicar.';
 export const AI_GENERATE_ERROR = 'Não deu para gerar agora. Tente de novo.';
+
+// ---------------------------------------------------------------- peças dos componentes
+
+/** Texto padrão de cada selo de plano e de estado (prancha Componentes · Selos). */
+export const STATUS_BADGE_LABELS = {
+  free: 'Free',
+  trial: (days: number) => `Teste · ${days} ${days === 1 ? 'dia' : 'dias'}`,
+  pro: 'PRO',
+  'pro-community': (group: string) => `PRO · ${group}`,
+  lite: 'Lite',
+  done: 'Concluído',
+  pending: 'Pendente',
+  risk: 'Em risco',
+} as const;
+
+/** Onde a linha com swipe para ao soltar: passou da metade das ações, abre. */
+export function swipeSettle(offset: number, actionsWidth: number): number {
+  return offset < -actionsWidth / 2 ? -actionsWidth : 0;
+}
+
+/** Na régua, o traço `i` é maior (de 5 em 5)? Os traços andam com o valor. */
+export function rulerMajorTick(
+  i: number,
+  r: { value: number; min: number; step: number },
+): boolean {
+  const offset = Math.round((r.value - r.min) / r.step) % 5;
+  return (i + offset) % 5 === 0;
+}
+
+export type ShareIdentityChoice =
+  { as: 'name'; value: string } | { as: 'handle'; value: string } | { as: 'none' };
+
+/** Como a pessoa aparece no cartão: o nome, o @, ou nada. */
+export function shareIdentityText(identity: ShareIdentityChoice): string | null {
+  if (identity.as === 'name') return identity.value;
+  if (identity.as === 'handle') return `@${identity.value}`;
+  return null;
+}

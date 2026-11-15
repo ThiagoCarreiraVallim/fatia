@@ -1,5 +1,6 @@
 'use client';
 
+import { shareIdentityText } from '@fatia/api-client';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 
@@ -33,12 +34,7 @@ export function ShareCard({
   identity: ShareIdentity;
   className?: string;
 }) {
-  const who =
-    identity.as === 'name'
-      ? identity.value
-      : identity.as === 'handle'
-        ? `@${identity.value}`
-        : null;
+  const who = shareIdentityText(identity);
   return (
     <figure
       aria-label={`${data.caption}: ${data.headline}`}

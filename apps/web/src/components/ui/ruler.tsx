@@ -1,5 +1,6 @@
 'use client';
 
+import { rulerMajorTick } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,8 +29,6 @@ export function Ruler({
   className?: string;
 }) {
   const ticks = 21;
-  // Os traços andam com o valor: o do meio é sempre o valor atual.
-  const offset = ((value - min) / step) % 5;
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex items-end justify-between">
@@ -42,7 +41,8 @@ export function Ruler({
       <div className="relative h-11 overflow-hidden rounded-field bg-muted">
         <div aria-hidden className="absolute inset-0 flex items-center justify-between px-3">
           {Array.from({ length: ticks }, (_, i) => {
-            const major = (i + offset) % 5 === 0;
+            // Os traços andam com o valor: o do meio é sempre o valor atual.
+            const major = rulerMajorTick(i, { value, min, step });
             return <i key={i} className={cn('w-px bg-border-strong', major ? 'h-5' : 'h-3')} />;
           })}
         </div>

@@ -42,16 +42,7 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
-/** Texto padrão de cada selo de estado. */
-export const STATUS_BADGE_LABELS = {
-  free: 'Free',
-  trial: (days: number) => `Teste · ${days} ${days === 1 ? 'dia' : 'dias'}`,
-  pro: 'PRO',
-  'pro-community': (group: string) => `PRO · ${group}`,
-  lite: 'Lite',
-  done: 'Concluído',
-  pending: 'Pendente',
-  risk: 'Em risco',
-} as const;
+/** Os textos vêm do api-client: o app usa os mesmos. */
+export { STATUS_BADGE_LABELS } from '@fatia/api-client';
 
 export { Badge, badgeVariants };

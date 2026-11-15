@@ -77,3 +77,36 @@ describe('"Gerar com IA" (prancha 1.7)', () => {
     expect(AI_GENERATE_DRAFT_NOTE).toMatch(/rascunho/i);
   });
 });
+
+describe('peças compartilhadas pelos componentes do app e da web', () => {
+  it('selos de plano e de estado', async () => {
+    const { STATUS_BADGE_LABELS } = await import('../plan-components-copy');
+    expect(STATUS_BADGE_LABELS.trial(1)).toBe('Teste · 1 dia');
+    expect(STATUS_BADGE_LABELS['pro-community']('Academia')).toBe('PRO · Academia');
+    expect([
+      STATUS_BADGE_LABELS.done,
+      STATUS_BADGE_LABELS.pending,
+      STATUS_BADGE_LABELS.risk,
+    ]).toEqual(['Concluído', 'Pendente', 'Em risco']);
+  });
+
+  it('linha com swipe: passou da metade abre, senão fecha', async () => {
+    const { swipeSettle } = await import('../plan-components-copy');
+    expect(swipeSettle(-100, 176)).toBe(-176);
+    expect(swipeSettle(-80, 176)).toBe(0);
+  });
+
+  it('régua: o traço maior anda com o valor', async () => {
+    const { rulerMajorTick } = await import('../plan-components-copy');
+    expect(rulerMajorTick(0, { value: 30, min: 30, step: 1 })).toBe(true);
+    expect(rulerMajorTick(0, { value: 31, min: 30, step: 1 })).toBe(false);
+    expect(rulerMajorTick(4, { value: 31, min: 30, step: 1 })).toBe(true);
+  });
+
+  it('cartão: como a pessoa aparece', async () => {
+    const { shareIdentityText } = await import('../plan-components-copy');
+    expect(shareIdentityText({ as: 'name', value: 'Ana' })).toBe('Ana');
+    expect(shareIdentityText({ as: 'handle', value: 'ana' })).toBe('@ana');
+    expect(shareIdentityText({ as: 'none' })).toBeNull();
+  });
+});

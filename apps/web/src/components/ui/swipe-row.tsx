@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { swipeSettle } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { Icon } from './icon';
 
@@ -51,7 +52,7 @@ export function SwipeRow({
     if (!start.current) return;
     start.current = null;
     setDragging(false);
-    setOffset((o) => (o < -full / 2 ? -full : 0));
+    setOffset((o) => swipeSettle(o, full));
   };
 
   return (
