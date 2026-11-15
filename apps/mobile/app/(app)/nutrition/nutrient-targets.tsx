@@ -36,6 +36,9 @@ import { colors } from '@/theme/colors';
  * digitáveis. "Outro" pede só nome e unidade; a chave sai do nome.
  */
 
+/** Campo preenchido da prancha: --s2 dentro do cartão, sem borda. */
+const FIELD = 'h-12 rounded-field border-0 bg-muted text-base';
+
 const PRESET_KEYS = new Set(NUTRIENT_PRESETS.map((p) => p.nutrientKey));
 const CUSTOM = '__custom__';
 const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
@@ -139,8 +142,8 @@ export default function NutrientTargetsScreen() {
 
   return (
     <Screen onRefresh={() => void targets.refetch()} refreshing={targets.isRefetching}>
-      <View className="gap-5 p-4 pb-28">
-        <Text className="text-sm text-muted-foreground">
+      <View className="gap-5 px-5 pb-28 pt-2">
+        <Text className="text-[13px] text-muted-foreground">
           Além dos macros. Eles aparecem em Nutrição, no detalhe de cada refeição e nas Metas do
           dia. O valor de hoje soma o que você registra.
         </Text>
@@ -159,10 +162,7 @@ export default function NutrientTargetsScreen() {
 
         {targets.data ? (
           <View className="gap-2">
-            <Text
-              accessibilityRole="header"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <Text accessibilityRole="header" className="px-1 text-[13px] text-muted-foreground">
               Hoje
             </Text>
             {targets.data.map((t) => (
@@ -182,24 +182,29 @@ export default function NutrientTargetsScreen() {
           </View>
         ) : null}
 
-        <View className="gap-4 rounded-2xl bg-card p-4">
-          <View>
-            <Text className="text-xs text-muted-foreground">Adicionar nutriente</Text>
-            <Text className="text-base font-bold text-foreground">{pickName}</Text>
+        <View
+          className="gap-4 rounded-card bg-card p-4"
+          style={{ borderWidth: 1.5, borderColor: `${colors.primary}59` }}
+        >
+          <View className="flex-row items-center gap-3">
+            <View
+              className="h-12 w-12 items-center justify-center rounded-field"
+              style={{ backgroundColor: `${colors.primary}26` }}
+            >
+              <Plus size={20} color={colors.primaryText} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-[13px] text-muted-foreground">Adicionar nutriente</Text>
+              <Text className="font-display-semibold text-[17px] text-foreground">{pickName}</Text>
+            </View>
           </View>
 
           <View className="flex-row flex-wrap gap-1.5">
-            {NUTRIENT_PRESETS.map((p) => {
-              const exists = existingKeys.has(p.nutrientKey);
+            {/* Os que a pessoa já tem saem da lista, como na prancha. */}
+            {NUTRIENT_PRESETS.filter((p) => !existingKeys.has(p.nutrientKey)).map((p) => {
               const on = preset.nutrientKey === p.nutrientKey;
               return (
-                <ChipButton
-                  key={p.nutrientKey}
-                  label={p.label}
-                  on={on}
-                  disabled={exists}
-                  onPress={() => pick(p)}
-                />
+                <ChipButton key={p.nutrientKey} label={p.label} on={on} onPress={() => pick(p)} />
               );
             })}
             <ChipButton
@@ -271,7 +276,7 @@ export default function NutrientTargetsScreen() {
                 value={min}
                 onChangeText={setMin}
                 placeholder="quero pelo menos"
-                className={rangeError ? 'border-destructive' : undefined}
+                className={cn(FIELD, rangeError && 'border border-destructive')}
               />
             </View>
             <View className="flex-1 gap-1">
@@ -283,7 +288,7 @@ export default function NutrientTargetsScreen() {
                 value={max}
                 onChangeText={setMax}
                 placeholder="quero no máximo"
-                className={rangeError ? 'border-destructive' : undefined}
+                className={cn(FIELD, rangeError && 'border border-destructive')}
               />
             </View>
           </View>
@@ -295,6 +300,8 @@ export default function NutrientTargetsScreen() {
 
           <Button
             size="xl"
+            className="rounded-pill bg-foreground"
+            textClassName="text-background"
             onPress={() => save.mutate()}
             disabled={!canSave || save.isPending}
             loading={save.isPending}
@@ -334,18 +341,18 @@ function ChipButton({
       disabled={disabled}
       onPress={onPress}
       className={cn(
-        'min-h-[44px] flex-row items-center justify-center gap-1 rounded-full px-3 py-1',
-        on ? 'bg-primary' : 'bg-muted',
+        'h-11 flex-row items-center justify-center gap-1.5 rounded-chip px-4',
+        on ? 'bg-primary' : label === 'Outro' ? 'border border-border-strong' : 'bg-muted',
         disabled && 'opacity-30',
       )}
     >
       {label === 'Outro' ? (
-        <Plus size={14} color={on ? colors.background : colors.mutedForeground} />
+        <Plus size={16} color={on ? colors.background : colors.foreground} />
       ) : null}
       <Text
         className={cn(
-          'text-xs font-bold',
-          on ? 'text-primary-foreground' : 'text-muted-foreground',
+          'font-sans-semibold text-[15px]',
+          on ? 'text-primary-foreground' : 'text-foreground',
         )}
       >
         {label}
@@ -379,12 +386,21 @@ function TargetRow({
   const total = progress?.total ?? 0;
   const pct = ref > 0 ? Math.min(100, Math.round((total / ref) * 100)) : 0;
   const status = progress?.status ?? 'none';
+  // Abaixo do mínimo hoje: o "MÍN" acende em laranja, como na prancha.
+  const short = kind === 'mín' && status === 'under';
   return (
-    <View className="gap-2 rounded-2xl border border-border bg-card p-4">
+    <View className="gap-3 rounded-card bg-card p-4">
       <View className="flex-row items-center gap-2">
-        <Text className="text-sm font-bold text-foreground">{target.label}</Text>
-        <View className="rounded-full bg-muted px-2 py-0.5">
-          <Text className="text-[11px] font-bold text-foreground">{kind}</Text>
+        <Text className="font-display-semibold text-[17px] text-foreground">{target.label}</Text>
+        <View className={cn('rounded-pill px-2.5 py-0.5', short ? 'bg-warning' : 'bg-muted')}>
+          <Text
+            className={cn(
+              'font-sans-extrabold text-[11px] uppercase',
+              short ? 'text-background' : 'text-muted-foreground',
+            )}
+          >
+            {kind}
+          </Text>
         </View>
         {!PRESET_KEYS.has(target.nutrientKey) ? (
           <View className="rounded-full bg-primary/15 px-2 py-0.5">
@@ -396,34 +412,45 @@ function TargetRow({
           accessibilityLabel={`Remover ${target.label}`}
           onPress={onDelete}
           hitSlop={8}
-          className="ml-auto h-11 w-11 items-center justify-center rounded-md active:bg-accent"
+          className="-my-2 -mr-2 ml-auto h-11 w-11 items-center justify-center rounded-field active:bg-muted"
         >
-          <Trash2 size={16} color={colors.mutedForeground} />
+          <Trash2 size={18} color={colors.mutedForeground} />
         </Pressable>
       </View>
       <View
         accessibilityRole="progressbar"
         accessibilityLabel={target.label}
         accessibilityValue={{ min: 0, max: 100, now: pct }}
-        className="h-1.5 overflow-hidden rounded-full bg-muted"
+        className="h-2 overflow-hidden rounded-pill bg-muted"
       >
         <View
           className={cn(
-            'h-full',
-            status === 'over' ? 'bg-danger' : status === 'under' ? 'bg-warning' : 'bg-primary',
+            'h-full rounded-pill',
+            status === 'over' ? 'bg-danger' : status === 'under' ? 'bg-protein' : 'bg-primary',
           )}
           style={{ width: `${pct}%` }}
         />
       </View>
       <View className="flex-row items-baseline justify-between">
-        <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
-          <Text className="font-bold text-foreground">
+        <Text style={NUMEROS_TABULARES} className="text-[15px] text-muted-foreground">
+          <Text className="font-sans-bold text-foreground">
             {progress ? `${fmt(total)} ${target.unit}` : '—'}
           </Text>{' '}
           de {goal}
         </Text>
         {progress ? (
-          <Text className="text-xs font-bold text-foreground">{nutrientStatusText(progress)}</Text>
+          <Text
+            className={cn(
+              'text-[15px]',
+              status === 'over'
+                ? 'text-destructive'
+                : status === 'under'
+                  ? 'text-protein'
+                  : 'text-primary',
+            )}
+          >
+            {nutrientStatusText(progress)}
+          </Text>
         ) : null}
       </View>
     </View>

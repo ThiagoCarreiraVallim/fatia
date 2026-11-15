@@ -1,9 +1,18 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react-native';
+import {
+  Apple,
+  ChevronRight,
+  Info,
+  Plus,
+  ScanBarcode,
+  Search,
+  Star,
+  Trash2,
+} from 'lucide-react-native';
 import {
   customFoodSummary,
   filterMyFoods,
@@ -17,7 +26,7 @@ import {
   type MyFoodsTab,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, ErrorState, Input, LoadingState, Segmented, useConfirm } from '@/components/ui';
+import { Button, ErrorState, LoadingState, cn, useConfirm } from '@/components/ui';
 import { CustomFoodDrawer } from '@/components/nutrition/custom-food-drawer';
 import { colors } from '@/theme/colors';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
@@ -85,8 +94,9 @@ export default function CustomFoodsScreen() {
             accessibilityLabel="Novo alimento"
             onPress={() => setEditing('novo')}
             className={TOP_BAR_ACTION}
+            style={{ backgroundColor: colors.primary }}
           >
-            <Plus size={22} color={colors.primaryText} />
+            <Plus size={22} color={colors.primaryForeground} />
           </Pressable>
         }
         onRefresh={() => {
@@ -95,23 +105,46 @@ export default function CustomFoodsScreen() {
         }}
         refreshing={foods.isRefetching}
       >
-        <View className="gap-4 p-4">
-          <Text className="text-sm text-muted-foreground">
-            {`${MY_FOODS_HINT} Cadastre uma vez e registre como qualquer alimento.`}
-          </Text>
-
-          <Input
-            accessibilityLabel="Buscar em Meus alimentos"
-            value={q}
-            onChangeText={setQ}
-            placeholder="Buscar nos seus"
-          />
-          <Segmented
-            label="O que mostrar"
-            options={myFoodsTabs().map(({ key, label }) => ({ value: key, label }))}
-            value={tab}
-            onChange={setTab}
-          />
+        <View className="gap-4 px-5 pb-28 pt-2">
+          <View className="h-[52px] flex-row items-center gap-3 rounded-pill bg-card px-5">
+            <Search size={20} color={colors.mutedForeground} />
+            <TextInput
+              accessibilityLabel="Buscar em Meus alimentos"
+              value={q}
+              onChangeText={setQ}
+              placeholder="Buscar nos seus"
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
+              style={{ flex: 1, fontSize: 16, color: colors.foreground, padding: 0 }}
+            />
+          </View>
+          <View
+            accessibilityRole="tablist"
+            accessibilityLabel="O que mostrar"
+            className="flex-row gap-2"
+          >
+            {myFoodsTabs().map(({ key, label }) => (
+              <Pressable
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === key }}
+                onPress={() => setTab(key)}
+                className={cn(
+                  'h-11 justify-center rounded-chip px-4',
+                  tab === key ? 'bg-foreground' : 'bg-card',
+                )}
+              >
+                <Text
+                  className={cn(
+                    'font-sans-semibold text-[15px]',
+                    tab === key ? 'text-background' : 'text-muted-foreground',
+                  )}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           {foods.isLoading ? <LoadingState label="Carregando seus alimentos…" /> : null}
           {foods.error ? (
@@ -133,46 +166,56 @@ export default function CustomFoodsScreen() {
             </View>
           ) : null}
           {shown.foods.length > 0 ? (
-            <View className="rounded-xl border border-border bg-card">
+            <View className="overflow-hidden rounded-card bg-card">
               {shown.foods.map((food, i) => (
                 <Pressable
                   key={food.id}
                   accessibilityRole="button"
                   accessibilityLabel={`Editar ${food.name}`}
                   onPress={() => setEditing(food)}
-                  className={`min-h-14 flex-row items-center gap-3 px-4 py-3 active:bg-accent ${
-                    i > 0 ? 'border-t border-border' : ''
-                  }`}
+                  className={cn(
+                    'min-h-[72px] flex-row items-center gap-4 px-4 py-3 active:bg-muted',
+                    i > 0 && 'border-t border-border',
+                  )}
                 >
+                  <FoodTile kind={food.barcode ? 'scanned' : 'food'} />
                   <View className="flex-1">
-                    <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                    <Text
+                      numberOfLines={1}
+                      className="font-sans-semibold text-[17px] text-foreground"
+                    >
                       {food.name}
                     </Text>
-                    <Text className="text-xs text-muted-foreground">{customFoodSummary(food)}</Text>
+                    <Text className="text-[15px] text-muted-foreground">
+                      {customFoodSummary(food)}
+                    </Text>
                   </View>
-                  <ChevronRight size={16} color={colors.mutedForeground} />
+                  <ChevronRight size={18} color={colors.mutedForeground} />
                 </Pressable>
               ))}
             </View>
           ) : null}
           {shown.meals.length > 0 ? (
             <View className="gap-2">
-              <Text className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                Refeições salvas
-              </Text>
-              <View className="rounded-xl border border-border bg-card">
+              <Text className="px-1 text-[13px] text-muted-foreground">Refeições salvas</Text>
+              <View className="overflow-hidden rounded-card bg-card">
                 {shown.meals.map((template, i) => (
                   <View
                     key={template.id}
-                    className={`min-h-14 flex-row items-center gap-3 pl-4 ${
-                      i > 0 ? 'border-t border-border' : ''
-                    }`}
+                    className={cn(
+                      'min-h-[72px] flex-row items-center gap-4 pl-4',
+                      i > 0 && 'border-t border-border',
+                    )}
                   >
+                    <FoodTile kind="meal" />
                     <View className="flex-1 py-3">
-                      <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                      <Text
+                        numberOfLines={1}
+                        className="font-sans-semibold text-[17px] text-foreground"
+                      >
                         {template.name}
                       </Text>
-                      <Text className="text-xs text-muted-foreground">
+                      <Text className="text-[15px] text-muted-foreground">
                         {templateSummary(template)}
                       </Text>
                     </View>
@@ -189,6 +232,16 @@ export default function CustomFoodsScreen() {
               </View>
             </View>
           ) : null}
+
+          {/* O que cabe aqui, embaixo da lista como na prancha. */}
+          {!nothingSaved ? (
+            <View className="flex-row gap-3 rounded-card bg-card p-4">
+              <Info size={18} color={colors.mutedForeground} />
+              <Text className="flex-1 text-sm text-muted-foreground">
+                {`${MY_FOODS_HINT} Cadastre uma vez e registre como qualquer alimento.`}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </Screen>
 
@@ -198,5 +251,20 @@ export default function CustomFoodsScreen() {
         food={editing === 'novo' ? null : editing}
       />
     </>
+  );
+}
+
+/** O quadradinho da prancha: maçã (alimento), código (lido) ou estrela (refeição). */
+function FoodTile({ kind }: { kind: 'food' | 'scanned' | 'meal' }) {
+  const Icon = kind === 'meal' ? Star : kind === 'scanned' ? ScanBarcode : Apple;
+  const tone =
+    kind === 'meal' ? colors.protein : kind === 'scanned' ? colors.steps : colors.primary;
+  return (
+    <View
+      className="h-12 w-12 items-center justify-center rounded-field"
+      style={{ backgroundColor: `${tone}26` }}
+    >
+      <Icon size={20} color={tone} />
+    </View>
   );
 }

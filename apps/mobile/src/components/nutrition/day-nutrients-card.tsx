@@ -7,7 +7,7 @@ import {
   formatNutrientAmount,
   type DayNutrient,
 } from '@fatia/api-client';
-import { Chip, Icon, Text, cn } from '@/components/ui';
+import { Icon, Text, cn } from '@/components/ui';
 import { TABULAR, todayCard, toneSoft } from '@/components/today/parts';
 import { colors } from '@/theme/colors';
 
@@ -45,9 +45,9 @@ export function DayNutrientsCard({
         contentContainerClassName="gap-1.5"
         accessibilityLabel="Nutriente"
       >
-        <Chip label="Todos" selected={!one} onPress={() => onSelect(null)} />
+        <NutrientChip label="Todos" selected={!one} onPress={() => onSelect(null)} />
         {nutrients.map((n) => (
-          <Chip
+          <NutrientChip
             key={n.key}
             label={n.label}
             selected={one?.key === n.key}
@@ -58,17 +58,17 @@ export function DayNutrientsCard({
           accessibilityRole="link"
           accessibilityLabel="Adicionar nutriente"
           onPress={() => router.push('/nutrition/nutrient-targets')}
-          className="min-h-9 flex-row items-center gap-1 rounded-pill border border-dashed border-border px-4"
+          className="h-9 flex-row items-center gap-1.5 rounded-chip border border-border-strong px-3.5"
         >
           <Icon name="plus" size={16} color={colors.mutedForeground} />
-          <Text className="font-sans-semibold text-[13px] text-muted-foreground">Nutriente</Text>
+          <Text className="font-sans-semibold text-sm text-muted-foreground">Nutriente</Text>
         </Pressable>
       </ScrollView>
 
       {one ? (
         <OneNutrient n={one} />
       ) : (
-        <View className={todayCard}>
+        <View className={cn(todayCard, 'gap-4 p-[18px]')}>
           {kcal ? (
             <Pressable
               accessibilityRole="button"
@@ -78,7 +78,10 @@ export function DayNutrientsCard({
             >
               <View className="flex-row items-end justify-between gap-3">
                 <View className="flex-row items-baseline gap-1.5">
-                  <Text style={TABULAR} className="font-display text-d3">
+                  <Text
+                    style={[TABULAR, { fontSize: 40, lineHeight: 44, letterSpacing: -1.2 }]}
+                    className="font-display"
+                  >
                     {number(kcal)}
                   </Text>
                   <Text className="text-sm text-muted-foreground">kcal</Text>
@@ -90,18 +93,18 @@ export function DayNutrientsCard({
                   </Text>
                 </View>
               </View>
-              <RangeBar n={kcal} />
+              <RangeBar n={kcal} tall />
             </Pressable>
           ) : null}
           {macros.length > 0 ? (
-            <View className="flex-row gap-3">
+            <View className="flex-row gap-3.5 border-t border-border pt-3.5">
               {macros.map((n) => (
                 <NutrientCell key={n.key} n={n} onSelect={onSelect} />
               ))}
             </View>
           ) : null}
           {micros.length > 0 ? (
-            <View className="flex-row flex-wrap gap-3 border-t border-border pt-3">
+            <View className="flex-row flex-wrap gap-3.5 border-t border-border pt-3.5">
               {micros.map((n) => (
                 <NutrientCell key={n.key} n={n} onSelect={onSelect} />
               ))}
@@ -119,7 +122,7 @@ function NutrientCell({ n, onSelect }: { n: DayNutrient; onSelect: (key: string)
       accessibilityRole="button"
       accessibilityLabel={`${n.label}, ${formatNutrientAmount(n.value, n.unit)}`}
       onPress={() => onSelect(n.key)}
-      className="min-h-11 min-w-[28%] flex-1 gap-1"
+      className="min-h-11 min-w-[28%] flex-1 gap-1.5"
     >
       <Text numberOfLines={1} className="text-xs text-muted-foreground">
         {n.label}
@@ -194,34 +197,93 @@ function OneNutrient({ n }: { n: DayNutrient }) {
   );
 }
 
-/** Barra com a faixa marcada por trás do preenchido. */
+/** A cor de cada nutriente, como na prancha (`N` do script de Al-N1). */
+export function nutrientColor(key: string): string {
+  const map: Record<string, string> = {
+    kcal: colors.primary,
+    protein_g: colors.protein,
+    carbs_g: colors.carbs,
+    fat_g: colors.fat,
+    fiber_g: colors.water,
+    sodium_mg: colors.steps,
+    caffeine_mg: colors.mutedForeground,
+  };
+  return map[key] ?? colors.primary;
+}
+
+/** Chip de filtro da prancha: 36 px, raio de chip, texto apagado até ser escolhido. */
+function NutrientChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={cn(
+        'h-9 items-center justify-center rounded-chip px-3.5',
+        selected ? 'bg-foreground' : 'bg-card',
+      )}
+    >
+      <Text
+        className={cn(
+          'font-sans-semibold text-sm',
+          selected ? 'text-background' : 'text-muted-foreground',
+        )}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Barra com a faixa marcada por trás do preenchido e um traço em cada ponta dela. */
 function RangeBar({ n, tall = false }: { n: DayNutrient; tall?: boolean }) {
   const bar = dayNutrientBar(n);
   const lo = bar.lo ?? 0;
   const hi = bar.hi ?? 100;
+  const color = nutrientColor(n.key);
   return (
     <View
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      className={cn('w-full overflow-hidden rounded-pill bg-surface-3', tall ? 'h-3' : 'h-1.5')}
+      className={cn('w-full', tall ? 'h-3' : 'h-1.5')}
     >
-      {bar.lo != null || bar.hi != null ? (
+      <View className="absolute inset-0 overflow-hidden rounded-pill bg-surface-3">
+        {bar.lo != null || bar.hi != null ? (
+          <View
+            className="absolute bottom-0 top-0"
+            style={{
+              left: `${lo}%`,
+              width: `${Math.max(0, hi - lo)}%`,
+              backgroundColor: color,
+              opacity: 0.22,
+            }}
+          />
+        ) : null}
         <View
-          className="absolute bottom-0 top-0"
+          className="absolute bottom-0 left-0 top-0 rounded-pill"
           style={{
-            left: `${lo}%`,
-            width: `${Math.max(0, hi - lo)}%`,
-            backgroundColor: `${colors.primary}33`,
+            width: `${bar.fill}%`,
+            backgroundColor: n.status === 'over' ? colors.destructive : color,
           }}
         />
-      ) : null}
-      <View
-        className="absolute bottom-0 left-0 top-0 rounded-pill"
-        style={{
-          width: `${bar.fill}%`,
-          backgroundColor: n.status === 'over' ? colors.destructive : colors.primary,
-        }}
-      />
+      </View>
+      {[bar.lo, bar.hi].map((at, i) =>
+        at == null ? null : (
+          <View
+            key={i}
+            className="absolute w-0.5 rounded-[1px] bg-foreground"
+            style={{ left: `${at}%`, top: -3, bottom: -3, marginLeft: -1 }}
+          />
+        ),
+      )}
     </View>
   );
 }

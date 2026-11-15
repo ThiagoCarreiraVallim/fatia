@@ -11,9 +11,14 @@ import { cn } from './utils';
  * `tailwind.config.js`). O `Text` do react-native não deve ser importado fora
  * daqui (`font-usage.test.ts`).
  *
+ * Cor: o `Text` do React Native sem cor sai **preto**, ilegível no tema
+ * escuro. Por isso o texto de fora já nasce `text-foreground`; qualquer classe
+ * de cor de quem chama (`text-muted-foreground`, `text-primary-foreground`…)
+ * ou `style.color` vence.
+ *
  * Texto aninhado herda o estilo do pai no React Native; por isso o filho não
- * repõe `font-sans`, senão um trecho dentro de um título em negrito voltaria
- * ao regular.
+ * repõe `font-sans` nem a cor, senão um trecho dentro de um título em negrito
+ * voltaria ao regular, ou um trecho dentro de um texto verde ficaria branco.
  */
 const InsideText = createContext(false);
 
@@ -23,7 +28,10 @@ export function Text({ className, ...props }: TextProps) {
   const nested = useContext(InsideText);
   return (
     <InsideText.Provider value>
-      <NativeText className={nested ? className : cn('font-sans', className)} {...props} />
+      <NativeText
+        className={nested ? className : cn('font-sans text-foreground', className)}
+        {...props}
+      />
     </InsideText.Provider>
   );
 }

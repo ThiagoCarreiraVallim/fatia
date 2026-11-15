@@ -10,11 +10,9 @@ import {
   type Meal,
 } from '@fatia/api-client';
 import {
-  Button,
   Drawer,
   DrawerContent,
   DrawerDescription,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
   Segmented,
@@ -23,6 +21,14 @@ import { CopyToDay } from './copy-to-day';
 import { hojeIso, mensagemDeErro } from './helpers';
 
 type What = 'meal' | 'day';
+
+/** "Só o café", "Só o almoço": o segmentado diz qual refeição. */
+const SHORT_MEAL: Record<Meal['mealType'], string> = {
+  BREAKFAST: 'café',
+  LUNCH: 'almoço',
+  SNACK: 'lanche',
+  DINNER: 'jantar',
+};
 
 /** "4 itens · 373 kcal". */
 function mealCopySummary(meal: Meal): string {
@@ -84,23 +90,23 @@ export function CopyMealSheet({
     <Drawer open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DrawerContent>
         <DrawerHeader>
-          <DrawerTitle>Copiar</DrawerTitle>
-          <DrawerDescription>
-            {what === 'meal'
-              ? `${mealCopySummary(meal)}. Fica no mesmo horário.`
-              : 'Todas as refeições do dia, cada uma no seu horário. O que já existir lá não duplica.'}
-          </DrawerDescription>
+          <DrawerTitle className="font-display text-h2">Copiar</DrawerTitle>
         </DrawerHeader>
-        <View className="gap-3 px-4 py-3">
+        <View className="gap-4 px-4 pb-6 pt-3">
           <Segmented
             label="O que copiar"
             options={[
-              { value: 'meal', label: 'Só a refeição' },
+              { value: 'meal', label: `Só o ${SHORT_MEAL[meal.mealType]}` },
               { value: 'day', label: 'O dia todo' },
             ]}
             value={what}
             onChange={reset}
           />
+          <DrawerDescription>
+            {what === 'meal'
+              ? `${mealCopySummary(meal)}. Fica no mesmo horário.`
+              : 'Todas as refeições do dia, cada uma no seu horário. O que já existir lá não duplica.'}
+          </DrawerDescription>
           <CopyToDay
             key={`${meal.id}-${what}`}
             sourceDate={date}
@@ -116,11 +122,6 @@ export function CopyMealSheet({
             }}
           />
         </View>
-        <DrawerFooter>
-          <Button variant="ghost" onPress={close}>
-            Fechar
-          </Button>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );

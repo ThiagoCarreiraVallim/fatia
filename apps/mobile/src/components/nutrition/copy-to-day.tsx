@@ -3,8 +3,15 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { copyTargetDays, dayLabel, shiftDay } from '@fatia/api-client';
-import { Button, Chip } from '@/components/ui';
+import { cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
+
+/** "qua", "qui": o dia da semana em cima do número. */
+function weekdayShort(iso: string): string {
+  return new Date(`${iso}T12:00:00`)
+    .toLocaleDateString('pt-BR', { weekday: 'short' })
+    .replace('.', '');
+}
 
 /**
  * Réplica de `apps/web/src/components/nutrition/copy-to-day.tsx`.
@@ -35,47 +42,107 @@ export function CopyToDay({
   onVer: (dia: string) => void;
 }) {
   const [dia, setDia] = useState(diaPadrao);
+  const [outroDia, setOutroDia] = useState(!sourceDate);
   const rotulo = dayLabel(dia, hoje);
 
   return (
-    <View className="gap-2">
+    <View className="gap-3">
       {sourceDate ? (
-        <View accessibilityLabel="Para" className="flex-row flex-wrap gap-1.5">
-          {copyTargetDays(sourceDate, hoje).map((day) => (
-            <Chip
-              key={day}
-              label={dayLabel(day, hoje)}
-              selected={day === dia}
-              onPress={() => setDia(day)}
-            />
-          ))}
-        </View>
+        <>
+          <Text className="font-sans-bold text-xs uppercase tracking-[0.72px] text-muted-foreground">
+            Para
+          </Text>
+          {/* Os próximos dias em blocos (prancha Al-N9): o escolhido em verde. */}
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Para"
+            className="flex-row gap-1.5"
+          >
+            {copyTargetDays(sourceDate, hoje).map((day) => {
+              const on = day === dia;
+              return (
+                <Pressable
+                  key={day}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  accessibilityLabel={dayLabel(day, hoje)}
+                  onPress={() => setDia(day)}
+                  className={cn(
+                    'h-16 flex-1 items-center justify-center gap-0.5 rounded-field',
+                    on && 'bg-primary',
+                  )}
+                >
+                  <Text
+                    className={cn(
+                      'text-[13px]',
+                      on ? 'text-primary-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {weekdayShort(day)}
+                  </Text>
+                  <Text
+                    className={cn(
+                      'font-display text-base',
+                      on ? 'text-primary-foreground' : 'text-foreground',
+                    )}
+                  >
+                    {Number(day.slice(8))}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!outroDia ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setOutroDia(true)}
+              className="min-h-9 justify-center self-start"
+            >
+              <Text className="font-sans-semibold text-sm text-primary">Outro dia</Text>
+            </Pressable>
+          ) : null}
+        </>
       ) : null}
-      <Text className="text-sm font-medium text-foreground">
-        {sourceDate ? 'Outro dia' : 'Dia de destino'}
-      </Text>
-      <View className="flex-row items-center justify-between rounded-md border border-border p-1">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Dia de destino anterior"
-          onPress={() => setDia(shiftDay(dia, -1))}
-          className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
-        >
-          <ChevronLeft size={20} color={colors.foreground} />
-        </Pressable>
-        <Text className="text-sm font-medium capitalize text-foreground">{rotulo}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Próximo dia de destino"
-          onPress={() => setDia(shiftDay(dia, 1))}
-          className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
-        >
-          <ChevronRight size={20} color={colors.foreground} />
-        </Pressable>
-      </View>
-      <Button onPress={() => onCopiar(dia)} disabled={pendente} loading={pendente}>
-        {`Copiar para ${rotulo}`}
-      </Button>
+      {outroDia ? (
+        <>
+          <Text className="text-sm font-medium text-foreground">
+            {sourceDate ? 'Outro dia' : 'Dia de destino'}
+          </Text>
+          <View className="flex-row items-center justify-between rounded-field bg-muted p-1">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dia de destino anterior"
+              onPress={() => setDia(shiftDay(dia, -1))}
+              className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
+            >
+              <ChevronLeft size={20} color={colors.foreground} />
+            </Pressable>
+            <Text className="text-sm font-medium capitalize text-foreground">{rotulo}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Próximo dia de destino"
+              onPress={() => setDia(shiftDay(dia, 1))}
+              className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
+            >
+              <ChevronRight size={20} color={colors.foreground} />
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: pendente }}
+        disabled={pendente}
+        onPress={() => onCopiar(dia)}
+        className={cn(
+          'h-14 items-center justify-center rounded-pill bg-primary',
+          pendente && 'opacity-40',
+        )}
+      >
+        <Text className="font-sans-bold text-[15px] text-primary-foreground">
+          {pendente ? 'Copiando...' : `Copiar para ${rotulo}`}
+        </Text>
+      </Pressable>
       {erro ? (
         <Text accessibilityRole="alert" className="text-sm text-destructive">
           {erro}

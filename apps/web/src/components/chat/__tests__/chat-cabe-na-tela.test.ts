@@ -55,7 +55,8 @@ describe('a caixa do chat cabe entre as duas barras', () => {
     expect(altura, 'ChatScreen precisa declarar a altura como calc(100dvh-Nrem)').not.toBeNull();
 
     // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reservava.
-    // Hoje: 1 + 6 + 3.5 da barra de topo.
+    // Hoje: 1 + 2 + 3.5 da barra de topo. A barra de baixo some no chat (tarefa de foco),
+    // e o respiro dela (`BottomSpacer`) só existe com a barra visível.
     expect(Number(altura![1])).toBe(reservado);
   });
 
@@ -71,13 +72,14 @@ describe('a caixa do chat cabe entre as duas barras', () => {
     }
   });
 
-  it('a barra de baixo continua fixa e por cima — é o que torna o erro invisível', () => {
+  it('a barra de baixo continua fixa e por cima da tela — é o que torna o erro invisível', () => {
     // Sem `fixed` + `z-50` a caixa transbordando seria só um respiro a menos, não um campo
     // inalcançável. É a combinação que transforma erro de cálculo em funcionalidade quebrada,
     // e é por isso que este caso mora aqui e não some numa limpeza.
     const nav = readFileSync(resolve(RAIZ, 'src/components/layout/bottom-nav.tsx'), 'utf8');
 
+    // z-40: acima da tela, abaixo das folhas e diálogos (z-50).
     expect(nav).toMatch(/\bfixed\b/);
-    expect(nav).toMatch(/\bz-50\b/);
+    expect(nav).toMatch(/\bz-40\b/);
   });
 });

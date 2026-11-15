@@ -127,9 +127,9 @@ export function WeightSheet({
           <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
             Peso
           </Text>
-          <View className="h-8 flex-row items-center gap-1.5 rounded-pill bg-muted px-3">
-            <Icon name="cal" size={16} />
-            <Text className="text-[13px] font-semibold text-foreground">Hoje</Text>
+          <View className="h-9 flex-row items-center gap-1.5 rounded-chip bg-card px-3.5">
+            <Icon name="cal" size={16} color={colors.mutedForeground} />
+            <Text className="text-sm font-semibold text-muted-foreground">Hoje</Text>
           </View>
         </View>
 
@@ -138,7 +138,7 @@ export function WeightSheet({
             accessibilityRole="button"
             accessibilityLabel="Menos 0,1 kg"
             onPress={() => setKg(round1(value - WEIGHT_STEP_KG))}
-            className="h-14 w-14 items-center justify-center rounded-full bg-muted"
+            className="h-14 w-14 items-center justify-center rounded-field bg-muted"
           >
             <View className="h-0.5 w-4 rounded-[1px] bg-foreground" />
           </Pressable>
@@ -157,7 +157,7 @@ export function WeightSheet({
                 style={{ backgroundColor: `${ok ? colors.primary : colors.warning}24` }}
               >
                 <Text
-                  className="text-[11px] font-extrabold"
+                  className="text-[11px] font-extrabold uppercase tracking-[0.44px]"
                   style={{ color: ok ? colors.primaryText : colors.warning }}
                 >
                   {weightDeltaSinceLabel(delta, reference.date, today)}
@@ -169,7 +169,7 @@ export function WeightSheet({
             accessibilityRole="button"
             accessibilityLabel="Mais 0,1 kg"
             onPress={() => setKg(round1(value + WEIGHT_STEP_KG))}
-            className="h-14 w-14 items-center justify-center rounded-full bg-primary"
+            className="h-14 w-14 items-center justify-center rounded-field bg-primary"
           >
             <Icon name="plus" size={24} color={colors.primaryForeground} />
           </Pressable>

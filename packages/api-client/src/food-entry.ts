@@ -43,6 +43,11 @@ const MEAL_TARGET: Record<MealType, string> = {
   DINNER: 'ao jantar',
 };
 
+/** "para o jantar": a linha de baixo do nome, na quantidade (Al-N3). */
+export function mealForLabel(mealType: MealType | undefined): string {
+  return mealType ? `para o ${MEAL_TARGET[mealType].slice(3)}` : '';
+}
+
 /** "Adicionar ao jantar": o botão diz para onde vai. */
 export function addTargetLabel(mealType: MealType | undefined): string {
   return mealType ? `Adicionar ${MEAL_TARGET[mealType]}` : 'Adicionar';

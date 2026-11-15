@@ -75,7 +75,7 @@ export function WeightSheet({
       <DrawerContent className="gap-4 px-6 pb-8 pt-3">
         <div className="flex items-center justify-between">
           <DrawerTitle className="font-display text-h2">Peso</DrawerTitle>
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-pill bg-muted px-3 text-[13px] font-semibold">
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-chip bg-card px-3.5 text-sm font-semibold text-muted-foreground">
             <Icon name="cal" size={16} />
             Hoje
           </span>
@@ -89,7 +89,7 @@ export function WeightSheet({
             type="button"
             aria-label="Menos 0,1 kg"
             onClick={() => setKg(round1(value - WEIGHT_STEP_KG))}
-            className="anim-press inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted"
+            className="anim-press inline-flex h-14 w-14 items-center justify-center rounded-field bg-muted"
           >
             <span aria-hidden className="h-0.5 w-4 rounded-[1px] bg-current" />
           </button>
@@ -104,7 +104,7 @@ export function WeightSheet({
             {delta !== null && reference && (
               <span
                 className={cn(
-                  'inline-flex h-[22px] items-center rounded-pill px-2.5 text-[11px] font-extrabold',
+                  'inline-flex h-[22px] items-center rounded-pill px-2.5 text-[11px] font-extrabold uppercase tracking-[0.04em]',
                   delta <= 0
                     ? 'bg-primary-soft text-primary'
                     : 'bg-[hsl(var(--warning)/0.14)] text-warning',
@@ -118,7 +118,7 @@ export function WeightSheet({
             type="button"
             aria-label="Mais 0,1 kg"
             onClick={() => setKg(round1(value + WEIGHT_STEP_KG))}
-            className="anim-press inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground"
+            className="anim-press inline-flex h-14 w-14 items-center justify-center rounded-field bg-primary text-primary-foreground"
           >
             <Icon name="plus" size={24} />
           </button>

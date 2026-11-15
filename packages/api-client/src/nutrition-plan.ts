@@ -194,6 +194,49 @@ const RANGE_CAP = {
   fatMinG: 1_000,
 } as const;
 
+/** Quanto cada − e + da prancha Al-N6 anda. */
+export const GOAL_STEP: Record<keyof GoalsDraft, number> = {
+  kcalMin: 50,
+  kcalMax: 50,
+  proteinMinG: 5,
+  proteinMaxG: 5,
+  carbsMinG: 5,
+  carbsMaxG: 5,
+  fatMinG: 5,
+  fatMaxG: 5,
+  waterL: 0.25,
+  weeklyWorkouts: 1,
+  dailyStepsTarget: 500,
+};
+
+/**
+ * Um passo para cima ou para baixo a partir do texto do campo, caindo no
+ * múltiplo do passo (1.830 + 50 → 1.850). Vazio ou ilegível começa de zero.
+ */
+export function stepGoalText(text: string, step: number, direction: 1 | -1): string {
+  const typed = parseTypedDecimal(text);
+  const current = typed == null || Number.isNaN(typed) ? 0 : typed;
+  const snapped =
+    direction > 0
+      ? Math.floor(current / step + 1e-9) * step + step
+      : Math.ceil(current / step - 1e-9) * step - step;
+  return formatDecimalInput(Math.max(0, snapped));
+}
+
+/**
+ * Onde a faixa entra na barra do cartão, em % de uma escala que vai até 1,6×
+ * o máximo — assim a faixa fica no meio, com folga dos dois lados.
+ */
+export function goalBand(minText: string, maxText: string): { left: number; width: number } | null {
+  const min = parseTypedDecimal(minText);
+  const max = parseTypedDecimal(maxText);
+  if (min == null || max == null || Number.isNaN(min) || Number.isNaN(max)) return null;
+  if (max <= 0 || min > max) return null;
+  const scale = max * 1.6;
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return { left: round((min / scale) * 100), width: round(((max - min) / scale) * 100) };
+}
+
 export function goalsToDraft(g: GoalsInput): GoalsDraft {
   return {
     kcalMin: formatDecimalInput(g.kcalMin),

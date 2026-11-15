@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addTargetLabel,
+  mealForLabel,
   emptySearchCopy,
   foodAmountPreview,
   foodOriginTag,
@@ -38,6 +39,8 @@ describe('busca do "Adicionar" (Al-N15)', () => {
   it('o botão de concluir diz para qual refeição vai', () => {
     expect(addTargetLabel('DINNER')).toBe('Adicionar ao jantar');
     expect(addTargetLabel('BREAKFAST')).toBe('Adicionar ao café');
+    expect(mealForLabel('DINNER')).toBe('para o jantar');
+    expect(mealForLabel(undefined)).toBe('');
     expect(addTargetLabel(undefined)).toBe('Adicionar');
   });
 });

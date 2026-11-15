@@ -194,7 +194,10 @@ export function MealDetailScreen({ id, date }: { id: string; date: string }) {
 
         <section className="space-y-2" aria-labelledby="meal-items-title">
           <div className="flex items-baseline justify-between">
-            <h2 id="meal-items-title" className="text-sm text-muted-foreground">
+            <h2
+              id="meal-items-title"
+              className="font-sans text-[13px] font-normal text-muted-foreground"
+            >
               O que você comeu
             </h2>
             <span className="text-xs text-muted-foreground">

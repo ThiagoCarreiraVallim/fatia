@@ -12,7 +12,7 @@ import {
   workoutApi,
   type NavTab,
 } from '@fatia/api-client';
-import { Icon } from '@/components/ui';
+import { Icon, useAnyDrawerOpen } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
 import { colors } from '@/theme/colors';
 import { ActiveWorkoutBar } from './active-workout-bar';
@@ -115,7 +115,10 @@ export function BottomNav() {
   const menu = useAiMenu();
   const usable = aiUsable(useChatAvailability().data);
   const active = activeNavKey(pathname);
-  if (!visible) return null;
+  // Com um drawer aberto a barra sai: ela mora fora da tela e cobriria o
+  // rodapé do sheet (botões de salvar, confirmar).
+  const drawerOpen = useAnyDrawerOpen();
+  if (!visible || drawerOpen) return null;
 
   const bottom = insets.bottom + NAV_BOTTOM;
   const above = bottom + NAV_HEIGHT + ACTIVE_WORKOUT_BAR_GAP;
@@ -130,7 +133,7 @@ export function BottomNav() {
         accessibilityRole="tablist"
         accessibilityLabel="Principal"
         style={{ bottom, elevation: 10 }}
-        className="absolute left-4 right-[96px] z-50 h-[68px] flex-row items-center gap-0.5 rounded-[22px] border border-border bg-muted px-1.5"
+        className="absolute left-4 right-[96px] z-50 h-[68px] flex-row items-center gap-0.5 rounded-[22px] border border-border bg-card px-1.5"
       >
         {PRIMARY_TABS.map((tab) => (
           <Tab key={tab.key} tab={tab} on={active === tab.key} />

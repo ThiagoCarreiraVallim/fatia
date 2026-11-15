@@ -8,6 +8,7 @@ import {
   goalsApi,
   goalsChipLabel,
   greetingLine,
+  todayDateLine,
   INBOX_EMPTY_TOAST,
   progressApi,
   usersApi,
@@ -18,6 +19,7 @@ import {
   type TodaySummary,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
@@ -55,13 +57,6 @@ import { colors } from '@/theme/colors';
 type Sheet = 'goals' | 'water' | 'weight' | 'steps' | 'share' | 'inbox' | null;
 
 const DASHBOARD_KEY = ['dashboard', 'today'] as const;
-
-/** "Sáb, 14 nov", do relógio do aparelho. */
-function todayLabel(): string {
-  return new Date()
-    .toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
-    .replace(/\./g, '');
-}
 
 function shareInput(data: TodaySummary) {
   return { ...data, streakDays: data.streak.activeDays.periodos };
@@ -147,21 +142,21 @@ export default function TodayScreen() {
   return (
     <>
       <Screen onRefresh={refresh} refreshing={refreshing}>
-        <View className="gap-3.5 px-5 pb-4 pt-2">
+        <View className="gap-4 px-6 pb-4 pt-2">
           {/* Topo (Al-H1): data e chip das metas, saudação, e o sino com ponto de não lido. */}
           <View className="mb-1.5 flex-row items-start gap-2">
             <View className="min-w-0 flex-1 gap-1">
               <View className="flex-row items-center gap-2">
-                <Text className="text-b2 capitalize text-muted-foreground">{todayLabel()}</Text>
+                <Text className="text-b2 text-muted-foreground">{todayDateLine()}</Text>
                 {goals && goals.total > 0 ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Metas do dia: ${goals.met} de ${goals.total}`}
                     onPress={() => setSheet('goals')}
-                    className="h-7 flex-row items-center gap-1 rounded-pill bg-card px-2.5"
+                    className="h-7 flex-row items-center gap-1.5 rounded-chip bg-card px-2.5"
                   >
                     <Icon name="target" size={16} color={colors.primaryText} />
-                    <Text className="text-xs font-semibold text-foreground">
+                    <Text className="text-xs font-semibold text-muted-foreground">
                       {goalsChipLabel(goals.met, goals.total)}
                     </Text>
                   </Pressable>
@@ -169,14 +164,19 @@ export default function TodayScreen() {
                   <Pressable
                     accessibilityRole="link"
                     onPress={() => router.push('/nutrition/goals')}
-                    className="h-7 flex-row items-center gap-1 rounded-pill bg-card px-2.5"
+                    className="h-7 flex-row items-center gap-1.5 rounded-chip bg-card px-2.5"
                   >
                     <Icon name="target" size={16} color={colors.primaryText} />
-                    <Text className="text-xs font-semibold text-foreground">Definir metas</Text>
+                    <Text className="text-xs font-semibold text-muted-foreground">
+                      Definir metas
+                    </Text>
                   </Pressable>
                 ) : null}
               </View>
-              <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
+              <Text
+                accessibilityRole="header"
+                className="font-display text-[26px] leading-[30px] tracking-[-0.5px] text-foreground"
+              >
                 {greetingLine(me.data?.name)}
               </Text>
             </View>
@@ -184,9 +184,10 @@ export default function TodayScreen() {
               accessibilityRole="button"
               accessibilityLabel={unread ? 'Avisos, há avisos novos' : 'Avisos'}
               onPress={openInbox}
-              className="h-11 w-11 items-center justify-center rounded-full bg-card"
+              hitSlop={4}
+              className={headerButtonClass()}
             >
-              <Icon name="bell" size={20} />
+              <Icon name="bell" size={20} color={colors.foreground} />
               {unread ? (
                 <View
                   className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-brand"
@@ -208,7 +209,7 @@ export default function TodayScreen() {
               {data.nextEvent ? <EventCard event={data.nextEvent} /> : null}
               <KcalCard nutrition={data.nutrition} />
               <NextWorkoutCard workout={data.workout} />
-              <View className="flex-row gap-3.5">
+              <View className="flex-row gap-3">
                 <WaterTile
                   water={data.water}
                   onOpen={() => setSheet('water')}
@@ -217,7 +218,7 @@ export default function TodayScreen() {
                 />
                 <StepsTile steps={data.steps} onOpen={() => setSheet('steps')} />
               </View>
-              <View className="flex-row gap-3.5">
+              <View className="flex-row gap-3">
                 <WeightTile weight={data.weight} onOpen={() => setSheet('weight')} />
                 <StreakTile streak={data.streak} />
               </View>

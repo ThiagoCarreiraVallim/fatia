@@ -160,4 +160,26 @@ describe('DayMealSources (De onde veio)', () => {
     await user.click(screen.getByRole('button', { name: 'Adicionar lanche ou refeição' }));
     expect(onAddMeal).toHaveBeenCalledTimes(2);
   });
+
+  it('em "Todos" mostra kcal e macros de cada refeição, e o vazio diz quanto cabe', () => {
+    render(
+      <DayMealSources
+        meals={meals}
+        nutrient={nutrients[0]}
+        date="2026-11-15"
+        onAddMeal={vi.fn()}
+        all
+      />,
+    );
+
+    expect(screen.getByText('kcal · macros')).toBeInTheDocument();
+    const lunch = screen.getByRole('link', { name: /Almoço/ });
+    expect(within(lunch).queryByText('33%')).not.toBeInTheDocument();
+    expect(within(lunch).getByText(/^P \d+ · C \d+ · G \d+ g$/)).toBeInTheDocument();
+    const dinner = screen.getByRole('button', { name: 'Registrar Jantar' });
+    expect(within(dinner).getByText('20:00')).toBeInTheDocument();
+    expect(
+      within(dinner).getByText(/^cabem até|acima do máximo|Toque para registrar/),
+    ).toBeInTheDocument();
+  });
 });

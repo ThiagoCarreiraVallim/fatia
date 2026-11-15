@@ -48,7 +48,7 @@ export function DayNutrientsCard({
         ))}
         <Link
           href="/nutrition/nutrient-targets"
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-chip border border-dashed border-border px-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-chip border border-border-strong px-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
         >
           <Icon name="plus" size={16} />
           Nutriente
@@ -58,7 +58,7 @@ export function DayNutrientsCard({
       {one ? (
         <OneNutrient n={one} />
       ) : (
-        <div className={todayCard}>
+        <div className={cn(todayCard, 'gap-4 p-[18px]')}>
           {kcal && (
             <button
               type="button"
@@ -68,7 +68,7 @@ export function DayNutrientsCard({
             >
               <span className="flex items-end justify-between gap-3">
                 <span className="flex items-baseline gap-1.5">
-                  <span className="font-display text-4xl font-bold tabular-nums">
+                  <span className="font-display text-[40px] font-bold leading-none tracking-[-0.03em] tabular-nums">
                     {formatNutrientAmount(kcal.value, '').trim()}
                   </span>
                   <span className="text-sm text-muted-foreground">kcal</span>
@@ -78,18 +78,18 @@ export function DayNutrientsCard({
                   <b className="text-sm tabular-nums">{dayNutrientRangeText(kcal)}</b>
                 </span>
               </span>
-              <RangeBar n={kcal} />
+              <RangeBar n={kcal} tall />
             </button>
           )}
           {macros.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3.5 border-t border-subtle pt-3.5">
               {macros.map((n) => (
                 <NutrientCell key={n.key} n={n} onSelect={onSelect} />
               ))}
             </div>
           )}
           {micros.length > 0 && (
-            <div className="grid grid-cols-3 gap-3 border-t border-subtle pt-3">
+            <div className="grid grid-cols-3 gap-3.5 border-t border-subtle pt-3.5">
               {micros.map((n) => (
                 <NutrientCell key={n.key} n={n} onSelect={onSelect} />
               ))}
@@ -107,7 +107,7 @@ function NutrientCell({ n, onSelect }: { n: DayNutrient; onSelect: (key: string)
       type="button"
       onClick={() => onSelect(n.key)}
       aria-label={`${n.label}, ${formatNutrientAmount(n.value, n.unit)}`}
-      className="flex min-h-11 flex-col gap-1 text-left"
+      className="flex min-h-11 min-w-0 flex-col gap-1.5 text-left"
     >
       <span className="truncate text-xs text-muted-foreground">{n.label}</span>
       <b className="text-base tabular-nums">
@@ -171,32 +171,49 @@ function OneNutrient({ n }: { n: DayNutrient }) {
   );
 }
 
-/** Barra com a faixa marcada por trás do preenchido. */
+/** A cor de cada nutriente, como na prancha (`N` do script de Al-N1). */
+const NUTRIENT_COLOR: Record<string, { fill: string; band: string }> = {
+  kcal: { fill: 'bg-primary', band: 'bg-primary/20' },
+  protein_g: { fill: 'bg-protein', band: 'bg-protein/20' },
+  carbs_g: { fill: 'bg-carbs', band: 'bg-carbs/20' },
+  fat_g: { fill: 'bg-fat', band: 'bg-fat/20' },
+  fiber_g: { fill: 'bg-water', band: 'bg-water/20' },
+  sodium_mg: { fill: 'bg-steps', band: 'bg-steps/20' },
+  caffeine_mg: { fill: 'bg-muted-foreground', band: 'bg-muted-foreground/20' },
+};
+
+/** Barra com a faixa marcada por trás do preenchido e um traço em cada ponta dela. */
 function RangeBar({ n, tall = false }: { n: DayNutrient; tall?: boolean }) {
   const bar = dayNutrientBar(n);
   const lo = bar.lo ?? 0;
   const hi = bar.hi ?? 100;
+  const color = NUTRIENT_COLOR[n.key] ?? NUTRIENT_COLOR.kcal!;
   return (
-    <div
-      aria-hidden
-      className={cn(
-        'relative w-full overflow-hidden rounded-full bg-surface-3',
-        tall ? 'h-3' : 'h-1.5',
-      )}
-    >
-      {(bar.lo != null || bar.hi != null) && (
-        <span
-          className="absolute inset-y-0 bg-primary/20"
-          style={{ left: `${lo}%`, width: `${Math.max(0, hi - lo)}%` }}
-        />
-      )}
-      <span
-        className={cn(
-          'absolute inset-y-0 left-0 rounded-full transition-[width] duration-[400ms] ease-ds',
-          n.status === 'over' ? 'bg-danger' : 'bg-primary',
+    <div aria-hidden className={cn('relative w-full shrink-0', tall ? 'h-3' : 'h-1.5')}>
+      <div className="absolute inset-0 overflow-hidden rounded-full bg-surface-3">
+        {(bar.lo != null || bar.hi != null) && (
+          <span
+            className={cn('absolute inset-y-0', color.band)}
+            style={{ left: `${lo}%`, width: `${Math.max(0, hi - lo)}%` }}
+          />
         )}
-        style={{ width: `${bar.fill}%` }}
-      />
+        <span
+          className={cn(
+            'absolute inset-y-0 left-0 rounded-full transition-[width] duration-[400ms] ease-ds',
+            n.status === 'over' ? 'bg-danger' : color.fill,
+          )}
+          style={{ width: `${bar.fill}%` }}
+        />
+      </div>
+      {[bar.lo, bar.hi].map((at, i) =>
+        at == null ? null : (
+          <span
+            key={i}
+            className="absolute -inset-y-[3px] -ml-px w-0.5 rounded-[1px] bg-foreground"
+            style={{ left: `${at}%` }}
+          />
+        ),
+      )}
     </div>
   );
 }

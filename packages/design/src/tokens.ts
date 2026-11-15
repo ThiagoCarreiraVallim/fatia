@@ -7,14 +7,15 @@
  * os três contra este arquivo; mudar uma cor só num lugar quebra ali.
  *
  * Os nomes são os mesmos nos dois temas (ADR 041). Mapa do canvas:
- * bg → background · s1 → muted · s2 → card (escuro) · s3 → surface-3 ·
+ * bg → background · s1 → card · s2 → muted · s3 → surface-3 ·
  * line → border · line2 → border-strong · tx → foreground ·
  * tx2 → muted-foreground · tx3 → faint-foreground · lime → primary ·
  * ink → primary-foreground · bad → danger · warn → warning.
  * O #0c0c0c atrás da tela que encolhe no menu da IA (Al-H6c5) → sunken.
  *
- * No claro o cartão é branco (s1 do canvas) sobre o fundo #F4F5F2: é onde as
- * cores de dado passam 4,5:1. No escuro o cartão continua #2A2A2A, como hoje.
+ * O cartão é o s1 do canvas nos dois temas: #1F1F1F sobre o fundo #131313 no
+ * escuro, branco sobre #F4F5F2 no claro. O que fica dentro do cartão (campo,
+ * chip, ícone em quadrado) é o s2: `muted`.
  */
 
 export const THEMES = ['dark', 'light'] as const;
@@ -66,7 +67,7 @@ export type Palette = Record<TokenName, string>;
 const dark: Palette = {
   background: '#131313',
   foreground: '#e5e2e1',
-  card: '#2a2a2a',
+  card: '#1f1f1f',
   'card-foreground': '#e5e2e1',
   popover: '#1a1a1a',
   'popover-foreground': '#e5e2e1',
@@ -75,7 +76,7 @@ const dark: Palette = {
   'primary-text': '#2ce500',
   secondary: '#333333',
   'secondary-foreground': '#e5e2e1',
-  muted: '#1f1f1f',
+  muted: '#2a2a2a',
   'muted-foreground': '#baccaf',
   'faint-foreground': '#9aa593',
   'surface-3': '#343434',

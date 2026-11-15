@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, Plus, ScanBarcode } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus, ScanBarcode } from 'lucide-react';
 import {
   customFoodFromForm,
   micronutrientFields,
@@ -34,6 +34,10 @@ interface Props {
    */
   saveOnly?: { label: string; onSubmit: (input: CustomFoodInput) => void };
 }
+
+/** Campo da prancha (Al-N11): preenchido em --s1, sem borda, 52 px. */
+const FIELD = 'h-[52px] rounded-field border-0 bg-card text-base';
+const LABEL = 'text-sm font-semibold text-muted-foreground';
 
 const MACRO_FIELDS = [
   ['kcal', 'Calorias (kcal)', ''],
@@ -79,6 +83,13 @@ export function CustomFoodForm({
   const more = moreMicronutrients(fields);
   const filledCount = Object.values(nutrients).filter((v) => v.trim() !== '').length;
 
+  const stepServing = (direction: 1 | -1) =>
+    setValues((prev) => {
+      const current = Number(prev.servingGrams.replace(',', '.'));
+      const base = Number.isFinite(current) ? current : 0;
+      const next = Math.max(10, Math.round((base + direction * 10) / 10) * 10);
+      return { ...prev, servingGrams: String(next) };
+    });
   const set = (key: keyof FormValues) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setValues((prev) => ({ ...prev, [key]: e.target.value }));
     setErrors((prev) => ({ ...prev, [key]: undefined, macros: undefined }));
@@ -131,7 +142,7 @@ export function CustomFoodForm({
   return (
     <form onSubmit={submit} noValidate className="my-3 space-y-3">
       <div className="space-y-1">
-        <label htmlFor={`${id}-name`} className="text-sm font-medium">
+        <label htmlFor={`${id}-name`} className={LABEL}>
           Nome
         </label>
         <Input
@@ -140,6 +151,7 @@ export function CustomFoodForm({
           value={values.name}
           onChange={set('name')}
           placeholder="Ex.: granola da marca X"
+          className={FIELD}
           maxLength={160}
           {...invalid('name')}
         />
@@ -148,15 +160,19 @@ export function CustomFoodForm({
 
       {!editing && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p id={`${id}-basis`} className="text-sm font-medium">
+          <p id={`${id}-basis`} className="text-sm text-muted-foreground">
             Valores do rótulo
           </p>
-          <div role="radiogroup" aria-labelledby={`${id}-basis`} className="flex gap-2">
+          <div
+            role="radiogroup"
+            aria-labelledby={`${id}-basis`}
+            className="flex gap-1 rounded-field bg-card p-1"
+          >
             <BasisChip checked={byServing} onSelect={() => setBasis('serving')}>
-              Por porção
+              Porção
             </BasisChip>
             <BasisChip checked={!byServing} onSelect={() => setBasis('100g')}>
-              Por 100 g
+              100 g
             </BasisChip>
           </div>
         </div>
@@ -164,17 +180,37 @@ export function CustomFoodForm({
 
       {!editing && (
         <div className="space-y-1">
-          <label htmlFor={`${id}-servingGrams`} className="text-sm font-medium">
+          <label htmlFor={`${id}-servingGrams`} className={LABEL}>
             {byServing ? 'Tamanho da porção (g)' : 'Porção do rótulo (g, opcional)'}
           </label>
-          <Input
-            id={`${id}-servingGrams`}
-            inputMode="decimal"
-            value={values.servingGrams}
-            onChange={set('servingGrams')}
-            placeholder="Ex.: 30"
-            {...invalid('servingGrams')}
-          />
+          {/* "− 40 g +" da prancha: o número é digitável, os passos são de 10 g. */}
+          <div className="flex h-[52px] items-center rounded-field bg-card px-1">
+            <button
+              type="button"
+              aria-label="Porção menos 10 g"
+              onClick={() => stepServing(-1)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-foreground hover:bg-muted"
+            >
+              <Minus size={18} aria-hidden />
+            </button>
+            <Input
+              id={`${id}-servingGrams`}
+              inputMode="decimal"
+              value={values.servingGrams}
+              onChange={set('servingGrams')}
+              placeholder="Ex.: 30"
+              className="h-11 flex-1 border-0 bg-transparent text-center text-lg font-bold tabular-nums"
+              {...invalid('servingGrams')}
+            />
+            <button
+              type="button"
+              aria-label="Porção mais 10 g"
+              onClick={() => stepServing(1)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-foreground hover:bg-muted"
+            >
+              <Plus size={18} aria-hidden />
+            </button>
+          </div>
           {fieldError('servingGrams')}
         </div>
       )}
@@ -184,7 +220,7 @@ export function CustomFoodForm({
           <div key={key} className="space-y-1">
             <label
               htmlFor={`${id}-${key}`}
-              className={cn('text-xs font-medium', tone || 'text-muted-foreground')}
+              className={cn('text-sm font-semibold', tone || 'text-muted-foreground')}
             >
               {label}
             </label>
@@ -194,6 +230,7 @@ export function CustomFoodForm({
               value={values[key]}
               onChange={set(key)}
               placeholder={key === 'kcal' ? '' : '0'}
+              className={FIELD}
               {...invalid(key)}
             />
             {fieldError(key)}
@@ -207,7 +244,10 @@ export function CustomFoodForm({
       )}
 
       {!editing && preview && (
-        <p className="rounded-lg bg-muted px-3 py-2 text-xs text-foreground">{preview}</p>
+        <p className="flex items-center gap-2 rounded-pill bg-card px-4 py-2.5 text-[13px] text-foreground">
+          <Check size={16} className="shrink-0 text-primary" aria-hidden />
+          {preview}
+        </p>
       )}
 
       <div className="space-y-2">
@@ -237,6 +277,7 @@ export function CustomFoodForm({
               value={values.barcode ?? ''}
               onChange={set('barcode')}
               placeholder="Ex.: 7891000100103"
+              className={FIELD}
               {...invalid('barcode')}
             />
             {fieldError('barcode')}
@@ -247,7 +288,7 @@ export function CustomFoodForm({
         )}
       </div>
 
-      <div className="rounded-2xl bg-card px-4">
+      <div className="rounded-card bg-card px-4">
         <button
           type="button"
           aria-expanded={microOpen}
@@ -262,7 +303,9 @@ export function CustomFoodForm({
                 : 'Fibra, sódio, açúcar e outros'}
             </span>
           </span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">opcional</span>
+          <span className="rounded-pill bg-muted px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-[0.04em] text-muted-foreground">
+            opcional
+          </span>
           <ChevronDown
             size={16}
             className={cn('text-muted-foreground transition-transform', microOpen && 'rotate-180')}
@@ -289,7 +332,7 @@ export function CustomFoodForm({
                     id={`${id}-n-${field.key}`}
                     inputMode="decimal"
                     placeholder="—"
-                    className="text-right"
+                    className="h-11 rounded-field border-0 bg-muted text-right font-bold"
                     value={nutrients[field.key] ?? ''}
                     onChange={(e) => setNutrient(field.key, e.target.value)}
                     aria-invalid={errors.nutrients?.[field.key] ? true : undefined}
@@ -322,7 +365,7 @@ export function CustomFoodForm({
                       key={field.key}
                       type="button"
                       onClick={() => setExtraKeys((prev) => [...prev, field.key])}
-                      className="inline-flex min-h-9 items-center gap-1 rounded-full bg-muted px-3 text-sm"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-chip bg-muted px-3.5 text-sm font-semibold"
                     >
                       <Plus size={14} aria-hidden />
                       {field.label}
@@ -349,8 +392,8 @@ export function CustomFoodForm({
         {saveOnly ? (
           <Button
             type="button"
-            variant="outline"
-            className="flex-1"
+            variant="ghost"
+            className="h-14 flex-1 rounded-pill bg-card font-bold hover:bg-muted"
             disabled={pending}
             onClick={() => {
               const input = parse();
@@ -364,15 +407,10 @@ export function CustomFoodForm({
             {cancelLabel}
           </Button>
         )}
-        <Button type="submit" className="flex-[2]" disabled={pending}>
+        <Button type="submit" className="h-14 flex-[1.6] rounded-pill font-bold" disabled={pending}>
           {pending ? 'Salvando...' : submitLabel}
         </Button>
       </div>
-      {saveOnly && (
-        <Button type="button" variant="ghost" className="w-full" onClick={onCancel}>
-          {cancelLabel}
-        </Button>
-      )}
     </form>
   );
 }
@@ -393,10 +431,8 @@ function BasisChip({
       aria-checked={checked}
       onClick={onSelect}
       className={cn(
-        'inline-flex min-h-11 items-center rounded-full border px-3 text-sm transition-colors',
-        checked
-          ? 'border-primary bg-primary/15 font-medium text-primary'
-          : 'text-muted-foreground hover:text-foreground',
+        'inline-flex h-11 min-w-[88px] items-center justify-center rounded-[10px] px-4 text-[15px] font-semibold transition-colors',
+        checked ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
     >
       {children}

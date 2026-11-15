@@ -37,7 +37,8 @@ import { BlockTimeline } from '@/components/workout/block-timeline';
 import { WorkoutCardsCarousel } from '@/components/workout/cards/workout-cards';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { useTopBarTitle } from '@/components/layout/app-top-bar';
+import { TabHeader, headerButtonClass } from '@/components/layout/tab-header';
 
 /**
  * Sessão em andamento — no PWA ela vive aqui, porque não existe rota de sessão.
@@ -280,11 +281,11 @@ function NoSession() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <TopBarActions>
-        <Link href="/workout/history" aria-label="Histórico" className={topBarActionClass}>
-          <History size={20} />
+      <TabHeader title="Treino">
+        <Link href="/workout/history" aria-label="Histórico" className={headerButtonClass()}>
+          <History size={20} aria-hidden />
         </Link>
-      </TopBarActions>
+      </TabHeader>
 
       {/* Os cards do canvas (músculos descansados, repetir o último, séries
           da semana) abrem a aba: nenhum depende de "próximo treino" (#369). */}

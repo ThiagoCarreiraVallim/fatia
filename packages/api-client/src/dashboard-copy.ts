@@ -16,7 +16,7 @@ function timeOfDay(now: Date): string {
 /**
  * Primeiro nome, se o nome guardado parece um nome. O provisionamento cai em
  * fallbacks quando o Logto não tem nome (parte local do e-mail, o `sub`,
- * "User") — cumprimentar "Bom dia, A1b2c3." é pior que não usar nome.
+ * "User") — cumprimentar "Bom dia, A1b2c3" é pior que não usar nome.
  */
 function firstName(name: string | null | undefined): string | null {
   const first = name?.trim().split(/\s+/)[0] ?? '';
@@ -26,7 +26,19 @@ function firstName(name: string | null | undefined): string | null {
 
 export function greetingLine(name: string | null | undefined, now: Date = new Date()): string {
   const who = firstName(name);
-  return who ? `${timeOfDay(now)}, ${who}.` : `${timeOfDay(now)}.`;
+  return who ? `${timeOfDay(now)}, ${who}` : timeOfDay(now);
+}
+
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/**
+ * A data curta do topo do Hoje, como na prancha Al-H1: "Qua, 4 nov". Montada à
+ * mão porque o `toLocaleDateString` varia entre navegador e Hermes ("qua.",
+ * "De Nov" com `capitalize`).
+ */
+export function todayDateLine(now: Date = new Date()): string {
+  return `${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`;
 }
 
 export interface NextWorkoutCopy {

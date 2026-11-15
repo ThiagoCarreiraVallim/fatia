@@ -11,7 +11,7 @@ import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { pluralize } from '@/components/workout/workout-stats';
 import { colors } from '@/theme/colors';
-import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/page.tsx`.
@@ -135,23 +135,21 @@ export default function WorkoutScreen() {
 
   return (
     <Screen
-      actions={
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Histórico de treinos"
-          onPress={() => router.push('/workout/history')}
-          className={TOP_BAR_ACTION}
-        >
-          <History size={20} color={colors.primaryText} />
-        </Pressable>
-      }
       refreshing={active.isRefetching || plans.isRefetching}
       onRefresh={() => {
         void active.refetch();
         void plans.refetch();
       }}
     >
-      <View className="gap-5 px-5 pb-4 pt-4">
+      <View className="gap-5 px-5 pb-4 pt-2">
+        <TabHeader title="Treino">
+          <HeaderButton
+            label="Histórico de treinos"
+            onPress={() => router.push('/workout/history')}
+          >
+            <History size={20} color={colors.foreground} />
+          </HeaderButton>
+        </TabHeader>
         {active.isLoading ? <LoadingState /> : null}
         {active.data ? (
           <ActiveSessionBanner sessionId={active.data.id} startedAt={active.data.startedAt} />
