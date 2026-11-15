@@ -60,6 +60,9 @@ interface AiMenuInternals extends AiMenuState {
   pick: (t: Target) => void;
   /** Rolagem e foco de quando o menu abriu: o fechar devolve os dois. */
   originRef: { current: { scrollY: number; focus: HTMLElement | null } };
+  /** A tela está congelada (aberta ou ainda voltando do notch). */
+  frozen: boolean;
+  setFrozen: (on: boolean) => void;
 }
 
 const AiMenuContext = createContext<AiMenuInternals>({
@@ -69,6 +72,8 @@ const AiMenuContext = createContext<AiMenuInternals>({
   go: () => undefined,
   pick: () => undefined,
   originRef: { current: { scrollY: 0, focus: null } },
+  frozen: false,
+  setFrozen: () => undefined,
 });
 
 /** Abre o menu da IA. Quem chama é o botão da IA da barra de baixo e o da lateral. */
@@ -100,6 +105,7 @@ function prefersReducedMotion(): boolean {
 export function AiMenuProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [frozen, setFrozen] = useState(false);
   const [target, setTarget] = useState<Target | null>(null);
   const pushed = useRef(false);
   const originRef = useRef<{ scrollY: number; focus: HTMLElement | null }>({
@@ -123,6 +129,7 @@ export function AiMenuProvider({ children }: { children: ReactNode }) {
       scrollY: window.scrollY,
       focus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
     };
+    setFrozen(true);
     setIsOpen(true);
     if (!pushed.current) {
       pushed.current = true;
@@ -166,8 +173,8 @@ export function AiMenuProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ isOpen, open, close, go, pick, originRef }),
-    [isOpen, open, close, go, pick],
+    () => ({ isOpen, open, close, go, pick, originRef, frozen, setFrozen }),
+    [isOpen, open, close, go, pick, frozen],
   );
   const meal = typeof target === 'object' && target !== null ? target.meal : null;
   const closeTarget = () => setTarget(null);
@@ -239,25 +246,16 @@ export function AiMenuStage({
   /** O layout tem a `SideNav` no desktop (ocupa os 256 px da esquerda). */
   sideNav?: boolean;
 }) {
-  const { isOpen, close, originRef } = useContext(AiMenuContext);
+  const { isOpen, close, originRef, frozen, setFrozen } = useContext(AiMenuContext);
   const pathname = usePathname() ?? '/';
   const vp = useViewport(sideNav);
-  const [frozen, setFrozen] = useState(false);
-  const [shown, setShown] = useState(false);
-  const [keyboard, setKeyboard] = useState(false);
-  const [wasOpen, setWasOpen] = useState(isOpen);
+  const [revealed, setRevealed] = useState(false);
+  const [typing, setTyping] = useState(false);
   const inner = useRef<HTMLDivElement>(null);
   const reduced = prefersReducedMotion();
-
-  // Abrir congela a tela já neste render; fechar começa a animação de volta.
-  if (wasOpen !== isOpen) {
-    setWasOpen(isOpen);
-    if (isOpen) setFrozen(true);
-    else {
-      setShown(false);
-      setKeyboard(false);
-    }
-  }
+  // Fechar começa a volta no mesmo render; o resto zera quando a tela descongela.
+  const shown = revealed && isOpen;
+  const keyboard = typing && isOpen;
 
   useEffect(() => {
     if (isOpen) {
@@ -265,16 +263,23 @@ export function AiMenuStage({
       // a transição ter de onde partir.
       let second = 0;
       const first = requestAnimationFrame(() => {
-        second = requestAnimationFrame(() => setShown(true));
+        second = requestAnimationFrame(() => setRevealed(true));
       });
       return () => {
         cancelAnimationFrame(first);
         cancelAnimationFrame(second);
       };
     }
-    const t = window.setTimeout(() => setFrozen(false), reduced ? 0 : duration.sheet + 100);
+    const t = window.setTimeout(
+      () => {
+        setRevealed(false);
+        setTyping(false);
+        setFrozen(false);
+      },
+      reduced ? 0 : duration.sheet + 100,
+    );
     return () => window.clearTimeout(t);
-  }, [isOpen, reduced]);
+  }, [isOpen, reduced, setFrozen]);
 
   // Congelada, a tela rola dentro do próprio bloco: a barra de topo `sticky`
   // continua no lugar e o notch mostra o que a pessoa via. Ao voltar, a
@@ -379,7 +384,7 @@ export function AiMenuStage({
           keyboardInset={vp.keyboard}
           backLabel={backLabel}
           keyboard={keyboard}
-          onKeyboard={setKeyboard}
+          onKeyboard={setTyping}
           transition={ease(duration.sheet, cssEasing.ease, 80)}
         />
       )}
@@ -432,7 +437,8 @@ function NotchHandle({
   );
 }
 
-const sectionLabel = 'px-2 text-[13px] text-muted-foreground';
+// O `b3` da prancha: 12 px em tx3, sem peso de título.
+const sectionLabel = 'px-2 font-sans text-xs font-normal tracking-normal text-faint';
 const roundIcon =
   'flex h-12 w-12 items-center justify-center rounded-full shadow-[inset_0_0_0_1px_hsl(var(--border-strong))]';
 
@@ -552,7 +558,7 @@ function AiMenuPanel({
               <Icon name={item.icon} size={16} />
             </span>
             {!iconOnly && (
-              <span aria-hidden className="text-[11px] text-muted-foreground">
+              <span aria-hidden className="text-[11px] text-faint">
                 {item.label}
               </span>
             )}
@@ -586,7 +592,9 @@ function AiMenuPanel({
         transformOrigin: '50% 100%',
         transform: shown ? 'none' : 'scale(.92) translateY(40px)',
         opacity: shown ? 1 : 0,
-        transition: reduced ? 'none' : `transform ${transition}, opacity ${transition}`,
+        transition: reduced
+          ? 'none'
+          : `transform ${transition}, opacity ${duration.sheet}ms ease 80ms`,
       }}
       className="fixed inset-y-0 right-0 z-[1] bg-sunken"
     >
@@ -692,12 +700,8 @@ function AiMenuPanel({
                           </span>
                           <span
                             className={cn(
-                              'shrink-0 text-[13px]',
-                              c.state === 'waiting'
-                                ? 'font-semibold text-primary-text'
-                                : c.state === 'thinking'
-                                  ? 'text-faint'
-                                  : 'text-muted-foreground',
+                              'shrink-0 text-xs',
+                              c.state === 'waiting' ? 'text-primary-text' : 'text-faint',
                             )}
                           >
                             {conversationTimeLabel(c)}
@@ -778,7 +782,7 @@ function AiMenuPanel({
 
           {usable && (
             <div className="flex flex-col gap-3 pt-2">
-              {keyboard && showManual && (
+              {keyboard && showManual && empty && (
                 <ul aria-label="Registrar manual" className="anim-pop flex justify-between px-4">
                   {manualButtons(true)}
                 </ul>
