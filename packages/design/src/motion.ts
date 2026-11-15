@@ -47,11 +47,14 @@ export const LIST_RISE_PX = 14;
 export const easing = {
   ease: [0.2, 0.8, 0.2, 1],
   spring: [0.34, 1.56, 0.64, 1],
+  /** A tela encolhendo até o notch do menu da IA (prancha `Al-H6c5`). */
+  notch: [0.65, 0, 0.2, 1],
 } as const satisfies Record<string, readonly [number, number, number, number]>;
 
 export const cssEasing = {
   ease: `cubic-bezier(${easing.ease.join(', ')})`,
   spring: `cubic-bezier(${easing.spring.join(', ')})`,
+  notch: `cubic-bezier(${easing.notch.join(', ')})`,
 } as const;
 
 /** A duração, ou 0 com reduzir movimento. */

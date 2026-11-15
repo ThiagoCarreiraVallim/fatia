@@ -8,6 +8,9 @@ describe('movimento', () => {
     expect(easing.ease).toEqual([0.2, 0.8, 0.2, 1]);
     expect(easing.spring).toEqual([0.34, 1.56, 0.64, 1]);
     expect(cssEasing.ease).toBe('cubic-bezier(0.2, 0.8, 0.2, 1)');
+    // A tela encolhendo até o notch do menu da IA (prancha Al-H6c5).
+    expect(easing.notch).toEqual([0.65, 0, 0.2, 1]);
+    expect(cssEasing.notch).toBe('cubic-bezier(0.65, 0, 0.2, 1)');
   });
 
   it('o toast some em 2,5 s sem ação e espera 5 s quando há Desfazer (WCAG 2.2.1)', () => {

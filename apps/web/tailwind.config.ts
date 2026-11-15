@@ -57,6 +57,7 @@ const config: Config = {
         },
         faint: 'hsl(var(--faint-foreground))',
         'surface-3': 'hsl(var(--surface-3))',
+        sunken: 'hsl(var(--sunken))',
         'border-strong': 'hsl(var(--border-strong))',
         accent: {
           DEFAULT: 'hsl(var(--accent))',

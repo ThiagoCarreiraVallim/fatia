@@ -25,6 +25,8 @@ function build(theme: Theme) {
     mutedForeground: p['muted-foreground'],
     faintForeground: p['faint-foreground'],
     surface3: p['surface-3'],
+    /** Atrás da tela que encolhe no menu da IA (Al-H6c5). */
+    sunken: p.sunken,
     /** Verde da marca como superfície (fundo de botão, anel). */
     primary: p.primary,
     /** Verde que pode ser texto ou ícone sobre o fundo (no claro, #1A7F00). */

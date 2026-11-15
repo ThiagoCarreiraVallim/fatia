@@ -11,9 +11,9 @@ import { THEMES, palettes, type TokenName } from '../tokens';
  * fundo, cartão e `muted` — por isso a tabela abaixo é por token.
  */
 const TEXT_ON: Record<string, TokenName[]> = {
-  foreground: ['background', 'card', 'muted', 'surface-3'],
-  'muted-foreground': ['background', 'card', 'muted', 'surface-3'],
-  'faint-foreground': ['background', 'card', 'muted'],
+  foreground: ['background', 'card', 'muted', 'surface-3', 'sunken'],
+  'muted-foreground': ['background', 'card', 'muted', 'surface-3', 'sunken'],
+  'faint-foreground': ['background', 'card', 'muted', 'sunken'],
   kcal: ['background', 'card'],
   protein: ['background', 'card'],
   carbs: ['background', 'card'],
@@ -48,6 +48,16 @@ describe.each(THEMES)('tema %s', (theme) => {
 
   it('o anel de foco (--ring) tem 3:1 sobre o fundo (WCAG 1.4.11)', () => {
     expect(contrastRatio(p.ring, p.background)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('fundo do menu da IA (--sunken)', () => {
+  it.each(THEMES)('fica atrás do fundo da tela no tema %s, e o cartão se destaca nele', (theme) => {
+    const p = palettes[theme];
+    // O menu se revela por trás da tela que encolhe: precisa ser mais fundo que ela.
+    expect(contrastRatio(p.sunken, p.background)).toBeGreaterThan(1.05);
+    // O cartão do Free (Al-H6c6) fica sobre esse fundo e não pode sumir nele.
+    expect(contrastRatio(p.card, p.sunken)).toBeGreaterThan(1.2);
   });
 });
 

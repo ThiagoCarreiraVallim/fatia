@@ -11,6 +11,7 @@
  * line → border · line2 → border-strong · tx → foreground ·
  * tx2 → muted-foreground · tx3 → faint-foreground · lime → primary ·
  * ink → primary-foreground · bad → danger · warn → warning.
+ * O #0c0c0c atrás da tela que encolhe no menu da IA (Al-H6c5) → sunken.
  *
  * No claro o cartão é branco (s1 do canvas) sobre o fundo #F4F5F2: é onde as
  * cores de dado passam 4,5:1. No escuro o cartão continua #2A2A2A, como hoje.
@@ -56,6 +57,7 @@ export const TOKEN_NAMES = [
   'steps',
   'brand',
   'brand-foreground',
+  'sunken',
 ] as const;
 export type TokenName = (typeof TOKEN_NAMES)[number];
 
@@ -98,6 +100,7 @@ const dark: Palette = {
   steps: '#2dd4bf',
   brand: '#ff7a1a',
   'brand-foreground': '#1f0e00',
+  sunken: '#0c0c0c',
 };
 
 /**
@@ -143,6 +146,7 @@ const light: Palette = {
   steps: '#0e7468',
   brand: '#ff7a1a',
   'brand-foreground': '#1f0e00',
+  sunken: '#e6e8e3',
 };
 
 export const palettes: Record<Theme, Palette> = { dark, light };
