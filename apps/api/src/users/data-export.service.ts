@@ -5,6 +5,11 @@ import { AccountService } from './account.service';
 
 /** Validade do link de exportação (prancha Al-V1: "Arquivo com link, vale 24 h"). */
 export const EXPORT_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Depois da primeira baixa, o link dura só mais isto: dá para tentar de novo se
+ * a rede caiu, mas um link que vazou (histórico, print, log) não vale o dia todo.
+ */
+export const EXPORT_LINK_REDOWNLOAD_MS = 15 * 60 * 1000;
 
 const hashOf = (token: string) => createHash('sha256').update(token).digest('hex');
 
@@ -62,7 +67,16 @@ export class DataExportService {
       throw new GoneException('Este link venceu. Peça uma nova exportação no app.');
     }
     const body = await this.account.exportData(link.userId);
-    await this.prisma.dataExport.update({ where: { id: link.id }, data: { downloadedAt: now } });
+    // A janela conta da primeira baixa; as seguintes não a esticam.
+    const firstDownload = link.downloadedAt ?? now;
+    const cutoff = new Date(firstDownload.getTime() + EXPORT_LINK_REDOWNLOAD_MS);
+    await this.prisma.dataExport.update({
+      where: { id: link.id },
+      data: {
+        downloadedAt: firstDownload,
+        expiresAt: cutoff < link.expiresAt ? cutoff : link.expiresAt,
+      },
+    });
     return { filename: `fatia-dados-${now.toISOString().slice(0, 10)}.json`, body };
   }
 }

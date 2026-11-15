@@ -9,10 +9,14 @@ import { GroupService } from '../../sharing/group.service';
 import { PostService } from '../../sharing/post.service';
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
-import { YouService } from '../../you/you.service';
+import { TUTORIALS_SEEN_MAX, YouService } from '../../you/you.service';
 import { NEWS } from '../../you/news-catalog';
 import { AccountService, APP_DELETE_CONFIRMATION, DELETE_CONFIRMATION } from '../account.service';
-import { DataExportService, EXPORT_LINK_TTL_MS } from '../data-export.service';
+import {
+  DataExportService,
+  EXPORT_LINK_REDOWNLOAD_MS,
+  EXPORT_LINK_TTL_MS,
+} from '../data-export.service';
 import { ProfileService } from '../profile.service';
 
 /**
@@ -239,6 +243,21 @@ describe('Você: perfil, conta e novidades (integração)', () => {
       await expect(exports.download(token)).rejects.toBeInstanceOf(GoneException);
       await expect(exports.download('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('baixado uma vez, o link dura só mais 15 min (um link vazado não vale o dia todo)', async () => {
+      const ana = await pessoa();
+      const t0 = new Date();
+      const link = await exports.createLink(ana, t0);
+      const token = link.url.split('/').at(-1)!;
+
+      await exports.download(token, t0);
+      // Dentro da janela: baixar de novo funciona (rede caiu, outro app).
+      await exports.download(token, new Date(t0.getTime() + EXPORT_LINK_REDOWNLOAD_MS - 1000));
+      // A segunda baixa não estica a janela.
+      await expect(
+        exports.download(token, new Date(t0.getTime() + EXPORT_LINK_REDOWNLOAD_MS + 1000)),
+      ).rejects.toBeInstanceOf(GoneException);
+    });
   });
 
   describe('apagar a conta', () => {
@@ -310,6 +329,21 @@ describe('Você: perfil, conta e novidades (integração)', () => {
       expect(await prisma.feedbackIdea.findMany({ where: { userId: ana } })).toEqual([
         expect.objectContaining({ body: 'Gráfico de sono' }),
       ]);
+    });
+
+    it('tutoriais vistos têm teto: um cliente não fabrica linhas sem fim', async () => {
+      const ana = await pessoa();
+      await prisma.userTutorialSeen.createMany({
+        data: Array.from({ length: TUTORIALS_SEEN_MAX }, (_, i) => ({
+          userId: ana,
+          tutorialId: `t-${i}`,
+        })),
+      });
+      await expect(you.markTutorialSeen(ana, 'mais-um')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      // Rever um que já está lá continua valendo.
+      await expect(you.markTutorialSeen(ana, 't-0')).resolves.toBeDefined();
     });
   });
 });

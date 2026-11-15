@@ -18,6 +18,12 @@ export const IDEA_MAX = 1000;
 export const TUTORIAL_ID = /^[a-z0-9-]{2,60}$/;
 
 /**
+ * O catálogo mora no cliente, então a API não sabe quais slugs existem. O teto
+ * impede que um cliente fabrique linhas sem fim; o catálogo real tem dezenas.
+ */
+export const TUTORIALS_SEEN_MAX = 200;
+
+/**
  * O resto da aba Você que não é perfil nem conta (#387): novidades lidas,
  * tutoriais vistos e as ideias que a pessoa manda. Tudo amarrado ao `userId`
  * do token — nenhum id de pessoa vem do cliente.
@@ -65,6 +71,13 @@ export class YouService {
 
   async markTutorialSeen(userId: string, tutorialId: string): Promise<{ seen: string[] }> {
     if (!TUTORIAL_ID.test(tutorialId)) throw new BadRequestException('Tutorial desconhecido.');
+    const [already, total] = await Promise.all([
+      this.prisma.userTutorialSeen.count({ where: { userId, tutorialId } }),
+      this.prisma.userTutorialSeen.count({ where: { userId } }),
+    ]);
+    if (!already && total >= TUTORIALS_SEEN_MAX) {
+      throw new BadRequestException('Tutorial desconhecido.');
+    }
     await this.prisma.userTutorialSeen.upsert({
       where: { userId_tutorialId: { userId, tutorialId } },
       create: { userId, tutorialId },

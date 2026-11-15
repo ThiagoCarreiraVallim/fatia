@@ -101,3 +101,19 @@ describe('redactSpanAttributes', () => {
     });
   });
 });
+
+describe('token do link de exportação no span', () => {
+  it('troca o token do caminho por :token em todo atributo de URL', () => {
+    const token = 'Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo';
+    const attributes: Attributes = {
+      'url.full': `https://api.fat.ia.br/api/exports/${token}`,
+      'http.target': `/api/exports/${token}?a=1`,
+      'url.path': `/api/exports/${token}`,
+      'http.route': '/api/exports/:token',
+    };
+    redactSpanAttributes(attributes);
+    expect(JSON.stringify(attributes)).not.toContain(token);
+    expect(attributes['url.full']).toBe('https://api.fat.ia.br/api/exports/:token');
+    expect(attributes['url.path']).toBe('/api/exports/:token');
+  });
+});

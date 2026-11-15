@@ -195,3 +195,33 @@ describe('serializadores de log', () => {
     });
   });
 });
+
+/**
+ * O link de exportação (#387) é público e o token vai **no caminho**, não na query: cortar a
+ * query não bastava, e o token de quem baixou ia inteiro para o Loki — quem lê log baixava os
+ * dados de saúde da pessoa sem login.
+ */
+describe('caminho com segredo', () => {
+  const TOKEN = 'Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo';
+
+  it('o token do link de exportação não chega ao log', () => {
+    const serializado = serializeRequest({
+      id: 'r',
+      method: 'GET',
+      url: `/api/exports/${TOKEN}?x=1`,
+      headers: {},
+    } as unknown as IncomingMessage);
+    expect(serializado.path).toBe('/api/exports/:token');
+    expect(JSON.stringify(serializado)).not.toContain(TOKEN);
+  });
+
+  it('as outras rotas seguem com o caminho real', () => {
+    const serializado = serializeRequest({
+      id: 'r',
+      method: 'GET',
+      url: '/api/users/me/exports',
+      headers: {},
+    } as unknown as IncomingMessage);
+    expect(serializado.path).toBe('/api/users/me/exports');
+  });
+});
