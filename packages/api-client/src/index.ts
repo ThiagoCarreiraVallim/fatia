@@ -59,6 +59,7 @@ export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';
 export * from './ai-drawer';
+export * from './plan-components-copy';
 export * from './onboarding';
 export * from './navigation';
 export * from './format';
