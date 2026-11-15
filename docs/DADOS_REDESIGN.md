@@ -178,7 +178,10 @@ campos de data dos modelos, não de enum.
 
 - **`User`** e o perfil do onboarding: `name`, `sex` (`BiologicalSex`), `birthDate`, `heightCm`,
   `activityLevel` (`ActivityLevel`), `objective` (`BodyObjective`), `onboardedAt` — Onb 4–7 (#371),
-  Perfil e Apagar conta (#387).
+  Perfil e Apagar conta (#387). A retomada (Onb-Retomada) guarda `onboardingStep` (a etapa em que a
+  pessoa está) e `onboardingDraft` (as metas ainda não aceitas e a escolha app/equipe); o cartão
+  "Primeiros passos" (Onb-11) usa `firstStepsSince` e `firstStepsDoneAt`, e o que está feito é
+  lido dos dados (refeição, treino, comunidade, desafio), sem tabela própria (#371).
 - **`UserSubscription`**: `tier` (`PlanTier`), `interval` (`BillingInterval`), `source`
   (`SubscriptionSource`: `ASAAS` na web, `APPLE`, `GOOGLE`, `MANUAL`), `status`
   (`SubscriptionStatus`), `currentPeriodEnd`, `graceEndsAt`, `cancelAtPeriodEnd`, `paymentUrl` —

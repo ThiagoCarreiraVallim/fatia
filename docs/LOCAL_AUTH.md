@@ -27,6 +27,21 @@ de senha por código. Em dev o SMTP é o Mailpit do compose: todo e-mail aparece
 `pnpm logto:bootstrap` de novo. A página de login do PWA abre direto em cada tela do Logto:
 `/api/logto/sign-in` (entrar), `?tela=cadastro` e `?tela=senha`.
 
+**Google e Apple (#371).** A tela da conta (Onb-01a/01b) tem nome, e-mail, Google e Apple; a senha
+continua na tela do Logto (ADR 008). O PWA manda `?email=` (vira `login_hint`), `?nome=` (fica num
+cookie curto que o onboarding grava no perfil) e `?social=google|apple` (vira
+`direct_sign_in=social:<target>`, que pula a tela do Logto); o app manda os mesmos parâmetros na
+autorização. Com `LOGTO_GOOGLE_*` e `LOGTO_APPLE_*` no `.env`, `pnpm logto:bootstrap` cria os
+conectores `google-universal` e `apple-universal`, lista os dois na experiência de login e liga o
+vínculo automático: quem entra pelo Google com o e-mail de uma conta que já existe cai nela. Sem as
+credenciais, o botão leva à tela do Logto com e-mail e senha. O que configurar fora do repositório:
+
+- **Google Cloud:** cliente OAuth do tipo _Web application_ com o redirect
+  `<LOGTO_ENDPOINT>/callback/<id do conector>` (o console do Logto mostra o id depois do bootstrap).
+- **Apple Developer:** um _Service ID_ com _Sign in with Apple_, o domínio e o mesmo redirect, uma
+  chave (.p8) com o _Key ID_ e o _Team ID_. A chave vai em `LOGTO_APPLE_PRIVATE_KEY` numa linha só,
+  com `\n` no lugar das quebras.
+
 Screenshots e fluxos de interface: [`e2e/README.md`](../e2e/README.md).
 
 ---
