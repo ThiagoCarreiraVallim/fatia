@@ -349,6 +349,14 @@ export const CAMPOS: Record<string, Campo> = {
   status: { rotulo: 'Situação', formato: deMapa(SITUACAO_DA_META) },
   heightCm: { rotulo: 'Altura', formato: comUnidade('cm', 0) },
   timezone: { rotulo: 'Fuso horário', formato: fuso },
+  // Apelido e bio do perfil (#387): aparecem a quem a visibilidade deixa, nas comunidades.
+  nickname: { rotulo: 'Nome nas comunidades', formato: texto },
+  bio: { rotulo: 'Sobre você', formato: texto },
+  loadUnit: { rotulo: 'Carga em', formato: deMapa({ KG: 'Quilos (kg)', LB: 'Libras (lb)' }) },
+  distanceUnit: {
+    rotulo: 'Distância em',
+    formato: deMapa({ KM: 'Quilômetros (km)', M: 'Metros (m)', MI: 'Milhas (mi)' }),
+  },
 };
 
 /**
