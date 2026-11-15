@@ -8,6 +8,7 @@ import type {
 } from './chat';
 import { nutritionApi, type MealType } from './nutrition';
 import { progressApi } from './progress';
+import { HOME_TITLE, routeInfo } from './navigation';
 
 /**
  * O menu do botão da IA, "O que vamos registrar?" (ADR 040, prancha
@@ -105,13 +106,41 @@ const COMPLETIONS: readonly string[] = [
   'Quantas calorias comi hoje?',
 ];
 
-export function completionsFor(draft: string, max = 3): string[] {
+/**
+ * Frases para completar: primeiro o `history` (o que a pessoa já registrou,
+ * {@link completionHistory}), depois as fixas. Sem repetir, até `max`.
+ */
+export function completionsFor(draft: string, max = 3, history: readonly string[] = []): string[] {
   const typed = draft.trim().toLowerCase();
   if (!typed) return [];
-  return COMPLETIONS.filter((f) => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const f of [...history, ...COMPLETIONS]) {
     const phrase = f.toLowerCase();
-    return phrase.startsWith(typed) && phrase !== typed;
-  }).slice(0, max);
+    if (!phrase.startsWith(typed) || phrase === typed || seen.has(phrase)) continue;
+    seen.add(phrase);
+    out.push(f);
+    if (out.length === max) break;
+  }
+  return out;
+}
+
+/**
+ * O que a pessoa já registrou, como frase para completar (prancha `Al-H6c7`).
+ * A API não guarda o texto que a pessoa mandou fora da conversa, e não vai
+ * passar a guardar só para isto: vale o título das conversas recentes (a IA o
+ * tira da primeira mensagem) e os alimentos que ela comeu nos últimos 60 dias
+ * (`nutritionApi.myFoods`), como "Comi …".
+ */
+export function completionHistory(
+  conversations: readonly ChatConversationSummary[],
+  foods: readonly { name: string }[],
+): string[] {
+  const phrases = [
+    ...conversations.map((c) => c.title?.trim() ?? ''),
+    ...foods.map((f) => `Comi ${f.name.trim().toLocaleLowerCase('pt-BR')}`),
+  ].filter((p) => p && p !== 'Comi ');
+  return [...new Set(phrases)];
 }
 
 export interface DrawerChipSection {
@@ -125,12 +154,89 @@ export interface DrawerChipSection {
  * Os chips acima do campo. Texto livre que nenhuma frase completa não mostra
  * nada — antes ficava só o rótulo "Completar", solto, sem chip.
  */
-export function drawerChipSection(draft: string): DrawerChipSection | null {
+export function drawerChipSection(
+  draft: string,
+  history: readonly string[] = [],
+): DrawerChipSection | null {
   if (!draft.trim()) {
     return { title: 'Sugestões', chips: [...AI_DRAWER_SUGGESTIONS], onTap: 'send' };
   }
-  const chips = completionsFor(draft);
+  const chips = completionsFor(draft, 3, history);
   return chips.length ? { title: 'Completar', chips, onTap: 'fill' } : null;
+}
+
+const SUGGESTION_ICONS: Record<string, 'target' | 'chart' | 'dumbbell'> = {
+  'Quanto falta de proteína hoje?': 'target',
+  'Como foi minha semana?': 'chart',
+  'Dor ou cansaço hoje?': 'dumbbell',
+};
+
+/** O ícone da dica (prancha `Al-H6c5`); frase de completar não tem. */
+export function suggestionIcon(phrase: string): 'target' | 'chart' | 'dumbbell' | null {
+  return SUGGESTION_ICONS[phrase] ?? null;
+}
+
+// ---------------------------------------------------------------- o notch
+
+/** A prancha `Al-H6c5` é de 390 px de largura; o resto escala a partir dela. */
+const FRAME_WIDTH = 390;
+/** Acima disso (coluna do desktop) a altura do notch para de crescer. */
+const FRAME_MAX_HEIGHT_WIDTH = 480;
+
+export interface AiMenuFrame {
+  /** Distância do notch ao topo, px. */
+  top: number;
+  /** Margem do notch dos dois lados, px. */
+  inset: number;
+  height: number;
+  radius: number;
+  /** A tela, no tamanho real, encolhe para caber entre as margens. */
+  scale: number;
+  /** Quanto a tela sobe dentro do notch (o topo dela fica escondido), px. */
+  lift: number;
+  /** Onde começa a linha do voltar, logo abaixo do notch. */
+  headerTop: number;
+}
+
+/**
+ * Onde a tela atual vai parar quando o menu da IA abre: um notch arredondado
+ * no topo (prancha `Al-H6c5`; com o teclado, `Al-H6c7`, mais baixo). Web e app
+ * animam até estes números.
+ */
+export function aiMenuFrame(width: number, opts: { keyboard?: boolean } = {}): AiMenuFrame {
+  const k = width / FRAME_WIDTH;
+  const hk = Math.min(width, FRAME_MAX_HEIGHT_WIDTH) / FRAME_WIDTH;
+  const top = 8;
+  const height = (opts.keyboard ? 112 : 160) * hk;
+  return {
+    top,
+    inset: 36 * k,
+    height,
+    radius: 32,
+    scale: 0.815,
+    lift: 30 * hk,
+    headerTop: top + height + 16,
+  };
+}
+
+/** Arrastar o notch para baixo além disto fecha o menu. */
+export const AI_MENU_DRAG_CLOSE_PX = 48;
+
+/** O voltar do menu diz para onde volta: a tela que encolheu no notch. */
+export function aiMenuBackLabel(pathname: string): string {
+  const { title } = routeInfo(pathname);
+  if (!title) return 'Voltar';
+  return title === HOME_TITLE ? `Voltar para o ${HOME_TITLE}` : `Voltar para ${title}`;
+}
+
+/**
+ * O texto do campo. Com conversa em andamento (Al-H6c9), deixa claro que
+ * escrever ali abre outra conversa, não responde a que espera.
+ */
+export function aiMenuPlaceholder(conversations: readonly ChatConversationSummary[]): string {
+  return conversations.some((c) => c.state === 'waiting' || c.state === 'thinking')
+    ? 'Nova conversa…'
+    : 'Comi, treinei… ou pergunte';
 }
 
 /** O bloco do Free (prancha `Al-H6c6`): o que a IA Pro faria, e para onde ir. */

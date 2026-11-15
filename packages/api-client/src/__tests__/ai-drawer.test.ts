@@ -15,6 +15,12 @@ import {
   workoutQuickLabel,
   openInterrupt,
   approvalResume,
+  aiMenuBackLabel,
+  aiMenuFrame,
+  aiMenuPlaceholder,
+  completionHistory,
+  suggestionIcon,
+  AI_DRAWER_SUGGESTIONS,
 } from '../ai-drawer';
 import type { ChatActionPreview, ChatConversationSummary, ChatInterruptValue } from '../chat';
 
@@ -190,6 +196,96 @@ describe('completar com o teclado aberto', () => {
 
   it('no máximo três frases', () => {
     expect(completionsFor('t').length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('completar com o que a pessoa já registrou (Al-H6c7)', () => {
+  const history = completionHistory(
+    [conversa('Almocei frango grelhado, arroz e salada', 'idle', '2026-11-14T12:00:00Z')],
+    [{ name: 'Banana prata' }, { name: 'Almôndega' }],
+  );
+
+  it('o histórico vem antes das frases fixas, sem repetir', () => {
+    expect(history).toEqual([
+      'Almocei frango grelhado, arroz e salada',
+      'Comi banana prata',
+      'Comi almôndega',
+    ]);
+    expect(completionsFor('alm', 3, history)).toEqual(['Almocei frango grelhado, arroz e salada']);
+    const comi = completionsFor('comi', 3, history);
+    expect(comi.slice(0, 2)).toEqual(['Comi banana prata', 'Comi almôndega']);
+    expect(new Set(comi).size).toBe(comi.length);
+  });
+
+  it('conversa sem título não vira frase', () => {
+    expect(
+      completionHistory([{ ...conversa('x', 'idle', '2026-11-14T12:00:00Z'), title: null }], []),
+    ).toEqual([]);
+  });
+
+  it('a seção de chips usa o histórico', () => {
+    expect(drawerChipSection('almocei', history)?.chips).toEqual([
+      'Almocei frango grelhado, arroz e salada',
+    ]);
+  });
+});
+
+describe('dicas com ícone (Al-H6c5)', () => {
+  it('toda sugestão fixa tem ícone; frase desconhecida não', () => {
+    for (const s of AI_DRAWER_SUGGESTIONS) expect(suggestionIcon(s)).toBeTruthy();
+    expect(suggestionIcon('outra coisa')).toBeNull();
+  });
+});
+
+describe('o notch do menu da IA (Al-H6c5)', () => {
+  it('na tela de referência (390 px) é a prancha', () => {
+    expect(aiMenuFrame(390)).toEqual({
+      top: 8,
+      inset: 36,
+      height: 160,
+      radius: 32,
+      scale: 0.815,
+      lift: 30,
+      headerTop: 184,
+    });
+  });
+
+  it('com o teclado (Al-H6c7) o notch baixa para 112 e o cabeçalho sobe para 136', () => {
+    const f = aiMenuFrame(390, { keyboard: true });
+    expect(f.height).toBe(112);
+    expect(f.headerTop).toBe(136);
+  });
+
+  it('escala com a largura, e a tela encolhida cabe entre as margens', () => {
+    const f = aiMenuFrame(430);
+    expect(f.inset).toBeCloseTo(39.69, 1);
+    expect(f.height).toBeCloseTo(176.4, 1);
+    expect(430 * f.scale).toBeLessThanOrEqual(430 - 2 * f.inset + 0.5);
+  });
+
+  it('no desktop a altura para de crescer (coluna larga)', () => {
+    expect(aiMenuFrame(1200).height).toBe(aiMenuFrame(480).height);
+  });
+});
+
+describe('o voltar do menu e o campo', () => {
+  it('diz para qual tela volta', () => {
+    expect(aiMenuBackLabel('/')).toBe('Voltar para o Hoje');
+    expect(aiMenuBackLabel('/nutrition')).toBe('Voltar para Nutrição');
+    expect(aiMenuBackLabel('/rota/que/nao/existe')).toBe('Voltar');
+  });
+
+  it('com conversa pendente o campo abre conversa nova (Al-H6c9)', () => {
+    expect(aiMenuPlaceholder([])).toBe('Comi, treinei… ou pergunte');
+    expect(aiMenuPlaceholder([conversa('a', 'idle', '2026-11-14T12:00:00Z')])).toBe(
+      'Comi, treinei… ou pergunte',
+    );
+    expect(aiMenuPlaceholder([conversa('a', 'waiting', '2026-11-14T12:00:00Z')])).toBe(
+      'Nova conversa…',
+    );
+    expect(aiMenuPlaceholder([conversa('a', 'thinking', '2026-11-14T12:00:00Z')])).toBe(
+      'Nova conversa…',
+    );
   });
 });
 
