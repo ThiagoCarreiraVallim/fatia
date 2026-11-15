@@ -104,6 +104,12 @@ model User {
   nutrientTargets        NutrientTarget[]
   achievements           UserAchievement[]
   trainingBlocks         TrainingBlock[]
+  /// Planos de treino que a equipe mandou para a pessoa (#379). É dado dela.
+  planOffers             PlanOffer[]        @relation("PlanOfferSubject")
+  /// Ofertas que a pessoa, como profissional, mandou para alunos (#379).
+  planOffersAuthored     PlanOffer[]        @relation("PlanOfferAuthor")
+  /// A agenda de treinos (#379): as sessões dos planos de calendário.
+  plannedSessions        PlannedSession[]
   /// Plano alimentar que a equipe mandou para a pessoa (#376). É dado dela.
   nutritionPlans         NutritionPlan[]    @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
@@ -787,16 +793,22 @@ model WorkoutPlan {
   /// Plano pronto da comunidade de onde este plano veio (Fase 7). Torna a
   /// adoção idempotente; arquivar o modelo não mexe na cópia.
   fromTemplateId String?
+  /// Oferta da equipe de onde este plano veio (#379). Aceitar a versão nova
+  /// troca os exercícios deste mesmo plano; apagar o plano não mexe na oferta.
+  fromOfferId    String?
   createdAt      DateTime @default(now())
 
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exercises      WorkoutPlanExercise[]
-  sessions       WorkoutSession[]
-  trainingBlocks TrainingBlock[]
-  fromTemplate   GroupPlanTemplate?    @relation("PlanFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises       WorkoutPlanExercise[]
+  sessions        WorkoutSession[]
+  trainingBlocks  TrainingBlock[]
+  fromTemplate    GroupPlanTemplate?    @relation("PlanFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
+  fromOffer       PlanOffer?            @relation("PlanFromOffer", fields: [fromOfferId], references: [id], onDelete: SetNull)
+  plannedSessions PlannedSession[]
 
   @@index([userId])
   @@index([userId, fromTemplateId])
+  @@index([fromOfferId])
 }
 
 /// Uma linha do plano. A identidade é o `id` (e a posição é `order`): o mesmo
@@ -1008,7 +1020,8 @@ model WorkoutCheckin {
 // PERIODIZAÇÃO (#145 — ADR 019)
 // ============================================================
 
-/// Bloco de periodização: 4 semanas (3 de acúmulo/pico + 1 deload) sobre um plano.
+/// Bloco de periodização: de 3 a 6 semanas (acúmulo, pico e 1 deload no fim) sobre
+/// um plano. Os blocos de 4 semanas de antes da #379 seguem iguais.
 ///
 /// O que estas tabelas guardam é **intenção**, e só ela: o bloco que o usuário
 /// aceitou, com os multiplicadores congelados no dia em que aceitou. Derivar a
@@ -1046,7 +1059,8 @@ model TrainingBlockWeek {
   blockId    String
   /// 1..weeksTotal
   weekNumber Int
-  /// "accumulation" | "peak" | "deload"
+  /// "accumulation" | "peak" | "deload" (os mesmos três desde a #379, que só
+  /// mudou quantas semanas de cada um o bloco tem)
   focus      String
 
   /// Multiplicadores gravados na linha, não lidos do template do código: um bloco
@@ -1078,6 +1092,121 @@ enum TrainingBlockStatus {
   active
   completed
   abandoned
+}
+
+// ============================================================
+// PLANO RECEBIDO E AGENDA DE TREINOS (#379, ADR 014 e ADR 042)
+// ============================================================
+
+/// PENDING: chegou e espera o aceite. ACCEPTED: a versão em uso (uma por
+/// oferta). DECLINED: a pessoa recusou ("Desfazer" volta a PENDING), ou, numa
+/// atualização, manteve a versão atual. SUPERSEDED: veio uma versão mais nova
+/// antes da resposta, ou outra versão foi aceita depois desta.
+enum PlanOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  SUPERSEDED
+}
+
+/// CALENDAR: o plano tem datas, e o aceite gera as sessões da agenda.
+/// FLEXIBLE: sem datas; a agenda só calcula a próxima sessão.
+enum PlanSchedule {
+  CALENDAR
+  FLEXIBLE
+}
+
+/// Plano de treino que a equipe mandou para um aluno (#379). A linha é do ALUNO
+/// (`userId`): entra no export dele e some com a conta dele. Só nasce com
+/// `ProfessionalLink` ativo entre o aluno e a equipe remetente; recusar não
+/// mexe no vínculo nem nos consentimentos.
+///
+/// O conteúdo mora nas versões (`PlanOfferVersion`): atualizar é versão nova, e
+/// nada muda no plano do aluno sem o aceite dela (ADR 014: a cópia é dele).
+model PlanOffer {
+  id        String   @id @default(uuid())
+  userId    String
+  /// Quem enviou. Nulo quando apagou a conta: a oferta fica, sem o nome.
+  authorId  String?
+  /// Comunidade em que a oferta foi enviada. Exercício dela viaja por referência.
+  groupId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User               @relation("PlanOfferSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author   User?              @relation("PlanOfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  group    Group?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  versions PlanOfferVersion[]
+  /// O plano que o aceite criou na conta do aluno.
+  plans    WorkoutPlan[]      @relation("PlanFromOffer")
+
+  @@index([userId])
+  @@index([authorId])
+  @@index([groupId])
+}
+
+/// Uma versão da oferta: o retrato congelado do plano (`plan-snapshot.ts`), as
+/// datas e o recado. O "o que mudou" é o diff entre o retrato da versão aceita
+/// e o desta, calculado na leitura.
+model PlanOfferVersion {
+  id              String          @id @default(uuid())
+  offerId         String
+  /// 1, 2, 3… dentro da oferta. Aparece como "v2".
+  version         Int
+  status          PlanOfferStatus @default(PENDING)
+  title           String
+  snapshot        Json
+  snapshotVersion Int
+  schedule        PlanSchedule
+  /// Só no CALENDAR: a primeira segunda-feira (YYYY-MM-DD), quantas semanas e
+  /// os dias da semana ISO (1 = segunda … 7 = domingo).
+  startDate       String?
+  weeks           Int?
+  weekdays        Int[]           @default([])
+  /// Recado da equipe, texto puro.
+  note            String?
+  sentAt          DateTime        @default(now())
+  /// Quando a pessoa aceitou, recusou ou a versão foi substituída.
+  respondedAt     DateTime?
+
+  offer PlanOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, version])
+  @@index([offerId, status])
+}
+
+/// PLANNED: no dia combinado. RESCHEDULED: a pessoa remarcou (`originalDate`
+/// guarda o dia de antes). "Feito" e "não feito" não ficam aqui: saem das
+/// sessões concluídas na leitura (ADR 019), e a agenda não registra presença.
+enum PlannedSessionStatus {
+  PLANNED
+  RESCHEDULED
+}
+
+/// Uma sessão da agenda de treinos (Al-T24): o plano de calendário no dia.
+/// Informativa (ADR 042): sem reserva, sem presença. Só o aceite de um plano
+/// de calendário cria linhas; plano flexível não cria nenhuma.
+model PlannedSession {
+  id             String               @id @default(uuid())
+  userId         String
+  planId         String
+  /// Versão da oferta que gerou a sessão. Aceitar uma versão nova refaz as
+  /// sessões de hoje em diante; as que passaram ficam.
+  offerVersionId String?
+  /// YYYY-MM-DD no fuso da pessoa.
+  date           String
+  /// 1, 2, 3… na ordem do plano.
+  order          Int
+  status         PlannedSessionStatus @default(PLANNED)
+  originalDate   String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([planId, date])
 }
 
 // ============================================================
@@ -1370,6 +1499,8 @@ model Group {
   challenges            GroupChallenge[]
   /// Planos alimentares que a equipe mandou a alunos (#376).
   nutritionPlans        NutritionPlan[]
+  /// Planos de treino que a equipe mandou a alunos (#379).
+  planOffers            PlanOffer[]
   /// Quem publica no mural (Fase 8b, ADR 032).
   postPolicy            PostPolicy           @default(ALL_MEMBERS)
   posts                 GroupPost[]
