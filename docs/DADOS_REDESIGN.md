@@ -129,7 +129,7 @@ schema; a issue da tela usa o campo indicado.
 | Bloco de treino               | Periodização                       | `TrainingBlock` (`kind`, `weeksTotal`, `status`) + `TrainingBlockWeek`              | #379       |
 | Origem do alimento            | Adicionar item                     | `Food.source`; `Food.barcode` no alimento da pessoa (§2)                            | #375       |
 | Como foi o treino             | Fim do treino                      | `WorkoutSession.notes`                                                              | #377       |
-| Favorito de exercício         | Como fazer                         | não existe: favorito só de alimento (`FavoriteFood`)                                | #378       |
+| Favorito de exercício         | Como fazer                         | existe desde a #378: `FavoriteExercise` (único por pessoa e exercício)              | #378       |
 | Tipo de comunidade            | Criar comunidade, Checklist        | `GroupType`, `GroupVisibility`, `JoinPolicy`, `PostPolicy`, `requiredSharingScopes` | #372       |
 
 ## 4. Estados que viram tela

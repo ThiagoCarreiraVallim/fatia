@@ -66,6 +66,7 @@ Nenhum placeholder restante no código.
 | `(app)/workout`                      | `app/(app)/workout/index.tsx`                            | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela                                                                                               |
 | `(app)/workout/history`              | `app/(app)/workout/history.tsx`                          | ✅  |                                                                                                                                                                       |
 | `(app)/workout/plans`                | `app/(app)/workout/plans/index.tsx`                      | ✅  |                                                                                                                                                                       |
+| `(app)/workout/plans/new`            | `app/(app)/workout/plans/new.tsx`                        | ✅  | Novo plano (#378): nome e lote de exercícios; o Configurar fica no plano criado                                                                                       |
 | `(app)/workout/plans/[id]`           | `app/(app)/workout/plans/[id].tsx`                       | ✅  |                                                                                                                                                                       |
 | `(app)/workout/quick/[templateId]`   | `app/(app)/workout/quick/[templateId].tsx`               | ✅  |                                                                                                                                                                       |
 | `(app)/workout/session/[id]`         | `app/(app)/workout/session/[id].tsx`                     | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita                                                                                            |
@@ -146,14 +147,17 @@ Semana (S1).
 | `barcode-flow`          | `app/(app)/nutrition/scan.tsx`       | ✅  | abas Código/Rótulo nos dois; o rótulo usa upload com `capture` no PWA (`label-reader`) e `PhotoCapture` (câmera e galeria, Expo Go) no app; Free vê "Ver o plano PRO"; sem IA no servidor a aba some. No PWA é um modo do drawer de busca; no app é tela                                                                             |
 | —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta, guardar) é comum em `@fatia/api-client` (`barcode.ts`)                                                                                                                                                                                              |
 
-### Treino — 14 de 14
+### Treino — 17 de 17
 
 | PWA                      | App nativo                              |     | Observação                                                                   |
 | ------------------------ | --------------------------------------- | :-: | ---------------------------------------------------------------------------- |
-| `add-exercise-drawer`    | `workout/add-exercise-drawer`           | ✅  |                                                                              |
+| `add-exercise-drawer`    | `workout/add-exercise-drawer`           | ✅  | seleção múltipla com Favoritos e grupos (#378)                               |
+| `plan-exercise-sheet`    | `workout/plan-exercise-sheet`           | ✅  | Configurar exercício (#378): A, série por série (B) e cardio (D)             |
+| `plan-exercise-row`      | `workout/plan-exercise-row`             | ✅  | linha do plano; no app o Como fazer abre pelo `ExerciseDetailHost`           |
+| `plan-muscle-bar`        | `workout/plan-muscle-bar`               | ✅  | séries por grupo; a cor vem de `muscleGroupTone` no api-client               |
 | `block-timeline`         | `workout/block-timeline`                | ✅  | bloco de periodização (#145); a frase explicativa vem pronta da API          |
 | `exercise-detail-card`   | `workout/exercise-detail-card`          | ✅  | aceita `renderSet` para receber a linha editável da sessão                   |
-| `exercise-detail-drawer` | `workout/exercise-detail-drawer`        | ✅  |                                                                              |
+| `exercise-detail-drawer` | `workout/exercise-detail-drawer`        | ✅  | estrela de favorito no título (#378)                                         |
 | `exercise-edit-drawer`   | `workout/exercise-edit-drawer`          | ✅  |                                                                              |
 | `exercise-search-drawer` | `workout/exercise-search-drawer`        | ✅  |                                                                              |
 | `muscle-diagram`         | `workout/muscle-diagram`                | ✅  | 206 traços com `id` e `data-muscle` preservados                              |
