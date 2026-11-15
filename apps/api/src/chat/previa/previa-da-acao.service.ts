@@ -417,6 +417,36 @@ export class PreviaDaAcaoService {
         });
         return troca ? `${troca.foodName} no lugar de ${troca.item.foodName}` : null;
       }
+      // Plano de treino recebido e agenda (#379): sempre pela pessoa que recebeu.
+      case 'planoRecebido': {
+        const oferta = await this.prisma.planOffer.findFirst({
+          where: { id, userId },
+          select: {
+            author: { select: { name: true } },
+            versions: { orderBy: { version: 'desc' }, take: 1, select: { title: true } },
+          },
+        });
+        const titulo = oferta?.versions[0]?.title;
+        if (!titulo) return null;
+        return oferta.author?.name ? `${titulo}, de ${oferta.author.name}` : titulo;
+      }
+      case 'versaoDoPlanoRecebido': {
+        const versao = await this.prisma.planOfferVersion.findFirst({
+          where: { id, offer: { userId } },
+          select: { title: true, version: true },
+        });
+        if (!versao) return null;
+        return versao.version > 1 ? `${versao.title} v${versao.version}` : versao.title;
+      }
+      case 'sessaoDaAgenda': {
+        const sessao = await this.prisma.plannedSession.findFirst({
+          where: { id, userId },
+          select: { date: true, order: true, plan: { select: { name: true } } },
+        });
+        return sessao
+          ? `${sessao.plan.name}, sessão ${sessao.order}, ${dia(sessao.date, ctx)}`
+          : null;
+      }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({
           where: { id, plan: { userId } },

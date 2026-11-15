@@ -498,6 +498,12 @@ export const CAMPOS: Record<string, Campo> = {
   quietHoursEnabled: { rotulo: 'Silêncio noturno', formato: simOuNao },
   quietFrom: { rotulo: 'Silêncio começa', formato: texto },
   quietTo: { rotulo: 'Silêncio termina', formato: texto },
+  // Bloco de semanas (#379): de 3 a 6, a última de deload.
+  weeks: {
+    rotulo: 'Semanas',
+    formato: (valor) =>
+      typeof valor === 'number' ? (valor === 1 ? '1 semana' : `${valor} semanas`) : null,
+  },
 };
 
 /**
@@ -545,7 +551,10 @@ export type TipoDeRegistro =
   | 'opcaoDoPlano'
   | 'itemDoPlano'
   | 'equivalenteDoPlano'
-  | 'trocaDoPlano';
+  | 'trocaDoPlano'
+  | 'planoRecebido'
+  | 'versaoDoPlanoRecebido'
+  | 'sessaoDaAgenda';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
@@ -565,6 +574,9 @@ export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   log_plan_meal: { planMealId: 'refeicaoDoPlano', optionId: 'opcaoDoPlano' },
   swap_plan_item: { itemId: 'itemDoPlano', equivalentId: 'equivalenteDoPlano' },
   undo_plan_swap: { swapId: 'trocaDoPlano' },
+  // Plano de treino recebido da equipe (#379).
+  accept_plan_offer: { offerId: 'planoRecebido', versionId: 'versaoDoPlanoRecebido' },
+  decline_plan_offer: { offerId: 'planoRecebido', versionId: 'versaoDoPlanoRecebido' },
 };
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
@@ -578,6 +590,7 @@ export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   update_reminder: 'lembrete',
   clone_exercise: 'exercicio',
   update_custom_exercise: 'exercicio',
+  reschedule_planned_session: 'sessaoDaAgenda',
 };
 
 export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
@@ -610,6 +623,9 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   itemDoPlano: 'Item do plano',
   equivalenteDoPlano: 'Trocar por',
   trocaDoPlano: 'Troca',
+  planoRecebido: 'Plano recebido',
+  versaoDoPlanoRecebido: 'Versão',
+  sessaoDaAgenda: 'Sessão da agenda',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */
