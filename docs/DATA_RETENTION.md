@@ -6,18 +6,19 @@
 
 ## Dados do usuário
 
-| Dado                                                 | Onde     | Retenção                 |
-| ---------------------------------------------------- | -------- | ------------------------ |
-| Perfil (`User`)                                      | Postgres | Enquanto a conta existir |
-| Metas de macros (`UserGoals`)                        | Postgres | Enquanto a conta existir |
-| Metas de nutrientes (`NutrientTarget`)               | Postgres | Enquanto a conta existir |
-| Metas pessoais (`Goal`)                              | Postgres | Enquanto a conta existir |
-| Refeições e itens (`Meal`, `MealItem`)               | Postgres | Enquanto a conta existir |
-| Alimentos custom (`Food` com `createdByUserId`)      | Postgres | Enquanto a conta existir |
-| Exercícios custom (`Exercise` com `createdByUserId`) | Postgres | Enquanto a conta existir |
-| Planos, sessões e séries de treino                   | Postgres | Enquanto a conta existir |
-| Peso, passos, hidratação                             | Postgres | Enquanto a conta existir |
-| Assinatura do plano (`UserSubscription`)             | Postgres | Enquanto a conta existir |
+| Dado                                                                                              | Onde     | Retenção                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Perfil (`User`)                                                                                   | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Metas de macros (`UserGoals`)                                                                     | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Metas de nutrientes (`NutrientTarget`)                                                            | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Plano alimentar recebido e trocas (`NutritionPlan` e filhos, `NutritionSwap`, `NutritionPlanLog`) | Postgres | É do aluno: enquanto a conta dele existir, entra no export e sai com a exclusão. Se quem escreveu apaga a conta, o plano fica sem autor (`authorId` nulo). Ver ADR 045 |
+| Metas pessoais (`Goal`)                                                                           | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Refeições e itens (`Meal`, `MealItem`)                                                            | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Alimentos custom (`Food` com `createdByUserId`)                                                   | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Exercícios custom (`Exercise` com `createdByUserId`)                                              | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Planos, sessões e séries de treino                                                                | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Peso, passos, hidratação                                                                          | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Assinatura do plano (`UserSubscription`)                                                          | Postgres | Enquanto a conta existir                                                                                                                                               |
 
 **Não há expiração automática.** O histórico é o produto: um registro de peso de dois anos atrás
 é exatamente o que dá valor ao gráfico de progresso. Apagar por idade seria destruir a

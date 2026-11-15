@@ -20,6 +20,7 @@ Decisões que nasceram desta conferência:
 | [042](./ADR/042-agenda-da-comunidade.md)                            | Agenda da comunidade informativa, sem reserva, vaga ou presença      |
 | [043](./ADR/043-papeis-da-equipe.md)                                | Papéis da equipe (com nutricionista) e consentimento por papel       |
 | [044](./ADR/044-desafios-com-revisao.md)                            | Desafios com pontos e foto de check-in revisada só pela equipe       |
+| [045](./ADR/045-plano-alimentar-autoral.md)                         | Plano alimentar autoral do profissional, sem sugestão da IA          |
 
 ## 1. O que o Fatia guarda
 
@@ -56,7 +57,7 @@ Igual à tabela da #370. A coluna "Migração em" diz qual PR cria a tabela ou a
 | Avaliação física                                | data, quem fez, peso/altura, circunferências, dobras, bioimpedância, pressão, FC; pedido com prazo e repetição | #383                 | #383                                                           |
 | Telefone para WhatsApp                          | número + permissão "equipe pode me chamar"; o Fatia não guarda conversas                                       | #387, #401, #402     | #387                                                           |
 | Plano enviado ao aluno                          | quem enviou, versão, o que mudou, aceito/recusado                                                              | #379, #405           | #379                                                           |
-| Plano alimentar do nutri                        | opções por refeição e escolha da semana                                                                        | #376, #407           | #376                                                           |
+| Plano alimentar do nutri                        | opções por refeição e escolha da semana                                                                        | #376, #407           | #376 — migrado (`20261115100000_nutrition_plan`, ADR 045)      |
 | Foto da refeição                                | arquivo ligado à refeição, preferência "guardar fotos", categoria "Fotos das refeições"                        | #374, #385, #387     | #374                                                           |
 | Cota diária da IA                               | uso do dia por pessoa (pode ficar só no servidor)                                                              | #385, #386           | **nenhuma** — derivada de `AiUsage` (abaixo)                   |
 | Circuito                                        | formato (AMRAP, EMOM, Tabata, For Time), duração, trabalho/descanso, rounds, exercícios                        | #380                 | #380                                                           |

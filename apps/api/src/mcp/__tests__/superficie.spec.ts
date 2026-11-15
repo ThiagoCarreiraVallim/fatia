@@ -41,9 +41,11 @@ import {
  * A #374 acrescentou `delete_meal_photo` (destrutiva, servida também no braço B) e a origem do
  * item (`source`) em `log_meal`, `add_meal_item` e `update_meal_item`: mudam os dois braços (B
  * passa a 44, 26 delas compartilhadas).
+ * A #376 acrescentou cinco tools do plano alimentar (nenhuma destrutiva), e a revisão mudou a
+ * descrição de `log_plan_meal` (repetir devolve o mesmo registro): muda o braço A.
  */
 
-const SHA_ENTIDADE = '36f7ebca14f17efbb8d8616f7dbca9bfb8c6acc5aa844d827ae99155aa5605a5';
+const SHA_ENTIDADE = '41f3ff8317b51c953ae415d1e7959157167396230c6e7b536bc512eec37dc40d';
 const SHA_INTENCAO = 'a4eef950d1628fa4a250ec62089d20d02abde8897e1caf2ef5e4592b09c991d2';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

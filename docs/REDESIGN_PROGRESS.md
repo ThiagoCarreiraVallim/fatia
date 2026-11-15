@@ -62,11 +62,11 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
 
 ## Etapa 3: Nutrição (`em andamento`)
 
-| Issue | Título                              | Estado   | Superfícies                        |
-| ----- | ----------------------------------- | -------- | ---------------------------------- |
-| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app |
-| #375  | Adicionar comida                    | a fazer  |                                    |
-| #376  | Metas, nutrientes e plano alimentar | a fazer  |                                    |
+| Issue | Título                              | Estado   | Superfícies                                  |
+| ----- | ----------------------------------- | -------- | -------------------------------------------- |
+| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app           |
+| #375  | Adicionar comida                    | a fazer  |                                              |
+| #376  | Metas, nutrientes e plano alimentar | validado | api, db, MCP (5 tools), api-client, web, app |
 
 Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
 
@@ -74,7 +74,15 @@ Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
 - **Foto:** só refeição nova recebe a foto; somar itens por foto a uma refeição que já existe descarta a imagem. A foto do chat fica com a #385. O PWA não tem câmera de refeição: a pergunta "Guardar as fotos das refeições?" está no app, e a preferência fica em Você nos dois.
 - **Trocar tipo e hora da refeição** (o lápis e o relógio do Al-N8) e a estrela de favorito do Al-N14 ficam para a #375/#376. O "+ Nutriente" leva às metas de nutrientes até a Al-N7 (#376).
 - **Removidos:** anel de calorias, bento de macros, card de metas de nutrientes, timeline e drawer de ações da refeição (web e app), trocados pelas telas novas.
+- **Foto em refeição existente:** foto tirada para adicionar itens a uma refeição existente não é ligada (o app não manda `photoFileId`; a limpeza a apaga).
 - **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+
+Pendências da #376:
+
+- **Editor e envio:** o plano entra por `NutritionPlanService.send` (seed do demo). O editor da equipe é a #407; o envio e a notificação `PLAN_RECEIVED` ficam com a #405.
+- **#374:** o "comi isso" e a troca gravam `MealItem.source = PLAN`. O cartão do plano no dia (`PlannedMealSuggestion`) segue só com contrato: preencher é tocar a tela do dia, fora desta issue.
+- **Agregados:** nenhum agregado da equipe sobre planos ainda; quando vier, `MIN_CELL` 5.
+- **Desvio do canvas:** metas e nutrientes são digitáveis em vez de "−/+"; o aviso da troca usa o nome sem artigo ("Helena vê no seu diário").
 
 ## Etapas seguintes
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type NutrientTarget } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
@@ -28,7 +28,11 @@ export class NutrientTargetService {
     });
   }
 
-  upsert(userId: string, dto: UpsertNutrientTargetDto): Promise<NutrientTarget> {
+  async upsert(userId: string, dto: UpsertNutrientTargetDto): Promise<NutrientTarget> {
+    // Aqui, e não só na tela: a tool MCP grava pelo mesmo método (#376).
+    if (dto.min != null && dto.max != null && dto.min > dto.max) {
+      throw new BadRequestException(`O mínimo de ${dto.label} não pode passar do máximo.`);
+    }
     const data = {
       label: dto.label,
       unit: dto.unit,

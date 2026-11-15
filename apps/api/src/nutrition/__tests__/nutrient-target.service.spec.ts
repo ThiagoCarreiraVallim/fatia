@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { NutrientTargetService } from '../nutrient-target.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -60,6 +60,19 @@ describe('NutrientTargetService', () => {
         period: 'daily',
       });
       expect(arg.update).toMatchObject({ max: 2000, min: null });
+    });
+
+    it('recusa mínimo acima do máximo, antes de gravar (REST e MCP iguais)', async () => {
+      await expect(
+        service.upsert(userId, {
+          nutrientKey: 'fiber_g',
+          label: 'Fibra',
+          unit: 'g',
+          min: 30,
+          max: 25,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.nutrientTarget.upsert).not.toHaveBeenCalled();
     });
   });
 

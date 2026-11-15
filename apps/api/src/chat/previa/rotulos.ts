@@ -474,7 +474,13 @@ export type TipoDeRegistro =
   | 'planoDaComunidade'
   | 'desafioDaComunidade'
   | 'postDaComunidade'
-  | 'lembrete';
+  | 'lembrete'
+  | 'planoAlimentar'
+  | 'refeicaoDoPlano'
+  | 'opcaoDoPlano'
+  | 'itemDoPlano'
+  | 'equivalenteDoPlano'
+  | 'trocaDoPlano';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
@@ -489,6 +495,11 @@ export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   join_group_challenge: { groupId: 'comunidade', challengeId: 'desafioDaComunidade' },
   create_group_post: { groupId: 'comunidade' },
   comment_on_group_post: { groupId: 'comunidade', postId: 'postDaComunidade' },
+  // Plano alimentar do profissional (#376): `planId` aqui não é plano de treino.
+  accept_nutrition_plan: { planId: 'planoAlimentar' },
+  log_plan_meal: { planMealId: 'refeicaoDoPlano', optionId: 'opcaoDoPlano' },
+  swap_plan_item: { itemId: 'itemDoPlano', equivalentId: 'equivalenteDoPlano' },
+  undo_plan_swap: { swapId: 'trocaDoPlano' },
 };
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
@@ -527,6 +538,12 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   desafioDaComunidade: 'Desafio',
   postDaComunidade: 'Post',
   lembrete: 'Lembrete',
+  planoAlimentar: 'Plano alimentar',
+  refeicaoDoPlano: 'Refeição do plano',
+  opcaoDoPlano: 'Opção',
+  itemDoPlano: 'Item do plano',
+  equivalenteDoPlano: 'Trocar por',
+  trocaDoPlano: 'Troca',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */

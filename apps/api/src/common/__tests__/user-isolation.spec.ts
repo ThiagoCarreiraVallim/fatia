@@ -1,3 +1,4 @@
+import { SharedWithService } from '../../sharing/shared-with.service';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {
@@ -53,6 +54,8 @@ import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service
 import { InboxService } from '../../notifications/inbox.service';
 import { ReminderService } from '../../notifications/reminders/reminder.service';
 import { DashboardService } from '../../progress/dashboard.service';
+import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
+import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -108,6 +111,12 @@ describe('isolamento entre usuários', () => {
   const memorias = new MemoryService(prisma);
   const inbox = new InboxService(prisma);
   const reminders = new ReminderService(prisma);
+  const nutritionPlans = new NutritionPlanService(
+    prisma,
+    meals,
+    new DailyAdherenceService(prisma),
+    new SharedWithService(prisma),
+  );
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -1142,6 +1151,7 @@ describe('isolamento entre usuários', () => {
       nutritionSummary,
       goals,
       meals,
+      nutritionPlans,
     );
 
     /** Mensagem da recusa. Estoura se a leitura for **autorizada**. */
@@ -2998,6 +3008,210 @@ describe('isolamento entre usuários', () => {
     });
   });
 
+  /**
+   * Plano alimentar do profissional (#376). O plano é do aluno: refeição, opção,
+   * item, equivalente e troca são procurados dentro do plano de quem chama, e a
+   * equipe só lê trocas e aderência pela porta de Alimentação.
+   *
+   * Grupo próprio, do `pro`, para não depender do estado em que os blocos acima
+   * deixaram a academia do user-B (saídas, remoções, revogações).
+   */
+  describe('plano alimentar do profissional (#376)', () => {
+    const studentView = new StudentViewService(
+      prisma,
+      access,
+      plans,
+      sessions,
+      progress,
+      nutritionSummary,
+      goals,
+      meals,
+      nutritionPlans,
+    );
+    const p = {
+      groupId: '',
+      membershipA: '',
+      planId: '',
+      planMealId: '',
+      optionId: '',
+      itemId: '',
+      equivalentId: '',
+      swapId: '',
+    };
+
+    beforeAll(async () => {
+      const stamp = `plano-${Date.now()}`;
+      const grupo = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Nutri do Pro',
+          slug: `${stamp}-nutri`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.colega, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      p.groupId = grupo.id;
+      p.membershipA = grupo.memberships.find((m) => m.userId === owned.userA)!.id;
+
+      const outro = await prisma.food.create({
+        data: {
+          name: `${stamp}-equivalente`,
+          searchName: `${stamp}-equivalente`,
+          source: 'TACO',
+          kcalPer100g: 300,
+          proteinPer100g: 1,
+          carbsPer100g: 70,
+          fatPer100g: 1,
+        },
+      });
+      const enviado = await nutritionPlans.send(owned.pro, p.membershipA, {
+        goals: {
+          kcalMin: 1800,
+          kcalMax: 2000,
+          proteinMinG: 100,
+          proteinMaxG: 140,
+          carbsMinG: 180,
+          carbsMaxG: 240,
+          fatMinG: 50,
+          fatMaxG: 70,
+        },
+        meals: [
+          {
+            mealType: MealType.BREAKFAST,
+            name: 'Café da manhã',
+            options: [
+              {
+                items: [
+                  {
+                    foodId: owned.publicFoodId,
+                    grams: 50,
+                    equivalents: [{ foodId: outro.id, grams: 40 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      p.planId = enviado.id;
+      await nutritionPlans.accept(owned.userA, enviado.id);
+      const meal = enviado.meals[0]!;
+      p.planMealId = meal.id;
+      p.optionId = meal.options[0]!.id;
+      p.itemId = meal.options[0]!.items[0]!.id;
+      p.equivalentId = meal.options[0]!.items[0]!.equivalents[0]!.id;
+      p.swapId = (
+        await nutritionPlans.swap(
+          owned.userA,
+          { itemId: p.itemId, equivalentId: p.equivalentId },
+          TZ,
+        )
+      ).swap.id;
+    });
+
+    it('o user-B não vê o plano do user-A', async () => {
+      const visao = await nutritionPlans.overview(owned.userB, TZ);
+      expect(visao).toMatchObject({ active: null, pending: null, teamSees: false });
+    });
+
+    it('o user-B não aceita, registra, troca nem desfaz no plano do user-A', async () => {
+      await expect(nutritionPlans.accept(owned.userB, p.planId)).rejects.toThrow(NotFoundException);
+      await expect(nutritionPlans.logMeal(owned.userB, p.planMealId, {}, TZ)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(
+        nutritionPlans.swap(owned.userB, { itemId: p.itemId, equivalentId: p.equivalentId }, TZ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(nutritionPlans.undoSwap(owned.userB, p.swapId)).rejects.toThrow(
+        NotFoundException,
+      );
+      // Nada mudou do lado do user-A.
+      const swap = await prisma.nutritionSwap.findUniqueOrThrow({ where: { id: p.swapId } });
+      expect(swap.undoneAt).toBeNull();
+      expect(await prisma.nutritionPlanLog.count({ where: { planMealId: p.planMealId } })).toBe(0);
+    });
+
+    it('colega da mesma comunidade não envia plano ao user-A', async () => {
+      await expect(
+        nutritionPlans.send(owned.colega, p.membershipA, {
+          goals: {
+            kcalMin: 1,
+            kcalMax: 2,
+            proteinMinG: 1,
+            proteinMaxG: 2,
+            carbsMinG: 1,
+            carbsMaxG: 2,
+            fatMinG: 1,
+            fatMaxG: 2,
+          },
+          meals: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('sem Alimentação liberada, a equipe não lê trocas nem aderência, e a recusa fica na trilha', async () => {
+      await expect(
+        studentView.read(owned.pro, p.membershipA, ShareScope.NUTRITION, 7),
+      ).rejects.toThrow(NotFoundException);
+      const ultima = await prisma.professionalAccessLog.findFirst({
+        where: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          scope: ShareScope.NUTRITION,
+        },
+        orderBy: { at: 'desc' },
+      });
+      expect(ultima).toMatchObject({ denied: true });
+    });
+
+    it('com Alimentação liberada, a leitura traz a troca e a aderência, sem o userId', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: p.groupId,
+        scopes: [ShareScope.NUTRITION],
+      });
+      const r = await studentView.read(owned.pro, p.membershipA, ShareScope.NUTRITION, 7);
+      if (r.reading.scope !== ShareScope.NUTRITION) throw new Error('escopo errado');
+      expect(r.reading.plan.plan).toMatchObject({ version: 1, status: 'ACCEPTED' });
+      expect(r.reading.plan.swaps).toEqual([
+        expect.objectContaining({ mealName: 'Café da manhã', grams: 40, undone: false }),
+      ]);
+      expect(r.reading.plan.adherence.days).toBe(7);
+      expect(JSON.stringify(r)).not.toContain(owned.userA);
+      const ultima = await prisma.professionalAccessLog.findFirst({
+        where: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          scope: ShareScope.NUTRITION,
+        },
+        orderBy: { at: 'desc' },
+      });
+      expect(ultima).toMatchObject({ denied: false, action: 'get_student_progress' });
+    });
+
+    it('o export do user-A leva o plano e a troca; o do user-B, nada disso', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      expect(deA.nutritionPlans.map((x) => x.id)).toContain(p.planId);
+      const plano = deA.nutritionPlans.find((x) => x.id === p.planId)!;
+      expect(plano.swaps.map((s) => s.id)).toEqual([p.swapId]);
+      const deB = await conta.exportData(owned.userB);
+      expect(deB.nutritionPlans).toEqual([]);
+    });
+  });
+
   describe('foto da refeição (#374, ADR 038)', () => {
     const studentView = new StudentViewService(
       prisma,
@@ -3008,6 +3222,7 @@ describe('isolamento entre usuários', () => {
       nutritionSummary,
       goals,
       meals,
+      nutritionPlans,
     );
     let fotoA = '';
     let fotoSoltaA = '';

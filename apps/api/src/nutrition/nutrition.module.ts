@@ -1,3 +1,4 @@
+import { SharedWithService } from '../sharing/shared-with.service';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { text } from 'express';
 import type { NextFunction, Request, Response } from 'express';
@@ -54,6 +55,14 @@ import { DeleteMealTemplateTool } from './mcp/delete-meal-template.tool';
 import { SuggestNutritionGoalsTool } from './mcp/suggest-nutrition-goals.tool';
 import { OnboardingService } from './onboarding.service';
 import { OnboardingController } from './onboarding.controller';
+import { DailyAdherenceService } from './daily-adherence.service';
+import { NutritionPlanService } from './nutrition-plan.service';
+import { NutritionPlanController } from './nutrition-plan.controller';
+import { GetNutritionPlanTool } from './mcp/get-nutrition-plan.tool';
+import { AcceptNutritionPlanTool } from './mcp/accept-nutrition-plan.tool';
+import { LogPlanMealTool } from './mcp/log-plan-meal.tool';
+import { SwapPlanItemTool } from './mcp/swap-plan-item.tool';
+import { UndoPlanSwapTool } from './mcp/undo-plan-swap.tool';
 
 /**
  * Teto do corpo da rota de reconhecimento (#139).
@@ -69,8 +78,10 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
 
 @Module({
   imports: [AiModule, StorageModule],
-  controllers: [NutritionController, OnboardingController],
+  controllers: [NutritionController, OnboardingController, NutritionPlanController],
   providers: [
+    // Do `sharing/`, mas só depende do Prisma: o aviso da troca (#376) sem ciclo de módulo.
+    SharedWithService,
     FoodService,
     FoodShortcutsService,
     FoodPortionService,
@@ -85,6 +96,8 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     UserGoalsService,
     OnboardingService,
     NutrientTargetService,
+    DailyAdherenceService,
+    NutritionPlanService,
     // MCP tools (auto-discovered by McpToolRegistry)
     SearchFoodTool,
     GetFoodTool,
@@ -121,6 +134,11 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     SetNutrientTargetTool,
     DeleteNutrientTargetTool,
     GetNutrientSummaryTool,
+    GetNutritionPlanTool,
+    AcceptNutritionPlanTool,
+    LogPlanMealTool,
+    SwapPlanItemTool,
+    UndoPlanSwapTool,
   ],
   exports: [
     FoodService,
@@ -130,6 +148,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     UserGoalsService,
     NutrientTargetService,
     MealTemplateService,
+    NutritionPlanService,
   ],
 })
 export class NutritionModule implements NestModule {
