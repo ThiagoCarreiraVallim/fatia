@@ -27,10 +27,20 @@ const levelColor = (level: string | null) =>
   level === 'beginner'
     ? colors.primaryText
     : level === 'intermediate'
-      ? colors.warning
+      ? colors.steps
       : level === 'advanced'
         ? colors.danger
         : colors.faintForeground;
+
+/** O quadrado do ícone na cor do nível (prancha: chipic colorido). */
+const levelChipBg = (level: string | null) =>
+  level === 'beginner'
+    ? `${colors.primary}26`
+    : level === 'intermediate'
+      ? `${colors.steps}26`
+      : level === 'advanced'
+        ? `${colors.danger}26`
+        : colors.muted;
 
 export default function WorkoutTemplatesScreen() {
   const router = useRouter();
@@ -68,8 +78,8 @@ export default function WorkoutTemplatesScreen() {
           {q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : null}
           {q.data && groups.length === 0 ? (
             <EmptyState
-              title="Nenhum modelo por enquanto"
-              description="Quando uma comunidade sua publicar um plano de treino, ele aparece aqui."
+              title="Nenhum modelo nas suas comunidades"
+              description="Quando a equipe de uma comunidade publicar um plano de treino, ele aparece aqui."
               action={
                 <Button
                   variant="secondary"
@@ -113,10 +123,13 @@ function GroupSection({
     <View className="gap-2">
       <View className="flex-row items-center gap-2.5">
         <View
-          className="h-8 w-8 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${colors.brand}33` }}
+          className="h-7 w-7 items-center justify-center rounded-[10px]"
+          style={{ backgroundColor: colors.brand }}
         >
-          <Text className="font-sans-extrabold text-[11px] text-foreground">
+          <Text
+            className="font-sans-extrabold text-[11px]"
+            style={{ color: colors.brandForeground }}
+          >
             {initialsOf(g.group.name)}
           </Text>
         </View>
@@ -127,11 +140,11 @@ function GroupSection({
         >
           {g.group.name}
         </Text>
-        <Text className="text-xs text-faint">
+        <Text className="text-xs text-muted-foreground">
           {n} {n === 1 ? 'modelo' : 'modelos'}
         </Text>
       </View>
-      <View className="overflow-hidden rounded-card bg-card">
+      <View className="overflow-hidden rounded-card bg-card px-4">
         {g.templates.map((t, i) => {
           const sub = templatesSubtitle(t);
           return (
@@ -143,18 +156,21 @@ function GroupSection({
                 .join(', ')}
               onPress={() => onOpen(t)}
               className={cn(
-                'flex-row items-center gap-3 px-4 py-3 active:opacity-80',
+                'min-h-16 flex-row items-center gap-3 py-3 active:opacity-80',
                 i > 0 && 'border-t border-border',
               )}
             >
-              <View className="h-10 w-10 items-center justify-center rounded-[12px] bg-muted">
-                <Dumbbell size={18} color={colors.foreground} />
+              <View
+                className="h-10 w-10 items-center justify-center rounded-[12px]"
+                style={{ backgroundColor: levelChipBg(t.level) }}
+              >
+                <Dumbbell size={16} color={levelColor(t.level)} />
               </View>
               <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
+                <Text numberOfLines={1} className="font-sans-semibold text-[15px] text-foreground">
                   {t.title}
                 </Text>
-                <Text numberOfLines={1} className="text-xs text-faint">
+                <Text numberOfLines={1} className="text-xs text-muted-foreground">
                   {sub.level ? (
                     <Text className="font-sans-bold text-xs" style={{ color: levelColor(t.level) }}>
                       {sub.level} ·{' '}

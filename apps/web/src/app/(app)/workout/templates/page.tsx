@@ -16,6 +16,12 @@ const LEVEL_TONE: Record<string, string> = {
   Intermediário: 'text-steps',
   Avançado: 'text-danger',
 };
+/** O quadrado do ícone na cor do nível (prancha: chipic colorido). */
+const LEVEL_CHIP: Record<string, string> = {
+  Iniciante: 'bg-primary/15 text-primary',
+  Intermediário: 'bg-[hsl(var(--steps)/0.15)] text-steps',
+  Avançado: 'bg-[hsl(var(--danger)/0.15)] text-danger',
+};
 
 /**
  * Modelos das comunidades (#379, prancha Al-T23): os planos de treino prontos
@@ -118,7 +124,10 @@ export default function WorkoutTemplatesPage() {
                   >
                     <span
                       aria-hidden
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-muted text-muted-foreground"
+                      className={cn(
+                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]',
+                        (sub.level && LEVEL_CHIP[sub.level]) || 'bg-muted text-muted-foreground',
+                      )}
                     >
                       <Dumbbell size={16} />
                     </span>
