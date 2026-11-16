@@ -94,13 +94,13 @@ Pendências da #376:
 - **Agregados:** nenhum agregado da equipe sobre planos ainda; quando vier, `MIN_CELL` 5.
 - **Desvio do canvas:** metas e nutrientes são digitáveis em vez de "−/+"; o aviso da troca usa o nome sem artigo ("Helena vê no seu diário").
 
-## Etapa 4: Treino A (em andamento)
+## Etapa 4: Treino A (`mergeado`, PRs #431, #433 e #434; aguardando teste do dono)
 
-| Issue | Título                                     | Estado       | Superfícies                                        |
-| ----- | ------------------------------------------ | ------------ | -------------------------------------------------- |
-| #377  | Início, sessão em andamento e treino feito | validado     | api, db, MCP (1 tool), api-client, web, app        |
-| #378  | Planos, adicionar e configurar exercício   | validado     | api, db, MCP (1 tool nova), api-client, web, app   |
-| #379  | Plano recebido, modelos, bloco e agenda    | em andamento | api, db, MCP (5 tools novas), api-client, web, app |
+| Issue | Título                                     | Estado   | Superfícies                                        |
+| ----- | ------------------------------------------ | -------- | -------------------------------------------------- |
+| #377  | Início, sessão em andamento e treino feito | mergeado | api, db, MCP (1 tool), api-client, web, app        |
+| #378  | Planos, adicionar e configurar exercício   | mergeado | api, db, MCP (1 tool nova), api-client, web, app   |
+| #379  | Plano recebido, modelos, bloco e agenda    | mergeado | api, db, MCP (5 tools novas), api-client, web, app |
 
 Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000000_workout_feeling_and_checkin`):
 
@@ -140,7 +140,7 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
-| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | em andamento |
+| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer      |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
