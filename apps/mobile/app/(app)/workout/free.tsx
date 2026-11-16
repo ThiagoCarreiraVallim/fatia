@@ -44,7 +44,12 @@ export default function FreeWorkoutScreen() {
     queryKey: ['workout', 'exercises', 'suggested'],
     queryFn: () => workoutApi.searchExercises(undefined, undefined, { limit: SUGGESTIONS + 4 }),
   });
-  const suggested = freeSuggestions(suggestions.data, picked, SUGGESTIONS);
+  // A mesma chave da aba Treino: os planos já costumam estar no cache.
+  const plans = useQuery({
+    queryKey: ['workout', 'plans'],
+    queryFn: () => workoutApi.listPlans(),
+  });
+  const suggested = freeSuggestions(suggestions.data, picked, SUGGESTIONS, plans.data);
   const canStart = picked.length > 0 && !start.isPending;
 
   function add(exercises: Exercise[]) {
@@ -107,21 +112,21 @@ export default function FreeWorkoutScreen() {
             >
               Treino livre
             </Text>
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-xs text-faint">
               Monte na hora. O relógio começa quando você iniciar.
             </Text>
           </View>
 
           {picked.length === 0 ? (
             <View
-              style={{ borderWidth: 1.5, borderColor: colors.borderStrong, borderStyle: 'dashed' }}
+              style={{ borderWidth: 1.5, borderColor: colors.borderStrong }}
               className="items-center gap-2 rounded-card px-4 py-7"
             >
               <View className="h-[52px] w-[52px] items-center justify-center rounded-2xl bg-primary/15">
                 <Dumbbell size={24} color={colors.primaryText} />
               </View>
               <Text className="font-sans-bold text-foreground">Adicione o primeiro exercício</Text>
-              <Text className="text-center text-sm text-muted-foreground">
+              <Text className="text-center text-xs text-faint">
                 Busque ou toque num dos sugeridos abaixo
               </Text>
             </View>
@@ -165,10 +170,10 @@ export default function FreeWorkoutScreen() {
           {suggested.length > 0 ? (
             <View className="gap-2">
               <View className="flex-row items-baseline justify-between px-1">
-                <Text accessibilityRole="header" className="text-xs text-muted-foreground">
+                <Text accessibilityRole="header" className="text-xs text-faint">
                   Sugeridos
                 </Text>
-                <Text className="text-xs text-muted-foreground">favoritos primeiro</Text>
+                <Text className="text-xs text-faint">favoritos primeiro</Text>
               </View>
               <View className="flex-row flex-wrap gap-1.5">
                 {suggested.map((e) => (
@@ -177,7 +182,7 @@ export default function FreeWorkoutScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Adicionar ${e.name}${e.favorite ? ' (favorito)' : ''}`}
                     onPress={() => add([e])}
-                    className="h-[38px] flex-row items-center gap-1.5 rounded-pill bg-card px-3.5 active:opacity-80"
+                    className="h-[38px] flex-row items-center gap-1.5 rounded-chip bg-card px-3.5 active:opacity-80"
                   >
                     {e.favorite ? (
                       <Star size={14} color={colors.steps} fill={colors.steps} />

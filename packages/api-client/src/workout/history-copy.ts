@@ -225,12 +225,34 @@ export function addToFreeWorkout<T extends { id: number; name: string }>(
   };
 }
 
-/** Os sugeridos do Treino livre: a busca sem termo (favoritos primeiro), sem os já escolhidos. */
-export function freeSuggestions<T extends { id: number }>(
+/**
+ * Os sugeridos do Treino livre (Al-T17b): os favoritos primeiro, depois os
+ * exercícios dos planos da pessoa (um de cada plano por vez, para variar os
+ * grupos), depois o resto da busca sem termo. Sem os já escolhidos e sem repetir.
+ */
+export function freeSuggestions<T extends { id: number; favorite?: boolean }>(
   results: readonly T[] | undefined,
   picked: readonly { id: number }[],
   max: number,
+  plans: readonly { exercises: readonly { exercise: T }[] }[] = [],
 ): T[] {
-  const chosen = new Set(picked.map((e) => e.id));
-  return (results ?? []).filter((e) => !chosen.has(e.id)).slice(0, max);
+  const seen = new Set(picked.map((e) => e.id));
+  const out: T[] = [];
+  const take = (e: T) => {
+    if (out.length < max && !seen.has(e.id)) {
+      seen.add(e.id);
+      out.push(e);
+    }
+  };
+  const all = results ?? [];
+  all.filter((e) => e.favorite).forEach(take);
+  const longest = Math.max(0, ...plans.map((p) => p.exercises.length));
+  for (let i = 0; i < longest; i++) {
+    for (const plan of plans) {
+      const row = plan.exercises[i];
+      if (row) take(row.exercise);
+    }
+  }
+  all.forEach(take);
+  return out;
 }

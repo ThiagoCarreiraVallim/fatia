@@ -304,4 +304,27 @@ describe('montar o treino livre (Al-T17b)', () => {
     expect(freeSuggestions(results, [], 2)).toEqual([supino, remada]);
     expect(freeSuggestions(undefined, [], 8)).toEqual([]);
   });
+
+  it('sugeridos: favoritos, depois os dos planos (um de cada plano por vez), depois a busca', () => {
+    const fav = { id: 9, name: 'Prancha', muscleGroup: 'core', favorite: true };
+    const abd = { id: 10, name: 'Abdominais', muscleGroup: 'core' };
+    const agach = { id: 11, name: 'Agachamento', muscleGroup: 'pernas' };
+    const puxada = { id: 12, name: 'Puxada', muscleGroup: 'costas' };
+    const plans = [
+      { exercises: [{ exercise: supino }, { exercise: fav }] },
+      { exercises: [{ exercise: agach }] },
+      { exercises: [{ exercise: puxada }, { exercise: remada }] },
+    ];
+    expect(freeSuggestions([fav, abd, esteira], [], 8, plans)).toEqual([
+      fav,
+      supino,
+      agach,
+      puxada,
+      remada,
+      abd,
+      esteira,
+    ]);
+    // Os já escolhidos saem também da parte dos planos; o limite vale para tudo.
+    expect(freeSuggestions([fav, abd], [agach], 3, plans)).toEqual([fav, supino, puxada]);
+  });
 });

@@ -25,8 +25,8 @@ const SUGGESTIONS = 8;
 /**
  * Treino livre (prancha `Al-T17b`, #381): "Treino atual · livre", vazio, para
  * montar na hora. Nada começa até o "Iniciar treino": o relógio da sessão só
- * anda dali em diante. Os sugeridos são a busca sem termo, que já põe os
- * favoritos primeiro (#378).
+ * anda dali em diante. Os sugeridos: favoritos, os exercícios dos planos e a
+ * busca sem termo (`freeSuggestions`).
  *
  * `?add=cardio` é o "Só cardio" da aba Treino: abre o Adicionar exercício já
  * no filtro Cardio. Cardio é exercício, não tipo de treino.
@@ -44,8 +44,13 @@ function FreeWorkout() {
     queryKey: ['workout', 'exercises', 'suggested'],
     queryFn: () => workoutApi.searchExercises(undefined, undefined, { limit: SUGGESTIONS + 4 }),
   });
+  // A mesma chave da aba Treino: os planos já costumam estar no cache.
+  const plans = useQuery({
+    queryKey: ['workout', 'plans'],
+    queryFn: () => workoutApi.listPlans(),
+  });
   const chosen = new Set(picked.map((e) => e.id));
-  const suggested = freeSuggestions(suggestions.data, picked, SUGGESTIONS);
+  const suggested = freeSuggestions(suggestions.data, picked, SUGGESTIONS, plans.data);
 
   function add(exercises: Exercise[]) {
     const next = addToFreeWorkout(picked, exercises);
@@ -64,9 +69,7 @@ function FreeWorkout() {
 
       <div className="space-y-1 px-1">
         <h1 className="font-display text-[26px] font-bold tracking-tight">Treino livre</h1>
-        <p className="text-sm text-muted-foreground">
-          Monte na hora. O relógio começa quando você iniciar.
-        </p>
+        <p className="text-xs text-faint">Monte na hora. O relógio começa quando você iniciar.</p>
       </div>
 
       {picked.length === 0 ? (
@@ -78,7 +81,7 @@ function FreeWorkout() {
             <Dumbbell size={24} />
           </span>
           <p className="font-bold">Adicione o primeiro exercício</p>
-          <p className="text-sm text-muted-foreground">Busque ou toque num dos sugeridos abaixo</p>
+          <p className="text-xs text-faint">Busque ou toque num dos sugeridos abaixo</p>
         </div>
       ) : (
         <ol aria-label="Exercícios do treino" className="rounded-card bg-card px-4">
@@ -119,8 +122,10 @@ function FreeWorkout() {
 
       {suggested.length > 0 && (
         <section aria-labelledby="free-suggested" className="space-y-2">
-          <div className="flex items-baseline justify-between px-1 text-xs text-muted-foreground">
-            <h2 id="free-suggested">Sugeridos</h2>
+          <div className="flex items-baseline justify-between px-1 text-xs text-faint">
+            <h2 id="free-suggested" className="font-sans font-normal">
+              Sugeridos
+            </h2>
             <span>favoritos primeiro</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -130,7 +135,7 @@ function FreeWorkout() {
                 type="button"
                 aria-label={`Adicionar ${e.name}${e.favorite ? ' (favorito)' : ''}`}
                 onClick={() => add([e])}
-                className="anim-press inline-flex h-[38px] items-center gap-1.5 rounded-pill bg-card px-3.5 text-sm font-semibold"
+                className="anim-press inline-flex h-[38px] items-center gap-1.5 rounded-chip bg-card px-3.5 text-sm font-semibold"
               >
                 {e.favorite ? (
                   <Star size={14} aria-hidden className="fill-current text-steps" />

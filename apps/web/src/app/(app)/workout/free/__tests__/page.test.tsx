@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { ApiError, type Exercise, type WorkoutSession } from '@fatia/api-client';
+import { ApiError, type Exercise, type WorkoutPlan, type WorkoutSession } from '@fatia/api-client';
 import { AppTopBar, TopBarProvider } from '@/components/layout/app-top-bar';
 import FreeWorkoutPage from '../page';
 
@@ -39,6 +39,7 @@ vi.mock('@fatia/api-client', async () => {
     ...actual,
     workoutApi: {
       searchExercises: vi.fn(),
+      listPlans: vi.fn(),
       startSession: vi.fn(),
       getActiveSession: vi.fn().mockResolvedValue(null),
     },
@@ -51,6 +52,7 @@ import { workoutApi } from '@fatia/api-client';
 
 const searchExercises = vi.mocked(workoutApi.searchExercises);
 const startSession = vi.mocked(workoutApi.startSession);
+const listPlans = vi.mocked(workoutApi.listPlans);
 
 const ex = (id: number, name: string, muscleGroup: string, favorite = false): Exercise =>
   ({ id, name, muscleGroup, source: 'SEED', favorite }) as Exercise;
@@ -78,6 +80,24 @@ describe('Treino livre', () => {
       ex(1, 'Supino reto com barra', 'peito', true),
       ex(2, 'Puxada frente', 'costas'),
       ex(3, 'Esteira', 'cardio'),
+    ]);
+    listPlans.mockResolvedValue([]);
+  });
+
+  it('sugeridos trazem os exercícios dos planos logo depois dos favoritos', async () => {
+    listPlans.mockResolvedValue([
+      { exercises: [{ exercise: ex(7, 'Agachamento livre', 'pernas') }] },
+    ] as unknown as WorkoutPlan[]);
+    renderPage();
+    await screen.findByRole('button', { name: 'Adicionar Agachamento livre' });
+    const names = screen
+      .getAllByRole('button', { name: /^Adicionar / })
+      .map((b) => b.getAttribute('aria-label'));
+    expect(names).toEqual([
+      'Adicionar Supino reto com barra (favorito)',
+      'Adicionar Agachamento livre',
+      'Adicionar Puxada frente',
+      'Adicionar Esteira',
     ]);
   });
 
