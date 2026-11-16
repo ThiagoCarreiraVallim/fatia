@@ -149,79 +149,77 @@ export function LogStepsDrawer({
 
   const content = (
     <>
-        {switcher}
+      {switcher}
 
-        <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
-          <DrawerDescription>
-            {editing
-              ? `Corrigindo o registro de ${dayMonth(editing.date)}.`
-              : 'Passos do dia.'}
-          </DrawerDescription>
-        </DrawerHeader>
+      <DrawerHeader className="px-0">
+        <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
+        <DrawerDescription>
+          {editing ? `Corrigindo o registro de ${dayMonth(editing.date)}.` : 'Passos do dia.'}
+        </DrawerDescription>
+      </DrawerHeader>
 
-        <View className="gap-4 py-3">
-          {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
-          <ValueStepper
-            label="Passos"
-            value={steps}
-            onChange={setSteps}
-            step={500}
-            decimals={0}
-            base={logs.data?.logs[0]?.steps ?? null}
-            unit="passos"
-            placeholder="0"
-          />
-          {error ? <FormMessage>{error}</FormMessage> : null}
-          <Text className="text-center text-[13px] text-muted-foreground">
-            Vários registros no dia: vale o maior. Os do celular chegam sozinhos.
-          </Text>
+      <View className="gap-4 py-3">
+        {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
+        <ValueStepper
+          label="Passos"
+          value={steps}
+          onChange={setSteps}
+          step={500}
+          decimals={0}
+          base={logs.data?.logs[0]?.steps ?? null}
+          unit="passos"
+          placeholder="0"
+        />
+        {error ? <FormMessage>{error}</FormMessage> : null}
+        <Text className="text-center text-[13px] text-muted-foreground">
+          Vários registros no dia: vale o maior. Os do celular chegam sozinhos.
+        </Text>
 
-          {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
+        {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
 
-          <LogHistory
-            entries={entries}
-            isLoading={logs.isLoading}
-            error={logs.error}
-            onRetry={() => logs.refetch()}
-            editingId={editing?.id ?? null}
-            onEdit={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (!log) return;
-              setEditing(log);
-              setSteps(String(log.steps));
+        <LogHistory
+          entries={entries}
+          isLoading={logs.isLoading}
+          error={logs.error}
+          onRetry={() => logs.refetch()}
+          editingId={editing?.id ?? null}
+          onEdit={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (!log) return;
+            setEditing(log);
+            setSteps(String(log.steps));
+            setFormError(null);
+          }}
+          onDelete={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (log) remove.mutate(log);
+          }}
+          pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
+          emptyLabel="Nenhum registro de passos nos últimos 30 dias."
+        />
+      </View>
+
+      <DrawerFooter className="px-0">
+        <Button onPress={submit} loading={save.isPending}>
+          {editing
+            ? 'Salvar alteração'
+            : dia === hoje
+              ? 'Salvar'
+              : `Salvar em ${dayLabel(dia, hoje)}`}
+        </Button>
+        {editing ? (
+          <Button
+            variant="outline"
+            onPress={() => {
+              setEditing(null);
+              setSteps('');
               setFormError(null);
             }}
-            onDelete={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (log) remove.mutate(log);
-            }}
-            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
-            emptyLabel="Nenhum registro de passos nos últimos 30 dias."
-          />
-        </View>
-
-        <DrawerFooter className="px-0">
-          <Button onPress={submit} loading={save.isPending}>
-            {editing
-              ? 'Salvar alteração'
-              : dia === hoje
-                ? 'Salvar'
-                : `Salvar em ${dayLabel(dia, hoje)}`}
+          >
+            Cancelar edição
           </Button>
-          {editing ? (
-            <Button
-              variant="outline"
-              onPress={() => {
-                setEditing(null);
-                setSteps('');
-                setFormError(null);
-              }}
-            >
-              Cancelar edição
-            </Button>
-          ) : null}
-        </DrawerFooter>
+        ) : null}
+      </DrawerFooter>
     </>
   );
 
@@ -237,9 +235,7 @@ export function LogStepsDrawer({
         }
       }}
     >
-      <DrawerContent className="px-4">
-        {content}
-      </DrawerContent>
+      <DrawerContent className="px-4">{content}</DrawerContent>
     </Drawer>
   );
 }

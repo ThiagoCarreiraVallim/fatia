@@ -259,11 +259,7 @@ export default function TodayScreen() {
           </>
         ) : null}
         <WeightSheet open={sheet === 'weight'} onOpenChange={closeOn} />
-        <BodyLogSheet
-          open={sheet === 'steps'}
-          initialKind="steps"
-          onClose={() => setSheet(null)}
-        />
+        <BodyLogSheet open={sheet === 'steps'} initialKind="steps" onClose={() => setSheet(null)} />
         <InboxSheet open={sheet === 'inbox'} onOpenChange={closeOn} />
       </DrawerLayer>
     </>

@@ -93,7 +93,14 @@ export default function ProgressScreen() {
   const tally = achievements.data ? achievementTally(achievements.data) : null;
   const recordCount = records.data ? strengthRecordCount(records.data) : null;
 
-  const minis: { label: string; icon: IconName; color: string; value: string; unit: string; chart: ReactNode }[] = [
+  const minis: {
+    label: string;
+    icon: IconName;
+    color: string;
+    value: string;
+    unit: string;
+    chart: ReactNode;
+  }[] = [
     {
       label: 'Passos',
       icon: 'steps',
@@ -175,7 +182,9 @@ export default function ProgressScreen() {
                 </View>
                 <Text className="font-sans-bold text-base text-foreground" numberOfLines={1}>
                   {m.value}
-                  <Text className="font-sans-semibold text-[11px] text-muted-foreground">{m.unit}</Text>
+                  <Text className="font-sans-semibold text-[11px] text-muted-foreground">
+                    {m.unit}
+                  </Text>
                 </Text>
                 {m.chart}
               </Pressable>
@@ -208,7 +217,8 @@ export default function ProgressScreen() {
               {report ? (
                 <Text className="text-warning">
                   {' '}
-                  · {report.streak.periodos} {report.streak.periodos === 1 ? 'dia seguido' : 'dias seguidos'}
+                  · {report.streak.periodos}{' '}
+                  {report.streak.periodos === 1 ? 'dia seguido' : 'dias seguidos'}
                 </Text>
               ) : null}
             </Text>
@@ -221,7 +231,10 @@ export default function ProgressScreen() {
           </View>
           <View className="flex-row gap-1">
             {last14.map((d) => (
-              <View key={d.date} style={[{ flex: 1, aspectRatio: 1, borderRadius: 5 }, heatColor(d.count)]} />
+              <View
+                key={d.date}
+                style={[{ flex: 1, aspectRatio: 1, borderRadius: 5 }, heatColor(d.count)]}
+              />
             ))}
           </View>
         </Pressable>

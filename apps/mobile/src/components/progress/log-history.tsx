@@ -87,35 +87,37 @@ export function LogHistory({
                     {entry.time ? ` · ${entry.time}` : ''}
                   </Text>
                 </View>
-                {entry.badge ? <ToneBadge tone={entry.badge.tone} label={entry.badge.label} /> : null}
+                {entry.badge ? (
+                  <ToneBadge tone={entry.badge.tone} label={entry.badge.label} />
+                ) : null}
                 {entry.readOnly ? null : (
                   <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
-                  accessibilityState={{ selected: editing, disabled: pending }}
-                  disabled={pending}
-                  onPress={() => onEdit(entry)}
-                  className="h-11 w-11 items-center justify-center rounded-xl"
-                >
-                  <Pencil
-                    size={16}
-                    color={editing ? chartColors.primary : chartColors.foreground}
-                  />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
-                  accessibilityState={{ disabled: pending }}
-                  disabled={pending}
-                  onPress={() => onDelete(entry)}
-                  className="h-11 w-11 items-center justify-center rounded-xl"
-                >
-                  {/* Apaga na hora, sem pergunta: o aviso com "Desfazer" (`useToast`)
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
+                      accessibilityState={{ selected: editing, disabled: pending }}
+                      disabled={pending}
+                      onPress={() => onEdit(entry)}
+                      className="h-11 w-11 items-center justify-center rounded-xl"
+                    >
+                      <Pencil
+                        size={16}
+                        color={editing ? chartColors.primary : chartColors.foreground}
+                      />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                      accessibilityState={{ disabled: pending }}
+                      disabled={pending}
+                      onPress={() => onDelete(entry)}
+                      className="h-11 w-11 items-center justify-center rounded-xl"
+                    >
+                      {/* Apaga na hora, sem pergunta: o aviso com "Desfazer" (`useToast`)
                       é a rede de segurança. O vermelho do tema (#93000a) sumiria
                       sobre o card escuro. */}
-                  <Trash2 size={16} color={chartColors.mutedForeground} />
-                </Pressable>
+                      <Trash2 size={16} color={chartColors.mutedForeground} />
+                    </Pressable>
                   </>
                 )}
               </View>

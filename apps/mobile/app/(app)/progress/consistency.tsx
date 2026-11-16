@@ -45,18 +45,30 @@ export default function ConsistencyScreen() {
   return (
     <Screen onRefresh={() => void query.refetch()} refreshing={query.isRefetching}>
       <View className="gap-3 px-4 pb-8 pt-2">
-        <Segmented label="Período" options={CONSISTENCY_RANGE_OPTIONS} value={range} onChange={setRange} />
+        <Segmented
+          label="Período"
+          options={CONSISTENCY_RANGE_OPTIONS}
+          value={range}
+          onChange={setRange}
+        />
 
         {query.isLoading ? <LoadingState label="Carregando a constância…" /> : null}
-        {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
+        {query.isError ? (
+          <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+        ) : null}
 
         {report ? (
           <>
             <View className="flex-row gap-2">
               {consistencyStats(report).map((s) => (
-                <View key={s.label} className="flex-1 basis-0 gap-0.5 rounded-card bg-card px-3.5 py-3">
+                <View
+                  key={s.label}
+                  className="flex-1 basis-0 gap-0.5 rounded-card bg-card px-3.5 py-3"
+                >
                   <View className="flex-row items-center gap-1">
-                    <Text className="font-display text-[22px] leading-[28px] text-foreground">{s.value}</Text>
+                    <Text className="font-display text-[22px] leading-[28px] text-foreground">
+                      {s.value}
+                    </Text>
                     {s.fire ? <Icon name="flame" size={18} color={colors.warning} /> : null}
                   </View>
                   <Text className="text-[13px] text-muted-foreground">{s.label}</Text>
@@ -67,14 +79,21 @@ export default function ConsistencyScreen() {
             <View className="gap-3 rounded-card bg-card p-4">
               <View className="flex-row items-start justify-between gap-2">
                 <View className="flex-1">
-                  <Text className="font-sans-bold text-[15px] text-foreground">{consistencyGridTitle(report)}</Text>
-                  <Text className="text-[12px] text-muted-foreground">{consistencyGridCaption(report)}</Text>
+                  <Text className="font-sans-bold text-[15px] text-foreground">
+                    {consistencyGridTitle(report)}
+                  </Text>
+                  <Text className="text-[12px] text-muted-foreground">
+                    {consistencyGridCaption(report)}
+                  </Text>
                 </View>
                 {report.range !== 'year' ? (
                   <View className="flex-row items-center gap-1" accessibilityElementsHidden>
                     <Text className="text-[11px] text-muted-foreground">0</Text>
                     {[0, 1, 2, 3, 4].map((l) => (
-                      <View key={l} style={[{ width: 10, height: 10, borderRadius: 3 }, heatColor(l)]} />
+                      <View
+                        key={l}
+                        style={[{ width: 10, height: 10, borderRadius: 3 }, heatColor(l)]}
+                      />
                     ))}
                     <Text className="text-[11px] text-muted-foreground">4</Text>
                   </View>
@@ -94,14 +113,18 @@ export default function ConsistencyScreen() {
                   <View className="flex-1">
                     <ProgressBar percent={row.percent} color={areaColor[row.tone]} />
                   </View>
-                  <Text className="w-[56px] text-right font-sans-bold text-[13px] text-foreground">{row.text}</Text>
+                  <Text className="w-[56px] text-right font-sans-bold text-[13px] text-foreground">
+                    {row.text}
+                  </Text>
                 </View>
               ))}
             </View>
 
             <View className="flex-row items-start gap-2 px-1">
               <Icon name="info" size={16} color={colors.mutedForeground} />
-              <Text className="flex-1 text-[13px] text-muted-foreground">{consistencyTip(report)}</Text>
+              <Text className="flex-1 text-[13px] text-muted-foreground">
+                {consistencyTip(report)}
+              </Text>
             </View>
           </>
         ) : null}
@@ -187,7 +210,13 @@ function Cell({ cell, showDay = false }: { cell: ConsistencyCell; showDay?: bool
   return (
     <View
       style={[
-        { flex: 1, aspectRatio: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+        {
+          flex: 1,
+          aspectRatio: 1,
+          borderRadius: 6,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
         future ? { borderWidth: 1, borderColor: colors.border } : heatColor(cell.level),
       ]}
     >

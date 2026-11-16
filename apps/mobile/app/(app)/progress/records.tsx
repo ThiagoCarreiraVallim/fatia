@@ -34,7 +34,9 @@ export default function RecordsScreen() {
     <Screen onRefresh={() => void query.refetch()} refreshing={query.isRefetching}>
       <View className="gap-3 px-4 pb-8 pt-2">
         {query.isLoading ? <LoadingState label="Carregando os recordes…" /> : null}
-        {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
+        {query.isError ? (
+          <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+        ) : null}
 
         {highlight ? (
           <View className="gap-2 rounded-card bg-primary p-4">
@@ -49,7 +51,10 @@ export default function RecordsScreen() {
                 {highlight.percent}
               </Text>
             </View>
-            <View className="h-1.5 w-full overflow-hidden rounded-pill" style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
+            <View
+              className="h-1.5 w-full overflow-hidden rounded-pill"
+              style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
+            >
               <View
                 style={{
                   width: `${highlight.barPercent}%`,
@@ -67,9 +72,18 @@ export default function RecordsScreen() {
 
         {query.data ? (
           <>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
               {RECORD_GROUP_FILTERS.map((f) => (
-                <Chip key={f.value} label={f.label} selected={group === f.value} onPress={() => setGroup(f.value)} />
+                <Chip
+                  key={f.value}
+                  label={f.label}
+                  selected={group === f.value}
+                  onPress={() => setGroup(f.value)}
+                />
               ))}
             </ScrollView>
 
@@ -80,7 +94,10 @@ export default function RecordsScreen() {
                     key={r.id}
                     accessible
                     accessibilityLabel={`${r.title}: ${r.value} ${r.unit}. ${r.subtitle}`}
-                    className={cn('flex-row items-center gap-3 px-4 py-3', i > 0 && 'border-t border-border')}
+                    className={cn(
+                      'flex-row items-center gap-3 px-4 py-3',
+                      i > 0 && 'border-t border-border',
+                    )}
                   >
                     <View
                       className="h-10 w-10 items-center justify-center rounded-[12px]"
@@ -98,7 +115,10 @@ export default function RecordsScreen() {
                     </View>
                     <Text className="font-display text-[18px] text-foreground">
                       {r.value}
-                      <Text className="font-sans-semibold text-[12px] text-muted-foreground"> {r.unit}</Text>
+                      <Text className="font-sans-semibold text-[12px] text-muted-foreground">
+                        {' '}
+                        {r.unit}
+                      </Text>
                     </Text>
                   </View>
                 ))}

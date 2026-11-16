@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { achievementDetail, achievementIcon, achievementTally, progressApi } from '@fatia/api-client';
+import {
+  achievementDetail,
+  achievementIcon,
+  achievementTally,
+  progressApi,
+} from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState, Ring, cn } from '@/components/ui';
@@ -20,14 +25,17 @@ export default function AchievementsScreen() {
   });
   const list = query.data ?? [];
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const selected = list.find((a) => a.key === selectedKey) ?? list.find((a) => a.unlockedAt) ?? list[0];
+  const selected =
+    list.find((a) => a.key === selectedKey) ?? list.find((a) => a.unlockedAt) ?? list[0];
   const tally = achievementTally(list);
 
   return (
     <Screen onRefresh={() => void query.refetch()} refreshing={query.isRefetching}>
       <View className="gap-3 px-4 pb-8 pt-2">
         {query.isLoading ? <LoadingState label="Carregando as conquistas…" /> : null}
-        {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
+        {query.isError ? (
+          <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+        ) : null}
 
         {query.data ? (
           <>
@@ -36,7 +44,9 @@ export default function AchievementsScreen() {
                 <Text className="font-display text-[22px] leading-[28px] text-foreground">
                   {tally.got} de {tally.total} desbloqueadas
                 </Text>
-                <Text className="text-[13px] text-muted-foreground">Toque numa para ver os detalhes.</Text>
+                <Text className="text-[13px] text-muted-foreground">
+                  Toque numa para ver os detalhes.
+                </Text>
               </View>
               <Ring value={tally.got} max={tally.total} size={64} stroke={7} label="conquistas">
                 <Text className="font-sans-bold text-sm text-foreground">
@@ -88,7 +98,10 @@ export default function AchievementsScreen() {
             </View>
 
             {selected ? (
-              <View accessibilityLiveRegion="polite" className="flex-row items-center gap-3 rounded-card bg-card p-4">
+              <View
+                accessibilityLiveRegion="polite"
+                className="flex-row items-center gap-3 rounded-card bg-card p-4"
+              >
                 <View
                   className={cn(
                     'h-11 w-11 items-center justify-center rounded-full',
@@ -96,14 +109,18 @@ export default function AchievementsScreen() {
                   )}
                 >
                   <Icon
-                    name={selected.unlockedAt ? (achievementIcon(selected.key) as IconName) : 'lock'}
+                    name={
+                      selected.unlockedAt ? (achievementIcon(selected.key) as IconName) : 'lock'
+                    }
                     size={20}
                     color={selected.unlockedAt ? colors.primaryForeground : colors.mutedForeground}
                   />
                 </View>
                 <View className="flex-1">
                   <Text className="font-sans-bold text-foreground">{selected.title}</Text>
-                  <Text className="text-[13px] text-muted-foreground">{achievementDetail(selected).text}</Text>
+                  <Text className="text-[13px] text-muted-foreground">
+                    {achievementDetail(selected).text}
+                  </Text>
                 </View>
               </View>
             ) : null}

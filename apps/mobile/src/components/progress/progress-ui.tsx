@@ -153,7 +153,12 @@ export function ProgressBar({
       className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-3"
     >
       <View
-        style={{ width: `${percent}%`, height: '100%', borderRadius: 999, backgroundColor: color ?? colors.primary }}
+        style={{
+          width: `${percent}%`,
+          height: '100%',
+          borderRadius: 999,
+          backgroundColor: color ?? colors.primary,
+        }}
       />
     </View>
   );

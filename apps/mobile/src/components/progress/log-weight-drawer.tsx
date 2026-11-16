@@ -154,81 +154,81 @@ export function LogWeightDrawer({
 
   const content = (
     <>
-        {switcher}
+      {switcher}
 
-        <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
-          <DrawerDescription>
-            {editing
-              ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
-              : dia === hoje
-                ? 'Pesagem de hoje.'
-                : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
-          </DrawerDescription>
-        </DrawerHeader>
+      <DrawerHeader className="px-0">
+        <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
+        <DrawerDescription>
+          {editing
+            ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
+            : dia === hoje
+              ? 'Pesagem de hoje.'
+              : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
+        </DrawerDescription>
+      </DrawerHeader>
 
-        <View className="gap-4 py-3">
-          {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
-          <ValueStepper
-            label="Peso (kg)"
-            value={weight}
-            onChange={setWeight}
-            step={0.1}
-            decimals={1}
-            base={logs.data?.logs[0]?.weightKg ?? null}
-            unit="kg"
-            placeholder="0,0"
-          />
-          {error ? <FormMessage>{error}</FormMessage> : null}
-          <Text className="text-center text-[13px] text-muted-foreground">
-            De manhã, em jejum, é o mais consistente.
-          </Text>
+      <View className="gap-4 py-3">
+        {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
+        <ValueStepper
+          label="Peso (kg)"
+          value={weight}
+          onChange={setWeight}
+          step={0.1}
+          decimals={1}
+          base={logs.data?.logs[0]?.weightKg ?? null}
+          unit="kg"
+          placeholder="0,0"
+        />
+        {error ? <FormMessage>{error}</FormMessage> : null}
+        <Text className="text-center text-[13px] text-muted-foreground">
+          De manhã, em jejum, é o mais consistente.
+        </Text>
 
-          {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
+        {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
 
-          <LogHistory
-            entries={entries}
-            isLoading={logs.isLoading}
-            error={logs.error}
-            onRetry={() => logs.refetch()}
-            editingId={editing?.id ?? null}
-            onEdit={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (!log) return;
-              setEditing(log);
-              setWeight(formatDecimal(log.weightKg));
+        <LogHistory
+          entries={entries}
+          isLoading={logs.isLoading}
+          error={logs.error}
+          onRetry={() => logs.refetch()}
+          editingId={editing?.id ?? null}
+          onEdit={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (!log) return;
+            setEditing(log);
+            setWeight(formatDecimal(log.weightKg));
+            setFormError(null);
+          }}
+          onDelete={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (log) remove.mutate(log);
+          }}
+          pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
+          emptyLabel="Nenhuma pesagem nos últimos 30 dias."
+        />
+      </View>
+
+      <DrawerFooter className="px-0">
+        <Button onPress={submit} loading={save.isPending}>
+          {editing
+            ? 'Salvar alteração'
+            : dia === hoje
+              ? 'Salvar'
+              : `Salvar em ${dayLabel(dia, hoje)}`}
+        </Button>
+        {editing ? (
+          <Button
+            variant="outline"
+            onPress={() => {
+              setEditing(null);
+              setWeight('');
               setFormError(null);
             }}
-            onDelete={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (log) remove.mutate(log);
-            }}
-            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
-            emptyLabel="Nenhuma pesagem nos últimos 30 dias."
-          />
-        </View>
-
-        <DrawerFooter className="px-0">
-          <Button onPress={submit} loading={save.isPending}>
-            {editing
-              ? 'Salvar alteração'
-              : dia === hoje
-                ? 'Salvar'
-                : `Salvar em ${dayLabel(dia, hoje)}`}
+          >
+            Cancelar edição
           </Button>
-          {editing ? (
-            <Button
-              variant="outline"
-              onPress={() => {
-                setEditing(null);
-                setWeight('');
-                setFormError(null);
-              }}
-            >
-              Cancelar edição
-            </Button>
-          ) : null}
-        </DrawerFooter>
+        ) : null}
+      </DrawerFooter>
     </>
   );
 
@@ -244,9 +244,7 @@ export function LogWeightDrawer({
         }
       }}
     >
-      <DrawerContent className="px-4">
-        {content}
-      </DrawerContent>
+      <DrawerContent className="px-4">{content}</DrawerContent>
     </Drawer>
   );
 }

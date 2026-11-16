@@ -121,14 +121,19 @@ export default function ChartsScreen() {
                   className="h-8 max-w-[170px] flex-row items-center gap-1 rounded-chip bg-muted px-3"
                 >
                   <Icon name="search" size={16} color={colors.mutedForeground} />
-                  <Text className="font-sans-semibold text-[12px] text-foreground" numberOfLines={1}>
+                  <Text
+                    className="font-sans-semibold text-[12px] text-foreground"
+                    numberOfLines={1}
+                  >
                     {exercise?.name ?? 'Escolher'}
                   </Text>
                 </Pressable>
               ) : null}
             </View>
             <View className="flex-row items-baseline gap-2">
-              <Text className="font-display text-[32px] leading-[36px] text-foreground">{view.big}</Text>
+              <Text className="font-display text-[32px] leading-[36px] text-foreground">
+                {view.big}
+              </Text>
               {view.delta ? <ToneBadge tone={view.deltaTone} label={view.delta} /> : null}
             </View>
 
@@ -165,13 +170,21 @@ export default function ChartsScreen() {
           </View>
 
           {kind === 'strength' ? (
-            <Segmented label="Métrica" options={STRENGTH_METRICS} value={metric} onChange={setMetric} />
+            <Segmented
+              label="Métrica"
+              options={STRENGTH_METRICS}
+              value={metric}
+              onChange={setMetric}
+            />
           ) : null}
 
           {view.summary.length > 0 ? (
             <View className="flex-row gap-2">
               {view.summary.map((x) => (
-                <View key={x.label} className="flex-1 basis-0 gap-0.5 rounded-card bg-card px-3.5 py-3">
+                <View
+                  key={x.label}
+                  className="flex-1 basis-0 gap-0.5 rounded-card bg-card px-3.5 py-3"
+                >
                   <Text className="font-sans-bold text-[17px] text-foreground" numberOfLines={1}>
                     {x.value}
                   </Text>

@@ -39,7 +39,13 @@ export function BodyLogSheet({
   }
 
   const switcher = (
-    <Segmented label="O que registrar" options={KINDS} value={kind} onChange={setKind} className="mt-2" />
+    <Segmented
+      label="O que registrar"
+      options={KINDS}
+      value={kind}
+      onChange={setKind}
+      className="mt-2"
+    />
   );
 
   return (
