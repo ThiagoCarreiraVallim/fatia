@@ -53,9 +53,11 @@ import {
  * braço A. As duas chegaram juntas no merge da main na #378.
  * A #379 acrescentou cinco tools do aluno (plano recebido e agenda, nenhuma destrutiva nem de
  * intenção) e `weeks` em `create_training_block`: muda o braço A.
+ * A #380 acrescentou `log_circuit_result` e `circuit`/`exercises` em `create_workout_plan`
+ * (nenhuma destrutiva nem de intenção): muda o braço A.
  */
 
-const SHA_ENTIDADE = '364222343d026cfd1bcb2cd4e3b57af9fdafbeec26d0422292f289526ce80994';
+const SHA_ENTIDADE = 'bd497fb63119fda3f6854279c5cc76484482071003aa572d48824bd4cb89c676';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

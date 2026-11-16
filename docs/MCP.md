@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **151 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **152 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 151 tools): **135,6 k caracteres**
-hoje, dos quais **7.812 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 152 tools): **139,7 k caracteres**
+hoje, dos quais **8.214 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (112,9 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (116,8 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -305,6 +305,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `delete_custom_exercise`       | D        |
 |                            | `set_exercise_favorite`        | U        |
 | **Planos de treino**       | `create_workout_plan`          | C        |
+|                            | `log_circuit_result`           | C        |
 |                            | `get_workout_plan`             | R        |
 |                            | `list_workout_plans`           | R        |
 |                            | `update_workout_plan`          | U        |
@@ -396,7 +397,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **151 tools**. Cada uma documentada abaixo.
+Total: **152 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1388,17 +1389,58 @@ Passos de execução e detalhes de técnica de um exercício buscado **por nome*
 
 ### `create_workout_plan`
 
-Cria um plano vazio.
+Cria um plano vazio. Com `circuit`, cria um circuito com timer (#380): AMRAP, EMOM, Tabata ou For
+Time, já com os exercícios na ordem, cada um por reps ou por tempo. O circuito aparece na aba
+Circuitos do Planos e se faz com o relógio do app; o resultado entra por `log_circuit_result`.
 
 **Input:**
 
 ```typescript
 {
-  name: string; // "Push", "Pull A", "Leg Heavy"
+  name: string; // "Push", "Pull A", "Leg Heavy", "AMRAP 12"
+  circuit?: {
+    format: 'AMRAP' | 'EMOM' | 'TABATA' | 'FOR_TIME';
+    durationMinutes?: number; // AMRAP e EMOM (1 a 120)
+    workSeconds?: number; // TABATA: trabalho
+    restSeconds?: number; // TABATA: descanso
+    intervals?: number; // TABATA: intervalos
+    rounds?: number; // FOR_TIME
+    restBetweenRoundsSeconds?: number; // FOR_TIME (padrão 0)
+  };
+  // Só com circuit: na ordem, reps OU seconds por round (por minuto, no EMOM).
+  exercises?: Array<{ exerciseId: number; reps?: number; seconds?: number }>;
 }
 ```
 
-**Output:** `{ planId: string }`
+**Output:** o plano criado, com `kind` (`STRENGTH` ou `CIRCUIT`) e `circuit` (formato e tempos).
+
+### `log_circuit_result`
+
+Registra o resultado de um circuito (#380). Com `sessionId`, encerra a sessão de circuito aberta
+(começada no app); sem ele, cria uma sessão já terminada. Grava uma série (`SessionSet`) por
+exercício por round, minuto ou intervalo, e o resultado em `WorkoutSession.circuit`, que
+`get_workout_session` devolve e o "Treino feito" compara com a última vez.
+
+**Input:**
+
+```typescript
+{
+  planId: string; // o circuito
+  sessionId?: string; // sessão de circuito aberta
+  roundsCompleted?: number; // AMRAP e For Time
+  partialExercises?: number; // exercícios feitos no round que não fechou
+  finalTimeSeconds?: number; // For Time terminado
+  roundSeconds?: number[]; // tempo de cada round completo
+  intervalsCompleted?: number; // EMOM (minutos) e Tabata (intervalos); padrão: todos
+  elapsedSeconds?: number; // padrão: a duração do circuito, ou o tempo final
+  completedAt?: string; // ISO 8601, padrão agora; nunca no futuro
+  feeling?: number; // 1 Leve … 5 No limite
+  notes?: string;
+}
+```
+
+**Output:** `{ sessionId, result: { roundsCompleted, partialExercises, roundSeconds, partialRoundSeconds,
+elapsedSeconds, finalTimeSeconds, intervalsCompleted, completed, totalReps, exercises }, alreadyFinished }`
 
 ### `get_workout_plan`
 

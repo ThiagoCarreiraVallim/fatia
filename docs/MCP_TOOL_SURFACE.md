@@ -40,12 +40,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-151 tools: **135,6 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 112,9 k e subestima o
+152 tools: **139,7 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 116,8 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 82 tools de escrita
-valem **7.812 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 83 tools de escrita
+valem **8.214 caracteres** — média de **90** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -61,7 +61,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **151** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **152** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -203,12 +203,17 @@ recusa é o próprio `accept_plan_offer` sobre a versão recusada. `create_train
 aceitar `weeks` de 3 a 6. Enviar e atualizar a oferta é da equipe e fica em REST
 (`/professional/students/:membershipId/plan-offers`).
 
+**Circuitos (#380), entregue:** `create_workout_plan` ganhou `circuit` (formato e tempos) e
+`exercises` (reps ou segundos por round), e o resultado entra por uma tool própria,
+`log_circuit_result`: a sessão de séries não comporta rounds, round parcial nem tempo final. Ela
+encerra a sessão de circuito aberta no app ou cria uma já terminada; `get_workout_session` devolve
+o `circuit` da sessão. O relógio (fases, pular fase, pausas) é só do app, sem tool.
+
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |
 | Hábitos e visitas                  | `list_habits`, `create_habit`, `log_habit`, `update_habit`, `delete_habit`, `list_gym_visits` (só leitura; o check-in por QR é câmera) | #390  |
 | Avaliação física                   | `list_assessments`, `get_assessment`, `log_assessment`, `compare_assessments`, `list_assessment_requests`, `submit_assessment_request` | #383  |
 | Agenda da comunidade (ADR 042)     | `list_group_agenda` (leitura), `set_agenda_interest` / `clear_agenda_interest` ("Vou"), `register_agenda_session`                      | #397  |
-| Circuitos                          | formato de circuito em `create_workout_plan` e rounds/tempo na sessão (tool própria só se a sessão não comportar)                      | #380  |
 | Questionários                      | `list_pending_questionnaires`, `get_questionnaire`, `answer_questionnaire`                                                             | #391  |
 | Foto da refeição (ADR 038, item 7) | as tools de refeição **só indicam** se há foto; `delete_meal_photo`; nenhuma tool manda a foto à IA hospedada (ADR 018)                | #374  |
 | Desafios por tipo (ADR 044)        | `get_my_challenge_progress`; sem tool de check-in com foto (câmera) nem de revisão (administração)                                     | #395  |

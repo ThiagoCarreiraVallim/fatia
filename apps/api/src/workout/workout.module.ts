@@ -39,6 +39,7 @@ import { ListPersonalRecordsTool } from './mcp/list-personal-records.tool';
 import { ListWorkoutPlansTool } from './mcp/list-workout-plans.tool';
 import { ListWorkoutSessionsTool } from './mcp/list-workout-sessions.tool';
 import { LogSetTool } from './mcp/log-set.tool';
+import { LogCircuitResultTool } from './mcp/log-circuit-result.tool';
 import { RemoveExerciseFromPlanTool } from './mcp/remove-exercise-from-plan.tool';
 import { ReorderPlanExercisesTool } from './mcp/reorder-plan-exercises.tool';
 import { SearchExerciseTool } from './mcp/search-exercise.tool';
@@ -97,6 +98,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     ListWorkoutPlansTool,
     ListWorkoutSessionsTool,
     LogSetTool,
+    LogCircuitResultTool,
     RemoveExerciseFromPlanTool,
     ReorderPlanExercisesTool,
     SearchExerciseTool,
