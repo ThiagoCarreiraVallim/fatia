@@ -3,12 +3,14 @@
 Worktree: `.claude/worktrees/380-circuitos`, branch `redesign/380-circuitos`. Sem push, sem PR.
 
 ## Pranchas
+
 Baixadas do artifact `GvL8GtYkJGjK5e4YovhZ3o` para
 `/tmp/claude-1000/-home-thiago-Documentos-pessoal-fatia/0bd027d0-f0c2-42a3-b37f-2f6dd993fad5/scratchpad/artifact-files/80eb4942-0fa7-48ac-acc0-5067fbe6e8b2/project/`
 (Al-T22, Al-T4, Al-T4b, Al-T4c, Al-T4d, Al-T4e, Al-T1, Al-T11c). Al-T6 está em `../../../.canvas/project/` (só leitura).
 Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 
 ## Desenho (decidido)
+
 - Banco (migration aditiva, timestamp >= 2h depois de `20261116020000`): `WorkoutPlanKind {STRENGTH, CIRCUIT}`,
   `WorkoutPlan.kind @default(STRENGTH)`; `CircuitFormat {AMRAP, EMOM, TABATA, FOR_TIME}`; modelo `CircuitConfig`
   1:1 com o plano (format, durationSeconds, workSeconds, restSeconds, intervals, rounds, restBetweenRoundsSeconds).
@@ -24,8 +26,13 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
   devolve `circuit`.
 
 ## Checklist
-- [ ] schema + migration
-- [ ] API: plano circuito (CRUD), sessão circuito (progresso, finish), comparação com a última, snapshot/modelos
+
+- [x] schema + migration (`20261116053800_workout_circuits`)
+- [x] api-client: `workout/circuit-timer.ts` (18 testes)
+- [x] API: `helpers/circuit.ts`, `circuit-session.service.ts`, `WorkoutPlanService.createCircuit/replaceCircuit`,
+      rotas `POST/PUT /workout/circuits`, `PUT /workout/sessions/:id/circuit`, `POST .../circuit/finish`,
+      `summary().circuit` (testes `circuit.spec.ts`, `circuit.integration.spec.ts`)
+- [ ] snapshot/modelos/oferta com circuito
 - [ ] isolamento (`user-isolation.spec.ts`), export/exclusão LGPD, leitura da equipe
 - [ ] MCP + docs/MCP_TOOL_SURFACE.md + docs/MCP.md + fingerprint
 - [ ] api-client: timer puro + testes; cliente HTTP; copy
@@ -35,7 +42,12 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [ ] lint, typecheck, testes api/api-client/web/mobile
 
 ## Comandos
-- DB de teste: ver seção abaixo quando montado.
+
+- DB de teste (já criado e semeado):
+  `export DATABASE_URL=$(grep -E "^DATABASE_URL=" /home/thiago/Documentos/pessoal/fatia/.env | cut -d= -f2- | tr -d '"' | sed -E 's#/fatia(\?|$)#/fatia_t380\1#')`
+- `cd apps/api && npx jest src/workout/__tests__/circuit` ; `cd packages/api-client && npx vitest run`
+- typecheck da api precisa de `pnpm --filter @fatia/design build` (já feito).
 
 ## Próximo passo
-Schema + migration.
+
+Snapshot/materializer, export, isolamento, depois MCP.
