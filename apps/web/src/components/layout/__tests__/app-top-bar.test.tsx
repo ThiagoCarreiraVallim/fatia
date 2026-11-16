@@ -81,8 +81,9 @@ describe('AppTopBar', () => {
     expect(barra).toContainElement(screen.getByRole('button', { name: 'Copiar dia' }));
   });
 
-  it('a tela pode interceptar o voltar (treino em andamento confirma)', async () => {
-    pathname.atual = '/workout/session/s1';
+  it('a tela pode interceptar o voltar (o Treino atual da sessão aberta)', async () => {
+    // A sessão em si não tem barra de topo (Al-T3, Al-T5); o Treino atual tem.
+    pathname.atual = '/workout/session/s1/edit';
     const confirmar = vi.fn();
     function Tela() {
       const onBack = useCallback(() => confirmar(), []);
@@ -90,9 +91,7 @@ describe('AppTopBar', () => {
       return null;
     }
     montar(<Tela />);
-    await userEvent
-      .setup()
-      .click(screen.getByRole('link', { name: 'Voltar para Histórico de treino' }));
+    await userEvent.setup().click(screen.getByRole('link', { name: 'Voltar para Treino' }));
     expect(confirmar).toHaveBeenCalledTimes(1);
   });
 });
