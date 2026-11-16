@@ -175,11 +175,12 @@ export default function BlockScreen() {
               onChange={setKind}
             />
 
-            <View className="gap-2">
-              <Text className="font-sans-bold text-sm text-foreground">
-                Semanas <Text className="text-xs text-faint">· a última é de deload</Text>
-              </Text>
-              <View accessibilityRole="radiogroup" className="flex-row gap-2">
+            <View className="min-h-16 flex-row items-center justify-between gap-3 rounded-card bg-card px-4 py-3">
+              <View>
+                <Text className="font-sans-bold text-[15px] text-foreground">Semanas</Text>
+                <Text className="text-xs text-muted-foreground">a última é de deload</Text>
+              </View>
+              <View accessibilityRole="radiogroup" className="flex-row gap-1.5">
                 {BLOCK_WEEK_OPTIONS.map((n) => {
                   const on = n === weeks;
                   return (
@@ -189,15 +190,16 @@ export default function BlockScreen() {
                       accessibilityLabel={`${n} semanas`}
                       accessibilityState={{ checked: on }}
                       onPress={() => setWeeks(n)}
+                      hitSlop={4}
                       className={cn(
-                        'h-11 w-12 items-center justify-center rounded-pill',
-                        on ? 'bg-foreground' : 'bg-card',
+                        'h-9 w-10 items-center justify-center rounded-chip',
+                        on ? 'bg-primary' : 'bg-muted',
                       )}
                     >
                       <Text
                         className={cn(
-                          'font-sans-bold text-[15px]',
-                          on ? 'text-background' : 'text-foreground',
+                          'font-sans-bold text-sm',
+                          on ? 'text-primary-foreground' : 'text-muted-foreground',
                         )}
                       >
                         {n}
@@ -209,13 +211,16 @@ export default function BlockScreen() {
             </View>
 
             {plans.data && plans.data.length > 0 ? (
-              <View className="gap-2">
-                <Text className="font-sans-bold text-sm text-foreground">Plano do bloco</Text>
+              <View className="gap-2.5 rounded-card bg-card px-4 py-3">
+                <View>
+                  <Text className="font-sans-bold text-[15px] text-foreground">Plano</Text>
+                  <Text className="text-xs text-muted-foreground">o que o bloco periodiza</Text>
+                </View>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  className="-mx-5"
-                  contentContainerClassName="gap-2 px-5"
+                  className="-mx-4"
+                  contentContainerClassName="gap-1.5 px-4"
                 >
                   {[{ id: undefined, name: 'Treino livre' }, ...plans.data].map((p) => {
                     const on = planId === p.id;
@@ -227,7 +232,7 @@ export default function BlockScreen() {
                         onPress={() => setPlanId(p.id)}
                         className={cn(
                           'min-h-9 justify-center rounded-pill px-4',
-                          on ? 'bg-foreground' : 'bg-card',
+                          on ? 'bg-foreground' : 'bg-muted',
                         )}
                       >
                         <Text
@@ -296,51 +301,44 @@ function StatusCard({ block }: { block: TrainingBlock }) {
   );
 }
 
-/** "Volume e intensidade": duas barras por semana, proporcionais ao maior fator. */
+/** "Volume e intensidade": duas barras por semana, proporcionais ao maior fator (Al-T12). */
 function WeekChart({ rows }: { rows: WeekRow[] }) {
-  const H = 72;
+  const H = 110;
   return (
-    <View className="gap-2 rounded-card bg-card p-4">
+    <View className="gap-3.5 rounded-card bg-card p-4">
       <View className="flex-row items-center justify-between">
-        <Text className="font-sans-bold text-sm text-foreground">Volume e intensidade</Text>
-        <View className="flex-row items-center gap-3">
+        <Text className="font-sans-bold text-[15px] text-foreground">Volume e intensidade</Text>
+        <View className="flex-row items-center gap-2">
           <Legend color={colors.primary} label="volume" />
-          <Legend color={colors.info} label="intensidade" />
+          <Legend color={colors.protein} label="intensidade" />
         </View>
       </View>
       <View
         accessibilityLabel={rows
           .map((r) => `semana ${r.n}: volume ${r.volume}, intensidade ${r.intensity}`)
           .join('; ')}
-        className="flex-row items-end gap-2"
+        className="flex-row items-end gap-2.5"
         style={{ height: H }}
       >
         {rows.map((r) => (
-          <View key={r.n} className="flex-1 flex-row items-end justify-center gap-1">
+          <View key={r.n} className="h-full flex-1 flex-row items-end gap-[3px]">
             <View
-              className="w-2.5 rounded-t-[3px]"
+              className="flex-1 rounded-md"
               style={{
-                height: Math.max(4, Math.round(r.volumeBar * H)),
+                height: Math.max(4, Math.round(r.volumeBar * 0.85 * H)),
                 backgroundColor: colors.primary,
                 opacity: r.current === false ? 0.5 : 1,
               }}
             />
             <View
-              className="w-2.5 rounded-t-[3px]"
+              className="flex-1 rounded-md"
               style={{
-                height: Math.max(4, Math.round(r.intensityBar * H)),
-                backgroundColor: colors.info,
+                height: Math.max(4, Math.round(r.intensityBar * 0.95 * H)),
+                backgroundColor: colors.protein,
                 opacity: r.current === false ? 0.5 : 1,
               }}
             />
           </View>
-        ))}
-      </View>
-      <View className="flex-row gap-2">
-        {rows.map((r) => (
-          <Text key={r.n} className="flex-1 text-center text-[11px] text-faint">
-            {r.n}
-          </Text>
         ))}
       </View>
     </View>
@@ -350,49 +348,58 @@ function WeekChart({ rows }: { rows: WeekRow[] }) {
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <View className="flex-row items-center gap-1">
-      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-      <Text className="text-[11px] text-faint">{label}</Text>
+      <View className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: color }} />
+      <Text className="text-xs text-muted-foreground">{label}</Text>
     </View>
   );
 }
 
 function WeekList({ rows }: { rows: WeekRow[] }) {
   return (
-    <View className="overflow-hidden rounded-card bg-card">
+    <View className="overflow-hidden rounded-card bg-card px-4">
       {rows.map((r, i) => (
         <View
           key={r.n}
           accessibilityLabel={`Semana ${r.n}, ${r.label}${r.current ? ', semana atual' : ''}`}
-          className={cn('flex-row items-center gap-3 px-4 py-3', i > 0 && 'border-t border-border')}
+          className={cn(
+            'min-h-[60px] flex-row items-center gap-3 py-2.5',
+            i > 0 && 'border-t border-border',
+          )}
           style={r.current ? { backgroundColor: `${colors.primary}14` } : undefined}
         >
           <View
-            className={cn(
-              'h-9 w-9 items-center justify-center rounded-[10px]',
-              r.current ? 'bg-primary' : 'bg-muted',
-            )}
+            className="h-8 w-8 items-center justify-center rounded-[10px]"
+            style={{
+              backgroundColor: r.current
+                ? colors.primary
+                : r.deload
+                  ? `${colors.water}29`
+                  : `${colors.primary}26`,
+            }}
           >
             <Text
-              className={cn(
-                'font-sans-bold text-sm',
-                r.current ? 'text-primary-foreground' : 'text-foreground',
-              )}
+              className="font-sans-extrabold text-sm"
+              style={{
+                color: r.current
+                  ? colors.primaryForeground
+                  : r.deload
+                    ? colors.water
+                    : colors.primary,
+              }}
             >
               {r.n}
             </Text>
           </View>
           <View className="min-w-0 flex-1">
-            <Text
-              className={cn('font-sans-bold text-sm', r.deload ? 'text-info' : 'text-foreground')}
-            >
+            <Text className="font-sans-semibold text-[15px] text-foreground">
               {r.label}
               {r.current ? ' · agora' : ''}
             </Text>
-            <Text className="text-xs text-faint">
+            <Text className="text-xs text-muted-foreground">
               intensidade {r.intensity} · volume {r.volume}
             </Text>
           </View>
-          <Text className="text-xs text-faint" style={{ fontVariant: ['tabular-nums'] }}>
+          <Text className="text-xs text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
             {r.progress ?? r.sessions}
           </Text>
         </View>

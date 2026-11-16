@@ -9,7 +9,7 @@ Pranchas renderizadas: todas em `board/`.
 - [x] Al-T2 / T2b plano recebido (f830cf7d): cmp-Al-T2-Plano-recebido, cmp-Al-T2-aceito, cmp-Al-T2-recusado, cmp-Al-T2b-Plano-flexivel
 - [x] Al-T1 aviso no Treino (ae7a3e99): cmp-Al-T1-aviso. Botão Agenda (calendário) no header não está na prancha: única entrada da agenda, mantido
 - [x] Al-T23 Modelos: cmp-Al-T23-Modelos (filtro por comunidade só aparece com 2+ comunidades; o demo tem 1)
-- [ ] Al-T12 Periodização
+- [x] Al-T12 Periodização: cmp-Al-T12-Periodizacao (bug: blocks/latest null → corpo vazio; corrigido no apiFetch)
 - [x] Al-T24 / T24b / T24c Agenda + Remarcar: cmp-Al-T24-Agenda, cmp-Al-T24-hoje, cmp-Al-T24-Remarcar, cmp-Al-T24b-Agenda-vazia, cmp-Al-T24c-Agenda-plano-terminado
 - [ ] verificação final (lint, typecheck, testes)
 
@@ -22,4 +22,4 @@ Pranchas renderizadas: todas em `board/`.
 
 ## Próximo passo
 
-Al-T12 Periodização; depois apagar os modelos vis379-* e verificação final.
+Apagar os modelos vis379-*, verificação final (lint, typecheck, testes) e relatório.
