@@ -9,7 +9,7 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 - [x] pranchas renderizadas (board/)
 - [x] T17b treino livre (commit "fix: treino livre segue a T17b") — prints web/workout_free*.m.png, app/free-empty.png, app/free-with.png, cmp-Al-T17b-*.png
 - [x] T10 histórico — web/workout_history*.m.png, app/history*.png, cmp-Al-T10-Historico.png
-- [ ] T11 detalhe força
+- [x] T11 detalhe força — web/workout_history_517c…_click_Tr_ceps_Corda_scroll_end.m.png, app/detail.png, app/detail-record-end.png, app/detail-back.png (seta volta ao histórico: ok web e app), cmp-Al-T11-Sessao-detalhe.png
 - [ ] T11b detalhe cardio (demo não tem sessão cardio: criar via "Só cardio")
 - [ ] lint/typecheck/testes; apagar este arquivo no último commit
 
@@ -23,4 +23,4 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 
 ## Próximo passo
 
-T11 (sessão 517c1d27-4e5a-44a2-86fc-73dee682401b, Push 16/11, recorde no Tríceps): subtítulo b3, selo RECORDE como .bdg ok (maiúsculo 11px 800), print expandido + seta volta ao histórico.
+T11b: criar sessão só cardio pelo app/web (Treino > Só cardio > Esteira > Iniciar > registrar distância/tempo > concluir), print do detalhe. Estilos do CardioBody já ajustados (b3; "Salvar como plano" em bg-muted).

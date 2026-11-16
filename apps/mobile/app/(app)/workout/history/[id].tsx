@@ -168,10 +168,10 @@ function Detail({
               accessibilityState={{ disabled: saveAsPlan.isPending }}
               disabled={saveAsPlan.isPending}
               onPress={() => saveAsPlan.mutate()}
-              className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-primary active:opacity-80"
+              className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-muted active:opacity-80"
             >
               <Plus size={16} color={colors.primaryForeground} />
-              <Text className="font-sans-bold text-[15px] text-primary-foreground">
+              <Text className="font-sans-bold text-[15px] text-foreground">
                 {saveAsPlan.isPending ? 'Salvando...' : 'Salvar como plano'}
               </Text>
             </Pressable>
@@ -249,9 +249,7 @@ function FeelingCard({ summary }: { summary: WorkoutSessionSummary }) {
         <Text className="font-sans-bold text-sm text-foreground">
           {feeling?.label ?? 'Como foi'}
         </Text>
-        {summary.notes ? (
-          <Text className="text-sm text-muted-foreground">“{summary.notes}”</Text>
-        ) : null}
+        {summary.notes ? <Text className="text-xs text-faint">“{summary.notes}”</Text> : null}
       </View>
     </View>
   );
@@ -280,14 +278,16 @@ function StrengthExercises({ summary }: { summary: WorkoutSessionSummary }) {
                 <Text className="font-sans-semibold text-[15px] text-foreground">
                   {e.exerciseName}
                 </Text>
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-xs text-faint">
                   {muscleGroupName(e.muscleGroup)} · {sets}
                 </Text>
               </View>
               {e.isRecord ? (
-                <View className="flex-row items-center gap-1 rounded-pill bg-primary/15 px-2 py-1">
+                <View className="h-[22px] flex-row items-center gap-1 rounded-pill bg-primary/15 px-[9px]">
                   <Trophy size={14} color={colors.primaryText} />
-                  <Text className="font-sans-bold text-xs text-primary">recorde</Text>
+                  <Text className="font-sans-extrabold text-[11px] uppercase tracking-[0.44px] text-primary">
+                    recorde
+                  </Text>
                 </View>
               ) : null}
               <View style={expanded ? { transform: [{ rotate: '180deg' }] } : undefined}>
@@ -305,7 +305,7 @@ function StrengthExercises({ summary }: { summary: WorkoutSessionSummary }) {
                       accessibilityLabel={`Série ${s.setNumber}: ${setLine(s, units)}${f ? `, ${f.label}` : ''}`}
                       className="min-h-11 flex-row items-center gap-2.5 border-t border-border"
                     >
-                      <Text className="w-5 text-sm text-muted-foreground">{s.setNumber}</Text>
+                      <Text className="w-5 text-xs text-faint">{s.setNumber}</Text>
                       <Text className="flex-1 font-sans-bold text-sm text-foreground">
                         {setLine(s, units)}
                       </Text>
@@ -350,7 +350,7 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
           <Text className="font-sans-bold text-[22px] text-foreground">
             {ex.best?.kcalBurned ?? '—'}
           </Text>
-          <Text className="text-sm text-muted-foreground">kcal</Text>
+          <Text className="text-xs text-faint">kcal</Text>
         </View>
         <View
           accessible
@@ -360,7 +360,7 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
           <Text className="font-sans-bold text-[22px] text-foreground">
             {feeling?.emoji ?? '—'}
           </Text>
-          <Text className="text-sm text-muted-foreground">como foi</Text>
+          <Text className="text-xs text-faint">como foi</Text>
         </View>
       </View>
 
@@ -384,14 +384,14 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
           </View>
           <View className="min-w-0 flex-1 gap-0.5">
             <Text className="font-sans-bold text-sm text-foreground">{e.exerciseName}</Text>
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-xs text-faint">
               {e.exerciseId === ex.exerciseId ? detail : formatBestSet(e.best, units.loadUnit)}
             </Text>
           </View>
         </View>
       ))}
 
-      <Text className="text-sm text-muted-foreground">
+      <Text className="text-xs text-faint">
         Cardio é um exercício como os outros: aqui foi um treino livre só com ele.
       </Text>
 

@@ -186,7 +186,7 @@ function Detail({ summary }: { summary: WorkoutSessionSummary }) {
             type="button"
             disabled={saveAsPlan.isPending}
             onClick={() => saveAsPlan.mutate()}
-            className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-60"
+            className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-muted text-[15px] font-bold text-foreground disabled:opacity-60"
           >
             <Plus size={16} aria-hidden />
             {saveAsPlan.isPending ? 'Salvando...' : 'Salvar como plano'}
@@ -211,9 +211,7 @@ function FeelingCard({ summary }: { summary: WorkoutSessionSummary }) {
       )}
       <span className="min-w-0 flex-1 space-y-0.5">
         <b className="block text-sm">{feeling?.label ?? 'Como foi'}</b>
-        {summary.notes && (
-          <span className="block text-sm text-muted-foreground">“{summary.notes}”</span>
-        )}
+        {summary.notes && <span className="block text-xs text-faint">“{summary.notes}”</span>}
       </span>
     </section>
   );
@@ -238,12 +236,12 @@ function StrengthExercises({ summary }: { summary: WorkoutSessionSummary }) {
               <ExerciseThumb group={e.muscleGroup} size={44} />
               <span className="min-w-0 flex-1 space-y-0.5">
                 <span className="block text-[15px] font-semibold">{e.exerciseName}</span>
-                <span className="block text-sm text-muted-foreground">
+                <span className="block text-xs text-faint">
                   {muscleGroupName(e.muscleGroup)} · {e.sets} {e.sets === 1 ? 'série' : 'séries'}
                 </span>
               </span>
               {e.isRecord && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-primary-soft px-2 py-1 text-xs font-bold text-primary-text">
+                <span className="inline-flex h-[22px] shrink-0 items-center gap-1 rounded-pill bg-primary-soft px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em] text-primary-text">
                   <Trophy size={14} aria-hidden />
                   recorde
                 </span>
@@ -261,7 +259,7 @@ function StrengthExercises({ summary }: { summary: WorkoutSessionSummary }) {
                     key={s.setNumber}
                     className="flex min-h-11 items-center gap-2.5 border-t border-border tabular-nums"
                   >
-                    <span className="w-5 text-sm text-muted-foreground">{s.setNumber}</span>
+                    <span className="w-5 text-xs text-faint">{s.setNumber}</span>
                     <b className="flex-1 text-sm">{setLine(s, units)}</b>
                     <span aria-label={feelingOf(s.feeling)?.label} className="text-lg">
                       {feelingOf(s.feeling)?.emoji ?? ''}
@@ -298,11 +296,11 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
     <>
       <dl className="grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-0.5 rounded-[18px] bg-card p-3.5">
-          <dt className="order-last text-sm text-muted-foreground">kcal</dt>
+          <dt className="order-last text-xs text-faint">kcal</dt>
           <dd className="text-[22px] font-bold tabular-nums">{ex.best?.kcalBurned ?? '—'}</dd>
         </div>
         <div className="flex flex-col gap-0.5 rounded-[18px] bg-card p-3.5">
-          <dt className="order-last text-sm text-muted-foreground">como foi</dt>
+          <dt className="order-last text-xs text-faint">como foi</dt>
           <dd className="text-[22px] font-bold" aria-label={feeling?.label ?? 'sem marca'}>
             {feeling?.emoji ?? '—'}
           </dd>
@@ -327,14 +325,14 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
           </span>
           <span className="min-w-0 flex-1 space-y-0.5">
             <b className="block text-sm">{e.exerciseName}</b>
-            <span className="block text-sm text-muted-foreground">
+            <span className="block text-xs text-faint">
               {e.exerciseId === ex.exerciseId ? detail : formatBestSet(e.best, units.loadUnit)}
             </span>
           </span>
         </div>
       ))}
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-xs text-faint">
         Cardio é um exercício como os outros: aqui foi um treino livre só com ele.
       </p>
 
