@@ -135,13 +135,35 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
   - o T8 e o T21 abrem no app como folhas a 85% da tela, como as outras do app, e não em tela cheia;
   - a imagem do exercício é um placeholder.
 
+## Etapa 5: Treino B e Progresso (em andamento)
+
+| Issue | Título    | Estado       | Superfícies                                                   |
+| ----- | --------- | ------------ | ------------------------------------------------------------- |
+| #380  | Circuitos | em andamento | api, db, MCP (1 tool nova e 1 ampliada), api-client, web, app |
+
+Pendências da #380 (branch `redesign/380-circuitos`, migration `20261116053800_workout_circuits`):
+
+- **Modelo:** circuito é um `WorkoutPlan` com `kind = CIRCUIT` e um `CircuitConfig` 1:1 (formato e só os campos dele). Os itens são `WorkoutPlanExercise` com `repUnit` (reps ou segundos) e `targetReps` numérico. A sessão congela o circuito em `WorkoutSession.circuit` (JSON v1: definição, `startedAt`, toques com horário, resultado e a última vez).
+- **Relógio:** funções puras em `packages/api-client/src/workout/circuit-timer.ts`, por horário (nunca por tique). Cada toque vai para `PUT /workout/sessions/:id/circuit`, e outra aba ou o app retomam do mesmo ponto. "Encerrar" (`POST .../circuit/finish`) é idempotente; o servidor confere o resultado contra o circuito e cria uma `SessionSet` por exercício por round, minuto ou intervalo.
+- **MCP:** `create_workout_plan` aceita `circuit` e `exercises` com `reps` ou `seconds`; `log_circuit_result` (nova) registra um circuito feito, fechando a sessão aberta ou criando uma terminada. Não há `update_circuit`: editar é pela tela.
+- **Para a #381 (Al-T11c):** `GET /workout/sessions/:id/summary` traz `circuit` (`CircuitSummaryView`: rounds, parcial, tempo de cada round, média, tempo final, intervalos, total de reps, total por exercício, a última vez e a comparação). Os blocos prontos são `CircuitResultBlocks` (web e app).
+- **Desvios do canvas:**
+  - Números do Novo circuito digitáveis, além do −/+.
+  - "Encerrar" pede confirmação.
+  - O card da aba Circuitos abre o editor (o "Começar" leva ao relógio). O "Circuito" do Treino leva à aba Circuitos quando já há circuito, e ao Novo circuito quando não há.
+  - Tocar num exercício adiante no AMRAP/For Time marca também os anteriores do round.
+  - O For Time tem "Pular descanso" no descanso entre rounds (a prancha não desenha esse estado).
+  - O AMRAP terminado pelo tempo mostra o fim no desenho do Al-T4e ("rounds + exercícios").
+- **Contas escolhidas:** o Tabata conta o último descanso no total (8 × 20/10 = 4 min, como a prancha); pular fase conta a fase como feita; a série do Tabata grava os segundos de trabalho; `targetReps` em faixa vira o maior número.
+- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual); som e avisos no aparelho (no Expo Go do Android não há avisos do sistema: o relógio só apita com a tela acesa).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
-| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer      |
+| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
@@ -187,6 +209,11 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
   - "O que mudou": diff por exercício entre o snapshot aceito e o novo (novo, removido, alterado em séries, repetições e descanso). A pessoa aceita a atualização ou mantém a versão atual; nada muda sem aceite.
   - Bloco de semanas: de 3 a 6, com os focos de hoje. A última é deload; o meio é acúmulo e depois pico (3: acúmulo, pico, deload; 6: acúmulo ×3, pico ×2, deload). Os blocos de 4 semanas não mudam; seguem as regras da ADR 019, inclusive o deload por sinal.
   - "Remarcar" na agenda: qualquer dia de hoje até o fim do plano, nunca depois. Só informativo, sem presença nem reserva.
+- **Etapa 5 (#380):**
+  - Só AMRAP, EMOM, Tabata e For Time. Superset e giant set, e carga em % de 1RM, ficam para depois; a faixa de repetições (mín–máx) já existe desde a #378.
+  - EMOM e Tabata dividem a mesma tela de intervalos (Al-T4b e Al-T4d).
+  - O Al-T4e é um estado da tela do For Time (Al-T4c), não uma tela à parte.
+  - Na web, manter a tela acesa não é confiável (Wake Lock negado, iOS antigo, aba no fundo): o relógio segue certo pelos horários, e a tela avisa quando o navegador não tem a API. No app, `expo-keep-awake`, háptico, som por `expo-audio` e avisos do sistema com o app no fundo, tudo com fallback no Expo Go.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).
