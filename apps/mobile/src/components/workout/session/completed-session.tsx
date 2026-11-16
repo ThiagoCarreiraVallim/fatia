@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Check, Share2, Trophy } from 'lucide-react-native';
 import {
+  invalidateSessionLists,
   appendNoteShortcut,
   buildExerciseGroups,
   checkinDoneMessage,
@@ -116,7 +117,7 @@ function Summary({
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
-      void qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      invalidateSessionLists(qc);
       router.replace('/workout');
     },
   });
@@ -395,6 +396,7 @@ function TeamQuestions({
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onDone({ skipped });
       void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      invalidateSessionLists(qc);
     },
   });
 

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import {
+  invalidateSessionLists,
   feelingToRpe,
   loadFieldValue,
   loadToKg,
@@ -52,6 +53,7 @@ export function SetEditor({
   function invalidate() {
     void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
     void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+    invalidateSessionLists(qc);
   }
 
   const save = useMutation({

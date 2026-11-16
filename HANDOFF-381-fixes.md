@@ -16,12 +16,11 @@ Branch `redesign/381-review-fixes` (worktree `.claude/worktrees/381-review-fixes
 5. [x] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
 6. [x] Cursor do histórico (keyset opaco por usuário)
 7. [x] Mobile: toque duplo em Iniciar treino
-8. [ ] Invalidar ['workout','history'] ao terminar/check-in/excluir/sensação
+8. [x] Invalidar ['workout','history'] ao terminar/check-in/excluir/sensação
 
 Migração única: `20261116030000_session_plan_snapshot_and_plan_source`.
 
 ## Próximo passo
 
-Item 8: invalidar ['workout','history'] em finish (mobile use-finish-session.ts, web
-finish-session-modal.tsx), check-in, delete/cancelar sessão e edição de sensação.
-Depois: pnpm lint, typecheck, testes (api, api-client, web, mobile), apagar este HANDOFF.
+Verificação final: pnpm lint, pnpm typecheck, testes de api (com .env), api-client, web,
+mobile. Depois apagar este HANDOFF no commit final.
