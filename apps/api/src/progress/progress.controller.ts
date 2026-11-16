@@ -15,10 +15,11 @@ import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
 import { ProgressService } from './progress.service';
 import { DashboardService } from './dashboard.service';
-import { StreakService } from './streak.service';
+import { ConsistencyService } from './consistency.service';
 import { AchievementService } from './achievement.service';
 import { CreateWeightLogDto, ListWeightLogsDto, UpdateWeightLogDto } from './dto/weight-log.dto';
 import { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
+import { ConsistencyQueryDto } from './dto/consistency.dto';
 import { CreateWaterLogDto, ListWaterLogsDto, UpdateWaterLogDto } from './dto/water-log.dto';
 
 @Controller()
@@ -29,7 +30,7 @@ export class ProgressController {
     private readonly waters: WaterLogService,
     private readonly progress: ProgressService,
     private readonly dashboard: DashboardService,
-    private readonly streaks: StreakService,
+    private readonly consistency: ConsistencyService,
     private readonly achievements: AchievementService,
   ) {}
 
@@ -201,7 +202,16 @@ export class ProgressController {
   // -------- Engajamento --------
   @Get('streak')
   streak(@CurrentUser() user: CurrentUserPayload) {
-    return this.streaks.compute({ userId: user.id, timezone: user.timezone });
+    return this.consistency.streak({ userId: user.id, timezone: user.timezone });
+  }
+
+  /** Constância (Al-G12, #382): dias do período com as áreas cumpridas, sequência e recorde. */
+  @Get('progress/consistency')
+  consistencyReport(@CurrentUser() user: CurrentUserPayload, @Query() q: ConsistencyQueryDto) {
+    return this.consistency.report(
+      { userId: user.id, timezone: user.timezone },
+      q.range ?? 'month',
+    );
   }
 
   @Get('achievements')

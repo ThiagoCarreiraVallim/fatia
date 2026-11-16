@@ -1,7 +1,7 @@
 import { AchievementService } from '../achievement.service';
 import { ACHIEVEMENT_KEYS } from '../achievement-catalog';
 import type { PrismaService } from '../../common/prisma.service';
-import type { StreakService, StreakSummary } from '../streak.service';
+import type { ConsistencyService, StreakSummary } from '../consistency.service';
 
 /**
  * Os helpers de fuso são os **reais** (nenhum `jest.mock` de `date-tz` aqui): `first_full_week`
@@ -19,25 +19,22 @@ describe('AchievementService', () => {
       periodoCorrenteEmAberto: false,
       janelaEsgotada: false,
     };
-    return {
-      activeDays: { ...vazio, periodos: dias },
-      nutritionDays: vazio,
-      workoutWeeks: vazio,
-      stepsDays: vazio,
-      stepsTargetSet: false,
-    };
+    return { activeDays: { ...vazio, periodos: dias } };
   }
 
   function build(dados: {
     desbloqueadas?: Array<{ key: string; unlockedAt: Date; context: unknown }>;
     primeiraRefeicao?: Date | null;
     primeiroTreino?: Date | null;
+    /** O 100º treino concluído (`skip: 99`), quando existe. */
+    centesimoTreino?: Date | null;
+    treinosConcluidos?: number;
     primeiroPlano?: Date | null;
     setsPorSessao?: Array<{ sessionId: string; exerciseId: number; _max: { weightKg: number } }>;
     sessoes?: Array<{ id: string; startedAt: Date }>;
     weeklyWorkouts?: number | null;
     sessoesConcluidas?: Date[];
-    /** Dias da sequência que o `StreakService` devolve — `streak_7`/`streak_30` leem daqui. */
+    /** Dias da sequência que o `ConsistencyService` devolve — `streak_7`/`streak_30` leem daqui. */
     streakDias?: number;
     /** Participações em desafios da comunidade (Fase 8a). */
     desafios?: Array<{
@@ -59,17 +56,33 @@ describe('AchievementService', () => {
       meal: {
         findFirst: jest
           .fn()
-          .mockResolvedValue(dados.primeiraRefeicao ? { eatenAt: dados.primeiraRefeicao } : null),
+          .mockResolvedValue(
+            dados.primeiraRefeicao
+              ? { eatenAt: dados.primeiraRefeicao, mealType: 'BREAKFAST' }
+              : null,
+          ),
       },
       workoutPlan: {
         findFirst: jest
           .fn()
-          .mockResolvedValue(dados.primeiroPlano ? { createdAt: dados.primeiroPlano } : null),
+          .mockResolvedValue(
+            dados.primeiroPlano ? { createdAt: dados.primeiroPlano, name: 'Push/Pull/Legs' } : null,
+          ),
       },
       workoutSession: {
-        findFirst: jest
-          .fn()
-          .mockResolvedValue(dados.primeiroTreino ? { completedAt: dados.primeiroTreino } : null),
+        findFirst: jest.fn().mockImplementation(({ skip }: { skip?: number }) => {
+          if (skip === 99) {
+            return Promise.resolve(
+              dados.centesimoTreino ? { completedAt: dados.centesimoTreino, plan: null } : null,
+            );
+          }
+          return Promise.resolve(
+            dados.primeiroTreino
+              ? { completedAt: dados.primeiroTreino, plan: { name: 'Push' } }
+              : null,
+          );
+        }),
+        count: jest.fn().mockResolvedValue(dados.treinosConcluidos ?? 0),
         findMany: jest.fn().mockImplementation(({ select }: { select: Record<string, boolean> }) =>
           // O snapshot faz duas consultas diferentes em `workoutSession.findMany`: as sessões com
           // data de início (para o recorde) e as concluídas (para a semana completa).
@@ -123,10 +136,10 @@ describe('AchievementService', () => {
           ),
       },
     };
-    const streaks = { compute: jest.fn().mockResolvedValue(streakDe(dados.streakDias ?? 0)) };
+    const streaks = { streak: jest.fn().mockResolvedValue(streakDe(dados.streakDias ?? 0)) };
     const service = new AchievementService(
       prisma as unknown as PrismaService,
-      streaks as unknown as StreakService,
+      streaks as unknown as ConsistencyService,
     );
     return { service, prisma, streaks, criadas };
   }
@@ -199,6 +212,109 @@ describe('AchievementService', () => {
     expect(prisma.sessionSet.groupBy).not.toHaveBeenCalled();
     expect(prisma.meal.findFirst).not.toHaveBeenCalled();
     expect(prisma.userAchievement.createMany).not.toHaveBeenCalled();
+  });
+
+  describe('catálogo fechado em 10 (#382)', () => {
+    it('tem as dez conquistas, na ordem da prancha Al-G11, com "100 treinos"', () => {
+      expect([...ACHIEVEMENT_KEYS]).toEqual([
+        'first_meal',
+        'first_workout',
+        'plan_created',
+        'first_pr',
+        'streak_7',
+        'streak_30',
+        'first_full_week',
+        'workouts_100',
+        'challenge_finished',
+        'challenge_podium',
+      ]);
+    });
+
+    it('toda conquista diz o que falta quando está bloqueada', async () => {
+      const lista = await build({}).service.list(ctx);
+
+      expect(lista.every((a) => a.condition.length > 0)).toBe(true);
+    });
+  });
+
+  describe('workouts_100', () => {
+    it('desbloqueia com a data do 100º treino concluído', async () => {
+      const centesimo = new Date('2026-10-29T19:00:00.000Z');
+      const { service, criadas } = build({ centesimoTreino: centesimo, treinosConcluidos: 104 });
+
+      await service.evaluate(ctx);
+
+      const cem = criadas.find((c) => (c as { key: string }).key === 'workouts_100') as {
+        unlockedAt: Date;
+        context: { count: number };
+      };
+      expect(cem.unlockedAt).toEqual(centesimo);
+      expect(cem.context).toEqual({ count: 100 });
+    });
+
+    it('com 99 treinos continua bloqueada', async () => {
+      const { service } = build({ centesimoTreino: null, treinosConcluidos: 99 });
+
+      const lista = await service.evaluate(ctx);
+
+      expect(lista.find((a) => a.key === 'workouts_100')?.unlockedAt).toBeNull();
+    });
+  });
+
+  describe('progresso das bloqueadas ("faltam 58")', () => {
+    it('com `withProgress`, as de contagem dizem quanto já tem', async () => {
+      const { service } = build({ treinosConcluidos: 42, streakDias: 5 });
+
+      const lista = await service.list(ctx, { withProgress: true });
+
+      expect(lista.find((a) => a.key === 'workouts_100')?.progress).toEqual({
+        current: 42,
+        target: 100,
+      });
+      expect(lista.find((a) => a.key === 'streak_7')?.progress).toEqual({ current: 5, target: 7 });
+      expect(lista.find((a) => a.key === 'first_meal')?.progress).toBeNull();
+    });
+
+    it('sem `withProgress` não consulta nada além das desbloqueadas (o Hoje)', async () => {
+      const { service, prisma, streaks } = build({ treinosConcluidos: 42 });
+
+      const lista = await service.list(ctx);
+
+      expect(prisma.workoutSession.count).not.toHaveBeenCalled();
+      expect(streaks.streak).not.toHaveBeenCalled();
+      expect(lista.every((a) => a.progress === null)).toBe(true);
+    });
+
+    it('desbloqueada não tem progresso', async () => {
+      const { service } = build({
+        treinosConcluidos: 130,
+        desbloqueadas: [
+          { key: 'workouts_100', unlockedAt: new Date('2026-10-29T19:00:00.000Z'), context: null },
+        ],
+      });
+
+      const lista = await service.list(ctx, { withProgress: true });
+
+      expect(lista.find((a) => a.key === 'workouts_100')?.progress).toBeNull();
+    });
+  });
+
+  describe('contexto para a tela contar a história (Al-G11)', () => {
+    it('primeira refeição guarda o tipo; primeiro treino e primeiro plano, o nome do plano', async () => {
+      const { service, criadas } = build({
+        primeiraRefeicao: new Date('2026-09-28T10:00:00.000Z'),
+        primeiroTreino: new Date('2026-09-29T10:00:00.000Z'),
+        primeiroPlano: new Date('2026-09-30T10:00:00.000Z'),
+      });
+
+      await service.evaluate(ctx);
+
+      const por = (key: string) =>
+        (criadas.find((c) => (c as { key: string }).key === key) as { context: unknown }).context;
+      expect(por('first_meal')).toEqual({ mealType: 'BREAKFAST' });
+      expect(por('first_workout')).toEqual({ planName: 'Push' });
+      expect(por('plan_created')).toEqual({ planName: 'Push/Pull/Legs' });
+    });
   });
 
   describe('first_pr', () => {
@@ -360,7 +476,7 @@ describe('AchievementService', () => {
   });
 
   describe('streak_7 e streak_30', () => {
-    it('usam a sequência com tolerância que o StreakService calcula', async () => {
+    it('usam a sequência com tolerância que o ConsistencyService calcula', async () => {
       const { service, streaks } = build({ streakDias: 30 });
 
       const lista = await service.evaluate(ctx);
@@ -369,8 +485,8 @@ describe('AchievementService', () => {
       expect(lista.find((a) => a.key === 'streak_30')?.unlockedAt).not.toBeNull();
       // Uma vez só, mesmo com duas conquistas pedindo o mesmo dado: é o `umaVez` compartilhando
       // a promessa que impede as três consultas de streak de rodarem duas vezes.
-      expect(streaks.compute).toHaveBeenCalledTimes(1);
-      expect(streaks.compute).toHaveBeenCalledWith(ctx);
+      expect(streaks.streak).toHaveBeenCalledTimes(1);
+      expect(streaks.streak).toHaveBeenCalledWith(ctx);
     });
 
     it('não desbloqueia streak_30 com 29 dias', async () => {
@@ -397,7 +513,7 @@ describe('AchievementService', () => {
 
       await service.evaluate(ctx);
 
-      expect(streaks.compute).not.toHaveBeenCalled();
+      expect(streaks.streak).not.toHaveBeenCalled();
     });
   });
 

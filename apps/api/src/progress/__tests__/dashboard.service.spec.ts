@@ -3,7 +3,7 @@ import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
-import type { StreakService, StreakSummary } from '../streak.service';
+import type { ConsistencyService, StreakSummary } from '../consistency.service';
 import type { AchievementService } from '../achievement.service';
 import type { TrainingBlockService } from '../../workout/training-block.service';
 
@@ -42,8 +42,8 @@ type MockPrisma = {
 };
 
 /**
- * As sequências saíram daqui para o `StreakService` — e os testes delas saíram para
- * `streak.service.spec.ts`, que usa os helpers de fuso REAIS. Um teste de streak escrito neste
+ * As sequências saíram daqui para o `ConsistencyService` — e os testes delas saíram para
+ * `consistency.service.spec.ts`, que usa os helpers de fuso REAIS. Um teste de streak escrito neste
  * arquivo herdaria o `jest.mock('../helpers/date-tz')` do topo e não poderia pegar bug de fuso,
  * que é o defeito que streak mais tem.
  */
@@ -57,10 +57,6 @@ const STREAK_VAZIO = {
 
 const RESUMO_DE_STREAK: StreakSummary = {
   activeDays: STREAK_VAZIO,
-  nutritionDays: STREAK_VAZIO,
-  workoutWeeks: STREAK_VAZIO,
-  stepsDays: STREAK_VAZIO,
-  stepsTargetSet: false,
 };
 
 type MockStepLogs = {
@@ -124,7 +120,7 @@ describe('DashboardService', () => {
   let stepLogs: MockStepLogs;
   let weightLogs: MockWeightLogs;
   let waterLogs: MockWaterLogs;
-  let streaks: { compute: jest.Mock };
+  let streaks: { streak: jest.Mock };
   let achievements: { evaluate: jest.Mock; list: jest.Mock };
   let trainingBlocks: { getActive: jest.Mock };
   let service: DashboardService;
@@ -137,7 +133,7 @@ describe('DashboardService', () => {
     waterLogs = makeWaterLogs();
     // Default: zero água logada — testes que precisam override fazem manualmente.
     waterLogs.getForDate.mockResolvedValue({ date: '2026-01-15', totalMl: 0, logCount: 0 });
-    streaks = { compute: jest.fn().mockResolvedValue(RESUMO_DE_STREAK) };
+    streaks = { streak: jest.fn().mockResolvedValue(RESUMO_DE_STREAK) };
     achievements = {
       evaluate: jest.fn().mockResolvedValue([]),
       list: jest.fn().mockResolvedValue([]),
@@ -148,7 +144,7 @@ describe('DashboardService', () => {
       stepLogs as unknown as StepLogService,
       weightLogs as unknown as WeightLogService,
       waterLogs as unknown as WaterLogService,
-      streaks as unknown as StreakService,
+      streaks as unknown as ConsistencyService,
       achievements as unknown as AchievementService,
       trainingBlocks as unknown as TrainingBlockService,
     );
@@ -614,9 +610,9 @@ describe('DashboardService', () => {
         stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
       };
 
-      it('entrega o resumo de sequências que o StreakService calculou', async () => {
+      it('entrega o resumo de sequências que o ConsistencyService calculou', async () => {
         baselineTodayMocks();
-        streaks.compute.mockResolvedValue({
+        streaks.streak.mockResolvedValue({
           ...RESUMO_DE_STREAK,
           activeDays: { ...STREAK_VAZIO, periodos: 12, faltasUsadas: 1, faltasPermitidas: 2 },
         });
@@ -637,7 +633,7 @@ describe('DashboardService', () => {
         expect(prisma.meal.count).not.toHaveBeenCalled();
         expect(prisma.workoutSession.count).not.toHaveBeenCalled();
         expect(stepLogs.getStepsForDate).toHaveBeenCalledTimes(1);
-        expect(streaks.compute).toHaveBeenCalledTimes(1);
+        expect(streaks.streak).toHaveBeenCalledTimes(1);
       });
 
       it('LÊ as conquistas sem desbloquear nada', async () => {

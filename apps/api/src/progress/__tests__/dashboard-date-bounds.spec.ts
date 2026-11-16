@@ -4,7 +4,7 @@ import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
-import type { StreakService, StreakSummary } from '../streak.service';
+import type { ConsistencyService, StreakSummary } from '../consistency.service';
 import type { AchievementService } from '../achievement.service';
 import type { TrainingBlockService } from '../../workout/training-block.service';
 
@@ -54,12 +54,8 @@ describe('DashboardService — fronteiras de dia e semana', () => {
     };
     const resumo: StreakSummary = {
       activeDays: vazio,
-      nutritionDays: vazio,
-      workoutWeeks: vazio,
-      stepsDays: vazio,
-      stepsTargetSet: false,
     };
-    const streaks = { compute: jest.fn().mockResolvedValue(resumo) };
+    const streaks = { streak: jest.fn().mockResolvedValue(resumo) };
     const achievements = { evaluate: jest.fn().mockResolvedValue([]) };
     const trainingBlocks = { getActive: jest.fn().mockResolvedValue(null) };
 
@@ -68,7 +64,7 @@ describe('DashboardService — fronteiras de dia e semana', () => {
       stepLogs as unknown as StepLogService,
       weightLogs as unknown as WeightLogService,
       waterLogs as unknown as WaterLogService,
-      streaks as unknown as StreakService,
+      streaks as unknown as ConsistencyService,
       achievements as unknown as AchievementService,
       trainingBlocks as unknown as TrainingBlockService,
     );
@@ -110,9 +106,9 @@ describe('DashboardService — fronteiras de dia e semana', () => {
     });
   });
 
-  // A janela semanal de treino saiu daqui: quem a monta agora é o `StreakService`, e os casos
+  // A janela semanal de treino saiu daqui: quem a monta agora é o `ConsistencyService`, e os casos
   // (segunda 07:00 em Tóquio dentro da janela, `lt` no fim, sete dias exatos) vivem em
-  // `streak.service.spec.ts` — que também usa os helpers reais, pelo mesmo motivo deste arquivo.
+  // `consistency.service.spec.ts` — que também usa os helpers reais, pelo mesmo motivo deste arquivo.
 
   describe('o resumo da semana', () => {
     afterEach(() => jest.useRealTimers());

@@ -8,7 +8,7 @@ import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
 import { ProgressService } from './progress.service';
 import { DashboardService } from './dashboard.service';
-import { StreakService } from './streak.service';
+import { ConsistencyService } from './consistency.service';
 import { AchievementService } from './achievement.service';
 import { ProgressController } from './progress.controller';
 import { LogWeightTool } from './mcp/log-weight.tool';
@@ -36,6 +36,7 @@ import { GetStepsProgressTool } from './mcp/get-steps-progress.tool';
 import { GetTodaySummaryTool } from './mcp/get-today-summary.tool';
 import { GetWeekSummaryTool } from './mcp/get-week-summary.tool';
 import { GetStreakTool } from './mcp/get-streak.tool';
+import { GetConsistencyTool } from './mcp/get-consistency.tool';
 import { ListAchievementsTool } from './mcp/list-achievements.tool';
 import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
 
@@ -48,7 +49,7 @@ import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
     WaterLogService,
     ProgressService,
     DashboardService,
-    StreakService,
+    ConsistencyService,
     AchievementService,
     LogWeightTool,
     UpdateWeightLogTool,
@@ -75,6 +76,7 @@ import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
     GetTodaySummaryTool,
     GetWeekSummaryTool,
     GetStreakTool,
+    GetConsistencyTool,
     ListAchievementsTool,
     RefreshAchievementsTool,
   ],
@@ -84,7 +86,7 @@ import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
     WaterLogService,
     ProgressService,
     DashboardService,
-    StreakService,
+    ConsistencyService,
     AchievementService,
   ],
 })
