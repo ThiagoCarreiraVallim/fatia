@@ -6,6 +6,7 @@ import {
   restedHeadline,
   weeklySetsBars,
   figureTone,
+  figureViewBox,
 } from '../workout-cards';
 
 describe('cards da aba Treino', () => {
@@ -99,5 +100,35 @@ describe('figureTone — o boneco no tema (sem caixa branca no escuro)', () => {
     expect(figureTone('#F5F5F5')).toBe('transparent');
     expect(figureTone('none')).toBeNull();
     expect(figureTone(undefined)).toBeNull();
+  });
+});
+
+describe('figureViewBox — frente e costas no mesmo quadro', () => {
+  const box = (view: 'front' | 'back') => figureViewBox(view).split(' ').map(Number);
+
+  it('as duas vistas têm o mesmo tamanho: mesma largura, mesma altura', () => {
+    const [, , fw, fh] = box('front');
+    const [, , bw, bh] = box('back');
+    expect(fw).toBe(bw);
+    expect(fh).toBe(bh);
+  });
+
+  it('cabe o desenho inteiro de cada SVG (frente 587×1137, costas 596×1133)', () => {
+    const [fx, fy, fw, fh] = box('front');
+    const [bx, by, bw, bh] = box('back');
+    expect(fx).toBeLessThanOrEqual(0);
+    expect(fx + fw).toBeGreaterThanOrEqual(587);
+    expect(fy + fh).toBeGreaterThanOrEqual(1137);
+    expect(bx + bw).toBeGreaterThanOrEqual(596);
+    expect(by + bh).toBeGreaterThanOrEqual(1133);
+  });
+
+  it('a cabeça fica na mesma altura e no meio do quadro nas duas', () => {
+    // A cabeça começa em y 14,7 nos dois arquivos; o x do contorno do rosto é
+    // 258,7 na frente e 263,2 nas costas (4,5 a mais, metade de 596 − 587).
+    const [fx, fy] = box('front');
+    const [bx, by] = box('back');
+    expect(fy).toBe(by);
+    expect(258.7 - fx).toBeCloseTo(263.2 - bx, 1);
   });
 });

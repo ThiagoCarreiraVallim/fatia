@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { figureTone } from '@fatia/api-client';
+import { figureTone, figureViewBox } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 import { describeMuscles } from './muscle-labels';
 import type { MusclePath } from './muscle-path';
-import { BACK_PATHS, BACK_VIEW_BOX } from './muscle-paths-back';
-import { FRONT_PATHS, FRONT_VIEW_BOX } from './muscle-paths-front';
+import { BACK_PATHS } from './muscle-paths-back';
+import { FRONT_PATHS } from './muscle-paths-front';
 
 /**
  * Réplica de `apps/web/src/components/workout/muscle-diagram.tsx`.
@@ -113,15 +113,22 @@ export function MuscleDiagram({
       className="flex-row justify-center gap-2"
     >
       {view === 'front' || view === 'both' ? (
+        // O quadro comum às duas vistas (`figureViewBox`): com o de cada
+        // arquivo, a frente saía maior e mais baixa que as costas.
         <BodyView
           paths={FRONT_PATHS}
-          viewBox={FRONT_VIEW_BOX}
+          viewBox={figureViewBox('front')}
           width={width}
           highlight={highlight}
         />
       ) : null}
       {view === 'back' || view === 'both' ? (
-        <BodyView paths={BACK_PATHS} viewBox={BACK_VIEW_BOX} width={width} highlight={highlight} />
+        <BodyView
+          paths={BACK_PATHS}
+          viewBox={figureViewBox('back')}
+          width={width}
+          highlight={highlight}
+        />
       ) : null}
     </View>
   );
