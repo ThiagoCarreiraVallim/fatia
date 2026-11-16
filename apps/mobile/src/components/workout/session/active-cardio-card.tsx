@@ -8,7 +8,7 @@ import { newSetClientKey, workoutApi, type ExerciseGroup } from '@fatia/api-clie
 import { Button } from '@/components/ui';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { formatPace, formatPreviousSet } from './format';
-import { setHeadline, STEPS } from './guided-session';
+import { STEPS } from './guided-session';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
@@ -105,12 +105,8 @@ export function ActiveCardioCard({
     <View className="gap-3">
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 text-[13px] text-muted-foreground">
-          {setHeadline({
-            done: group.sets.length,
-            target: 1,
-            targetReps: group.targetReps,
-            lastTime,
-          })}
+          {/* Como no PWA: a referência da última vez, sem o "Série 1 de 1". */}
+          {lastTime ? `Anterior: ${lastTime}` : 'Cardio'}
         </Text>
         {nav}
       </View>
