@@ -10,12 +10,16 @@ import { PrismaService } from '../common/prisma.service';
 import { SharedWithService } from '../sharing/shared-with.service';
 import type {
   FinishSessionDto,
+  HistoryQueryDto,
   ListSessionsDto,
   StartSessionDto,
   UpdateSessionDto,
   WorkoutCheckinDto,
 } from './dto/session.dto';
 import { summarizeSession, type SessionSummary } from './session-summary';
+import { historyItemOf, type WorkoutHistory } from './session-history';
+import { sessionKind, sessionKindWhere } from './helpers/session-kind';
+import { isCardioExercise } from './helpers/is-cardio';
 
 export interface PostWorkoutQuestion {
   key: 'fatigue' | 'pain';
@@ -190,22 +194,100 @@ export class WorkoutSessionService {
     return session ? this.shapeSession(session) : null;
   }
 
+  /**
+   * As sessões com tudo (séries, plano, check-in) e o tipo de cada uma (#381).
+   * É o que o MCP (`list_workout_sessions`) e a leitura de Treino da equipe
+   * devolvem; a tela do histórico usa o `history`, mais enxuto.
+   */
   async list(userId: string, params: ListSessionsDto) {
     const limit = Math.min(params.limit ?? 20, 50);
-    const where: Prisma.WorkoutSessionWhereInput = { userId };
+    const where: Prisma.WorkoutSessionWhereInput = { userId, ...sessionKindWhere(params.kind) };
     if (params.date) {
       const start = new Date(`${params.date}T00:00:00.000Z`);
       const end = new Date(start);
       end.setUTCDate(end.getUTCDate() + 1);
       where.startedAt = { gte: start, lt: end };
     }
-    return this.prisma.workoutSession.findMany({
+    const rows = await this.prisma.workoutSession.findMany({
       where,
       include: SESSION_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
+    return rows.map((row) => ({ ...row, kind: sessionKind(row) }));
+  }
+
+  /**
+   * O histórico (#381, prancha `Al-T10`): os totais do topo e as linhas, só de
+   * sessões concluídas — a aberta mora na barra do treino em andamento. O filtro
+   * de tipo vale para os dois.
+   *
+   * Os totais agregam em memória, como `listPersonalRecords`: a escala é de uma
+   * pessoa (centenas de sessões), e o filtro de tipo fica num lugar só
+   * (`sessionKindWhere`) em vez de repetido num SQL à mão.
+   */
+  async history(userId: string, params: HistoryQueryDto): Promise<WorkoutHistory> {
+    const limit = Math.min(params.limit ?? 20, 50);
+    const where: Prisma.WorkoutSessionWhereInput = {
+      userId,
+      completedAt: { not: null },
+      ...sessionKindWhere(params.kind),
+    };
+    const [rows, spans, lifts] = await Promise.all([
+      this.prisma.workoutSession.findMany({
+        where,
+        select: {
+          id: true,
+          planId: true,
+          startedAt: true,
+          completedAt: true,
+          feeling: true,
+          notes: true,
+          plan: { select: { name: true } },
+          sets: {
+            select: {
+              exerciseId: true,
+              weightKg: true,
+              reps: true,
+              durationSeconds: true,
+              distanceMeters: true,
+              avgHeartRate: true,
+              exercise: { select: { name: true, muscleGroup: true } },
+            },
+            orderBy: [{ setNumber: 'asc' }, { id: 'asc' }],
+          },
+        },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      }),
+      this.prisma.workoutSession.findMany({
+        where,
+        select: { startedAt: true, completedAt: true },
+      }),
+      this.prisma.sessionSet.findMany({
+        where: { session: where, weightKg: { not: null }, reps: { not: null } },
+        select: { weightKg: true, reps: true, exercise: { select: { muscleGroup: true } } },
+      }),
+    ]);
+
+    const page = rows.slice(0, limit);
+    const minutes = spans.map((s) => (s.completedAt!.getTime() - s.startedAt.getTime()) / 60_000);
+    const volume = lifts
+      .filter((s) => !isCardioExercise(s.exercise))
+      .reduce((acc, s) => acc + s.weightKg! * s.reps!, 0);
+    return {
+      totals: {
+        sessions: spans.length,
+        avgDurationMinutes: minutes.length
+          ? Math.round(minutes.reduce((a, b) => a + b, 0) / minutes.length)
+          : null,
+        volumeKg: Math.round(volume * 10) / 10,
+      },
+      items: page.map(historyItemOf),
+      nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+    };
   }
 
   /**

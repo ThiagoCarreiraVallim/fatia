@@ -15,6 +15,9 @@ import type {
   UpdatePlanDto,
   UpdatePlanExerciseDto,
 } from './dto/plan.dto';
+import type { SaveSessionAsPlanDto } from './dto/session.dto';
+import { planExercisesFromSession } from './helpers/plan-from-session';
+import { orderExercisesLikeSession } from './session-summary';
 import { readableExercises } from './helpers/exercise-access';
 import { isCardioExercise } from './helpers/is-cardio';
 import {
@@ -64,6 +67,75 @@ export class WorkoutPlanService {
       data: { userId, name: dto.name },
       include: PLAN_INCLUDE,
     });
+  }
+
+  /**
+   * "Salvar como plano" (#381, prancha `Al-T11b`): um plano novo com os
+   * exercícios da sessão, na ordem dela, e as metas observadas
+   * (`planExercisesFromSession`). Cardio vira meta de cardio (#378).
+   *
+   * A sessão é lida pelo dono (`id` + `userId`): a de outra pessoa é 404, igual
+   * a inexistente. Exercício que a pessoa não enxerga mais (o da comunidade que
+   * ela deixou) fica de fora, como no "Adicionar exercício".
+   */
+  async createFromSession(
+    userId: string,
+    sessionId: string,
+    dto: SaveSessionAsPlanDto,
+  ): Promise<PlanView> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { id: sessionId, userId },
+      select: {
+        exerciseOrder: true,
+        plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
+        sets: {
+          select: {
+            exerciseId: true,
+            setNumber: true,
+            weightKg: true,
+            reps: true,
+            durationSeconds: true,
+            distanceMeters: true,
+            exercise: { select: { name: true, muscleGroup: true } },
+          },
+        },
+      },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const ids = [...new Set(session.sets.map((s) => s.exerciseId))];
+    const readable = new Set(
+      (
+        await this.prisma.exercise.findMany({
+          where: { id: { in: ids }, ...readableExercises(userId) },
+          select: { id: true },
+        })
+      ).map((e) => e.id),
+    );
+    const ordered = orderExercisesLikeSession(
+      ids,
+      session.exerciseOrder,
+      session.plan?.exercises ?? [],
+    );
+    const rows = planExercisesFromSession(
+      ordered
+        .filter((id) => readable.has(id))
+        .map((id) => {
+          const own = session.sets.filter((s) => s.exerciseId === id);
+          return { exerciseId: id, muscleGroup: own[0]!.exercise.muscleGroup, sets: own };
+        }),
+    );
+    if (rows.length === 0) {
+      throw new BadRequestException('Esse treino não tem série registrada para virar plano.');
+    }
+
+    const only =
+      rows.length === 1 ? session.sets.find((s) => s.exerciseId === rows[0]!.exerciseId) : null;
+    const name = dto.name?.trim() || session.plan?.name || only?.exercise.name || 'Treino livre';
+    const plan = await this.prisma.workoutPlan.create({
+      data: { userId, name: name.slice(0, 100), exercises: { create: rows } },
+    });
+    return this.findById(userId, plan.id);
   }
 
   async findById(userId: string, id: string): Promise<PlanView> {

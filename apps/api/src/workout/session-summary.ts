@@ -1,6 +1,7 @@
 import { canonicalGroupsOf, type CanonicalMuscleGroup } from './helpers/muscle-group';
 import { isCardioExercise } from './helpers/is-cardio';
 import { averageFeeling, rpeToFeeling } from './helpers/feeling';
+import { sessionKind, type SessionKind } from './helpers/session-kind';
 
 type StrengthGroup = Exclude<CanonicalMuscleGroup, 'cardio'>;
 
@@ -21,6 +22,8 @@ export interface SummarySet {
   durationSeconds: number | null;
   distanceMeters: number | null;
   avgHeartRate: number | null;
+  /** Cardio: as kcal que a pessoa digitou (#381). Opcional para quem não lê. */
+  kcalBurned?: number | null;
   exercise: SummaryExercise;
 }
 
@@ -60,6 +63,19 @@ export interface BestSet {
   distanceMeters: number | null;
   durationSeconds: number | null;
   avgHeartRate: number | null;
+  /** Cardio: soma das kcal digitadas; nula quando nenhuma série trouxe. */
+  kcalBurned: number | null;
+}
+
+/** Uma série como o detalhe do histórico mostra (Al-T11: "50 kg × 10 🙂"). */
+export interface SummarySetLine {
+  setNumber: number;
+  weightKg: number | null;
+  reps: number | null;
+  durationSeconds: number | null;
+  distanceMeters: number | null;
+  /** A sensação da série (1 a 5), pelo RPE. */
+  feeling: number | null;
 }
 
 export interface SessionSummaryExercise {
@@ -72,10 +88,14 @@ export interface SessionSummaryExercise {
   /** A sensação da série mais recente (1 a 5), pelo RPE dela. */
   feeling: number | null;
   isRecord: boolean;
+  /** As séries, na ordem (#381, exercícios expansíveis do Al-T11). */
+  setList: SummarySetLine[];
 }
 
 export interface SessionSummary {
   sessionId: string;
+  /** Plano, circuito ou livre (#381); ver `helpers/session-kind.ts`. */
+  kind: SessionKind;
   planId: string | null;
   planName: string | null;
   startedAt: Date;
@@ -103,6 +123,8 @@ export interface SessionSummary {
     reps: number | null;
     distanceMeters: number | null;
     durationSeconds: number | null;
+    /** O melhor de antes, que o recorde bateu ("antes 4,6 km", #381). */
+    previous: { weightKg: number | null; reps: number | null; distanceMeters: number | null };
   }[];
   muscles: {
     groups: { group: StrengthGroup; sets: number }[];
@@ -140,12 +162,17 @@ function strengthGroupsOf(exercise: SummaryExercise): StrengthGroup[] {
 /**
  * A ordem da lista: a escolhida na sessão, depois a do plano, depois a de
  * chegada. `SessionSet` não guarda hora, então "a ordem em que fez" é essa.
+ * O "Salvar como plano" (#381) usa a mesma, para o plano sair como a tela mostrou.
  */
-function exerciseOrder(input: SummaryInput['session'], ids: number[]): number[] {
+export function orderExercisesLikeSession(
+  ids: readonly number[],
+  chosen: readonly number[],
+  planExercises: ReadonlyArray<{ exerciseId: number; order: number }>,
+): number[] {
   const position = new Map<number, number>();
-  input.exerciseOrder.forEach((id, i) => position.set(id, i));
+  chosen.forEach((id, i) => position.set(id, i));
   const planOrder = new Map<number, number>();
-  for (const pe of input.plan?.exercises ?? []) planOrder.set(pe.exerciseId, pe.order);
+  for (const pe of planExercises) planOrder.set(pe.exerciseId, pe.order);
   const firstSeen = new Map<number, number>();
   ids.forEach((id, i) => firstSeen.has(id) || firstSeen.set(id, i));
   const key = (id: number): [number, number, number] => [
@@ -212,9 +239,10 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
 
   const records: SessionSummary['records'] = [];
   const exercises: SessionSummaryExercise[] = [];
-  for (const id of exerciseOrder(
-    session,
+  for (const id of orderExercisesLikeSession(
     session.sets.map((s) => s.exerciseId),
+    session.exerciseOrder,
+    session.plan?.exercises ?? [],
   )) {
     const sets = [...(byExercise.get(id) ?? [])].sort((a, b) => a.setNumber - b.setNumber);
     const exercise = sets[0]!.exercise;
@@ -226,12 +254,14 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
       const distance = sets.reduce((a, s) => a + (s.distanceMeters ?? 0), 0);
       const duration = sets.reduce((a, s) => a + (s.durationSeconds ?? 0), 0);
       const hrs = sets.map((s) => s.avgHeartRate).filter((h): h is number => h != null);
+      const kcal = sets.map((s) => s.kcalBurned).filter((k): k is number => k != null);
       best = {
         weightKg: null,
         reps: null,
         distanceMeters: distance || null,
         durationSeconds: duration || null,
         avgHeartRate: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null,
+        kcalBurned: kcal.length ? kcal.reduce((a, b) => a + b, 0) : null,
       };
       const prior = priorCardio.get(id);
       isRecord = prior !== undefined && distance > prior;
@@ -243,6 +273,7 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
           reps: null,
           distanceMeters: best.distanceMeters,
           durationSeconds: best.durationSeconds,
+          previous: { weightKg: null, reps: null, distanceMeters: prior ?? null },
         });
       }
     } else {
@@ -255,6 +286,7 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
           distanceMeters: null,
           durationSeconds: null,
           avgHeartRate: null,
+          kcalBurned: null,
         };
         const prior = priorStrength.get(id);
         // Peso do corpo (sem carga ou carga 0, como as telas mostram) não vira
@@ -268,6 +300,11 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
             reps: top.reps,
             distanceMeters: null,
             durationSeconds: null,
+            previous: {
+              weightKg: prior?.weightKg ?? null,
+              reps: prior?.reps ?? null,
+              distanceMeters: null,
+            },
           });
         }
       }
@@ -282,6 +319,14 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
       best,
       feeling: rpeToFeeling(sets.at(-1)?.rpe),
       isRecord,
+      setList: sets.map((s) => ({
+        setNumber: s.setNumber,
+        weightKg: s.weightKg,
+        reps: s.reps,
+        durationSeconds: s.durationSeconds,
+        distanceMeters: s.distanceMeters,
+        feeling: rpeToFeeling(s.rpe),
+      })),
     });
   }
 
@@ -302,6 +347,7 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
 
   return {
     sessionId: session.id,
+    kind: sessionKind(session),
     planId: session.planId,
     planName: session.plan?.name ?? null,
     startedAt: session.startedAt,
