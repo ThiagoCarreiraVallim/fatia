@@ -20,4 +20,4 @@ Prints: `~/.cache/fatia-vis/treino-ajustes/` (boards/, before-web/, before-app/,
 
 ## Próximo passo
 
-Item 5 (tudo feito: lista das séries do treino; reaproveitar CurrentExercise do Treino atual na web e SetTable do edit.tsx no app). Precisa concluir todos os exercícios da sessão para o print. Sessão Push do demo ATIVA (3 séries no supino). Script local não versionado: scripts/_session.mjs (registra N séries no PWA e tira print).
+Item 5: web FEITO (wip commit; CurrentExerciseList em current-workout-sheet.tsx, page.tsx showDone, teste no page.test.tsx). Falta o app: extrair o cartão do exercício de edit.tsx (SetTable etc.) e mostrar a lista no estado "picking" sem restantes em active-session.tsx; "Finalizar treino" no dock (useDockedAction). Sessão Push do demo ATIVA, com tudo feito (10 séries).

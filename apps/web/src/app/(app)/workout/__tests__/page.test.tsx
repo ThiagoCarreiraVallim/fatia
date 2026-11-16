@@ -433,6 +433,30 @@ describe('WorkoutPage — arrumar a sessão pelo Treino atual', () => {
       [threeExercises.id, 'serie-2-2'],
     ]);
   });
+
+  it('tudo feito: cada exercício com as séries feitas, e dá para pôr outro ou finalizar', async () => {
+    getActiveSession.mockResolvedValue({
+      ...threeExercises,
+      sets: [1, 2, 3].flatMap((e) => [1, 2, 3].map((n) => loggedSet(e, n))),
+    });
+    renderPage();
+
+    // No lugar do "Tudo feito por aqui" vazio, o resumo do treino até aqui.
+    const done = await screen.findByRole('region', { name: 'Treino de hoje' });
+    expect(within(done).getByText('3 exercícios · 9 séries')).toBeInTheDocument();
+    for (const name of ['Supino reto', 'Rosca direta', 'Agachamento']) {
+      expect(within(done).getByText(name)).toBeInTheDocument();
+    }
+    expect(within(done).getAllByText('20 × 10')).toHaveLength(9);
+    expect(within(done).getAllByText('✓ Feito')).toHaveLength(3);
+    // Corrigir uma série segue à mão, como no Treino atual (Al-T17).
+    expect(
+      within(done).getByRole('button', { name: 'Corrigir série 1 de Agachamento' }),
+    ).toBeInTheDocument();
+    expect(within(done).getByRole('button', { name: '+ Exercício' })).toBeInTheDocument();
+    expect(within(done).getByRole('button', { name: 'Finalizar treino' })).toBeInTheDocument();
+    expect(screen.queryByText(/Finalize o treino no topo/)).not.toBeInTheDocument();
+  });
 });
 
 describe('WorkoutPage — sessão guiada (#377)', () => {
