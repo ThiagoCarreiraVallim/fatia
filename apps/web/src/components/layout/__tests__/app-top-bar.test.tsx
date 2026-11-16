@@ -40,7 +40,7 @@ describe('AppTopBar', () => {
     pathname.atual = '/workout/plans/abc';
     montar();
     expect(screen.getByRole('heading', { level: 1, name: 'Plano de treino' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Voltar para Planos de treino' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Voltar para Planos e circuitos' })).toHaveAttribute(
       'href',
       '/workout/plans',
     );

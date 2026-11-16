@@ -67,6 +67,7 @@ export function CircuitEditor({ initial, planId }: { initial: CircuitDraft; plan
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
+      void qc.invalidateQueries({ queryKey: ['workout', 'plan'] });
     },
   });
 

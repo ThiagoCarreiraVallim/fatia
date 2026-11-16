@@ -1,10 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   buildExerciseGroups,
+  circuitRunPath,
   moveExerciseInOrder,
   orderExerciseGroups,
   pickFocusedGroup,
@@ -435,6 +437,19 @@ function ActiveSession({
   );
 }
 
+function CircuitRedirect({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(circuitRunPath(sessionId));
+  }, [sessionId, router]);
+  return (
+    <div className="space-y-3 p-4">
+      <Skeleton className="h-6 w-40 rounded bg-muted" />
+      <Skeleton className="h-24 rounded-lg bg-muted" />
+    </div>
+  );
+}
+
 export default function WorkoutPage() {
   // "Só cardio" começa um treino livre e já abre a busca nos cardios.
   const [searchOnStart, setSearchOnStart] = useState<MuscleGroup | null>(null);
@@ -446,6 +461,10 @@ export default function WorkoutPage() {
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
+
+  // Circuito aberto (#380): o lugar dele é o relógio, não a sessão de séries.
+  const circuitId = active.data?.circuit ? active.data.id : null;
+  if (circuitId) return <CircuitRedirect sessionId={circuitId} />;
 
   if (active.isLoading) {
     return (

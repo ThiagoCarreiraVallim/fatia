@@ -38,6 +38,14 @@ vi.mock('@/components/workout/cancel-session-modal', () => ({ CancelSessionModal
 vi.mock('@/components/workout/exercise-detail-card', () => ({
   ExerciseDetailCard: ({ footer }: { footer?: ReactNode }) => <div>{footer}</div>,
 }));
+const routerReplace = vi.fn();
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    ...actual,
+    useRouter: () => ({ push: vi.fn(), replace: routerReplace, back: vi.fn(), prefetch: vi.fn() }),
+  };
+});
 vi.mock('@/components/workout/block-timeline', () => ({ BlockTimeline: () => null }));
 // O embla consulta `matchMedia`, que o jsdom não tem; o carrossel não é o alvo.
 vi.mock('@/components/ui/carousel', () => {
@@ -754,5 +762,31 @@ describe('WorkoutPage — sem sessão aberta', () => {
     const week = await screen.findByRole('region', { name: 'Semana' });
     expect(notice.compareDocumentPosition(week) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Agenda' })).toHaveAttribute('href', '/workout/agenda');
+  });
+});
+
+describe('WorkoutPage — circuito aberto (#380)', () => {
+  it('leva ao relógio do circuito, e não à sessão de séries', async () => {
+    getActiveSession.mockResolvedValue({
+      id: 's1',
+      planId: 'c1',
+      startedAt: STARTED_AT,
+      completedAt: null,
+      sets: [],
+      circuit: {
+        version: 1,
+        definition: { format: 'AMRAP', name: 'AMRAP 12', config: {}, exercises: [] },
+        startedAt: STARTED_AT,
+        events: [],
+        result: null,
+      },
+    } as unknown as WorkoutSession);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkoutPage />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(routerReplace).toHaveBeenCalledWith('/workout/circuit/s1'));
   });
 });

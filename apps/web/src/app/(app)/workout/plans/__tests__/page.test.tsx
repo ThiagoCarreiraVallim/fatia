@@ -7,9 +7,12 @@ import type { TrainingBlock, WorkoutPlan, WorkoutPlanExercise } from '@fatia/api
 import PlansPage from '../page';
 
 const push = vi.fn();
+const replace = vi.fn();
+let search = new URLSearchParams();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
   usePathname: () => '/workout/plans',
+  useSearchParams: () => search,
 }));
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
@@ -80,6 +83,7 @@ describe('PlansPage', () => {
     startSession.mockReset();
     push.mockReset();
     getActiveBlock.mockResolvedValue(null);
+    search = new URLSearchParams();
   });
 
   it('pergunta antes de excluir o plano, e só exclui na confirmação', async () => {
@@ -177,5 +181,38 @@ describe('PlansPage', () => {
     renderPage();
     expect(await screen.findByText('Semana 2 de 4')).toBeInTheDocument();
     expect(screen.getByText('1 de 3 sessões nesta semana')).toBeInTheDocument();
+  });
+
+  it('aba Circuitos (#380): só os circuitos, com o selo e o resumo; Começar abre o relógio', async () => {
+    search = new URLSearchParams('tab=circuitos');
+    const amrap = {
+      id: 'c1',
+      name: 'AMRAP 12',
+      kind: 'CIRCUIT',
+      circuit: { format: 'AMRAP', durationSeconds: 720 },
+      exercises: [line('Burpee', 'cardio', 1, 0), line('Prancha', 'core', 1, 0)],
+    } as unknown as WorkoutPlan;
+    listPlans.mockResolvedValue([PUSH, amrap]);
+    startSession.mockResolvedValue({ id: 's9' } as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('AMRAP 12')).toBeInTheDocument();
+    expect(screen.queryByText('Push')).toBeNull();
+    expect(screen.getByText('máximo de rounds em 12 min · 2 exercícios')).toBeInTheDocument();
+    expect(screen.getByText('AMRAP')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Novo circuito/ })).toHaveAttribute(
+      'href',
+      '/workout/circuits/new',
+    );
+    expect(screen.queryByText('Modelos das comunidades')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Começar AMRAP 12' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/workout/circuit/s9'));
+
+    // Planos não mostra o circuito.
+    await user.click(screen.getByRole('radio', { name: 'Planos' }));
+    expect(await screen.findByText('Push')).toBeInTheDocument();
+    expect(screen.queryByText('AMRAP 12')).toBeNull();
   });
 });

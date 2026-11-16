@@ -1,11 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ChevronRight, ClipboardList, Layers, Play, Plus, Trash2, Users } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  ChevronRight,
+  ClipboardList,
+  Layers,
+  Play,
+  Plus,
+  Timer,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import {
+  circuitBadge,
+  circuitPlanSummary,
   planExerciseChips,
   planSummaryLine,
   workoutApi,
@@ -17,20 +28,40 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/elements/error-state';
 import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
 import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
+import { Segmented } from '@/components/ui/segmented';
+import { CircuitBadge } from '@/components/workout/circuit/circuit-badge';
+import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { cn } from '@/lib/utils';
 
 /** O `btn sm` do canvas: cinza (`--s2`), 12 px de canto. */
 const greyButton =
   'anim-press inline-flex h-10 items-center justify-center gap-2 rounded-[12px] bg-muted text-sm font-bold text-foreground disabled:opacity-40';
 
+type PlansTab = 'planos' | 'circuitos';
+
 /**
- * Planos (prancha Al-T6, #378): os cards dos planos, os atalhos para modelos e
- * bloco, e o "Novo plano" preso embaixo. A aba Circuitos fica para a #380 e o
- * plano recebido do personal para a #379.
+ * Planos e circuitos (prancha Al-T6, #378 e #380): as abas Planos e Circuitos,
+ * os cards, os atalhos para modelos e bloco, e o "Novo plano" ou "Novo
+ * circuito" preso embaixo. O plano recebido do personal fica para a #379.
  */
 export default function PlansPage() {
+  return (
+    <Suspense>
+      <PlansAndCircuits />
+    </Suspense>
+  );
+}
+
+function PlansAndCircuits() {
   const qc = useQueryClient();
   const router = useRouter();
+  const params = useSearchParams();
+  // A aba vai na URL: o "Salvar" do Novo circuito e o X do relógio voltam nela.
+  const [tab, setTab] = useState<PlansTab>(
+    params?.get('tab') === 'circuitos' ? 'circuitos' : 'planos',
+  );
+  const circuitsTab = tab === 'circuitos';
+  const startCircuit = useStartCircuit();
   // Excluir pergunta antes, no próprio card (Al-T6): o histórico continua, mas o plano não volta.
   const [askId, setAskId] = useState<string | null>(null);
 
@@ -63,10 +94,29 @@ export default function PlansPage() {
   });
 
   const activeBlock = block.data ?? null;
+  const shown = plans.data?.filter((p) => (p.kind === 'CIRCUIT') === circuitsTab);
+  const starting = start.isPending || startCircuit.isPending;
+  const startError = start.error ?? startCircuit.error;
 
   return (
     <DockedPage className="px-4 pt-2">
-      {activeBlock && (
+      <Segmented<PlansTab>
+        label="Planos ou circuitos"
+        value={tab}
+        onChange={(next) => {
+          setTab(next);
+          setAskId(null);
+          router.replace(next === 'circuitos' ? '/workout/plans?tab=circuitos' : '/workout/plans', {
+            scroll: false,
+          });
+        }}
+        options={[
+          { value: 'planos', label: 'Planos' },
+          { value: 'circuitos', label: 'Circuitos' },
+        ]}
+      />
+
+      {!circuitsTab && activeBlock && (
         <BlockCard
           block={activeBlock}
           starting={start.isPending}
@@ -92,30 +142,37 @@ export default function PlansPage() {
         />
       )}
 
-      {plans.data && plans.data.length === 0 && (
+      {shown && shown.length === 0 && !circuitsTab && (
         <EmptyState
           icon={ClipboardList}
           title="Nenhum plano criado ainda"
           description="Monte um treino (ex.: Push, Pull, Pernas) para começar mais rápido na academia."
         />
       )}
+      {shown && shown.length === 0 && circuitsTab && (
+        <EmptyState
+          icon={Timer}
+          title="Nenhum circuito ainda"
+          description="Monte um AMRAP, EMOM, Tabata ou For Time e deixe o relógio contar por você."
+        />
+      )}
 
-      {start.isError && (
+      {startError && (
         <p role="alert" className="text-sm text-danger">
-          Não foi possível começar o treino.{' '}
-          {start.error instanceof Error ? start.error.message : ''}
+          Não foi possível começar o treino. {startError instanceof Error ? startError.message : ''}
         </p>
       )}
 
-      {plans.data?.map((plan) => (
+      {shown?.map((plan) => (
         <PlanCard
           key={plan.id}
           plan={plan}
-          starting={start.isPending}
+          circuit={circuitsTab}
+          starting={starting}
           asking={askId === plan.id}
           removing={remove.isPending}
           removeFailed={remove.isError && askId === plan.id}
-          onStart={() => start.mutate(plan.id)}
+          onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
           onAsk={() => {
             remove.reset();
             setAskId(plan.id);
@@ -125,26 +182,30 @@ export default function PlansPage() {
         />
       ))}
 
-      <ShortcutLink
-        href="/workout/templates"
-        icon={<Users size={20} aria-hidden />}
-        title="Modelos das comunidades"
-        subtitle="planos prontos dos seus grupos"
-      />
-      <ShortcutLink
-        href="/workout/block"
-        icon={<Layers size={20} aria-hidden />}
-        title="Bloco de semanas"
-        subtitle="organize força, volume e deload"
-      />
+      {!circuitsTab && (
+        <>
+          <ShortcutLink
+            href="/workout/templates"
+            icon={<Users size={20} aria-hidden />}
+            title="Modelos das comunidades"
+            subtitle="planos prontos dos seus grupos"
+          />
+          <ShortcutLink
+            href="/workout/block"
+            icon={<Layers size={20} aria-hidden />}
+            title="Bloco de semanas"
+            subtitle="organize força, volume e deload"
+          />
+        </>
+      )}
 
       <DockedAction>
         <Link
-          href="/workout/plans/new"
+          href={circuitsTab ? '/workout/circuits/new' : '/workout/plans/new'}
           className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-foreground text-[15px] font-bold text-background"
         >
           <Plus size={16} aria-hidden />
-          Novo plano
+          {circuitsTab ? 'Novo circuito' : 'Novo plano'}
         </Link>
       </DockedAction>
     </DockedPage>
@@ -221,6 +282,7 @@ function BlockCard({
 
 function PlanCard({
   plan,
+  circuit = false,
   starting,
   asking,
   removing,
@@ -231,6 +293,8 @@ function PlanCard({
   onDelete,
 }: {
   plan: WorkoutPlan;
+  /** Card da aba Circuitos: o resumo e o selo do formato, e o toque abre o editor. */
+  circuit?: boolean;
   starting: boolean;
   asking: boolean;
   removing: boolean;
@@ -243,25 +307,36 @@ function PlanCard({
   const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
   const chips = planExerciseChips(exercises);
   const template = Boolean(plan.fromTemplateId);
+  const format = circuit ? plan.circuit?.format : undefined;
   return (
     <article className="space-y-3 rounded-card bg-card p-4">
-      {/* O card inteiro (nome, chips e barra) abre o plano, como na prancha. */}
-      <Link href={`/workout/plans/${plan.id}`} className="block space-y-3">
+      {/* O card inteiro (nome, chips e barra) abre o plano, como na prancha. O
+          do circuito abre o editor: o "Começar" embaixo já leva ao relógio. */}
+      <Link
+        href={circuit ? `/workout/circuits/${plan.id}` : `/workout/plans/${plan.id}`}
+        className="block space-y-3"
+      >
         <span className="flex items-start justify-between gap-2">
           <span className="min-w-0">
             <span className="block truncate text-[17px] font-bold text-foreground">
               {plan.name}
             </span>
-            <span className="block text-xs text-faint">{planSummaryLine(exercises)}</span>
+            <span className="block text-xs text-faint">
+              {circuit ? circuitPlanSummary(plan) : planSummaryLine(exercises)}
+            </span>
           </span>
-          <span
-            className={cn(
-              'inline-flex h-[22px] shrink-0 items-center rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
-              template ? 'bg-brand text-brand-foreground' : 'bg-primary-soft text-primary-text',
-            )}
-          >
-            {template ? 'modelo' : 'seu'}
-          </span>
+          {format ? (
+            <CircuitBadge format={format}>{circuitBadge(format).label}</CircuitBadge>
+          ) : (
+            <span
+              className={cn(
+                'inline-flex h-[22px] shrink-0 items-center rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
+                template ? 'bg-brand text-brand-foreground' : 'bg-primary-soft text-primary-text',
+              )}
+            >
+              {template ? 'modelo' : 'seu'}
+            </span>
+          )}
         </span>
         {chips.length > 0 && (
           <span className="flex flex-wrap gap-1.5">
