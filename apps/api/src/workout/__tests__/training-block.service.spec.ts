@@ -335,6 +335,43 @@ describe('TrainingBlockService', () => {
       expect(data.kind).toBe('strength');
     });
 
+    it('monta o bloco de 6 semanas com a última de deload e diz "de 6" (#379)', async () => {
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({ weeklyWorkouts: 3 });
+
+      const criado = await makeService(prisma).create(CTX, { weeks: 6 });
+
+      const data = prisma.trainingBlock.create.mock.calls[0][0].data;
+      expect(data.weeksTotal).toBe(6);
+      expect(data.weeks.create.map((w) => w.focus)).toEqual([
+        'accumulation',
+        'accumulation',
+        'accumulation',
+        'peak',
+        'peak',
+        'deload',
+      ]);
+      expect(data.weeks.create.at(-1)?.weekStart).toBe('2026-02-23');
+      expect(criado.explanation).toContain('Semana 1 de 6');
+      expect(criado.weeks.map((w) => w.label)).toEqual([
+        'Acúmulo 1',
+        'Acúmulo 2',
+        'Acúmulo 3',
+        'Pico 1',
+        'Pico 2',
+        'Deload',
+      ]);
+    });
+
+    it('sem semanas pedidas, continua de 4', async () => {
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({ weeklyWorkouts: 3 });
+
+      await makeService(prisma).create(CTX, {});
+
+      expect(prisma.trainingBlock.create.mock.calls[0][0].data.weeksTotal).toBe(4);
+    });
+
     it('devolve a faixa de repetições do tipo do bloco', async () => {
       congelaEm('2026-01-14T15:00:00Z');
       const prisma = fakePrisma({ weeklyWorkouts: 3 });
@@ -381,6 +418,39 @@ describe('TrainingBlockService', () => {
         data: { status: 'abandoned' },
       });
       expect(criado.id).toBe('block-novo');
+    });
+  });
+
+  describe('preview (Al-T12)', () => {
+    it('mostra as semanas do bloco antes de criar, com a meta semanal e sem gravar', async () => {
+      const prisma = fakePrisma({ weeklyWorkouts: 4 });
+
+      const previa = await makeService(prisma).preview(CTX, { weeks: 3, kind: 'strength' });
+
+      expect(previa).toMatchObject({ weeksTotal: 3, kind: 'strength', repRange: '4-6' });
+      expect(previa.weeks.map((w) => [w.label, w.sessionsTarget])).toEqual([
+        ['Acúmulo', 4],
+        ['Pico', 4],
+        ['Deload', 4],
+      ]);
+      expect(prisma.trainingBlock.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('latest', () => {
+    it('devolve o bloco encerrado mais recente, para a tela oferecer recomeçar', async () => {
+      congelaEm('2026-03-20T15:00:00Z');
+      const prisma = fakePrisma({ blocks: [bloco({ status: 'abandoned' })] });
+
+      const view = await makeService(prisma).latest(CTX);
+
+      expect(view?.status).toBe('abandoned');
+    });
+
+    it('não devolve bloco de outra pessoa', async () => {
+      const prisma = fakePrisma({ blocks: [bloco({ userId: 'user-B' })] });
+
+      expect(await makeService(prisma).latest(CTX)).toBeNull();
     });
   });
 

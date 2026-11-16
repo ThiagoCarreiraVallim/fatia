@@ -72,6 +72,13 @@ describe('apiFetch', () => {
     await expect(apiFetch('/api/foo')).resolves.toBeUndefined();
   });
 
+  it('devolve null em 200 sem corpo: é como o Nest responde um handler que retorna null', async () => {
+    // Ex.: GET /workout/blocks/latest sem bloco nenhum (Al-T12). Antes, o
+    // .json() lançava "Unexpected end of JSON input" e a tela caía no erro.
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 200 }));
+    await expect(apiFetch('/api/foo')).resolves.toBeNull();
+  });
+
   it('usa body.message quando a resposta não é ok', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'Bad input' }, { status: 400 }));
     await expect(apiFetch('/api/foo')).rejects.toThrow('Bad input');

@@ -106,7 +106,7 @@ describe('Novo plano', () => {
     renderPage();
     expect(screen.getByRole('link', { name: /Começar de um modelo/ })).toHaveAttribute(
       'href',
-      '/community',
+      '/workout/templates',
     );
   });
 });

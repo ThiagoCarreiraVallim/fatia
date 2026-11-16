@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { ChevronRight, Layers, Plus, X } from 'lucide-react-native';
 import {
   DEFAULT_PLAN_LINE,
@@ -159,7 +159,7 @@ export default function NewPlanScreen() {
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Começar de um modelo, planos prontos das suas comunidades"
-            onPress={() => router.push('/community')}
+            onPress={() => router.push('/workout/templates' as Href)}
             style={{ borderWidth: 1.5, borderColor: colors.borderStrong }}
             className="flex-row items-center gap-3 rounded-card px-4 py-3.5 active:opacity-80"
           >

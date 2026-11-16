@@ -56,6 +56,8 @@ import { ReminderService } from '../../notifications/reminders/reminder.service'
 import { DashboardService } from '../../progress/dashboard.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
+import { PlanOfferService } from '../../sharing/plan-offer.service';
+import { AgendaService } from '../../workout/agenda.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -3609,6 +3611,127 @@ describe('isolamento entre usuários', () => {
       expect(sessao).toMatchObject({ feeling: 3, checkin: { fatigue: 4, pain: true } });
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain(feitoA);
+    });
+  });
+
+  describe('plano de treino recebido e agenda (#379)', () => {
+    const offers = new PlanOfferService(
+      prisma,
+      new PlanMaterializerService(prisma, exercises),
+      silentNotifications,
+      plans,
+    );
+    const agenda = new AgendaService(prisma);
+    const o = {
+      groupId: '',
+      membershipA: '',
+      offerId: '',
+      versionId: '',
+      planId: '',
+      sessionId: '',
+    };
+
+    beforeAll(async () => {
+      const stamp = `oferta-${Date.now()}`;
+      const grupo = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Treino do Pro',
+          slug: `${stamp}-treino`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      o.groupId = grupo.id;
+      o.membershipA = grupo.memberships.find((m) => m.userId === owned.userA)!.id;
+      await prisma.professionalLink.createMany({
+        data: [owned.userA, owned.userB].map((subjectUserId) => ({
+          subjectUserId,
+          professionalId: owned.pro,
+          groupId: grupo.id,
+          scopes: [ShareScope.WORKOUT],
+        })),
+      });
+      const catalogo = await prisma.exercise.findFirstOrThrow({
+        where: { createdByUserId: null, groupOwned: false },
+        select: { id: true },
+      });
+      const doPro = await prisma.workoutPlan.create({
+        data: {
+          userId: owned.pro,
+          name: 'Inferior',
+          exercises: {
+            create: [{ exerciseId: catalogo.id, order: 0, targetSets: 3, targetReps: '10' }],
+          },
+        },
+      });
+      const hoje = dateInTz(new Date(), TZ);
+      const enviada = await offers.send(owned.pro, o.membershipA, {
+        planId: doPro.id,
+        schedule: 'CALENDAR',
+        startDate: hoje,
+        weeks: 1,
+        weekdays: [1, 2, 3, 4, 5, 6, 7],
+      });
+      o.offerId = enviada.id;
+      o.versionId = enviada.versionId;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: o.groupId } });
+    });
+
+    it('o aluno B não vê, não aceita e não recusa a oferta do aluno A', async () => {
+      expect(await offers.list(owned.userB)).toEqual({ pending: [], accepted: [] });
+      await expect(offers.get(owned.userB, o.offerId)).rejects.toThrow(NotFoundException);
+      await expect(offers.accept(owned.userB, o.offerId, o.versionId, TZ)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(offers.decline(owned.userB, o.offerId, o.versionId)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(offers.undoDecline(owned.userB, o.offerId, o.versionId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect((await offers.get(owned.userA, o.offerId)).shown.status).toBe('PENDING');
+    });
+
+    it('a agenda do aluno A não aparece para o B, e o B não remarca sessão do A', async () => {
+      const aceita = await offers.accept(owned.userA, o.offerId, o.versionId, TZ);
+      o.planId = aceita.planId!;
+      const daA = await agenda.range(owned.userA, TZ);
+      const sessao = daA.days.flatMap((d) => d.items).find((i) => i.kind === 'planned')!;
+      o.sessionId = sessao.id;
+
+      const daB = await agenda.range(owned.userB, TZ);
+      expect(daB.days.flatMap((d) => d.items)).toEqual([]);
+      await expect(
+        agenda.reschedule(owned.userB, TZ, o.sessionId, dateInTz(new Date(), TZ)),
+      ).rejects.toThrow(NotFoundException);
+      // O plano criado pelo aceite é do A: o B não o lê.
+      await expect(plans.findById(owned.userB, o.planId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('o export do A leva a oferta, as versões e a agenda; o do B, nada disso', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      expect(deA.planOffers.map((x) => x.id)).toContain(o.offerId);
+      expect(deA.planOffers.find((x) => x.id === o.offerId)?.versions).toHaveLength(1);
+      expect(deA.plannedSessions.map((x) => x.id)).toContain(o.sessionId);
+      const deB = await conta.exportData(owned.userB);
+      expect(JSON.stringify(deB)).not.toContain(o.offerId);
+      expect(JSON.stringify(deB)).not.toContain(o.sessionId);
     });
   });
 

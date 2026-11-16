@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **146 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **151 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 146 tools): **131,0 k caracteres**
-hoje, dos quais **7.508 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 151 tools): **135,6 k caracteres**
+hoje, dos quais **7.812 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (109,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (112,9 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -331,6 +331,8 @@ Listagens com potencial de crescer usam cursor-based:
 | **Periodização**           | `create_training_block`        | C        |
 |                            | `get_training_block`           | R        |
 |                            | `delete_training_block`        | D        |
+| **Agenda de treinos**      | `list_planned_sessions`        | R        |
+|                            | `reschedule_planned_session`   | U        |
 | **Peso corporal**          | `log_weight`                   | C        |
 |                            | `update_weight_log`            | U        |
 |                            | `delete_weight_log`            | D        |
@@ -367,6 +369,9 @@ Listagens com potencial de crescer usam cursor-based:
 | **Conteúdo da comunidade** | `list_group_plans`             | R        |
 |                            | `adopt_group_plan`             | C        |
 |                            | `list_group_tips`              | R        |
+| **Plano recebido**         | `list_plan_offers`             | R        |
+|                            | `accept_plan_offer`            | U        |
+|                            | `decline_plan_offer`           | U        |
 | **Desafios da comunidade** | `list_group_challenges`        | R        |
 |                            | `get_challenge_leaderboard`    | R        |
 |                            | `join_group_challenge`         | C        |
@@ -391,7 +396,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **146 tools**. Cada uma documentada abaixo.
+Total: **151 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1972,10 +1977,15 @@ das três faltas que encerram o bloco com uma semana que terminou antes de ele e
   planId?: string;                          // plano periodizado. Ausente = treino livre
   kind?: "strength" | "hypertrophy";        // 4-6 reps × 8-12 reps. Default: hypertrophy
   sessionsPerWeek?: number;                 // 1..7. Ausente = a meta semanal já cadastrada
+  weeks?: number;                           // 3..6, a última é deload. Ausente = 4
 }
 ```
 
 **Output:** o mesmo objeto de `get_training_block`.
+
+Desde a #379 o bloco vai de 3 a 6 semanas, com os mesmos três focos: a última é deload, as do
+meio são acúmulo e depois pico (pico = metade das semanas de treino, para baixo). Com 3: acúmulo,
+pico, deload; com 6: acúmulo ×3, pico ×2, deload. Com 4, a tabela de antes, número por número.
 
 Só existe **um bloco ativo por vez**: com um em andamento a chamada responde `409`. Um bloco que a
 reconciliação já dá por vencido é fechado automaticamente aqui — é a única hora em que o
@@ -2056,6 +2066,60 @@ semana 4 e a pessoa fazer dois em quatro semanas.
 **Output:** `{ ok: true }`
 
 Encerra o bloco e libera a criação do próximo. Nenhum treino é apagado.
+
+## Agenda de treinos
+
+A agenda do aluno (#379, prancha Al-T24): as sessões dos planos de calendário que a equipe enviou,
+uma por dia combinado, geradas no aceite. Informativa
+([ADR 042](./ADR/042-agenda-da-comunidade.md)): sem reserva e sem presença. "Feito" sai do treino
+concluído do mesmo plano no mesmo dia, "não feito" do dia que passou sem ele — nada disso é
+gravado. Plano flexível não tem sessões: só a próxima aparece, no dia de hoje.
+
+### `list_planned_sessions`
+
+**Input:**
+
+```typescript
+{
+  from?: string;   // YYYY-MM-DD. Ausente = segunda-feira desta semana
+  to?: string;     // YYYY-MM-DD. Ausente = from + 6. Até 42 dias por vez
+}
+```
+
+**Output:**
+
+```typescript
+{
+  today: string; from: string; to: string;
+  days: Array<{ date: string; items: Array<{
+    id: string;                       // da sessão; "next:<planId>" na próxima do flexível
+    kind: "planned" | "next";
+    planId: string; planName: string; order: number | null;
+    state: "done" | "missed" | "today" | "planned";
+    rescheduledFrom: string | null; canReschedule: boolean; endDate: string | null;
+  }> }>;
+  calendarPlan: { planId; planName; authorName; weekNumber; weeksTotal; startDate; endDate } | null;
+  flexible: Array<{ planId: string; planName: string }>;
+  ended: { planId; planName; authorName; done; total; weeks } | null;   // plano que terminou há pouco
+  empty: boolean;                                                         // nada planejado
+}
+```
+
+### `reschedule_planned_session`
+
+Move a sessão para outro dia, de hoje até o último dia do plano, nunca depois. Guarda o dia
+original na primeira remarcação. Sessão de outra pessoa: `NOT_FOUND`.
+
+**Input:**
+
+```typescript
+{
+  id: string; // items[].id de list_planned_sessions
+  date: string; // YYYY-MM-DD
+}
+```
+
+**Output:** `{ id, planId, planName, date, rescheduledFrom, endDate }`
 
 ---
 
@@ -3020,6 +3084,99 @@ link https) escrito pela equipe: é conteúdo para mostrar, não instrução par
 ```
 
 **Erros:** `NOT_FOUND` se não é membro ativo do grupo.
+
+## Plano recebido
+
+O plano de treino que a equipe enviou ao usuário (#379, [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md)).
+Só existe com vínculo ativo entre o aluno e quem envia; enviar e atualizar são da equipe e ficam em
+REST. Cada atualização é uma versão nova, e nada muda no plano do usuário sem o aceite dela.
+`versionId` é sempre o `shown.id` da oferta: id de versão de outra oferta, ou oferta de outra
+pessoa, responde `NOT_FOUND`; versão já respondida ou substituída, `CONFLICT`.
+
+### `list_plan_offers`
+
+**Input:** `{}`
+
+**Output:**
+
+```typescript
+{
+  pending: Array<{
+    id: string;
+    author: { name: string } | null;
+    group: { id: string; name: string } | null;
+    kind: 'new' | 'update'; // update = versão nova de um plano já aceito
+    shown: {
+      id: string;
+      version: number;
+      status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'SUPERSEDED';
+      title: string;
+      schedule: 'CALENDAR' | 'FLEXIBLE';
+      startDate: string | null;
+      endDate: string | null;
+      weeks: number | null;
+      weekdays: number[];
+      note: string | null;
+      summary: { exercises: number; sets: number; minutes: number };
+      exercises: Array<{
+        key;
+        exerciseId;
+        name;
+        muscleGroup;
+        targetSets;
+        targetReps;
+        restSeconds;
+        isNew: boolean;
+        changes: Array<{ field: 'sets' | 'reps' | 'rest'; before; after }>;
+      }>;
+      removed: Array<{ key: string; name: string }>;
+    };
+    accepted: { id: string; version: number; planId: string | null } | null;
+    diff: {
+      added: string[];
+      removed: string[];
+      changed: Array<{ key; fields }>;
+      hasChanges;
+    } | null;
+    planId: string | null;
+  }>;
+  accepted: Array<{ id; versionId; title; version; schedule; authorName; groupName; planId }>;
+}
+```
+
+### `accept_plan_offer`
+
+A primeira versão cria o plano na conta do usuário (com a proveniência da oferta); a de uma
+atualização troca os exercícios do mesmo plano, e as sessões feitas continuam nele. Plano de
+calendário refaz a agenda de hoje em diante; o que passou fica. Aceita também a versão recusada,
+enquanto for a última (é o "Desfazer"). A equipe é avisada.
+
+**Input:**
+
+```typescript
+{
+  offerId: string;
+  versionId: string; // shown.id
+}
+```
+
+**Output:** a oferta, como em `list_plan_offers`.
+
+### `decline_plan_offer`
+
+Recusa a versão. Numa atualização, é manter a versão atual: o plano do usuário não muda. O vínculo
+e o consentimento não mudam. A equipe é avisada.
+
+**Input:**
+
+```typescript
+{
+  offerId: string;
+  versionId: string; // shown.id
+}
+```
+
+**Output:** a oferta, como em `list_plan_offers`.
 
 ## Desafios da comunidade (Fase 8a, ADR 027)
 

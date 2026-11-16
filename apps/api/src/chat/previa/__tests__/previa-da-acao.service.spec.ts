@@ -19,6 +19,9 @@ import { AcceptNutritionPlanTool } from '../../../nutrition/mcp/accept-nutrition
 import { LogPlanMealTool } from '../../../nutrition/mcp/log-plan-meal.tool';
 import { SwapPlanItemTool } from '../../../nutrition/mcp/swap-plan-item.tool';
 import { UndoPlanSwapTool } from '../../../nutrition/mcp/undo-plan-swap.tool';
+import { AcceptPlanOfferTool } from '../../../sharing/mcp/accept-plan-offer.tool';
+import { DeclinePlanOfferTool } from '../../../sharing/mcp/decline-plan-offer.tool';
+import { ReschedulePlannedSessionTool } from '../../../workout/mcp/reschedule-planned-session.tool';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
 /**
@@ -51,6 +54,9 @@ describe('PreviaDaAcaoService', () => {
     LogPlanMealTool,
     SwapPlanItemTool,
     UndoPlanSwapTool,
+    AcceptPlanOfferTool,
+    DeclinePlanOfferTool,
+    ReschedulePlannedSessionTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -455,6 +461,88 @@ describe('PreviaDaAcaoService', () => {
       expect(alheia.valida).toBe(false);
       expect(JSON.stringify(alheia)).not.toMatch(/Pão|Tapioca|Café/);
     }
+  });
+
+  it('plano recebido e agenda (#379): o título, a versão e a sessão, só para o dono', async () => {
+    const helena = await prisma.user.create({
+      data: {
+        logtoSub: `previa-helena-${Date.now()}`,
+        email: `previa-helena-${Date.now()}@test.local`,
+        name: 'Helena',
+        timezone: TZ,
+      },
+    });
+    const offer = await prisma.planOffer.create({
+      data: {
+        userId: dono.id,
+        authorId: helena.id,
+        versions: {
+          create: [
+            {
+              version: 1,
+              status: 'SUPERSEDED',
+              title: 'Inferior',
+              snapshot: {},
+              snapshotVersion: 1,
+              schedule: 'FLEXIBLE',
+            },
+            {
+              version: 2,
+              status: 'PENDING',
+              title: 'Inferior',
+              snapshot: {},
+              snapshotVersion: 1,
+              schedule: 'FLEXIBLE',
+            },
+          ],
+        },
+      },
+      include: { versions: { orderBy: { version: 'asc' } } },
+    });
+    const v2 = offer.versions[1]!;
+    const plano = await prisma.workoutPlan.create({ data: { userId: dono.id, name: 'Superior' } });
+    const sessao = await prisma.plannedSession.create({
+      data: { userId: dono.id, planId: plano.id, date: '2026-09-24', order: 3 },
+    });
+
+    const casos: Array<
+      [string, Record<string, unknown>, Array<{ rotulo: string; valor: string }>]
+    > = [
+      [
+        'accept_plan_offer',
+        { offerId: offer.id, versionId: v2.id },
+        [
+          { rotulo: 'Plano recebido', valor: 'Inferior, de Helena' },
+          { rotulo: 'Versão', valor: 'Inferior v2' },
+        ],
+      ],
+      [
+        'decline_plan_offer',
+        { offerId: offer.id, versionId: v2.id },
+        [
+          { rotulo: 'Plano recebido', valor: 'Inferior, de Helena' },
+          { rotulo: 'Versão', valor: 'Inferior v2' },
+        ],
+      ],
+      [
+        'reschedule_planned_session',
+        { id: sessao.id, date: '2026-09-25' },
+        [
+          { rotulo: 'Sessão da agenda', valor: 'Superior, sessão 3, ontem' },
+          { rotulo: 'Dia', valor: 'hoje' },
+        ],
+      ],
+    ];
+    for (const [tool, args, linhas] of casos) {
+      await expect(previas.previa(dono, tool, args, AGORA)).resolves.toEqual({
+        valida: true,
+        linhas,
+      });
+      const alheia = await previas.previa(outro, tool, args, AGORA);
+      expect(alheia.valida).toBe(false);
+      expect(JSON.stringify(alheia)).not.toMatch(/Inferior|Superior|Helena/);
+    }
+    await prisma.user.delete({ where: { id: helena.id } });
   });
 
   it('copiar dia: de quando para quando', async () => {

@@ -84,10 +84,14 @@ vi.mock('@fatia/api-client', async () => {
       startSession: vi.fn(),
       getActiveBlock: vi.fn().mockResolvedValue(null),
     },
+    planOffersApi: {
+      ...actual.planOffersApi,
+      list: vi.fn().mockResolvedValue({ pending: [], accepted: [] }),
+    },
   };
 });
 
-import { workoutApi } from '@fatia/api-client';
+import { planOffersApi, workoutApi } from '@fatia/api-client';
 
 const getActiveSession = vi.mocked(workoutApi.getActiveSession);
 const getLastSet = vi.mocked(workoutApi.getLastSet);
@@ -693,5 +697,38 @@ describe('WorkoutPage — sem sessão aberta', () => {
         nodes[i - 1]!.compareDocumentPosition(nodes[i]!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
+  });
+
+  it('o plano recebido da equipe avisa acima da semana; a agenda fica no topo (#379)', async () => {
+    getActiveSession.mockResolvedValue(null);
+    listPlans.mockResolvedValue([]);
+    getWeeklyMuscleSummary.mockResolvedValue(weekSummary());
+    getLastSession.mockResolvedValue(null);
+    vi.mocked(planOffersApi.list).mockResolvedValueOnce({
+      pending: [
+        {
+          id: 'o1',
+          versionId: 'v1',
+          title: 'Inferior',
+          version: 1,
+          kind: 'new',
+          status: 'PENDING',
+          schedule: 'CALENDAR',
+          authorName: 'Helena Personal',
+          groupName: 'Academia Demo',
+          sentAt: '2026-08-01T12:00:00.000Z',
+          planId: null,
+          href: '/workout/offers/o1',
+        },
+      ],
+      accepted: [],
+    });
+    renderPage();
+
+    const notice = await screen.findByRole('link', { name: /Helena enviou um plano/ });
+    expect(notice).toHaveAttribute('href', '/workout/offers/o1');
+    const week = await screen.findByRole('region', { name: 'Semana' });
+    expect(notice.compareDocumentPosition(week) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Agenda' })).toHaveAttribute('href', '/workout/agenda');
   });
 });

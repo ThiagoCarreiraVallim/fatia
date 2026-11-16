@@ -228,6 +228,46 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
       expect(lista[0]).not.toHaveProperty('canEdit');
     });
 
+    it('Modelos (#379): os de treino publicados de todas as minhas comunidades, por comunidade', async () => {
+      const a = await comunidade();
+      const b = await comunidade();
+      const fora = await comunidade();
+      // A mesma pessoa é membro de A e de B, e não de "fora".
+      await prisma.groupMembership.create({
+        data: { groupId: b.groupId, userId: a.membro, role: 'MEMBER', status: 'ACTIVE' },
+      });
+      const publicar = async (c: { groupId: string; dono: string }) => {
+        const t = await content.createWorkoutTemplate(c.dono, c.groupId, {
+          planId: await planoDe(c.dono),
+        });
+        await content.setTemplatePublished(c.dono, c.groupId, t.id, true);
+        return t.id;
+      };
+      const ta = await publicar(a);
+      const tb = await publicar(b);
+      await publicar(fora);
+      // Rascunho não aparece.
+      await content.createWorkoutTemplate(a.prof, a.groupId, { planId: await planoDe(a.prof) });
+
+      const grupos = await content.listWorkoutTemplatesForMe(a.membro);
+      expect(grupos.map((g) => g.group.id).sort()).toEqual([a.groupId, b.groupId].sort());
+      const deA = grupos.find((g) => g.group.id === a.groupId)!;
+      expect(deA.templates).toEqual([
+        expect.objectContaining({ id: ta, exerciseCount: 3, setCount: 10, adoptedPlanId: null }),
+      ]);
+      expect(grupos.find((g) => g.group.id === b.groupId)!.templates.map((t) => t.id)).toEqual([
+        tb,
+      ]);
+
+      const adotado = await content.adopt(a.membro, a.groupId, ta);
+      const depois = await content.listWorkoutTemplatesForMe(a.membro);
+      expect(depois.find((g) => g.group.id === a.groupId)!.templates[0]!.adoptedPlanId).toBe(
+        adotado.planId,
+      );
+      // Quem não é membro de nenhuma não vê nada.
+      expect(await content.listWorkoutTemplatesForMe(await pessoa())).toEqual([]);
+    });
+
     it('id de outra comunidade não abre, mesmo publicado', async () => {
       const a = await comunidade();
       const b = await comunidade();

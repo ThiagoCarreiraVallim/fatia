@@ -256,6 +256,8 @@ const FOCUS_ROUTES = [
   '/community/new',
   // Al-T19: o Novo plano fecha no X e tem o "Criar plano" embaixo, sem a barra.
   '/workout/plans/new',
+  // Al-T12: o Bloco de treino fecha no X e tem o "Começar bloco" embaixo, sem a barra.
+  '/workout/block',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -338,6 +340,10 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
+  { pattern: '/workout/offers/:id', title: 'Plano recebido', parent: '/workout' },
+  { pattern: '/workout/agenda', title: 'Agenda', parent: '/workout' },
+  { pattern: '/workout/templates', title: 'Modelos das comunidades', parent: '/workout/plans' },
+  { pattern: '/workout/block', title: 'Bloco de treino', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
   { pattern: '/workout/session/:id/edit', title: 'Treino atual', parent: '/workout' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.

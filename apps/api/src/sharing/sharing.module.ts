@@ -52,6 +52,11 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
 import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
 import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
 import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
+import { PlanOfferService } from './plan-offer.service';
+import { PlanOfferController } from './plan-offer.controller';
+import { ListPlanOffersTool } from './mcp/list-plan-offers.tool';
+import { AcceptPlanOfferTool } from './mcp/accept-plan-offer.tool';
+import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
 
 /**
  * Toda a lógica de grupo e vínculo profissional do produto (ADR 014).
@@ -111,6 +116,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ChallengeController,
     PostController,
     ModerationController,
+    PlanOfferController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -122,6 +128,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     MembershipService,
     InviteService,
     PlanMaterializerService,
+    PlanOfferService,
     ContentService,
     GroupExerciseService,
     GroupAgentService,
@@ -149,6 +156,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ListGroupPostsTool,
     CreateGroupPostTool,
     CommentOnGroupPostTool,
+    ListPlanOffersTool,
+    AcceptPlanOfferTool,
+    DeclinePlanOfferTool,
   ],
   exports: [
     ProfessionalAccessService,
@@ -163,6 +173,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     GroupExerciseService,
     GroupAgentService,
     ChallengeService,
+    PlanOfferService,
   ],
 })
 export class SharingModule {}

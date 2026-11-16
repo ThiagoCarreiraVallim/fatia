@@ -37,6 +37,8 @@ type MockPrisma = {
   workoutPlan: { findMany: jest.Mock };
   nutrientTarget: { findMany: jest.Mock };
   inboxNotice: { count: jest.Mock };
+  planOffer: { findMany: jest.Mock };
+  professionalLink: { findMany: jest.Mock };
 };
 
 /**
@@ -81,6 +83,8 @@ const makePrisma = (): MockPrisma => ({
   workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
   nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { count: jest.fn().mockResolvedValue(0) },
+  planOffer: { findMany: jest.fn().mockResolvedValue([]) },
+  professionalLink: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const makeStepLogs = (): MockStepLogs => ({ getStepsForDate: jest.fn() });
@@ -488,6 +492,75 @@ describe('DashboardService', () => {
         expect(prisma.inboxNotice.count).toHaveBeenCalledWith({
           where: { userId: 'user-A', readAt: null },
         });
+      });
+
+      it('plano recebido da equipe (#379): o mais recente no cartão, os outros no "Para fazer"', async () => {
+        const oferta = (id: string, title: string, version: number, weeks: number | null) => ({
+          id,
+          author: { name: 'Helena Personal' },
+          versions: [
+            { id: `${id}-v`, title, version, schedule: weeks ? 'CALENDAR' : 'FLEXIBLE', weeks },
+          ],
+        });
+        prisma.professionalLink.findMany.mockResolvedValue([
+          { professionalId: 'helena', groupId: 'g1' },
+        ]);
+        prisma.planOffer.findMany.mockResolvedValue([
+          oferta('o1', 'Inferior', 2, 4),
+          oferta('o2', 'Push', 1, null),
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(prisma.professionalLink.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { subjectUserId: 'user-A', revokedAt: null } }),
+        );
+        // Só as ofertas de quem ainda tem vínculo ativo, na comunidade em que enviou.
+        expect(prisma.planOffer.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              userId: 'user-A',
+              OR: [{ authorId: 'helena', groupId: 'g1' }],
+            }),
+          }),
+        );
+        expect(result.receivedPlan).toEqual({
+          id: 'o1',
+          title: 'Novo treino de Helena',
+          subtitle: 'Inferior v2 · 4 semanas',
+          fromName: 'Helena Personal',
+          href: '/workout/offers/o1',
+        });
+        expect(result.todo).toEqual({
+          count: 1,
+          items: [
+            {
+              kind: 'plan_offer',
+              id: 'o2',
+              title: 'Push',
+              subtitle: 'enviado por Helena · flexível',
+              href: '/workout/offers/o2',
+            },
+          ],
+        });
+      });
+
+      it('plano recebido sem vínculo ativo com quem enviou não aparece no Hoje', async () => {
+        prisma.planOffer.findMany.mockResolvedValue([
+          {
+            id: 'o1',
+            author: { name: 'Helena Personal' },
+            versions: [
+              { id: 'v', title: 'Inferior', version: 1, schedule: 'FLEXIBLE', weeks: null },
+            ],
+          },
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(prisma.planOffer.findMany).not.toHaveBeenCalled();
+        expect(result.receivedPlan).toBeNull();
+        expect(result.todo).toEqual({ count: 0, items: [] });
       });
 
       it('"Para fazer", treino recebido e evento: contrato pronto, vazio até as issues deles', async () => {

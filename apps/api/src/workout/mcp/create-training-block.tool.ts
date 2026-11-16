@@ -20,8 +20,8 @@ export class CreateTrainingBlockTool implements McpToolDef {
 
   readonly hostedInference = false;
   readonly description =
-    'Monta um bloco de periodização de 4 semanas (3 de acúmulo/pico + 1 de deload) a partir da segunda-feira desta semana. Os fatores de cada semana multiplicam a prescrição de carga, nunca uma carga absoluta. Só pode haver um bloco ativo por vez — se já houver um em andamento, encerre-o antes. ' +
-    'Exemplo: {"planId":"3f7c1c2e-9a4b-4b1e-8f0d-2c5a6b7d8e90","kind":"hypertrophy","sessionsPerWeek":4}';
+    'Monta um bloco de periodização de 3 a 6 semanas (4 por padrão): acúmulo, depois pico, e a última de deload, a partir da segunda-feira desta semana (ou da próxima). Os fatores de cada semana multiplicam a prescrição de carga, nunca uma carga absoluta. Só pode haver um bloco ativo por vez — se já houver um em andamento, encerre-o antes. ' +
+    'Exemplo: {"planId":"3f7c1c2e-9a4b-4b1e-8f0d-2c5a6b7d8e90","kind":"hypertrophy","sessionsPerWeek":4,"weeks":6}';
   readonly inputSchema = {
     planId: z
       .string()
@@ -41,10 +41,22 @@ export class CreateTrainingBlockTool implements McpToolDef {
       .max(7)
       .optional()
       .describe('Meta de sessões por semana. Ausente = a meta semanal já cadastrada nas metas'),
+    weeks: z
+      .number()
+      .int()
+      .min(3)
+      .max(6)
+      .optional()
+      .describe('Quantas semanas, de 3 a 6; a última é deload. Padrão: 4'),
   } as const;
 
   execute(
-    input: { planId?: string; kind?: 'strength' | 'hypertrophy'; sessionsPerWeek?: number },
+    input: {
+      planId?: string;
+      kind?: 'strength' | 'hypertrophy';
+      sessionsPerWeek?: number;
+      weeks?: number;
+    },
     { userId, timezone }: McpToolContext,
   ) {
     return this.blocks.create({ userId, timezone }, input);

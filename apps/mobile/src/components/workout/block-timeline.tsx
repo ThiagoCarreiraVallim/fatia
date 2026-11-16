@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ const FOCO_CURTO: Record<TrainingBlockWeek['focus'], string> = {
 export function BlockTimeline() {
   const confirm = useConfirm();
   const qc = useQueryClient();
+  const router = useRouter();
   const [planId, setPlanId] = useState<string | undefined>(undefined);
 
   const block = useQuery({
@@ -88,6 +90,13 @@ export function BlockTimeline() {
         >
           MONTAR BLOCO DE 4 SEMANAS
         </Button>
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => router.push('/workout/block')}
+          className="min-h-[44px] items-center justify-center"
+        >
+          <Text className="text-xs font-bold text-primary">Outro tamanho: de 3 a 6 semanas</Text>
+        </Pressable>
       </View>
     );
   }

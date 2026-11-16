@@ -151,5 +151,8 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
     throw new ApiError(message, res.status, body);
   }
 
-  return res.json() as Promise<T>;
+  // Handler do Nest que retorna `null` responde 200 sem corpo (ex.: o último
+  // bloco de quem nunca teve um). Corpo vazio vira `null`, não erro de parse.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }

@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
+import { useRouter, type Href } from 'expo-router';
+import { CalendarDays, ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
 import {
   blockRow,
+  initialsOf,
   planCardInfo,
+  planOffersApi,
+  receivedOfferBanner,
   planExercisePreview,
   planMuscleBars,
   QUICK_TEMPLATES,
@@ -259,7 +262,7 @@ function BlockRow() {
             {row ? row.title : 'Periodização em blocos'}
           </Text>
           <Text className="text-xs text-muted-foreground">
-            {row ? row.detail : '4 semanas planejadas, com deload no fim'}
+            {row ? row.detail : 'de 3 a 6 semanas, com deload no fim'}
           </Text>
         </View>
         {row ? (
@@ -335,6 +338,13 @@ export default function WorkoutScreen() {
     queryFn: () => workoutApi.listPlans(),
   });
 
+  // Plano recebido da equipe esperando resposta (#379): o aviso no topo.
+  const offers = useQuery({
+    queryKey: ['plan-offers'],
+    queryFn: () => planOffersApi.list(),
+  });
+  const pendingOffers = offers.data?.pending ?? [];
+
   const planWidth = Math.min(240, Math.round((width - 40) * 0.62));
   const quickCardWidth = Math.round((width - 40) * 0.7);
 
@@ -342,6 +352,7 @@ export default function WorkoutScreen() {
     <Screen
       refreshing={active.isRefetching || plans.isRefetching || summary.isRefetching}
       onRefresh={() => {
+        void offers.refetch();
         void active.refetch();
         void plans.refetch();
         void summary.refetch();
@@ -349,6 +360,9 @@ export default function WorkoutScreen() {
     >
       <View className="gap-6 px-5 pb-4 pt-2">
         <TabHeader title="Treino">
+          <HeaderButton label="Agenda" onPress={() => router.push('/workout/agenda' as Href)}>
+            <CalendarDays size={20} color={colors.foreground} />
+          </HeaderButton>
           <HeaderButton
             label="Histórico de treinos"
             onPress={() => router.push('/workout/history')}
@@ -359,8 +373,44 @@ export default function WorkoutScreen() {
             <Plus size={22} color={colors.foreground} />
           </HeaderButton>
         </TabHeader>
-        {/* TODO(#379): o aviso "<treinador> enviou um plano · toque para ver e
-            aceitar" entra aqui, acima da semana, quando houver plano recebido. */}
+        {pendingOffers.map((offer) => {
+          const banner = receivedOfferBanner(offer);
+          return (
+            <Pressable
+              key={offer.id}
+              accessibilityRole="link"
+              accessibilityLabel={`${banner.title}. ${banner.sub}`}
+              onPress={() => router.push(offer.href as Href)}
+              className="flex-row items-center gap-3 rounded-card bg-card px-3.5 py-3 active:opacity-80"
+              style={{ borderWidth: 1, borderColor: `${colors.water}59` }}
+            >
+              <View
+                className="h-7 w-7 items-center justify-center rounded-full"
+                style={{ backgroundColor: `${colors.water}2e` }}
+              >
+                <Text className="font-sans-extrabold text-[11px]" style={{ color: colors.water }}>
+                  {initialsOf(offer.authorName)}
+                </Text>
+              </View>
+              <View className="min-w-0 flex-1">
+                <Text numberOfLines={1} className="font-sans-bold text-sm text-foreground">
+                  {banner.title}
+                </Text>
+                <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                  {banner.sub}
+                </Text>
+              </View>
+              <View
+                className="h-[22px] justify-center rounded-pill px-[9px]"
+                style={{ backgroundColor: `${colors.info}1a` }}
+              >
+                <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-info">
+                  {offer.kind === 'update' ? 'nova versão' : 'novo'}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
 
         {summary.data?.week ? (
           <WeekRow week={summary.data.week} activeSessionId={active.data?.id} />

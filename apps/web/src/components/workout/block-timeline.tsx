@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
@@ -83,6 +84,12 @@ export function BlockTimeline() {
         >
           {criar.isPending ? 'MONTANDO...' : 'MONTAR BLOCO DE 4 SEMANAS'}
         </Button>
+        <Link
+          href="/workout/block"
+          className="mt-2 block text-center text-xs font-bold text-primary"
+        >
+          Outro tamanho: de 3 a 6 semanas
+        </Link>
       </div>
     );
   }
@@ -140,7 +147,11 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
 
       <p className="mt-3 text-sm text-foreground">{block.explanation}</p>
 
-      <ol className="mt-3 grid grid-cols-4 gap-2">
+      {/* Uma coluna por semana: o bloco tem de 3 a 6 (#379). */}
+      <ol
+        className="mt-3 grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${block.weeks.length}, minmax(0, 1fr))` }}
+      >
         {block.weeks.map((week) => (
           <li key={week.weekNumber} data-testid={`bloco-semana-${week.weekNumber}`}>
             <div

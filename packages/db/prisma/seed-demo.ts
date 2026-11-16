@@ -534,6 +534,7 @@ async function seedCommunity(demoUserId: string) {
 
   const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
   const planoAlimentar = await seedNutritionPlan(demoUserId, profissional.id, group.id);
+  const planoDeTreino = await seedPlanOffer(demoUserId, profissional.id, group.id);
   const catalogo = await seedCommunityExercises(group.id, dona.id, profissional.id);
   const agente = await seedCommunityAgent(group.id);
   const desafios = await seedCommunityChallenges(group.id, dona.id, [
@@ -554,7 +555,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${planoAlimentar}, ${catalogo}, ${agente}, ${desafios}, ${mural}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${planoAlimentar}, ${planoDeTreino}, ${catalogo}, ${agente}, ${desafios}, ${mural}.`,
   );
 }
 
@@ -1234,6 +1235,63 @@ async function seedCommunityExercises(groupId: string, donaId: string, profissio
     });
   }
   return `${supino ? 2 : 1} exercícios no catálogo da comunidade`;
+}
+
+/**
+ * O plano de treino da Helena para o demo (#379, prancha Al-T2): o Inferior,
+ * esperando o aceite, de calendário (4 semanas, segunda e quinta, a partir de
+ * hoje). O envio de verdade exige vínculo ativo (`PlanOfferService.send`); o
+ * demo não está na comunidade, então a oferta entra direto, como o plano
+ * alimentar. Aceitar pela tela cria o plano e as sessões da agenda.
+ */
+async function seedPlanOffer(demoUserId: string, helenaId: string, groupId: string) {
+  await prisma.planOffer.deleteMany({ where: { userId: demoUserId } });
+  const itens: Array<[string, number, string, number]> = [
+    ['Agachamento Goblet', 4, '8', 120],
+    ['Leg Press', 3, '10-12', 90],
+    ['Elevação de Quadril', 3, '10', 90],
+    ['Agachamento no Smith', 4, '15', 60],
+  ];
+  const exercises = [];
+  for (const [order, [nome, targetSets, targetReps, restSeconds]] of itens.entries()) {
+    const ex = await prisma.exercise.findFirst({
+      where: { name: nome, createdByUserId: null, groupOwned: false },
+      select: { id: true },
+    });
+    if (ex) {
+      exercises.push({
+        source: 'catalog',
+        catalogExerciseId: ex.id,
+        order,
+        targetSets,
+        targetReps,
+        restSeconds,
+      });
+    }
+  }
+  if (exercises.length === 0) return 'plano de treino pulado (catálogo vazio)';
+  await prisma.planOffer.create({
+    data: {
+      userId: demoUserId,
+      authorId: helenaId,
+      groupId,
+      versions: {
+        create: {
+          version: 1,
+          title: 'Inferior',
+          snapshot: { version: 1, name: 'Inferior', exercises },
+          snapshotVersion: 1,
+          schedule: 'CALENDAR',
+          startDate: localDate(0),
+          weeks: 4,
+          weekdays: [1, 4],
+          note: 'Duas vezes por semana, segunda e quinta. Capriche na descida do agachamento.',
+          sentAt: localInstant(0, 9, 12),
+        },
+      },
+    },
+  });
+  return `plano de treino da Helena esperando aceite (${exercises.length} exercícios)`;
 }
 
 main()

@@ -51,9 +51,11 @@ import {
  * destrutiva nem de intenção): muda o braço A.
  * A #377 acrescentou a sensação e as respostas pós-treino a `finish_workout_session`: muda o
  * braço A. As duas chegaram juntas no merge da main na #378.
+ * A #379 acrescentou cinco tools do aluno (plano recebido e agenda, nenhuma destrutiva nem de
+ * intenção) e `weeks` em `create_training_block`: muda o braço A.
  */
 
-const SHA_ENTIDADE = '0882c740a22eeda0e16c81e7163a2f59092d114056e055f0201c0afeedd3fe33';
+const SHA_ENTIDADE = '364222343d026cfd1bcb2cd4e3b57af9fdafbeec26d0422292f289526ce80994';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

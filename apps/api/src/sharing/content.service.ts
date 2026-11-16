@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   GroupRole,
+  MembershipStatus,
   PlanTemplateKind,
   Prisma,
   type GroupPlanTemplate,
@@ -102,6 +103,20 @@ export interface TemplateView {
   /** Só para a equipe: dá para atualizar a partir do plano de origem. */
   sourcePlanId?: string | null;
   canEdit?: boolean;
+}
+
+/** Um grupo da tela Modelos (Al-T23): a comunidade e os modelos de treino dela. */
+export interface WorkoutTemplatesByGroup {
+  group: { id: string; name: string };
+  templates: Array<{
+    id: string;
+    title: string;
+    level: string | null;
+    authorName: string;
+    exerciseCount: number;
+    setCount: number;
+    adoptedPlanId: string | null;
+  }>;
 }
 
 export interface TipView {
@@ -430,6 +445,55 @@ export class ContentService {
       orderBy: { publishedAt: 'desc' },
     });
     return Promise.all(rows.map((r) => this.templateView(r, userId, null)));
+  }
+
+  /**
+   * Os modelos de treino publicados de todas as comunidades em que a pessoa é
+   * membro ativo, agrupados por comunidade (Al-T23, #379). Só a lista: o
+   * detalhe e a adoção continuam pela comunidade do modelo.
+   */
+  async listWorkoutTemplatesForMe(userId: string): Promise<WorkoutTemplatesByGroup[]> {
+    const memberships = await this.prisma.groupMembership.findMany({
+      where: { userId, status: MembershipStatus.ACTIVE },
+      select: { group: { select: { id: true, name: true } } },
+      orderBy: { joinedAt: 'asc' },
+    });
+    if (memberships.length === 0) return [];
+    const groupIds = memberships.map((m) => m.group.id);
+    const rows = await this.prisma.groupPlanTemplate.findMany({
+      where: {
+        groupId: { in: groupIds },
+        kind: PlanTemplateKind.WORKOUT,
+        publishedAt: { not: null },
+      },
+      include: { author: { select: { name: true } } },
+      orderBy: { publishedAt: 'desc' },
+    });
+    const adopted = await this.prisma.workoutPlan.findMany({
+      where: { userId, fromTemplateId: { in: rows.map((r) => r.id) } },
+      select: { id: true, fromTemplateId: true },
+    });
+    const adoptedOf = new Map(adopted.map((p) => [p.fromTemplateId, p.id]));
+    return memberships
+      .map(({ group }) => ({
+        group,
+        templates: rows
+          .filter((r) => r.groupId === group.id)
+          .map((r) => {
+            const snap = planSnapshotSchema.safeParse(r.snapshot);
+            const items = snap.success ? snap.data.exercises : [];
+            return {
+              id: r.id,
+              title: r.title,
+              level: r.level,
+              authorName: r.author?.name ?? TEAM_AUTHOR,
+              exerciseCount: items.length,
+              setCount: items.reduce((n, e) => n + e.targetSets, 0),
+              adoptedPlanId: adoptedOf.get(r.id) ?? null,
+            };
+          }),
+      }))
+      .filter((g) => g.templates.length > 0);
   }
 
   async getTemplateForMember(userId: string, groupId: string, id: string): Promise<TemplateView> {

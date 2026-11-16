@@ -8,11 +8,12 @@ import {
   weekStartInTz,
 } from '../progress/helpers/date-tz';
 import {
-  BLOCK_TEMPLATE,
   BLOCK_WEEKS_TOTAL,
   KIND_LABEL,
   REP_RANGE_BY_KIND,
+  blockTemplate,
   describeWeek,
+  weekLabel,
   type BlockFocus,
   type BlockKind,
 } from './helpers/block-template';
@@ -23,7 +24,7 @@ import {
   type DeloadSignal,
 } from './helpers/detect-deload-signal';
 import { reconcileBlock, type ReconciledWeek } from './helpers/reconcile-block';
-import type { CreateTrainingBlockDto } from './dto/training-block.dto';
+import type { CreateTrainingBlockDto, TrainingBlockPreviewDto } from './dto/training-block.dto';
 
 /** Meta semanal de sessões quando o usuário não definiu `UserGoals.weeklyWorkouts`. */
 const DEFAULT_SESSIONS_PER_WEEK = 3;
@@ -46,7 +47,44 @@ export class TrainingBlockService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Cria o bloco de 4 semanas ancorado na segunda-feira em que a semana 1 de fato
+   * As semanas que o bloco teria (Al-T12), antes de criar: foco, fatores e a
+   * meta semanal. A tela desenha o gráfico com isto, e a regra fica num lugar
+   * só (`blockTemplate`). Não grava.
+   */
+  async preview(ctx: BlockUserCtx, dto: TrainingBlockPreviewDto) {
+    const weeksTotal = dto.weeks ?? BLOCK_WEEKS_TOTAL;
+    const kind = dto.kind ?? 'hypertrophy';
+    const template = blockTemplate(weeksTotal);
+    const sessionsTarget = dto.sessionsPerWeek ?? (await this.weeklyWorkoutsGoal(ctx.userId));
+    return {
+      kind,
+      kindLabel: KIND_LABEL[kind],
+      repRange: REP_RANGE_BY_KIND[kind],
+      weeksTotal,
+      weeks: template.map((week) => ({
+        ...week,
+        label: weekLabel(week, template),
+        sessionsTarget,
+        summary: describeWeek(week, weeksTotal),
+      })),
+    };
+  }
+
+  /**
+   * O bloco mais recente, em qualquer estado (Al-T12): ativo mostra a semana
+   * corrente; concluído, o resumo; abandonado, o "recomeçar". Não grava.
+   */
+  async latest(ctx: BlockUserCtx) {
+    const block = await this.prisma.trainingBlock.findFirst({
+      where: { userId: ctx.userId },
+      orderBy: { createdAt: 'desc' },
+      include: BLOCK_INCLUDE,
+    });
+    return block ? this.present(ctx, block) : null;
+  }
+
+  /**
+   * Cria o bloco (de 3 a 6 semanas, 4 por padrão) ancorado na segunda-feira em que a semana 1 de fato
    * começa (ver `blockStartDate`), no fuso do usuário. Os fatores do template são
    * **copiados** para as linhas: o bloco que a pessoa aceitou não pode mudar
    * quando `block-template.ts` mudar.
@@ -73,6 +111,7 @@ export class TrainingBlockService {
 
     const sessionsTarget = dto.sessionsPerWeek ?? (await this.weeklyWorkoutsGoal(ctx.userId));
     const startDate = blockStartDate(ctx.timezone);
+    const weeksTotal = dto.weeks ?? BLOCK_WEEKS_TOTAL;
 
     const block = await this.prisma.trainingBlock.create({
       data: {
@@ -80,9 +119,9 @@ export class TrainingBlockService {
         planId: dto.planId ?? null,
         kind: dto.kind ?? 'hypertrophy',
         startDate,
-        weeksTotal: BLOCK_WEEKS_TOTAL,
+        weeksTotal,
         weeks: {
-          create: BLOCK_TEMPLATE.map((week) => ({
+          create: blockTemplate(weeksTotal).map((week) => ({
             weekNumber: week.weekNumber,
             focus: week.focus,
             intensityFactor: week.intensityFactor,
@@ -189,12 +228,16 @@ export class TrainingBlockService {
       current,
       deload,
     );
-    const weeks = swapDeloadInto(reconciled.weeks, antecipada);
+    const swapped = swapDeloadInto(reconciled.weeks, antecipada);
+    const weeks = swapped.map((week) => ({ ...week, label: weekLabel(week, swapped) }));
     const currentView = weeks.find((w) => w.weekNumber === reconciled.currentWeekNumber) ?? null;
     const nextView =
       weeks.find((w) => w.weekNumber === (reconciled.currentWeekNumber ?? 0) + 1) ?? null;
 
     const kind = block.kind as BlockKind;
+    // Encerrado pela pessoa (ou fechado numa escrita) vale o que está gravado:
+    // a reconciliação só sabe do calendário, não do "encerrar bloco".
+    const status = block.status === 'active' ? reconciled.status : block.status;
 
     return {
       id: block.id,
@@ -205,14 +248,18 @@ export class TrainingBlockService {
       repRange: REP_RANGE_BY_KIND[kind],
       startDate: block.startDate,
       weeksTotal: block.weeksTotal,
-      status: reconciled.status,
-      currentWeek: currentView && { ...currentView, summary: describeWeek(currentView) },
-      nextWeek: nextView && { ...nextView, summary: describeWeek(nextView) },
+      status,
+      currentWeek: currentView && {
+        ...currentView,
+        summary: describeWeek(currentView, block.weeksTotal),
+      },
+      nextWeek: nextView && { ...nextView, summary: describeWeek(nextView, block.weeksTotal) },
       weeks,
       deload,
       /** A frase inteira, pronta para a tela — web e mobile mostram a mesma. */
       explanation: explain(
-        reconciled.status,
+        status,
+        block.weeksTotal,
         currentView,
         deload,
         antecipada !== null && antecipada === reconciled.currentWeekNumber,
@@ -343,6 +390,7 @@ const BLOCK_INCLUDE = {
 
 interface BlockRow {
   id: string;
+  status: 'active' | 'completed' | 'abandoned';
   planId: string | null;
   plan: { name: string } | null;
   kind: string;
@@ -383,7 +431,7 @@ function blockStartDate(timezone: string): string {
  * O sinal **antecipa** a semana de deload que já existe; nunca cria uma quinta.
  *
  * A troca é de fatores e foco entre a semana que sinalizou e a de deload ainda à
- * frente — o bloco continua tendo 4 semanas, e a semana empurrada vira a última.
+ * frente — o bloco continua com as mesmas semanas, e a empurrada vira a última.
  */
 function swapDeloadInto(weeks: ReconciledWeek[], weekNumber: number | null): ReconciledWeek[] {
   if (weekNumber === null) return weeks;
@@ -417,6 +465,7 @@ function swapDeloadInto(weeks: ReconciledWeek[], weekNumber: number | null): Rec
 
 function explain(
   status: 'active' | 'completed' | 'abandoned',
+  weeksTotal: number,
   current: ReconciledWeek | null,
   deload: DeloadSignal,
   /** O deload antecipado caiu na semana corrente — só aí a frase dele faz sentido. */
@@ -428,7 +477,7 @@ function explain(
   }
   if (!current) return 'Bloco sem semana corrente.';
 
-  const partes = [describeWeek(current)];
+  const partes = [describeWeek(current, weeksTotal)];
   // Bloco montado no meio da semana começa na segunda seguinte: sem dizer a data, o
   // card pareceria afirmar que a semana 1 já está correndo.
   if (current.state === 'upcoming') {

@@ -19,8 +19,10 @@ import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
+import { AgendaService } from './agenda.service';
+import { AgendaQueryDto, RescheduleSessionDto } from './dto/agenda.dto';
 import { MuscleSummaryService } from './muscle-summary.service';
-import { CreateTrainingBlockDto } from './dto/training-block.dto';
+import { CreateTrainingBlockDto, TrainingBlockPreviewDto } from './dto/training-block.dto';
 import {
   AddPlanExerciseDto,
   AddPlanExercisesDto,
@@ -50,7 +52,26 @@ export class WorkoutController {
     private readonly prescriptions: PrescriptionService,
     private readonly blocks: TrainingBlockService,
     private readonly muscles: MuscleSummaryService,
+    private readonly agenda: AgendaService,
   ) {}
+
+  // -------- Agenda de treinos (#379, Al-T24) --------
+
+  /** Os dias do intervalo, com as sessões do plano de calendário. Informativa (ADR 042). */
+  @Get('agenda')
+  agendaRange(@CurrentUser() user: CurrentUserPayload, @Query() q: AgendaQueryDto) {
+    return this.agenda.range(user.id, user.timezone, q.from, q.to);
+  }
+
+  /** "Remarcar": de hoje até o fim do plano. Não reserva nada. */
+  @Patch('agenda/:id')
+  reschedule(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleSessionDto,
+  ) {
+    return this.agenda.reschedule(user.id, user.timezone, id, dto.date);
+  }
 
   // -------- Blocos de periodização (#145) --------
 
@@ -62,6 +83,18 @@ export class WorkoutController {
   @Get('blocks/active')
   getActiveBlock(@CurrentUser() user: CurrentUserPayload) {
     return this.blocks.getActive({ userId: user.id, timezone: user.timezone });
+  }
+
+  /** As semanas do bloco antes de criar (Al-T12, #379). */
+  @Get('blocks/preview')
+  previewBlock(@CurrentUser() user: CurrentUserPayload, @Query() q: TrainingBlockPreviewDto) {
+    return this.blocks.preview({ userId: user.id, timezone: user.timezone }, q);
+  }
+
+  /** O bloco mais recente, em qualquer estado (Al-T12, #379). */
+  @Get('blocks/latest')
+  latestBlock(@CurrentUser() user: CurrentUserPayload) {
+    return this.blocks.latest({ userId: user.id, timezone: user.timezone });
   }
 
   @Delete('blocks/:id')
