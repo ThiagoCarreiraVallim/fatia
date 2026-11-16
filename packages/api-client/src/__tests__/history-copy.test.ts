@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   HISTORY_FILTERS,
+  addToFreeWorkout,
   cardioOnly,
   cardioRecordLine,
   freeStartLabel,
+  freeSuggestions,
   historyDay,
   historyLine,
   historyTitle,
@@ -276,5 +278,30 @@ describe('treino livre (Al-T17b)', () => {
     expect(freeStartLabel(0)).toBe('Iniciar treino');
     expect(freeStartLabel(1)).toBe('Iniciar treino · 1 exercício');
     expect(freeStartLabel(3)).toBe('Iniciar treino · 3 exercícios');
+  });
+});
+
+describe('montar o treino livre (Al-T17b)', () => {
+  const supino = { id: 1, name: 'Supino', muscleGroup: 'peito' };
+  const remada = { id: 2, name: 'Remada', muscleGroup: 'costas' };
+  const esteira = { id: 3, name: 'Esteira', muscleGroup: 'cardio' };
+
+  it('soma na ordem, sem repetir, e diz o que entrou', () => {
+    expect(addToFreeWorkout([], [supino])).toEqual({
+      picked: [supino],
+      message: 'Supino adicionado',
+    });
+    expect(addToFreeWorkout([supino], [supino, remada, esteira])).toEqual({
+      picked: [supino, remada, esteira],
+      message: '2 adicionados',
+    });
+    expect(addToFreeWorkout([supino], [supino])).toEqual({ picked: [supino], message: null });
+  });
+
+  it('sugeridos: a busca sem termo, sem os já escolhidos, até o limite', () => {
+    const results = [supino, remada, esteira];
+    expect(freeSuggestions(results, [remada], 8)).toEqual([supino, esteira]);
+    expect(freeSuggestions(results, [], 2)).toEqual([supino, remada]);
+    expect(freeSuggestions(undefined, [], 8)).toEqual([]);
   });
 });

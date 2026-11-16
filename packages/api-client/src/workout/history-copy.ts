@@ -207,3 +207,30 @@ export function freeStartLabel(count: number): string {
   if (count === 0) return 'Iniciar treino';
   return `Iniciar treino · ${plural(count, 'exercício', 'exercícios')}`;
 }
+
+/**
+ * O Treino livre somando exercícios (Al-T17b): na ordem, sem repetir, com o
+ * aviso do que entrou (nulo quando nada era novo).
+ */
+export function addToFreeWorkout<T extends { id: number; name: string }>(
+  picked: readonly T[],
+  incoming: readonly T[],
+): { picked: T[]; message: string | null } {
+  const chosen = new Set(picked.map((e) => e.id));
+  const fresh = incoming.filter((e) => !chosen.has(e.id) && chosen.add(e.id));
+  if (fresh.length === 0) return { picked: [...picked], message: null };
+  return {
+    picked: [...picked, ...fresh],
+    message: fresh.length === 1 ? `${fresh[0]!.name} adicionado` : `${fresh.length} adicionados`,
+  };
+}
+
+/** Os sugeridos do Treino livre: a busca sem termo (favoritos primeiro), sem os já escolhidos. */
+export function freeSuggestions<T extends { id: number }>(
+  results: readonly T[] | undefined,
+  picked: readonly { id: number }[],
+  max: number,
+): T[] {
+  const chosen = new Set(picked.map((e) => e.id));
+  return (results ?? []).filter((e) => !chosen.has(e.id)).slice(0, max);
+}
