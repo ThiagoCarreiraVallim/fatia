@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
@@ -10,11 +10,11 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   dayLabel,
   progressApi,
   undoMessage,
+  stepSourceBadge,
   stepsRestoreInput,
   type StepLog,
 } from '@fatia/api-client';
@@ -22,18 +22,23 @@ import { useUndoSlot } from './use-undo-slot';
 import { hojeIso } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
-import { dayMonth, formatInteger } from './log-format';
+import { dayMonth, formatInteger, hourMinute } from './log-format';
+import { ValueStepper } from './value-stepper';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
+  /** Só o miolo, sem a gaveta: a folha Peso/Passos (Al-G7) é quem abre e fecha. */
+  embedded?: boolean;
+  /** O segmentado Peso · Passos da folha, no topo. */
+  switcher?: ReactNode;
 }
 
 const HISTORY_DAYS = 30;
 
-export function LogStepsDrawer({ open, onClose, date }: Props) {
+export function LogStepsDrawer({ open, onClose, date, embedded = false, switcher }: Props) {
   const today = hojeIso();
   const [day, setDay] = useState(date ?? today);
   const [steps, setSteps] = useState('');
@@ -50,7 +55,7 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
       }),
     // Ver `log-weight-drawer`: o card de passos do dashboard monta este drawer
     // fechado, e sem isto buscaria o histórico em toda visita.
-    enabled: open,
+    enabled: open || embedded,
   });
 
   function invalidate() {
@@ -132,9 +137,106 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
     id: log.id,
     title: `${formatInteger(log.steps)} passos`,
     subtitle: dayMonth(log.date),
+    time: hourMinute(log.loggedAt),
+    badge: stepSourceBadge(log.source),
+    readOnly: !stepSourceBadge(log.source).manual,
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
+
+  const content = (
+    <>
+      {switcher}
+
+      <DrawerHeader className="px-0">
+        <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
+        <DrawerDescription>
+          {editing ? `Corrigindo o registro de ${dayMonth(editing.date)}.` : 'Passos do dia.'}
+        </DrawerDescription>
+      </DrawerHeader>
+      <div className="my-3 space-y-4">
+        {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+        {!editing && <LogDayField id="steps-day" day={day} today={today} onChange={setDay} />}
+        <ValueStepper
+          id="steps"
+          ref={inputRef}
+          label="Passos"
+          value={steps}
+          onChange={setSteps}
+          step={500}
+          decimals={0}
+          base={logs.data?.logs[0]?.steps ?? null}
+          unit="passos"
+          placeholder="0"
+        />
+        <p className="text-center text-[13px] text-muted-foreground">
+          Vários registros no dia: vale o maior. Os do celular chegam sozinhos.
+        </p>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
+        {restore.error && (
+          <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
+        )}
+
+        <LogHistory
+          entries={entries}
+          isLoading={logs.isLoading}
+          isError={logs.isError}
+          onRetry={() => void logs.refetch()}
+          editingId={editing?.id ?? null}
+          onEdit={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (!log) return;
+            setEditing(log);
+            setSteps(String(log.steps));
+            setFormError(null);
+            // Ver `log-weight-drawer`: erro antigo não pode acusar linha nova.
+            save.reset();
+            remove.reset();
+            inputRef.current?.focus();
+          }}
+          onDelete={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (log) remove.mutate(log);
+          }}
+          pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
+          isDeleting={remove.isPending}
+          undo={
+            undone
+              ? {
+                  message: undoMessage('steps'),
+                  onUndo: () => {
+                    restore.mutate(undone);
+                    setUndone(null);
+                  },
+                }
+              : null
+          }
+          emptyLabel="Nenhum registro de passos nos últimos 30 dias."
+        />
+
+        <div className="space-y-2">
+          <Button className="w-full" onClick={submit} disabled={save.isPending || !steps.trim()}>
+            {save.isPending
+              ? 'Salvando…'
+              : editing
+                ? 'Salvar alteração'
+                : day === today
+                  ? 'Salvar'
+                  : `Salvar em ${dayLabel(day, today)}`}
+          </Button>
+          {editing && (
+            <Button variant="outline" className="w-full" onClick={resetAll}>
+              Cancelar edição
+            </Button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  if (embedded) return content;
 
   return (
     <Drawer
@@ -145,95 +247,7 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
         onClose();
       }}
     >
-      <DrawerContent className="px-4 pb-6">
-        <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar passos' : 'Logar passos'}</DrawerTitle>
-          <DrawerDescription>
-            {editing
-              ? `Corrigindo o registro de ${dayMonth(editing.date)}.`
-              : 'Múltiplos logs no mesmo dia são OK — o servidor pega o maior valor.'}
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="my-3 space-y-4">
-          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
-          {!editing && <LogDayField id="steps-day" day={day} today={today} onChange={setDay} />}
-          <div className="space-y-1">
-            <label htmlFor="steps" className="text-sm font-medium">
-              Passos
-            </label>
-            <Input
-              id="steps"
-              ref={inputRef}
-              type="number"
-              inputMode="numeric"
-              value={steps}
-              onChange={(e) => setSteps(e.target.value)}
-              placeholder="ex: 9500"
-              autoFocus
-            />
-          </div>
-
-          {error && <p className="text-sm text-danger">{error}</p>}
-          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
-          {restore.error && (
-            <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
-          )}
-
-          <LogHistory
-            entries={entries}
-            isLoading={logs.isLoading}
-            isError={logs.isError}
-            onRetry={() => void logs.refetch()}
-            editingId={editing?.id ?? null}
-            onEdit={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (!log) return;
-              setEditing(log);
-              setSteps(String(log.steps));
-              setFormError(null);
-              // Ver `log-weight-drawer`: erro antigo não pode acusar linha nova.
-              save.reset();
-              remove.reset();
-              inputRef.current?.focus();
-            }}
-            onDelete={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (log) remove.mutate(log);
-            }}
-            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
-            isDeleting={remove.isPending}
-            undo={
-              undone
-                ? {
-                    message: undoMessage('steps'),
-                    onUndo: () => {
-                      restore.mutate(undone);
-                      setUndone(null);
-                    },
-                  }
-                : null
-            }
-            emptyLabel="Nenhum registro de passos nos últimos 30 dias."
-          />
-
-          <div className="space-y-2">
-            <Button className="w-full" onClick={submit} disabled={save.isPending || !steps.trim()}>
-              {save.isPending
-                ? 'Salvando…'
-                : editing
-                  ? 'Salvar alteração'
-                  : day === today
-                    ? 'Salvar'
-                    : `Salvar em ${dayLabel(day, today)}`}
-            </Button>
-            {editing && (
-              <Button variant="outline" className="w-full" onClick={resetAll}>
-                Cancelar edição
-              </Button>
-            )}
-          </div>
-        </div>
-      </DrawerContent>
+      <DrawerContent className="px-4 pb-6">{content}</DrawerContent>
     </Drawer>
   );
 }

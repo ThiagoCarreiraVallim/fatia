@@ -805,3 +805,30 @@ export function cardioSummary(c: CardioProgress): ChartSummaryItem[] {
     { label: 'maior distância', value: longest > 0 ? `${formatDecimal(longest / 1000)} km` : '—' },
   ];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Registrar peso e passos (Al-G7)
+// ---------------------------------------------------------------------------------------------
+
+const STEP_SOURCE_LABEL: Record<string, string> = {
+  APPLE_HEALTH: 'Apple Saúde',
+  HEALTH_CONNECT: 'Health Connect',
+  GOOGLE_FIT: 'Google Fit',
+  STRAVA: 'Strava',
+  GARMIN: 'Garmin',
+  FITBIT: 'Fitbit',
+  WEBHOOK: 'integração',
+};
+
+/**
+ * O selo de origem de um registro. Só o manual se edita e apaga ali: o que veio do celular
+ * chega de novo na próxima sincronização, e apagar daria a impressão errada de que sumiu.
+ */
+export function stepSourceBadge(source: string): {
+  label: string;
+  tone: 'ok' | 'mute';
+  manual: boolean;
+} {
+  if (source === 'MANUAL') return { label: 'manual', tone: 'mute', manual: true };
+  return { label: STEP_SOURCE_LABEL[source] ?? 'integração', tone: 'ok', manual: false };
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
@@ -10,7 +10,6 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   dayLabel,
   progressApi,
@@ -22,18 +21,23 @@ import { useUndoSlot } from './use-undo-slot';
 import { hojeIso, instanteNoDia } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
-import { formatDecimal, instantDayMonth } from './log-format';
+import { formatDecimal, hourMinute, instantDayMonth } from './log-format';
+import { ValueStepper } from './value-stepper';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
+  /** Só o miolo, sem a gaveta: a folha Peso/Passos (Al-G7) é quem abre e fecha. */
+  embedded?: boolean;
+  /** O segmentado Peso · Passos da folha, no topo. */
+  switcher?: ReactNode;
 }
 
 const HISTORY_DAYS = 30;
 
-export function LogWeightDrawer({ open, onClose, date }: Props) {
+export function LogWeightDrawer({ open, onClose, date, embedded = false, switcher }: Props) {
   const today = hojeIso();
   const [day, setDay] = useState(date ?? today);
   const [weight, setWeight] = useState('');
@@ -52,7 +56,7 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
       }),
     // Sem `enabled`, toda página que monta o drawer fechado — o dashboard entre
     // elas — buscaria 30 dias de histórico já no primeiro render.
-    enabled: open,
+    enabled: open || embedded,
   });
 
   function invalidate() {
@@ -140,9 +144,111 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
     id: log.id,
     title: `${formatDecimal(log.weightKg)} kg`,
     subtitle: instantDayMonth(log.loggedAt),
+    time: hourMinute(log.loggedAt),
+    // Peso só entra à mão por enquanto (a balança conectada não chegou).
+    badge: { label: 'manual', tone: 'mute' },
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
+
+  const content = (
+    <>
+      {switcher}
+
+      <DrawerHeader className="px-0">
+        <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
+        <DrawerDescription>
+          {editing
+            ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
+            : day === today
+              ? 'Pesagem de hoje.'
+              : `A pesagem vai para ${dayLabel(day, today)}.`}
+        </DrawerDescription>
+      </DrawerHeader>
+      <div className="my-3 space-y-4">
+        {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+        {!editing && <LogDayField id="weight-day" day={day} today={today} onChange={setDay} />}
+        <ValueStepper
+          id="weight-kg"
+          ref={inputRef}
+          label="Peso (kg)"
+          value={weight}
+          onChange={setWeight}
+          step={0.1}
+          decimals={1}
+          base={logs.data?.logs[0]?.weightKg ?? null}
+          unit="kg"
+          placeholder="0,0"
+        />
+        <p className="text-center text-[13px] text-muted-foreground">
+          De manhã, em jejum, é o mais consistente.
+        </p>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
+        {restore.error && (
+          <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
+        )}
+
+        <LogHistory
+          entries={entries}
+          isLoading={logs.isLoading}
+          isError={logs.isError}
+          onRetry={() => void logs.refetch()}
+          editingId={editing?.id ?? null}
+          onEdit={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (!log) return;
+            setEditing(log);
+            setWeight(String(log.weightKg));
+            setFormError(null);
+            // Sem o `reset`, o erro da tentativa anterior fica colado na tela
+            // e passa a acusar uma linha que nunca falhou.
+            save.reset();
+            remove.reset();
+            inputRef.current?.focus();
+          }}
+          onDelete={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (log) remove.mutate(log);
+          }}
+          pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
+          isDeleting={remove.isPending}
+          undo={
+            undone
+              ? {
+                  message: undoMessage('weight'),
+                  onUndo: () => {
+                    restore.mutate(undone);
+                    setUndone(null);
+                  },
+                }
+              : null
+          }
+          emptyLabel="Nenhuma pesagem nos últimos 30 dias."
+        />
+
+        <div className="space-y-2">
+          <Button className="w-full" onClick={submit} disabled={save.isPending}>
+            {save.isPending
+              ? 'Salvando…'
+              : editing
+                ? 'Salvar alteração'
+                : day === today
+                  ? 'Salvar'
+                  : `Salvar em ${dayLabel(day, today)}`}
+          </Button>
+          {editing && (
+            <Button variant="outline" className="w-full" onClick={resetAll}>
+              Cancelar edição
+            </Button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  if (embedded) return content;
 
   return (
     <Drawer
@@ -153,99 +259,7 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
         onClose();
       }}
     >
-      <DrawerContent className="px-4 pb-6">
-        <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar peso' : 'Logar peso'}</DrawerTitle>
-          <DrawerDescription>
-            {editing
-              ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
-              : day === today
-                ? 'Pesagem da manhã, em jejum, é o mais consistente.'
-                : `A pesagem vai para ${dayLabel(day, today)}.`}
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="my-3 space-y-4">
-          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
-          {!editing && <LogDayField id="weight-day" day={day} today={today} onChange={setDay} />}
-          <div className="space-y-1">
-            <label htmlFor="weight-kg" className="text-sm font-medium">
-              Peso (kg)
-            </label>
-            <Input
-              id="weight-kg"
-              ref={inputRef}
-              type="number"
-              inputMode="decimal"
-              step="0.1"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              placeholder="ex: 78.5"
-              autoFocus
-            />
-          </div>
-
-          {error && <p className="text-sm text-danger">{error}</p>}
-          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
-          {restore.error && (
-            <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
-          )}
-
-          <LogHistory
-            entries={entries}
-            isLoading={logs.isLoading}
-            isError={logs.isError}
-            onRetry={() => void logs.refetch()}
-            editingId={editing?.id ?? null}
-            onEdit={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (!log) return;
-              setEditing(log);
-              setWeight(String(log.weightKg));
-              setFormError(null);
-              // Sem o `reset`, o erro da tentativa anterior fica colado na tela
-              // e passa a acusar uma linha que nunca falhou.
-              save.reset();
-              remove.reset();
-              inputRef.current?.focus();
-            }}
-            onDelete={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (log) remove.mutate(log);
-            }}
-            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
-            isDeleting={remove.isPending}
-            undo={
-              undone
-                ? {
-                    message: undoMessage('weight'),
-                    onUndo: () => {
-                      restore.mutate(undone);
-                      setUndone(null);
-                    },
-                  }
-                : null
-            }
-            emptyLabel="Nenhuma pesagem nos últimos 30 dias."
-          />
-
-          <div className="space-y-2">
-            <Button className="w-full" onClick={submit} disabled={save.isPending}>
-              {save.isPending
-                ? 'Salvando…'
-                : editing
-                  ? 'Salvar alteração'
-                  : day === today
-                    ? 'Salvar'
-                    : `Salvar em ${dayLabel(day, today)}`}
-            </Button>
-            {editing && (
-              <Button variant="outline" className="w-full" onClick={resetAll}>
-                Cancelar edição
-              </Button>
-            )}
-          </div>
-        </div>
-      </DrawerContent>
+      <DrawerContent className="px-4 pb-6">{content}</DrawerContent>
     </Drawer>
   );
 }

@@ -10,6 +10,12 @@ export interface LogHistoryEntry {
   title: string;
   /** Data ou origem do registro. */
   subtitle: string;
+  /** Hora do registro, depois da data ("19 mai · 08:12"). Fora do nome dos botões. */
+  time?: string;
+  /** Selo de origem (Al-G7): "manual" mudo, "Apple Saúde" verde. */
+  badge?: { label: string; tone: 'ok' | 'mute' };
+  /** Veio do celular: aparece, mas não se edita nem apaga daqui. */
+  readOnly?: boolean;
 }
 
 interface Props {
@@ -67,8 +73,8 @@ export function LogHistory({
 }: Props) {
   return (
     <div className="space-y-2">
-      <p className="text-[11px] font-bold tracking-wide text-muted-foreground">
-        REGISTROS RECENTES
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        Recentes
       </p>
 
       {/* Região viva montada sempre: um `aria-live` que nasce preenchido costuma
@@ -126,35 +132,54 @@ export function LogHistory({
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{entry.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {entry.subtitle}
+                    {entry.time ? ` · ${entry.time}` : ''}
+                  </p>
                 </div>
-                {/* O rótulo carrega o valor, e não só a data. Água tem
+                {entry.badge && (
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-bold',
+                      entry.badge.tone === 'ok'
+                        ? 'bg-[hsl(var(--success)/0.12)] text-success'
+                        : 'bg-surface-3 text-muted-foreground',
+                    )}
+                  >
+                    {entry.badge.label}
+                  </span>
+                )}
+                {!entry.readOnly && (
+                  <>
+                    {/* O rótulo carrega o valor, e não só a data. Água tem
                     vários registros por dia por definição: com a data
                     sozinha saíam N botões "Apagar registro de 17 mai"
                     indistinguíveis no leitor de tela, bem na ação que apaga. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 shrink-0"
-                  aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
-                  aria-pressed={isEditing}
-                  disabled={isDeleting}
-                  onClick={() => onEdit(entry)}
-                >
-                  <Pencil className={cn(isEditing && 'text-primary')} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 shrink-0 text-muted-foreground"
-                  aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
-                  disabled={isDeleting}
-                  onClick={() => onDelete(entry)}
-                >
-                  <Trash2 />
-                </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 shrink-0"
+                      aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
+                      aria-pressed={isEditing}
+                      disabled={isDeleting}
+                      onClick={() => onEdit(entry)}
+                    >
+                      <Pencil className={cn(isEditing && 'text-primary')} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 shrink-0 text-muted-foreground"
+                      aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                      disabled={isDeleting}
+                      onClick={() => onDelete(entry)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </>
+                )}
               </li>
             );
           })}

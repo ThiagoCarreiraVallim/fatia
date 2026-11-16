@@ -24,6 +24,7 @@ import {
   linePath,
   newBestCount,
   recordHighlight,
+  stepSourceBadge,
   strengthRecordRows,
   trendPercent,
 } from '../progress-screens';
@@ -481,5 +482,22 @@ describe('resumos dos gráficos', () => {
       { label: 'média', value: '7:24 /km' },
       { label: 'maior distância', value: '6,0 km' },
     ]);
+  });
+});
+
+describe('origem do registro (Al-G7)', () => {
+  it('manual é mudo e editável; o que vem do celular é verde e só se vê', () => {
+    expect(stepSourceBadge('MANUAL')).toEqual({ label: 'manual', tone: 'mute', manual: true });
+    expect(stepSourceBadge('APPLE_HEALTH')).toEqual({
+      label: 'Apple Saúde',
+      tone: 'ok',
+      manual: false,
+    });
+    expect(stepSourceBadge('HEALTH_CONNECT')).toEqual({
+      label: 'Health Connect',
+      tone: 'ok',
+      manual: false,
+    });
+    expect(stepSourceBadge('WEBHOOK').manual).toBe(false);
   });
 });

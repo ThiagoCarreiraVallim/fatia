@@ -43,7 +43,7 @@ vi.mock('@/components/today/goals-sheet', () => ({ GoalsSheet: () => null }));
 vi.mock('@/components/today/water-sheet', () => ({ WaterSheet: () => null }));
 vi.mock('@/components/today/weight-sheet', () => ({ WeightSheet: () => null }));
 vi.mock('@/components/today/inbox-sheet', () => ({ InboxSheet: () => null }));
-vi.mock('@/components/progress/log-steps-drawer', () => ({ LogStepsDrawer: () => null }));
+vi.mock('@/components/progress/body-log-sheet', () => ({ BodyLogSheet: () => null }));
 vi.mock('@/components/sharing/share-sheet', () => ({ ShareSheet: () => null }));
 
 describe('Início com falha no resumo', () => {

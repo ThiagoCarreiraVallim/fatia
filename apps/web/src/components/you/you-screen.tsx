@@ -27,6 +27,7 @@ import { SignOutButton } from '@/components/profile/sign-out-button';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
 import { Icon } from '@/components/ui/icon';
 import { signInHref } from '@/lib/next-path';
+import { BodyLogSheet } from '@/components/progress/body-log-sheet';
 import { HeightSheet } from './height-sheet';
 import { NEWS_QUERY_KEY } from './news-cache';
 import { useExportData } from './use-export-data';
@@ -47,6 +48,7 @@ export function YouScreen() {
   const sections = useNavMenu();
   const qc = useQueryClient();
   const [heightOpen, setHeightOpen] = useState(false);
+  const [weightOpen, setWeightOpen] = useState(false);
 
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
   const today = useQuery({ queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() });
@@ -177,7 +179,12 @@ export function YouScreen() {
       </header>
 
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/progress" className="flex flex-col gap-2 rounded-card bg-card px-[18px] py-4">
+        {/* Abre o registrar peso (Al-G7), como na prancha Al-V1. */}
+        <button
+          type="button"
+          onClick={() => setWeightOpen(true)}
+          className="flex flex-col gap-2 rounded-card bg-card px-[18px] py-4 text-left"
+        >
           <span className="text-xs text-faint">Peso atual</span>
           <span className="font-display text-[24px] font-bold leading-[1.1] tracking-[-0.02em] tabular-nums text-foreground">
             {weightText(today.data?.weight.latest?.weightKg)}
@@ -185,7 +192,7 @@ export function YouScreen() {
               kg
             </span>
           </span>
-        </Link>
+        </button>
         <button
           type="button"
           onClick={() => setHeightOpen(true)}
@@ -219,6 +226,7 @@ export function YouScreen() {
         Apagar minha conta
       </Link>
 
+      <BodyLogSheet open={weightOpen} onClose={() => setWeightOpen(false)} />
       <HeightSheet
         open={heightOpen}
         onOpenChange={setHeightOpen}
