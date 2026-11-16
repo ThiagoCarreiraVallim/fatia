@@ -21,7 +21,8 @@ import { WorkoutPlanService } from '../workout/workout-plan.service';
 import { MAX_OFFER_NOTE, MAX_OFFER_WEEKS, type SendPlanOfferDto } from './dto/plan-offer.dto';
 import { TEAM_ROLES } from './permissions';
 import { PlanMaterializerService } from './plan-materializer.service';
-import { diffPlanSnapshots, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
+import { diffOfferVersions, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
+import { activeLinksOf, hasActiveLink, isLinked } from './plan-offer-links';
 import { offerAnsweredNotice, offerSentNotice, offerUpdatedNotice } from './plan-offer-notices';
 import {
   buildPlanSnapshot,
@@ -33,6 +34,7 @@ import {
 /** Recusa única: oferta ou versão alheia ou inexistente (#92). */
 const OFFER_NOT_FOUND = 'Plan offer not found';
 const MEMBERSHIP_NOT_FOUND = 'Membership not found';
+const OFFER_UNAVAILABLE = 'Esse plano não está mais disponível';
 const ALREADY_ANSWERED =
   'Essa versão do plano já foi respondida ou substituída. Atualize a tela para ver a atual.';
 
@@ -134,7 +136,8 @@ function parseSnapshot(snapshot: Prisma.JsonValue): PlanSnapshot | null {
 /** As versões da oferta, na leitura: a última, a aceita e a que a tela mostra. */
 function versionsOf(offer: OfferRow) {
   const latest = offer.versions.at(-1)!;
-  const accepted = offer.versions.find((v) => v.status === 'ACCEPTED') ?? null;
+  // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
+  const accepted = offer.versions.filter((v) => v.status === 'ACCEPTED').at(-1) ?? null;
   // A última fala por si quando espera resposta ou foi recusada; aceita ou
   // substituída, a tela mostra a que está em uso.
   const shown =
@@ -210,6 +213,7 @@ export class PlanOfferService {
     const content = await this.versionContent(authorId, input);
 
     const created = await this.inTransaction(async (db) => {
+      await this.lockOffer(db, offerId);
       const last = await db.planOfferVersion.findFirst({
         where: { offerId },
         orderBy: { version: 'desc' },
@@ -233,11 +237,14 @@ export class PlanOfferService {
   // ---------------------------------------------------------------- aluno
 
   async list(userId: string): Promise<PlanOfferList> {
-    const offers = await this.prisma.planOffer.findMany({
-      where: { userId },
-      include: OFFER_INCLUDE,
-      orderBy: { updatedAt: 'desc' },
-    });
+    const [offers, links] = await Promise.all([
+      this.prisma.planOffer.findMany({
+        where: { userId },
+        include: OFFER_INCLUDE,
+        orderBy: { updatedAt: 'desc' },
+      }),
+      activeLinksOf(this.prisma, userId),
+    ]);
     const pending: PlanOfferSummary[] = [];
     const accepted: PlanOfferSummary[] = [];
     for (const offer of offers) {
@@ -257,7 +264,8 @@ export class PlanOfferService {
         planId: this.planOf(offer, userId),
         href: `/workout/offers/${offer.id}`,
       });
-      if (v.latest.status === 'PENDING') pending.push(summary(v.latest));
+      // Sem vínculo ativo com quem enviou, a pendente não se responde mais.
+      if (v.latest.status === 'PENDING' && isLinked(offer, links)) pending.push(summary(v.latest));
       if (v.accepted) accepted.push(summary(v.accepted));
     }
     pending.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
@@ -292,35 +300,36 @@ export class PlanOfferService {
     }
 
     const now = new Date();
-    const claimed = await this.prisma.planOfferVersion.updateMany({
-      where: { id: version.id, offerId, status: version.status },
-      data: { status: 'ACCEPTED', respondedAt: now },
+    await this.claim(offer, version, ['PENDING', 'DECLINED'], {
+      status: 'ACCEPTED',
+      respondedAt: now,
     });
-    if (claimed.count !== 1) throw new ConflictException(ALREADY_ANSWERED);
 
-    let planId: string;
+    // Plano, troca de versão e agenda vão numa transação de lote só: ou entra
+    // tudo, ou a versão volta ao que era e a pessoa pode tentar de novo. Nunca
+    // ficam duas versões aceitas.
     try {
-      const existing = this.planOf(offer, userId);
-      const plan = existing
-        ? await this.materializer.rematerialize(userId, existing, version.snapshot)
-        : await this.materializer.materializeOffer(userId, version.snapshot, offerId);
-      planId = plan.id;
+      const { planId, writes } = await this.materializer.offerPlanWrites(
+        userId,
+        version.snapshot,
+        offerId,
+        this.planOf(offer, userId),
+      );
+      await this.prisma.$transaction([
+        ...writes,
+        this.prisma.planOfferVersion.updateMany({
+          where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
+          data: { status: 'SUPERSEDED', respondedAt: now },
+        }),
+        ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
+      ]);
     } catch (error) {
-      // A cópia falhou: a versão volta a esperar, e a pessoa pode tentar de novo.
       await this.prisma.planOfferVersion.update({
         where: { id: version.id },
         data: { status: version.status, respondedAt: version.respondedAt },
       });
       throw error;
     }
-
-    await this.prisma.$transaction([
-      this.prisma.planOfferVersion.updateMany({
-        where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
-        data: { status: 'SUPERSEDED', respondedAt: now },
-      }),
-      ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
-    ]);
 
     await this.notifyTeam(offer, userId, version.title, 'accepted');
     return this.view(await this.findOffer(userId, offerId), userId);
@@ -334,11 +343,10 @@ export class PlanOfferService {
     if (version.id !== latest.id || version.status !== 'PENDING') {
       throw new ConflictException(ALREADY_ANSWERED);
     }
-    const claimed = await this.prisma.planOfferVersion.updateMany({
-      where: { id: version.id, offerId, status: 'PENDING' },
-      data: { status: 'DECLINED', respondedAt: new Date() },
+    await this.claim(offer, version, ['PENDING'], {
+      status: 'DECLINED',
+      respondedAt: new Date(),
     });
-    if (claimed.count !== 1) throw new ConflictException(ALREADY_ANSWERED);
     await this.notifyTeam(offer, userId, version.title, accepted ? 'kept' : 'declined');
     return this.view(await this.findOffer(userId, offerId), userId);
   }
@@ -351,15 +359,48 @@ export class PlanOfferService {
     if (version.id !== latest.id || version.status !== 'DECLINED') {
       throw new ConflictException(ALREADY_ANSWERED);
     }
-    const claimed = await this.prisma.planOfferVersion.updateMany({
-      where: { id: version.id, offerId, status: 'DECLINED' },
-      data: { status: 'PENDING', respondedAt: null },
-    });
-    if (claimed.count !== 1) throw new ConflictException(ALREADY_ANSWERED);
+    await this.claim(offer, version, ['DECLINED'], { status: 'PENDING', respondedAt: null });
     return this.view(await this.findOffer(userId, offerId), userId);
   }
 
   // ---------------------------------------------------------------- internos
+
+  /**
+   * Trava a oferta (`FOR UPDATE`) até o fim da transação. `update` pega a mesma
+   * trava antes de criar a versão nova, então a resposta da pessoa e a versão
+   * nova da equipe nunca se cruzam.
+   */
+  private async lockOffer(db: Prisma.TransactionClient, offerId: string) {
+    await db.$queryRaw`SELECT id FROM "PlanOffer" WHERE id = ${offerId} FOR UPDATE`;
+  }
+
+  /**
+   * Reserva a resposta da pessoa. Sem vínculo ativo entre quem enviou e a
+   * pessoa, a oferta não está mais disponível (409). A leitura que a tela usou
+   * pode estar velha:
+   * com a oferta travada, relê a última versão e só escreve se ela ainda for a
+   * respondida, no estado esperado. Senão, 409.
+   */
+  private async claim(
+    offer: OfferRow,
+    version: VersionRow,
+    from: PlanOfferStatus[],
+    data: { status: PlanOfferStatus; respondedAt: Date | null },
+  ) {
+    await this.inTransaction(async (db) => {
+      await this.lockOffer(db, offer.id);
+      if (!(await hasActiveLink(db, offer))) throw new ConflictException(OFFER_UNAVAILABLE);
+      const latest = await db.planOfferVersion.findFirst({
+        where: { offerId: offer.id },
+        orderBy: { version: 'desc' },
+        select: { id: true, status: true },
+      });
+      if (latest?.id !== version.id || !from.includes(latest.status)) {
+        throw new ConflictException(ALREADY_ANSWERED);
+      }
+      await db.planOfferVersion.update({ where: { id: version.id }, data });
+    });
+  }
 
   /**
    * Quem envia é da equipe ativa da comunidade da associação; o aluno é membro
@@ -502,6 +543,8 @@ export class PlanOfferService {
     answer: 'accepted' | 'declined' | 'kept',
   ) {
     if (!offer.authorId || !offer.groupId) return;
+    // Quem perdeu o vínculo no meio do caminho não fica sabendo da resposta.
+    if (!(await hasActiveLink(this.prisma, offer))) return;
     const student = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { name: true },
@@ -517,7 +560,13 @@ export class PlanOfferService {
     const { shown, accepted, kind } = versionsOf(offer);
     const shownSnap = parseSnapshot(shown.snapshot);
     const acceptedSnap = kind === 'update' && accepted ? parseSnapshot(accepted.snapshot) : null;
-    const diff = shownSnap && acceptedSnap ? diffPlanSnapshots(acceptedSnap, shownSnap) : null;
+    const diff =
+      shownSnap && acceptedSnap && accepted
+        ? diffOfferVersions(
+            { ...accepted, snapshot: acceptedSnap },
+            { ...shown, snapshot: shownSnap },
+          )
+        : null;
     const names = await this.namesOf([shownSnap, acceptedSnap]);
     const planId = this.planOf(offer, userId);
     return {

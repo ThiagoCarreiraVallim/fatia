@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { assertDay } from '../common/dates';
 import {
@@ -21,6 +26,8 @@ export const MAX_AGENDA_DAYS = 42;
 const ENDED_VISIBLE_DAYS = 28;
 
 const SESSION_NOT_FOUND = 'Planned session not found';
+const NO_DATES = 'Esse plano não tem mais datas para remarcar.';
+const ALREADY_DONE = 'Essa sessão já foi feita. Só dá para remarcar o que não foi feito.';
 
 export interface AgendaItem {
   /** Id da sessão planejada; na próxima sessão do plano flexível, `next:<planId>`. */
@@ -125,7 +132,8 @@ export class AgendaService {
             order: s.order,
             state,
             rescheduledFrom: s.originalDate,
-            canReschedule: state !== 'done' && (endOf.get(s.planId) ?? s.date) >= today,
+            // Sem fim de calendário aceito (virou flexível), não há até quando remarcar.
+            canReschedule: state !== 'done' && (endOf.get(s.planId) ?? '') >= today,
             endDate: endOf.get(s.planId) ?? null,
           };
         });
@@ -187,6 +195,11 @@ export class AgendaService {
   /**
    * "Remarcar" (decisão do dono, #379): qualquer dia de hoje até o fim do
    * plano. Guarda o dia original na primeira remarcação. Não reserva nada.
+   *
+   * O fim é o da versão aceita **agora** para o plano, não o da versão que
+   * gerou a sessão: a sessão que passou fica com a versão antiga quando a
+   * pessoa aceita uma nova. Sem versão aceita de calendário, não há até quando
+   * remarcar (409). Sessão já feita também não se remarca (409).
    */
   async reschedule(userId: string, timezone: string, id: string, date: string) {
     const day = assertDay(date, 'date');
@@ -195,7 +208,19 @@ export class AgendaService {
       include: { plan: { select: { name: true } } },
     });
     if (!session) throw new NotFoundException(SESSION_NOT_FOUND);
-    const endDate = await this.endDateOf(userId, session.planId, session.offerVersionId);
+    const accepted = (await this.acceptedPlans(userId)).find((p) => p.planId === session.planId);
+    if (!accepted || accepted.schedule !== 'CALENDAR' || !accepted.endDate) {
+      throw new ConflictException(NO_DATES);
+    }
+    const endDate = accepted.endDate;
+    const done = await this.doneDays(
+      userId,
+      timezone,
+      [session.planId],
+      session.date,
+      session.date,
+    );
+    if (done.has(`${session.planId}|${session.date}`)) throw new ConflictException(ALREADY_DONE);
     assertRescheduleDate({ date: day, today: todayInTz(timezone), endDate });
     const updated = await this.prisma.plannedSession.update({
       where: { id: session.id },
@@ -221,7 +246,8 @@ export class AgendaService {
       where: { userId, versions: { some: { status: 'ACCEPTED' } } },
       include: {
         author: { select: { name: true } },
-        versions: { where: { status: 'ACCEPTED' } },
+        // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
+        versions: { where: { status: 'ACCEPTED' }, orderBy: { version: 'desc' }, take: 1 },
         plans: { where: { userId }, select: { id: true, name: true } },
       },
     });
@@ -296,22 +322,5 @@ export class AgendaService {
       total: sessions.length,
       weeks: plan.weeks ?? 0,
     };
-  }
-
-  /** Fim do plano: o da versão que gerou a sessão, ou a última sessão do plano. */
-  private async endDateOf(userId: string, planId: string, versionId: string | null) {
-    const version = versionId
-      ? await this.prisma.planOfferVersion.findFirst({
-          where: { id: versionId, offer: { userId } },
-          select: { startDate: true, weeks: true },
-        })
-      : null;
-    if (version?.startDate && version.weeks) return planEndDate(version.startDate, version.weeks);
-    const last = await this.prisma.plannedSession.findFirst({
-      where: { userId, planId },
-      orderBy: { date: 'desc' },
-      select: { date: true },
-    });
-    return last?.date ?? todayInTz('UTC');
   }
 }

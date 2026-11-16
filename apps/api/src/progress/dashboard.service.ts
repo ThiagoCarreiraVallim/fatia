@@ -9,6 +9,7 @@ import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 import { computeDailyGoals } from './helpers/daily-goals';
+import { activeLinksOf, linkedOffersWhere } from '../sharing/plan-offer-links';
 import type { NextEvent, ReceivedPlan, TodoItem, TodoSummary } from './today-contracts';
 
 /** Janela da variação de peso que o cartão do Hoje mostra ("−2,5 em 30 dias"). */
@@ -32,6 +33,30 @@ export class DashboardService {
     private readonly achievements: AchievementService,
     private readonly trainingBlocks: TrainingBlockService,
   ) {}
+
+  /**
+   * Ofertas esperando resposta (#379), só de quem ainda tem `ProfessionalLink`
+   * ativo com a pessoa na comunidade em que enviou: a outra não se responde mais.
+   */
+  private async pendingOffers(userId: string) {
+    const linked = linkedOffersWhere(await activeLinksOf(this.prisma, userId));
+    if (!linked) return [];
+    return this.prisma.planOffer.findMany({
+      where: { userId, versions: { some: { status: 'PENDING' } }, ...linked },
+      select: {
+        id: true,
+        author: { select: { name: true } },
+        versions: {
+          where: { status: 'PENDING' },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { id: true, title: true, version: true, schedule: true, weeks: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: TODO_LIMIT + 1,
+    });
+  }
 
   async today(ctx: UserCtx) {
     const date = todayInTz(ctx.timezone);
@@ -118,22 +143,9 @@ export class DashboardService {
         orderBy: { loggedAt: 'asc' },
         select: { id: true, weightKg: true },
       }),
-      // Planos de treino da equipe esperando resposta (#379).
-      this.prisma.planOffer.findMany({
-        where: { userId: ctx.userId, versions: { some: { status: 'PENDING' } } },
-        select: {
-          id: true,
-          author: { select: { name: true } },
-          versions: {
-            where: { status: 'PENDING' },
-            orderBy: { version: 'desc' },
-            take: 1,
-            select: { id: true, title: true, version: true, schedule: true, weeks: true },
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: TODO_LIMIT + 1,
-      }),
+      // Planos de treino da equipe esperando resposta (#379), só de quem ainda
+      // tem vínculo ativo com a pessoa.
+      this.pendingOffers(ctx.userId),
     ]);
 
     const plannedToday =

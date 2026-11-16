@@ -38,6 +38,7 @@ type MockPrisma = {
   nutrientTarget: { findMany: jest.Mock };
   inboxNotice: { count: jest.Mock };
   planOffer: { findMany: jest.Mock };
+  professionalLink: { findMany: jest.Mock };
 };
 
 /**
@@ -83,6 +84,7 @@ const makePrisma = (): MockPrisma => ({
   nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { count: jest.fn().mockResolvedValue(0) },
   planOffer: { findMany: jest.fn().mockResolvedValue([]) },
+  professionalLink: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const makeStepLogs = (): MockStepLogs => ({ getStepsForDate: jest.fn() });
@@ -500,6 +502,9 @@ describe('DashboardService', () => {
             { id: `${id}-v`, title, version, schedule: weeks ? 'CALENDAR' : 'FLEXIBLE', weeks },
           ],
         });
+        prisma.professionalLink.findMany.mockResolvedValue([
+          { professionalId: 'helena', groupId: 'g1' },
+        ]);
         prisma.planOffer.findMany.mockResolvedValue([
           oferta('o1', 'Inferior', 2, 4),
           oferta('o2', 'Push', 1, null),
@@ -507,8 +512,17 @@ describe('DashboardService', () => {
 
         const result = await service.today(ctx);
 
+        expect(prisma.professionalLink.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { subjectUserId: 'user-A', revokedAt: null } }),
+        );
+        // Só as ofertas de quem ainda tem vínculo ativo, na comunidade em que enviou.
         expect(prisma.planOffer.findMany).toHaveBeenCalledWith(
-          expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),
+          expect.objectContaining({
+            where: expect.objectContaining({
+              userId: 'user-A',
+              OR: [{ authorId: 'helena', groupId: 'g1' }],
+            }),
+          }),
         );
         expect(result.receivedPlan).toEqual({
           id: 'o1',
@@ -529,6 +543,24 @@ describe('DashboardService', () => {
             },
           ],
         });
+      });
+
+      it('plano recebido sem vínculo ativo com quem enviou não aparece no Hoje', async () => {
+        prisma.planOffer.findMany.mockResolvedValue([
+          {
+            id: 'o1',
+            author: { name: 'Helena Personal' },
+            versions: [
+              { id: 'v', title: 'Inferior', version: 1, schedule: 'FLEXIBLE', weeks: null },
+            ],
+          },
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(prisma.planOffer.findMany).not.toHaveBeenCalled();
+        expect(result.receivedPlan).toBeNull();
+        expect(result.todo).toEqual({ count: 0, items: [] });
       });
 
       it('"Para fazer", treino recebido e evento: contrato pronto, vazio até as issues deles', async () => {
