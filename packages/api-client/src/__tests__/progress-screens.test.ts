@@ -15,14 +15,17 @@ import {
   goalBadge,
   goalCreateInput,
   goalDeadlineIso,
+  parseDayInput,
   goalProgress,
   goalSubtitle,
   goalTab,
   averagePace,
   cardioSummary,
+  chartCardView,
   formatPace,
   linePath,
   newBestCount,
+  clockTime,
   recordHighlight,
   stepSourceBadge,
   strengthRecordRows,
@@ -517,5 +520,111 @@ describe('origem do registro (Al-G7)', () => {
       manual: false,
     });
     expect(stepSourceBadge('WEBHOOK').manual).toBe(false);
+  });
+});
+
+describe('hora do registro', () => {
+  beforeEach(() => vi.stubEnv('TZ', 'America/Sao_Paulo'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('HH:MM no fuso de quem olha; vazio sem data', () => {
+    expect(clockTime('2026-05-19T11:05:00.000Z')).toBe('08:05');
+    expect(clockTime(null)).toBe('');
+  });
+});
+
+describe('cartão do gráfico (Al-G6)', () => {
+  it('peso: valor atual, variação e a linha', () => {
+    const v = chartCardView(
+      'weight',
+      {
+        weight: {
+          points: [
+            { date: '2026-10-20', weightKg: 71 },
+            { date: '2026-11-15', weightKg: 70.2 },
+          ],
+          weeklyAverages: [],
+          totalDeltaKg: -0.8,
+          currentWeightKg: 70.2,
+          latest: null,
+          previous: null,
+          deltaSinceLastKg: null,
+        },
+      },
+      { loadUnit: 'KG', metric: 'max_weight' },
+    );
+
+    expect(v).toMatchObject({
+      label: 'Peso',
+      big: '70,2 kg',
+      delta: '−0,8 kg',
+      bars: null,
+      line: [71, 70.2],
+    });
+  });
+
+  it('passos: média por dia e 12 barras', () => {
+    const points = Array.from({ length: 24 }, (_, i) => ({
+      date: `d${i}`,
+      steps: 1000,
+      goalReached: null,
+    }));
+    const v = chartCardView(
+      'steps',
+      {
+        steps: {
+          points,
+          weeklyAverages: [
+            { weekStart: 'a', avgSteps: 8000 },
+            { weekStart: 'b', avgSteps: 10000 },
+          ],
+          totalSteps: 24000,
+          averageDaily: 8884,
+          bestDay: null,
+          goalTarget: null,
+          daysWithGoalReached: 0,
+        },
+      },
+      { loadUnit: 'KG', metric: 'max_weight' },
+    );
+
+    expect(v).toMatchObject({ big: '8.884', delta: '+25%', deltaTone: 'ok', line: null });
+    expect(v.bars).toHaveLength(12);
+  });
+
+  it('força em libras quando a pessoa usa libras', () => {
+    const v = chartCardView(
+      'strength',
+      {
+        strength: {
+          exercise: { id: 1, name: 'Supino' },
+          metric: 'max_weight',
+          points: [],
+          startValue: 80,
+          currentValue: 100,
+          deltaPercent: 25,
+        },
+      },
+      { loadUnit: 'LB', metric: 'max_weight' },
+    );
+
+    expect(v).toMatchObject({ label: 'Carga máx', big: '220,5 lb', delta: '+25%' });
+  });
+
+  it('sem dado ainda: travessão, sem variação', () => {
+    expect(chartCardView('cardio', {}, { loadUnit: 'KG', metric: 'max_weight' })).toMatchObject({
+      big: '—',
+      delta: null,
+    });
+  });
+});
+
+describe('data digitada (prazo no app, sem calendário nativo)', () => {
+  it('DD/MM/AAAA vira YYYY-MM-DD; data que não existe, null', () => {
+    expect(parseDayInput('20/12/2026')).toBe('2026-12-20');
+    expect(parseDayInput(' 5/1/2027 ')).toBe('2027-01-05');
+    expect(parseDayInput('31/02/2027')).toBeNull();
+    expect(parseDayInput('2026-12-20')).toBeNull();
+    expect(parseDayInput('')).toBeNull();
   });
 });

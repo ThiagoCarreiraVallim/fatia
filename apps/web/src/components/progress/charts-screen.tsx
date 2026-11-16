@@ -7,26 +7,13 @@ import {
   CHART_NOTES,
   CHART_RANGES,
   STRENGTH_METRICS,
-  averagePace,
-  bucketize,
+  chartCardView,
   describeSeries,
-  cardioSummary,
   formatDecimal,
-  formatInteger,
-  formatPace,
-  loadNumber,
-  loadUnitLabel,
   progressApi,
   shortDayOf,
-  signedDelta,
-  signedPercent,
-  stepsSummary,
-  strengthSummary,
-  trendPercent,
-  weightSummary,
   workoutApi,
   type ChartKind,
-  type ChartSummaryItem,
   type Exercise,
   type StrengthChartMetric,
 } from '@fatia/api-client';
@@ -40,19 +27,6 @@ import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { BodyLogSheet } from './body-log-sheet';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
 import { MiniBars, Sparkline, ToneBadge } from './progress-ui';
-
-interface ChartView {
-  label: string;
-  big: string;
-  delta: string | null;
-  deltaTone: 'ok' | 'warn' | 'mute';
-  bars: number[] | null;
-  line: number[] | null;
-  summary: ChartSummaryItem[];
-  loading: boolean;
-  error: boolean;
-  retry: () => void;
-}
 
 /**
  * Gráficos (prancha Al-G6, #382): Peso, Passos, Força e Cardio no mesmo cartão, com o
@@ -103,79 +77,29 @@ export function ChartsScreen() {
     enabled: kind === 'cardio',
   });
 
-  const unit = loadUnitLabel(loadUnit);
-  const view: ChartView = (() => {
-    switch (kind) {
-      case 'weight': {
-        const w = weight.data;
-        return {
-          label: 'Peso',
-          big: w?.currentWeightKg != null ? `${formatDecimal(w.currentWeightKg)} kg` : '—',
-          delta: w && w.points.length >= 2 ? signedDelta(w.totalDeltaKg, 'kg') : null,
-          deltaTone: 'ok',
-          bars: null,
-          line: w?.points.map((p) => p.weightKg) ?? [],
-          summary: w ? weightSummary(w) : [],
-          loading: weight.isLoading,
-          error: weight.isError,
-          retry: () => void weight.refetch(),
-        };
-      }
-      case 'steps': {
-        const s = steps.data;
-        const trend = s ? trendPercent(s.weeklyAverages.map((x) => x.avgSteps)) : null;
-        return {
-          label: 'Passos por dia',
-          big: s && s.points.length ? formatInteger(s.averageDaily) : '—',
-          delta: trend === null ? null : signedPercent(trend),
-          deltaTone: trend !== null && trend < 0 ? 'warn' : 'ok',
-          bars: bucketize(s?.points.map((p) => p.steps) ?? [], 12),
-          line: null,
-          summary: s ? stepsSummary(s) : [],
-          loading: steps.isLoading,
-          error: steps.isError,
-          retry: () => void steps.refetch(),
-        };
-      }
-      case 'strength': {
-        const st = strength.data;
-        const label = STRENGTH_METRICS.find((m) => m.value === metric)!.label;
-        return {
-          label,
-          big:
-            st?.currentValue != null
-              ? metric === 'total_volume'
-                ? `${formatInteger(st.currentValue)} ${unit}`
-                : `${loadNumber(st.currentValue, loadUnit)} ${unit}`
-              : '—',
-          delta: st?.deltaPercent != null ? signedPercent(Math.round(st.deltaPercent)) : null,
-          deltaTone: st?.deltaPercent != null && st.deltaPercent < 0 ? 'warn' : 'ok',
-          bars: null,
-          line: st?.points.map((p) => p.value) ?? [],
-          summary: st ? strengthSummary(st, loadUnit) : [],
-          loading: records.isLoading || strength.isLoading,
-          error: records.isError || strength.isError,
-          retry: () => void (records.isError ? records.refetch() : strength.refetch()),
-        };
-      }
-      case 'cardio': {
-        const c = cardio.data;
-        const pace = c ? averagePace(c) : null;
-        return {
-          label: 'Ritmo médio',
-          big: pace !== null ? `${formatPace(pace)} /km` : c ? `${c.points.length} sessões` : '—',
-          delta: c ? `${c.points.length} ${c.points.length === 1 ? 'sessão' : 'sessões'}` : null,
-          deltaTone: 'mute',
-          bars: bucketize(c?.points.map((p) => p.durationSeconds / 60) ?? [], 12),
-          line: null,
-          summary: c ? cardioSummary(c) : [],
-          loading: cardio.isLoading,
-          error: cardio.isError,
-          retry: () => void cardio.refetch(),
-        };
-      }
-    }
-  })();
+  const view = chartCardView(
+    kind,
+    { weight: weight.data, steps: steps.data, strength: strength.data, cardio: cardio.data },
+    { loadUnit, metric },
+  );
+  const status = {
+    weight: {
+      loading: weight.isLoading,
+      error: weight.isError,
+      retry: () => void weight.refetch(),
+    },
+    steps: { loading: steps.isLoading, error: steps.isError, retry: () => void steps.refetch() },
+    strength: {
+      loading: records.isLoading || strength.isLoading,
+      error: records.isError || strength.isError,
+      retry: () => void (records.isError ? records.refetch() : strength.refetch()),
+    },
+    cardio: {
+      loading: cardio.isLoading,
+      error: cardio.isError,
+      retry: () => void cardio.refetch(),
+    },
+  }[kind];
 
   const from = shortDayOf(new Date(nowMs - days * 86_400_000).toISOString());
 
@@ -223,9 +147,9 @@ export function ChartsScreen() {
           {view.delta && <ToneBadge tone={view.deltaTone}>{view.delta}</ToneBadge>}
         </div>
 
-        {view.error ? (
-          <ErrorState message="Não deu para carregar o gráfico." onRetry={view.retry} />
-        ) : view.loading ? (
+        {status.error ? (
+          <ErrorState message="Não deu para carregar o gráfico." onRetry={status.retry} />
+        ) : status.loading ? (
           <Skeleton className="h-[150px] rounded-field" />
         ) : view.bars ? (
           <MiniBars

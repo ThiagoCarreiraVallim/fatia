@@ -835,3 +835,107 @@ export function stepSourceBadge(source: string): {
   if (source === 'MANUAL') return { label: 'manual', tone: 'mute', manual: true };
   return { label: STEP_SOURCE_LABEL[source] ?? 'integração', tone: 'ok', manual: false };
 }
+
+/** "08:05" de um instante ISO, no fuso de quem está olhando; vazio sem data. */
+export function clockTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export interface ChartCardView {
+  label: string;
+  big: string;
+  delta: string | null;
+  deltaTone: 'ok' | 'warn' | 'mute';
+  /** Passos e Cardio: 12 barras. */
+  bars: number[] | null;
+  /** Peso e Força: a linha. */
+  line: number[] | null;
+  summary: ChartSummaryItem[];
+}
+
+/** O cartão do G6 para o tipo escolhido, com o que já carregou. */
+export function chartCardView(
+  kind: ChartKind,
+  data: {
+    weight?: WeightProgress;
+    steps?: StepsProgress;
+    strength?: StrengthProgress;
+    cardio?: CardioProgress;
+  },
+  opts: { loadUnit: LoadUnit; metric: StrengthChartMetric },
+): ChartCardView {
+  const unit = loadUnitLabel(opts.loadUnit);
+  switch (kind) {
+    case 'weight': {
+      const w = data.weight;
+      return {
+        label: 'Peso',
+        big: w?.currentWeightKg != null ? `${formatDecimal(w.currentWeightKg)} kg` : '—',
+        delta: w && w.points.length >= 2 ? signedDelta(w.totalDeltaKg, 'kg') : null,
+        deltaTone: 'ok',
+        bars: null,
+        line: w?.points.map((p) => p.weightKg) ?? [],
+        summary: w ? weightSummary(w) : [],
+      };
+    }
+    case 'steps': {
+      const s = data.steps;
+      const trend = s ? trendPercent(s.weeklyAverages.map((x) => x.avgSteps)) : null;
+      return {
+        label: 'Passos por dia',
+        big: s && s.points.length ? formatInteger(s.averageDaily) : '—',
+        delta: trend === null ? null : signedPercent(trend),
+        deltaTone: trend !== null && trend < 0 ? 'warn' : 'ok',
+        bars: bucketize(s?.points.map((p) => p.steps) ?? [], 12),
+        line: null,
+        summary: s ? stepsSummary(s) : [],
+      };
+    }
+    case 'strength': {
+      const st = data.strength;
+      const label = STRENGTH_METRICS.find((m) => m.value === opts.metric)!.label;
+      const big =
+        st?.currentValue == null
+          ? '—'
+          : opts.metric === 'total_volume'
+            ? `${formatInteger(kgToLoad(st.currentValue, opts.loadUnit))} ${unit}`
+            : `${loadNumber(st.currentValue, opts.loadUnit)} ${unit}`;
+      return {
+        label,
+        big,
+        delta: st?.deltaPercent != null ? signedPercent(Math.round(st.deltaPercent)) : null,
+        deltaTone: st?.deltaPercent != null && st.deltaPercent < 0 ? 'warn' : 'ok',
+        bars: null,
+        line: st?.points.map((p) => p.value) ?? [],
+        summary: st ? strengthSummary(st, opts.loadUnit) : [],
+      };
+    }
+    case 'cardio': {
+      const c = data.cardio;
+      const pace = c ? averagePace(c) : null;
+      return {
+        label: 'Ritmo médio',
+        big: pace !== null ? `${formatPace(pace)} /km` : c ? `${c.points.length} sessões` : '—',
+        delta: c ? `${c.points.length} ${c.points.length === 1 ? 'sessão' : 'sessões'}` : null,
+        deltaTone: 'mute',
+        bars: bucketize(c?.points.map((p) => p.durationSeconds / 60) ?? [], 12),
+        line: null,
+        summary: c ? cardioSummary(c) : [],
+      };
+    }
+  }
+}
+
+/** "20/12/2026" → "2026-12-20"; `null` se não for uma data que existe. */
+export function parseDayInput(text: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text.trim());
+  if (!m) return null;
+  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d)
+    return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
