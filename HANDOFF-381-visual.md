@@ -10,7 +10,7 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 - [x] T17b treino livre (commit "fix: treino livre segue a T17b") — prints web/workout_free*.m.png, app/free-empty.png, app/free-with.png, cmp-Al-T17b-*.png
 - [x] T10 histórico — web/workout_history*.m.png, app/history*.png, cmp-Al-T10-Historico.png
 - [x] T11 detalhe força — web/workout_history_517c…_click_Tr_ceps_Corda_scroll_end.m.png, app/detail.png, app/detail-record-end.png, app/detail-back.png (seta volta ao histórico: ok web e app), cmp-Al-T11-Sessao-detalhe.png
-- [ ] T11b detalhe cardio (demo não tem sessão cardio: criar via "Só cardio")
+- [x] T11b detalhe cardio — sessão criada e concluída na web: 05ab4303-f23d-4e87-80a9-8000c4572f7f (Corrida na Esteira 5,1 km 32 min 146 bpm 340 kcal, como foi 😐). Prints web/workout_history_05ab4303*.m.png, app/cardio*.png, cmp-Al-T11b-Sessao-cardio.png
 - [ ] lint/typecheck/testes; apagar este arquivo no último commit
 
 ## Diferenças achadas (a corrigir)
@@ -23,4 +23,4 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 
 ## Próximo passo
 
-T11b: criar sessão só cardio pelo app/web (Treino > Só cardio > Esteira > Iniciar > registrar distância/tempo > concluir), print do detalhe. Estilos do CardioBody já ajustados (b3; "Salvar como plano" em bg-muted).
+pnpm lint, pnpm typecheck, testes api-client/web/mobile (+ spec da API session-history); relatório; apagar este arquivo no último commit.

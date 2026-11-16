@@ -170,7 +170,7 @@ function Detail({
               onPress={() => saveAsPlan.mutate()}
               className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-muted active:opacity-80"
             >
-              <Plus size={16} color={colors.primaryForeground} />
+              <Plus size={16} color={colors.foreground} />
               <Text className="font-sans-bold text-[15px] text-foreground">
                 {saveAsPlan.isPending ? 'Salvando...' : 'Salvar como plano'}
               </Text>
