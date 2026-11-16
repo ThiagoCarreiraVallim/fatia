@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Minus, Plus } from 'lucide-react';
 import {
   FEELINGS,
+  currentChipIndex,
+  revealOffset,
   feelingOf,
   feelingToRpe,
   loadFieldValue,
@@ -96,17 +98,42 @@ export function SetChips({
   const open = sets.find((s) => s.id === openId) ?? null;
   const openIndex = open ? sets.indexOf(open) : -1;
   const pending = Math.max(0, targetSets - sets.length);
+  const stripRef = useRef<HTMLUListElement>(null);
+  const current = currentChipIndex({ done: sets.length, target: targetSets });
+
+  // O chip da vez sempre à vista (pedido do dono): na série 4 de 4 a faixa
+  // mostrava só os dois primeiros. Rola o mínimo, a cada série registrada.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const chip = strip?.querySelector<HTMLElement>(`[data-chip="${current}"]`);
+    if (!strip || !chip) return;
+    const box = strip.getBoundingClientRect();
+    const rect = chip.getBoundingClientRect();
+    const itemStart = rect.left - box.left + strip.scrollLeft;
+    const left = revealOffset({
+      offset: strip.scrollLeft,
+      viewport: strip.clientWidth,
+      content: strip.scrollWidth,
+      itemStart,
+      itemEnd: itemStart + rect.width,
+      margin: 16,
+    });
+    if (left !== strip.scrollLeft) strip.scrollTo?.({ left, behavior: 'smooth' });
+  }, [current, sets.length, targetSets]);
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <ul className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [scrollbar-width:none]">
+        <ul
+          ref={stripRef}
+          className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [scrollbar-width:none]"
+        >
           {sets.map((s, i) => {
             const summary = formatPreviousSet({ ...s, rpe: null }, isCardio, units) ?? '—';
             const feeling = feelingOf(rpeToFeeling(s.rpe));
             const editing = openId === s.id;
             return (
-              <li key={s.id} className="shrink-0">
+              <li key={s.id} data-chip={i} className="shrink-0">
                 <button
                   type="button"
                   aria-expanded={editing}
@@ -132,6 +159,7 @@ export function SetChips({
             return (
               <li
                 key={`falta-${n}`}
+                data-chip={n - 1}
                 aria-label={current ? `Série ${n}, a da vez` : `Série ${n}, falta`}
                 className={cn(
                   'flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-bold',

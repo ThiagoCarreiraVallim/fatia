@@ -1,6 +1,7 @@
+import { useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import type { ExerciseGroup } from '@fatia/api-client';
+import { currentChipIndex, revealOffset, type ExerciseGroup } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui';
 import { setChipLabel } from './guided-session';
@@ -28,13 +29,50 @@ export function SetChips({
   const unit = useUnitPrefs().loadUnit;
   const total = Math.max(targetSetsOf(group), group.sets.length);
   const done = group.sets.length;
+  const currentIndex = currentChipIndex({ done, target: targetSetsOf(group) });
+
+  // O chip da vez sempre à vista (pedido do dono): na série 4 de 4 a faixa
+  // mostrava só os dois primeiros. As medidas chegam pelo `onLayout`; quando o
+  // chip da vez se mede (ele muda de "agora" para a série feita a cada
+  // registro), a faixa rola o mínimo para ele caber.
+  const scrollRef = useRef<ScrollView>(null);
+  const measure = useRef({ offset: 0, viewport: 0, content: 0 });
+  const chips = useRef(new Map<number, { x: number; width: number }>());
+  function reveal() {
+    const chip = currentIndex != null ? chips.current.get(currentIndex) : undefined;
+    const m = measure.current;
+    if (!chip || m.viewport === 0) return;
+    const x = revealOffset({
+      offset: m.offset,
+      viewport: m.viewport,
+      content: m.content,
+      itemStart: chip.x,
+      itemEnd: chip.x + chip.width,
+      margin: 16,
+    });
+    if (x !== m.offset) scrollRef.current?.scrollTo({ x, animated: true });
+  }
+
   return (
     <View className="flex-row items-center gap-1.5">
       <ScrollView
+        ref={scrollRef}
         horizontal
         className="flex-1"
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 6 }}
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          measure.current.offset = e.nativeEvent.contentOffset.x;
+        }}
+        onLayout={(e) => {
+          measure.current.viewport = e.nativeEvent.layout.width;
+          reveal();
+        }}
+        onContentSizeChange={(width) => {
+          measure.current.content = width;
+          reveal();
+        }}
       >
         {Array.from({ length: total }, (_, i) => {
           const set = group.sets[i];
@@ -54,6 +92,11 @@ export function SetChips({
               accessibilityState={set ? { expanded: on } : undefined}
               disabled={!set}
               onPress={() => onEdit(on ? null : i)}
+              onLayout={(e) => {
+                const { x, width } = e.nativeEvent.layout;
+                chips.current.set(i, { x, width });
+                if (i === currentIndex) reveal();
+              }}
               className={cn(
                 'h-10 flex-row items-center gap-1.5 rounded-full px-3',
                 set && on && 'bg-primary',
