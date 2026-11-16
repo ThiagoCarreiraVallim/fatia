@@ -32,10 +32,11 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] API: `helpers/circuit.ts`, `circuit-session.service.ts`, `WorkoutPlanService.createCircuit/replaceCircuit`,
       rotas `POST/PUT /workout/circuits`, `PUT /workout/sessions/:id/circuit`, `POST .../circuit/finish`,
       `summary().circuit` (testes `circuit.spec.ts`, `circuit.integration.spec.ts`)
-- [ ] snapshot/modelos/oferta com circuito
-- [ ] isolamento (`user-isolation.spec.ts`), export/exclusão LGPD, leitura da equipe
-- [ ] MCP + docs/MCP_TOOL_SURFACE.md + docs/MCP.md + fingerprint
-- [ ] api-client: timer puro + testes; cliente HTTP; copy
+- [x] snapshot/modelos/oferta com circuito (plan-snapshot + materializer)
+- [x] isolamento (`user-isolation.spec.ts`, 3 testes), export LGPD (`circuit: true`)
+- [x] MCP (`create_workout_plan.circuit`, `log_circuit_result`) + docs + fingerprint (SHA novo, 152 tools)
+- [x] api-client: `circuit-copy.ts` (13 testes), `workoutApi.createCircuit/updateCircuit/saveCircuitProgress/finishCircuit`,
+      rotas em `navigation.ts` (`/workout/circuits/new`, `/workout/circuits/:id`, `/workout/circuit/:id`)
 - [ ] web: T22, T4, T4b/T4d, T4c/T4e, aba Circuitos no T6, "Circuito" no T1, fim → T5
 - [ ] app: idem + keep-awake, som/vibração com fallback
 - [ ] REDESIGN_PROGRESS (decisões do dono #380, pendências)
@@ -50,4 +51,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 
 ## Próximo passo
 
-Snapshot/materializer, export, isolamento, depois MCP.
+Web: editor T22 (`components/workout/circuit/circuit-editor.tsx`, páginas `/workout/circuits/new` e `[id]`),
+tela de execução `/workout/circuit/[id]`, aba Circuitos em Planos, card no Treino, bloco do circuito no T5,
+barra ativa. Teste web `app-top-bar.test.tsx:43` espera 'Voltar para Planos de treino' (agora 'Planos e circuitos').
+Depois o app (mesmas telas).
