@@ -53,6 +53,11 @@ export interface PostWorkoutQuestions {
 export type SessionSummaryView = SessionSummary & {
   checkin: Omit<WorkoutCheckin, 'userId'> | null;
   questions: PostWorkoutQuestions | null;
+  /**
+   * O plano que esta sessão virou no "Salvar como plano" (#381). A tela troca
+   * o botão por "Ver plano"; nulo se não virou (ou se o plano foi apagado).
+   */
+  savedPlanId: string | null;
 };
 
 const SESSION_INCLUDE = {
@@ -463,7 +468,7 @@ export class WorkoutSessionService {
     if (!session) throw new NotFoundException('Session not found');
 
     const exerciseIds = [...new Set(session.sets.map((s) => s.exerciseId))];
-    const [previous, priorSets, questions] = await Promise.all([
+    const [previous, priorSets, questions, savedPlan] = await Promise.all([
       session.planId
         ? this.prisma.workoutSession.findFirst({
             where: {
@@ -498,6 +503,10 @@ export class WorkoutSessionService {
           })
         : [],
       this.postWorkoutQuestions(userId),
+      this.prisma.workoutPlan.findFirst({
+        where: { userId, fromSessionId: session.id },
+        select: { id: true },
+      }),
     ]);
 
     const summary = summarizeSession({
@@ -524,7 +533,7 @@ export class WorkoutSessionService {
       void _dono;
       checkin = rest;
     }
-    return { ...summary, checkin, questions };
+    return { ...summary, checkin, questions, savedPlanId: savedPlan?.id ?? null };
   }
 
   private shapeSession(session: SessionWithRelations) {

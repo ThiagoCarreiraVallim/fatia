@@ -1658,7 +1658,8 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 
 **Output:** as sessões, cada uma com séries, plano, `feeling` (1 Leve a 5 No limite), `notes` e
 `kind` (#381): `plan` (com plano), `free` (treino livre, inclusive o só de cardio) ou `circuit`.
-O tipo é derivado, nunca gravado; não há tipo "cardio", porque cardio é exercício
+O tipo vem do retrato gravado ao começar (`fromPlan` e `planName` na sessão): apagar o plano não
+faz a sessão virar `free`. Não há tipo "cardio", porque cardio é exercício
 (`muscleGroup === 'cardio'`). Circuito chega com a #380: até lá nenhuma sessão é `circuit`.
 
 ### `save_session_as_plan`
@@ -1667,7 +1668,10 @@ O tipo é derivado, nunca gravado; não há tipo "cardio", porque cardio é exer
 novo com os exercícios da sessão, na ordem dela. Força guarda as séries feitas, a faixa de
 repetições (ou de segundos) e a carga da primeira série como carga inicial; cardio guarda a
 distância e o tempo somados como meta de cardio (por distância quando houve distância, senão por
-tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`.
+tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`; sessão ainda
+aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"). Idempotente por sessão: salvar
+de novo a mesma sessão devolve o plano que ela já virou (`WorkoutPlan.fromSessionId`, único por
+pessoa), sem criar outro nem renomear; o resumo da sessão traz esse id em `savedPlanId`.
 
 **Input:**
 

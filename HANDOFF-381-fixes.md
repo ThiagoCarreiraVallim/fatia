@@ -10,9 +10,9 @@ Branch `redesign/381-review-fixes` (worktree `.claude/worktrees/381-review-fixes
 ## Checklist (cada item: teste vermelho -> correção -> commit)
 
 1. [x] Web: lista de pendentes do treino livre fica velha (usePendingExercises compartilhado)
-2. [~] Excluir plano vira "Treino livre" (snapshot planName/wasPlanned + backfill)
-3. [ ] Salvar como plano idempotente (WorkoutPlan.fromSessionId, "Ver plano")
-4. [ ] Salvar como plano exige sessão concluída (409)
+2. [x] Excluir plano vira "Treino livre" (snapshot planName/wasPlanned + backfill)
+3. [x] Salvar como plano idempotente (WorkoutPlan.fromSessionId, "Ver plano")
+4. [x] Salvar como plano exige sessão concluída (409)
 5. [ ] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
 6. [ ] Cursor do histórico (keyset opaco por usuário)
 7. [ ] Mobile: toque duplo em Iniciar treino
@@ -22,4 +22,7 @@ Migração única: `20261116030000_session_plan_snapshot_and_plan_source`.
 
 ## Próximo passo
 
-Item 2: API feita (commit "fix(api): sessão guarda retrato do plano"); falta a UI (planActionOf no api-client, junto com o "Ver plano" do item 3). Depois itens 3-6 na API (spec vermelho em history-review.integration.spec.ts; rodar sem diagnóstico TS com o config em scratchpad ou só depois de tipar).
+Item 5: repor o `orderBy` dos sets em `createFromSession` (texto em scratchpad/orderby.txt:
+`orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }]`), `exerciseOrder` no StartSessionDto
+e no `start()`, e os hooks de início (web `use-start-with-exercises`, app `use-start-session`)
+mandando a ordem dos escolhidos. Depois item 6 (cursor), 7, 8.

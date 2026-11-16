@@ -226,9 +226,17 @@ describe('treino livre e histórico #381 (banco real)', () => {
     });
 
     it('sessão sem série não tem o que virar plano', async () => {
-      await expect(plans.createFromSession(userId, openId, {})).rejects.toThrow(
+      const empty = await prisma.workoutSession.create({
+        data: {
+          userId,
+          startedAt: at('2026-10-01T10:00:00Z'),
+          completedAt: at('2026-10-01T10:05:00Z'),
+        },
+      });
+      await expect(plans.createFromSession(userId, empty.id, {})).rejects.toThrow(
         BadRequestException,
       );
+      await prisma.workoutSession.delete({ where: { id: empty.id } });
     });
   });
 

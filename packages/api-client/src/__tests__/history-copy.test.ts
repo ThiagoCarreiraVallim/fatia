@@ -12,6 +12,7 @@ import {
   historyTotals,
   repeatPlanOf,
   sessionDetailTitle,
+  sessionPlanAction,
   sessionHero,
   sessionKindLabel,
   setLine,
@@ -262,6 +263,19 @@ describe('detalhe da sessão (Al-T11, Al-T11b)', () => {
         KM,
       ),
     ).toEqual({ title: 'Maior distância na esteira', before: 'antes 4,6 km' });
+  });
+
+  it('livre oferece salvar como plano; já salvo, ver o plano', () => {
+    expect(sessionPlanAction(runSummary())).toEqual({ kind: 'save' });
+    expect(sessionPlanAction({ ...runSummary(), savedPlanId: 'p9' })).toEqual({
+      kind: 'view',
+      planId: 'p9',
+    });
+  });
+
+  it('sessão de plano não vira plano, nem depois de o plano ser apagado', () => {
+    expect(sessionPlanAction(summary())).toBeNull();
+    expect(sessionPlanAction({ ...summary(), planId: null, kind: 'plan' })).toBeNull();
   });
 
   it('repetir: com plano, o plano; livre, os mesmos exercícios', () => {
