@@ -49,6 +49,7 @@ export type MenuKey =
   | 'progress'
   | 'personal-goals'
   | 'records'
+  | 'achievements'
   | 'nutrition-plan'
   | 'daily-goals'
   | 'nutrients'
@@ -110,7 +111,7 @@ const link = (
 /**
  * As seções de Você, na ordem da prancha `Al-V1-Voce` (ADR 040, item 3). Só
  * entram as linhas cujo destino existe: Sua semana e cards, Avaliações,
- * Conquistas, Configurações da IA, Hábitos, Lembretes, a saúde do celular e
+ * Configurações da IA, Hábitos, Lembretes, a saúde do celular e
  * Objetivo e rotina chegam com as issues donas das telas (#382, #383, #385,
  * #389, #390, #371). Aparência fica em Conta pela ADR 041 e pela revisão da
  * ADR 040, mesmo sem estar desenhada na prancha.
@@ -122,6 +123,7 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
       link('progress', 'Progresso', 'trend', '/progress'),
       link('personal-goals', 'Metas pessoais', 'target', '/goals'),
       link('records', 'Recordes', 'trophy', '/progress/records'),
+      link('achievements', 'Conquistas', 'medal', '/progress/achievements'),
     ],
   },
   {
@@ -362,7 +364,10 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
   { pattern: '/progress', title: 'Progresso', parent: '/you' },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
-  { pattern: '/goals', title: 'Metas pessoais', parent: '/you' },
+  { pattern: '/progress/charts', title: 'Gráficos', parent: '/progress' },
+  { pattern: '/progress/achievements', title: 'Conquistas', parent: '/progress' },
+  { pattern: '/progress/consistency', title: 'Constância', parent: '/progress' },
+  { pattern: '/goals', title: 'Metas', parent: '/you' },
   // O perfil virou Você (#387): `/profile` só redireciona para lá.
   { pattern: '/profile', title: 'Perfil', parent: '/you' },
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/you' },
