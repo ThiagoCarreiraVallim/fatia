@@ -216,7 +216,10 @@ export class ProgressController {
 
   @Get('achievements')
   listAchievements(@CurrentUser() user: CurrentUserPayload) {
-    return this.achievements.list({ userId: user.id, timezone: user.timezone });
+    return this.achievements.list(
+      { userId: user.id, timezone: user.timezone },
+      { withProgress: true },
+    );
   }
 
   /**

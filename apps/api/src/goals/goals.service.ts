@@ -45,17 +45,22 @@ export class GoalsService {
 
   async list(filter: ListGoalsDto, userId: string, timezone: string): Promise<GoalWithProgress[]> {
     const where: Prisma.GoalWhereInput = { userId };
-    if (filter.status) where.status = filter.status;
     if (filter.kind) where.kind = filter.kind;
+    // O status filtra em memória, depois de aplicado o prazo: "vencida" é derivada, e um filtro no
+    // banco por `active` traria a meta cujo prazo já passou para a aba errada.
     const goals = await this.prisma.goal.findMany({
       where,
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
-    return Promise.all(goals.map((g) => this.withProgress(g, userId, timezone)));
+    const now = new Date();
+    const visible = goals
+      .map((g) => ({ ...g, status: effectiveStatus(g, now) }))
+      .filter((g) => !filter.status || g.status === filter.status);
+    return Promise.all(visible.map((g) => this.withProgress(g, userId, timezone)));
   }
 
   async update(id: string, dto: UpdateGoalDto, userId: string, timezone: string) {
-    await this.assertOwned(id, userId);
+    const current = await this.assertOwned(id, userId);
     const data: Prisma.GoalUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
@@ -63,9 +68,23 @@ export class GoalsService {
     if (dto.unit !== undefined) data.unit = dto.unit;
     if (dto.deadline !== undefined) data.deadline = dto.deadline ? new Date(dto.deadline) : null;
     if (dto.lastReportedValue !== undefined) data.lastReportedValue = dto.lastReportedValue;
+    // "Novo prazo" (Al-G9): um prazo no futuro numa meta vencida a traz de volta às ativas. A
+    // vencida pode estar gravada (`expired`, pelo MCP) ou só lida assim (ativa com prazo passado).
+    const now = new Date();
+    const newDeadline = dto.deadline ? new Date(dto.deadline) : null;
+    if (
+      dto.status === undefined &&
+      newDeadline &&
+      newDeadline > now &&
+      effectiveStatus(current, now) === GoalStatus.expired
+    ) {
+      data.status = GoalStatus.active;
+    }
     if (dto.status !== undefined) {
       data.status = dto.status;
       if (dto.status === GoalStatus.completed) data.completedAt = new Date();
+      // Reabrir uma concluída tira a data de conclusão: a meta não está mais concluída.
+      if (dto.status === GoalStatus.active) data.completedAt = null;
     }
     const goal = await this.prisma.goal.update({ where: { id }, data });
     return this.withProgress(goal, userId, timezone);
@@ -105,7 +124,7 @@ export class GoalsService {
       timezone,
     );
     const progressPercent = computeProgress(goal.startValue, goal.targetValue, currentValue);
-    return { ...goal, currentValue, progressPercent };
+    return { ...goal, status: effectiveStatus(goal, new Date()), currentValue, progressPercent };
   }
 
   private async deriveCurrentValue(
@@ -133,11 +152,25 @@ export class GoalsService {
         const total = history.reduce((acc, h) => acc + h.steps, 0);
         return Math.round(total / history.length);
       }
+      // % de gordura ainda vem do que a pessoa (ou o Claude) reporta: a fonte automática é a
+      // avaliação física, que chega com a #383 — o ponto de extensão é este `case`.
       case GoalKind.body_fat:
       case GoalKind.custom:
         return lastReportedValue;
     }
   }
+}
+
+/**
+ * A situação lida da meta: ativa com o prazo já passado é vencida (#382). Derivada na leitura —
+ * nenhum job nem GET grava a troca, e um novo prazo a desfaz sozinho. Concluída e arquivada não
+ * vencem.
+ */
+export function effectiveStatus(goal: Pick<Goal, 'status' | 'deadline'>, now: Date): GoalStatus {
+  if (goal.status === GoalStatus.active && goal.deadline && goal.deadline < now) {
+    return GoalStatus.expired;
+  }
+  return goal.status;
 }
 
 /**

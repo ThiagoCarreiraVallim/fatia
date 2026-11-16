@@ -18,6 +18,7 @@ export class UpdateGoalTool implements McpToolDef {
   readonly hostedInference = false;
   readonly description =
     'Atualiza uma meta pessoal. Use `lastReportedValue` para reportar progresso manual em metas de tipo `body_fat` ou `custom`. ' +
+    'Meta vencida (o prazo passou): mandar um `deadline` no futuro a volta para ativa ("novo prazo"). ' +
     'Exemplo: {"goalId":"11111111-2222-4333-8444-555555555555","targetValue":73,"deadline":"2027-03-31T23:59:59-03:00"}';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a atualizar'),

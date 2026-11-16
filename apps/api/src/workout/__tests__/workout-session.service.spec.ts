@@ -317,6 +317,37 @@ describe('WorkoutSessionService', () => {
       expect(prisma.workoutSession.update.mock.calls[1][0].data).toEqual({});
     });
 
+    it('reavalia as conquistas depois de gravar o fim (100 treinos na hora, #382)', async () => {
+      prisma.workoutSession.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        userId,
+        completedAt: null,
+      });
+      prisma.workoutSession.update.mockResolvedValue({ id: 'sess-1' });
+      const hook = { afterFinish: jest.fn().mockResolvedValue([]) };
+      const comGancho = new WorkoutSessionService(prisma as unknown as PrismaService, undefined, [
+        hook,
+      ]);
+
+      await comGancho.finish(userId, 'sess-1', {});
+
+      expect(hook.afterFinish).toHaveBeenCalledWith(userId);
+    });
+
+    it('um gancho que falha não desfaz o treino concluído', async () => {
+      prisma.workoutSession.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        userId,
+        completedAt: null,
+      });
+      prisma.workoutSession.update.mockResolvedValue({ id: 'sess-1' });
+      const comGancho = new WorkoutSessionService(prisma as unknown as PrismaService, undefined, [
+        { afterFinish: jest.fn().mockRejectedValue(new Error('banco fora do ar')) },
+      ]);
+
+      await expect(comGancho.finish(userId, 'sess-1', {})).resolves.toEqual({ id: 'sess-1' });
+    });
+
     it('refuses to finish a session owned by another user', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({
         id: 'sess-1',

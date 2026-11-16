@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -16,6 +18,7 @@ import type {
   WorkoutCheckinDto,
 } from './dto/session.dto';
 import { summarizeSession, type SessionSummary } from './session-summary';
+import { WORKOUT_FINISHED_HOOKS, type WorkoutFinishedHook } from './workout-finished.hook';
 
 export interface PostWorkoutQuestion {
   key: 'fatigue' | 'pain';
@@ -115,9 +118,14 @@ export interface PlannedExerciseView {
 export class WorkoutSessionService {
   private readonly sharedWith: SharedWithService;
 
+  private readonly logger = new Logger(WorkoutSessionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() sharedWith?: SharedWithService,
+    @Optional()
+    @Inject(WORKOUT_FINISHED_HOOKS)
+    private readonly finishedHooks: WorkoutFinishedHook[] = [],
   ) {
     // Só depende do Prisma: quem monta o serviço à mão (specs, scripts) não
     // precisa montar o resto do compartilhamento.
@@ -264,7 +272,19 @@ export class WorkoutSessionService {
       },
     });
     if (dto.checkin) await this.saveCheckin(userId, id, dto.checkin);
+    await this.runFinishedHooks(userId);
     return updated;
+  }
+
+  /** Conquistas na hora (#382). Falhar aqui não desfaz o treino: a próxima abertura reavalia. */
+  private async runFinishedHooks(userId: string) {
+    for (const hook of this.finishedHooks ?? []) {
+      try {
+        await hook.afterFinish(userId);
+      } catch (err) {
+        this.logger.warn(`gancho do fim do treino falhou: ${(err as Error).message}`);
+      }
+    }
   }
 
   /**
