@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApiError } from '@fatia/api-client';
 import type {
   SessionSet,
   WeeklyMuscleSummary,
@@ -661,17 +660,21 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     );
   });
 
-  it('"Outros jeitos de treinar": livre e só cardio; os treinos rápidos vêm depois', async () => {
-    startSession.mockResolvedValue(session);
-    const user = userEvent.setup();
+  it('"Outros jeitos de treinar": livre e só cardio abrem o Treino livre sem começar nada (#381)', async () => {
     renderPage();
     const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
-    expect(within(other).getByRole('button', { name: /Só cardio/ })).toBeInTheDocument();
+    // O relógio só anda no "Iniciar treino" do Treino livre (Al-T17b).
+    expect(within(other).getByRole('link', { name: /Livre/ })).toHaveAttribute(
+      'href',
+      '/workout/free',
+    );
+    expect(within(other).getByRole('link', { name: /Só cardio/ })).toHaveAttribute(
+      'href',
+      '/workout/free?add=cardio',
+    );
     expect(within(other).queryByText('Treinos rápidos')).toBeNull();
     expect(screen.getByRole('region', { name: 'Treinos rápidos' })).toBeInTheDocument();
-    await user.click(within(other).getByRole('button', { name: /Livre/ }));
-    await waitFor(() => expect(startSession).toHaveBeenCalledTimes(1));
-    expect(startSession.mock.calls[0]![0].planId).toBeUndefined();
+    expect(startSession).not.toHaveBeenCalled();
   });
 
   it('o bloco numa linha; o toque abre o detalhe', async () => {
@@ -681,21 +684,6 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     expect(row).toHaveAttribute('aria-expanded', 'false');
     await user.click(row);
     expect(row).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('se já havia um treino aberto (409), abre esse em vez de dar erro', async () => {
-    startSession.mockRejectedValue(
-      new ApiError('aberta', 409, { activeSessionId: 'sessao-de-hoje' }),
-    );
-    getActiveSession.mockResolvedValueOnce(null).mockResolvedValue(session);
-    getLastSet.mockResolvedValue(null);
-    getPersonalRecord.mockResolvedValue(null);
-    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
-    const user = userEvent.setup();
-    renderPage();
-    const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
-    await user.click(within(other).getByRole('button', { name: /Livre/ }));
-    expect(await screen.findByRole('heading', { name: 'Supino reto' })).toBeInTheDocument();
   });
 });
 
