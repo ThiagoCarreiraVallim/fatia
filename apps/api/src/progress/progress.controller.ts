@@ -144,7 +144,8 @@ export class ProgressController {
   @Get('progress/cardio')
   cardioProgress(
     @CurrentUser() user: CurrentUserPayload,
-    @Query('exerciseId', ParseIntPipe) exerciseId: number,
+    // Sem exercício, soma todo o cardio da sessão (Al-G6).
+    @Query('exerciseId', new ParseIntPipe({ optional: true })) exerciseId: number | undefined,
     @Query('days', new ParseIntPipe({ optional: true })) days?: number,
     @Query('metric') metric?: 'duration' | 'distance' | 'pace' | 'kcal',
   ) {

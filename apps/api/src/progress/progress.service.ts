@@ -161,17 +161,30 @@ export class ProgressService {
     };
   }
 
-  async cardioProgress(exerciseId: number, days: number, metric: CardioMetric, ctx: UserCtx) {
-    const exercise = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
-    if (!exercise) throw new NotFoundException('Exercise not found');
-    if (exercise.muscleGroup !== 'cardio') {
-      throw new BadRequestException('Exercise is not cardio');
+  /**
+   * Sem `exerciseId`, soma todos os exercícios de cardio de cada sessão (Al-G6, #382: "Cardio soma
+   * os exercícios de esteira, bike e corrida dos seus treinos").
+   */
+  async cardioProgress(
+    exerciseId: number | undefined,
+    days: number,
+    metric: CardioMetric,
+    ctx: UserCtx,
+  ) {
+    let exercise: { id: number; name: string } | null = null;
+    if (exerciseId !== undefined) {
+      const found = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
+      if (!found) throw new NotFoundException('Exercise not found');
+      if (found.muscleGroup !== 'cardio') {
+        throw new BadRequestException('Exercise is not cardio');
+      }
+      exercise = { id: found.id, name: found.name };
     }
 
     const fromIso = addDaysIso(todayInTz(ctx.timezone), -(days - 1));
     const sets = await this.prisma.sessionSet.findMany({
       where: {
-        exerciseId,
+        ...(exerciseId !== undefined ? { exerciseId } : { exercise: { muscleGroup: 'cardio' } }),
         durationSeconds: { not: null },
         session: { userId: ctx.userId, startedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
       },
@@ -224,7 +237,7 @@ export class ProgressService {
       : null;
 
     return {
-      exercise: { id: exercise.id, name: exercise.name },
+      exercise,
       metric,
       points,
       bestSession: bestSession
