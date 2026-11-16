@@ -62,6 +62,7 @@ export * from './workout/rpe';
 export * from './workout/set-prefill';
 export * from './workout/prescription';
 export * from './workout/quick-templates';
+export * from './workout/circuit-timer';
 export * from './session-view';
 export * from './active-workout-bar';
 export * from './workout-cards';
