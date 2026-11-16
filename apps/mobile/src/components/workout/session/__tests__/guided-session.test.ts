@@ -13,6 +13,7 @@ import {
   setProgress,
   STEPS,
   stepValue,
+  isSessionDone,
 } from '../guided-session';
 
 function set(over: Partial<SessionSet> = {}): SessionSet {
@@ -140,5 +141,17 @@ describe('preferência de passar sozinho', () => {
     expect(parseAutoAdvance('0')).toBe(false);
     expect(parseAutoAdvance('1')).toBe(true);
     expect(serializeAutoAdvance(false)).toBe('0');
+  });
+});
+
+describe('tudo feito: o resumo do treino no lugar do aviso vazio', () => {
+  it('todos os exercícios completos', () => {
+    expect(isSessionDone([group(1, 3), group(2, 3), group(3, 1, 3, true)])).toBe(true);
+  });
+
+  it('falta série em algum, ou a lista está vazia: ainda não', () => {
+    expect(isSessionDone([group(1, 3), group(2, 2)])).toBe(false);
+    expect(isSessionDone([group(1, 3), group(2, 0, 3, true)])).toBe(false);
+    expect(isSessionDone([])).toBe(false);
   });
 });

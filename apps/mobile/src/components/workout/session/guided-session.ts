@@ -44,6 +44,14 @@ export function guidedState({
   return complete ? 'picking' : 'working';
 }
 
+/**
+ * Todos os exercícios da sessão completos: no lugar do "Tudo feito por aqui"
+ * vazio, a tela mostra o treino até aqui (cada exercício com as séries).
+ */
+export function isSessionDone(groups: readonly ExerciseGroup[]): boolean {
+  return groups.length > 0 && groups.every(isExerciseComplete);
+}
+
 /** O próximo exercício ainda aberto depois de `from`, dando a volta na lista. */
 export function nextOpenIndex(groups: readonly ExerciseGroup[], from: number): number | null {
   for (let k = 1; k <= groups.length; k += 1) {
