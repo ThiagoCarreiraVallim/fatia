@@ -14,14 +14,14 @@ Não fazer push nem PR.
 
 ### API
 
-- [ ] `helpers/session-kind.ts`: tipo derivado (plan | circuit | free); circuito é ponto de extensão da #380
-- [ ] `GET /workout/sessions?kind=` e `kind` em cada sessão da lista
-- [ ] `GET /workout/history` com totais (sessões, média, volume) + itens resumidos + filtro por tipo
-- [ ] Resumo (`sessions/:id/summary`): `kind`, séries por exercício, kcal, recorde com o valor de antes
-- [ ] `POST /workout/sessions/:id/plan` (salvar como plano; cardio vira meta de cardio)
-- [ ] `GET /workout/records`: recorde de distância do cardio somado por sessão
-- [ ] MCP: `save_session_as_plan`, `list_workout_sessions` com tipo e sensação, doc do `start_workout_session`
-- [ ] `user-isolation.spec.ts`
+- [x] `helpers/session-kind.ts`: tipo derivado (plan | circuit | free); circuito é ponto de extensão da #380
+- [x] `GET /workout/sessions?kind=` e `kind` em cada sessão da lista
+- [x] `GET /workout/history` com totais (sessões, média, volume) + itens resumidos + filtro por tipo
+- [x] Resumo (`sessions/:id/summary`): `kind`, séries por exercício, kcal, recorde com o valor de antes
+- [x] `POST /workout/sessions/:id/plan` (salvar como plano; cardio vira meta de cardio)
+- [x] `GET /workout/records`: recorde de distância do cardio somado por sessão
+- [x] MCP: `save_session_as_plan`, `list_workout_sessions` com tipo e sensação, doc do `start_workout_session`
+- [x] `user-isolation.spec.ts`
 
 ### api-client
 
@@ -43,6 +43,18 @@ Não fazer push nem PR.
 - "Salvar como plano" de cardio grava distância/tempo observados como meta de cardio (#378). Dono.
 - Sem migration: tipo derivado de `planId`; plano criado da sessão é um plano comum (export/exclusão já cobrem).
 
+## Feito na API (commits defa2fae..fe7c8ccd)
+
+- `helpers/session-kind.ts`, `helpers/plan-from-session.ts`, `session-history.ts` (puros, com spec)
+- `WorkoutSessionService.list` (+`kind`, filtro), `.history`; `WorkoutPlanService.createFromSession`
+- Resumo: `kind`, `exercises[].setList`, `best.kcalBurned`, `records[].previous`; `orderExercisesLikeSession` exportado
+- Recordes: cardio somado por sessão (`listPersonalRecords`)
+- Rotas: `GET /workout/history`, `POST /workout/sessions/:id/plan`
+- MCP `save_session_as_plan` (152 tools); docs MCP.md/MCP_TOOL_SURFACE e contagens atualizadas; sha da superfície
+- Specs: `history.integration.spec.ts`, isolamento, leitura da equipe com `kind`/`feeling`
+
 ## Próximo passo
 
-Começar pela API (session-kind).
+api-client: tipos (`SessionKind`, `WorkoutHistory`, `HistoryItem`, summary novo), `workoutApi.getHistory`,
+`saveSessionAsPlan`; textos do histórico; rotas `/workout/free` e `/workout/history/:id` no `navigation.ts`.
+Depois web e app.
