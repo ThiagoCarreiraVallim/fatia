@@ -16,6 +16,7 @@ import {
   REP_UNITS,
   TECHNIQUES,
 } from '../workout/helpers/plan-exercise-config';
+import { CIRCUIT_FORMATS, CIRCUIT_LIMITS } from '../workout/helpers/circuit';
 
 /**
  * Formato congelado de um plano de treino para atravessar contas (ADR 014).
@@ -167,6 +168,25 @@ const itemSchema = z.discriminatedUnion('source', [
   }),
 ]);
 
+/**
+ * Circuito (#380), opcional dentro da v1: o retrato antigo segue válido e
+ * adota como plano de séries. Aqui só a forma; a coerência do formato (campo
+ * obrigatório, faixa) é conferida na adoção por `normalizeCircuitConfig`,
+ * antes de qualquer escrita.
+ */
+const campoDoCircuito = (campo: keyof typeof CIRCUIT_LIMITS) =>
+  z.number().int().min(CIRCUIT_LIMITS[campo][0]).max(CIRCUIT_LIMITS[campo][1]).optional();
+
+const circuitoSchema = z.object({
+  format: z.enum(CIRCUIT_FORMATS),
+  durationSeconds: campoDoCircuito('durationSeconds'),
+  workSeconds: campoDoCircuito('workSeconds'),
+  restSeconds: campoDoCircuito('restSeconds'),
+  intervals: campoDoCircuito('intervals'),
+  rounds: campoDoCircuito('rounds'),
+  restBetweenRoundsSeconds: campoDoCircuito('restBetweenRoundsSeconds'),
+});
+
 export const planSnapshotSchema = z
   .object({
     version: z.literal(PLAN_SNAPSHOT_VERSION),
@@ -179,6 +199,7 @@ export const planSnapshotSchema = z
     // virar um plano de 10 mil linhas. Quem esbarra nele é o autor, na
     // publicação, com o plano na frente e um exercício a menos como conserto.
     exercises: z.array(itemSchema).min(1).max(MAX_EXERCICIOS_NO_SNAPSHOT),
+    circuit: circuitoSchema.optional(),
   })
   .superRefine((snap, ctx) => {
     // `WorkoutPlanExercise` tem `@@unique([planId, exerciseId])`. Sem esta
@@ -220,6 +241,12 @@ export const describeIssues = (erro: z.ZodError): string =>
 /** A forma mínima de `WorkoutPlan` + exercícios que o snapshot sabe congelar. */
 export type PlanoParaCongelar = {
   name: string;
+  /** Circuito (#380): o plano `CIRCUIT` leva a configuração junto. */
+  circuit?:
+    | ({ format: (typeof CIRCUIT_FORMATS)[number] } & Partial<
+        Record<keyof typeof CIRCUIT_LIMITS, number | null>
+      >)
+    | null;
   exercises: ReadonlyArray<{
     order: number;
     targetSets: number;
@@ -332,10 +359,18 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar, groupId?: string): P
     return { source: 'custom' as const, exercise: semVazios(definicao), ...base };
   });
 
+  const circuit = plano.circuit
+    ? (semVazios(
+        Object.fromEntries(
+          Object.entries(plano.circuit).filter(([k]) => k === 'format' || k in CIRCUIT_LIMITS),
+        ),
+      ) as PlanSnapshot['circuit'])
+    : undefined;
   const parsed = planSnapshotSchema.safeParse({
     version: PLAN_SNAPSHOT_VERSION,
     name: plano.name,
     exercises,
+    ...(circuit ? { circuit } : {}),
   });
   if (!parsed.success) {
     throw new BadRequestException(

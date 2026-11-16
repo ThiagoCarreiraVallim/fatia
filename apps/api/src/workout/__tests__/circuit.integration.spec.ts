@@ -4,6 +4,12 @@ import { CircuitSessionService } from '../circuit-session.service';
 import { WorkoutPlanService } from '../workout-plan.service';
 import { WorkoutSessionService } from '../workout-session.service';
 import type { SaveCircuitDto } from '../dto/circuit.dto';
+import { ExerciseService } from '../exercise.service';
+import { PlanMaterializerService } from '../../sharing/plan-materializer.service';
+import { buildPlanSnapshot, planSnapshotSchema } from '../../sharing/plan-snapshot';
+import { AccountService } from '../../users/account.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 
 /**
  * Circuito de ponta a ponta no banco (#380): criar o AMRAP 12 com 4
@@ -218,6 +224,66 @@ describe('circuitos (banco real)', () => {
     });
     expect(session.completedAt).not.toBeNull();
     expect(await prisma.sessionSet.count({ where: { sessionId: logged.sessionId } })).toBe(8);
+  });
+
+  it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
+    const plan = await plans.createCircuit(userId, {
+      name: 'For Time 5',
+      format: 'FOR_TIME',
+      rounds: 5,
+      restBetweenRoundsSeconds: 30,
+      exercises: [
+        { exerciseId: exerciseIds[0], unit: 'REPS', target: 12 },
+        { exerciseId: exerciseIds[3], unit: 'SECONDS', target: 30 },
+      ],
+    });
+    const snapshot = buildPlanSnapshot(plan);
+    expect(snapshot.circuit).toEqual({
+      format: 'FOR_TIME',
+      rounds: 5,
+      restBetweenRoundsSeconds: 30,
+    });
+
+    const materializer = new PlanMaterializerService(prisma, new ExerciseService(prisma));
+    const adopted = await materializer.materialize(otherId, snapshot);
+    const copy = await plans.findById(otherId, adopted.id);
+    expect(copy.kind).toBe('CIRCUIT');
+    expect(copy.circuit).toMatchObject({
+      format: 'FOR_TIME',
+      rounds: 5,
+      restBetweenRoundsSeconds: 30,
+    });
+    expect(copy.exercises.map((e) => [e.targetReps, e.repUnit])).toEqual([
+      ['12', 'REPS'],
+      ['30', 'SECONDS'],
+    ]);
+
+    // Retrato forjado com circuito incoerente recusa antes de escrever.
+    const bad = { ...snapshot, circuit: { format: 'AMRAP' } };
+    expect(planSnapshotSchema.safeParse(bad).success).toBe(true);
+    await expect(materializer.materialize(otherId, bad)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('a exportação (LGPD) leva a configuração do circuito e o resultado com o tempo por round', async () => {
+    const account = new AccountService(
+      prisma,
+      {} as LogtoManagementService,
+      {} as CheckpointPurgeService,
+    );
+    const data = (await account.exportData(userId)) as unknown as {
+      workoutPlans: Array<{ kind: string; circuit: { format: string } | null }>;
+      workoutSessions: Array<{ circuit: { result: { roundSeconds: number[] } | null } | null }>;
+    };
+    expect(
+      data.workoutPlans.some((p) => p.kind === 'CIRCUIT' && p.circuit?.format === 'AMRAP'),
+    ).toBe(true);
+    expect(
+      data.workoutSessions.some(
+        (s) => s.circuit?.result?.roundSeconds.join() === '138,144,151,160',
+      ),
+    ).toBe(true);
   });
 
   it('outra pessoa não lê, não começa, não edita e não encerra o circuito', async () => {

@@ -227,6 +227,8 @@ export class AccountService {
       this.prisma.workoutPlan.findMany({
         where: { userId },
         include: {
+          // Circuito (#380): formato e tempos; o resultado vem na sessão (`circuit`).
+          circuit: true,
           exercises: {
             include: {
               exercise: { select: { id: true, name: true } },

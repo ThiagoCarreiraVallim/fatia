@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { isCardioExercise } from '../workout/helpers/is-cardio';
+import { normalizeCircuitConfig } from '../workout/helpers/circuit';
 import {
   describeIssues,
   PLAN_SNAPSHOT_VERSION,
@@ -14,6 +15,7 @@ import {
 } from './plan-snapshot';
 
 const PLAN_INCLUDE = {
+  circuit: true,
   exercises: {
     include: { exercise: true, sets: { orderBy: { order: 'asc' as const } } },
     orderBy: { order: 'asc' as const },
@@ -117,13 +119,20 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
+    const circuit = this.circuitOf(snap);
     const exercises = await this.buildExercises(userId, snap, groupId);
 
     // Um `create` aninhado, não `$transaction` interativa: plano e exercícios
     // saem numa transação só do lado do Prisma, sem segurar conexão entre
     // roundtrips — pgbouncer em transaction pooling (ADR 010).
     return this.prisma.workoutPlan.create({
-      data: { userId, name: snap.name, fromTemplateId, exercises: { create: exercises } },
+      data: {
+        userId,
+        name: snap.name,
+        fromTemplateId,
+        ...(circuit ? { kind: 'CIRCUIT' as const, circuit: { create: circuit } } : {}),
+        exercises: { create: exercises },
+      },
       include: PLAN_INCLUDE,
     });
   }
@@ -153,6 +162,7 @@ export class PlanMaterializerService {
     planId: string | null,
   ): Promise<{ planId: string; writes: Prisma.PrismaPromise<unknown>[] }> {
     const snap = this.validate(snapshot);
+    const circuit = this.circuitOf(snap);
     if (planId) {
       const owned = await this.prisma.workoutPlan.findFirst({
         where: { id: planId, userId },
@@ -167,7 +177,14 @@ export class PlanMaterializerService {
         planId: id,
         writes: [
           this.prisma.workoutPlan.create({
-            data: { id, userId, name: snap.name, fromOfferId, exercises: { create: exercises } },
+            data: {
+              id,
+              userId,
+              name: snap.name,
+              fromOfferId,
+              ...(circuit ? { kind: 'CIRCUIT' as const, circuit: { create: circuit } } : {}),
+              exercises: { create: exercises },
+            },
           }),
         ],
       };
@@ -176,12 +193,34 @@ export class PlanMaterializerService {
       planId,
       writes: [
         this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
+        // A versão nova pode trocar o tipo (séries ↔ circuito): a configuração acompanha.
+        this.prisma.circuitConfig.deleteMany({ where: { planId } }),
         this.prisma.workoutPlan.update({
           where: { id: planId },
-          data: { name: snap.name, exercises: { create: exercises } },
+          data: {
+            name: snap.name,
+            kind: circuit ? 'CIRCUIT' : 'STRENGTH',
+            ...(circuit ? { circuit: { create: circuit } } : {}),
+            exercises: { create: exercises },
+          },
         }),
       ],
     };
+  }
+
+  /**
+   * A configuração do circuito do retrato, conferida pelo formato antes de
+   * qualquer escrita (o retrato pode vir forjado). Sem circuito, nulo.
+   */
+  private circuitOf(snap: PlanSnapshot) {
+    if (!snap.circuit) return null;
+    const { format, ...fields } = snap.circuit;
+    try {
+      return { format, ...normalizeCircuitConfig(format, fields) };
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : 'circuito inválido';
+      throw new BadRequestException(`Circuito do plano inválido (${motivo}). Nada foi criado.`);
+    }
   }
 
   /**
