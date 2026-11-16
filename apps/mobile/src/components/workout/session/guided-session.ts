@@ -44,6 +44,14 @@ export function guidedState({
   return complete ? 'picking' : 'working';
 }
 
+/**
+ * Todos os exercícios da sessão completos: no lugar do "Tudo feito por aqui"
+ * vazio, a tela mostra o treino até aqui (cada exercício com as séries).
+ */
+export function isSessionDone(groups: readonly ExerciseGroup[]): boolean {
+  return groups.length > 0 && groups.every(isExerciseComplete);
+}
+
 /** O próximo exercício ainda aberto depois de `from`, dando a volta na lista. */
 export function nextOpenIndex(groups: readonly ExerciseGroup[], from: number): number | null {
   for (let k = 1; k <= groups.length; k += 1) {
@@ -54,22 +62,12 @@ export function nextOpenIndex(groups: readonly ExerciseGroup[], from: number): n
   return null;
 }
 
-/** "Série 2 de 4 · meta 8–10 · última vez 52,5 kg × 9". */
-export function setHeadline({
-  done,
-  target,
-  targetReps,
-  lastTime,
-}: {
-  done: number;
-  target: number;
-  targetReps?: string | null;
-  lastTime?: string | null;
-}): string {
-  const parts = [`Série ${Math.min(done + 1, target)} de ${target}`];
-  if (targetReps) parts.push(`meta ${targetReps}`);
-  if (lastTime) parts.push(`última vez ${lastTime}`);
-  return parts.join(' · ');
+/**
+ * "Série 2 de 4" (prancha `Al-T3d`). Só a contagem: a meta já está embaixo das
+ * reps, e a "última vez" e a sugestão saíram a pedido do dono.
+ */
+export function setHeadline({ done, target }: { done: number; target: number }): string {
+  return `Série ${Math.min(done + 1, target)} de ${target}`;
 }
 
 /** O chip de uma série feita: "52,5×9 🙂", "15", "3,2km 20′". */

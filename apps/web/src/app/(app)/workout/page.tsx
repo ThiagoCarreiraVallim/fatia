@@ -24,7 +24,10 @@ import { RemoveExerciseModal } from '@/components/workout/remove-exercise-modal'
 import { RpeModal } from '@/components/workout/rpe-modal';
 import { SessionHeader } from '@/components/workout/session-header';
 import { isExerciseComplete } from '@/components/workout/format';
-import { CurrentWorkoutSheet } from '@/components/workout/current-workout-sheet';
+import {
+  CurrentExerciseList,
+  CurrentWorkoutSheet,
+} from '@/components/workout/current-workout-sheet';
 import { ExerciseHeading } from '@/components/workout/exercise-title';
 import { useAutoAdvance } from '@/components/workout/use-auto-advance';
 import { Switch } from '@/components/ui/switch';
@@ -102,6 +105,11 @@ function ActiveSession({
       ? groups.slice(focusedIndex + 1).find((g) => !isExerciseComplete(g))
       : undefined;
   const remaining = groups.filter((g) => !isExerciseComplete(g));
+  // Nada em foco com exercício na lista (tudo feito, ou o que falta foi
+  // pulado), ou a escolha do próximo sem próximo: o resumo do treino até aqui.
+  const showDone =
+    groups.length > 0 && ((!picking && !focused) || (picking && remaining.length === 0));
+  const doneSets = groups.reduce((acc, g) => acc + g.sets.length, 0);
 
   /** Traz o exercício para o foco — inclusive um que a pessoa tinha pulado. */
   function doNow(exerciseId: number) {
@@ -213,7 +221,7 @@ function ActiveSession({
         </p>
       )}
 
-      {picking && (
+      {picking && !showDone && (
         <section
           aria-labelledby="sessao-escolhendo"
           className="space-y-3 rounded-3xl border border-subtle bg-card p-4"
@@ -221,9 +229,6 @@ function ActiveSession({
           <h2 id="sessao-escolhendo" className="text-lg font-extrabold text-foreground">
             Qual o próximo?
           </h2>
-          {remaining.length === 0 && (
-            <p className="text-sm text-muted-foreground">Tudo feito por aqui.</p>
-          )}
           <ul className="space-y-2">
             {remaining.map((g) => (
               <li key={g.exerciseId}>
@@ -314,20 +319,55 @@ function ActiveSession({
         />
       )}
 
-      {!picking && !focused && groups.length > 0 && (
-        <div className="rounded-2xl border border-subtle bg-card p-4">
-          <p className="text-sm font-bold text-foreground">Tudo feito por aqui.</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Finalize o treino no topo, ou adicione outro exercício abaixo.
-          </p>
-        </div>
+      {showDone && (
+        // Tudo feito: no lugar do aviso vazio, cada exercício com as séries
+        // feitas (a lista do Treino atual, prancha Al-T17), para conferir e
+        // corrigir antes de finalizar. Pôr outro e finalizar ficam presos
+        // embaixo, como o "Concluir série".
+        <section aria-labelledby="sessao-feito" className="space-y-3">
+          <div>
+            <h2
+              id="sessao-feito"
+              className="font-display text-[22px] font-semibold text-foreground"
+            >
+              Treino de hoje
+            </h2>
+            <p className="text-[13px] text-muted-foreground tabular-nums">
+              {groups.length} {groups.length === 1 ? 'exercício' : 'exercícios'} · {doneSets}{' '}
+              {doneSets === 1 ? 'série' : 'séries'}
+            </p>
+          </div>
+          <CurrentExerciseList
+            surface="page"
+            sessionId={session.id}
+            groups={groups}
+            onRemove={requestRemove}
+            onStart={doNow}
+          />
+          <div className="sticky bottom-[calc(22px+env(safe-area-inset-bottom))] z-30 flex gap-2 md:bottom-4">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="anim-press flex h-14 items-center justify-center rounded-full bg-muted px-5 text-[15px] font-bold text-foreground"
+            >
+              + Exercício
+            </button>
+            <button
+              type="button"
+              onClick={() => setFinishOpen(true)}
+              className="anim-press h-14 flex-1 rounded-full bg-primary text-[15px] font-extrabold text-primary-foreground"
+            >
+              Finalizar treino
+            </button>
+          </div>
+        </section>
       )}
 
-      {/* Sem exercício em foco (treino livre vazio, ou tudo feito) não há o
-          "Todas ›" do card: adicionar fica aqui. Com foco, a prancha Al-T3 não
-          tem lista embaixo — fazer outro agora, reordenar, tirar e pôr
-          exercício moram no "Treino atual". */}
-      {!picking && !focused && (
+      {/* Treino livre ainda vazio: sem card em foco não há o "Todas ›", e
+          adicionar fica aqui. Com foco, a prancha Al-T3 não tem lista embaixo —
+          fazer outro agora, reordenar, tirar e pôr exercício moram no "Treino
+          atual". */}
+      {!picking && !focused && groups.length === 0 && (
         <button
           type="button"
           onClick={() => setSearchOpen(true)}

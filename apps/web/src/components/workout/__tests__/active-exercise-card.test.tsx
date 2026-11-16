@@ -259,7 +259,7 @@ describe('ActiveExerciseCard', () => {
     await waitFor(() => expect(getPrescription).toHaveBeenCalledWith(1, '5'));
   });
 
-  it('mostra a sugestão com a regra que a produziu', async () => {
+  it('a prescrição só preenche o campo: sem a linha "Sugestão" embaixo', async () => {
     getPrescription.mockResolvedValue({
       status: 'ok',
       weightKg: 62.5,
@@ -271,9 +271,11 @@ describe('ActiveExerciseCard', () => {
     });
     renderCard();
 
-    expect(await screen.findByText('Sugestão: 62.5 kg × 8 · 180s')).toBeInTheDocument();
-    // Sem RPE registrado, o texto não pode creditar o RPE.
-    expect(screen.getByText(/sem RPE — todas as séries fecharam a faixa/)).toBeInTheDocument();
+    await waitFor(() => expect(weightValue()).toBe('62,5'));
+    // O dono pediu a tela mais limpa: a prescrição já está no campo, e a
+    // frase "Sugestão: … · RPE alto na última sessão" repetia o número.
+    expect(screen.queryByText(/Sugestão/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/todas as séries fecharam a faixa/)).not.toBeInTheDocument();
   });
 
   it('o descanso só aparece depois da série, e com o tempo prescrito', async () => {
@@ -290,7 +292,7 @@ describe('ActiveExerciseCard', () => {
     const user = userEvent.setup();
     renderCard();
 
-    await screen.findByText('Sugestão: 62.5 kg × 8 · 180s');
+    await waitFor(() => expect(weightValue()).toBe('62,5'));
     // Parado, o descanso não ocupa a tela (prancha Al-T3): só a série a fazer.
     expect(screen.queryByRole('timer', { name: 'Descanso' })).not.toBeInTheDocument();
 
@@ -346,17 +348,18 @@ describe('ActiveExerciseCard', () => {
     await user.click(increaseWeight());
     expect(weightValue()).toBe('2,5');
 
-    resolvePrescription({
-      status: 'ok',
-      weightKg: 62.5,
-      reps: 8,
-      restSeconds: 90,
-      basis: 'rpe',
-      action: 'increase_load',
-      capped: false,
+    await act(async () => {
+      resolvePrescription({
+        status: 'ok',
+        weightKg: 62.5,
+        reps: 8,
+        restSeconds: 90,
+        basis: 'rpe',
+        action: 'increase_load',
+        capped: false,
+      });
     });
 
-    await waitFor(() => expect(screen.getByText(/Sugestão/)).toBeInTheDocument());
     expect(weightValue()).toBe('2,5');
   });
 
@@ -436,13 +439,16 @@ describe('ActiveExerciseCard', () => {
     expect(weightValue()).toBe('82,5');
   });
 
-  it('diz a série, a meta e a última vez numa linha só, e quando ainda não há série hoje', async () => {
+  it('a linha da série diz só "Série N de M": sem meta, última vez nem RPE', async () => {
     getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10, rpe: 8 }));
     renderCard();
 
-    expect(
-      await screen.findByText('Série 1 de 3 · meta 8-12 reps · última vez 62,5 kg × 10 · RPE 8'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Série 1 de 3')).toBeInTheDocument();
+    // A referência chegou (o "Anterior" do campo é dela), e a linha não a repete.
+    await screen.findByText('Anterior: 62,5 kg');
+    expect(screen.queryByText(/última vez/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RPE 8/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/meta 8-12 reps/)).not.toBeInTheDocument();
     // Sem série hoje, a linha dos chips já mostra a da vez e as que faltam.
     expect(screen.getByLabelText('Série 1, a da vez')).toHaveTextContent('1agora');
   });
@@ -454,6 +460,17 @@ describe('ActiveExerciseCard — sessão guiada (#377)', () => {
     getLastSet.mockResolvedValue(null);
     getPersonalRecord.mockResolvedValue(null);
     getPrescription.mockResolvedValue({ status: 'insufficient_history' });
+  });
+
+  it('o "Concluir série" fica preso embaixo da tela, ocupando o lugar dele no fim do card', async () => {
+    const { container } = renderCard();
+    const concluir = await screen.findByRole('button', { name: /Concluir série 1/ });
+    const dock = concluir.parentElement!;
+    // `sticky` no rodapé (prancha Al-T3): rola junto até o fim e, como ocupa o
+    // próprio lugar, o último item do card nunca fica atrás dele.
+    expect(dock.className).toMatch(/\bsticky\b/);
+    expect(dock.className).toMatch(/bottom-\[calc\(22px\+env\(safe-area-inset-bottom\)\)\]/);
+    expect(container.firstElementChild!.lastElementChild).toBe(dock);
   });
 
   it('a carga anda de 2,5 em 2,5 kg', async () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { figureTone } from '@fatia/api-client';
+import { FIGURE_ASPECT, figureTone, figureViewBox } from '@fatia/api-client';
 import { describeMuscles } from './muscle-labels';
 
 /** Os cinzas fixos do desenho, como estão escritos nos dois SVGs. */
@@ -13,7 +13,13 @@ const FIGURE_FILLS = ['#F5F5F5', '#BDBDBD', '#AEAEB2', '#E0E0E0'];
  * documento, então os tokens são lidos aqui e entram prontos numa folha de
  * estilo dele; a pintura dos grupos é estilo inline e continua vencendo.
  */
-function themeFigure(doc: Document) {
+function themeFigure(doc: Document, view: 'front' | 'back') {
+  // O quadro comum às duas vistas (`figureViewBox`): com o de cada arquivo, a
+  // frente (587 × 1137) saía maior e mais baixa que as costas (596 × 1133).
+  const svg = doc.documentElement;
+  svg.setAttribute('viewBox', figureViewBox(view));
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
   const root = getComputedStyle(document.documentElement);
   const css = (tone: string) =>
     tone === 'transparent' ? 'transparent' : `hsl(${root.getPropertyValue(`--${tone}`).trim()})`;
@@ -59,7 +65,7 @@ export function MuscleDiagram({
   const backRef = useRef<HTMLObjectElement>(null);
 
   useEffect(() => {
-    const highlight = (obj: HTMLObjectElement | null) => {
+    const highlight = (obj: HTMLObjectElement | null, view: 'front' | 'back') => {
       if (!obj) return;
       const doc = obj.contentDocument;
       if (!doc) return;
@@ -77,7 +83,7 @@ export function MuscleDiagram({
         });
       };
 
-      themeFigure(doc);
+      themeFigure(doc, view);
 
       // Reset: todos os grupos esmaecidos e sem cor
       doc.querySelectorAll('g[data-muscle]').forEach((el) => paint(el, null));
@@ -116,12 +122,12 @@ export function MuscleDiagram({
     const frontEl = frontRef.current;
     const backEl = backRef.current;
 
-    if (frontEl) frontEl.onload = () => highlight(frontEl);
-    if (backEl) backEl.onload = () => highlight(backEl);
+    if (frontEl) frontEl.onload = () => highlight(frontEl, 'front');
+    if (backEl) backEl.onload = () => highlight(backEl, 'back');
 
     // Also try immediately if already loaded
-    if (frontEl?.contentDocument?.readyState === 'complete') highlight(frontEl);
-    if (backEl?.contentDocument?.readyState === 'complete') highlight(backEl);
+    if (frontEl?.contentDocument?.readyState === 'complete') highlight(frontEl, 'front');
+    if (backEl?.contentDocument?.readyState === 'complete') highlight(backEl, 'back');
   }, [primaryMuscles, secondaryMuscles, colors]);
 
   // `[color-scheme:normal]` nos `<object>`: o SVG não declara esquema de cor e,
@@ -140,6 +146,7 @@ export function MuscleDiagram({
           data="/muscle-front.svg"
           type="image/svg+xml"
           className={`pointer-events-none h-auto [color-scheme:normal] ${sizeClassName}`}
+          style={{ aspectRatio: FIGURE_ASPECT }}
           aria-hidden
           tabIndex={-1}
         />
@@ -150,6 +157,7 @@ export function MuscleDiagram({
           data="/muscle-back.svg"
           type="image/svg+xml"
           className={`pointer-events-none h-auto [color-scheme:normal] ${sizeClassName}`}
+          style={{ aspectRatio: FIGURE_ASPECT }}
           aria-hidden
           tabIndex={-1}
         />

@@ -266,10 +266,13 @@ const FOCUS_ROUTES = [
 
 export type NavBarMode = 'visible' | 'hidden';
 
+/** A sessão de treino: em andamento (Al-T3) ou o "Treino feito" (Al-T5). */
+const SESSION_ROUTE = '/workout/session/:id';
+
 /**
- * A barra aparece nesta tela? A sessão de treino só esconde enquanto está em
- * andamento: concluída, ela é tela de ver. `activeSessionId` ausente é "ainda
- * não sei", e a barra fica escondida até saber, para não piscar sobre a sessão.
+ * A barra aparece nesta tela? A sessão some sempre (aberta ou concluída); o
+ * "Treino atual" dela só enquanto ela está em andamento. `activeSessionId`
+ * ausente é "ainda não sei", e a barra fica escondida até saber.
  */
 export function navBarMode(
   pathname: string,
@@ -277,8 +280,11 @@ export function navBarMode(
 ): NavBarMode {
   const path = segments(pathname);
   if (FOCUS_ROUTES.some((pattern) => match(pattern, path))) return 'hidden';
-  // A sessão e o "Treino atual" dela (#377).
-  if (match('/workout/session/:id', path) || match('/workout/session/:id/edit', path)) {
+  // A sessão é foco aberta (Al-T3) e concluída: o "Treino feito" (Al-T5) não
+  // tem barra, e o "Salvar" e o compartilhar dele são a saída.
+  if (match(SESSION_ROUTE, path)) return 'hidden';
+  // O "Treino atual" (#377) só esconde enquanto a sessão está em andamento.
+  if (match('/workout/session/:id/edit', path)) {
     if (opts.activeSessionId === undefined) return 'hidden';
     return opts.activeSessionId === path[2] ? 'hidden' : 'visible';
   }
@@ -449,6 +455,9 @@ export const TAB_ROOTS = ['/', '/nutrition', '/workout', '/community', '/you'] a
  */
 export function hasTopBar(pathname: string): boolean {
   const path = '/' + segments(pathname).join('/');
+  // A sessão tem o próprio cabeçalho (Al-T3), e o "Treino feito" (Al-T5)
+  // nenhum: sem a barra e sem o voltar, nas duas pontas.
+  if (match(SESSION_ROUTE, segments(pathname))) return false;
   return !(TAB_ROOTS as readonly string[]).includes(path);
 }
 

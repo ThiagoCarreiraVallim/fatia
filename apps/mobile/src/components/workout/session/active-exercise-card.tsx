@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Check, Trophy } from 'lucide-react-native';
 import {
-  describePrescription,
   feelingToRpe,
   loadFieldValue,
   loadToKg,
@@ -21,6 +20,7 @@ import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { isExerciseComplete, loadValue, parseFirstRep, targetSetsOf } from './format';
 import { FeelingPicker } from './feeling-picker';
 import { loadStep, setHeadline, STEPS } from './guided-session';
+import { useDockedAction } from './session-dock';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
@@ -28,8 +28,8 @@ import type { RestTimer as RestTimerState } from './use-rest-timer';
 import { colors } from '@/theme/colors';
 
 /**
- * A série de força da sessão guiada (prancha `Al-T3-Sessao`): "Série N de M ·
- * meta · última vez", os chips das séries (tocar numa feita corrige), e — no
+ * A série de força da sessão guiada (prancha `Al-T3-Sessao`): "Série N de M",
+ * os chips das séries (tocar numa feita corrige), e — no
  * estado de trabalho — carga e reps digitáveis, o recorde, "Como foi a série?"
  * e "Concluir série N".
  *
@@ -100,7 +100,6 @@ export function ActiveExerciseCard({
   });
   const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
   const prescription = prescribed?.status === 'ok' ? prescribed : null;
-  const hint = prescription && doneSets === 0 ? describePrescription(prescription) : null;
 
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
@@ -166,11 +165,6 @@ export function ActiveExerciseCard({
     logSet.mutate(clientKey.current);
   }
 
-  const lastTime = reference
-    ? reference.weightKg
-      ? `${loadValue(reference.weightKg, units)} ${unitLabel} × ${reference.reps ?? 0}`
-      : `${reference.reps ?? 0} reps`
-    : null;
   const record =
     prWeight != null
       ? `recorde ${loadValue(prWeight, units)} ${unitLabel}${prReps != null ? ` × ${prReps}` : ''}`
@@ -180,16 +174,29 @@ export function ActiveExerciseCard({
   const isComplete = isExerciseComplete(group);
   const editingSet = editing != null ? group.sets[editing] : undefined;
 
+  // Preso no rodapé da sessão, fora da rolagem (prancha Al-T3, pedido do dono):
+  // `useDockedAction` leva o botão para lá.
+  const submitInline = useDockedAction(
+    working && !isComplete ? (
+      <Button
+        className="h-[60px] rounded-full"
+        disabled={logSet.isPending}
+        loading={logSet.isPending}
+        onPress={conclude}
+      >
+        <Check size={18} color={colors.primaryForeground} />
+        <Text className="font-sans-bold text-base text-primary-foreground">
+          Concluir série {doneSets + 1}
+        </Text>
+      </Button>
+    ) : null,
+  );
+
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 text-[13px] text-muted-foreground">
-          {setHeadline({
-            done: doneSets,
-            target: targetSets,
-            targetReps: group.targetReps,
-            lastTime,
-          })}
+          {setHeadline({ done: doneSets, target: targetSets })}
         </Text>
         {nav}
       </View>
@@ -258,12 +265,6 @@ export function ActiveExerciseCard({
             />
           </View>
 
-          {hint ? (
-            <Text className="text-[12px] text-muted-foreground">
-              {hint.label} · {hint.reason}
-            </Text>
-          ) : null}
-
           <FeelingPicker title="Como foi a série?" value={feeling} onChange={setFeeling} />
 
           {logSet.error ? (
@@ -274,17 +275,7 @@ export function ActiveExerciseCard({
 
           {beforeSubmit}
 
-          <Button
-            className="h-[60px] rounded-full"
-            disabled={logSet.isPending}
-            loading={logSet.isPending}
-            onPress={conclude}
-          >
-            <Check size={18} color={colors.primaryForeground} />
-            <Text className="font-sans-bold text-base text-primary-foreground">
-              Concluir série {doneSets + 1}
-            </Text>
-          </Button>
+          {submitInline}
         </>
       ) : null}
     </View>

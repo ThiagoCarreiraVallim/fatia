@@ -13,6 +13,7 @@ import {
   setProgress,
   STEPS,
   stepValue,
+  isSessionDone,
 } from '../guided-session';
 
 function set(over: Partial<SessionSet> = {}): SessionSet {
@@ -77,11 +78,12 @@ describe('estado da sessão guiada', () => {
 });
 
 describe('textos da série', () => {
-  it('"Série 2 de 4 · meta 8–10 · última vez 52,5 kg × 9"', () => {
-    expect(setHeadline({ done: 1, target: 4, targetReps: '8–10', lastTime: '52,5 kg × 9' })).toBe(
-      'Série 2 de 4 · meta 8–10 · última vez 52,5 kg × 9',
-    );
-    // Sem meta nem histórico, só a contagem; completo não passa do total.
+  it('só "Série N de M": a meta e a última vez não entram na linha (pedido do dono)', () => {
+    // Quem chamava com a meta do plano e a última vez continua só com a contagem:
+    // a meta está embaixo das reps, e a linha longa repetia o que já está na tela.
+    const old = { targetReps: '8–10', lastTime: '52,5 kg × 9' } as object;
+    expect(setHeadline({ done: 1, target: 4, ...old })).toBe('Série 2 de 4');
+    // Completo não passa do total.
     expect(setHeadline({ done: 4, target: 4 })).toBe('Série 4 de 4');
   });
 
@@ -139,5 +141,17 @@ describe('preferência de passar sozinho', () => {
     expect(parseAutoAdvance('0')).toBe(false);
     expect(parseAutoAdvance('1')).toBe(true);
     expect(serializeAutoAdvance(false)).toBe('0');
+  });
+});
+
+describe('tudo feito: o resumo do treino no lugar do aviso vazio', () => {
+  it('todos os exercícios completos', () => {
+    expect(isSessionDone([group(1, 3), group(2, 3), group(3, 1, 3, true)])).toBe(true);
+  });
+
+  it('falta série em algum, ou a lista está vazia: ainda não', () => {
+    expect(isSessionDone([group(1, 3), group(2, 2)])).toBe(false);
+    expect(isSessionDone([group(1, 3), group(2, 0, 3, true)])).toBe(false);
+    expect(isSessionDone([])).toBe(false);
   });
 });

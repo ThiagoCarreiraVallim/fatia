@@ -4,7 +4,6 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Check, Minus, Plus, Trophy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  describePrescription,
   feelingToRpe,
   loadFieldValue,
   loadToKg,
@@ -18,14 +17,7 @@ import {
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
-import {
-  formatNumber,
-  formatPreviousSet,
-  loadValue,
-  parseDecimalInput,
-  parseFirstRep,
-  targetSetsOf,
-} from './format';
+import { formatNumber, loadValue, parseDecimalInput, parseFirstRep, targetSetsOf } from './format';
 import { RestTimer } from './rest-timer';
 import { FeelingPicker, SetChips } from './set-chips';
 import { DEFAULT_REST_SECONDS, type RestTimer as RestTimerState } from './use-rest-timer';
@@ -112,11 +104,9 @@ export function ActiveExerciseCard({
   // união — a anotação é o que faz `status: 'ok'` valer como discriminante.
   const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
   const prescription = prescribed?.status === 'ok' ? prescribed : null;
-  // A sugestão sai da tela assim que existe série **desta** sessão: o
-  // `prefillForNextSet` dá precedência a ela, e a prescrição parte da última
-  // sessão concluída. Manter o texto seria contradizer o campo — 70 kg × 8 no
-  // stepper e "Sugestão: 62,5 kg × 8" logo abaixo.
-  const hint = prescription && doneSets === 0 ? describePrescription(prescription) : null;
+  // A prescrição só preenche o campo (`prefillForNextSet`): a frase
+  // "Sugestão: 62,5 kg × 8 · RPE alto na última sessão" saiu a pedido do dono,
+  // porque repetia o número que já está no campo.
   // O descanso prescrito ganha do padrão da tela: 180s depois de uma tripla
   // pesada e 60s depois de rosca direta não são a mesma pausa.
   const restTarget = prescription?.restSeconds ?? DEFAULT_REST_SECONDS;
@@ -198,15 +188,10 @@ export function ActiveExerciseCard({
   // continuam em kg; só o campo e as dicas mostram em lb.
   const units = useUnitPrefs();
   const unitLabel = loadUnitLabel(units.loadUnit);
-  const previousLabel = formatPreviousSet(reference, false, units);
   const setNumber = Math.min(doneSets + 1, targetSets);
-  const headline = [
-    `Série ${setNumber} de ${targetSets}`,
-    group.targetReps ? `meta ${group.targetReps} reps` : null,
-    previousLabel ? `última vez ${previousLabel}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // Só "Série N de M" (prancha Al-T3d): a meta já está embaixo das reps e a
+  // última vez no "Anterior" dos campos — a linha longa repetia os dois.
+  const headline = `Série ${setNumber} de ${targetSets}`;
   const isRecord = prWeight != null && prWeight > 0 && weight > prWeight;
 
   const record =
@@ -292,12 +277,6 @@ export function ActiveExerciseCard({
             />
           </div>
 
-          {hint && (
-            <p className="text-center text-xs text-muted-foreground">
-              <span className="font-bold text-primary-text">{hint.label}</span> · {hint.reason}
-            </p>
-          )}
-
           {!resting && (
             <div className="space-y-2.5">
               <p className="font-display text-[17px] font-semibold text-foreground">
@@ -311,9 +290,28 @@ export function ActiveExerciseCard({
 
       {beforeSubmit}
 
-      <div className="space-y-1">
+      <button
+        type="button"
+        onClick={onFinishExercise}
+        className="anim-press mx-auto flex h-11 items-center px-4 text-[13px] font-bold text-muted-foreground"
+      >
+        Finalizar exercício
+      </button>
+
+      {logSet.isError && (
+        <p role="alert" className="text-center text-xs text-danger">
+          Não foi possível registrar a série
+          {logSet.error instanceof Error ? `: ${logSet.error.message}` : '.'}
+        </p>
+      )}
+
+      {/* Preso embaixo da tela (prancha Al-T3, pedido do dono): o conteúdo rola
+          acima dele. `sticky`, e não `fixed`: o botão segue ocupando o lugar
+          dele no fim do card, então o último item nunca fica atrás. A barra de
+          baixo some na sessão; 22 px da borda, acima da área segura. */}
+      <div className="sticky bottom-[calc(22px+env(safe-area-inset-bottom))] z-30 md:bottom-4">
         <Button
-          className="h-[60px] w-full rounded-full text-base font-extrabold"
+          className="h-[60px] w-full rounded-full text-base font-extrabold shadow-[0_12px_32px_-8px_hsl(var(--background))]"
           onClick={concludeSet}
           disabled={logSet.isPending || isComplete}
         >
@@ -324,19 +322,6 @@ export function ActiveExerciseCard({
               ? 'Exercício completo'
               : `Concluir série ${setNumber}`}
         </Button>
-        {logSet.isError && (
-          <p role="alert" className="text-center text-xs text-danger">
-            Não foi possível registrar a série
-            {logSet.error instanceof Error ? `: ${logSet.error.message}` : '.'}
-          </p>
-        )}
-        <button
-          type="button"
-          onClick={onFinishExercise}
-          className="anim-press mx-auto flex h-11 items-center px-4 text-[13px] font-bold text-muted-foreground"
-        >
-          Finalizar exercício
-        </button>
       </div>
     </div>
   );

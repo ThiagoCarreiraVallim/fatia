@@ -8,7 +8,8 @@ import { newSetClientKey, workoutApi, type ExerciseGroup } from '@fatia/api-clie
 import { Button } from '@/components/ui';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { formatPace, formatPreviousSet } from './format';
-import { setHeadline, STEPS } from './guided-session';
+import { STEPS } from './guided-session';
+import { useDockedAction } from './session-dock';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
@@ -101,16 +102,32 @@ export function ActiveCardioCard({
   const nothing = minutes === 0 && meters == null && bpm === 0 && kcal === 0;
   const editingSet = editing != null ? group.sets[editing] : undefined;
 
+  // Preso no rodapé da sessão, como o da força (`useDockedAction`).
+  const submitInline = useDockedAction(
+    working && !existing ? (
+      <Button
+        className="h-[60px] rounded-full"
+        disabled={save.isPending || nothing}
+        loading={save.isPending}
+        onPress={() => {
+          if (save.isPending) return;
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          clientKey.current ??= newSetClientKey();
+          save.mutate(clientKey.current);
+        }}
+      >
+        <Check size={18} color={colors.primaryForeground} />
+        <Text className="font-sans-bold text-base text-primary-foreground">Concluir série 1</Text>
+      </Button>
+    ) : null,
+  );
+
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 text-[13px] text-muted-foreground">
-          {setHeadline({
-            done: group.sets.length,
-            target: 1,
-            targetReps: group.targetReps,
-            lastTime,
-          })}
+          {/* Como no PWA: a referência da última vez, sem o "Série 1 de 1". */}
+          {lastTime ? `Anterior: ${lastTime}` : 'Cardio'}
         </Text>
         {nav}
       </View>
@@ -186,22 +203,7 @@ export function ActiveCardioCard({
 
           {beforeSubmit}
 
-          <Button
-            className="h-[60px] rounded-full"
-            disabled={save.isPending || nothing}
-            loading={save.isPending}
-            onPress={() => {
-              if (save.isPending) return;
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              clientKey.current ??= newSetClientKey();
-              save.mutate(clientKey.current);
-            }}
-          >
-            <Check size={18} color={colors.primaryForeground} />
-            <Text className="font-sans-bold text-base text-primary-foreground">
-              Concluir série 1
-            </Text>
-          </Button>
+          {submitInline}
         </>
       ) : null}
     </View>

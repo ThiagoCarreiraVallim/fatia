@@ -135,3 +135,22 @@ export function figureTone(original: string | null | undefined): FigureTone | nu
       return null;
   }
 }
+
+/**
+ * O quadro (`viewBox`) de cada vista do boneco. Os dois SVGs têm o desenho na
+ * mesma escala e com a cabeça na mesma altura, mas telas de tamanhos
+ * diferentes: a frente tem 587 × 1137 e as costas 596 × 1133. Com a mesma
+ * largura na tela, a frente saía maior e mais comprida que as costas — a figura
+ * da esquerda "caída". No mesmo quadro de 596 × 1137 (a frente centrada nele)
+ * as duas saem do mesmo tamanho, com o topo e o pé alinhados.
+ */
+const FIGURE_FRAME = { width: 596, height: 1137 } as const;
+const FIGURE_CANVAS = { front: 587, back: 596 } as const;
+
+export function figureViewBox(view: 'front' | 'back'): string {
+  const x = -(FIGURE_FRAME.width - FIGURE_CANVAS[view]) / 2;
+  return `${x} 0 ${FIGURE_FRAME.width} ${FIGURE_FRAME.height}`;
+}
+
+/** Largura sobre altura do quadro comum, para o `aspect-ratio` da vista. */
+export const FIGURE_ASPECT = FIGURE_FRAME.width / FIGURE_FRAME.height;

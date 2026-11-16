@@ -34,7 +34,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ErrorState } from '@/components/elements/error-state';
-import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { MuscleDiagram } from '@/components/workout/muscle-diagram';
 import { FeelingPicker } from '@/components/workout/set-chips';
 import { groupTone } from '@/components/workout/group-tone';
@@ -60,7 +59,8 @@ export default function SessionDetailPage() {
     queryFn: () => workoutApi.getSessionSummary(id),
   });
   const stillOpen = query.data != null && query.data.completedAt == null;
-  useTopBarTitle(query.data && !stillOpen ? 'Treino feito' : null);
+  // Sem barra de topo nem voltar (prancha Al-T5, `hasTopBar`): o "Treino
+  // feito" é foco, e o "Salvar" e o compartilhar são a saída.
   // Sessão ainda aberta (link antigo, outra aba): o lugar dela é o treino em
   // andamento, não o "Treino feito!" nem as perguntas do fim.
   useEffect(() => {
@@ -350,39 +350,42 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
   const shortcuts = noteShortcutsFor(note);
 
   return (
-    <section aria-labelledby="feito-como-foi" className={cn(card, 'space-y-3')}>
-      <h2 id="feito-como-foi" className={title}>
-        Como foi o treino?
-      </h2>
-      <FeelingPicker label="Como foi o treino?" value={feeling} onChange={setFeeling} />
-      <Textarea
-        aria-label="Observação do treino"
-        placeholder="Algo para lembrar no próximo? (opcional)"
-        value={note}
-        maxLength={500}
-        rows={3}
-        onChange={(e) => setNote(e.target.value)}
-      />
-      {shortcuts.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {shortcuts.map((label) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setNote((current) => appendNoteShortcut(current, label))}
-              className="anim-press flex min-h-11 items-center gap-1 rounded-full bg-muted px-3 text-[13px] font-bold text-foreground"
-            >
-              <Plus size={14} aria-hidden />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+    <>
+      <section aria-labelledby="feito-como-foi" className={cn(card, 'space-y-3')}>
+        <h2 id="feito-como-foi" className={title}>
+          Como foi o treino?
+        </h2>
+        <FeelingPicker label="Como foi o treino?" value={feeling} onChange={setFeeling} />
+        <Textarea
+          aria-label="Observação do treino"
+          placeholder="Algo para lembrar no próximo? (opcional)"
+          value={note}
+          maxLength={500}
+          rows={3}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        {shortcuts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {shortcuts.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setNote((current) => appendNoteShortcut(current, label))}
+                className="anim-press flex min-h-11 items-center gap-1 rounded-full bg-muted px-3 text-[13px] font-bold text-foreground"
+              >
+                <Plus size={14} aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
       {save.isError && (
         <p role="alert" className="text-center text-xs text-danger">
           Não foi possível salvar. Tente de novo.
         </p>
       )}
+      {/* Fora do cartão, como na prancha Al-T5: são a saída da tela. */}
       <div className="grid grid-cols-[auto_1fr] gap-2">
         <button
           type="button"
@@ -401,7 +404,7 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
           {save.isPending ? 'Salvando…' : 'Salvar'}
         </button>
       </div>
-    </section>
+    </>
   );
 }
 

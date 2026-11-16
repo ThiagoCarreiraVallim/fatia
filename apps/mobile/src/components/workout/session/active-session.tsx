@@ -9,6 +9,7 @@ import {
   muscleGroupLabel,
   orderExerciseGroups,
   pickFocusedGroup,
+  type ExerciseGroup,
   type MuscleGroup,
   type StrengthMuscleGroup,
   type WorkoutSession,
@@ -22,9 +23,17 @@ import { groupColorName } from '@/components/workout/workout-home';
 import { ActiveCardioCard } from './active-cardio-card';
 import { ActiveExerciseCard } from './active-exercise-card';
 import { isExerciseComplete, pluralize, targetSetsOf } from './format';
-import { guidedState, nextOpenIndex } from './guided-session';
+import { guidedState, isSessionDone, nextOpenIndex } from './guided-session';
 import { isResting, RestPanel } from './rest-panel';
 import { SessionHeader } from './session-header';
+import {
+  SessionDockHost,
+  SessionDockProvider,
+  useDockedAction,
+  useSessionDockStore,
+} from './session-dock';
+import { SessionExerciseCard, useSessionExerciseActions } from './session-exercise-card';
+import { dockLayout } from './session-dock-store';
 import { useAutoAdvance } from './use-auto-advance';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useFinishSession } from './use-finish-session';
@@ -75,6 +84,10 @@ export function ActiveSession({
   const { focus: requestedFocus, request: requestFocus } = useFocusRequest(session.id);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const scrollRef = useRef<ScrollView>(null);
+  // O "Concluir série" preso embaixo, fora da rolagem (`session-dock.tsx`).
+  const dock = useSessionDockStore();
+  const [dockHeight, setDockHeight] = useState(0);
+  const dockPlace = dockLayout({ safeBottom: insets.bottom, dockHeight });
 
   const [searchOpen, setSearchOpen] = useState(initialSearch != null);
   const [searchGroup, setSearchGroup] = useState<MuscleGroup | undefined>(initialSearch);
@@ -212,164 +225,184 @@ export function ActiveSession({
     </Pressable>
   );
   const remaining = groups.filter((g, i) => i !== index && !isExerciseComplete(g));
+  // Tudo feito (e fora do descanso): no lugar do "Tudo feito por aqui" vazio,
+  // o treino até aqui, com as séries de cada exercício (prancha Al-T17).
+  const showDone = state !== 'resting' && isSessionDone(groups);
 
   return (
     <>
       <ExerciseDetailHost>
-        <View className="flex-1 bg-background">
-          <SessionHeader
-            startedAt={session.startedAt}
-            onMinimize={exit.leave}
-            onFinish={requestFinish}
-          />
-          <ScrollView
-            ref={scrollRef}
-            className="flex-1"
-            contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primaryText}
-                colors={[colors.primaryText]}
-              />
-            }
-          >
-            {current ? (
-              <>
-                <ExerciseHeading
-                  key={`heading-${current.exerciseId}`}
-                  exerciseId={current.exerciseId}
-                  exerciseName={current.exerciseName}
-                  groupColor={
-                    groupName ? colors[groupColorName(groupName)] : colors.faintForeground
-                  }
-                  groupLabel={
-                    groupName
-                      ? groupName === 'cardio'
-                        ? 'Cardio'
-                        : muscleGroupLabel(groupName as StrengthMuscleGroup)
-                      : null
-                  }
+        <SessionDockProvider value={dock}>
+          <View className="flex-1 bg-background">
+            <SessionHeader
+              startedAt={session.startedAt}
+              onMinimize={exit.leave}
+              onFinish={requestFinish}
+            />
+            <ScrollView
+              ref={scrollRef}
+              className="flex-1"
+              contentContainerStyle={{
+                padding: 20,
+                paddingBottom: dockPlace.scrollPaddingBottom,
+                gap: 16,
+              }}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.primaryText}
+                  colors={[colors.primaryText]}
                 />
-
-                {current.isCardio ? (
-                  <ActiveCardioCard
-                    key={current.exerciseId}
-                    sessionId={session.id}
-                    group={current}
-                    working={state === 'working'}
-                    onLogged={(completed) => {
-                      if (completed) setAdvanceFrom(current.exerciseId);
-                    }}
-                    nav={exerciseNav}
-                    onAll={openOverview}
-                    beforeSubmit={autoToggle}
-                  />
-                ) : (
-                  // `key` por exercício: sem ela a carga digitada no anterior
-                  // continuaria no campo do próximo.
-                  <ActiveExerciseCard
-                    key={current.exerciseId}
-                    sessionId={session.id}
-                    sessionStartedAt={session.startedAt}
-                    group={current}
-                    rest={rest}
-                    working={state === 'working'}
-                    onLogged={(completed) => {
-                      if (completed) setAdvanceFrom(current.exerciseId);
-                    }}
-                    nav={exerciseNav}
-                    onAll={openOverview}
-                    beforeSubmit={autoToggle}
-                  />
-                )}
-              </>
-            ) : (
-              <View className="gap-1 rounded-3xl bg-card p-4">
-                <Text className="font-sans-bold text-base text-foreground">Treino livre</Text>
-                <Text className="text-[13px] text-muted-foreground">
-                  Adicione o primeiro exercício para começar.
-                </Text>
-              </View>
-            )}
-
-            {state === 'resting' ? <RestPanel timer={rest} next={nextLabel} /> : null}
-
-            {state === 'picking' ? (
-              <View className="gap-3">
-                {current ? (
-                  <Text className="font-sans-bold text-base text-foreground">
-                    {remaining.length > 0 ? 'E agora?' : 'Tudo feito por aqui.'}
-                  </Text>
-                ) : null}
-                {remaining.map((g) => {
-                  const i = groups.indexOf(g);
-                  const target = targetSetsOf(g);
-                  const badge =
-                    g.sets.length === 0
-                      ? g.isCardio
-                        ? 'cardio'
-                        : `${target} ${pluralize(target, 'série', 'séries')}`
-                      : `${g.sets.length} de ${target}`;
-                  return (
-                    <Pressable
-                      key={g.exerciseId}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Fazer ${g.exerciseName}, ${badge}`}
-                      onPress={() => goTo(i)}
-                      className={cn(
-                        'min-h-[56px] flex-row items-center gap-3 rounded-2xl px-4 active:opacity-80',
-                        i === nextIndex ? 'bg-primary/15' : 'bg-card',
-                      )}
-                    >
-                      <Text
-                        numberOfLines={1}
-                        className="flex-1 font-sans-bold text-sm text-foreground"
-                      >
-                        {g.exerciseName}
-                      </Text>
-                      <View className="rounded-full bg-muted px-2.5 py-1">
-                        <Text className="text-[11px] font-sans-bold text-muted-foreground">
-                          {badge}
-                        </Text>
-                      </View>
-                      {i === nextIndex ? (
-                        <Text className="text-[11px] font-sans-bold text-primary-text">
-                          próximo
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-                <Button
-                  variant="outline"
-                  className="h-12 rounded-full"
-                  onPress={() => {
+              }
+            >
+              {showDone ? (
+                <DoneSummary
+                  session={session}
+                  groups={groups}
+                  onOpen={openOverview}
+                  onAddExercise={() => {
                     setSearchGroup(undefined);
                     setSearchOpen(true);
                   }}
-                >
-                  <Plus size={16} color={colors.foreground} />
-                  <Text className="font-sans-bold text-sm text-foreground">
-                    Adicionar exercício
-                  </Text>
-                </Button>
-                <Button
-                  className="h-14 rounded-full"
-                  loading={finish.isPending}
-                  disabled={finish.isPending}
-                  onPress={requestFinish}
-                >
-                  Finalizar treino
-                </Button>
-              </View>
-            ) : null}
+                  onFinish={requestFinish}
+                  finishing={finish.isPending}
+                />
+              ) : current ? (
+                <>
+                  <ExerciseHeading
+                    key={`heading-${current.exerciseId}`}
+                    exerciseId={current.exerciseId}
+                    exerciseName={current.exerciseName}
+                    groupColor={
+                      groupName ? colors[groupColorName(groupName)] : colors.faintForeground
+                    }
+                    groupLabel={
+                      groupName
+                        ? groupName === 'cardio'
+                          ? 'Cardio'
+                          : muscleGroupLabel(groupName as StrengthMuscleGroup)
+                        : null
+                    }
+                  />
 
-            {state === 'working' && current ? null : autoToggle}
-          </ScrollView>
-        </View>
+                  {current.isCardio ? (
+                    <ActiveCardioCard
+                      key={current.exerciseId}
+                      sessionId={session.id}
+                      group={current}
+                      working={state === 'working'}
+                      onLogged={(completed) => {
+                        if (completed) setAdvanceFrom(current.exerciseId);
+                      }}
+                      nav={exerciseNav}
+                      onAll={openOverview}
+                      beforeSubmit={autoToggle}
+                    />
+                  ) : (
+                    // `key` por exercício: sem ela a carga digitada no anterior
+                    // continuaria no campo do próximo.
+                    <ActiveExerciseCard
+                      key={current.exerciseId}
+                      sessionId={session.id}
+                      sessionStartedAt={session.startedAt}
+                      group={current}
+                      rest={rest}
+                      working={state === 'working'}
+                      onLogged={(completed) => {
+                        if (completed) setAdvanceFrom(current.exerciseId);
+                      }}
+                      nav={exerciseNav}
+                      onAll={openOverview}
+                      beforeSubmit={autoToggle}
+                    />
+                  )}
+                </>
+              ) : (
+                <View className="gap-1 rounded-3xl bg-card p-4">
+                  <Text className="font-sans-bold text-base text-foreground">Treino livre</Text>
+                  <Text className="text-[13px] text-muted-foreground">
+                    Adicione o primeiro exercício para começar.
+                  </Text>
+                </View>
+              )}
+
+              {state === 'resting' ? <RestPanel timer={rest} next={nextLabel} /> : null}
+
+              {state === 'picking' && !showDone ? (
+                <View className="gap-3">
+                  {current ? (
+                    <Text className="font-sans-bold text-base text-foreground">E agora?</Text>
+                  ) : null}
+                  {remaining.map((g) => {
+                    const i = groups.indexOf(g);
+                    const target = targetSetsOf(g);
+                    const badge =
+                      g.sets.length === 0
+                        ? g.isCardio
+                          ? 'cardio'
+                          : `${target} ${pluralize(target, 'série', 'séries')}`
+                        : `${g.sets.length} de ${target}`;
+                    return (
+                      <Pressable
+                        key={g.exerciseId}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Fazer ${g.exerciseName}, ${badge}`}
+                        onPress={() => goTo(i)}
+                        className={cn(
+                          'min-h-[56px] flex-row items-center gap-3 rounded-2xl px-4 active:opacity-80',
+                          i === nextIndex ? 'bg-primary/15' : 'bg-card',
+                        )}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          className="flex-1 font-sans-bold text-sm text-foreground"
+                        >
+                          {g.exerciseName}
+                        </Text>
+                        <View className="rounded-full bg-muted px-2.5 py-1">
+                          <Text className="text-[11px] font-sans-bold text-muted-foreground">
+                            {badge}
+                          </Text>
+                        </View>
+                        {i === nextIndex ? (
+                          <Text className="text-[11px] font-sans-bold text-primary-text">
+                            próximo
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                  <Button
+                    variant="outline"
+                    className="h-12 rounded-full"
+                    onPress={() => {
+                      setSearchGroup(undefined);
+                      setSearchOpen(true);
+                    }}
+                  >
+                    <Plus size={16} color={colors.foreground} />
+                    <Text className="font-sans-bold text-sm text-foreground">
+                      Adicionar exercício
+                    </Text>
+                  </Button>
+                  <Button
+                    className="h-14 rounded-full"
+                    loading={finish.isPending}
+                    disabled={finish.isPending}
+                    onPress={requestFinish}
+                  >
+                    Finalizar treino
+                  </Button>
+                </View>
+              ) : null}
+
+              {(state === 'working' && current) || showDone ? null : autoToggle}
+            </ScrollView>
+            <SessionDockHost store={dock} bottom={dockPlace.bottom} onHeight={setDockHeight} />
+          </View>
+        </SessionDockProvider>
       </ExerciseDetailHost>
 
       <DrawerLayer>
@@ -419,5 +452,87 @@ function NavArrow({
     >
       {children}
     </Pressable>
+  );
+}
+
+/**
+ * Tudo feito: o treino até aqui, cada exercício com as séries (o cartão do
+ * Treino atual, prancha Al-T17), para conferir e corrigir antes de finalizar.
+ * "+ Exercício" e "Finalizar treino" ficam presos embaixo, como o "Concluir
+ * série".
+ */
+function DoneSummary({
+  session,
+  groups,
+  onOpen,
+  onAddExercise,
+  onFinish,
+  finishing,
+}: {
+  session: WorkoutSession;
+  groups: ExerciseGroup[];
+  onOpen: () => void;
+  onAddExercise: () => void;
+  onFinish: () => void;
+  finishing: boolean;
+}) {
+  const [editing, setEditing] = useState<{ exerciseId: number; index: number } | null>(null);
+  // Tudo completo: "+ Série" sempre tem a última para copiar.
+  const actions = useSessionExerciseActions(session, { onStartEmpty: onOpen });
+  const sets = groups.reduce((acc, g) => acc + g.sets.length, 0);
+  const footer = useDockedAction(
+    <View className="flex-row gap-2">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Adicionar exercício"
+        onPress={onAddExercise}
+        className="h-14 flex-row items-center justify-center gap-1.5 rounded-full bg-muted px-5 active:opacity-80"
+      >
+        <Plus size={16} color={colors.foreground} />
+        <Text className="font-sans-bold text-[15px] text-foreground">Exercício</Text>
+      </Pressable>
+      <Button
+        className="h-14 flex-1 rounded-full"
+        loading={finishing}
+        disabled={finishing}
+        onPress={onFinish}
+      >
+        Finalizar treino
+      </Button>
+    </View>,
+  );
+
+  return (
+    <View className="gap-3">
+      <View>
+        <Text
+          accessibilityRole="header"
+          className="font-display-semibold text-[22px] text-foreground"
+        >
+          Treino de hoje
+        </Text>
+        <Text className="text-[13px] text-muted-foreground">
+          {groups.length} {pluralize(groups.length, 'exercício', 'exercícios')} · {sets}{' '}
+          {pluralize(sets, 'série', 'séries')}
+        </Text>
+      </View>
+      {groups.map((group, position) => (
+        <SessionExerciseCard
+          key={group.exerciseId}
+          session={session}
+          group={group}
+          position={position}
+          count={groups.length}
+          editing={editing?.exerciseId === group.exerciseId ? editing.index : null}
+          onEdit={(i) => setEditing(i == null ? null : { exerciseId: group.exerciseId, index: i })}
+          onAction={onOpen}
+          onAddSet={() => actions.addSetTo(group)}
+          addDisabled={actions.addPending}
+          onRemove={() => actions.requestRemove(group)}
+          removeDisabled={actions.removePending}
+        />
+      ))}
+      {footer}
+    </View>
   );
 }

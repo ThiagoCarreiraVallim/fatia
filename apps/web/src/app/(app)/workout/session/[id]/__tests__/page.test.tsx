@@ -11,6 +11,12 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'sessao-1' }),
   useRouter: () => ({ push, replace }),
 }));
+// O "Treino feito" (Al-T5) é tela de foco: sem barra de topo, nem pedida
+// pelo título. O dublê registra o que a página pede à barra.
+const topBarTitle = vi.fn();
+vi.mock('@/components/layout/app-top-bar', () => ({
+  useTopBarTitle: (title: string | null) => topBarTitle(title),
+}));
 vi.mock('@/components/workout/muscle-diagram', () => ({
   MuscleDiagram: ({ primaryMuscles }: { primaryMuscles: string[] }) => (
     <div role="img" aria-label={`Músculos: ${primaryMuscles.join(', ')}`} />
@@ -112,6 +118,13 @@ function renderPage() {
 describe('Treino feito! (#377)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('não pede a barra de topo: o "Treino feito" é foco, sem título nem voltar (Al-T5)', async () => {
+    getSessionSummary.mockResolvedValue(summary());
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Treino feito!' })).toBeInTheDocument();
+    for (const [title] of topBarTitle.mock.calls) expect(title).toBeNull();
   });
 
   it('falha de rede não vira "sessão não encontrada", e dá para tentar de novo', async () => {

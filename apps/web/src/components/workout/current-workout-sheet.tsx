@@ -78,20 +78,14 @@ export function CurrentWorkoutSheet({
           </DrawerDescription>
         </DrawerHeader>
 
-        <ul className="max-h-[60vh] space-y-3 overflow-y-auto py-2">
-          {groups.map((g, index) => (
-            <CurrentExercise
-              key={g.exerciseId}
-              sessionId={sessionId}
-              group={g}
-              isFirst={index === 0}
-              isLast={index === groups.length - 1}
-              onRemove={() => onRemove(g)}
-              onMove={(direction) => onMove(g.exerciseId, direction)}
-              onStart={() => onStart(g.exerciseId)}
-            />
-          ))}
-        </ul>
+        <CurrentExerciseList
+          className="max-h-[60vh] overflow-y-auto py-2"
+          sessionId={sessionId}
+          groups={groups}
+          onRemove={onRemove}
+          onMove={onMove}
+          onStart={onStart}
+        />
 
         <div className="mt-3 flex gap-2">
           <button
@@ -123,9 +117,52 @@ export function CurrentWorkoutSheet({
   );
 }
 
+/**
+ * Os exercícios da sessão com as séries (prancha Al-T17). Mora na folha do
+ * Treino atual e, com tudo feito, na própria sessão, como o resumo do treino
+ * até aqui. Sem `onMove`, sem as setas de ordem.
+ */
+export function CurrentExerciseList({
+  sessionId,
+  groups,
+  onRemove,
+  onMove,
+  onStart,
+  surface = 'sheet',
+  className,
+}: {
+  sessionId: string;
+  groups: ExerciseGroup[];
+  onRemove: (group: ExerciseGroup) => void;
+  onMove?: (exerciseId: number, direction: 'up' | 'down') => void;
+  onStart: (exerciseId: number) => void;
+  /** Na folha o cartão é um tom acima do fundo dela; na página, o `bg-card`. */
+  surface?: 'sheet' | 'page';
+  className?: string;
+}) {
+  return (
+    <ul className={cn('space-y-3', className)}>
+      {groups.map((g, index) => (
+        <CurrentExercise
+          key={g.exerciseId}
+          sessionId={sessionId}
+          group={g}
+          surface={surface}
+          isFirst={index === 0}
+          isLast={index === groups.length - 1}
+          onRemove={() => onRemove(g)}
+          onMove={onMove ? (direction) => onMove(g.exerciseId, direction) : undefined}
+          onStart={() => onStart(g.exerciseId)}
+        />
+      ))}
+    </ul>
+  );
+}
+
 function CurrentExercise({
   sessionId,
   group,
+  surface,
   isFirst,
   isLast,
   onRemove,
@@ -134,10 +171,11 @@ function CurrentExercise({
 }: {
   sessionId: string;
   group: ExerciseGroup;
+  surface: 'sheet' | 'page';
   isFirst: boolean;
   isLast: boolean;
   onRemove: () => void;
-  onMove: (direction: 'up' | 'down') => void;
+  onMove?: (direction: 'up' | 'down') => void;
   onStart: () => void;
 }) {
   const qc = useQueryClient();
@@ -175,7 +213,8 @@ function CurrentExercise({
   return (
     <li
       className={cn(
-        'rounded-card bg-muted/60 px-4',
+        'rounded-card px-4',
+        surface === 'sheet' ? 'bg-muted/60' : 'bg-card',
         inProgress && 'shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.6)]',
       )}
     >
@@ -190,24 +229,28 @@ function CurrentExercise({
             {(target || group.sets.length) === 1 ? 'série' : 'séries'}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label={`Subir ${group.exerciseName}`}
-          disabled={isFirst}
-          onClick={() => onMove('up')}
-          className={arrow}
-        >
-          <ChevronUp size={18} aria-hidden />
-        </button>
-        <button
-          type="button"
-          aria-label={`Descer ${group.exerciseName}`}
-          disabled={isLast}
-          onClick={() => onMove('down')}
-          className={arrow}
-        >
-          <ChevronDown size={18} aria-hidden />
-        </button>
+        {onMove && (
+          <>
+            <button
+              type="button"
+              aria-label={`Subir ${group.exerciseName}`}
+              disabled={isFirst}
+              onClick={() => onMove('up')}
+              className={arrow}
+            >
+              <ChevronUp size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label={`Descer ${group.exerciseName}`}
+              disabled={isLast}
+              onClick={() => onMove('down')}
+              className={arrow}
+            >
+              <ChevronDown size={18} aria-hidden />
+            </button>
+          </>
+        )}
         {done ? (
           <span className="ms-1 shrink-0 text-[13px] font-bold text-muted-foreground">✓ Feito</span>
         ) : (
