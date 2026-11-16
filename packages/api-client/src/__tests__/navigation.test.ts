@@ -194,6 +194,10 @@ describe('navegação', () => {
       '/workout/plans/new',
       // Al-T12: o Bloco de treino fecha no X, com o "Começar bloco" embaixo.
       '/workout/block',
+      // #380: Novo circuito (Al-T22), editar e o relógio (Al-T4…) são foco.
+      '/workout/circuits/new',
+      '/workout/circuits/c1',
+      '/workout/circuit/s1',
     ])('%s esconde a barra', (path) => {
       expect(navBarMode(path)).toBe('hidden');
     });
@@ -245,11 +249,14 @@ describe('navegação', () => {
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
       ['/nutrition/meals/m1?date=2026-11-15', 'Refeição', '/nutrition', 'Nutrição'],
       ['/nutrition/plan', 'Plano alimentar', '/nutrition', 'Nutrição'],
-      ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
-      ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos de treino'],
+      ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos e circuitos'],
       ['/workout/offers/o1', 'Plano recebido', '/workout', 'Treino'],
+      ['/workout/circuits/new', 'Novo circuito', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/circuits/c1', 'Editar circuito', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/circuit/s1', 'Circuito', '/workout', 'Treino'],
       ['/workout/agenda', 'Agenda', '/workout', 'Treino'],
-      ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos de treino'],
+      ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos e circuitos'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
       ['/plan', 'Meu plano', '/you', 'Você'],
@@ -308,6 +315,8 @@ describe('abas raiz', () => {
 
   it('a sessão e o "Treino feito" (Al-T3, Al-T5) não têm a barra de topo nem o voltar', () => {
     expect(hasTopBar('/workout/session/s1')).toBe(false);
+    // O relógio do circuito tem o próprio cabeçalho (X, formato e som), como a sessão.
+    expect(hasTopBar('/workout/circuit/s1')).toBe(false);
     expect(hasTopBar('/workout/session/s1?x=1')).toBe(false);
     // O Treino atual (Al-T17) segue com a barra: tem o voltar ao treino.
     expect(hasTopBar('/workout/session/s1/edit')).toBe(true);

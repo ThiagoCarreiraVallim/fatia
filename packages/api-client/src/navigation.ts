@@ -258,6 +258,11 @@ const FOCUS_ROUTES = [
   '/workout/plans/new',
   // Al-T12: o Bloco de treino fecha no X e tem o "Começar bloco" embaixo, sem a barra.
   '/workout/block',
+  // #380: o Novo circuito (Al-T22) e a edição fecham no X, com "Salvar" e
+  // "Começar agora" embaixo; o relógio (Al-T4, T4b, T4c) é foco, sem barra.
+  '/workout/circuits/new',
+  '/workout/circuits/:id',
+  '/workout/circuit/:id',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -268,6 +273,8 @@ export type NavBarMode = 'visible' | 'hidden';
 
 /** A sessão de treino: em andamento (Al-T3) ou o "Treino feito" (Al-T5). */
 const SESSION_ROUTE = '/workout/session/:id';
+/** O relógio do circuito (Al-T4, T4b, T4c, T4d): o próprio cabeçalho, sem barra de topo. */
+const CIRCUIT_RUN_ROUTE = '/workout/circuit/:id';
 
 /**
  * A barra aparece nesta tela? A sessão some sempre (aberta ou concluída); o
@@ -342,10 +349,23 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/nutrition/meals/:id', title: 'Refeição', parent: '/nutrition' },
   { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
-  { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
+  { pattern: '/workout/plans', title: 'Planos e circuitos', parent: '/workout' },
   { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
+  {
+    pattern: '/workout/circuits/new',
+    title: 'Novo circuito',
+    parent: '/workout/plans',
+    dismiss: true,
+  },
+  {
+    pattern: '/workout/circuits/:id',
+    title: 'Editar circuito',
+    parent: '/workout/plans',
+    dismiss: true,
+  },
+  { pattern: '/workout/circuit/:id', title: 'Circuito', parent: '/workout' },
   { pattern: '/workout/offers/:id', title: 'Plano recebido', parent: '/workout' },
   { pattern: '/workout/agenda', title: 'Agenda', parent: '/workout' },
   { pattern: '/workout/templates', title: 'Modelos das comunidades', parent: '/workout/plans' },
@@ -458,6 +478,7 @@ export function hasTopBar(pathname: string): boolean {
   // A sessão tem o próprio cabeçalho (Al-T3), e o "Treino feito" (Al-T5)
   // nenhum: sem a barra e sem o voltar, nas duas pontas.
   if (match(SESSION_ROUTE, segments(pathname))) return false;
+  if (match(CIRCUIT_RUN_ROUTE, segments(pathname))) return false;
   return !(TAB_ROOTS as readonly string[]).includes(path);
 }
 
