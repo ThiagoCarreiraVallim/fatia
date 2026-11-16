@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { currentChipIndex, revealOffset, type ExerciseGroup } from '@fatia/api-client';
@@ -52,6 +52,13 @@ export function SetChips({
     });
     if (x !== m.offset) scrollRef.current?.scrollTo({ x, animated: true });
   }
+  // Ao abrir a sessão já na série 4, as medidas chegam antes de o ScrollView
+  // aceitar `scrollTo`; uma segunda tentativa depois do primeiro quadro garante.
+  useEffect(() => {
+    const t = setTimeout(reveal, 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, total]);
 
   return (
     <View className="flex-row items-center gap-1.5">
