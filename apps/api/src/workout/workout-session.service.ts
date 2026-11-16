@@ -16,6 +16,13 @@ import type {
   WorkoutCheckinDto,
 } from './dto/session.dto';
 import { summarizeSession, type SessionSummary } from './session-summary';
+import {
+  circuitDefinitionFromPlan,
+  circuitSummaryView,
+  newCircuitJson,
+  parseCircuitJson,
+  type CircuitSummaryView,
+} from './helpers/circuit';
 
 export interface PostWorkoutQuestion {
   key: 'fatigue' | 'pain';
@@ -49,6 +56,8 @@ export interface PostWorkoutQuestions {
 export type SessionSummaryView = SessionSummary & {
   checkin: Omit<WorkoutCheckin, 'userId'> | null;
   questions: PostWorkoutQuestions | null;
+  /** Circuito (#380): rounds, tempo por round, tempo final e a comparação. Nulo em treino de séries. */
+  circuit: CircuitSummaryView | null;
 };
 
 const SESSION_INCLUDE = {
@@ -134,20 +143,34 @@ export class WorkoutSessionService {
     // O plano vem do corpo: precisa ser da pessoa. Sem isto a sessão de B
     // apontaria para o plano de A, e o `findById` de B mostraria os exercícios
     // de A em `plannedExercises`.
+    let circuit: Prisma.InputJsonValue | undefined;
+    const startedAt = dto.startedAt ? new Date(dto.startedAt) : new Date();
     if (dto.planId) {
       const plan = await this.prisma.workoutPlan.findFirst({
         where: { id: dto.planId, userId },
-        select: { id: true },
+        include: {
+          circuit: true,
+          exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
+        },
       });
       if (!plan) throw new NotFoundException('Plan not found');
+      // Circuito (#380): a sessão congela o circuito no começo, e o relógio
+      // conta a partir daqui. Os toques chegam depois, pelo progresso.
+      if (plan.kind === 'CIRCUIT') {
+        if (plan.exercises.length === 0) {
+          throw new BadRequestException('Adicione exercícios ao circuito antes de começar.');
+        }
+        circuit = newCircuitJson(circuitDefinitionFromPlan(plan), startedAt);
+      }
     }
     try {
       return await this.prisma.workoutSession.create({
         data: {
           userId,
           planId: dto.planId ?? null,
-          startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
+          startedAt,
           notes: dto.notes,
+          ...(circuit ? { circuit } : {}),
         },
       });
     } catch (error) {
@@ -427,13 +450,51 @@ export class WorkoutSessionService {
       priorSets,
       now: new Date(),
     });
+    const circuit = await this.circuitSummary(userId, session);
     let checkin: SessionSummaryView['checkin'] = null;
     if (session.checkin) {
       const { userId: _dono, ...rest } = session.checkin;
       void _dono;
       checkin = rest;
     }
-    return { ...summary, checkin, questions };
+    return { ...summary, checkin, questions, circuit };
+  }
+
+  /**
+   * O resultado do circuito e a última vez do mesmo circuito, antes deste. As
+   * sessões antigas sem resultado (encerradas sem relógio, JSON de outra
+   * versão) não contam como "última vez".
+   */
+  private async circuitSummary(
+    userId: string,
+    session: { id: string; planId: string | null; startedAt: Date; circuit: Prisma.JsonValue },
+  ): Promise<CircuitSummaryView | null> {
+    const json = parseCircuitJson(session.circuit);
+    if (!json?.result) return null;
+    const earlier = session.planId
+      ? await this.prisma.workoutSession.findMany({
+          where: {
+            userId,
+            planId: session.planId,
+            id: { not: session.id },
+            completedAt: { not: null },
+            startedAt: { lt: session.startedAt },
+            circuit: { not: Prisma.AnyNull },
+          },
+          orderBy: { startedAt: 'desc' },
+          take: 5,
+          select: { id: true, startedAt: true, circuit: true },
+        })
+      : [];
+    const previous = earlier
+      .map((e) => ({ sessionId: e.id, startedAt: e.startedAt, json: parseCircuitJson(e.circuit) }))
+      .find((e) => e.json?.result);
+    return circuitSummaryView(
+      json,
+      previous?.json
+        ? { sessionId: previous.sessionId, startedAt: previous.startedAt, json: previous.json }
+        : null,
+    );
   }
 
   private shapeSession(session: SessionWithRelations) {

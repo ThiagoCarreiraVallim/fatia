@@ -8,6 +8,7 @@ import { SessionSetService } from './session-set.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
 import { AgendaService } from './agenda.service';
+import { CircuitSessionService } from './circuit-session.service';
 import { ListPlannedSessionsTool } from './mcp/list-planned-sessions.tool';
 import { ReschedulePlannedSessionTool } from './mcp/reschedule-planned-session.tool';
 import { MuscleSummaryService } from './muscle-summary.service';
@@ -61,6 +62,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     PrescriptionService,
     TrainingBlockService,
     AgendaService,
+    CircuitSessionService,
     ListPlannedSessionsTool,
     ReschedulePlannedSessionTool,
     MuscleSummaryService,

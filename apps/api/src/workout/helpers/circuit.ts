@@ -343,3 +343,116 @@ export function compareCircuitResults(
     previousFinalTimeSeconds: previous.finalTimeSeconds,
   };
 }
+
+/** O JSON da sessão que começa: o retrato, sem toques e sem resultado. */
+export function newCircuitJson(definition: CircuitDefinitionV1, startedAt: Date): CircuitJsonV1 {
+  return { version: 1, definition, startedAt: startedAt.toISOString(), events: [], result: null };
+}
+
+/** Quantos minutos (EMOM) ou intervalos (Tabata) o circuito tem. */
+export function circuitIntervalsTotal(def: CircuitDefinitionV1): number | null {
+  if (def.format === 'TABATA') return def.config.intervals ?? null;
+  if (def.format === 'EMOM') return Math.ceil((def.config.durationSeconds ?? 0) / 60);
+  return null;
+}
+
+/**
+ * O circuito no "Treino feito" (Al-T5) e no detalhe da sessão do histórico
+ * (Al-T11c, #381). Nulo enquanto a sessão não tem resultado.
+ */
+export interface CircuitSummaryView {
+  format: CircuitFormatValue;
+  name: string;
+  config: CircuitDefinitionV1['config'];
+  roundsCompleted: number;
+  partialExercises: number;
+  /** O exercício da vez quando o circuito parou no meio de um round ("o tempo acabou no Box jump"). */
+  stoppedAt: { exerciseId: number; name: string } | null;
+  roundSeconds: number[];
+  partialRoundSeconds: number | null;
+  averageRoundSeconds: number | null;
+  elapsedSeconds: number;
+  finalTimeSeconds: number | null;
+  intervalsCompleted: number | null;
+  intervalsTotal: number | null;
+  /** Chegou ao fim (tempo, rounds ou intervalos), e não foi encerrado antes. */
+  completed: boolean;
+  totalReps: number;
+  /** Na ordem do circuito: o alvo por round e o total feito. */
+  exercises: Array<{
+    exerciseId: number;
+    name: string;
+    muscleGroup: string;
+    unit: 'REPS' | 'SECONDS';
+    target: number;
+    sets: number;
+    reps: number;
+    seconds: number;
+  }>;
+  previous: {
+    sessionId: string;
+    startedAt: Date;
+    roundsCompleted: number;
+    partialExercises: number;
+    finalTimeSeconds: number | null;
+    intervalsCompleted: number | null;
+    totalReps: number;
+    elapsedSeconds: number;
+  } | null;
+  comparison: CircuitComparison | null;
+}
+
+export function circuitSummaryView(
+  current: CircuitJsonV1,
+  previous: { sessionId: string; startedAt: Date; json: CircuitJsonV1 } | null,
+): CircuitSummaryView | null {
+  const r = current.result;
+  if (!r) return null;
+  const def = current.definition;
+  const prev = previous?.json.result ? { ...previous, result: previous.json.result } : null;
+  const hasRounds = def.format === 'AMRAP' || def.format === 'FOR_TIME';
+  const stopped =
+    hasRounds && r.finalTimeSeconds === null && r.partialRoundSeconds !== null
+      ? def.exercises[r.partialExercises]
+      : undefined;
+  const totals = new Map(r.exercises.map((e) => [e.exerciseId, e]));
+  const seen = new Set<number>();
+  return {
+    format: def.format,
+    name: def.name,
+    config: def.config,
+    roundsCompleted: r.roundsCompleted,
+    partialExercises: r.partialExercises,
+    stoppedAt: stopped ? { exerciseId: stopped.exerciseId, name: stopped.name } : null,
+    roundSeconds: r.roundSeconds,
+    partialRoundSeconds: r.partialRoundSeconds,
+    averageRoundSeconds: r.roundSeconds.length
+      ? Math.round(r.roundSeconds.reduce((a, b) => a + b, 0) / r.roundSeconds.length)
+      : null,
+    elapsedSeconds: r.elapsedSeconds,
+    finalTimeSeconds: r.finalTimeSeconds,
+    intervalsCompleted: r.intervalsCompleted,
+    intervalsTotal: circuitIntervalsTotal(def),
+    completed: r.completed,
+    totalReps: r.totalReps,
+    exercises: def.exercises
+      .filter((e) => !seen.has(e.exerciseId) && seen.add(e.exerciseId))
+      .map((e) => {
+        const t = totals.get(e.exerciseId);
+        return { ...e, sets: t?.sets ?? 0, reps: t?.reps ?? 0, seconds: t?.seconds ?? 0 };
+      }),
+    previous: prev
+      ? {
+          sessionId: prev.sessionId,
+          startedAt: prev.startedAt,
+          roundsCompleted: prev.result.roundsCompleted,
+          partialExercises: prev.result.partialExercises,
+          finalTimeSeconds: prev.result.finalTimeSeconds,
+          intervalsCompleted: prev.result.intervalsCompleted,
+          totalReps: prev.result.totalReps,
+          elapsedSeconds: prev.result.elapsedSeconds,
+        }
+      : null,
+    comparison: compareCircuitResults(def.format, def.exercises.length, r, prev?.result ?? null),
+  };
+}

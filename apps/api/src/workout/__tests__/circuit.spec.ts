@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   circuitDefinitionFromPlan,
   circuitSetRows,
+  circuitSummaryView,
   compareCircuitResults,
   normalizeCircuitConfig,
   parseCircuitJson,
@@ -185,5 +186,64 @@ describe('parseCircuitJson', () => {
     expect(parseCircuitJson(json)?.definition.name).toBe('AMRAP 12');
     expect(parseCircuitJson({ version: 2 })).toBeNull();
     expect(parseCircuitJson(null)).toBeNull();
+  });
+});
+
+describe('circuitSummaryView', () => {
+  const result = {
+    roundsCompleted: 4,
+    partialExercises: 2,
+    roundSeconds: [138, 144, 151, 160],
+    partialRoundSeconds: 127,
+    elapsedSeconds: 720,
+    finalTimeSeconds: null,
+    intervalsCompleted: null,
+    completed: true,
+    totalReps: 148,
+    exercises: [
+      { exerciseId: 1, sets: 5, reps: 75, seconds: 0 },
+      { exerciseId: 2, sets: 5, reps: 50, seconds: 0 },
+      { exerciseId: 3, sets: 4, reps: 0, seconds: 120 },
+    ],
+  };
+  const json = {
+    version: 1 as const,
+    definition: amrap,
+    startedAt: '2026-11-16T18:00:00.000Z',
+    events: [],
+    result,
+  };
+
+  it('monta o resumo do Al-T11c: rounds + parcial, média, onde parou, por exercício', () => {
+    const view = circuitSummaryView(json, {
+      sessionId: 's0',
+      startedAt: new Date('2026-11-10T18:00:00Z'),
+      json: { ...json, result: { ...result, roundsCompleted: 3 } },
+    });
+    expect(view).toMatchObject({
+      format: 'AMRAP',
+      name: 'AMRAP 12',
+      roundsCompleted: 4,
+      partialExercises: 2,
+      stoppedAt: { exerciseId: 3, name: 'Prancha' },
+      averageRoundSeconds: 148,
+      intervalsTotal: null,
+      previous: { sessionId: 's0', roundsCompleted: 3 },
+      comparison: { verdict: 'better', roundsDelta: 1 },
+    });
+    expect(view?.exercises[2]).toEqual({
+      exerciseId: 3,
+      name: 'Prancha',
+      muscleGroup: 'core',
+      unit: 'SECONDS',
+      target: 30,
+      sets: 4,
+      reps: 0,
+      seconds: 120,
+    });
+  });
+
+  it('circuito ainda sem resultado (sessão aberta) não tem resumo', () => {
+    expect(circuitSummaryView({ ...json, result: null }, null)).toBeNull();
   });
 });
