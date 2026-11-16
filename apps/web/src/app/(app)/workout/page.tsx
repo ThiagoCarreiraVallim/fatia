@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   buildExerciseGroups,
@@ -10,7 +10,6 @@ import {
   pickFocusedGroup,
   workoutApi,
   type ExerciseGroup,
-  type MuscleGroup,
   type PendingExercise,
   type SessionSet,
   type WorkoutSession,
@@ -34,6 +33,7 @@ import { Switch } from '@/components/ui/switch';
 import { useSessionRestTimer } from '@/components/workout/rest-timer-provider';
 import { useSessionLayout } from '@/components/workout/use-session-layout';
 import { useWakeLock } from '@/components/workout/use-wake-lock';
+import { pendingKey } from '@/components/workout/use-start-with-exercises';
 import { WorkoutHome } from '@/components/workout/workout-home';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -47,13 +47,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  * para arrumar a ordem ou tirar o exercício — só desta sessão
  * (`use-session-layout.ts`). Mesmo recorte do `active-session.tsx` do app.
  */
-function ActiveSession({
-  session,
-  initialSearchGroup = null,
-}: {
-  session: WorkoutSession;
-  initialSearchGroup?: MuscleGroup | null;
-}) {
+function ActiveSession({ session }: { session: WorkoutSession }) {
   // A tela apagando no meio da série obriga a desbloquear o celular com a mão
   // que está segurando a barra.
   useWakeLock();
@@ -64,7 +58,7 @@ function ActiveSession({
   const rest = useSessionRestTimer();
   const topRef = useRef<HTMLDivElement>(null);
 
-  const [searchOpen, setSearchOpen] = useState(initialSearchGroup != null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ExerciseGroup | null>(null);
@@ -72,7 +66,11 @@ function ActiveSession({
   const [announcement, setAnnouncement] = useState('');
   const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
   // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
-  const [pending, setPending] = useState<PendingExercise[]>([]);
+  // O Treino livre e o "Repetir" (#381) deixam os escolhidos no cache ao abrir a sessão.
+  const qc = useQueryClient();
+  const [pending, setPending] = useState<PendingExercise[]>(
+    () => qc.getQueryData<PendingExercise[]>(pendingKey(session.id)) ?? [],
+  );
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [currentOpen, setCurrentOpen] = useState(false);
   // Desligado o "passar sozinho", o fim de um exercício mostra a lista do que
@@ -381,7 +379,6 @@ function ActiveSession({
       <ExerciseSearchDrawer
         open={searchOpen}
         onOpenChange={setSearchOpen}
-        muscleGroup={initialSearchGroup ?? undefined}
         onPick={(exercise) => {
           setPending((prev) => [...prev, exercise]);
           setPickedId(exercise.id);
@@ -436,8 +433,6 @@ function ActiveSession({
 }
 
 export default function WorkoutPage() {
-  // "Só cardio" começa um treino livre e já abre a busca nos cardios.
-  const [searchOnStart, setSearchOnStart] = useState<MuscleGroup | null>(null);
   const active = useQuery({
     queryKey: ['workout', 'active'],
     queryFn: () => workoutApi.getActiveSession(),
@@ -456,9 +451,5 @@ export default function WorkoutPage() {
     );
   }
 
-  return active.data ? (
-    <ActiveSession session={active.data} initialSearchGroup={searchOnStart} />
-  ) : (
-    <WorkoutHome onCardio={() => setSearchOnStart('cardio')} />
-  );
+  return active.data ? <ActiveSession session={active.data} /> : <WorkoutHome />;
 }
