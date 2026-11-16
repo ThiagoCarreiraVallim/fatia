@@ -217,10 +217,10 @@ describe('navegação', () => {
       expect(navBarMode(path)).toBe('visible');
     });
 
-    it('a sessão concluída é tela de ver: só a sessão em andamento esconde', () => {
+    it('a sessão é tela de foco aberta ou concluída: o "Treino feito" (Al-T5) também não tem a barra', () => {
       expect(navBarMode('/workout/session/s1', { activeSessionId: 's1' })).toBe('hidden');
-      expect(navBarMode('/workout/session/s1', { activeSessionId: null })).toBe('visible');
-      expect(navBarMode('/workout/session/s1', { activeSessionId: 'outra' })).toBe('visible');
+      expect(navBarMode('/workout/session/s1', { activeSessionId: null })).toBe('hidden');
+      expect(navBarMode('/workout/session/s1', { activeSessionId: 'outra' })).toBe('hidden');
     });
 
     it('o Treino atual (#377) da sessão aberta também esconde a barra', () => {
@@ -304,6 +304,13 @@ describe('abas raiz', () => {
     }
     expect(hasTopBar('/workout/plans')).toBe(true);
     expect(hasTopBar('/nutrition/goals')).toBe(true);
+  });
+
+  it('a sessão e o "Treino feito" (Al-T3, Al-T5) não têm a barra de topo nem o voltar', () => {
+    expect(hasTopBar('/workout/session/s1')).toBe(false);
+    expect(hasTopBar('/workout/session/s1?x=1')).toBe(false);
+    // O Treino atual (Al-T17) segue com a barra: tem o voltar ao treino.
+    expect(hasTopBar('/workout/session/s1/edit')).toBe(true);
   });
 
   it('o que fica dentro de uma aba volta para ela', () => {
