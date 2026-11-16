@@ -45,7 +45,7 @@ O denominador importa. Contar só `name + description + inputSchema` dá 114,1 k
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 83 tools de escrita
-valem **7.895 caracteres** — média de **95** caracteres por tool, algo em torno de 6% do
+valem **7.895 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque

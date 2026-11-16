@@ -36,13 +36,13 @@ Não fazer push nem PR.
 
 ### App
 
-- [ ] `app/(app)/workout/free.tsx` (T17b); WayCards Livre / Só cardio
-- [ ] `history/index.tsx` (T10, era `history.tsx`) e `history/[id].tsx` (T11/T11b) com volta ao histórico
-- [ ] hook de iniciar com pendentes (repetir / livre) e testes
+- [x] `app/(app)/workout/free.tsx` (T17b); WayCards Livre / Só cardio (commit aaba2462)
+- [x] `history/index.tsx` (T10, era `history.tsx`) e `history/[id].tsx` (T11/T11b) com volta ao histórico
+- [x] `useStartSession` leva `pending`; lógica do treino livre em `addToFreeWorkout`/`freeSuggestions` (api-client, testada)
 
 ### Docs
 
-- [ ] REDESIGN_PROGRESS (decisões do dono #381 + pendências), MCP_TOOL_SURFACE
+- [x] REDESIGN_PROGRESS (decisões do dono #381 + pendências), MCP_TOOL_SURFACE
 
 ## Decisões
 
@@ -62,6 +62,5 @@ Não fazer push nem PR.
 
 ## Próximo passo
 
-App (mobile): treino livre, histórico e detalhe, espelhando a web. Pendentes no cache
-`['workout','session',id,'pending']` (mesma chave da web). Depois REDESIGN_PROGRESS e checagem final
-(`pnpm lint`, `pnpm typecheck`, testes api/api-client/web/mobile).
+Tudo feito. Checagem final: `pnpm lint` e `pnpm typecheck` verdes; testes api 2930 (182 suítes, banco fatia_t381), api-client 778, web 911, mobile 485.
+Falta só a passada visual do dono (sem capturas nesta sessão). Não fazer push nem PR sem o coordenador.
