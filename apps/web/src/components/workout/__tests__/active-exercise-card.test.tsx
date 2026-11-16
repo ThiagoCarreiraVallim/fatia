@@ -462,6 +462,17 @@ describe('ActiveExerciseCard — sessão guiada (#377)', () => {
     getPrescription.mockResolvedValue({ status: 'insufficient_history' });
   });
 
+  it('o "Concluir série" fica preso embaixo da tela, ocupando o lugar dele no fim do card', async () => {
+    const { container } = renderCard();
+    const concluir = await screen.findByRole('button', { name: /Concluir série 1/ });
+    const dock = concluir.parentElement!;
+    // `sticky` no rodapé (prancha Al-T3): rola junto até o fim e, como ocupa o
+    // próprio lugar, o último item do card nunca fica atrás dele.
+    expect(dock.className).toMatch(/\bsticky\b/);
+    expect(dock.className).toMatch(/bottom-\[calc\(22px\+env\(safe-area-inset-bottom\)\)\]/);
+    expect(container.firstElementChild!.lastElementChild).toBe(dock);
+  });
+
   it('a carga anda de 2,5 em 2,5 kg', async () => {
     const user = userEvent.setup();
     renderCard();

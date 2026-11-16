@@ -20,6 +20,7 @@ import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { isExerciseComplete, loadValue, parseFirstRep, targetSetsOf } from './format';
 import { FeelingPicker } from './feeling-picker';
 import { loadStep, setHeadline, STEPS } from './guided-session';
+import { useDockedAction } from './session-dock';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
@@ -173,6 +174,24 @@ export function ActiveExerciseCard({
   const isComplete = isExerciseComplete(group);
   const editingSet = editing != null ? group.sets[editing] : undefined;
 
+  // Preso no rodapé da sessão, fora da rolagem (prancha Al-T3, pedido do dono):
+  // `useDockedAction` leva o botão para lá.
+  const submitInline = useDockedAction(
+    working && !isComplete ? (
+      <Button
+        className="h-[60px] rounded-full"
+        disabled={logSet.isPending}
+        loading={logSet.isPending}
+        onPress={conclude}
+      >
+        <Check size={18} color={colors.primaryForeground} />
+        <Text className="font-sans-bold text-base text-primary-foreground">
+          Concluir série {doneSets + 1}
+        </Text>
+      </Button>
+    ) : null,
+  );
+
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2">
@@ -256,17 +275,7 @@ export function ActiveExerciseCard({
 
           {beforeSubmit}
 
-          <Button
-            className="h-[60px] rounded-full"
-            disabled={logSet.isPending}
-            loading={logSet.isPending}
-            onPress={conclude}
-          >
-            <Check size={18} color={colors.primaryForeground} />
-            <Text className="font-sans-bold text-base text-primary-foreground">
-              Concluir série {doneSets + 1}
-            </Text>
-          </Button>
+          {submitInline}
         </>
       ) : null}
     </View>

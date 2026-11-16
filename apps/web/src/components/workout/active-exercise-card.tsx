@@ -290,9 +290,28 @@ export function ActiveExerciseCard({
 
       {beforeSubmit}
 
-      <div className="space-y-1">
+      <button
+        type="button"
+        onClick={onFinishExercise}
+        className="anim-press mx-auto flex h-11 items-center px-4 text-[13px] font-bold text-muted-foreground"
+      >
+        Finalizar exercício
+      </button>
+
+      {logSet.isError && (
+        <p role="alert" className="text-center text-xs text-danger">
+          Não foi possível registrar a série
+          {logSet.error instanceof Error ? `: ${logSet.error.message}` : '.'}
+        </p>
+      )}
+
+      {/* Preso embaixo da tela (prancha Al-T3, pedido do dono): o conteúdo rola
+          acima dele. `sticky`, e não `fixed`: o botão segue ocupando o lugar
+          dele no fim do card, então o último item nunca fica atrás. A barra de
+          baixo some na sessão; 22 px da borda, acima da área segura. */}
+      <div className="sticky bottom-[calc(22px+env(safe-area-inset-bottom))] z-30 md:bottom-4">
         <Button
-          className="h-[60px] w-full rounded-full text-base font-extrabold"
+          className="h-[60px] w-full rounded-full text-base font-extrabold shadow-[0_12px_32px_-8px_hsl(var(--background))]"
           onClick={concludeSet}
           disabled={logSet.isPending || isComplete}
         >
@@ -303,19 +322,6 @@ export function ActiveExerciseCard({
               ? 'Exercício completo'
               : `Concluir série ${setNumber}`}
         </Button>
-        {logSet.isError && (
-          <p role="alert" className="text-center text-xs text-danger">
-            Não foi possível registrar a série
-            {logSet.error instanceof Error ? `: ${logSet.error.message}` : '.'}
-          </p>
-        )}
-        <button
-          type="button"
-          onClick={onFinishExercise}
-          className="anim-press mx-auto flex h-11 items-center px-4 text-[13px] font-bold text-muted-foreground"
-        >
-          Finalizar exercício
-        </button>
       </div>
     </div>
   );
