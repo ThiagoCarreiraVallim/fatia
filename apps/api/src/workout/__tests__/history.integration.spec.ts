@@ -165,7 +165,9 @@ describe('treino livre e histórico #381 (banco real)', () => {
     it('pagina pelo cursor', async () => {
       const first = await sessions.history(userId, { limit: 2 });
       expect(first.items).toHaveLength(2);
-      expect(first.nextCursor).toBe(first.items[1]!.id);
+      // Opaco: a posição da última linha, não o id dela.
+      expect(first.nextCursor).toEqual(expect.any(String));
+      expect(first.nextCursor).not.toBe(first.items[1]!.id);
       const rest = await sessions.history(userId, { limit: 2, cursor: first.nextCursor! });
       expect(rest.items).toHaveLength(1);
       expect(rest.nextCursor).toBeNull();

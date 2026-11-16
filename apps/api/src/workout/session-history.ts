@@ -57,7 +57,7 @@ export interface HistoryItem {
 export interface WorkoutHistory {
   totals: { sessions: number; avgDurationMinutes: number | null; volumeKg: number };
   items: HistoryItem[];
-  /** Passe como `cursor` para a próxima página; nulo no fim. */
+  /** Passe como `cursor` para a próxima página (opaco); nulo no fim. */
   nextCursor: string | null;
 }
 

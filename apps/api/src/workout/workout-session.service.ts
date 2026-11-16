@@ -20,6 +20,11 @@ import { summarizeSession, type SessionSummary } from './session-summary';
 import { historyItemOf, type WorkoutHistory } from './session-history';
 import { sessionKind, sessionKindWhere } from './helpers/session-kind';
 import { isCardioExercise } from './helpers/is-cardio';
+import {
+  afterSessionPosition,
+  decodeSessionCursor,
+  encodeSessionCursor,
+} from './helpers/session-cursor';
 
 export interface PostWorkoutQuestion {
   key: 'fatigue' | 'pain';
@@ -209,22 +214,38 @@ export class WorkoutSessionService {
    * As sessões com tudo (séries, plano, check-in) e o tipo de cada uma (#381).
    * É o que o MCP (`list_workout_sessions`) e a leitura de Treino da equipe
    * devolvem; a tela do histórico usa o `history`, mais enxuto.
+   *
+   * O `cursor` é o id da última sessão da página anterior (contrato do MCP).
+   * Ele é lido **desta pessoa** e vira posição (`startedAt`, `id`): o de outra
+   * pessoa, ou o de uma sessão já apagada, é 400 — antes o primeiro servia de
+   * posição e o segundo encerrava a lista em silêncio.
    */
   async list(userId: string, params: ListSessionsDto) {
     const limit = Math.min(params.limit ?? 20, 50);
-    const where: Prisma.WorkoutSessionWhereInput = { userId, ...sessionKindWhere(params.kind) };
+    const filters: Prisma.WorkoutSessionWhereInput[] = [{ userId }, sessionKindWhere(params.kind)];
     if (params.date) {
       const start = new Date(`${params.date}T00:00:00.000Z`);
       const end = new Date(start);
       end.setUTCDate(end.getUTCDate() + 1);
-      where.startedAt = { gte: start, lt: end };
+      filters.push({ startedAt: { gte: start, lt: end } });
+    }
+    if (params.cursor) {
+      const position = await this.prisma.workoutSession.findFirst({
+        where: { id: params.cursor, userId },
+        select: { id: true, startedAt: true },
+      });
+      if (!position) {
+        throw new BadRequestException(
+          'cursor inválido: use o id da última sessão da página anterior.',
+        );
+      }
+      filters.push(afterSessionPosition(position));
     }
     const rows = await this.prisma.workoutSession.findMany({
-      where,
+      where: { AND: filters },
       include: SESSION_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: limit,
-      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
     return rows.map((row) => ({ ...row, kind: sessionKind(row) }));
   }
@@ -237,6 +258,9 @@ export class WorkoutSessionService {
    * Os totais agregam em memória, como `listPersonalRecords`: a escala é de uma
    * pessoa (centenas de sessões), e o filtro de tipo fica num lugar só
    * (`sessionKindWhere`) em vez de repetido num SQL à mão.
+   *
+   * A página segue por keyset (`helpers/session-cursor.ts`): o `nextCursor` é
+   * a posição da última linha, e não o id dela.
    */
   async history(userId: string, params: HistoryQueryDto): Promise<WorkoutHistory> {
     const limit = Math.min(params.limit ?? 20, 50);
@@ -245,9 +269,12 @@ export class WorkoutSessionService {
       completedAt: { not: null },
       ...sessionKindWhere(params.kind),
     };
+    const pageWhere: Prisma.WorkoutSessionWhereInput = params.cursor
+      ? { AND: [where, afterSessionPosition(decodeSessionCursor(params.cursor))] }
+      : where;
     const [rows, spans, lifts] = await Promise.all([
       this.prisma.workoutSession.findMany({
-        where,
+        where: pageWhere,
         select: {
           id: true,
           planId: true,
@@ -273,7 +300,6 @@ export class WorkoutSessionService {
         },
         orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
         take: limit + 1,
-        ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
       }),
       this.prisma.workoutSession.findMany({
         where,
@@ -299,7 +325,7 @@ export class WorkoutSessionService {
         volumeKg: Math.round(volume * 10) / 10,
       },
       items: page.map(historyItemOf),
-      nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+      nextCursor: rows.length > limit && page.length ? encodeSessionCursor(page.at(-1)!) : null,
     };
   }
 

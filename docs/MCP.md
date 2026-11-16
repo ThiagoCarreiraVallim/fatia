@@ -1651,7 +1651,7 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 {
   date?: string;   // YYYY-MM-DD (UTC)
   limit?: number;
-  cursor?: string;
+  cursor?: string; // id da última sessão da página anterior; de outra pessoa ou já apagada: BAD_REQUEST
   kind?: 'plan' | 'circuit' | 'free'; // #381
 }
 ```

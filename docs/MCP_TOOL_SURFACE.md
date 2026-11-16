@@ -204,12 +204,15 @@ aceitar `weeks` de 3 a 6. Enviar e atualizar a oferta é da equipe e fica em RES
 (`/professional/students/:membershipId/plan-offers`).
 Também entregue: `save_session_as_plan` (#381), o "Salvar como plano" do detalhe da sessão
 (`POST /workout/sessions/:id/plan`), escrita reversível (`confirmableHint`), idempotente por sessão
-(repetir devolve o plano já criado) e só para sessão terminada (a aberta é `CONFLICT`). `list_workout_sessions`
-passou a trazer o tipo de cada sessão (`kind`: plano, circuito ou livre, pelo retrato do plano
-gravado ao começar, que sobrevive à exclusão do plano) e a filtrar por
-ele; a sensação já vinha na linha. O treino livre é o `start_workout_session` sem `planId`, como
-sempre — só ficou documentado. O histórico com totais (`GET /workout/history`) é leitura de tela e
-não ganhou tool: `list_workout_sessions` responde as mesmas perguntas.
+(repetir devolve o plano já criado) e só para sessão terminada (a aberta é `CONFLICT`).
+`list_workout_sessions` passou a trazer o tipo de cada sessão (`kind`: plano, circuito ou livre,
+pelo retrato do plano gravado ao começar, que sobrevive à exclusão do plano) e a filtrar por ele; a
+sensação já vinha na linha. O treino livre é o `start_workout_session` sem `planId`, como sempre —
+só ficou documentado. O histórico com totais (`GET /workout/history`) é leitura de tela e não ganhou
+tool: `list_workout_sessions` responde as mesmas perguntas. Na revisão, o `cursor` de
+`list_workout_sessions` passou a ser conferido contra a pessoa: o id de uma sessão de outra conta,
+ou de uma já apagada, é `BAD_REQUEST` em vez de posição aceita ou fim de lista silencioso (a
+descrição da tool não mudou).
 
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |

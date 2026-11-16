@@ -14,7 +14,7 @@ Branch `redesign/381-review-fixes` (worktree `.claude/worktrees/381-review-fixes
 3. [x] Salvar como plano idempotente (WorkoutPlan.fromSessionId, "Ver plano")
 4. [x] Salvar como plano exige sessão concluída (409)
 5. [x] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
-6. [ ] Cursor do histórico (keyset opaco por usuário)
+6. [x] Cursor do histórico (keyset opaco por usuário)
 7. [ ] Mobile: toque duplo em Iniciar treino
 8. [ ] Invalidar ['workout','history'] ao terminar/check-in/excluir/sensação
 
@@ -22,6 +22,6 @@ Migração única: `20261116030000_session_plan_snapshot_and_plan_source`.
 
 ## Próximo passo
 
-Item 6 (cursor): history com cursor opaco keyset (base64url de `startedAt|id`), list
-validando o id do cursor contra o usuário (400) e keyset por ele; DTO do history sem
-@IsUUID. Testes vermelhos já em history-review.integration.spec.ts. Depois 7 e 8.
+Item 7 (mobile duplo toque em Iniciar treino): use-start-session.ts, ignorar o 409 cujo
+activeSessionId é a sessão recém-aberta e/ou router.replace a partir da tela livre.
+Lógica testável no api-client (mobile só testa lógica pura). Depois item 8.

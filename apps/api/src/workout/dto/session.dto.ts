@@ -105,7 +105,8 @@ export class ListSessionsDto {
 /** O histórico (#381, Al-T10): só sessões concluídas, com totais do mesmo filtro. */
 export class HistoryQueryDto {
   @IsOptional() @IsIn(SESSION_KINDS) kind?: SessionKind;
-  @IsOptional() @IsUUID() cursor?: string;
+  /** O `nextCursor` da página anterior: opaco (`helpers/session-cursor.ts`). */
+  @IsOptional() @IsString() @MaxLength(200) cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
 }
 

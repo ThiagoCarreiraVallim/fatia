@@ -213,7 +213,7 @@ describe('histórico e salvar como plano — correções do review #381 (banco r
       );
     });
 
-    it('a lista do MCP pagina por id sem perder ninguém, mesmo apagando o cursor', async () => {
+    it('a lista do MCP segue paginando pelo id da última sessão', async () => {
       const a = await doneSession('2026-11-03T10:00:00Z', [lowId]);
       const b = await doneSession('2026-11-02T10:00:00Z', [lowId]);
       const first = await sessions.list(userId, { limit: 1 });
