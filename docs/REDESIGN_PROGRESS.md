@@ -137,9 +137,9 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 
 ## Etapa 5: Treino B e Progresso (em andamento)
 
-| Issue | Título                   | Estado           | Superfícies |
-| ----- | ------------------------ | ---------------- | ----------- |
-| #381  | Treino livre e histórico | pronto na branch |
+| Issue | Título                   | Estado           | Superfícies                                  |
+| ----- | ------------------------ | ---------------- | -------------------------------------------- |
+| #381  | Treino livre e histórico | pronto na branch | api, MCP (1 tool nova), api-client, web, app |
 
 Pendências da #381 (branch `redesign/381-treino-livre-historico`, sem migration):
 
