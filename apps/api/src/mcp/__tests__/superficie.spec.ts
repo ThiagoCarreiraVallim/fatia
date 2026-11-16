@@ -53,9 +53,12 @@ import {
  * braço A. As duas chegaram juntas no merge da main na #378.
  * A #379 acrescentou cinco tools do aluno (plano recebido e agenda, nenhuma destrutiva nem de
  * intenção) e `weeks` em `create_training_block`: muda o braço A.
+ * A #381 acrescentou `save_session_as_plan` (não destrutiva nem de intenção), `kind` em
+ * `list_workout_sessions` e o treino livre na descrição de `start_workout_session`: muda o
+ * braço A.
  */
 
-const SHA_ENTIDADE = '364222343d026cfd1bcb2cd4e3b57af9fdafbeec26d0422292f289526ce80994';
+const SHA_ENTIDADE = '4fd793cbd0e0ddd60be4bc8c43538fb1044daf30a6e5b564239ec34dd3958ab2';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
