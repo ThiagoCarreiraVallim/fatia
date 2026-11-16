@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/text';
 import { Pencil, Trash2 } from 'lucide-react-native';
 import { DrawerScrollView, ErrorState, LoadingState, cn } from '@/components/ui';
 import { chartColors } from '@/components/charts';
+import { ToneBadge } from './progress-ui';
 
 export interface LogHistoryEntry {
   id: string;
@@ -10,6 +11,12 @@ export interface LogHistoryEntry {
   title: string;
   /** Data ou origem do registro. */
   subtitle: string;
+  /** Hora do registro, depois da data ("19 mai · 08:12"). Fora do nome dos botões. */
+  time?: string;
+  /** Selo de origem (Al-G7): "manual" mudo, "Apple Saúde" verde. */
+  badge?: { label: string; tone: 'ok' | 'mute' };
+  /** Veio do celular: aparece, mas não se edita nem apaga daqui. */
+  readOnly?: boolean;
 }
 
 /**
@@ -44,8 +51,8 @@ export function LogHistory({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-[11px] font-bold tracking-wide text-muted-foreground">
-        REGISTROS RECENTES
+      <Text className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+        Recentes
       </Text>
 
       {isLoading ? <LoadingState label="" /> : null}
@@ -75,8 +82,14 @@ export function LogHistory({
               >
                 <View className="min-w-0 flex-1">
                   <Text className="text-sm font-bold text-foreground">{entry.title}</Text>
-                  <Text className="text-xs text-muted-foreground">{entry.subtitle}</Text>
+                  <Text className="text-xs text-muted-foreground">
+                    {entry.subtitle}
+                    {entry.time ? ` · ${entry.time}` : ''}
+                  </Text>
                 </View>
+                {entry.badge ? <ToneBadge tone={entry.badge.tone} label={entry.badge.label} /> : null}
+                {entry.readOnly ? null : (
+                  <>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
@@ -103,6 +116,8 @@ export function LogHistory({
                       sobre o card escuro. */}
                   <Trash2 size={16} color={chartColors.mutedForeground} />
                 </Pressable>
+                  </>
+                )}
               </View>
             );
           })}

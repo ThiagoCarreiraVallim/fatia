@@ -25,6 +25,7 @@ import { Button, useConfirm, useToast } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { HeightSheet } from '@/components/you/height-sheet';
+import { BodyLogSheet } from '@/components/progress/body-log-sheet';
 import { REMINDERS_KEY } from '@/components/reminders/keys';
 import { NEWS_QUERY_KEY } from '@/components/you/news-cache';
 import { useExportData } from '@/components/you/use-export-data';
@@ -50,6 +51,7 @@ export default function YouScreen() {
   const confirm = useConfirm();
   const { signIn, signOut } = useAuth();
   const [heightOpen, setHeightOpen] = useState(false);
+  const [weightOpen, setWeightOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
@@ -245,9 +247,10 @@ export default function YouScreen() {
 
           <View className="flex-row gap-3">
             <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={`Peso atual: ${weightText(today.data?.weight.latest?.weightKg)} kg`}
-              onPress={() => router.push('/progress')}
+              accessibilityRole="button"
+              accessibilityLabel={`Peso atual: ${weightText(today.data?.weight.latest?.weightKg)} kg. Registrar peso`}
+              // Abre o registrar peso (Al-G7), como na prancha Al-V1.
+              onPress={() => setWeightOpen(true)}
               className="flex-1 basis-0 gap-2 rounded-card bg-card px-[18px] py-4 active:opacity-80"
             >
               <Text className="text-xs text-faint">Peso atual</Text>
@@ -317,6 +320,7 @@ export default function YouScreen() {
         onOpenChange={setHeightOpen}
         heightCm={user?.heightCm ?? null}
       />
+      <BodyLogSheet open={weightOpen} onClose={() => setWeightOpen(false)} />
     </>
   );
 }

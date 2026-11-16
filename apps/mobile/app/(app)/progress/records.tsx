@@ -1,255 +1,119 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { useState } from 'react';
+import { ScrollView, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, Footprints, Trophy } from 'lucide-react-native';
-import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
-import { Screen } from '@/components/layout/screen';
 import {
-  Card,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  cn,
-} from '@/components/ui';
-import { chartColors, dayMonth, formatDecimal, formatDuration } from '@/components/charts';
+  RECORDS_NOTE,
+  RECORD_GROUP_FILTERS,
+  recordHighlight,
+  strengthRecordRows,
+  workoutApi,
+  type RecordGroupFilter,
+} from '@fatia/api-client';
+import { Screen } from '@/components/layout/screen';
+import { Chip, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { Icon } from '@/components/ui/icon';
+import { Text } from '@/components/ui/text';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
+import { colors } from '@/theme/colors';
 
-type SortKey = 'recent' | 'weight';
-
-const RECENT_PR_DAYS = 30;
-
-function daysAgo(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-}
-
-/** Réplica de `apps/web/src/app/(app)/progress/records/page.tsx`. */
+/**
+ * Recordes (prancha Al-G5, #382) — réplica de
+ * `apps/web/src/components/progress/records-screen.tsx`.
+ */
 export default function RecordsScreen() {
-  const [sort, setSort] = useState<SortKey>('recent');
-  const [muscle, setMuscle] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const records = useQuery({
-    queryKey: ['workout', 'records'],
-    queryFn: () => workoutApi.listPersonalRecords(),
+  const { loadUnit } = useUnitPrefs();
+  const [group, setGroup] = useState<RecordGroupFilter>('all');
+  const query = useQuery({
+    queryKey: ['workout', 'records', 'overview'],
+    queryFn: () => workoutApi.recordsOverview(),
   });
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await records.refetch();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [records]);
-
-  const data = useMemo(() => records.data ?? [], [records.data]);
-
-  const muscles = useMemo(
-    () => [...new Set(data.map((record) => record.muscleGroup))].sort(),
-    [data],
-  );
-
-  const filtered = useMemo(() => {
-    const rows = muscle ? data.filter((record) => record.muscleGroup === muscle) : [...data];
-    if (sort === 'weight') {
-      rows.sort(
-        (a, b) =>
-          (b.maxWeightKg ?? b.maxDistanceMeters ?? 0) - (a.maxWeightKg ?? a.maxDistanceMeters ?? 0),
-      );
-    } else {
-      rows.sort((a, b) => (b.lastPerformedAt ?? '').localeCompare(a.lastPerformedAt ?? ''));
-    }
-    return rows;
-  }, [data, muscle, sort]);
-
-  const recentPRs = useMemo(
-    () =>
-      data.filter((record) => {
-        const elapsed = daysAgo(record.achievedAt);
-        return elapsed != null && elapsed <= RECENT_PR_DAYS;
-      }).length,
-    [data],
-  );
-
-  const totalSets = useMemo(
-    () => data.reduce((accumulated, record) => accumulated + record.totalSets, 0),
-    [data],
-  );
+  const highlight = query.data ? recordHighlight(query.data, loadUnit) : null;
+  const rows = query.data ? strengthRecordRows(query.data, group, loadUnit) : [];
 
   return (
-    <Screen onRefresh={onRefresh} refreshing={refreshing}>
-      <View className="gap-5 px-5 pb-4 pt-1">
-        <View className="flex-row gap-2">
-          <StatCard label="Exercícios" value={String(data.length)} />
-          <StatCard label="Recordes (30d)" value={String(recentPRs)} highlight />
-          <StatCard label="Séries totais" value={String(totalSets)} />
-        </View>
+    <Screen onRefresh={() => void query.refetch()} refreshing={query.isRefetching}>
+      <View className="gap-3 px-4 pb-8 pt-2">
+        {query.isLoading ? <LoadingState label="Carregando os recordes…" /> : null}
+        {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
 
-        {muscles.length > 0 ? (
-          <View className="flex-row flex-wrap gap-1.5">
-            <Chip active={muscle === null} label="Todos" onPress={() => setMuscle(null)} />
-            {muscles.map((group) => (
-              <Chip
-                key={group}
-                active={muscle === group}
-                label={group}
-                onPress={() => setMuscle(group)}
+        {highlight ? (
+          <View className="gap-2 rounded-card bg-primary p-4">
+            <Text className="font-sans-bold text-[11px] uppercase tracking-widest text-primary-foreground opacity-70">
+              Maior evolução do mês
+            </Text>
+            <View className="flex-row items-baseline justify-between gap-2">
+              <Text className="flex-1 font-display text-[20px] leading-[24px] text-primary-foreground">
+                {highlight.title}
+              </Text>
+              <Text className="font-display text-[28px] leading-[32px] text-primary-foreground">
+                {highlight.percent}
+              </Text>
+            </View>
+            <View className="h-1.5 w-full overflow-hidden rounded-pill" style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
+              <View
+                style={{
+                  width: `${highlight.barPercent}%`,
+                  height: '100%',
+                  borderRadius: 999,
+                  backgroundColor: colors.primaryForeground,
+                }}
               />
-            ))}
+            </View>
+            <Text className="font-sans-semibold text-[13px] text-primary-foreground opacity-80">
+              {highlight.scale}
+            </Text>
           </View>
         ) : null}
 
-        <Tabs value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-          <TabsList className="rounded-full">
-            <TabsTrigger value="recent" className="rounded-full">
-              <Text
-                className={cn(
-                  'text-[11px] font-bold',
-                  sort === 'recent' ? 'text-primary' : 'text-muted-foreground',
-                )}
-              >
-                Mais recentes
-              </Text>
-            </TabsTrigger>
-            <TabsTrigger value="weight" className="rounded-full">
-              <Text
-                className={cn(
-                  'text-[11px] font-bold',
-                  sort === 'weight' ? 'text-primary' : 'text-muted-foreground',
-                )}
-              >
-                Maior carga
-              </Text>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {query.data ? (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {RECORD_GROUP_FILTERS.map((f) => (
+                <Chip key={f.value} label={f.label} selected={group === f.value} onPress={() => setGroup(f.value)} />
+              ))}
+            </ScrollView>
 
-        {records.isLoading ? <LoadingState /> : null}
+            {rows.length > 0 ? (
+              <View accessibilityLabel="Recordes" className="overflow-hidden rounded-card bg-card">
+                {rows.map((r, i) => (
+                  <View
+                    key={r.id}
+                    accessible
+                    accessibilityLabel={`${r.title}: ${r.value} ${r.unit}. ${r.subtitle}`}
+                    className={cn('flex-row items-center gap-3 px-4 py-3', i > 0 && 'border-t border-border')}
+                  >
+                    <View
+                      className="h-10 w-10 items-center justify-center rounded-[12px]"
+                      style={{ backgroundColor: `${colors.steps}24` }}
+                    >
+                      <Icon name="trophy" size={18} color={colors.steps} />
+                    </View>
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-sans-semibold text-foreground" numberOfLines={1}>
+                        {r.title}
+                      </Text>
+                      <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                        {r.subtitle}
+                      </Text>
+                    </View>
+                    <Text className="font-display text-[18px] text-foreground">
+                      {r.value}
+                      <Text className="font-sans-semibold text-[12px] text-muted-foreground"> {r.unit}</Text>
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <EmptyState
+                title="Nenhum recorde aqui"
+                description="Os recordes aparecem conforme você registra séries com carga."
+              />
+            )}
 
-        {records.error ? (
-          <ErrorState error={records.error} onRetry={() => records.refetch()} />
+            <Text className="px-1 text-[13px] text-muted-foreground">{RECORDS_NOTE}</Text>
+          </>
         ) : null}
-
-        {records.data && filtered.length === 0 ? (
-          <Card>
-            <EmptyState
-              title="Nenhum recorde ainda"
-              description="Registre séries durante o treino para começar."
-              className="py-8"
-            />
-          </Card>
-        ) : null}
-
-        <View className="gap-2">
-          {filtered.map((record) => (
-            <RecordRow key={record.exerciseId} record={record} />
-          ))}
-        </View>
       </View>
     </Screen>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <Card className="flex-1 items-center p-3">
-      <Text
-        className={cn('text-2xl font-extrabold', highlight ? 'text-primary' : 'text-foreground')}
-      >
-        {value}
-      </Text>
-      <Text className="text-center text-[10px] font-bold tracking-wide text-muted-foreground">
-        {label}
-      </Text>
-    </Card>
-  );
-}
-
-function Chip({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Filtrar por ${label}`}
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      className={cn(
-        'min-h-[44px] justify-center rounded-full px-4',
-        active ? 'bg-primary' : 'bg-muted',
-      )}
-    >
-      <Text
-        className={cn(
-          'text-xs font-bold capitalize',
-          active ? 'text-primary-foreground' : 'text-muted-foreground',
-        )}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function RecordRow({ record }: { record: PersonalRecordEntry }) {
-  const isCardio = record.type === 'cardio';
-  return (
-    <Card className="flex-row items-center gap-3 p-4">
-      <View className="h-11 w-11 items-center justify-center rounded-full bg-muted">
-        {isCardio ? (
-          <Footprints size={18} color={chartColors.primary} />
-        ) : (
-          <Dumbbell size={18} color={chartColors.primary} />
-        )}
-      </View>
-
-      <View className="min-w-0 flex-1">
-        <Text numberOfLines={1} className="text-sm font-bold text-foreground">
-          {record.exerciseName}
-        </Text>
-        <Text className="text-xs capitalize text-muted-foreground">
-          {record.muscleGroup} • {record.totalSets} série{record.totalSets !== 1 ? 's' : ''} •{' '}
-          {dayMonth(record.achievedAt)}
-        </Text>
-      </View>
-
-      <View className="items-end">
-        {isCardio ? (
-          <>
-            <Text className="text-lg font-extrabold text-primary">
-              {record.maxDistanceMeters != null
-                ? formatDecimal(record.maxDistanceMeters / 1000, 2)
-                : '—'}{' '}
-              <Text className="text-xs text-muted-foreground">km</Text>
-            </Text>
-            <Text className="text-[11px] text-muted-foreground">
-              {formatDuration(record.bestDurationSeconds)}
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text className="text-lg font-extrabold text-primary">
-              {record.maxWeightKg ?? '—'} <Text className="text-xs text-muted-foreground">kg</Text>
-            </Text>
-            <Text className="text-[11px] text-muted-foreground">
-              {record.repsAtMax ?? '—'} reps · 1RM ~
-              {record.estimated1RM != null ? Math.round(record.estimated1RM) : '—'}
-            </Text>
-          </>
-        )}
-      </View>
-
-      <Trophy size={16} color={chartColors.mutedForeground} />
-    </Card>
   );
 }

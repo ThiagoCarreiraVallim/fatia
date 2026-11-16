@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  clockTime,
   dayLabel,
   progressApi,
   undoMessage,
@@ -23,7 +24,8 @@ import { formatDecimal, instantDayMonth } from '@/components/charts';
 import { useToast } from '@/components/ui/toast';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { SeletorDeDia } from './seletor-de-dia';
-import { SheetField } from './sheet-field';
+import { ValueStepper } from './value-stepper';
+import { Text } from '@/components/ui/text';
 import { parseAmount } from './parse';
 
 const HISTORY_DAYS = 30;
@@ -36,11 +38,17 @@ export function LogWeightDrawer({
   open,
   onClose,
   date,
+  embedded = false,
+  switcher,
 }: {
   open: boolean;
   onClose: () => void;
   /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
+  /** Só o miolo, sem a gaveta: a folha Peso/Passos (Al-G7) é quem abre e fecha. */
+  embedded?: boolean;
+  /** O segmentado Peso · Passos da folha, no topo. */
+  switcher?: ReactNode;
 }) {
   const hoje = hojeIso();
   const [dia, setDia] = useState(date ?? hoje);
@@ -61,7 +69,7 @@ export function LogWeightDrawer({
   const logs = useQuery({
     queryKey: ['weight-logs', from],
     queryFn: () => progressApi.listWeights({ from }),
-    enabled: open,
+    enabled: open || embedded,
   });
 
   function invalidate() {
@@ -137,43 +145,44 @@ export function LogWeightDrawer({
     id: log.id,
     title: `${formatDecimal(log.weightKg)} kg`,
     subtitle: instantDayMonth(log.loggedAt),
+    time: clockTime(log.loggedAt),
+    // Peso só entra à mão por enquanto (a balança conectada não chegou).
+    badge: { label: 'manual', tone: 'mute' },
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
 
-  return (
-    <Drawer
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          reset();
-          onClose();
-        }
-      }}
-    >
-      <DrawerContent className="px-4">
+  const content = (
+    <>
+        {switcher}
+
         <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar peso' : 'Logar peso'}</DrawerTitle>
+          <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
           <DrawerDescription>
             {editing
               ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
               : dia === hoje
-                ? 'Pesagem da manhã, em jejum, é o mais consistente.'
+                ? 'Pesagem de hoje.'
                 : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
           </DrawerDescription>
         </DrawerHeader>
 
         <View className="gap-4 py-3">
           {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
-          <SheetField
+          <ValueStepper
             label="Peso (kg)"
             value={weight}
-            onChangeText={setWeight}
-            placeholder="ex: 78,5"
-            keyboardType="decimal-pad"
-            autoFocus
-            error={error}
+            onChange={setWeight}
+            step={0.1}
+            decimals={1}
+            base={logs.data?.logs[0]?.weightKg ?? null}
+            unit="kg"
+            placeholder="0,0"
           />
+          {error ? <FormMessage>{error}</FormMessage> : null}
+          <Text className="text-center text-[13px] text-muted-foreground">
+            De manhã, em jejum, é o mais consistente.
+          </Text>
 
           {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
 
@@ -220,6 +229,23 @@ export function LogWeightDrawer({
             </Button>
           ) : null}
         </DrawerFooter>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Drawer
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DrawerContent className="px-4">
+        {content}
       </DrawerContent>
     </Drawer>
   );

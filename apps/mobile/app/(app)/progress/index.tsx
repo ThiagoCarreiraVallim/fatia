@@ -1,61 +1,40 @@
-import { useCallback, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Scale, TrendingDown, TrendingUp } from 'lucide-react-native';
-import { progressApi, type Exercise } from '@fatia/api-client';
+import {
+  OVERVIEW_RANGES,
+  achievementTally,
+  averagePace,
+  bucketize,
+  formatDecimal,
+  formatInteger,
+  formatPace,
+  progressApi,
+  signedDelta,
+  signedPercent,
+  strengthRecordCount,
+  trendPercent,
+  workoutApi,
+} from '@fatia/api-client';
+import type { IconName } from '@fatia/design';
 import { Screen } from '@/components/layout/screen';
-import {
-  Button,
-  Card,
-  DrawerLayer,
-  ErrorState,
-  LoadingState,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  cn,
-} from '@/components/ui';
-import { chartColors, formatDecimal } from '@/components/charts';
-import { CardioChart } from '@/components/progress/cardio-chart';
-import { ConsistencyCard } from '@/components/progress/consistency-card';
-import {
-  ExercisePickerDrawer,
-  type ExercisePickerFilter,
-} from '@/components/progress/exercise-picker-drawer';
-import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
-import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
-import { PersonalRecords } from '@/components/progress/personal-records';
-import { StepsChart } from '@/components/progress/steps-chart';
-import { StrengthChart } from '@/components/progress/strength-chart';
-import { TrainingIntensity } from '@/components/progress/training-intensity';
-import { WeightChart } from '@/components/progress/weight-chart';
-import { WeightMiniBars } from '@/components/progress/weight-mini-bars';
+import { Segmented } from '@/components/ui';
+import { Icon } from '@/components/ui/icon';
+import { Text } from '@/components/ui/text';
+import { MiniBars, Sparkline, ToneBadge, heatColor } from '@/components/progress/progress-ui';
+import { colors } from '@/theme/colors';
 
-const RANGES = [14, 30, 90, 180] as const;
-const MINI_BARS = 6;
-
-interface PickerRequest {
-  filter: ExercisePickerFilter;
-  onPick: (exercise: Exercise) => void;
-}
-
-/** Réplica de `apps/web/src/app/(app)/progress/page.tsx`. */
+/**
+ * Progresso (prancha Al-G1, #382) — réplica de
+ * `apps/web/src/components/progress/progress-screen.tsx`.
+ */
 export default function ProgressScreen() {
-  const [days, setDays] = useState<number>(30);
-  const [tab, setTab] = useState('overview');
-  const [logWeightOpen, setLogWeightOpen] = useState(false);
-  const [logStepsOpen, setLogStepsOpen] = useState(false);
-  const [picker, setPicker] = useState<PickerRequest | null>(null);
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [range, setRange] = useState('30');
   const [refreshing, setRefreshing] = useState(false);
-  const queryClient = useQueryClient();
-
-  const openPicker = useCallback(
-    (filter: ExercisePickerFilter, onPick: (exercise: Exercise) => void) =>
-      setPicker({ filter, onPick }),
-    [],
-  );
+  const days = Number(range);
 
   const weight = useQuery({
     queryKey: ['progress', 'weight', days],
@@ -65,174 +44,242 @@ export default function ProgressScreen() {
     queryKey: ['progress', 'steps', days],
     queryFn: () => progressApi.steps(days),
   });
+  const volume = useQuery({
+    queryKey: ['progress', 'volume', days],
+    queryFn: () => progressApi.volume(days),
+  });
+  const cardio = useQuery({
+    queryKey: ['progress', 'cardio', 'all', days, 'pace'],
+    queryFn: () => progressApi.cardio(null, days, 'pace'),
+  });
+  const consistency = useQuery({
+    queryKey: ['progress', 'consistency', 'month'],
+    queryFn: () => progressApi.consistency('month'),
+  });
+  const records = useQuery({
+    queryKey: ['workout', 'records', 'overview'],
+    queryFn: () => workoutApi.recordsOverview(),
+  });
+  const achievements = useQuery({
+    queryKey: ['achievements', 'list'],
+    queryFn: () => progressApi.listAchievements(),
+  });
 
-  const onRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      // Recarrega tudo o que está montado: a tela é um painel, e atualizar só o
-      // peso deixaria constância, intensidade e recordes velhos na mesma rolagem.
-      await queryClient.refetchQueries({ type: 'active' });
-    } finally {
-      setRefreshing(false);
-    }
-  }, [queryClient]);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['progress'] }),
+      qc.invalidateQueries({ queryKey: ['workout', 'records', 'overview'] }),
+      qc.invalidateQueries({ queryKey: ['achievements', 'list'] }),
+    ]);
+    setRefreshing(false);
+  };
 
-  const points = weight.data?.points ?? [];
-  const miniSeries = points.slice(-MINI_BARS).map((point) => point.weightKg);
-  const currentWeight = weight.data?.currentWeightKg;
-  const weightDelta = weight.data?.totalDeltaKg ?? 0;
+  const w = weight.data;
+  const weightValues = w?.points.map((p) => p.weightKg) ?? [];
+  const current = w?.currentWeightKg ?? null;
+  const stepValues = steps.data?.points.map((p) => p.steps) ?? [];
+  const volumeValues = volume.data?.weeks.map((x) => x.totalVolumeKg) ?? [];
+  const strengthTrend = trendPercent(volumeValues);
+  const pace = cardio.data ? averagePace(cardio.data) : null;
+  const paceValues = (cardio.data?.points ?? [])
+    .map((p) => p.paceSecondsPerKm)
+    .filter((v): v is number => v !== null)
+    // Ritmo menor é melhor: invertido, a linha sobe quando melhora.
+    .map((v) => -v);
+
+  const report = consistency.data;
+  const last14 = report?.days.slice(-14) ?? [];
+  const tally = achievements.data ? achievementTally(achievements.data) : null;
+  const recordCount = records.data ? strengthRecordCount(records.data) : null;
+
+  const minis: { label: string; icon: IconName; color: string; value: string; unit: string; chart: ReactNode }[] = [
+    {
+      label: 'Passos',
+      icon: 'steps',
+      color: colors.steps,
+      value: steps.data && stepValues.length ? formatInteger(steps.data.averageDaily) : '—',
+      unit: '',
+      chart: <MiniBars values={bucketize(stepValues, 12)} height={22} />,
+    },
+    {
+      label: 'Força',
+      icon: 'dumbbell',
+      color: colors.primary,
+      value: strengthTrend === null ? '—' : signedPercent(strengthTrend),
+      unit: '',
+      chart: <Sparkline values={volumeValues} height={22} fill={false} />,
+    },
+    {
+      label: 'Cardio',
+      icon: 'heart',
+      color: colors.danger,
+      value: formatPace(pace),
+      unit: pace === null ? '' : ' /km',
+      chart: <Sparkline values={paceValues} height={22} fill={false} color={colors.danger} />,
+    },
+  ];
+
+  const go = (href: string) => router.push(href as never);
 
   return (
-    <>
-      <Screen onRefresh={onRefresh} refreshing={refreshing}>
-        <View className="gap-5 px-5 pb-4 pt-1">
-          <Text className="text-sm text-muted-foreground">
-            Seus dados de performance dos últimos {days} dias.
-          </Text>
-
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="rounded-xl">
-              <TabsTrigger value="overview" className="rounded-lg">
-                <Text
-                  className={cn(
-                    'text-[11px] font-bold',
-                    tab === 'overview' ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                >
-                  Visão geral
-                </Text>
-              </TabsTrigger>
-              <TabsTrigger value="charts" className="rounded-lg">
-                <Text
-                  className={cn(
-                    'text-[11px] font-bold',
-                    tab === 'charts' ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                >
-                  Gráficos
-                </Text>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="mt-4 gap-4">
-              <Card className="p-4">
-                <View className="flex-row items-start justify-between">
-                  <View>
-                    <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">
-                      PESO CORPORAL
-                    </Text>
-                    <View className="mt-1 flex-row items-baseline gap-2">
-                      <Text className="text-3xl font-extrabold text-foreground">
-                        {currentWeight != null ? formatDecimal(currentWeight, 1) : '—'}{' '}
-                        <Text className="text-base font-bold text-foreground">kg</Text>
-                      </Text>
-                      {weight.data && points.length >= 2 ? (
-                        <View className="flex-row items-center gap-0.5">
-                          {weightDelta < 0 ? (
-                            <TrendingDown size={12} color={chartColors.primary} />
-                          ) : (
-                            <TrendingUp size={12} color={chartColors.mutedForeground} />
-                          )}
-                          <Text
-                            className={cn(
-                              'text-xs font-bold',
-                              weightDelta < 0 ? 'text-primary' : 'text-muted-foreground',
-                            )}
-                          >
-                            {weightDelta > 0 ? '+' : ''}
-                            {formatDecimal(weightDelta, 1)} kg
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Logar peso"
-                    onPress={() => setLogWeightOpen(true)}
-                    className="h-11 w-11 items-center justify-center rounded-xl bg-accent"
-                  >
-                    <Scale size={16} color={chartColors.primary} />
-                  </Pressable>
-                </View>
-
-                <View className="mt-2">
-                  <WeightMiniBars values={miniSeries} />
-                </View>
-              </Card>
-
-              <ConsistencyCard />
-              <TrainingIntensity />
-              <PersonalRecords />
-            </TabsContent>
-
-            <TabsContent value="charts" className="mt-4 gap-4">
-              <Tabs value={String(days)} onValueChange={(value) => setDays(Number(value))}>
-                <TabsList className="self-end rounded-full">
-                  {RANGES.map((range) => (
-                    <TabsTrigger
-                      key={range}
-                      value={String(range)}
-                      className="min-w-[52px] rounded-full px-3"
-                    >
-                      <Text
-                        className={cn(
-                          'text-xs font-bold',
-                          days === range ? 'text-primary' : 'text-muted-foreground',
-                        )}
-                      >
-                        {range}d
-                      </Text>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-
-              {weight.isLoading || steps.isLoading ? <LoadingState /> : null}
-
-              {weight.error ? (
-                <ErrorState error={weight.error} onRetry={() => weight.refetch()} />
-              ) : null}
-              {weight.data ? <WeightChart data={weight.data} /> : null}
-
-              {steps.error ? (
-                <ErrorState error={steps.error} onRetry={() => steps.refetch()} />
-              ) : null}
-              {steps.data ? <StepsChart data={steps.data} /> : null}
-
-              <StrengthChart days={days} openPicker={openPicker} />
-              <CardioChart days={days} openPicker={openPicker} />
-
-              <Button variant="outline" onPress={() => setLogWeightOpen(true)}>
-                <View className="flex-row items-center gap-2">
-                  <Plus size={16} color={chartColors.foreground} />
-                  <Text className="text-[13px] font-medium text-foreground">Logar peso</Text>
-                </View>
-              </Button>
-              <Button variant="outline" onPress={() => setLogStepsOpen(true)}>
-                <View className="flex-row items-center gap-2">
-                  <Plus size={16} color={chartColors.foreground} />
-                  <Text className="text-[13px] font-medium text-foreground">Logar passos</Text>
-                </View>
-              </Button>
-            </TabsContent>
-          </Tabs>
+    <Screen
+      onRefresh={() => void onRefresh()}
+      refreshing={refreshing}
+      actions={
+        <View style={{ width: 200 }}>
+          <Segmented
+            label="Período"
+            options={OVERVIEW_RANGES.map((r) => ({ value: String(r.value), label: r.label }))}
+            value={range}
+            onChange={setRange}
+          />
         </View>
-      </Screen>
+      }
+    >
+      <View className="gap-3 px-4 pb-8 pt-2">
+        <View className="gap-3 rounded-card bg-card p-4">
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`Peso: ${current === null ? 'sem registro' : `${formatDecimal(current)} kg`}. Ver gráfico`}
+            onPress={() => go('/progress/charts')}
+            className="gap-1"
+          >
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[15px] text-muted-foreground">Peso</Text>
+              {w && weightValues.length >= 2 ? (
+                <ToneBadge tone="ok" label={signedDelta(w.totalDeltaKg, 'kg')} />
+              ) : null}
+            </View>
+            <View className="flex-row items-baseline">
+              <Text className="font-display text-[40px] leading-[44px] text-foreground">
+                {current === null ? '—' : formatDecimal(current)}
+              </Text>
+              <Text className="ml-1 font-sans-semibold text-base text-muted-foreground">kg</Text>
+            </View>
+            <Sparkline values={weightValues} height={56} />
+          </Pressable>
 
-      <DrawerLayer>
-        <LogWeightDrawer open={logWeightOpen} onClose={() => setLogWeightOpen(false)} />
-        <LogStepsDrawer open={logStepsOpen} onClose={() => setLogStepsOpen(false)} />
-        <ExercisePickerDrawer
-          open={picker !== null}
-          filter={picker?.filter ?? 'strength'}
-          onClose={() => setPicker(null)}
-          onPick={(exercise) => {
-            picker?.onPick(exercise);
-            setPicker(null);
-          }}
-        />
-      </DrawerLayer>
+          <View className="flex-row gap-2">
+            {minis.map((m) => (
+              <Pressable
+                key={m.label}
+                accessibilityRole="link"
+                accessibilityLabel={`${m.label}: ${m.value}${m.unit}`}
+                onPress={() => go('/progress/charts')}
+                className="flex-1 basis-0 gap-0.5 rounded-[14px] bg-muted px-2.5 pb-2 pt-2.5"
+              >
+                <View className="flex-row items-center gap-1">
+                  <Icon name={m.icon} size={16} color={m.color} />
+                  <Text className="text-[12px] text-muted-foreground">{m.label}</Text>
+                </View>
+                <Text className="font-sans-bold text-base text-foreground" numberOfLines={1}>
+                  {m.value}
+                  <Text className="font-sans-semibold text-[11px] text-muted-foreground">{m.unit}</Text>
+                </Text>
+                {m.chart}
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => go('/progress/charts')}
+            className="min-h-[32px] flex-row items-center justify-between border-t border-border pt-3"
+          >
+            <Text className="font-sans-bold text-sm text-foreground">Ver todos os gráficos</Text>
+            <Icon name="chevR" size={16} color={colors.faintForeground} />
+          </Pressable>
+        </View>
+
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={
+            report
+              ? `Constância: ${report.streak.periodos} dias seguidos, ${report.activeDays} de ${report.totalDays} dias ativos`
+              : 'Constância'
+          }
+          onPress={() => go('/progress/consistency')}
+          className="gap-3 rounded-card bg-card p-4"
+        >
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="flex-1 text-[15px] text-muted-foreground" numberOfLines={1}>
+              Constância
+              {report ? (
+                <Text className="text-warning">
+                  {' '}
+                  · {report.streak.periodos} {report.streak.periodos === 1 ? 'dia seguido' : 'dias seguidos'}
+                </Text>
+              ) : null}
+            </Text>
+            <View className="flex-row items-center gap-1">
+              <Text className="font-sans-bold text-sm text-foreground">
+                {report ? `${report.activeDays}/${report.totalDays} dias` : '—'}
+              </Text>
+              <Icon name="chevR" size={16} color={colors.faintForeground} />
+            </View>
+          </View>
+          <View className="flex-row gap-1">
+            {last14.map((d) => (
+              <View key={d.date} style={[{ flex: 1, aspectRatio: 1, borderRadius: 5 }, heatColor(d.count)]} />
+            ))}
+          </View>
+        </Pressable>
+
+        <View className="flex-row gap-2">
+          {/* % de gordura vem da avaliação física (Al-G2), que chega com a #383. Até lá o
+              cartão fica, sem link e sem número: é o ponto de extensão da tela. */}
+          <SmallCard icon="ruler" color={colors.steps} value="—" label="gordura" />
+          <SmallCard
+            onPress={() => go('/progress/records')}
+            icon="trophy"
+            color={colors.steps}
+            value={recordCount === null ? '—' : String(recordCount)}
+            label="recordes"
+          />
+          <SmallCard
+            onPress={() => go('/progress/achievements')}
+            icon="medal"
+            color={colors.primaryText}
+            value={tally ? `${tally.got}/${tally.total}` : '—'}
+            label="conquistas"
+          />
+        </View>
+      </View>
+    </Screen>
+  );
+}
+
+function SmallCard({
+  onPress,
+  icon,
+  color,
+  value,
+  label,
+}: {
+  onPress?: () => void;
+  icon: IconName;
+  color: string;
+  value: string;
+  label: string;
+}) {
+  const body = (
+    <>
+      <Icon name={icon} color={color} />
+      <Text className="font-display text-[22px] leading-[28px] text-foreground">{value}</Text>
+      <Text className="text-[13px] text-muted-foreground">{label}</Text>
     </>
+  );
+  return onPress ? (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${value} ${label}`}
+      onPress={onPress}
+      className="flex-1 basis-0 gap-1 rounded-card bg-card p-3.5"
+    >
+      {body}
+    </Pressable>
+  ) : (
+    <View className="flex-1 basis-0 gap-1 rounded-card bg-card p-3.5">{body}</View>
   );
 }
