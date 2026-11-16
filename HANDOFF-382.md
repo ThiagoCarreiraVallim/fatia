@@ -30,11 +30,11 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 
 ## Checklist
 
-- [ ] API: constância (`GET /progress/consistency`) + streak reescrito
-- [ ] API: conquista `workouts_100` + migration que concede a quem já tem 100 + avaliação no fim do treino
-- [ ] API: recordes com evolução de 1RM estimado e destaque
-- [ ] API: meta vencida (derivada) + PATCH com novo prazo volta a `active`
-- [ ] MCP: `get_consistency`, `list_personal_records`, `list_achievements`, `update_goal`; docs + SHA
+- [x] API: constância (`GET /progress/consistency`) + streak reescrito (`ConsistencyService`, `streak.service.ts` saiu)
+- [x] API: conquista `workouts_100` + migration `20261116050000_achievement_workouts_100` + gancho `WORKOUT_FINISHED_HOOKS` (`workout-hooks.module.ts`)
+- [x] API: recordes `{ records, highlight }` com `monthEvolution` (últimos 30 dias)
+- [x] API: meta vencida (derivada, `effectiveStatus`) + PATCH com prazo futuro volta a `active`
+- [x] MCP: `get_consistency`, `list_personal_records`, `list_achievements`, `update_goal`; docs (MCP.md, MCP_TOOL_SURFACE, totais 152) + SHA
 - [ ] api-client: tipos, endpoints e cópia compartilhada
 - [ ] Web: G1, G6, G7, G5, G11, G12, G9, G10
 - [ ] App: G1, G6, G7, G5, G11, G12, G9, G10
@@ -43,8 +43,18 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 
 ## Arquivos tocados
 
-(atualizar a cada camada)
+- API: `progress/consistency.service.ts`, `progress/helpers/consistency.ts`, `progress/dto/consistency.dto.ts`,
+  `progress/mcp/get-consistency.tool.ts`, `progress/mcp/get-streak.tool.ts`, `progress/achievement-catalog.ts`,
+  `progress/achievement.service.ts`, `progress/progress.controller.ts|module.ts`, `progress/dashboard.service.ts`,
+  `mcp/intent/tools/get-day-overview.tool.ts|get-goals-overview.tool.ts`, `workout/helpers/month-evolution.ts`,
+  `workout/session-set.service.ts`, `workout/workout.controller.ts`, `workout/mcp/list-personal-records.tool.ts`,
+  `workout/workout-finished.hook.ts`, `workout/workout-session.service.ts` (só o gancho no `finish`),
+  `workout-hooks.module.ts`, `app.module.ts`, `goals/goals.service.ts`, `goals/mcp/update-goal.tool.ts`
+- DB: `packages/db/prisma/migrations/20261116050000_achievement_workouts_100/` (só dados)
+- Docs: MCP.md, MCP_TOOL_SURFACE.md, totais 151→152 em README, ARCHITECTURE, SUBMISSION_CHECKLIST, site
 
 ## Próximo passo exato
 
-Camada 1 (API): `apps/api/src/progress/helpers/consistency.ts` + spec vermelho.
+Camada 2 (api-client): tipos novos (`ConsistencyReport`, `Achievement.condition/progress`,
+`RecordsOverview`), `progressApi.consistency(range)`, `workoutApi.recordsOverview()`, e a cópia
+compartilhada (grade da constância, dica, linha de contexto da conquista, linhas de meta).

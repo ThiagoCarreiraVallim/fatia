@@ -53,9 +53,12 @@ import {
  * braço A. As duas chegaram juntas no merge da main na #378.
  * A #379 acrescentou cinco tools do aluno (plano recebido e agenda, nenhuma destrutiva nem de
  * intenção) e `weeks` em `create_training_block`: muda o braço A.
+ * A #382 acrescentou `get_consistency` (só leitura) e mudou as descrições de `get_streak`,
+ * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
+ * braço A.
  */
 
-const SHA_ENTIDADE = '364222343d026cfd1bcb2cd4e3b57af9fdafbeec26d0422292f289526ce80994';
+const SHA_ENTIDADE = '402a9b7b996ed48476ff7b707d9d83ac81856ea9b6dd692683cb250abe71d442';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

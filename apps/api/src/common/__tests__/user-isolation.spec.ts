@@ -54,6 +54,8 @@ import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service
 import { InboxService } from '../../notifications/inbox.service';
 import { ReminderService } from '../../notifications/reminders/reminder.service';
 import { DashboardService } from '../../progress/dashboard.service';
+import { ConsistencyService } from '../../progress/consistency.service';
+import { AchievementService } from '../../progress/achievement.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
@@ -100,6 +102,8 @@ describe('isolamento entre usuários', () => {
   const steps = new StepLogService(prisma);
   const waters = new WaterLogService(prisma);
   const goals = new GoalsService(prisma, weights, steps);
+  const consistency = new ConsistencyService(prisma);
+  const achievements = new AchievementService(prisma, consistency);
   const progress = new ProgressService(prisma, steps, waters);
   const nutritionSummary = new NutritionSummaryService(prisma);
   const exercises = new ExerciseService(prisma);
@@ -553,6 +557,28 @@ describe('isolamento entre usuários', () => {
 
     it('list_personal_records volta vazio', async () => {
       await expect(sets.listPersonalRecords(owned.userB)).resolves.toEqual([]);
+      await expect(sets.recordsOverview(owned.userB)).resolves.toEqual({
+        records: [],
+        highlight: null,
+      });
+    });
+
+    it('get_consistency e get_streak do user-B não contam os dias do user-A (#382)', async () => {
+      // Sanidade: a refeição do user-A cai dentro do ano, então o A tem dia ativo.
+      const deA = await consistency.report({ userId: owned.userA, timezone: TZ }, 'year');
+      expect(deA.activeDays).toBeGreaterThan(0);
+
+      const deB = await consistency.report({ userId: owned.userB, timezone: TZ }, 'year');
+      expect(deB.activeDays).toBe(0);
+      expect(deB.days.every((d) => d.count === 0)).toBe(true);
+      const streak = await consistency.streak({ userId: owned.userB, timezone: TZ });
+      expect(streak.activeDays.periodos).toBe(0);
+    });
+
+    it('refresh_achievements do user-B não desbloqueia pelo que o user-A fez', async () => {
+      const lista = await achievements.evaluate({ userId: owned.userB, timezone: TZ });
+      expect(lista.find((a) => a.key === 'first_meal')?.unlockedAt).toBeNull();
+      expect(lista.find((a) => a.key === 'plan_created')?.unlockedAt).toBeNull();
     });
 
     it('get_active_workout_session não vê a sessão aberta do user-A', async () => {
@@ -964,7 +990,7 @@ describe('isolamento entre usuários', () => {
           steps,
           weights,
           waters,
-          { compute: async () => ({}) } as never,
+          { streak: async () => ({}) } as never,
           { list: async () => [] } as never,
           { getActive: async () => null } as never,
         ).today({ userId, timezone: TZ });
