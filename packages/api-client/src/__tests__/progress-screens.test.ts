@@ -398,6 +398,24 @@ describe('metas pessoais (Al-G9, Al-G10)', () => {
     expect(goalDeadlineIso('2026-12-31')).toBe('2027-01-01T02:59:59.000Z');
   });
 
+  it('"Outra" leva a unidade que a pessoa escreveu; os outros tipos ignoram', () => {
+    expect(
+      goalCreateInput({
+        kind: 'custom',
+        title: 'Ler',
+        target: 12,
+        deadline: null,
+        unit: ' livros ',
+      }).unit,
+    ).toBe('livros');
+    expect(
+      goalCreateInput({ kind: 'custom', title: 'Ler', target: 12, deadline: null, unit: '' }).unit,
+    ).toBe('vezes');
+    expect(
+      goalCreateInput({ kind: 'weight', title: 'x', target: 68, deadline: null, unit: 'lb' }).unit,
+    ).toBe('kg');
+  });
+
   it('monta a meta com a unidade do tipo', () => {
     expect(
       goalCreateInput({ kind: 'step_count', title: '', target: 10000, deadline: null }),

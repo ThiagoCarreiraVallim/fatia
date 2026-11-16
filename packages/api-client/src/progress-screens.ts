@@ -617,13 +617,16 @@ export function goalCreateInput(draft: {
   target: number;
   /** `YYYY-MM-DD` ou `null` para sem prazo. */
   deadline: string | null;
+  /** Só "Outra": a unidade que a pessoa escreveu (livros, km). */
+  unit?: string;
 }): CreateGoalInput {
   const option = goalKindOption(draft.kind);
+  const custom = draft.kind === 'custom' ? draft.unit?.trim() : '';
   return {
     kind: draft.kind,
     title: draft.title.trim() || defaultGoalTitle(draft.kind, draft.target),
     targetValue: draft.target,
-    unit: option.unit,
+    unit: custom || option.unit,
     ...(draft.deadline ? { deadline: goalDeadlineIso(draft.deadline) } : {}),
   };
 }
