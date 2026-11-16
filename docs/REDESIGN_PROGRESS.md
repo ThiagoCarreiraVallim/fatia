@@ -171,6 +171,31 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
 - **MCP:** `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`, `list_planned_sessions`, `reschedule_planned_session`; `create_training_block` aceita `weeks` 3–6. A administração da equipe fica fora do MCP.
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual); a tela da equipe para mandar o plano (só o endpoint mínimo).
 
+Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_achievement_workouts_100`, só dados):
+
+- **Sequência:** um cálculo só (`ConsistencyService`) para `GET /streak`, o Hoje, `get_streak`, `get_day_overview` e as conquistas. A tolerância de faltas da #147 continua. As sub-sequências (nutrição, treino em semanas, passos) saíram do `StreakSummary`, junto com os `StreakCard` mortos da web e do app. O desafio `ACTIVE_DAYS` da comunidade não mudou: é comparação entre pessoas, com regra própria.
+- **Constância (G12):** `GET /progress/consistency?range=month|quarter|year` e o MCP `get_consistency`, derivados na leitura, sem tabela. Água conta a soma do dia; passos contam o maior registro (ADR 007). Água e passos sem `UserGoals` ficam "sem meta". O treino conta contra a meta semanal. O recorde é por período (o maior entre o histórico e a janela).
+- **Conquistas (G11):** catálogo de 10 com `condition` e `progress` (o "faltam 58"). A `workouts_100` vale retroativa pela migration e também no fim de cada treino (`WORKOUT_FINISHED_HOOKS`, num módulo global para não criar ciclo de módulos).
+- **Recordes (G5):** `GET /workout/records` virou `{ records, highlight }`. "Maior evolução do mês" usa os últimos 30 dias corridos, não o mês do calendário, em % de 1RM estimado. `listPersonalRecords` do api-client segue devolvendo a lista.
+- **Metas (G9/G10):**
+  - "Vencida" é derivada na leitura (`effectiveStatus`). O PATCH com prazo futuro volta a meta para ativa.
+  - São três abas, como no canvas: Ativas, Concluídas e Arquivadas. A issue fala em quatro; a vencida fica nas ativas, com o selo.
+  - Concluir, arquivar e apagar perguntam antes. Só a arquivada pode ser apagada.
+  - Metas marcadas à mão (% de gordura e "Outra") ganham "Atualizar". "Outra" também ganhou o campo Unidade.
+  - O rodapé não fala de gordura: a % só se atualiza sozinha com a #383.
+- **Gráficos (G6):**
+  - Cardio usa `GET /progress/cardio` sem `exerciseId`, que soma todo o cardio da sessão.
+  - Força usa o exercício de maior 1RM até a pessoa escolher outro.
+  - Ganhou "Registrar peso" e "Registrar passos", que não estão no canvas.
+- **Registrar peso (G7):** uma folha com Peso e Passos (`body-log-sheet`), aberta pelo menu da IA, pelo Hoje (passos) e pelo "Peso atual" de Você. O miolo é o das gavetas de antes, com `embedded`.
+  - O valor é digitável e tem − e +.
+  - Apagar continua com "Desfazer", sem pergunta, como nos registros pequenos.
+  - O que veio do celular mostra o selo de origem e não se edita nem apaga dali.
+- **% de gordura no G1:** o cartão fica sem link e com "—" até a #383 (Al-G2). O ponto de extensão está em `progress-screen.tsx`, em `progress/index.tsx` do app e no `case GoalKind.body_fat` de `goals.service.ts`.
+- **App sem calendário nativo:** "Escolher" prazo e "Novo prazo" são datas digitadas (DD/MM/AAAA, `parseDayInput`).
+- **Dica da constância:** é só o lado bom. O "Sábado é o que mais falha" da prancha saiu.
+- **Ainda não conferido:** as capturas contra as pranchas. O dono faz a passada visual.
+
 ## Decisões do dono
 
 - **Etapa 1:**
@@ -187,6 +212,9 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
   - "O que mudou": diff por exercício entre o snapshot aceito e o novo (novo, removido, alterado em séries, repetições e descanso). A pessoa aceita a atualização ou mantém a versão atual; nada muda sem aceite.
   - Bloco de semanas: de 3 a 6, com os focos de hoje. A última é deload; o meio é acúmulo e depois pico (3: acúmulo, pico, deload; 6: acúmulo ×3, pico ×2, deload). Os blocos de 4 semanas não mudam; seguem as regras da ADR 019, inclusive o deload por sinal.
   - "Remarcar" na agenda: qualquer dia de hoje até o fim do plano, nunca depois. Só informativo, sem presença nem reserva.
+- **Etapa 5 (#382):**
+  - Sequência = dia ativo em todo lugar. Um dia é ativo com ao menos uma área cumprida: refeição, treino, água na meta ou passos na meta. Um cálculo só, sem dois números de sequência.
+  - Conquistas: catálogo fechado em 10, com "100 treinos". O contador é N/10, e quem já tem 100 treinos ganha a conquista pela migration.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).
