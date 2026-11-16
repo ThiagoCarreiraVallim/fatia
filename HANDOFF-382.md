@@ -35,8 +35,9 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 - [x] API: recordes `{ records, highlight }` com `monthEvolution` (últimos 30 dias)
 - [x] API: meta vencida (derivada, `effectiveStatus`) + PATCH com prazo futuro volta a `active`
 - [x] MCP: `get_consistency`, `list_personal_records`, `list_achievements`, `update_goal`; docs (MCP.md, MCP_TOOL_SURFACE, totais 152) + SHA
-- [ ] api-client: tipos, endpoints e cópia compartilhada
-- [ ] Web: G1, G6, G7, G5, G11, G12, G9, G10
+- [x] api-client: tipos, endpoints e `progress-screens.ts` (regras de tela), rotas e Conquistas no menu
+- [x] Web: G1, G6, G7 (`body-log-sheet.tsx` + gavetas com `embedded`), G5, G11, G12
+- [ ] Web: G9, G10
 - [ ] App: G1, G6, G7, G5, G11, G12, G9, G10
 - [ ] Docs: REDESIGN_PROGRESS (decisões do dono #382), MCP_TOOL_SURFACE, MCP.md
 - [ ] lint, typecheck, testes api/api-client/web/mobile
@@ -55,6 +56,6 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 
 ## Próximo passo exato
 
-Camada 2 (api-client): tipos novos (`ConsistencyReport`, `Achievement.condition/progress`,
-`RecordsOverview`), `progressApi.consistency(range)`, `workoutApi.recordsOverview()`, e a cópia
-compartilhada (grade da constância, dica, linha de contexto da conquista, linhas de meta).
+Web G9/G10: `components/goals/goals-screen.tsx` + `new-goal-sheet.tsx` (abas Ativas/Concluídas/Arquivadas,
+vencida nas ativas, Concluir/Arquivar/Novo prazo com confirmação), trocar `app/(app)/goals/page.tsx` e o teste.
+Depois o app (mesmas telas em `apps/mobile/app/(app)/progress/*` e `goals.tsx`).
