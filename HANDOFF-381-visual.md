@@ -8,7 +8,7 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 
 - [x] pranchas renderizadas (board/)
 - [x] T17b treino livre (commit "fix: treino livre segue a T17b") — prints web/workout_free*.m.png, app/free-empty.png, app/free-with.png, cmp-Al-T17b-*.png
-- [ ] T10 histórico
+- [x] T10 histórico — web/workout_history*.m.png, app/history*.png, cmp-Al-T10-Historico.png
 - [ ] T11 detalhe força
 - [ ] T11b detalhe cardio (demo não tem sessão cardio: criar via "Só cardio")
 - [ ] lint/typecheck/testes; apagar este arquivo no último commit
@@ -23,4 +23,4 @@ Helper (scratchpad, fora do git): node api.mjs <rota-web> <trecho-url-api> impri
 
 ## Próximo passo
 
-T10: título "Histórico" (packages/api-client/src/navigation.ts), b3 (text-xs text-faint), selo raio 6px, emoji só se houver; API: feeling do histórico cai na média das séries (session-history.ts, teste antes).
+T11 (sessão 517c1d27-4e5a-44a2-86fc-73dee682401b, Push 16/11, recorde no Tríceps): subtítulo b3, selo RECORDE como .bdg ok (maiúsculo 11px 800), print expandido + seta volta ao histórico.

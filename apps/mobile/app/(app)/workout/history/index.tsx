@@ -53,7 +53,7 @@ function Row({ item, first }: { item: WorkoutHistoryItem; first: boolean }) {
       )}
     >
       <View className="w-10 items-center gap-0.5">
-        <Text className="text-[11px] uppercase text-muted-foreground">{day.weekday}</Text>
+        <Text className="text-[11px] uppercase text-faint">{day.weekday}</Text>
         <Text className="font-sans-bold text-lg text-foreground">{day.day}</Text>
       </View>
       <View className="min-w-0 flex-1 gap-0.5">
@@ -61,21 +61,25 @@ function Row({ item, first }: { item: WorkoutHistoryItem; first: boolean }) {
           <Text numberOfLines={1} className="shrink font-sans-semibold text-[15px] text-foreground">
             {title}
           </Text>
-          <View className="rounded-md bg-muted px-1.5 py-px">
-            <Text className="text-[11px] text-muted-foreground">{sessionKindLabel(item.kind)}</Text>
+          <View className="rounded-[6px] bg-muted px-1.5 py-px">
+            <Text className="text-[11px] text-faint">{sessionKindLabel(item.kind)}</Text>
           </View>
         </View>
         <View className="flex-row items-center gap-1">
           {item.cardio ? <Heart size={14} color={colors.danger} /> : null}
-          <Text numberOfLines={1} className="shrink text-sm text-muted-foreground">
+          <Text numberOfLines={1} className="shrink text-xs text-faint">
             {line}
           </Text>
         </View>
       </View>
       <View className="items-end gap-0.5">
-        <Text className="text-lg leading-tight">{feeling?.emoji ?? ''}</Text>
+        {feeling ? (
+          <Text accessibilityLabel={feeling.label} className="text-lg leading-tight">
+            {feeling.emoji}
+          </Text>
+        ) : null}
         {item.durationMinutes != null ? (
-          <Text className="text-sm text-muted-foreground">{item.durationMinutes} min</Text>
+          <Text className="text-xs text-faint">{item.durationMinutes} min</Text>
         ) : null}
       </View>
     </Pressable>
@@ -109,7 +113,7 @@ export default function WorkoutHistoryScreen() {
                 className="flex-1 gap-0.5 rounded-[18px] bg-card p-3.5"
               >
                 <Text className="font-sans-bold text-[22px] text-foreground">{t.value}</Text>
-                <Text className="text-sm text-muted-foreground">{t.label}</Text>
+                <Text className="text-xs text-faint">{t.label}</Text>
               </View>
             ))}
           </View>

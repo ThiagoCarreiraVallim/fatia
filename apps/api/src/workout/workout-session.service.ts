@@ -250,6 +250,7 @@ export class WorkoutSessionService {
               exerciseId: true,
               weightKg: true,
               reps: true,
+              rpe: true,
               durationSeconds: true,
               distanceMeters: true,
               avgHeartRate: true,

@@ -43,29 +43,29 @@ function Row({ item, first }: { item: WorkoutHistoryItem; first: boolean }) {
         className="flex min-h-[68px] items-center gap-3"
       >
         <span aria-hidden className="flex w-10 shrink-0 flex-col items-center gap-0.5">
-          <span className="text-[11px] uppercase text-muted-foreground">{day.weekday}</span>
+          <span className="text-[11px] uppercase text-faint">{day.weekday}</span>
           <b className="text-lg tabular-nums">{day.day}</b>
         </span>
         <span className="min-w-0 flex-1 space-y-0.5">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-[15px] font-semibold">{title}</span>
-            <span className="shrink-0 rounded-md bg-muted px-1.5 py-px text-[11px] text-muted-foreground">
+            <span className="shrink-0 rounded-[6px] bg-muted px-1.5 py-px text-[11px] text-faint">
               {sessionKindLabel(item.kind)}
             </span>
           </span>
-          <span className="flex items-center gap-1 truncate text-sm text-muted-foreground">
+          <span className="flex items-center gap-1 truncate text-xs text-faint">
             {item.cardio && <Heart size={14} aria-hidden className="shrink-0 text-danger" />}
             <span className="truncate">{line}</span>
           </span>
         </span>
         <span className="flex shrink-0 flex-col items-end gap-0.5">
-          <span aria-hidden className="text-lg leading-tight">
-            {feeling?.emoji ?? ''}
-          </span>
-          {item.durationMinutes != null && (
-            <span className="text-sm tabular-nums text-muted-foreground">
-              {item.durationMinutes} min
+          {feeling && (
+            <span aria-label={feeling.label} className="text-lg leading-tight">
+              {feeling.emoji}
             </span>
+          )}
+          {item.durationMinutes != null && (
+            <span className="text-xs tabular-nums text-faint">{item.durationMinutes} min</span>
           )}
         </span>
       </Link>
@@ -99,7 +99,7 @@ export default function WorkoutHistoryPage() {
         <dl className="grid grid-cols-3 gap-2">
           {historyTotals(first.totals, units.loadUnit).map((t) => (
             <div key={t.label} className="flex flex-col gap-0.5 rounded-[18px] bg-card p-3.5">
-              <dt className="order-last text-sm text-muted-foreground">{t.label}</dt>
+              <dt className="order-last text-xs text-faint">{t.label}</dt>
               <dd className="text-[22px] font-bold tabular-nums">{t.value}</dd>
             </div>
           ))}

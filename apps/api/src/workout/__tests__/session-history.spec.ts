@@ -16,10 +16,12 @@ const lift = (
   exercise: typeof BENCH,
   weightKg: number | null,
   reps: number,
+  rpe: number | null = null,
 ) => ({
   exerciseId,
   weightKg,
   reps,
+  rpe,
   durationSeconds: null,
   distanceMeters: null,
   avgHeartRate: null,
@@ -36,6 +38,7 @@ const run = (
   exerciseId,
   weightKg: null,
   reps: null,
+  rpe: null,
   durationSeconds: seconds,
   distanceMeters: meters,
   avgHeartRate: bpm,
@@ -55,6 +58,14 @@ const session = (over: Partial<HistorySessionInput> = {}): HistorySessionInput =
 });
 
 describe('historyItemOf', () => {
+  it('sem "como foi" marcado, a sensação é a média das séries de força (como no detalhe)', () => {
+    const sets = [lift(1, BENCH, 50, 10, 7), lift(1, BENCH, 52.5, 10, 8), lift(2, ROW, 40, 12)];
+    expect(historyItemOf(session({ feeling: null, sets })).feeling).toBe(3);
+    // O que a pessoa marcou vale mais que a média.
+    expect(historyItemOf(session({ feeling: 1, sets })).feeling).toBe(1);
+    expect(historyItemOf(session({ feeling: null })).feeling).toBeNull();
+  });
+
   it('sessão de plano: nome do plano, tipo, duração, força e volume', () => {
     expect(historyItemOf(session())).toEqual({
       id: 's1',

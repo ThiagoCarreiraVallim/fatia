@@ -1,3 +1,4 @@
+import { averageFeeling } from './helpers/feeling';
 import { isCardioExercise } from './helpers/is-cardio';
 import { sessionKind, type SessionKind } from './helpers/session-kind';
 
@@ -14,6 +15,8 @@ export interface HistorySessionInput {
     exerciseId: number;
     weightKg: number | null;
     reps: number | null;
+    /** A sensação da série (RPE 6 a 10). */
+    rpe: number | null;
     durationSeconds: number | null;
     distanceMeters: number | null;
     avgHeartRate: number | null;
@@ -29,7 +32,10 @@ export interface HistoryItem {
   kind: SessionKind;
   /** O nome do plano. Nulo no treino livre: a tela escreve "Treino livre". */
   title: string | null;
-  /** "Como foi o treino?", 1 a 5. */
+  /**
+   * "Como foi o treino?", 1 a 5. Sem marca, a média das séries de força: a
+   * mesma regra do `overallFeeling` do resumo, para a linha e o detalhe baterem.
+   */
   feeling: number | null;
   notes: string | null;
   durationMinutes: number | null;
@@ -81,7 +87,7 @@ export function historyItemOf(session: HistorySessionInput): HistoryItem {
     completedAt: session.completedAt,
     kind: sessionKind(session),
     title: session.plan?.name ?? null,
-    feeling: session.feeling,
+    feeling: session.feeling ?? averageFeeling(strength.map((s) => s.rpe)),
     notes: session.notes,
     durationMinutes: session.completedAt
       ? Math.round((session.completedAt.getTime() - session.startedAt.getTime()) / 60_000)
