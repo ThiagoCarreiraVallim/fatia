@@ -38,9 +38,9 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 - [x] api-client: tipos, endpoints e `progress-screens.ts` (regras de tela), rotas e Conquistas no menu
 - [x] Web: G1, G6, G7 (`body-log-sheet.tsx` + gavetas com `embedded`), G5, G11, G12
 - [x] Web: G9, G10 (`components/goals/goals-screen.tsx`, `new-goal-sheet.tsx`; Atualizar para meta manual)
-- [ ] App: G1, G6, G7, G5, G11, G12, G9, G10
-- [ ] Docs: REDESIGN_PROGRESS (decisões do dono #382), MCP_TOOL_SURFACE, MCP.md
-- [ ] lint, typecheck, testes api/api-client/web/mobile
+- [x] App: G1, G6, G7, G5, G11, G12, G9, G10 (`app/(app)/progress/*`, `goals.tsx`, `components/progress/body-log-sheet.tsx`, `components/goals/new-goal-sheet.tsx`)
+- [x] Docs: REDESIGN_PROGRESS (pendências e decisões do dono #382), MCP_TOOL_SURFACE, MCP.md
+- [x] lint, typecheck, testes: api 182/2940, api-client 53/790, web 124/891, mobile 41/485
 
 ## Arquivos tocados
 
@@ -56,5 +56,5 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 
 ## Próximo passo exato
 
-App: mesmas telas em `apps/mobile/app/(app)/progress/*` e `goals.tsx`, com a lógica de
-`packages/api-client/src/progress-screens.ts`. Depois docs (REDESIGN_PROGRESS) e a bateria final.
+Issue implementada. Falta só a passada visual do dono (capturas contra as pranchas) e o PR
+pelo coordenador. Antes do merge, apagar este HANDOFF.
