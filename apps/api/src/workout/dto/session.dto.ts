@@ -36,6 +36,19 @@ export class StartSessionDto {
   @IsOptional() @IsUUID() planId?: string;
   @IsOptional() @IsISO8601() startedAt?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+
+  /**
+   * A ordem dos exercícios escolhidos antes de começar (Treino livre, #381),
+   * por id. Gravada como a `exerciseOrder` da sessão: o detalhe e o "Salvar
+   * como plano" saem na ordem em que a pessoa escolheu.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  exerciseOrder?: number[];
 }
 
 export class FinishSessionDto {

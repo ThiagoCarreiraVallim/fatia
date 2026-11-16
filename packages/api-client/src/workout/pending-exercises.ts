@@ -35,3 +35,17 @@ export function dropPendingExercise(
 ): PendingExercise[] {
   return (current ?? []).filter((p) => p.id !== exerciseId);
 }
+
+/**
+ * O corpo do `startSession` do Treino livre e do "Repetir" (web e app): sem
+ * plano, a ordem dos escolhidos vai junto como `exerciseOrder`, para o detalhe
+ * e o "Salvar como plano" saírem na ordem em que a pessoa escolheu.
+ */
+export function startSessionBody(
+  planId: string | null | undefined,
+  pending: readonly PendingExercise[] | undefined,
+  now: Date = new Date(),
+): { planId?: string; startedAt: string; exerciseOrder?: number[] } {
+  const order = !planId && pending?.length ? { exerciseOrder: pending.map((p) => p.id) } : {};
+  return { planId: planId ?? undefined, startedAt: now.toISOString(), ...order };
+}

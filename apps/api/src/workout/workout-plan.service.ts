@@ -105,6 +105,10 @@ export class WorkoutPlanService {
             distanceMeters: true,
             exercise: { select: { name: true, muscleGroup: true } },
           },
+          // A mesma ordem do resumo (`summary`): o desempate de
+          // `orderExercisesLikeSession` é a ordem de chegada destas linhas, e
+          // sem `orderBy` o plano saía numa ordem diferente da do detalhe.
+          orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
         },
       },
     });

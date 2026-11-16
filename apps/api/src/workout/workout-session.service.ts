@@ -162,6 +162,7 @@ export class WorkoutSessionService {
           planName: plan?.name ?? null,
           startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
           notes: dto.notes,
+          exerciseOrder: dto.exerciseOrder ?? [],
         },
       });
     } catch (error) {

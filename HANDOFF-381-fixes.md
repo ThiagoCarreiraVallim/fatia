@@ -13,7 +13,7 @@ Branch `redesign/381-review-fixes` (worktree `.claude/worktrees/381-review-fixes
 2. [x] Excluir plano vira "Treino livre" (snapshot planName/wasPlanned + backfill)
 3. [x] Salvar como plano idempotente (WorkoutPlan.fromSessionId, "Ver plano")
 4. [x] Salvar como plano exige sessão concluída (409)
-5. [ ] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
+5. [x] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
 6. [ ] Cursor do histórico (keyset opaco por usuário)
 7. [ ] Mobile: toque duplo em Iniciar treino
 8. [ ] Invalidar ['workout','history'] ao terminar/check-in/excluir/sensação
@@ -22,7 +22,6 @@ Migração única: `20261116030000_session_plan_snapshot_and_plan_source`.
 
 ## Próximo passo
 
-Item 5: repor o `orderBy` dos sets em `createFromSession` (texto em scratchpad/orderby.txt:
-`orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }]`), `exerciseOrder` no StartSessionDto
-e no `start()`, e os hooks de início (web `use-start-with-exercises`, app `use-start-session`)
-mandando a ordem dos escolhidos. Depois item 6 (cursor), 7, 8.
+Item 6 (cursor): history com cursor opaco keyset (base64url de `startedAt|id`), list
+validando o id do cursor contra o usuário (400) e keyset por ele; DTO do history sem
+@IsUUID. Testes vermelhos já em history-review.integration.spec.ts. Depois 7 e 8.

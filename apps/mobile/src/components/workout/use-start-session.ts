@@ -3,6 +3,7 @@ import { useRouter, type Href } from 'expo-router';
 import {
   activeSessionIdFromError,
   pendingExercisesKey,
+  startSessionBody,
   workoutApi,
   type PendingExercise,
 } from '@fatia/api-client';
@@ -21,8 +22,8 @@ export function useStartSession() {
   const qc = useQueryClient();
   const router = useRouter();
   return useMutation({
-    mutationFn: ({ planId }: { planId?: string | null; pending?: PendingExercise[] }) =>
-      workoutApi.startSession({ planId: planId ?? undefined, startedAt: new Date().toISOString() }),
+    mutationFn: ({ planId, pending }: { planId?: string | null; pending?: PendingExercise[] }) =>
+      workoutApi.startSession(startSessionBody(planId, pending)),
     onSuccess: (session, { pending }) => {
       if (pending?.length) qc.setQueryData(pendingExercisesKey(session.id), pending);
       qc.setQueryData(['workout', 'active'], session);

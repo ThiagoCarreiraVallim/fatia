@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   activeSessionIdFromError,
   pendingExercisesKey,
+  startSessionBody,
   workoutApi,
   type PendingExercise,
   type WorkoutSession,
@@ -25,15 +26,13 @@ export function useStartWithExercises() {
   return useMutation({
     mutationFn: async ({
       planId,
+      pending,
     }: {
       planId: string | null;
       pending: PendingExercise[];
     }): Promise<WorkoutSession | null> => {
       try {
-        return await workoutApi.startSession({
-          planId: planId ?? undefined,
-          startedAt: new Date().toISOString(),
-        });
+        return await workoutApi.startSession(startSessionBody(planId, pending));
       } catch (error) {
         if (activeSessionIdFromError(error)) return null;
         throw error;
