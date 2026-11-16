@@ -37,7 +37,10 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] MCP (`create_workout_plan.circuit`, `log_circuit_result`) + docs + fingerprint (SHA novo, 152 tools)
 - [x] api-client: `circuit-copy.ts` (13 testes), `workoutApi.createCircuit/updateCircuit/saveCircuitProgress/finishCircuit`,
       rotas em `navigation.ts` (`/workout/circuits/new`, `/workout/circuits/:id`, `/workout/circuit/:id`)
-- [ ] web: T22, T4, T4b/T4d, T4c/T4e, aba Circuitos no T6, "Circuito" no T1, fim → T5
+- [x] web: T22 (`components/workout/circuit/circuit-editor.tsx`, `/workout/circuits/new|[id]`), relógio
+      (`circuit-run.tsx`, `/workout/circuit/[id]`), aba Circuitos no T6, "Circuito" no T1, T5 com `circuit-result.tsx`,
+      barra ativa e `/workout` levando ao relógio. Testes em `components/workout/circuit/__tests__`.
+- [x] sessão nasce com `circuit.previous` (última vez) para o selo do T4e
 - [ ] app: idem + keep-awake, som/vibração com fallback
 - [ ] REDESIGN_PROGRESS (decisões do dono #380, pendências)
 - [ ] lint, typecheck, testes api/api-client/web/mobile
@@ -51,7 +54,6 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 
 ## Próximo passo
 
-Web: editor T22 (`components/workout/circuit/circuit-editor.tsx`, páginas `/workout/circuits/new` e `[id]`),
-tela de execução `/workout/circuit/[id]`, aba Circuitos em Planos, card no Treino, bloco do circuito no T5,
-barra ativa. Teste web `app-top-bar.test.tsx:43` espera 'Voltar para Planos de treino' (agora 'Planos e circuitos').
-Depois o app (mesmas telas).
+App (Expo): mesmas telas em `apps/mobile/app/(app)/workout/circuits/new.tsx`, `circuits/[id].tsx`,
+`circuit/[id].tsx`; keep-awake, haptics, expo-audio com try/catch, avisos locais via `circuitAlarms`
+(`@/notifications/native`, pode ser nulo). Depois REDESIGN_PROGRESS, lint/typecheck/testes completos.

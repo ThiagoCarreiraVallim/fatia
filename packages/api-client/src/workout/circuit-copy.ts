@@ -540,3 +540,13 @@ export function circuitRoundsView(def: CircuitDefinition, s: CircuitState): Circ
   }
   return { now: current ? circuitNowLabel(current) : '', items, resting: null };
 }
+
+/** "15 por round", "30 s por round", "10 por minuto", "20 s por intervalo" (Al-T11c). */
+export function circuitExercisePace(
+  format: CircuitFormat,
+  config: CircuitDefinition['config'],
+  item: Pick<CircuitItem, 'unit' | 'target'>,
+): string {
+  if (format === 'TABATA') return `${config.workSeconds ?? 0} s por intervalo`;
+  return `${circuitItemValue(item)} por ${format === 'EMOM' ? 'minuto' : 'round'}`;
+}

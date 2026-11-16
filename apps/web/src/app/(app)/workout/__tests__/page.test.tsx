@@ -682,6 +682,31 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     expect(startSession.mock.calls[0]![0].planId).toBeUndefined();
   });
 
+  it('"Circuito" (#380): sem circuito abre o Novo circuito; com circuito, a aba Circuitos, e ele não vira cartão de plano', async () => {
+    const { unmount } = renderPage();
+    const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
+    expect(within(other).getByRole('link', { name: /Circuito/ })).toHaveAttribute(
+      'href',
+      '/workout/circuits/new',
+    );
+    unmount();
+
+    listPlans.mockResolvedValue([
+      PUSH,
+      { id: 'c1', name: 'AMRAP 12', kind: 'CIRCUIT', exercises: [] } as unknown as WorkoutPlan,
+    ]);
+    renderPage();
+    const again = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
+    await waitFor(() =>
+      expect(within(again).getByRole('link', { name: /Circuito/ })).toHaveAttribute(
+        'href',
+        '/workout/plans?tab=circuitos',
+      ),
+    );
+    const plans = screen.getByRole('region', { name: 'Seus planos' });
+    expect(within(plans).queryByText('AMRAP 12')).toBeNull();
+  });
+
   it('o bloco numa linha; o toque abre o detalhe', async () => {
     const user = userEvent.setup();
     renderPage();

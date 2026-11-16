@@ -167,6 +167,68 @@ describe('Treino feito! (#377)', () => {
     expect(within(list).getByLabelText('Recorde')).toBeInTheDocument();
   });
 
+  it('circuito (#380): a faixa com rounds, a comparação, o tempo de cada round e o total por exercício', async () => {
+    getSessionSummary.mockResolvedValue(
+      summary({
+        circuit: {
+          format: 'AMRAP',
+          name: 'AMRAP 12',
+          config: { durationSeconds: 720 },
+          roundsCompleted: 4,
+          partialExercises: 2,
+          stoppedAt: { exerciseId: 3, name: 'Box jump' },
+          roundSeconds: [138, 144, 151, 160],
+          partialRoundSeconds: 127,
+          averageRoundSeconds: 148,
+          elapsedSeconds: 720,
+          finalTimeSeconds: null,
+          intervalsCompleted: null,
+          intervalsTotal: null,
+          completed: true,
+          totalReps: 148,
+          exercises: [
+            {
+              exerciseId: 1,
+              name: 'Kettlebell swing',
+              muscleGroup: 'pernas',
+              unit: 'REPS',
+              target: 15,
+              sets: 5,
+              reps: 67,
+              seconds: 0,
+            },
+          ],
+          previous: null,
+          comparison: {
+            verdict: 'better',
+            roundsDelta: 1,
+            finalTimeDeltaSeconds: null,
+            intervalsDelta: null,
+            repsDelta: 12,
+            previousFinalTimeSeconds: null,
+          },
+        },
+      }),
+    );
+    renderPage();
+    const band = await screen.findByRole('region', { name: 'Resultado do circuito' });
+    expect(within(band).getByText('Concluído · AMRAP 12')).toBeInTheDocument();
+    expect(within(band).getByText('4 + 2')).toBeInTheDocument();
+    expect(within(band).getByText('2:28')).toBeInTheDocument();
+    expect(screen.getByText('+1 round vs. a última vez')).toBeInTheDocument();
+    const rounds = screen.getByRole('region', { name: 'Tempo de cada round' });
+    expect(within(rounds).getByText('2:07*')).toBeInTheDocument();
+    expect(
+      within(rounds).getByText('* round incompleto: o tempo acabou no Box jump'),
+    ).toBeInTheDocument();
+    const exercises = screen.getByRole('region', { name: 'Exercícios' });
+    expect(within(exercises).getByText('15 por round')).toBeInTheDocument();
+    expect(within(exercises).getByText('67 reps')).toBeInTheDocument();
+    // Os blocos de séries e carga saem.
+    expect(screen.queryByRole('list', { name: 'Exercícios do treino' })).toBeNull();
+    expect(screen.queryByRole('region', { name: /Comparado ao último/ })).toBeNull();
+  });
+
   it('"Como foi o treino?": rosto, atalho na observação e Salvar volta ao Treino', async () => {
     getSessionSummary.mockResolvedValue(summary());
     updateSession.mockResolvedValue({} as never);

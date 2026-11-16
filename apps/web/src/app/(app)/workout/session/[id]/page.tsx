@@ -38,6 +38,7 @@ import { MuscleDiagram } from '@/components/workout/muscle-diagram';
 import { FeelingPicker } from '@/components/workout/set-chips';
 import { groupTone } from '@/components/workout/group-tone';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
+import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
 import { cn } from '@/lib/utils';
 
 const card = 'rounded-card bg-card p-4';
@@ -141,18 +142,23 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
         <p className="text-[13px] text-muted-foreground">{summaryHeadline(summary)}</p>
       </header>
 
-      <dl className="grid grid-cols-4 gap-2">
-        {facts.map((f) => (
-          <div key={f.label} className="flex flex-col-reverse rounded-field bg-card px-3 py-3">
-            <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
-            <dd className="whitespace-nowrap font-display text-lg font-semibold text-foreground tabular-nums">
-              {f.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {/* Circuito (#380): os números dele no lugar dos de séries e carga. */}
+      {summary.circuit && <CircuitResultBlocks circuit={summary.circuit} />}
 
-      {summary.comparison && (
+      {!summary.circuit && (
+        <dl className="grid grid-cols-4 gap-2">
+          {facts.map((f) => (
+            <div key={f.label} className="flex flex-col-reverse rounded-field bg-card px-3 py-3">
+              <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+              <dd className="whitespace-nowrap font-display text-lg font-semibold text-foreground tabular-nums">
+                {f.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {summary.comparison && !summary.circuit && (
         <section aria-labelledby="feito-comparacao" className={card}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 id="feito-comparacao" className={title}>
@@ -241,7 +247,7 @@ function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
         </section>
       )}
 
-      {summary.exercises.length > 0 && (
+      {summary.exercises.length > 0 && !summary.circuit && (
         <section aria-labelledby="feito-exercicios" className={card}>
           <h2 id="feito-exercicios" className="text-xs text-muted-foreground">
             Exercícios

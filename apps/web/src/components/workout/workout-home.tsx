@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, ChevronRight, Heart, History, Plus, Zap } from 'lucide-react';
+import { CalendarDays, ChevronRight, Heart, History, Plus, Timer, Zap } from 'lucide-react';
 import {
   blockRow,
   dayOfMonth,
@@ -154,11 +154,14 @@ function PlansSection() {
       {plans.data && (
         <Carousel opts={{ align: 'start', dragFree: true }}>
           <CarouselContent>
-            {plans.data.map((plan) => (
-              <CarouselItem key={plan.id} className="basis-[58%] sm:basis-1/3">
-                <PlanCard plan={plan} />
-              </CarouselItem>
-            ))}
+            {/* Os circuitos têm o atalho deles em "Outros jeitos de treinar". */}
+            {plans.data
+              .filter((plan) => plan.kind !== 'CIRCUIT')
+              .map((plan) => (
+                <CarouselItem key={plan.id} className="basis-[58%] sm:basis-1/3">
+                  <PlanCard plan={plan} />
+                </CarouselItem>
+              ))}
             <CarouselItem className="basis-[36%] sm:basis-1/4">
               {/* As telas de plano são da #378: daqui só se chega até elas. */}
               <Link
@@ -186,21 +189,19 @@ function WayTile({
   tone,
   disabled,
   onClick,
+  href,
 }: {
   title: string;
   hint: string;
   icon: ReactNode;
   tone: string;
-  disabled: boolean;
-  onClick: () => void;
+  disabled?: boolean;
+  onClick?: () => void;
+  /** Leva a outra tela em vez de começar uma sessão. */
+  href?: string;
 }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="anim-press flex min-w-0 items-center gap-2.5 rounded-[18px] bg-card p-3 text-left disabled:opacity-60"
-    >
+  const body = (
+    <>
       <span
         aria-hidden
         className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', tone)}
@@ -211,18 +212,35 @@ function WayTile({
         <span className="block text-sm font-bold text-foreground">{title}</span>
         <span className="block truncate text-xs text-muted-foreground">{hint}</span>
       </span>
+    </>
+  );
+  const className =
+    'anim-press flex min-w-0 items-center gap-2.5 rounded-[18px] bg-card p-3 text-left disabled:opacity-60';
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className={className}>
+      {body}
     </button>
   );
 }
 
 function OtherWays({ onCardio }: { onCardio: () => void }) {
   const start = useStartSession();
+  // Quem já tem circuito cai na lista deles (Al-T6); quem não tem, no Novo circuito (Al-T22).
+  const plans = useQuery({ queryKey: ['workout', 'plans'], queryFn: () => workoutApi.listPlans() });
+  const hasCircuits = plans.data?.some((p) => p.kind === 'CIRCUIT') ?? false;
   return (
     <section aria-labelledby="treino-outros" className="space-y-2.5">
       <h2 id="treino-outros" className={sectionTitle}>
         Outros jeitos de treinar
       </h2>
-      {/* Circuito e Modelos entram com a #380 e a #379. */}
+      {/* Modelos entra com a #379. */}
       <div className="grid grid-cols-2 gap-2">
         <WayTile
           title="Livre"
@@ -239,6 +257,13 @@ function OtherWays({ onCardio }: { onCardio: () => void }) {
           tone="bg-danger/15 text-danger"
           disabled={start.isPending}
           onClick={() => start.mutate(null, { onSuccess: onCardio })}
+        />
+        <WayTile
+          title="Circuito"
+          hint="AMRAP, EMOM"
+          icon={<Timer size={16} />}
+          tone="bg-warning/15 text-warning"
+          href={hasCircuits ? '/workout/plans?tab=circuitos' : '/workout/circuits/new'}
         />
       </div>
     </section>

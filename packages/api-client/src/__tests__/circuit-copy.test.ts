@@ -8,6 +8,7 @@ import {
   circuitDraftErrors,
   circuitDraftSummary,
   circuitDraftToInput,
+  circuitExercisePace,
   circuitFinishBody,
   circuitHeader,
   circuitIntervalsView,
@@ -468,5 +469,16 @@ describe('o que a tela do relógio mostra', () => {
       now: 'Descanso',
       resting: { seconds: 45, next: 'Burpee × 10' },
     });
+  });
+});
+
+describe('o ritmo de cada exercício no Treino feito (Al-T11c)', () => {
+  const burpee = amrap.exercises[0];
+  const prancha = amrap.exercises[1];
+  it('por round, por minuto ou o trabalho do intervalo', () => {
+    expect(circuitExercisePace('AMRAP', {}, burpee)).toBe('10 por round');
+    expect(circuitExercisePace('FOR_TIME', {}, prancha)).toBe('30 s por round');
+    expect(circuitExercisePace('EMOM', {}, burpee)).toBe('10 por minuto');
+    expect(circuitExercisePace('TABATA', { workSeconds: 20 }, burpee)).toBe('20 s por intervalo');
   });
 });
