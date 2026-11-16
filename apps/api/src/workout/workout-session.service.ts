@@ -138,10 +138,11 @@ export class WorkoutSessionService {
     // O plano vem do corpo: precisa ser da pessoa. Sem isto a sessão de B
     // apontaria para o plano de A, e o `findById` de B mostraria os exercícios
     // de A em `plannedExercises`.
+    let plan: { id: string; name: string } | null = null;
     if (dto.planId) {
-      const plan = await this.prisma.workoutPlan.findFirst({
+      plan = await this.prisma.workoutPlan.findFirst({
         where: { id: dto.planId, userId },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!plan) throw new NotFoundException('Plan not found');
     }
@@ -149,7 +150,11 @@ export class WorkoutSessionService {
       return await this.prisma.workoutSession.create({
         data: {
           userId,
-          planId: dto.planId ?? null,
+          planId: plan?.id ?? null,
+          // O retrato do plano: apagar o plano depois não faz a sessão virar
+          // "Treino livre" no histórico (`helpers/session-kind.ts`).
+          fromPlan: plan !== null,
+          planName: plan?.name ?? null,
           startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
           notes: dto.notes,
         },
@@ -240,6 +245,8 @@ export class WorkoutSessionService {
         select: {
           id: true,
           planId: true,
+          fromPlan: true,
+          planName: true,
           startedAt: true,
           completedAt: true,
           feeling: true,
@@ -497,6 +504,8 @@ export class WorkoutSessionService {
       session: {
         id: session.id,
         planId: session.planId,
+        fromPlan: session.fromPlan,
+        planName: session.planName,
         startedAt: session.startedAt,
         completedAt: session.completedAt,
         feeling: session.feeling,

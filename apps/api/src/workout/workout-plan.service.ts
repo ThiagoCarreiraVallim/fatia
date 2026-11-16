@@ -87,6 +87,7 @@ export class WorkoutPlanService {
       where: { id: sessionId, userId },
       select: {
         exerciseOrder: true,
+        planName: true,
         plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
         sets: {
           select: {
@@ -131,7 +132,12 @@ export class WorkoutPlanService {
 
     const only =
       rows.length === 1 ? session.sets.find((s) => s.exerciseId === rows[0]!.exerciseId) : null;
-    const name = dto.name?.trim() || session.plan?.name || only?.exercise.name || 'Treino livre';
+    const name =
+      dto.name?.trim() ||
+      session.plan?.name ||
+      session.planName ||
+      only?.exercise.name ||
+      'Treino livre';
     const plan = await this.prisma.workoutPlan.create({
       data: { userId, name: name.slice(0, 100), exercises: { create: rows } },
     });
