@@ -15,13 +15,13 @@ Branch `redesign/381-review-fixes` (worktree `.claude/worktrees/381-review-fixes
 4. [x] Salvar como plano exige sessão concluída (409)
 5. [x] Ordem dos exercícios do plano = resumo; exerciseOrder no treino livre
 6. [x] Cursor do histórico (keyset opaco por usuário)
-7. [ ] Mobile: toque duplo em Iniciar treino
+7. [x] Mobile: toque duplo em Iniciar treino
 8. [ ] Invalidar ['workout','history'] ao terminar/check-in/excluir/sensação
 
 Migração única: `20261116030000_session_plan_snapshot_and_plan_source`.
 
 ## Próximo passo
 
-Item 7 (mobile duplo toque em Iniciar treino): use-start-session.ts, ignorar o 409 cujo
-activeSessionId é a sessão recém-aberta e/ou router.replace a partir da tela livre.
-Lógica testável no api-client (mobile só testa lógica pura). Depois item 8.
+Item 8: invalidar ['workout','history'] em finish (mobile use-finish-session.ts, web
+finish-session-modal.tsx), check-in, delete/cancelar sessão e edição de sensação.
+Depois: pnpm lint, typecheck, testes (api, api-client, web, mobile), apagar este HANDOFF.
