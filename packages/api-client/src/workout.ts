@@ -196,6 +196,19 @@ export interface CircuitSessionData {
   startedAt: string;
   events: CircuitEvent[];
   result: (Omit<CircuitResult, 'exercises'> & { exercises: CircuitResult['exercises'] }) | null;
+  /** A última vez do mesmo circuito, congelada no começo (ausente nas sessões antigas). */
+  previous?: CircuitPrevious | null;
+}
+
+export interface CircuitPrevious {
+  sessionId: string;
+  startedAt: string;
+  roundsCompleted: number;
+  partialExercises: number;
+  finalTimeSeconds: number | null;
+  intervalsCompleted: number | null;
+  totalReps: number;
+  elapsedSeconds: number;
 }
 
 export type WorkoutPlanKind = 'STRENGTH' | 'CIRCUIT';

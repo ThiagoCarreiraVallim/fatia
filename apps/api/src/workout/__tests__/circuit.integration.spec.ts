@@ -130,8 +130,15 @@ describe('circuitos (banco real)', () => {
       },
     });
 
-    // Segunda vez: 4 rounds e 2 exercícios.
+    // Segunda vez: 4 rounds e 2 exercícios. A sessão já nasce com a última
+    // vez, para a tela comparar no fim (Al-T4e) antes de salvar.
     const second = await sessions.start(userId, { planId: plan.id });
+    expect((second.circuit as { previous: unknown }).previous).toMatchObject({
+      roundsCompleted: 3,
+      partialExercises: 0,
+      finalTimeSeconds: null,
+    });
+    expect((first.circuit as { previous: unknown }).previous).toBeNull();
     const t = new Date(second.startedAt).getTime();
     await circuits.saveProgress(userId, second.id, [
       { type: 'mark', at: t + 30_000 },

@@ -9,6 +9,7 @@ import {
   circuitDraftSummary,
   circuitDraftToInput,
   circuitHeader,
+  circuitLiveComparison,
   circuitItemValue,
   circuitNowLabel,
   circuitPlanSummary,
@@ -296,5 +297,52 @@ describe('Treino feito do circuito', () => {
         exercises: [{}, {}],
       } as unknown as WorkoutPlan),
     ).toBe('a cada minuto, 10 min · 2 exercícios');
+  });
+});
+
+describe('a comparação na tela do relógio, antes de salvar (Al-T4e)', () => {
+  const previous = {
+    sessionId: 's0',
+    startedAt: '2026-11-01T10:00:00.000Z',
+    roundsCompleted: 5,
+    partialExercises: 0,
+    finalTimeSeconds: 902,
+    intervalsCompleted: null,
+    totalReps: 100,
+    elapsedSeconds: 902,
+  };
+
+  it('For Time: tempo final contra o da última vez', () => {
+    expect(
+      circuitLiveComparison(
+        'FOR_TIME',
+        { roundsCompleted: 5, partialExercises: 0, finalTimeSeconds: 876 },
+        previous,
+      ),
+    ).toEqual({ text: 'melhor que a última vez · 15:02', tone: 'ok' });
+    expect(
+      circuitLiveComparison(
+        'FOR_TIME',
+        { roundsCompleted: 5, partialExercises: 0, finalTimeSeconds: 950 },
+        previous,
+      ),
+    ).toEqual({ text: 'a última vez · 15:02', tone: 'neutral' });
+  });
+
+  it('AMRAP: rounds a mais; sem última vez, nada', () => {
+    expect(
+      circuitLiveComparison(
+        'AMRAP',
+        { roundsCompleted: 6, partialExercises: 1, finalTimeSeconds: null },
+        { ...previous, finalTimeSeconds: null },
+      ),
+    ).toEqual({ text: '+1 round vs. a última vez', tone: 'ok' });
+    expect(
+      circuitLiveComparison(
+        'AMRAP',
+        { roundsCompleted: 6, partialExercises: 1, finalTimeSeconds: null },
+        null,
+      ),
+    ).toBeNull();
   });
 });

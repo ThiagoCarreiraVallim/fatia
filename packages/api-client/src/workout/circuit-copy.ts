@@ -1,6 +1,6 @@
 import type { CircuitSnapshot } from '../active-workout-bar';
 import { formatDecimal } from '../format';
-import type { CircuitInput, CircuitSummary, WorkoutPlan } from '../workout';
+import type { CircuitInput, CircuitPrevious, CircuitSummary, WorkoutPlan } from '../workout';
 import type {
   CircuitDefinition,
   CircuitExerciseTotal,
@@ -339,6 +339,47 @@ export function circuitComparisonLabel(
   if (cmp.verdict === 'better') return { text: 'melhor que a última vez', tone: 'ok' };
   if (cmp.verdict === 'same') return { text: 'igual à última vez', tone: 'neutral' };
   return { text: 'abaixo da última vez', tone: 'neutral' };
+}
+
+/**
+ * O selo do fim na tela do relógio, antes de salvar (Al-T4e): For Time compara
+ * o tempo final, AMRAP os rounds. Os outros formatos não têm selo ali.
+ */
+export function circuitLiveComparison(
+  format: CircuitFormat,
+  r: { roundsCompleted: number; partialExercises: number; finalTimeSeconds: number | null },
+  previous: CircuitPrevious | null | undefined,
+): { text: string; tone: 'ok' | 'neutral' } | null {
+  if (!previous) return null;
+  if (format === 'FOR_TIME') {
+    if (r.finalTimeSeconds === null || previous.finalTimeSeconds === null) return null;
+    const d = r.finalTimeSeconds - previous.finalTimeSeconds;
+    return circuitComparisonLabel({
+      format,
+      comparison: {
+        verdict: d < 0 ? 'better' : d === 0 ? 'same' : 'worse',
+        roundsDelta: 0,
+        finalTimeDeltaSeconds: d,
+        intervalsDelta: null,
+        repsDelta: 0,
+        previousFinalTimeSeconds: previous.finalTimeSeconds,
+      },
+    });
+  }
+  if (format !== 'AMRAP') return null;
+  const roundsDelta = r.roundsCompleted - previous.roundsCompleted;
+  if (!roundsDelta) return null;
+  return circuitComparisonLabel({
+    format,
+    comparison: {
+      verdict: roundsDelta > 0 ? 'better' : 'worse',
+      roundsDelta,
+      finalTimeDeltaSeconds: null,
+      intervalsDelta: null,
+      repsDelta: 0,
+      previousFinalTimeSeconds: null,
+    },
+  });
 }
 
 /** "round 5 · 2:07*": as linhas do "Tempo de cada round" (Al-T11c), com o parcial marcado. */

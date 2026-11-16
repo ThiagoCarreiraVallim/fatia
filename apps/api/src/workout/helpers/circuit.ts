@@ -155,6 +155,23 @@ export const circuitResultSchema = z.object({
 export type CircuitResultV1 = z.infer<typeof circuitResultSchema>;
 
 /** `WorkoutSession.circuit`, versão 1. */
+/**
+ * A última vez do mesmo circuito, congelada no começo da sessão: a tela do
+ * relógio compara no fim (Al-T4e) antes de salvar.
+ */
+export const circuitPreviousSchema = z.object({
+  sessionId: z.string(),
+  startedAt: z.string(),
+  roundsCompleted: z.number().int().min(0),
+  partialExercises: z.number().int().min(0),
+  finalTimeSeconds: z.number().int().min(0).nullable(),
+  intervalsCompleted: z.number().int().min(0).nullable(),
+  totalReps: z.number().int().min(0),
+  elapsedSeconds: z.number().int().min(0),
+});
+
+export type CircuitPreviousV1 = z.infer<typeof circuitPreviousSchema>;
+
 export const circuitJsonSchema = z.object({
   version: z.literal(1),
   definition: circuitDefinitionSchema,
@@ -162,6 +179,8 @@ export const circuitJsonSchema = z.object({
   startedAt: z.string(),
   events: z.array(circuitEventSchema).max(MAX_CIRCUIT_EVENTS),
   result: circuitResultSchema.nullable(),
+  /** Opcional: as sessões gravadas antes deste campo não o têm. */
+  previous: circuitPreviousSchema.nullable().optional(),
 });
 
 export type CircuitJsonV1 = z.infer<typeof circuitJsonSchema>;
@@ -345,8 +364,32 @@ export function compareCircuitResults(
 }
 
 /** O JSON da sessão que começa: o retrato, sem toques e sem resultado. */
-export function newCircuitJson(definition: CircuitDefinitionV1, startedAt: Date): CircuitJsonV1 {
-  return { version: 1, definition, startedAt: startedAt.toISOString(), events: [], result: null };
+export function newCircuitJson(
+  definition: CircuitDefinitionV1,
+  startedAt: Date,
+  previous: { sessionId: string; startedAt: Date; json: CircuitJsonV1 } | null = null,
+): CircuitJsonV1 {
+  const r = previous?.json.result;
+  return {
+    version: 1,
+    definition,
+    startedAt: startedAt.toISOString(),
+    events: [],
+    result: null,
+    previous:
+      previous && r
+        ? {
+            sessionId: previous.sessionId,
+            startedAt: previous.startedAt.toISOString(),
+            roundsCompleted: r.roundsCompleted,
+            partialExercises: r.partialExercises,
+            finalTimeSeconds: r.finalTimeSeconds,
+            intervalsCompleted: r.intervalsCompleted,
+            totalReps: r.totalReps,
+            elapsedSeconds: r.elapsedSeconds,
+          }
+        : null,
+  };
 }
 
 /** Quantos minutos (EMOM) ou intervalos (Tabata) o circuito tem. */

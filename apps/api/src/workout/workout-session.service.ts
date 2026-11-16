@@ -21,6 +21,7 @@ import {
   circuitSummaryView,
   newCircuitJson,
   parseCircuitJson,
+  type CircuitJsonV1,
   type CircuitSummaryView,
 } from './helpers/circuit';
 
@@ -160,7 +161,8 @@ export class WorkoutSessionService {
         if (plan.exercises.length === 0) {
           throw new BadRequestException('Adicione exercícios ao circuito antes de começar.');
         }
-        circuit = newCircuitJson(circuitDefinitionFromPlan(plan), startedAt);
+        const previous = await this.lastCircuitResult(userId, plan.id, startedAt);
+        circuit = newCircuitJson(circuitDefinitionFromPlan(plan), startedAt, previous);
       }
     }
     try {
@@ -471,30 +473,37 @@ export class WorkoutSessionService {
   ): Promise<CircuitSummaryView | null> {
     const json = parseCircuitJson(session.circuit);
     if (!json?.result) return null;
-    const earlier = session.planId
-      ? await this.prisma.workoutSession.findMany({
-          where: {
-            userId,
-            planId: session.planId,
-            id: { not: session.id },
-            completedAt: { not: null },
-            startedAt: { lt: session.startedAt },
-            circuit: { not: Prisma.AnyNull },
-          },
-          orderBy: { startedAt: 'desc' },
-          take: 5,
-          select: { id: true, startedAt: true, circuit: true },
-        })
-      : [];
-    const previous = earlier
-      .map((e) => ({ sessionId: e.id, startedAt: e.startedAt, json: parseCircuitJson(e.circuit) }))
-      .find((e) => e.json?.result);
-    return circuitSummaryView(
-      json,
-      previous?.json
-        ? { sessionId: previous.sessionId, startedAt: previous.startedAt, json: previous.json }
-        : null,
-    );
+    const previous = session.planId
+      ? await this.lastCircuitResult(userId, session.planId, session.startedAt, session.id)
+      : null;
+    return circuitSummaryView(json, previous);
+  }
+
+  /** A última sessão terminada do circuito, com resultado, antes de `before`. */
+  private async lastCircuitResult(
+    userId: string,
+    planId: string,
+    before: Date,
+    excludeId?: string,
+  ): Promise<{ sessionId: string; startedAt: Date; json: CircuitJsonV1 } | null> {
+    const earlier = await this.prisma.workoutSession.findMany({
+      where: {
+        userId,
+        planId,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        completedAt: { not: null },
+        startedAt: { lt: before },
+        circuit: { not: Prisma.AnyNull },
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 5,
+      select: { id: true, startedAt: true, circuit: true },
+    });
+    for (const e of earlier) {
+      const json = parseCircuitJson(e.circuit);
+      if (json?.result) return { sessionId: e.id, startedAt: e.startedAt, json };
+    }
+    return null;
   }
 
   private shapeSession(session: SessionWithRelations) {
