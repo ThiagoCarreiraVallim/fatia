@@ -25,13 +25,20 @@ Não fazer push nem PR.
 
 ### api-client
 
-- [ ] tipos e chamadas; textos do histórico e do detalhe; rotas novas no mapa
+- [x] tipos e chamadas; textos do histórico e do detalhe (`workout/history-copy.ts`); rotas novas no mapa
 
-### Web / App
+### Web (commits f15b6e2b, 09a64f67)
 
-- [ ] `/workout/free` (Al-T17b), Livre e Só cardio levam a ela
-- [ ] `/workout/history` (Al-T10)
-- [ ] `/workout/history/[id]` (Al-T11, Al-T11b; Al-T11c só ponto de extensão)
+- [x] `/workout/free` (Al-T17b), Livre e Só cardio levam a ela (`?add=cardio`)
+- [x] `/workout/history` (Al-T10)
+- [x] `/workout/history/[id]` (Al-T11, Al-T11b; Al-T11c só ponto de extensão)
+- [x] testes (free 5, history 5, detalhe 7); suíte web 911 verde
+
+### App
+
+- [ ] `app/(app)/workout/free.tsx` (T17b); WayCards Livre / Só cardio
+- [ ] `history/index.tsx` (T10, era `history.tsx`) e `history/[id].tsx` (T11/T11b) com volta ao histórico
+- [ ] hook de iniciar com pendentes (repetir / livre) e testes
 
 ### Docs
 
@@ -55,6 +62,6 @@ Não fazer push nem PR.
 
 ## Próximo passo
 
-api-client: tipos (`SessionKind`, `WorkoutHistory`, `HistoryItem`, summary novo), `workoutApi.getHistory`,
-`saveSessionAsPlan`; textos do histórico; rotas `/workout/free` e `/workout/history/:id` no `navigation.ts`.
-Depois web e app.
+App (mobile): treino livre, histórico e detalhe, espelhando a web. Pendentes no cache
+`['workout','session',id,'pending']` (mesma chave da web). Depois REDESIGN_PROGRESS e checagem final
+(`pnpm lint`, `pnpm typecheck`, testes api/api-client/web/mobile).
