@@ -159,8 +159,16 @@ export interface WorkoutCheckinInput {
   note?: string;
 }
 
+/**
+ * O tipo da sessão no histórico (#381): plano, circuito ou livre. Derivado na
+ * API; não existe "cardio" (cardio é exercício). Circuito chega com a #380.
+ */
+export type SessionKind = 'plan' | 'circuit' | 'free';
+
 export interface WorkoutSession {
   id: string;
+  /** Vem na listagem (`GET /workout/sessions`, #381). */
+  kind?: SessionKind;
   userId: string;
   planId: string | null;
   startedAt: string;
@@ -221,6 +229,18 @@ export interface SummaryBestSet {
   distanceMeters: number | null;
   durationSeconds: number | null;
   avgHeartRate: number | null;
+  /** Cardio: soma das kcal digitadas (#381). */
+  kcalBurned?: number | null;
+}
+
+/** Uma série no detalhe do histórico (#381, Al-T11). */
+export interface SummarySetLine {
+  setNumber: number;
+  weightKg: number | null;
+  reps: number | null;
+  durationSeconds: number | null;
+  distanceMeters: number | null;
+  feeling: number | null;
 }
 
 export interface PostWorkoutQuestion {
@@ -233,6 +253,8 @@ export interface PostWorkoutQuestion {
 /** O "Treino feito!" (`GET /workout/sessions/:id/summary`, prancha Al-T5-Fim). */
 export interface WorkoutSessionSummary {
   sessionId: string;
+  /** #381. Opcional para respostas antigas em cache. */
+  kind?: SessionKind;
   planId: string | null;
   planName: string | null;
   startedAt: string;
@@ -258,6 +280,8 @@ export interface WorkoutSessionSummary {
     reps: number | null;
     distanceMeters: number | null;
     durationSeconds: number | null;
+    /** O melhor de antes, que o recorde bateu ("antes 4,6 km", #381). */
+    previous?: { weightKg: number | null; reps: number | null; distanceMeters: number | null };
   }[];
   muscles: {
     groups: { group: StrengthMuscleGroup; sets: number }[];
@@ -273,10 +297,41 @@ export interface WorkoutSessionSummary {
     best: SummaryBestSet | null;
     feeling: number | null;
     isRecord: boolean;
+    /** As séries, na ordem (#381). */
+    setList?: SummarySetLine[];
   }[];
   checkin: (Omit<WorkoutCheckin, 'sessionId'> & { sessionId?: string }) | null;
   /** Nulo: ninguém da equipe lê Treino, a folha de perguntas não aparece. */
   questions: { askedBy: string[]; items: PostWorkoutQuestion[] } | null;
+}
+
+/** Uma linha do histórico (`GET /workout/history`, #381, Al-T10). */
+export interface WorkoutHistoryItem {
+  id: string;
+  startedAt: string;
+  completedAt: string | null;
+  kind: SessionKind;
+  /** O nome do plano; nulo no treino livre. */
+  title: string | null;
+  feeling: number | null;
+  notes: string | null;
+  durationMinutes: number | null;
+  strengthExercises: number;
+  strengthSets: number;
+  volumeKg: number;
+  cardioExercises: number;
+  cardio: {
+    exerciseName: string;
+    distanceMeters: number | null;
+    durationSeconds: number | null;
+    avgHeartRate: number | null;
+  } | null;
+}
+
+export interface WorkoutHistory {
+  totals: { sessions: number; avgDurationMinutes: number | null; volumeKg: number };
+  items: WorkoutHistoryItem[];
+  nextCursor: string | null;
 }
 
 /** "Seus números" do Como fazer (`GET /workout/exercises/:id/stats`). */
@@ -351,14 +406,35 @@ export const workoutApi = {
     (await workoutApi.listSessions({ limit: 1 }))[0] ?? null,
   getActiveSession: () => apiFetch<WorkoutSession | null>('/api/workout/sessions/active'),
   getSession: (id: string) => apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`),
-  listSessions: (params?: { date?: string; cursor?: string; limit?: number }) => {
+  listSessions: (params?: {
+    date?: string;
+    cursor?: string;
+    limit?: number;
+    kind?: SessionKind;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.date) qs.set('date', params.date);
+    if (params?.kind) qs.set('kind', params.kind);
     if (params?.cursor) qs.set('cursor', params.cursor);
     if (params?.limit) qs.set('limit', String(params.limit));
     const q = qs.toString();
     return apiFetch<WorkoutSession[]>(`/api/workout/sessions${q ? `?${q}` : ''}`);
   },
+  /** O histórico (#381): totais e linhas das sessões concluídas, com filtro por tipo. */
+  getHistory: (params?: { kind?: SessionKind; cursor?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.kind) qs.set('kind', params.kind);
+    if (params?.cursor) qs.set('cursor', params.cursor);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return apiFetch<WorkoutHistory>(`/api/workout/history${q ? `?${q}` : ''}`);
+  },
+  /** "Salvar como plano" (#381): plano novo com as metas observadas na sessão. */
+  saveSessionAsPlan: (id: string, body: { name?: string } = {}) =>
+    apiFetch<WorkoutPlan>(`/api/workout/sessions/${id}/plan`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   startSession: (body: { planId?: string; startedAt?: string; notes?: string }) =>
     apiFetch<WorkoutSession>('/api/workout/sessions', {
       method: 'POST',

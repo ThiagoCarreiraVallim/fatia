@@ -230,10 +230,9 @@ export function formatBestSet(
 export function formatTrainingVolume(kg: number, unit: LoadUnit = 'KG'): string {
   const value = kgToLoad(kg, unit);
   const label = loadUnitLabel(unit);
+  // "62 t", não "62,0 t": o canvas não mostra ",0" (Al-T10).
   if (value >= 1000)
-    return unit === 'LB'
-      ? `${formatDecimal(value / 1000, 1)} mil lb`
-      : `${formatDecimal(value / 1000, 1)} t`;
+    return unit === 'LB' ? `${trimDecimal(value / 1000)} mil lb` : `${trimDecimal(value / 1000)} t`;
   return `${formatDecimal(value, 0)} ${label}`;
 }
 
