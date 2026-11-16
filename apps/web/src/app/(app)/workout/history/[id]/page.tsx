@@ -31,7 +31,8 @@ import { cn } from '@/lib/utils';
 
 const HERO_TONE = {
   strength: 'bg-primary text-primary-foreground',
-  cardio: 'bg-danger text-[#2a0710]',
+  // `text-background`: escuro no rosa do tema escuro, claro no vermelho do claro.
+  cardio: 'bg-danger text-background',
 } as const;
 
 /**
@@ -309,7 +310,7 @@ function CardioBody({ summary }: { summary: WorkoutSessionSummary }) {
       </dl>
 
       {recordLine && (
-        <p className="flex items-center gap-3 rounded-[18px] bg-steps px-4 py-3 text-[#1f1300]">
+        <p className="flex items-center gap-3 rounded-[18px] bg-steps px-4 py-3 text-background">
           <Trophy size={16} aria-hidden />
           <b className="flex-1 text-sm">{recordLine.title}</b>
           {recordLine.before && <span className="font-bold tabular-nums">{recordLine.before}</span>}

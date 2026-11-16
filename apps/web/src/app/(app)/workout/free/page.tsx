@@ -4,7 +4,13 @@ import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Dumbbell, Play, Search, Star, X } from 'lucide-react';
-import { freeStartLabel, workoutApi, type Exercise } from '@fatia/api-client';
+import {
+  addToFreeWorkout,
+  freeStartLabel,
+  freeSuggestions,
+  workoutApi,
+  type Exercise,
+} from '@fatia/api-client';
 import { TopBarActions } from '@/components/layout/app-top-bar';
 import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
@@ -39,13 +45,13 @@ function FreeWorkout() {
     queryFn: () => workoutApi.searchExercises(undefined, undefined, { limit: SUGGESTIONS + 4 }),
   });
   const chosen = new Set(picked.map((e) => e.id));
-  const suggested = (suggestions.data ?? []).filter((e) => !chosen.has(e.id)).slice(0, SUGGESTIONS);
+  const suggested = freeSuggestions(suggestions.data, picked, SUGGESTIONS);
 
   function add(exercises: Exercise[]) {
-    const fresh = exercises.filter((e) => !chosen.has(e.id));
-    if (fresh.length === 0) return;
-    setPicked((prev) => [...prev, ...fresh]);
-    setToast(fresh.length === 1 ? `${fresh[0]!.name} adicionado` : `${fresh.length} adicionados`);
+    const next = addToFreeWorkout(picked, exercises);
+    if (!next.message) return;
+    setPicked(next.picked);
+    setToast(next.message);
   }
 
   return (
