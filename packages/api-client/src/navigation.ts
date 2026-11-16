@@ -276,6 +276,11 @@ const SESSION_ROUTE = '/workout/session/:id';
 /** O relógio do circuito (Al-T4, T4b, T4c, T4d): o próprio cabeçalho, sem barra de topo. */
 const CIRCUIT_RUN_ROUTE = '/workout/circuit/:id';
 
+/** O relógio do circuito de uma sessão (web e app). */
+export function circuitRunPath(sessionId: string): string {
+  return CIRCUIT_RUN_ROUTE.replace(':id', encodeURIComponent(sessionId));
+}
+
 /**
  * A barra aparece nesta tela? A sessão some sempre (aberta ou concluída); o
  * "Treino atual" dela só enquanto ela está em andamento. `activeSessionId`

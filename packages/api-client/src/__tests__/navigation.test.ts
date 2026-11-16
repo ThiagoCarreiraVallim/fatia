@@ -10,6 +10,7 @@ import {
   dockedActionReserve,
   routeInfo,
   hasTopBar,
+  circuitRunPath,
 } from '../navigation';
 
 const hrefs = (s: ReturnType<typeof menuSections>) => s.flatMap((x) => x.items.map((i) => i.href));
@@ -357,5 +358,13 @@ describe('routeInfo.dismiss: tela que fecha no X em vez de voltar', () => {
     expect(routeInfo('/workout/plans/p1').dismiss).toBeUndefined();
     expect(routeInfo('/workout/plans').dismiss).toBeUndefined();
     expect(routeInfo('/rota/que/nao/existe').dismiss).toBeUndefined();
+  });
+});
+
+describe('circuitRunPath (#380)', () => {
+  it('leva ao relógio do circuito da sessão', () => {
+    expect(circuitRunPath('s1')).toBe('/workout/circuit/s1');
+    expect(navBarMode(circuitRunPath('a b'))).toBe('hidden');
+    expect(hasTopBar(circuitRunPath('s1'))).toBe(false);
   });
 });

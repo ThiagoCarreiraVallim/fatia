@@ -1,12 +1,21 @@
 import type { CircuitSnapshot } from '../active-workout-bar';
 import { formatDecimal } from '../format';
-import type { CircuitInput, CircuitPrevious, CircuitSummary, WorkoutPlan } from '../workout';
 import type {
-  CircuitDefinition,
-  CircuitExerciseTotal,
-  CircuitFormat,
-  CircuitItem,
-  CircuitState,
+  CircuitFinishInput,
+  CircuitInput,
+  CircuitPrevious,
+  CircuitSummary,
+  WorkoutPlan,
+} from '../workout';
+import {
+  circuitResult,
+  circuitState,
+  type CircuitDefinition,
+  type CircuitExerciseTotal,
+  type CircuitFormat,
+  type CircuitItem,
+  type CircuitRun,
+  type CircuitState,
 } from './circuit-timer';
 
 /**
@@ -410,4 +419,124 @@ export function circuitExerciseTotal(e: {
   seconds: number;
 }) {
   return e.unit === 'SECONDS' ? formatShortClock(e.seconds) : `${e.reps} reps`;
+}
+
+/**
+ * O corpo do "Encerrar" e do "Salvar treino": os toques (com um "end" agora,
+ * quando o relógio ainda corria) e o resultado só com os campos que a API
+ * aceita; os totais por exercício o servidor recalcula.
+ */
+export function circuitFinishBody(
+  def: CircuitDefinition,
+  run: CircuitRun,
+  now: number,
+): CircuitFinishInput {
+  const events =
+    circuitState(def, run, now).status === 'done'
+      ? run.events
+      : [...run.events, { type: 'end' as const, at: now }];
+  const r = circuitResult(def, { ...run, events }, now);
+  return {
+    events,
+    result: {
+      roundsCompleted: r.roundsCompleted,
+      partialExercises: r.partialExercises,
+      roundSeconds: r.roundSeconds,
+      partialRoundSeconds: r.partialRoundSeconds,
+      elapsedSeconds: r.elapsedSeconds,
+      finalTimeSeconds: r.finalTimeSeconds,
+      intervalsCompleted: r.intervalsCompleted,
+      completed: r.completed,
+    },
+  };
+}
+
+export type CircuitDot = 'done' | 'work' | 'rest' | 'todo';
+
+export interface CircuitIntervalsView {
+  /** "TRABALHE", "DESCANSE", "MINUTO 4 DE 10" ou "PAUSADO". */
+  phaseLabel: string;
+  tone: 'work' | 'rest';
+  /** O número gigante: o que resta da fase. */
+  seconds: number;
+  now: string;
+  next: string;
+  dots: CircuitDot[];
+  foot: string;
+}
+
+/** A tela de intervalos, a mesma para Tabata (Al-T4b) e EMOM (Al-T4d). */
+export function circuitIntervalsView(
+  def: CircuitDefinition,
+  s: CircuitState,
+): CircuitIntervalsView {
+  const phase = s.phase;
+  const emom = def.format === 'EMOM';
+  const count = phase?.count ?? s.intervalsCompleted ?? 0;
+  const index = phase?.index ?? count;
+  const tone = phase?.kind === 'rest' ? 'rest' : 'work';
+  const exercise = (i: number | null | undefined) =>
+    i === null || i === undefined ? undefined : def.exercises[i];
+  const current = exercise(phase?.exerciseIndex);
+
+  let phaseLabel = emom
+    ? `MINUTO ${index + 1} DE ${count}`
+    : tone === 'work'
+      ? 'TRABALHE'
+      : 'DESCANSE';
+  if (s.status === 'paused') phaseLabel = 'PAUSADO';
+
+  let now = '';
+  if (phase) {
+    if (tone === 'rest') now = 'Respira';
+    else if (current) now = emom ? circuitNowLabel(current) : current.name;
+  }
+
+  let next = 'fim';
+  if (phase?.next) {
+    const nextExercise = exercise(phase.next.exerciseIndex);
+    if (phase.next.kind === 'rest') next = 'descanso';
+    else if (nextExercise)
+      next = emom ? `minuto ${index + 2} · ${nextExercise.name}` : nextExercise.name;
+  }
+
+  const dots = Array.from({ length: count }, (_, k): CircuitDot => {
+    if (k < index) return 'done';
+    if (k === index && phase) return tone;
+    return s.status === 'done' ? 'done' : 'todo';
+  });
+
+  const foot = emom
+    ? 'Faça as repetições no começo do minuto e descanse o que sobrar'
+    : `intervalo ${Math.min(count, index + 1)} de ${count} · ${def.config.workSeconds ?? 0} s trabalho / ${def.config.restSeconds ?? 0} s descanso`;
+
+  return { phaseLabel, tone, seconds: phase?.remainingSeconds ?? 0, now, next, dots, foot };
+}
+
+export interface CircuitRoundsView {
+  /** "Burpee × 10", ou "Descanso" entre rounds do For Time. */
+  now: string;
+  items: Array<{ name: string; value: string; status: 'done' | 'current' | 'todo' }>;
+  /** Descanso entre rounds do For Time: o que resta e o que vem. */
+  resting: { seconds: number; next: string } | null;
+}
+
+/** A lista do AMRAP (Al-T4) e do For Time (Al-T4c): feitos, o da vez e os que faltam. */
+export function circuitRoundsView(def: CircuitDefinition, s: CircuitState): CircuitRoundsView {
+  const items = def.exercises.map((e, i) => ({
+    name: e.name,
+    value: circuitItemValue(e),
+    status: (i < s.exerciseIndex ? 'done' : i === s.exerciseIndex ? 'current' : 'todo') as
+      'done' | 'current' | 'todo',
+  }));
+  const current = def.exercises[s.exerciseIndex];
+  const first = def.exercises[0];
+  if (s.rest) {
+    return {
+      now: 'Descanso',
+      items,
+      resting: { seconds: s.rest.remainingSeconds, next: first ? circuitNowLabel(first) : '' },
+    };
+  }
+  return { now: current ? circuitNowLabel(current) : '', items, resting: null };
 }

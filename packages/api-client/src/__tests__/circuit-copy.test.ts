@@ -8,7 +8,10 @@ import {
   circuitDraftErrors,
   circuitDraftSummary,
   circuitDraftToInput,
+  circuitFinishBody,
   circuitHeader,
+  circuitIntervalsView,
+  circuitRoundsView,
   circuitLiveComparison,
   circuitItemValue,
   circuitNowLabel,
@@ -344,5 +347,126 @@ describe('a comparação na tela do relógio, antes de salvar (Al-T4e)', () => {
         null,
       ),
     ).toBeNull();
+  });
+});
+
+describe('o corpo do "Encerrar" (POST .../circuit/finish)', () => {
+  it('no meio, fecha com um toque "end" e manda só os campos que a API aceita', () => {
+    const run = { startedAt: 0, events: [{ type: 'mark' as const, at: 30_000 }] };
+    const body = circuitFinishBody(amrap, run, 100_000);
+    expect(body.events).toEqual([
+      { type: 'mark', at: 30_000 },
+      { type: 'end', at: 100_000 },
+    ]);
+    expect(Object.keys(body.result).sort()).toEqual(
+      [
+        'completed',
+        'elapsedSeconds',
+        'finalTimeSeconds',
+        'intervalsCompleted',
+        'partialExercises',
+        'partialRoundSeconds',
+        'roundSeconds',
+        'roundsCompleted',
+      ].sort(),
+    );
+    expect(body.result).toMatchObject({
+      partialExercises: 1,
+      elapsedSeconds: 100,
+      completed: false,
+    });
+  });
+
+  it('terminado pelo tempo, não acrescenta nada', () => {
+    const run = { startedAt: 0, events: [] };
+    const body = circuitFinishBody(amrap, run, 800_000);
+    expect(body.events).toEqual([]);
+    expect(body.result).toMatchObject({ elapsedSeconds: 720, completed: true });
+  });
+});
+
+describe('o que a tela do relógio mostra', () => {
+  const tabata: CircuitDefinition = {
+    format: 'TABATA',
+    name: 'Tabata de core',
+    config: { workSeconds: 20, restSeconds: 10, intervals: 4 },
+    exercises: [
+      { exerciseId: 1, name: 'Prancha', muscleGroup: 'core', unit: 'SECONDS', target: 30 },
+      { exerciseId: 2, name: 'Abdominal bicicleta', muscleGroup: 'core', unit: 'REPS', target: 10 },
+    ],
+  };
+
+  it('Tabata no trabalho e no descanso (Al-T4b)', () => {
+    const work = circuitIntervalsView(
+      tabata,
+      circuitState(tabata, { startedAt: 0, events: [] }, 6_000),
+    );
+    expect(work).toEqual({
+      phaseLabel: 'TRABALHE',
+      tone: 'work',
+      seconds: 14,
+      now: 'Prancha',
+      next: 'descanso',
+      dots: ['work', 'todo', 'todo', 'todo'],
+      foot: 'intervalo 1 de 4 · 20 s trabalho / 10 s descanso',
+    });
+    const rest = circuitIntervalsView(
+      tabata,
+      circuitState(tabata, { startedAt: 0, events: [] }, 52_000),
+    );
+    expect(rest).toMatchObject({
+      phaseLabel: 'DESCANSE',
+      tone: 'rest',
+      seconds: 8,
+      now: 'Respira',
+      next: 'Prancha',
+      dots: ['done', 'rest', 'todo', 'todo'],
+    });
+  });
+
+  it('EMOM, com o minuto e o rodízio (Al-T4d)', () => {
+    const emom: CircuitDefinition = { ...tabata, format: 'EMOM', config: { durationSeconds: 600 } };
+    const v = circuitIntervalsView(emom, circuitState(emom, { startedAt: 0, events: [] }, 202_000));
+    expect(v).toMatchObject({
+      phaseLabel: 'MINUTO 4 DE 10',
+      tone: 'work',
+      seconds: 38,
+      now: 'Abdominal bicicleta × 10',
+      next: 'minuto 5 · Prancha',
+      foot: 'Faça as repetições no começo do minuto e descanse o que sobrar',
+    });
+    const paused = circuitIntervalsView(
+      emom,
+      circuitState(emom, { startedAt: 0, events: [{ type: 'pause', at: 1_000 }] }, 9_000),
+    );
+    expect(paused.phaseLabel).toBe('PAUSADO');
+  });
+
+  it('AMRAP e For Time: o da vez, os feitos e o descanso entre rounds (Al-T4, T4c)', () => {
+    const run = { startedAt: 0, events: [{ type: 'mark' as const, at: 10_000 }] };
+    expect(circuitRoundsView(amrap, circuitState(amrap, run, 20_000))).toEqual({
+      now: 'Prancha × 30 s',
+      items: [
+        { name: 'Burpee', value: '10', status: 'done' },
+        { name: 'Prancha', value: '30 s', status: 'current' },
+      ],
+      resting: null,
+    });
+    const forTime: CircuitDefinition = {
+      ...amrap,
+      format: 'FOR_TIME',
+      config: { rounds: 3, restBetweenRoundsSeconds: 60 },
+    };
+    const between = {
+      startedAt: 0,
+      events: [
+        { type: 'mark' as const, at: 10_000 },
+        { type: 'mark' as const, at: 20_000 },
+      ],
+    };
+    expect(circuitRoundsView(forTime, circuitState(forTime, between, 35_000))).toMatchObject({
+      now: 'Descanso',
+      resting: { seconds: 45, next: 'Burpee × 10' },
+    });
   });
 });
