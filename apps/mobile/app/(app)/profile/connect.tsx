@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, View } from 'react-native';
+import { AppState, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useQuery } from '@tanstack/react-query';
@@ -32,6 +32,9 @@ import { cn } from '@/components/ui/utils';
 import { copyText } from '@/components/profile/copy-text';
 import { useExportData } from '@/components/you/use-export-data';
 import { colors } from '@/theme/colors';
+
+/** Fonte de código do sistema: a prancha mostra o endereço em monoespaçada. */
+const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 /** O que fica no lugar do teste: a prancha troca um pelo outro (Al-V6b, tweak `stt`). */
 type Panel = 'test' | 'fail' | 'no-mcp';
@@ -101,20 +104,20 @@ export default function ConnectAiScreen() {
       <View className="gap-3.5 px-6 pb-8 pt-2">
         <View className="flex-row items-center gap-2">
           <Badge variant="done">grátis</Badge>
-          <Text className="flex-1 text-[13px] text-muted-foreground">
+          <Text className="flex-1 text-[12px] text-faint">
             Funciona no Claude, no ChatGPT e em outros apps com MCP
           </Text>
         </View>
 
         <Text
           accessibilityRole="header"
-          className="font-display-semibold text-[22px] text-foreground"
+          className="font-display text-h2 text-foreground"
         >
           Registre e consulte conversando com a sua IA
         </Text>
 
         <View className="gap-2">
-          <Text className="text-[13px] text-muted-foreground">Qual IA você usa?</Text>
+          <Text className="text-[12px] text-faint">Qual IA você usa?</Text>
           <Segmented
             label="Qual IA você usa?"
             options={AI_PROVIDER_OPTIONS}
@@ -133,8 +136,10 @@ export default function ConnectAiScreen() {
                 accessibilityState={{ expanded: open }}
                 onPress={() => setOpenStep(i)}
                 className={cn(
-                  'flex-row items-start gap-3 rounded-card bg-card p-3.5 active:opacity-80',
-                  open && 'border-[1.5px] border-primary/45',
+                  // A borda existe sempre (transparente quando fechado): abrir
+                  // o passo não empurra o conteúdo 1,5 px para dentro.
+                  'flex-row items-start gap-3 rounded-card border-[1.5px] border-transparent bg-card px-[18px] py-4 active:opacity-80',
+                  open && 'border-primary/45',
                 )}
               >
                 <View
@@ -155,7 +160,7 @@ export default function ConnectAiScreen() {
                 <View className="flex-1 gap-1.5 pt-1">
                   <Text className="font-sans-bold text-[15px] text-foreground">{step.title}</Text>
                   {open ? (
-                    <Text className="text-[14px] text-muted-foreground">{step.detail}</Text>
+                    <Text className="text-[13px] text-muted-foreground">{step.detail}</Text>
                   ) : null}
                 </View>
               </Pressable>
@@ -168,6 +173,7 @@ export default function ConnectAiScreen() {
             selectable
             numberOfLines={copy === 'failed' ? undefined : 1}
             className="flex-1 text-[13px] text-primary-text"
+            style={{ fontFamily: MONO }}
           >
             {serverUrl ?? '…'}
           </Text>
@@ -202,7 +208,7 @@ export default function ConnectAiScreen() {
           <View
             accessibilityLabel={connectedTitle(current, status.connection, status.recent)}
             className={cn(
-              'gap-2 rounded-card border p-4',
+              'gap-2.5 rounded-card border p-5',
               status.recent ? 'border-primary/35 bg-primary/10' : 'border-border bg-card',
             )}
           >
@@ -216,7 +222,7 @@ export default function ConnectAiScreen() {
                 {connectedTitle(current, status.connection, status.recent)}
               </Text>
             </View>
-            <Text className="text-[13px] text-muted-foreground">
+            <Text className="text-[12px] text-faint">
               {connectedFootnote(status.connection.lastUsedAt, new Date(), status.recent)}
             </Text>
           </View>
@@ -224,7 +230,7 @@ export default function ConnectAiScreen() {
 
         {panel === 'test' ? (
           <>
-            <View className="gap-1.5 rounded-card bg-surface-3 p-3.5">
+            <View className="gap-1.5 rounded-card bg-muted px-[18px] py-4">
               <Text className="font-sans-bold text-[15px] text-foreground">
                 Teste: “{VERIFY_PROMPT}”
               </Text>
@@ -234,7 +240,7 @@ export default function ConnectAiScreen() {
                   <Text className="text-[13px] text-foreground">{CONNECTED_EXAMPLE}</Text>
                 </Text>
               ) : (
-                <Text className="text-[13px] text-muted-foreground">{VERIFY_HINT}</Text>
+                <Text className="text-[12px] text-faint">{VERIFY_HINT}</Text>
               )}
             </View>
             <Pressable
@@ -243,13 +249,13 @@ export default function ConnectAiScreen() {
               hitSlop={10}
               className="self-start"
             >
-              <Text className="font-sans-semibold text-[14px] text-primary-text">
+              <Text className="font-sans-bold text-[14px] text-primary-text">
                 Não funcionou?
               </Text>
             </Pressable>
           </>
         ) : panel === 'fail' ? (
-          <View className="gap-2.5 rounded-card border border-warning/45 bg-card p-4">
+          <View className="gap-2.5 rounded-card border border-warning/45 bg-card p-5">
             <PanelHeader
               icon="alert"
               color={colors.warning}
@@ -259,8 +265,8 @@ export default function ConnectAiScreen() {
             <View className="gap-2">
               {failureChecks(current, serverUrl ?? '', email).map((check) => (
                 <View key={check} className="flex-row gap-2">
-                  <Text className="text-[14px] text-foreground">•</Text>
-                  <Text className="flex-1 text-[14px] text-foreground">{check}</Text>
+                  <Text className="text-[13px] text-foreground">•</Text>
+                  <Text className="flex-1 text-[13px] text-foreground">{check}</Text>
                 </View>
               ))}
             </View>
@@ -287,14 +293,14 @@ export default function ConnectAiScreen() {
             </Pressable>
           </View>
         ) : (
-          <View className="gap-2.5 rounded-card bg-card p-4">
+          <View className="gap-2.5 rounded-card bg-card p-5">
             <PanelHeader
               icon="info"
               color={colors.mutedForeground}
               title={NO_MCP_TITLE}
               onClose={setPanel}
             />
-            <Text className="text-[14px] text-muted-foreground">{NO_MCP_BODY}</Text>
+            <Text className="text-[13px] text-muted-foreground">{NO_MCP_BODY}</Text>
             <View className="flex-row gap-2">
               <Button variant="secondary" className="flex-1" onPress={ai.open}>
                 Usar a IA do Fatia
@@ -311,7 +317,7 @@ export default function ConnectAiScreen() {
           </View>
         )}
 
-        <Text className="text-[13px] text-muted-foreground">{CONNECT_PRIVACY_NOTE}</Text>
+        <Text className="text-[12px] text-faint">{CONNECT_PRIVACY_NOTE}</Text>
       </View>
     </Screen>
   );

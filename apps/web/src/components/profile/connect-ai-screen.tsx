@@ -98,17 +98,17 @@ export function ConnectAiScreen() {
     <div className="flex flex-col gap-3.5 px-6 pb-8 pt-4">
       <div className="flex items-center gap-2">
         <Badge variant="done">grátis</Badge>
-        <span className="text-[13px] text-muted-foreground">
+        <span className="text-[12px] text-faint">
           Funciona no Claude, no ChatGPT e em outros apps com MCP
         </span>
       </div>
 
-      <h1 className="font-display text-[22px] font-semibold leading-tight text-foreground">
+      <h1 className="font-display text-[22px] font-bold leading-[1.2] tracking-[-0.015em] text-foreground">
         Registre e consulte conversando com a sua IA
       </h1>
 
       <div className="flex flex-col gap-2">
-        <span className="text-[13px] text-muted-foreground" aria-hidden="true">
+        <span className="text-[12px] text-faint" aria-hidden="true">
           Qual IA você usa?
         </span>
         <Segmented
@@ -129,7 +129,7 @@ export function ConnectAiScreen() {
                 aria-expanded={open}
                 onClick={() => setOpenStep(i)}
                 className={cn(
-                  'flex w-full items-start gap-3 rounded-card bg-card p-3.5 text-left',
+                  'flex w-full items-start gap-3 rounded-card bg-card px-[18px] py-4 text-left',
                   open && 'shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.45)]',
                 )}
               >
@@ -145,7 +145,7 @@ export function ConnectAiScreen() {
                 <span className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
                   <b className="text-[15px] text-foreground">{step.title}</b>
                   {open && (
-                    <span className="text-[14px] leading-snug text-muted-foreground">
+                    <span className="text-[13px] leading-snug text-muted-foreground">
                       {step.detail}
                     </span>
                   )}
@@ -193,7 +193,7 @@ export function ConnectAiScreen() {
         <section
           aria-label={connectedTitle(current, status.connection, status.recent)}
           className={cn(
-            'flex flex-col gap-2 rounded-card p-4',
+            'flex flex-col gap-2.5 rounded-card p-5',
             status.recent
               ? 'bg-primary/10 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]'
               : 'bg-card shadow-[inset_0_0_0_1px_hsl(var(--border))]',
@@ -210,7 +210,7 @@ export function ConnectAiScreen() {
               {connectedTitle(current, status.connection, status.recent)}
             </b>
           </div>
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[12px] text-faint">
             {connectedFootnote(status.connection.lastUsedAt, new Date(), status.recent)}
           </p>
         </section>
@@ -218,20 +218,20 @@ export function ConnectAiScreen() {
 
       {panel === 'test' ? (
         <>
-          <div className="flex flex-col gap-1.5 rounded-card bg-surface-3 p-3.5">
+          <div className="flex flex-col gap-1.5 rounded-card bg-muted px-[18px] py-4">
             <b className="text-[15px] text-foreground">Teste: “{VERIFY_PROMPT}”</b>
             {status?.recent ? (
               <span className="text-[13px] text-muted-foreground">
                 Ele responde algo como: <span className="text-foreground">{CONNECTED_EXAMPLE}</span>
               </span>
             ) : (
-              <span className="text-[13px] text-muted-foreground">{VERIFY_HINT}</span>
+              <span className="text-[12px] text-faint">{VERIFY_HINT}</span>
             )}
           </div>
           <button
             type="button"
             onClick={() => setPanel('fail')}
-            className="self-start text-[14px] font-semibold text-primary underline-offset-4 hover:underline"
+            className="self-start text-[14px] font-bold text-primary underline-offset-4 hover:underline"
           >
             Não funcionou?
           </button>
@@ -239,18 +239,18 @@ export function ConnectAiScreen() {
       ) : panel === 'fail' ? (
         <section
           aria-label="Não funcionou"
-          className="flex flex-col gap-2.5 rounded-card bg-card p-4 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.45)]"
+          className="flex flex-col gap-2.5 rounded-card bg-card p-5 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.45)]"
         >
           <PanelHeader icon="alert" tone="text-warning" title="Não funcionou" onClose={setPanel} />
           <ul className="flex flex-col gap-2">
             {failureChecks(current, serverUrl ?? '', email).map((check) => (
-              <li key={check} className="flex gap-2 text-[14px] text-foreground">
+              <li key={check} className="flex gap-2 text-[13px] text-foreground">
                 <span aria-hidden="true">•</span>
                 <span className="min-w-0 break-words">{check}</span>
               </li>
             ))}
           </ul>
-          <Button asChild variant="secondary" size="lg" full>
+          <Button asChild variant="secondary" size="lg" full className="bg-muted hover:bg-surface-3">
             <Link href={`/you/help?tutorial=${CONNECT_AI_TUTORIAL_ID}`}>Ver o tutorial</Link>
           </Button>
           <button
@@ -264,7 +264,7 @@ export function ConnectAiScreen() {
       ) : (
         <section
           aria-label={NO_MCP_TITLE}
-          className="flex flex-col gap-2.5 rounded-card bg-card p-4"
+          className="flex flex-col gap-2.5 rounded-card bg-card p-5"
         >
           <PanelHeader
             icon="info"
@@ -272,13 +272,13 @@ export function ConnectAiScreen() {
             title={NO_MCP_TITLE}
             onClose={setPanel}
           />
-          <p className="text-[14px] text-muted-foreground">{NO_MCP_BODY}</p>
+          <p className="text-[13px] text-muted-foreground">{NO_MCP_BODY}</p>
           <div className="flex gap-2">
             <Button
               type="button"
               variant="secondary"
               size="lg"
-              className="flex-1"
+              className="flex-1 bg-muted hover:bg-surface-3"
               onClick={ai.open}
             >
               Usar a IA do Fatia
@@ -297,7 +297,7 @@ export function ConnectAiScreen() {
         </section>
       )}
 
-      <p className="text-[13px] text-muted-foreground">{CONNECT_PRIVACY_NOTE}</p>
+      <p className="text-[12px] text-faint">{CONNECT_PRIVACY_NOTE}</p>
     </div>
   );
 }
