@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Goal, GoalKind, GoalStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { WeightLogService } from '../progress/weight-log.service';
 import { StepLogService } from '../progress/step-log.service';
+import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { CreateGoalDto, ListGoalsDto, UpdateGoalDto } from './dto/goal.dto';
 
 export interface GoalWithProgress extends Goal {
@@ -19,6 +20,7 @@ export class GoalsService {
   ) {}
 
   async create(dto: CreateGoalDto, userId: string, timezone: string) {
+    const deadline = dto.deadline ? resolveDeadline(dto.deadline, timezone, new Date()) : null;
     const startValue =
       dto.startValue ?? (await this.deriveCurrentValue(dto.kind, null, userId, timezone)) ?? 0;
     const goal = await this.prisma.goal.create({
@@ -30,7 +32,7 @@ export class GoalsService {
         startValue,
         targetValue: dto.targetValue,
         unit: dto.unit,
-        deadline: dto.deadline ? new Date(dto.deadline) : null,
+        deadline,
         lastReportedValue: dto.lastReportedValue ?? null,
       },
     });
@@ -61,17 +63,17 @@ export class GoalsService {
 
   async update(id: string, dto: UpdateGoalDto, userId: string, timezone: string) {
     const current = await this.assertOwned(id, userId);
+    const now = new Date();
+    const newDeadline = dto.deadline ? resolveDeadline(dto.deadline, timezone, now) : null;
     const data: Prisma.GoalUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.targetValue !== undefined) data.targetValue = dto.targetValue;
     if (dto.unit !== undefined) data.unit = dto.unit;
-    if (dto.deadline !== undefined) data.deadline = dto.deadline ? new Date(dto.deadline) : null;
+    if (dto.deadline !== undefined) data.deadline = newDeadline;
     if (dto.lastReportedValue !== undefined) data.lastReportedValue = dto.lastReportedValue;
     // "Novo prazo" (Al-G9): um prazo no futuro numa meta vencida a traz de volta às ativas. A
     // vencida pode estar gravada (`expired`, pelo MCP) ou só lida assim (ativa com prazo passado).
-    const now = new Date();
-    const newDeadline = dto.deadline ? new Date(dto.deadline) : null;
     if (
       dto.status === undefined &&
       newDeadline &&
@@ -188,4 +190,18 @@ export function computeProgress(
   const pct = ((currentValue - startValue) / range) * 100;
   if (!Number.isFinite(pct)) return null;
   return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+/**
+ * O prazo como a pessoa quis dizer. Só a data ("2026-12-31") vale até o fim daquele dia no fuso
+ * dela — `new Date('2026-12-31')` é meia-noite UTC, e a meta venceria às 21h da véspera no Brasil.
+ * Prazo no passado é recusado: a meta nasceria (ou voltaria) vencida. Vale para a API e o MCP.
+ */
+export function resolveDeadline(raw: string, timezone: string, now: Date): Date {
+  const deadline = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(dayBoundsInTz(raw, timezone).end.getTime() - 1)
+    : new Date(raw);
+  if (Number.isNaN(deadline.getTime())) throw new BadRequestException('Prazo inválido.');
+  if (deadline < now) throw new BadRequestException('O prazo não pode estar no passado.');
+  return deadline;
 }

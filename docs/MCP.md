@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 152 tools): **136,9 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 152 tools): **137,1 k caracteres**
 hoje, dos quais **7.812 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (114,1 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (114,2 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -2394,10 +2394,14 @@ Metas dinâmicas definidas pelo usuário, distintas de `get_nutrition_goals`/`se
   startValue?: number;          // derivado do estado atual quando o kind tem fonte
   targetValue: number;
   unit: string;                 // "kg", "%", "treinos/semana", "passos"
-  deadline?: string;            // ISO datetime
+  deadline?: string;            // ISO datetime, ou YYYY-MM-DD (fim do dia no fuso do usuário)
   lastReportedValue?: number;   // para kind=body_fat ou custom
 }
 ```
+
+**Prazo (#382):** só a data vale até o fim daquele dia no fuso do usuário (e não até a
+meia-noite UTC, que no Brasil é 21h da véspera). Prazo no passado é recusado com 400
+("O prazo não pode estar no passado."), aqui e no `update_goal`.
 
 ### `get_goal`
 
@@ -2417,7 +2421,8 @@ Use `lastReportedValue` para reportar progresso manual em metas `body_fat` ou `c
 
 **Novo prazo (#382):** a meta ativa cujo prazo passou é lida como `expired` (derivado na leitura,
 nada é gravado). Mandar um `deadline` no futuro numa meta vencida a volta para `active`; um
-`status` explícito vence essa regra.
+`status` explícito vence essa regra. O `deadline` segue as regras do `create_goal`: só a data
+vale até o fim do dia, e no passado é recusado.
 
 **Input:**
 

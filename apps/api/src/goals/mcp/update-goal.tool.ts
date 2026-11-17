@@ -26,7 +26,12 @@ export class UpdateGoalTool implements McpToolDef {
     description: z.string().max(500).optional().describe('Novo detalhamento da meta'),
     targetValue: z.number().optional().describe('Novo valor alvo, na unidade da meta'),
     unit: z.string().min(1).max(30).optional().describe('Nova unidade (ex.: "kg", "%", "passos")'),
-    deadline: z.string().optional().describe('ISO datetime; vazio para remover'),
+    deadline: z
+      .string()
+      .optional()
+      .describe(
+        'ISO datetime, ou só a data (YYYY-MM-DD = fim daquele dia no fuso do usuário); vazio para remover. No passado é recusado',
+      ),
     lastReportedValue: z
       .number()
       .optional()

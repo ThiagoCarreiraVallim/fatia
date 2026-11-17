@@ -58,7 +58,7 @@ import {
  * braço A.
  */
 
-const SHA_ENTIDADE = '402a9b7b996ed48476ff7b707d9d83ac81856ea9b6dd692683cb250abe71d442';
+const SHA_ENTIDADE = 'bc3ac7ec49a52c4ad68c99998a05c3bce5b9e18b0d011597edf9ab7a9e94971b';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

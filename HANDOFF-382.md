@@ -58,3 +58,17 @@ Pranchas baixadas do artifact para o scratchpad (fora do git):
 
 Issue implementada. Falta só a passada visual do dono (capturas contra as pranchas) e o PR
 pelo coordenador. Antes do merge, apagar este HANDOFF.
+
+## Correções do review adversarial (em andamento)
+
+- [x] 1 `mark_goal_done` acha meta vencida (178ff053)
+- [x] 2 conquistas: POST refresh ao abrir + nunca "faltam 0" (5429af97)
+- [x] 3 evolução do mês só com sessão concluída (8e306fbd)
+- [x] 4 ritmo somado só com tempo das séries com distância (5752b26d)
+- [x] 5 prazo: passado → 400; só data = fim do dia no fuso (service, REST e MCP)
+- [ ] 5/6 notas em REDESIGN_PROGRESS "Pendências da #382" (apagar só arquivada = regra de UI; água/passos retroativos)
+- [ ] 7 checagens finais e apagar este HANDOFF no último commit
+
+Ambiente: o worktree resolvia `@prisma/client` no checkout principal (que já tem o schema da #381,
+`WorkoutPlan.fromSessionId`). Copiei `node_modules/@prisma` para o worktree e rodei `prisma generate`
+em `packages/db` — o cliente agora fica em `node_modules/.prisma` do worktree.

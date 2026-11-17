@@ -30,7 +30,12 @@ export class CreateGoalTool implements McpToolDef {
     startValue: z.number().optional().describe('Valor inicial; derivado se omitido'),
     targetValue: z.number().describe('Valor alvo, na unidade informada em `unit`'),
     unit: z.string().min(1).max(30).describe('Ex.: "kg", "%", "treinos/semana", "passos"'),
-    deadline: z.string().optional().describe('ISO datetime'),
+    deadline: z
+      .string()
+      .optional()
+      .describe(
+        'ISO datetime, ou só a data (YYYY-MM-DD = fim daquele dia no fuso do usuário). No passado é recusado',
+      ),
     lastReportedValue: z
       .number()
       .optional()

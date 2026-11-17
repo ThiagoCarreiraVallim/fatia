@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { GoalKind, GoalStatus, type Goal } from '@prisma/client';
 import { GoalsService } from '../goals.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -45,6 +46,7 @@ describe('GoalsService', () => {
         update: jest.fn(({ where, data }: { where: { id: string }; data: Partial<Goal> }) =>
           Promise.resolve({ ...goals.find((g) => g.id === where.id)!, ...data }),
         ),
+        create: jest.fn(({ data }: { data: Partial<Goal> }) => Promise.resolve(meta(data))),
       },
       workoutSession: { count: jest.fn().mockResolvedValue(3) },
     };
@@ -120,12 +122,13 @@ describe('GoalsService', () => {
       expect(arquivada.status).toBe(GoalStatus.archived);
     });
 
-    it('um prazo novo que já passou não reativa', async () => {
+    it('um prazo novo que já passou é recusado (400), e nada é gravado', async () => {
       const { service, prisma } = build([meta({ status: GoalStatus.expired, deadline: ontem })]);
 
-      await service.update('g1', { deadline: '2026-11-01T23:59:59-03:00' }, userId, TZ);
-
-      expect(prisma.goal.update.mock.calls[0][0].data.status).toBeUndefined();
+      await expect(
+        service.update('g1', { deadline: '2026-11-01T23:59:59-03:00' }, userId, TZ),
+      ).rejects.toThrow(new BadRequestException('O prazo não pode estar no passado.'));
+      expect(prisma.goal.update).not.toHaveBeenCalled();
     });
 
     it('arquivar e reabrir: voltar a ativa limpa a data de conclusão', async () => {
@@ -136,6 +139,62 @@ describe('GoalsService', () => {
       await service.update('g1', { status: GoalStatus.active }, userId, TZ);
 
       expect(prisma.goal.update.mock.calls[0][0].data.completedAt).toBeNull();
+    });
+  });
+
+  describe('prazo', () => {
+    it('criar com prazo no passado é recusado (400)', async () => {
+      const { service, prisma } = build([]);
+
+      await expect(
+        service.create(
+          {
+            kind: GoalKind.custom,
+            title: 'Ler',
+            targetValue: 4,
+            unit: 'livros',
+            deadline: '2026-11-10',
+          },
+          userId,
+          TZ,
+        ),
+      ).rejects.toThrow(new BadRequestException('O prazo não pode estar no passado.'));
+      expect(prisma.goal.create).not.toHaveBeenCalled();
+    });
+
+    it('só a data ("2026-12-31") vale até o fim daquele dia no fuso da pessoa', async () => {
+      const { service, prisma } = build([]);
+
+      await service.create(
+        {
+          kind: GoalKind.custom,
+          title: 'Ler',
+          targetValue: 4,
+          unit: 'livros',
+          deadline: '2026-12-31',
+        },
+        userId,
+        TZ,
+      );
+
+      const gravado = prisma.goal.create.mock.calls[0][0].data.deadline as Date;
+      expect(gravado.toISOString()).toBe('2027-01-01T02:59:59.999Z');
+    });
+
+    it('hoje, só a data, ainda vale: o dia não acabou', async () => {
+      const { service, prisma } = build([meta({ status: GoalStatus.expired, deadline: ontem })]);
+
+      await service.update('g1', { deadline: '2026-11-16' }, userId, TZ);
+
+      expect(prisma.goal.update.mock.calls[0][0].data.status).toBe(GoalStatus.active);
+    });
+
+    it('tirar o prazo continua valendo', async () => {
+      const { service, prisma } = build([meta({ deadline: ano })]);
+
+      await service.update('g1', { deadline: '' }, userId, TZ);
+
+      expect(prisma.goal.update.mock.calls[0][0].data.deadline).toBeNull();
     });
   });
 });
