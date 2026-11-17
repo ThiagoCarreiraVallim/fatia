@@ -105,6 +105,51 @@ describe('erroDoChat', () => {
 });
 
 describe('streamChat', () => {
+  const ocupada = () =>
+    new Response(
+      JSON.stringify({
+        code: 'CHAT_RUN_IN_PROGRESS',
+        message: 'Esta conversa ainda está respondendo.',
+      }),
+      { status: 409, headers: { 'content-type': 'application/json' } },
+    );
+
+  it('409 CHAT_RUN_IN_PROGRESS (a parada ainda fechando) tenta de novo com espera crescente', async () => {
+    vi.useFakeTimers();
+    try {
+      configure();
+      fetchMock
+        .mockResolvedValueOnce(ocupada())
+        .mockResolvedValueOnce(ocupada())
+        .mockResolvedValueOnce(sse(['event: done\ndata: {"status":"completed"}\n\n']));
+      const eventos = coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+      await vi.runAllTimersAsync();
+      expect(await eventos).toEqual([{ event: 'done', data: { status: 'completed' } }]);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('se a conversa segue ocupada, desiste com o erro nomeado em vez de tentar para sempre', async () => {
+    vi.useFakeTimers();
+    try {
+      configure();
+      fetchMock.mockImplementation(async () => ocupada());
+      const eventos = coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+      await vi.runAllTimersAsync();
+      expect(await eventos).toEqual([
+        { event: 'error', data: { code: 'CHAT_RUN_IN_PROGRESS' } },
+        { event: 'done', data: { status: 'error' } },
+      ]);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+      expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
+      expect(textoDeErroDoChat({ code: 'CHAT_RUN_IN_PROGRESS' })).toMatch(/ainda/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('não corta o quadro que chega partido entre dois chunks', async () => {
     configure();
     fetchMock.mockResolvedValue(

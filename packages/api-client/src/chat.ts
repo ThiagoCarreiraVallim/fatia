@@ -55,6 +55,7 @@ export type ChatErrorCode =
   | 'AGENT_STREAM_INTERRUPTED'
   | 'CHAT_INTERNAL_ERROR'
   | 'CHAT_RESUME_MISMATCH'
+  | 'CHAT_RUN_IN_PROGRESS'
   | 'CHAT_NOTHING_TO_RESUME'
   // Cliente: falhas de antes de qualquer resposta do servidor.
   | 'AI_NETWORK_ERROR'
@@ -220,6 +221,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
     'Esta conversa mudou desde que a pergunta apareceu. Recarregue para ver o que ela espera agora.',
   CHAT_NOTHING_TO_RESUME:
     'Esta conversa não está mais esperando resposta. Recarregue para ver como ela ficou.',
+  CHAT_RUN_IN_PROGRESS:
+    'Esta conversa ainda está terminando a resposta anterior. Espere um instante e envie de novo.',
   CHAT_INTERNAL_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
   AGENT_INTERNAL_ERROR: 'O assistente teve um problema nesta resposta. Tente enviar de novo.',
   AI_UNKNOWN_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
@@ -341,7 +344,14 @@ export interface StreamChatInit {
 const RECONEXOES = 3;
 const ESPERA_DA_RECONEXAO_MS = [500, 1500, 4000];
 
-type Abertura = { ok: true; res: Response } | { ok: false; frames: ChatStreamFrame[] };
+type Abertura = { ok: true; res: Response } | { ok: false; frames: ChatStreamFrame[]; busy?: true };
+
+/**
+ * As esperas antes de tentar de novo quando a conversa ainda está ocupada (409
+ * `CHAT_RUN_IN_PROGRESS`): a parada que a pessoa pediu ainda está fechando no servidor, ou a
+ * fila mandou a próxima um instante cedo demais. Depois da última, desiste com o erro nomeado.
+ */
+const ESPERAS_DA_CONVERSA_OCUPADA_MS = [500, 1000, 2000, 4000];
 
 async function abrirStream(
   path: string,
@@ -369,6 +379,9 @@ async function abrirStream(
   if (res.status === 204) return { ok: false, frames: [] };
   if (!res.ok || !res.body) {
     const error = await erroDeResposta(res);
+    if (error.code === 'CHAT_RUN_IN_PROGRESS') {
+      return { ok: false, busy: true, frames: [...comoQuadros(error)] };
+    }
     if (error.code === 'AI_UNAUTHORIZED') await transport.onUnauthorized?.({ path, body: null });
     return { ok: false, frames: [...comoQuadros(error)] };
   }
@@ -468,15 +481,23 @@ export async function* streamChat(
   body: ChatTurnRequest,
   init: StreamChatInit = {},
 ): AsyncGenerator<ChatStreamFrame> {
-  const aberto = await abrirStream(
-    '/api/chat',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    init.signal,
-  );
+  const abrir = () =>
+    abrirStream(
+      '/api/chat',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      init.signal,
+    );
+  let aberto = await abrir();
+  for (const espera of ESPERAS_DA_CONVERSA_OCUPADA_MS) {
+    if (aberto === null || aberto.ok || !aberto.busy) break;
+    await esperar(espera, init.signal);
+    if (init.signal?.aborted) return;
+    aberto = await abrir();
+  }
   if (aberto === null) return;
   if (!aberto.ok) {
     yield* aberto.frames;
