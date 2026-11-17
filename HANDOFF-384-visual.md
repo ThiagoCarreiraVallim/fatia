@@ -11,4 +11,10 @@
 
 ## Etapa 2 (passada visual, checkout principal)
 
-- [ ] ainda não começada
+- [x] checkout principal em redesign/384-chat; banco dev: a 20261117110100 falhou (colunas já vinham da 20261105120000 antiga do backup) -> resolve --applied (diff só mostra tabelas órfãs Attachment/MessageFeedback do backup)
+- [x] demo PRO: UserSubscription id=vis384-sub (apagar no fim). Estado original em ~/.cache/fatia-vis/384/demo-rows.txt
+- [x] conversas de demo: ~/.cache/fatia-vis/384/tools/seed.py -> seed.sql; apagar com tools/reset.sql (ids c3840000-/c3841000-)
+- [x] pranchas em ~/.cache/fatia-vis/384/board (*.fim.png = estado final das animadas; *.wide.png = IA-Cartoes/IA-Estados a 1700px)
+- [ ] capturas web/app e cmp-<prancha>.png
+- [ ] correções
+- AiConsent criado ao clicar Concordo: apagar no fim (where userId=demo)
