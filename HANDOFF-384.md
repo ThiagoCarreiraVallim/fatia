@@ -75,7 +75,7 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
       com prévia, motivo "Demorou", "Ouvindo… O áudio vira texto e é descartado.", plano "n de m passos",
       "Você" na fala; /privacy reescrita para a busca da #384. Helpers novos no api-client:
       `chatCardTitle`, `isEmptyChatArtifact`, `formatChatNumber`.
-- [ ] 7. App: o mesmo
+- [x] 7. App: `artifact-card.tsx` (todos os formatos), `message-list.tsx` (linhas, agrupar, recolher, motivo do 👎, plano, Você), `pause-card.tsx`, `consent.tsx` (aceite, globo, pílulas), `chat/ai-consent.ts`, lista por dia com busca e prévia, aviso do ditado; `ChatSession.explainVote`
 - [ ] 8. Docs (MCP_TOOL_SURFACE, REDESIGN_PROGRESS), lint, typecheck, testes; apagar este arquivo
 
 ## Arquivos tocados
@@ -113,18 +113,4 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 ## Próximo passo
 
-Item 7 (app, `apps/mobile/src/components/chat/`): o mesmo do item 6 — cartões (todos os formatos
-com `chatCardTitle`), linhas da tool (4 estados, recolher, agrupar ≥2), confirmação Gravar/Ajustar
-
-- lote, aceite da busca (`web_consent`), "Continuo?", aceite da 1ª conversa, chave do globo,
-  pílulas (`quickReplies`), lista por dia com prévia, motivo "Demorou", aviso do ditado.
-  Gavetas: `snapPoints={['85%']}` e rodapé `pb-8`. Testes do app são vitest.
-
-(Antigo, já feito:)
-
-Item 6 (web): reescrever `apps/web/src/components/chat/artefato.tsx` com os 13 formatos +
-sources/app_only/saved (hoje só metric/timeline/comparison/report; o resto cai em null),
-linhas de tool (4 estados, agrupar ≥2 com `groupToolCalls`), confirmação, web_consent,
-aceite da primeira conversa (403 `AI_CONSENT_REQUIRED`), pausa "Continuo?", pílulas, lista.
-Pendente também: a /privacy da branch descreve a busca da branch ("consulta que o modelo
-montou") — reescrever para a busca da #384 (só a pergunta, com aceite).
+Item 8: REDESIGN_PROGRESS (Etapa 6, bloco #384), `pnpm lint`, `pnpm typecheck`, testes de api/agent/api-client/web/mobile, apagar este arquivo no commit final.
