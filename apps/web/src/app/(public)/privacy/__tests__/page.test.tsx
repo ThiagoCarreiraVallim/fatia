@@ -115,3 +115,15 @@ describe('/privacy — o que já era verdade e continua', () => {
     expect(screen.getByText(/Última atualização:/)).toBeInTheDocument();
   });
 });
+
+describe('/privacy — chat (#384)', () => {
+  it('a foto do chat é passageira: some em 24 horas, salvo a que virou refeição', () => {
+    const texto = textoDaPagina();
+    expect(texto).toMatch(/24 horas/);
+    expect(texto).not.toMatch(/até você apagá-la/);
+  });
+
+  it('a pergunta da busca sai só da última mensagem, numa chamada à parte', () => {
+    expect(textoDaPagina()).toMatch(/só a partir da sua última mensagem/);
+  });
+});
