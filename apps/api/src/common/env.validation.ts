@@ -117,6 +117,8 @@ export const AppEnvSchema = z.object({
   // do produto cadastrado lá.
   BILLING_PRO_MONTHLY_CENTS: z.coerce.number().int().positive().default(1990),
   BILLING_PRO_YEARLY_CENTS: z.coerce.number().int().positive().default(17900),
+  /** Teste grátis do PRO, em dias (#386). 0 desliga o teste na web. */
+  BILLING_PRO_TRIAL_DAYS: z.coerce.number().int().min(0).max(30).default(7),
   // Preço de um assento de comunidade por mês (ADR 025). Vale para compras e
   // aumentos novos; o pool guarda o preço com que foi comprado.
   BILLING_SEAT_MONTHLY_CENTS: z.coerce.number().int().positive().default(1490),
