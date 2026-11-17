@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **151 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **152 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 151 tools): **135,6 k caracteres**
-hoje, dos quais **7.812 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 152 tools): **137,2 k caracteres**
+hoje, dos quais **7.895 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (112,9 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (114,2 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -318,6 +318,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_active_workout_session`   | R        |
 |                            | `get_weekly_muscle_summary`    | R        |
 |                            | `list_workout_sessions`        | R        |
+|                            | `save_session_as_plan`         | C        |
 |                            | `update_workout_session`       | U        |
 |                            | `finish_workout_session`       | U        |
 |                            | `delete_workout_session`       | D        |
@@ -396,7 +397,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **151 tools**. Cada uma documentada abaixo.
+Total: **152 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1553,7 +1554,9 @@ que o app pode ter acabado de gravar. Mesmo contrato do
 
 ### `start_workout_session`
 
-Inicia uma sessão. Pode ser livre ou baseada em plano. **Uma sessão aberta por pessoa** (#350):
+Inicia uma sessão. Pode ser livre ou baseada em plano. Sem `planId` é o **treino livre** (#381):
+monta na hora, registrando séries de qualquer exercício; uma sessão só de esteira é um treino
+livre com um exercício, e `save_session_as_plan` a transforma em plano. **Uma sessão aberta por pessoa** (#350):
 com outra já aberta, responde `CONFLICT` com o id dela — retome registrando séries nela, ou encerre
 com `finish_workout_session` antes de abrir outra. Vale igual para a REST, o app e o
 `start_workout` da superfície de intenção.
@@ -1646,14 +1649,40 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 
 ```typescript
 {
-  from?: string;
-  to?: string;
+  date?: string;   // YYYY-MM-DD (UTC)
   limit?: number;
-  cursor?: string;
+  cursor?: string; // id da última sessão da página anterior; de outra pessoa ou já apagada: BAD_REQUEST
+  kind?: 'plan' | 'circuit' | 'free'; // #381
 }
 ```
 
-**Output:** `{ sessions: [...], nextCursor?: string }` com formato resumido de cada sessão.
+**Output:** as sessões, cada uma com séries, plano, `feeling` (1 Leve a 5 No limite), `notes` e
+`kind` (#381): `plan` (com plano), `free` (treino livre, inclusive o só de cardio) ou `circuit`.
+O tipo vem do retrato gravado ao começar (`fromPlan` e `planName` na sessão): apagar o plano não
+faz a sessão virar `free`. Não há tipo "cardio", porque cardio é exercício
+(`muscleGroup === 'cardio'`). Circuito chega com a #380: até lá nenhuma sessão é `circuit`.
+
+### `save_session_as_plan`
+
+"Salvar como plano" (#381, a mesma rota do app, `POST /workout/sessions/:id/plan`): cria um plano
+novo com os exercícios da sessão, na ordem dela. Força guarda as séries feitas, a faixa de
+repetições (ou de segundos) e a carga da primeira série como carga inicial; cardio guarda a
+distância e o tempo somados como meta de cardio (por distância quando houve distância, senão por
+tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`; sessão ainda
+aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"). Idempotente por sessão: salvar
+de novo a mesma sessão devolve o plano que ela já virou (`WorkoutPlan.fromSessionId`, único por
+pessoa), sem criar outro nem renomear; o resumo da sessão traz esse id em `savedPlanId`.
+
+**Input:**
+
+```typescript
+{
+  sessionId: string;
+  name?: string; // default: o nome do plano da sessão, do único exercício ou "Treino livre"
+}
+```
+
+**Output:** o plano criado, no formato de `get_workout_plan`.
 
 ### `update_workout_session`
 

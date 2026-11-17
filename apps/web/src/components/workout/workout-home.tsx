@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TabHeader, headerButtonClass } from '@/components/layout/tab-header';
 import { cn } from '@/lib/utils';
 import { BlockTimeline } from './block-timeline';
-import { useStartSession, WorkoutCardsCarousel } from './cards/workout-cards';
+import { WorkoutCardsCarousel } from './cards/workout-cards';
 import { groupTone } from './group-tone';
 import { ReceivedOfferNotice } from './received-offer-notice';
 
@@ -184,22 +184,18 @@ function WayTile({
   hint,
   icon,
   tone,
-  disabled,
-  onClick,
+  href,
 }: {
   title: string;
   hint: string;
   icon: ReactNode;
   tone: string;
-  disabled: boolean;
-  onClick: () => void;
+  href: string;
 }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="anim-press flex min-w-0 items-center gap-2.5 rounded-[18px] bg-card p-3 text-left disabled:opacity-60"
+    <Link
+      href={href}
+      className="anim-press flex min-w-0 items-center gap-2.5 rounded-[18px] bg-card p-3 text-left"
     >
       <span
         aria-hidden
@@ -211,12 +207,15 @@ function WayTile({
         <span className="block text-sm font-bold text-foreground">{title}</span>
         <span className="block truncate text-xs text-muted-foreground">{hint}</span>
       </span>
-    </button>
+    </Link>
   );
 }
 
-function OtherWays({ onCardio }: { onCardio: () => void }) {
-  const start = useStartSession();
+/**
+ * Livre e Só cardio abrem o Treino livre (Al-T17b, #381) sem começar nada: o
+ * relógio só anda no "Iniciar treino". O Só cardio abre a busca já em Cardio.
+ */
+function OtherWays() {
   return (
     <section aria-labelledby="treino-outros" className="space-y-2.5">
       <h2 id="treino-outros" className={sectionTitle}>
@@ -229,16 +228,14 @@ function OtherWays({ onCardio }: { onCardio: () => void }) {
           hint="monte na hora"
           icon={<Zap size={16} />}
           tone="bg-primary-soft text-primary-text"
-          disabled={start.isPending}
-          onClick={() => start.mutate(null)}
+          href="/workout/free"
         />
         <WayTile
           title="Só cardio"
           hint="esteira, bike…"
           icon={<Heart size={16} />}
           tone="bg-danger/15 text-danger"
-          disabled={start.isPending}
-          onClick={() => start.mutate(null, { onSuccess: onCardio })}
+          href="/workout/free?add=cardio"
         />
       </div>
     </section>
@@ -346,7 +343,7 @@ function BlockRow() {
  * O início da aba Treino (prancha Al-T1): semana, cards, planos e os outros
  * jeitos de começar. A periodização, consultada uma vez por bloco, fica no fim.
  */
-export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
+export function WorkoutHome() {
   const muscles = useQuery({
     queryKey: ['workout', 'muscles', 'week'],
     queryFn: () => workoutApi.getWeeklyMuscleSummary(),
@@ -374,7 +371,7 @@ export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
 
       <PlansSection />
 
-      <OtherWays onCardio={onCardio} />
+      <OtherWays />
 
       <BlockRow />
 

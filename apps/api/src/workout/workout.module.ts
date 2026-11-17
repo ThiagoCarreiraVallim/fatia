@@ -37,6 +37,7 @@ import { ListExercisesByMuscleTool } from './mcp/list-exercises-by-muscle.tool';
 import { ListPersonalRecordsTool } from './mcp/list-personal-records.tool';
 import { ListWorkoutPlansTool } from './mcp/list-workout-plans.tool';
 import { ListWorkoutSessionsTool } from './mcp/list-workout-sessions.tool';
+import { SaveSessionAsPlanTool } from './mcp/save-session-as-plan.tool';
 import { LogSetTool } from './mcp/log-set.tool';
 import { RemoveExerciseFromPlanTool } from './mcp/remove-exercise-from-plan.tool';
 import { ReorderPlanExercisesTool } from './mcp/reorder-plan-exercises.tool';
@@ -94,6 +95,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     ListPersonalRecordsTool,
     ListWorkoutPlansTool,
     ListWorkoutSessionsTool,
+    SaveSessionAsPlanTool,
     LogSetTool,
     RemoveExerciseFromPlanTool,
     ReorderPlanExercisesTool,

@@ -10,12 +10,21 @@ import { PrismaService } from '../common/prisma.service';
 import { SharedWithService } from '../sharing/shared-with.service';
 import type {
   FinishSessionDto,
+  HistoryQueryDto,
   ListSessionsDto,
   StartSessionDto,
   UpdateSessionDto,
   WorkoutCheckinDto,
 } from './dto/session.dto';
 import { summarizeSession, type SessionSummary } from './session-summary';
+import { historyItemOf, type WorkoutHistory } from './session-history';
+import { sessionKind, sessionKindWhere } from './helpers/session-kind';
+import { isCardioExercise } from './helpers/is-cardio';
+import {
+  afterSessionPosition,
+  decodeSessionCursor,
+  encodeSessionCursor,
+} from './helpers/session-cursor';
 
 export interface PostWorkoutQuestion {
   key: 'fatigue' | 'pain';
@@ -49,6 +58,11 @@ export interface PostWorkoutQuestions {
 export type SessionSummaryView = SessionSummary & {
   checkin: Omit<WorkoutCheckin, 'userId'> | null;
   questions: PostWorkoutQuestions | null;
+  /**
+   * O plano que esta sessão virou no "Salvar como plano" (#381). A tela troca
+   * o botão por "Ver plano"; nulo se não virou (ou se o plano foi apagado).
+   */
+  savedPlanId: string | null;
 };
 
 const SESSION_INCLUDE = {
@@ -134,10 +148,11 @@ export class WorkoutSessionService {
     // O plano vem do corpo: precisa ser da pessoa. Sem isto a sessão de B
     // apontaria para o plano de A, e o `findById` de B mostraria os exercícios
     // de A em `plannedExercises`.
+    let plan: { id: string; name: string } | null = null;
     if (dto.planId) {
-      const plan = await this.prisma.workoutPlan.findFirst({
+      plan = await this.prisma.workoutPlan.findFirst({
         where: { id: dto.planId, userId },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!plan) throw new NotFoundException('Plan not found');
     }
@@ -145,9 +160,14 @@ export class WorkoutSessionService {
       return await this.prisma.workoutSession.create({
         data: {
           userId,
-          planId: dto.planId ?? null,
+          planId: plan?.id ?? null,
+          // O retrato do plano: apagar o plano depois não faz a sessão virar
+          // "Treino livre" no histórico (`helpers/session-kind.ts`).
+          fromPlan: plan !== null,
+          planName: plan?.name ?? null,
           startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
           notes: dto.notes,
+          exerciseOrder: dto.exerciseOrder ?? [],
         },
       });
     } catch (error) {
@@ -190,22 +210,124 @@ export class WorkoutSessionService {
     return session ? this.shapeSession(session) : null;
   }
 
+  /**
+   * As sessões com tudo (séries, plano, check-in) e o tipo de cada uma (#381).
+   * É o que o MCP (`list_workout_sessions`) e a leitura de Treino da equipe
+   * devolvem; a tela do histórico usa o `history`, mais enxuto.
+   *
+   * O `cursor` é o id da última sessão da página anterior (contrato do MCP).
+   * Ele é lido **desta pessoa** e vira posição (`startedAt`, `id`): o de outra
+   * pessoa, ou o de uma sessão já apagada, é 400 — antes o primeiro servia de
+   * posição e o segundo encerrava a lista em silêncio.
+   */
   async list(userId: string, params: ListSessionsDto) {
     const limit = Math.min(params.limit ?? 20, 50);
-    const where: Prisma.WorkoutSessionWhereInput = { userId };
+    const filters: Prisma.WorkoutSessionWhereInput[] = [{ userId }, sessionKindWhere(params.kind)];
     if (params.date) {
       const start = new Date(`${params.date}T00:00:00.000Z`);
       const end = new Date(start);
       end.setUTCDate(end.getUTCDate() + 1);
-      where.startedAt = { gte: start, lt: end };
+      filters.push({ startedAt: { gte: start, lt: end } });
     }
-    return this.prisma.workoutSession.findMany({
-      where,
+    if (params.cursor) {
+      const position = await this.prisma.workoutSession.findFirst({
+        where: { id: params.cursor, userId },
+        select: { id: true, startedAt: true },
+      });
+      if (!position) {
+        throw new BadRequestException(
+          'cursor inválido: use o id da última sessão da página anterior.',
+        );
+      }
+      filters.push(afterSessionPosition(position));
+    }
+    const rows = await this.prisma.workoutSession.findMany({
+      where: { AND: filters },
       include: SESSION_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: limit,
-      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
+    return rows.map((row) => ({ ...row, kind: sessionKind(row) }));
+  }
+
+  /**
+   * O histórico (#381, prancha `Al-T10`): os totais do topo e as linhas, só de
+   * sessões concluídas — a aberta mora na barra do treino em andamento. O filtro
+   * de tipo vale para os dois.
+   *
+   * Os totais agregam em memória, como `listPersonalRecords`: a escala é de uma
+   * pessoa (centenas de sessões), e o filtro de tipo fica num lugar só
+   * (`sessionKindWhere`) em vez de repetido num SQL à mão.
+   *
+   * A página segue por keyset (`helpers/session-cursor.ts`): o `nextCursor` é
+   * a posição da última linha, e não o id dela.
+   */
+  async history(userId: string, params: HistoryQueryDto): Promise<WorkoutHistory> {
+    const limit = Math.min(params.limit ?? 20, 50);
+    const where: Prisma.WorkoutSessionWhereInput = {
+      userId,
+      completedAt: { not: null },
+      ...sessionKindWhere(params.kind),
+    };
+    const pageWhere: Prisma.WorkoutSessionWhereInput = params.cursor
+      ? { AND: [where, afterSessionPosition(decodeSessionCursor(params.cursor))] }
+      : where;
+    const [rows, spans, lifts] = await Promise.all([
+      this.prisma.workoutSession.findMany({
+        where: pageWhere,
+        select: {
+          id: true,
+          planId: true,
+          fromPlan: true,
+          planName: true,
+          startedAt: true,
+          completedAt: true,
+          feeling: true,
+          notes: true,
+          plan: { select: { name: true } },
+          sets: {
+            select: {
+              exerciseId: true,
+              weightKg: true,
+              reps: true,
+              rpe: true,
+              durationSeconds: true,
+              distanceMeters: true,
+              avgHeartRate: true,
+              exercise: { select: { name: true, muscleGroup: true } },
+            },
+            orderBy: [{ setNumber: 'asc' }, { id: 'asc' }],
+          },
+        },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+      }),
+      this.prisma.workoutSession.findMany({
+        where,
+        select: { startedAt: true, completedAt: true },
+      }),
+      this.prisma.sessionSet.findMany({
+        where: { session: where, weightKg: { not: null }, reps: { not: null } },
+        select: { weightKg: true, reps: true, exercise: { select: { muscleGroup: true } } },
+      }),
+    ]);
+
+    const page = rows.slice(0, limit);
+    const minutes = spans.map((s) => (s.completedAt!.getTime() - s.startedAt.getTime()) / 60_000);
+    const volume = lifts
+      .filter((s) => !isCardioExercise(s.exercise))
+      .reduce((acc, s) => acc + s.weightKg! * s.reps!, 0);
+    return {
+      totals: {
+        sessions: spans.length,
+        avgDurationMinutes: minutes.length
+          ? Math.round(minutes.reduce((a, b) => a + b, 0) / minutes.length)
+          : null,
+        volumeKg: Math.round(volume * 10) / 10,
+      },
+      items: page.map(historyItemOf),
+      nextCursor: rows.length > limit && page.length ? encodeSessionCursor(page.at(-1)!) : null,
+    };
   }
 
   /**
@@ -374,7 +496,7 @@ export class WorkoutSessionService {
     if (!session) throw new NotFoundException('Session not found');
 
     const exerciseIds = [...new Set(session.sets.map((s) => s.exerciseId))];
-    const [previous, priorSets, questions] = await Promise.all([
+    const [previous, priorSets, questions, savedPlan] = await Promise.all([
       session.planId
         ? this.prisma.workoutSession.findFirst({
             where: {
@@ -409,12 +531,18 @@ export class WorkoutSessionService {
           })
         : [],
       this.postWorkoutQuestions(userId),
+      this.prisma.workoutPlan.findFirst({
+        where: { userId, fromSessionId: session.id },
+        select: { id: true },
+      }),
     ]);
 
     const summary = summarizeSession({
       session: {
         id: session.id,
         planId: session.planId,
+        fromPlan: session.fromPlan,
+        planName: session.planName,
         startedAt: session.startedAt,
         completedAt: session.completedAt,
         feeling: session.feeling,
@@ -433,7 +561,7 @@ export class WorkoutSessionService {
       void _dono;
       checkin = rest;
     }
-    return { ...summary, checkin, questions };
+    return { ...summary, checkin, questions, savedPlanId: savedPlan?.id ?? null };
   }
 
   private shapeSession(session: SessionWithRelations) {

@@ -796,11 +796,15 @@ model WorkoutPlan {
   /// Oferta da equipe de onde este plano veio (#379). Aceitar a versão nova
   /// troca os exercícios deste mesmo plano; apagar o plano não mexe na oferta.
   fromOfferId    String?
+  /// Sessão que virou este plano no "Salvar como plano" (#381). Torna o salvar
+  /// idempotente (um plano por sessão); apagar a sessão não apaga o plano.
+  fromSessionId  String?
   createdAt      DateTime @default(now())
 
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercises       WorkoutPlanExercise[]
-  sessions        WorkoutSession[]
+  sessions        WorkoutSession[]      @relation("SessionPlan")
+  fromSession     WorkoutSession?       @relation("PlanFromSession", fields: [fromSessionId], references: [id], onDelete: SetNull)
   trainingBlocks  TrainingBlock[]
   fromTemplate    GroupPlanTemplate?    @relation("PlanFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
   fromOffer       PlanOffer?            @relation("PlanFromOffer", fields: [fromOfferId], references: [id], onDelete: SetNull)
@@ -809,6 +813,7 @@ model WorkoutPlan {
   @@index([userId])
   @@index([userId, fromTemplateId])
   @@index([fromOfferId])
+  @@unique([userId, fromSessionId])
 }
 
 /// Uma linha do plano. A identidade é o `id` (e a posição é `order`): o mesmo
@@ -928,7 +933,11 @@ model FavoriteExercise {
 model WorkoutSession {
   id          String    @id @default(uuid())
   userId      String
-  planId      String? // null = treino livre
+  planId      String? // null = treino livre (ou o plano foi apagado: ver `fromPlan`)
+  /// Retrato do plano ao começar (#381): o plano pode ser apagado depois (a FK
+  /// vira nula), e a sessão segue sendo "de plano", com o nome que tinha.
+  fromPlan    Boolean   @default(false)
+  planName    String?
   startedAt   DateTime
   completedAt DateTime?
   notes       String?
@@ -946,9 +955,10 @@ model WorkoutSession {
   feeling Int?
 
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan    WorkoutPlan?    @relation(fields: [planId], references: [id])
-  sets    SessionSet[]
-  checkin WorkoutCheckin?
+  plan       WorkoutPlan?    @relation("SessionPlan", fields: [planId], references: [id])
+  sets       SessionSet[]
+  checkin    WorkoutCheckin?
+  savedPlans WorkoutPlan[]   @relation("PlanFromSession")
   // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
   // aberta por pessoa (#350). O Prisma não o descreve: está na migration
   // 20261026120000_one_open_workout_session.

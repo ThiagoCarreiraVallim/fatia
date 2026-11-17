@@ -135,13 +135,28 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
   - o T8 e o T21 abrem no app como folhas a 85% da tela, como as outras do app, e não em tela cheia;
   - a imagem do exercício é um placeholder.
 
+## Etapa 5: Treino B e Progresso (em andamento)
+
+| Issue | Título                   | Estado           | Superfícies                                  |
+| ----- | ------------------------ | ---------------- | -------------------------------------------- |
+| #381  | Treino livre e histórico | pronto na branch | api, MCP (1 tool nova), api-client, web, app |
+
+Pendências da #381 (branch `redesign/381-treino-livre-historico`, sem migration):
+
+- **Tipo da sessão é derivado, não gravado:** `plan` com `planId`, `free` sem. `circuit` é o ponto de extensão da #380 (`helpers/session-kind.ts`, `HISTORY_FILTERS`, `sessionHero` e o detalhe `history/[id]`): nenhuma sessão é circuito ainda, e a aba "Circuitos" do Al-T10 e a tela Al-T11c entram com a #380. Plano apagado deixa a sessão sem `planId`, e ela passa a aparecer como livre.
+- **Rotas e MCP:** `GET /workout/history` (totais, filtro `kind`, cursor), `GET /workout/sessions?kind=`, `POST /workout/sessions/:id/plan`; o resumo da sessão ganhou `kind`, as séries de cada exercício, kcal e o recorde de antes. MCP `save_session_as_plan` (152 tools) e `list_workout_sessions` com `kind` e sensação.
+- **Treino livre (Al-T17b):** monta antes de começar; a sessão só nasce no "Iniciar treino". Os escolhidos sem série ficam só no cliente (o cache `pending` da sessão), como na #377: fechar o app antes da primeira série os perde.
+- **Recorde de distância do cardio:** passou a somar as séries da sessão (como o resumo já fazia), em vez da maior série. Pode conflitar com a #382 (progresso), que lê os mesmos recordes.
+- **Desvios do canvas:** o detalhe tem "Corrigir séries deste treino" (leva à sessão), porque a tela antiga de sessão concluída era o único lugar de corrigir; cartão de cardio e selo de recorde usam `text-background` para contrastar nos dois temas.
+- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
-| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer      |
+| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
@@ -187,6 +202,9 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
   - "O que mudou": diff por exercício entre o snapshot aceito e o novo (novo, removido, alterado em séries, repetições e descanso). A pessoa aceita a atualização ou mantém a versão atual; nada muda sem aceite.
   - Bloco de semanas: de 3 a 6, com os focos de hoje. A última é deload; o meio é acúmulo e depois pico (3: acúmulo, pico, deload; 6: acúmulo ×3, pico ×2, deload). Os blocos de 4 semanas não mudam; seguem as regras da ADR 019, inclusive o deload por sinal.
   - "Remarcar" na agenda: qualquer dia de hoje até o fim do plano, nunca depois. Só informativo, sem presença nem reserva.
+- **Etapa 5 (#381):**
+  - Cardio é o exercício com `muscleGroup` cardio (a regra que já existia), sem campo novo. Cardio é exercício, não tipo de treino.
+  - "Salvar como plano" de uma sessão com cardio grava a distância e o tempo feitos como a meta de cardio do exercício do plano (a configuração da #378).
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).

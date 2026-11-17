@@ -106,8 +106,7 @@ function summary(over: Partial<WorkoutSessionSummary> = {}): WorkoutSessionSumma
   };
 }
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={client}>
       <SessionDetailPage />
@@ -188,6 +187,37 @@ describe('Treino feito! (#377)', () => {
       }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith('/workout'));
+  });
+
+  it('a sensação e as respostas mudam o histórico: ele fica velho (#381)', async () => {
+    getSessionSummary.mockResolvedValue(
+      summary({
+        questions: {
+          askedBy: ['Helena Prado'],
+          items: [{ key: 'pain', kind: 'yes_no', label: 'Sentiu dor ou desconforto?' }],
+        },
+      }),
+    );
+    saveCheckin.mockResolvedValue({} as never);
+    updateSession.mockResolvedValue({} as never);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const user = userEvent.setup();
+    renderPage(client);
+
+    const card = await screen.findByRole('region', { name: 'Perguntas da Helena' });
+    await user.click(within(card).getByRole('button', { name: 'Pular' }));
+    await waitFor(() => expect(saveCheckin).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workout', 'history'] }),
+    );
+
+    invalidate.mockClear();
+    const feelings = screen.getByRole('radiogroup', { name: 'Como foi o treino?' });
+    await user.click(within(feelings).getByRole('radio', { name: /^Puxado/ }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/workout'));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workout', 'history'] });
   });
 
   it('as perguntas da equipe: cansaço, dor com local, e quem vê', async () => {

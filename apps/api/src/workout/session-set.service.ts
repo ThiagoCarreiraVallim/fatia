@@ -336,7 +336,9 @@ export class SessionSetService {
   /**
    * Lista o recorde pessoal de cada exercício que o usuário já treinou.
    * Força: maior carga (desempate por reps) + 1RM estimado.
-   * Cardio: maior distância (com a duração daquela sessão).
+   * Cardio: maior distância **somada na sessão** (com a duração somada dela), a
+   * mesma conta do `getPersonalRecord` e do "Treino feito" (#381): duas séries
+   * de esteira no mesmo treino são um percurso só.
    * Agrega em memória — escala pessoal (poucos milhares de séries) torna isso suficiente.
    */
   async listPersonalRecords(userId: string): Promise<PersonalRecordEntry[]> {
@@ -348,12 +350,18 @@ export class SessionSetService {
         reps: true,
         distanceMeters: true,
         durationSeconds: true,
+        sessionId: true,
         exercise: { select: { id: true, name: true, muscleGroup: true } },
         session: { select: { startedAt: true } },
       },
     });
 
     const byExercise = new Map<number, PersonalRecordEntry>();
+    // Cardio: distância e duração somadas por exercício e sessão.
+    const cardioTotals = new Map<
+      string,
+      { exerciseId: number; distance: number; duration: number; date: string }
+    >();
     for (const s of sets) {
       const ex = s.exercise;
       const date = s.session.startedAt.toISOString();
@@ -380,13 +388,17 @@ export class SessionSetService {
       if (!entry.lastPerformedAt || date > entry.lastPerformedAt) entry.lastPerformedAt = date;
 
       if (entry.type === 'cardio') {
-        if (
-          s.distanceMeters != null &&
-          (entry.maxDistanceMeters == null || s.distanceMeters > entry.maxDistanceMeters)
-        ) {
-          entry.maxDistanceMeters = s.distanceMeters;
-          entry.bestDurationSeconds = s.durationSeconds ?? null;
-          entry.achievedAt = date;
+        if (s.distanceMeters != null) {
+          const key = `${ex.id}|${s.sessionId}`;
+          const total = cardioTotals.get(key) ?? {
+            exerciseId: ex.id,
+            distance: 0,
+            duration: 0,
+            date,
+          };
+          total.distance += s.distanceMeters;
+          total.duration += s.durationSeconds ?? 0;
+          cardioTotals.set(key, total);
         }
       } else if (s.weightKg != null) {
         const better =
@@ -402,6 +414,15 @@ export class SessionSetService {
           const e1rm = estimate1RM(s.weightKg, s.reps);
           if (entry.estimated1RM == null || e1rm > entry.estimated1RM) entry.estimated1RM = e1rm;
         }
+      }
+    }
+
+    for (const total of cardioTotals.values()) {
+      const entry = byExercise.get(total.exerciseId)!;
+      if (entry.maxDistanceMeters == null || total.distance > entry.maxDistanceMeters) {
+        entry.maxDistanceMeters = total.distance;
+        entry.bestDurationSeconds = total.duration || null;
+        entry.achievedAt = total.date;
       }
     }
 

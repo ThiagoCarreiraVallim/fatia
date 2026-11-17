@@ -1,100 +1,157 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ChevronRight, Dumbbell, History } from 'lucide-react';
-import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { Heart, History } from 'lucide-react';
+import {
+  HISTORY_FILTERS,
+  feelingOf,
+  historyDay,
+  historyLine,
+  historyTitle,
+  historyTotals,
+  sessionKindLabel,
+  workoutApi,
+  type WorkoutHistoryItem,
+} from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Segmented } from '@/components/ui/segmented';
 import { ErrorState } from '@/components/elements/error-state';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
+import { cn } from '@/lib/utils';
 
-function formatDuration(start: string, end?: string): string {
-  if (!end) return '—';
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  const totalMinutes = Math.round(ms / 60000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h > 0) return `${h}h ${m}min`;
-  return `${m}min`;
-}
+type Filter = 'all' | 'plan' | 'free';
 
-function SessionRow({ session }: { session: WorkoutSession }) {
-  const sets = session.sets ?? [];
-  const uniqueExercises = new Set(sets.map((s) => s.exerciseId)).size;
-  const totalVolume = sets.reduce((acc, s) => {
-    if (s.weightKg != null && s.reps != null) return acc + s.weightKg * s.reps;
-    return acc;
-  }, 0);
+const OPTIONS = HISTORY_FILTERS.map((f) => ({
+  value: (f.kind ?? 'all') as Filter,
+  label: f.label,
+}));
 
-  const dateLabel = new Date(session.startedAt).toLocaleDateString('pt-BR', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-
+function Row({ item, first }: { item: WorkoutHistoryItem; first: boolean }) {
+  const units = useUnitPrefs();
+  const day = historyDay(item.startedAt);
+  const feeling = feelingOf(item.feeling);
+  const title = historyTitle(item);
+  const line = historyLine(item, units);
   return (
-    <Link
-      href={`/workout/session/${session.id}`}
-      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
-    >
-      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-        <Dumbbell size={20} className="text-primary" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="truncate text-base font-bold capitalize text-foreground">{dateLabel}</p>
-        <p className="text-xs text-muted-foreground">
-          {uniqueExercises} exercício{uniqueExercises !== 1 ? 's' : ''} · {sets.length} série
-          {sets.length !== 1 ? 's' : ''}
-          {totalVolume > 0 ? ` · ${Math.round(totalVolume)}kg` : ''}
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          {formatDuration(session.startedAt, session.completedAt ?? undefined)}
-        </p>
-      </div>
-      <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
-    </Link>
+    <li className={cn(!first && 'border-t border-border')}>
+      <Link
+        href={`/workout/history/${item.id}`}
+        aria-label={`${title}, ${day.weekday} ${day.day}. ${line}`}
+        className="flex min-h-[68px] items-center gap-3"
+      >
+        <span aria-hidden className="flex w-10 shrink-0 flex-col items-center gap-0.5">
+          <span className="text-[11px] uppercase text-faint">{day.weekday}</span>
+          <b className="text-lg tabular-nums">{day.day}</b>
+        </span>
+        <span className="min-w-0 flex-1 space-y-0.5">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[15px] font-semibold">{title}</span>
+            <span className="shrink-0 rounded-[6px] bg-muted px-1.5 py-px text-[11px] text-faint">
+              {sessionKindLabel(item.kind)}
+            </span>
+          </span>
+          <span className="flex items-center gap-1 truncate text-xs text-faint">
+            {item.cardio && <Heart size={14} aria-hidden className="shrink-0 text-danger" />}
+            <span className="truncate">{line}</span>
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-0.5">
+          {feeling && (
+            <span aria-label={feeling.label} className="text-lg leading-tight">
+              {feeling.emoji}
+            </span>
+          )}
+          {item.durationMinutes != null && (
+            <span className="text-xs tabular-nums text-faint">{item.durationMinutes} min</span>
+          )}
+        </span>
+      </Link>
+    </li>
   );
 }
 
+/**
+ * Histórico (prancha `Al-T10`, #381): os totais (sessões, duração média e
+ * volume), o filtro por tipo e as sessões concluídas, cada uma com o tipo, o
+ * resumo e a sensação. O toque abre o detalhe (Al-T11).
+ *
+ * **Ponto de extensão (#380):** a aba "Circuitos" entra em `HISTORY_FILTERS`.
+ */
 export default function WorkoutHistoryPage() {
-  const sessions = useQuery({
-    queryKey: ['workout', 'sessions'],
-    queryFn: () => workoutApi.listSessions({ limit: 50 }),
+  const [filter, setFilter] = useState<Filter>('all');
+  const units = useUnitPrefs();
+  const kind = filter === 'all' ? undefined : filter;
+  const history = useInfiniteQuery({
+    queryKey: ['workout', 'history', kind ?? 'all'],
+    queryFn: ({ pageParam }) => workoutApi.getHistory({ kind, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
+  const first = history.data?.pages[0];
+  const items = history.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <div className="space-y-5 px-5 pt-4 pb-4">
-      {sessions.isLoading && (
+    <div className="space-y-4 px-4 pt-2 pb-4">
+      {first && (
+        <dl className="grid grid-cols-3 gap-2">
+          {historyTotals(first.totals, units.loadUnit).map((t) => (
+            <div key={t.label} className="flex flex-col gap-0.5 rounded-[18px] bg-card p-3.5">
+              <dt className="order-last text-xs text-faint">{t.label}</dt>
+              <dd className="text-[22px] font-bold tabular-nums">{t.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      <Segmented options={OPTIONS} value={filter} onChange={setFilter} label="Tipo de treino" />
+
+      {history.isLoading && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-16 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
 
-      {sessions.isError && (
+      {history.isError && (
         <ErrorState
           className="max-w-none"
           title="Não foi possível carregar o histórico"
-          detail={sessions.error instanceof Error ? sessions.error.message : 'Tente de novo.'}
+          detail={history.error instanceof Error ? history.error.message : 'Tente de novo.'}
           retryLabel="Tentar de novo"
-          onRetry={() => void sessions.refetch()}
+          onRetry={() => void history.refetch()}
         />
       )}
 
-      {sessions.data && sessions.data.length === 0 && (
+      {history.data && items.length === 0 && (
         <EmptyState
           icon={History}
-          title="Nenhum treino registrado ainda"
-          description="Toque no botão da IA e escolha Treino para começar o primeiro."
+          title={filter === 'all' ? 'Nenhum treino registrado ainda' : 'Nenhum treino deste tipo'}
+          description="Os treinos que você terminar aparecem aqui."
         />
       )}
 
-      <div className="space-y-2">
-        {sessions.data?.map((s) => (
-          <SessionRow key={s.id} session={s} />
-        ))}
-      </div>
+      {items.length > 0 && (
+        <ol aria-label="Sessões" className="rounded-card bg-card px-4">
+          {items.map((item, i) => (
+            <Row key={item.id} item={item} first={i === 0} />
+          ))}
+        </ol>
+      )}
+
+      {history.hasNextPage && (
+        <button
+          type="button"
+          disabled={history.isFetchingNextPage}
+          onClick={() => void history.fetchNextPage()}
+          className="anim-press flex min-h-11 w-full items-center justify-center rounded-pill bg-card text-sm font-bold disabled:opacity-60"
+        >
+          {history.isFetchingNextPage ? 'Carregando...' : 'Ver mais'}
+        </button>
+      )}
     </div>
   );
 }
