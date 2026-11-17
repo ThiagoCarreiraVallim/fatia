@@ -328,6 +328,29 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
   - Domínio de produção do endereço (a história de Produção).
 
+## Etapa 7: Comunidade no app (em andamento)
+
+| Issue | Título                                                                | Estado           | Superfícies                                      |
+| ----- | --------------------------------------------------------------------- | ---------------- | ------------------------------------------------ |
+| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
+
+#393 (branch `redesign/393-comunidades`, migration `20261117200000_community_entry_code_benefits`; nenhuma env nova):
+
+- **Código de entrada (Cm-02):** é um `GroupInvite` com `code` legível (8 caracteres, sem 0/O/1/I/L), gerado em Convites ("Gerar código de entrada", web e app), só de membro, vale até 1 ano, revogável na lista. **Não é aprovação:** segue a `joinPolicy` (aberta entra, com aprovação vira pedido); comunidade só por convite não gera código (409) e o código dela dá 404. O slug continua valendo como código (cartazes antigos). Cada entrada soma um uso no convite na mesma transação. **Não é cupom:** não tem comissão (#287) nem indicação (#332). `previewBySlug` virou `previewByCode`; `join` recebe `{ code }` (aceita `slug` ainda).
+- **QR:** o link do QR é `${WEB_ORIGIN}/community?join=1&code=X`; `parseCommunityEntry` lê código, esse link, o link de convite (`/c/<token>`, que entra pelo caminho do convite) e o token puro. No app a câmera (`expo-camera`, a mesma do onboarding) lê; na web não há leitura de QR, o link serve colado. Inválido, vencido, revogado e só-por-convite dão a mesma frase ("Código ou link inválido. Peça um novo à equipe."). O painel mostra o código e o link do QR em texto, sem desenhar o QR (não há biblioteca de QR no projeto).
+- **"A academia libera o PRO" (Cm-02)** só aparece quando o pool de assentos vale (`resolveAiEntitlement`) e tem vaga, ou é para todos os membros. **"PRO pago pela academia" (Cm-01/Cm-04)** só com o PRO pago pela comunidade valendo para a pessoa (`hasAiSeat`, `paidBy=GROUP`).
+- **Minhas comunidades (Cm-01):** `MyGroup` ganhou `visibility`, `timezone`, `memberCount`, `newPostCount`, `forYouCount` e `challenge { id, title, rank }`. "Posts novos" conta desde `GroupMembership.feedSeenAt`, gravado pelo servidor quando a primeira página do mural é lida (não por post visto na tela). "Para você" conta só as ofertas de plano pendentes da comunidade.
+- **Sobre (Cm-04):** cada categoria grava na hora (chave), a obrigatória fica travada com cadeado; números da comunidade num checkbox. A equipe vem de `GET /groups/:id/team` (quem da equipe, o que vê de mim, último acesso em `ProfessionalAccessLog` não negado, só do próprio membro), em seções por papel, com busca, "viu hoje" e "Ver toda a equipe (N)". "Quem olhou seus dados" mostra os 5 últimos, inclusive o negado.
+- **Benefícios (Cm-22, Pn-28):** `GroupPartnerBenefit` (parceiro, logo opcional pelo storage com propósito `benefit_logo`, desconto, cupom **ou** link https, validade em dia). O membro vê os ativos e os vencidos de ontem (sem cupom nem link), no fuso da comunidade; a entrada em Sobre só aparece com benefício ativo. Cupom copia, link abre fora. **Só o dono cadastra** (`benefit.manage`; `benefit.read` para todos os papéis), no painel da web (tabela + painel lateral com prévia e logo) e no app (formulário com validade em escolhas prontas, sem logo). MCP: `list_group_benefits` (leitura, cartão lista) — 155 tools, `SHA_ENTIDADE` novo.
+- **Isolamento:** benefício é sempre buscado por `{ id, groupId }` da URL; o logo passa por `media.resolveForGroup`. `user-isolation.spec.ts` cobre benefícios e a equipe vista pelo membro.
+- **Desvios de propósito:**
+  - Sem "Rever boas-vindas" em Sobre: depende da #410.
+  - A posição no desafio diz "ontem"/"hoje" em vez do dia da semana.
+  - O cartão do convite (link `/c/…`) não mostra a oferta do PRO: o preview do convite não traz o pool.
+  - A tool `join_group` do MCP manteve a descrição, mas aceita código.
+  - O consentimento de entrada segue o `ConsentForm` atual (#371 não mexeu nele).
+- **Falta:** passada visual (prints lado a lado com Cm-01, Cm-02, Cm-04, Cm-22, Cm-22b, Pn-28, Pn-28b, Pn-28c, web e app, escuro e claro); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -336,7 +359,7 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
-| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
+| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | em andamento |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
 | 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
