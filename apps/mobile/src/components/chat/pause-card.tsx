@@ -359,7 +359,12 @@ function Escrita({
           variant="secondary"
           disabled={ocupado}
           onPress={() => onDecidir(false)}
-          className={cn(invalida && 'flex-1', decisao === true && 'opacity-40')}
+          // No lote o cartão já é cinza: o Ajustar sobe um tom para não sumir nele.
+          className={cn(
+            invalida && 'flex-1',
+            emLote && 'bg-card',
+            decisao === true && 'opacity-40',
+          )}
           accessibilityHint="Não grava. Diga no campo o que mudar."
           accessibilityState={{ selected: decisao === false, disabled: ocupado }}
         >

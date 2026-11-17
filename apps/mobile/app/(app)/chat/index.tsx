@@ -123,7 +123,7 @@ export default function ConversationsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Nova conversa"
               onPress={nova}
-              className="mx-4 h-14 flex-row items-center rounded-full border border-primary/35 bg-card pl-5 pr-1.5"
+              className="h-14 flex-1 flex-row items-center rounded-full border border-primary/35 bg-card pl-5 pr-1.5"
             >
               <Text className="flex-1 text-[15px] text-muted-foreground">Nova conversa…</Text>
               <View className="size-11 items-center justify-center rounded-full bg-primary">
