@@ -67,6 +67,12 @@ export interface McpAutoWriter {
     input: Record<string, unknown>,
     ctx: McpToolContext,
   ): Promise<{ data: unknown; artifact: Record<string, unknown> }>;
+  /** O que a chamada `toolCallId` gravou; erro se não gravou. Nunca executa (#385). */
+  lookup(
+    userId: string,
+    conversationId: string,
+    toolCallId: string,
+  ): Promise<{ data: unknown; artifact: Record<string, unknown> }>;
 }
 
 const fail = (text: string): ToolResult => ({
@@ -189,7 +195,14 @@ export class McpToolRegistry implements OnModuleInit {
             // limites e tira o retrato. Sem ele registrado, recusa — nunca grava sem o Desfazer.
             if (ctx.autoWrite) {
               if (!this.autoWriter) throw new Error('Gravação automática sem executor registrado.');
-              const auto = await this.autoWriter.run(tool, input, ctx);
+              // A consulta do agente que perdeu a resposta num timeout: só lê, nunca grava de novo.
+              const auto = ctx.autoWrite.lookup
+                ? await this.autoWriter.lookup(
+                    ctx.userId,
+                    ctx.autoWrite.conversationId,
+                    ctx.autoWrite.toolCallId,
+                  )
+                : await this.autoWriter.run(tool, input, ctx);
               this.metrics.record({
                 tool: tool.name,
                 durationMs: Date.now() - start,

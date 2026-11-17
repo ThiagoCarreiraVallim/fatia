@@ -11,6 +11,8 @@ export interface McpAutoWriteRequest {
   conversationId: string;
   runId: string;
   toolCallId: string;
+  /** Só consulta o que esta chamada gravou; nunca executa (timeout do agente, #385). */
+  lookup?: true;
 }
 
 export interface McpToolContext {

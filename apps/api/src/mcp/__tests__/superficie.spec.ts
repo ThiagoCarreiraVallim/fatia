@@ -158,7 +158,7 @@ describe('superfície do /mcp', () => {
 
     it('com a flag desligada, o controller responde 400 antes de abrir o servidor MCP', async () => {
       const registry = { intencaoHabilitada: () => false } as unknown as McpToolRegistry;
-      const controller = new McpController(registry);
+      const controller = new McpController(registry, config({}));
       const req = { headers: { [HEADER_SUPERFICIE]: 'intencao' } } as unknown as Request;
       await expect(
         controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),

@@ -238,6 +238,7 @@ export class HttpAgentAdapter extends AgentAdapter {
       webSearch: input.webSearch ?? 'off',
       // O modo da IA por categoria (ADR 039, #385). Ausente é tudo em Perguntar antes.
       ...(input.toolModes ? { toolModes: input.toolModes } : {}),
+      ...(input.runToken ? { runToken: input.runToken } : {}),
       ...(input.resume
         ? { resume: input.resume }
         : {

@@ -12,7 +12,7 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
 import { GroupAgentService } from '../sharing/group-agent.service';
-import type { ChatPhotoDto, SendChatMessageDto } from './dto/chat.dto';
+import { CHAT_CONTINUE_MESSAGE, type ChatPhotoDto, type SendChatMessageDto } from './dto/chat.dto';
 import { TETO_DA_FOTO_DO_CHAT } from './corpos-do-chat';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/strip-exif';
 import { type TurnSummary, createTurnReader } from './leitor-do-turno';
@@ -155,7 +155,11 @@ export class ChatService {
 
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
     // de abrir outro turno na mesma thread do agente.
-    const run = this.runs.start(user.id, dto.conversationId);
+    // Retomada e "Continuar" seguem a mesma resposta da pessoa: o teto de gravações automáticas
+    // conta por mensagem dela, não por volta do agente (ADR 039, #385).
+    const run = this.runs.start(user.id, dto.conversationId, {
+      continues: dto.resume !== undefined || dto.message === CHAT_CONTINUE_MESSAGE,
+    });
     let hosted: HostedTurn;
     let agentGroupId: string | null = null;
     try {
@@ -178,6 +182,8 @@ export class ChatService {
           history,
           webSearch,
           toolModes,
+          // O agente o devolve no header da gravação automática; vale só enquanto este turno corre.
+          runToken: run.token,
           memories: (await this.memorias.list(user.id)).map(({ id, content }) => ({
             id,
             content,

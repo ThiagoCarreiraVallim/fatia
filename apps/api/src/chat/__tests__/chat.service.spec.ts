@@ -18,6 +18,7 @@ import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
 import { INSTANCIA_LIBERADA } from '../../billing/ai-entitlement';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { ChatRunRegistry } from '../chat-run.registry';
+import { CHAT_CONTINUE_MESSAGE } from '../dto/chat.dto';
 import type { NotificationService, Notice } from '../../notifications/notification.service';
 import { ChatService, type DestinoDoStream } from '../chat.service';
 import type { MemoryService } from '../memory/memory.service';
@@ -661,6 +662,7 @@ describe('ChatService — ordem das guardas', () => {
       memories: [{ id: 'm1', content: 'É vegetariana.' }],
       webSearch: 'off',
       toolModes: { auto: [], off: [] },
+      runToken: expect.any(String),
     });
   });
 
@@ -690,6 +692,35 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
     expect(chamadasAoAgente[0].toolModes).toEqual(toolModes);
+  });
+
+  it('manda ao agente o token do turno, que só vale enquanto o turno corre (#385)', async () => {
+    const { service, canal, chamadasAoAgente, runs } = montar();
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    const token = chamadasAoAgente[0].runToken as string;
+    expect(runs.active(USUARIO.id, CONVERSA, token)).not.toBeNull();
+    canal.encerrar();
+    await turno;
+    expect(runs.active(USUARIO.id, CONVERSA, token)).toBeNull();
+  });
+
+  it('"Continuar" e retomada seguem a mesma resposta da pessoa; mensagem nova abre outra (#385)', async () => {
+    const pedidos: { continues?: boolean }[] = [];
+    for (const dto of [
+      turnoNovo('registra tudo'),
+      turnoNovo(CHAT_CONTINUE_MESSAGE),
+      { conversationId: CONVERSA, resume: { interruptId: 'i-1', value: { approved: true } } },
+    ]) {
+      const { service, canal, runs } = montar();
+      const start = jest.spyOn(runs, 'start');
+      const turno = service.converse(USUARIO, dto, 'tok', destinoDeTeste().destino);
+      await respirar();
+      canal.encerrar();
+      await turno;
+      pedidos.push(start.mock.calls[0][2] ?? {});
+    }
+    expect(pedidos.map((p) => !!p.continues)).toEqual([false, true, true]);
   });
 
   it('conversa nova vai ao agente com o histórico vazio, e nasce com o id do PWA', async () => {

@@ -19,7 +19,7 @@ Worktree `.claude/worktrees/385-ia-config`, branch `redesign/385-ia-config`. Nã
 
 ## Próximo passo exato
 
-Serviço pronto (itens 1, 2-serviço, 3-purge/desfazer, 4-run ativo+answerKey, 5); spec de integração 37/37.
-Falta: item 4 fiação (chat.service `continues` + `runToken` ao agente; controller MCP exige `X-Fatia-Agent-Key`
-quando há `x-fatia-auto-write`; header `lookup: true` → `autoWriter.lookup`), agente (run_token, lookup no timeout),
-item 3 export/DATA_RETENTION, item 6 UI, docs.
+API do item 4 pronta (fb606b31 + este commit): `runToken` vai ao agente, "Continuar"/retomada seguem o
+answerKey, `/mcp` exige `X-Fatia-Agent-Key` com o header, `lookup: true` só consulta.
+Falta: agente (ChatRequest.run_token → runId do header; auto desligado sem token/chave; manda a chave;
+timeout → lookup; McpUnauthorized → cartão), item 3 export/DATA_RETENTION, item 6 UI, docs.

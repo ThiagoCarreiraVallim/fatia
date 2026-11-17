@@ -22,6 +22,13 @@ import {
 import { MAX_FOTOS_POR_MENSAGEM, TETO_DA_FOTO_DO_CHAT } from '../corpos-do-chat';
 import type { ConversationState } from '../conversation.service';
 
+/**
+ * O texto que o botão "Continuar" do web e do app manda depois de um corte (#385). O turno que o
+ * leva conta como a mesma resposta da pessoa no teto de gravações automáticas. Mantenha igual ao
+ * `CHAT_CONTINUE_MESSAGE` do `@fatia/api-client`.
+ */
+export const CHAT_CONTINUE_MESSAGE = 'Continue de onde parou.';
+
 const CONVERSATION_STATES: ConversationState[] = ['idle', 'thinking', 'waiting'];
 
 /**
