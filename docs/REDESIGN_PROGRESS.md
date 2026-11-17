@@ -353,6 +353,8 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
   - A câmera do app não ganhou as abas Prato/Rótulo nem o "Tirar outra" depois do disparo: o rótulo continua no alimento próprio; o "Tirar outra" está no aviso do provedor.
   - O texto da permissão da câmera inclui os códigos de barras, que a prancha não cita.
   - O botão da IA no menu não gira com a resposta em segundo plano; fica o "Respondendo…" que já existia no PWA.
+  - A revisão da foto (Al-M10) fica na tela da foto, e não no fio do chat com chips e campo de correção: no PWA, logo abaixo da foto; no app, na gaveta de revisão da #374. A conversa sobre a foto continua possível pelo chat.
+  - A Config da IA não tem a escolha do agente ("Com quem você conversa"): ela fica na conversa nova, como já registrado acima.
 - **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
 

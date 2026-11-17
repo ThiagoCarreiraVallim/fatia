@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -58,6 +58,10 @@ export default function PhotoScreen() {
   // A foto que espera o aviso do provedor (primeira vez, ou o 403 do aceite da #384).
   const [aguardandoAceite, setAguardandoAceite] = useState<string | null>(null);
   const [avisoDaFoto, setAvisoDaFoto] = useState<string | null>(null);
+  // A última foto tirada ou escolhida: fica no lugar da câmera enquanto o aviso, o reconhecimento
+  // ou a revisão estão abertos (Al-M12), para a pessoa ver o que vai mandar.
+  const [foto, setFoto] = useState<string | null>(null);
+  const [perguntandoGuardar, setPerguntandoGuardar] = useState(false);
   const qc = useQueryClient();
   const actionSheet = useActionSheet();
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
@@ -86,6 +90,7 @@ export default function PhotoScreen() {
    * não manda nada; a câmera continua aberta.
    */
   const recognize = (jpegBase64: string) => {
+    setFoto(jpegBase64);
     // Antes da primeira foto: o nome do provedor e o link dos dados (Al-M12). É o aceite do chat.
     if (aceites.data && !aceites.data.chat.accepted) {
       setAguardandoAceite(jpegBase64);
@@ -107,6 +112,7 @@ export default function PhotoScreen() {
     // A escolha só vale gravada: se falha, avisa e pergunta de novo, sem seguir com a foto num
     // estado que a pessoa não escolheu (#385).
     const choose = (keep: boolean) => {
+      setPerguntandoGuardar(false);
       usersApi.updateMe({ keepMealPhotos: keep }).then(
         (user) => {
           qc.setQueryData(['users', 'me'], user);
@@ -119,8 +125,11 @@ export default function PhotoScreen() {
         },
       );
     };
+    setPerguntandoGuardar(true);
     actionSheet({
       title: MEAL_PHOTO_COPY.keepTitle,
+      // Fechar sem escolher não manda nada: a câmera volta.
+      onCancel: () => setPerguntandoGuardar(false),
       description: MEAL_PHOTO_COPY.keepBody,
       options: [
         { label: MEAL_PHOTO_COPY.keepYes, onPress: () => choose(true) },
@@ -179,10 +188,23 @@ export default function PhotoScreen() {
             </Pressable>
           )}
           <View className="flex-1 overflow-hidden rounded-lg border border-border">
-            <PhotoCapture
-              onCapturada={recognize}
-              ativo={resultado === null && !reconhecer.isPending && aguardandoAceite === null}
-            />
+            {foto &&
+            (aguardandoAceite !== null ||
+              perguntandoGuardar ||
+              reconhecer.isPending ||
+              resultado !== null) ? (
+              <Image
+                accessibilityLabel="Foto do prato"
+                source={{ uri: `data:image/jpeg;base64,${foto}` }}
+                resizeMode="cover"
+                style={{ flex: 1 }}
+              />
+            ) : (
+              <PhotoCapture
+                onCapturada={recognize}
+                ativo={resultado === null && !reconhecer.isPending && aguardandoAceite === null}
+              />
+            )}
           </View>
 
           <View className="gap-3 pt-4">
