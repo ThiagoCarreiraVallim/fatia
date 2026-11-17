@@ -140,6 +140,10 @@ export class CircuitSessionService {
       data: {
         userId,
         planId: plan.id,
+        // O retrato do plano, como no `start()`: apagar o circuito depois não
+        // apaga o nome nem o tipo da sessão no histórico.
+        fromPlan: true,
+        planName: plan.name,
         startedAt,
         completedAt,
         feeling: dto.feeling ?? null,

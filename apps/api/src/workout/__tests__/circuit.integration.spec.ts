@@ -231,6 +231,8 @@ describe('circuitos (banco real)', () => {
     });
     expect(session.completedAt).not.toBeNull();
     expect(await prisma.sessionSet.count({ where: { sessionId: logged.sessionId } })).toBe(8);
+    // O retrato do plano, como no start(): apagar o circuito não apaga o nome.
+    expect(session).toMatchObject({ fromPlan: true, planName: 'Tabata' });
   });
 
   it('no histórico o circuito é "circuito", com filtro próprio e fora de Planos (#381, Al-T10)', async () => {
