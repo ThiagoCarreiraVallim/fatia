@@ -49,7 +49,7 @@ export function ChatLocked({ available }: { available: boolean }) {
         <Text className="text-sm text-muted-foreground">
           O registro manual e a sua própria IA pelo MCP continuam livres.
         </Text>
-        <Button variant="outline" onPress={() => router.push('/profile/tokens')}>
+        <Button variant="outline" onPress={() => router.push('/profile/connect')}>
           Usar minha IA pelo MCP
         </Button>
       </View>
@@ -109,7 +109,7 @@ export function ChatLocked({ available }: { available: boolean }) {
             </Button>
           </>
         )}
-        <Button variant="outline" onPress={() => router.push('/profile/tokens')}>
+        <Button variant="outline" onPress={() => router.push('/profile/connect')}>
           Usar minha IA pelo MCP
         </Button>
         <Button variant="text" onPress={() => router.replace('/')}>
