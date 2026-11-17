@@ -140,6 +140,9 @@ describe('convites e assentos', () => {
     expect(inviteSummary(convite({ email: 'ana@x.com', maxUses: 1 }))).toBe(
       'ana@x.com · vence 24 out',
     );
+    expect(inviteSummary(convite({ code: 'AD7K3Q9P', uses: 12 }))).toBe(
+      'Código AD7K3Q9P · 12 usos · vence 24 out',
+    );
   });
 
   it('resume os assentos', () => {

@@ -181,7 +181,7 @@ function dataCurta(iso: string): string {
 
 /** "Link · 3 de 10 usos · vence 24 out" ou "ana@x.com · vence 24 out". */
 export function inviteSummary(invite: InviteView): string {
-  const quem = invite.email ?? 'Link';
+  const quem = invite.email ?? (invite.code ? `Código ${invite.code}` : 'Link');
   const usos =
     invite.email !== null
       ? null

@@ -35,4 +35,4 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Próximo passo
 
-web: Cm-01, Cm-02, Cm-04 (Sobre) e Cm-22 (Benefícios do membro) feitos; falta painel /org/[id]/benefits (Pn-28) + código em Convites; depois app (mobile) e fixtures de previewBySlug (onboarding web test, mobile drawer).
+web: tudo feito (Cm-01, Cm-02, Cm-04, Cm-22, Pn-28, código em Convites). Próximo: app (mobile) — drawer (previewBySlug→previewByCode, aba QR), lista Cm-01, Sobre Cm-04, Benefícios Cm-22, fixtures MyGroup; depois REDESIGN_PROGRESS e checagens finais.

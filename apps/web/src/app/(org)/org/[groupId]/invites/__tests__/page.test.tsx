@@ -74,6 +74,29 @@ describe('painel › convites', () => {
     expect(screen.queryByRole('button', { name: 'Compartilhar' })).toBeNull();
   });
 
+  it('gera o código de entrada da recepção, de membro, e mostra o código e o link do QR', async () => {
+    vi.mocked(orgApi.createInvite).mockResolvedValue({
+      invite: convite({ id: 'i4', code: 'AD7K3Q9P', maxUses: null, uses: 0 }),
+      url: 'http://localhost:3030/community?join=1&code=AD7K3Q9P',
+      emailSent: false,
+    });
+    abrir();
+    await userEvent.click(screen.getByRole('button', { name: 'Gerar código de entrada' }));
+    await waitFor(() =>
+      expect(orgApi.createInvite).toHaveBeenCalledWith('g1', { role: 'MEMBER', code: true }),
+    );
+    expect(await screen.findByTestId('entry-code')).toHaveTextContent('AD7K3Q9P');
+    expect(screen.getByTestId('entry-code-url')).toHaveTextContent(
+      'http://localhost:3030/community?join=1&code=AD7K3Q9P',
+    );
+  });
+
+  it('comunidade só por convite não tem código de entrada', async () => {
+    abrir(grupo({ joinPolicy: 'INVITE_ONLY' }));
+    expect(screen.queryByRole('button', { name: 'Gerar código de entrada' })).toBeNull();
+    expect(screen.getByText(/só por convite/)).toBeInTheDocument();
+  });
+
   it('onde o navegador tem a folha do sistema, o link vai por ela', async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'share', { value: share, configurable: true });
