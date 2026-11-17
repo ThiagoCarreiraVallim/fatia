@@ -48,6 +48,8 @@ import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
 import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
+import { AceiteDoChat, useChatLiberado } from './aceite';
+import { PilulasDeResposta } from './pilulas';
 import {
   useConversaAberta,
   useDisponibilidadeDoChat,
@@ -521,6 +523,7 @@ function Composer() {
 
 export function ChatThread() {
   const rodando = useAuiState((s) => s.thread.isRunning);
+  const liberado = useChatLiberado();
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <LiveJoin />
@@ -545,7 +548,13 @@ export function ChatThread() {
       </Conversation>
       <Anuncio />
       <AvisoDeCota />
-      <Composer />
+      {liberado ? (
+        <>
+          <PilulasDeResposta />
+          <Composer />
+        </>
+      ) : null}
+      <AceiteDoChat />
     </ThreadPrimitive.Root>
   );
 }
