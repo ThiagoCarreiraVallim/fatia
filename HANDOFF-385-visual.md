@@ -18,3 +18,4 @@
 - As 5 pranchas não estavam em .canvas/project: baixadas do artifact compartilhado "Fatia — redesign e novo plano" (https://claude.ai/artifact/GvL8GtYkJGjK5e4YovhZ3o, files project/Al-M*.dc.html) e copiadas para .canvas/project. Renders em ~/.cache/fatia-vis/385/board.
 - Demo: linhas criadas listadas em ~/.cache/fatia-vis/385/demo-rows.txt (baseline no topo). Restaurar no fim.
 - Consultas no banco: node <scratchpad>/q.cjs "SQL" (Prisma raw; psql não existe).
+- Feito: print web da Config da IA (~/.cache/fatia-vis/385/web). Diferenças web Al-M24: linhas sem ícones (categorias, busca, Mais), categorias e Mais fora de cartão, cadeados por item no "Nunca". Próximo: print do app (/chat/settings), depois corrigir.
