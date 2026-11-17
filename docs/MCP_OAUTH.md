@@ -122,6 +122,28 @@ Os tokens do Logto são repassados ao cliente **sem serem armazenados**.
 
 `grant_type=refresh_token` é repassado ao Logto. O facade não guarda refresh tokens.
 
+Erro do Logto no `/oauth/token` (code ou refresh) sai como `OAuthError`, no formato da RFC 6749:
+`invalid_request`, `invalid_grant`, `invalid_scope` e `unsupported_grant_type` passam como
+vieram; o resto (inclusive `invalid_client`, que lá fala do app do facade) vira `invalid_grant`.
+
+### Quem conectou o quê (#388)
+
+A tela "Conectar sua IA" mostra "Conectado ao Claude · último acesso agora". Para isso existe a
+tabela `McpOAuthConnection` (pessoa × cliente DCR), porque a `McpOAuthAuthorization` some minutos
+depois do login e não serve de vínculo.
+
+- **Nasce no `/oauth/token`**, no code e no refresh (com o `client_id` que o cliente público
+  manda). O dono é o `sub` do access token que o Logto acabou de emitir, verificado pelo JWKS
+  (`McpConnectionRecorder`); o `client_id` só diz qual app. Falhar aqui só registra um aviso: o
+  login do app de IA nunca cai por causa da tela.
+- **Último acesso:** a linha guarda o SHA-256 do último access token entregue. Cada chamada ao
+  `/mcp` procura o hash do Bearer e atualiza `lastUsedAt` (no máximo uma escrita por minuto). O
+  token do PWA e do app não casa com nenhuma linha.
+- **Leitura:** `GET /users/me/mcp-connections` devolve `serverUrl` (`API_PUBLIC_URL` + `/mcp`, o
+  mesmo `resource` do metadata para quem chega pelo endereço público) e as conexões da própria
+  pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`.
+- Conexões de antes da tabela aparecem no primeiro refresh do token.
+
 ## Exigências do diretório de conectores
 
 Além da spec MCP genérica, a doc de [authentication](https://claude.com/docs/connectors/building/authentication)
@@ -186,6 +208,9 @@ O que existe hoje para cortar acesso:
 - **No Fatia:** apagar a conta (`delete_my_account`) remove o `User`, e o token vira inútil — o
   `sub` deixa de resolver.
 
+Por isso a tela "Conectar sua IA" (#388) diz "para desconectar, remova o conector no app da sua
+IA", e não oferece um botão de desconectar.
+
 O que **falta**, e está registrado como limitação em
 [`docs/THREAT_MODEL.md`](./THREAT_MODEL.md): não há como o usuário revogar uma sessão específica
 pela interface do Fatia sem apagar a conta.
@@ -202,4 +227,5 @@ Automatizado não cobre — precisa ser feito à mão uma vez, contra a instânc
 3. Concluir o login no Logto e aceitar o consentimento.
 4. Pedir ao Claude "quais tools do Fatia você tem?" — deve listar as 87.
 5. Pedir "registre uma refeição de teste" e "inicie um treino" — o critério de pronto da épica #38.
-6. Conferir no banco que há um `McpOAuthClient` com `lastUsedAt` preenchido.
+6. Conferir no banco que há um `McpOAuthClient` com `lastUsedAt` preenchido e, em Você › Conectar
+   sua IA, que a tela mostra "Conectado ao Claude" com o último acesso.
