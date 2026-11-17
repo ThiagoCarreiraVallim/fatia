@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, ShieldCheck } from 'lucide-react-native';
+import { Globe } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
   aiConsentBody,
@@ -59,10 +59,7 @@ export function AiConsentCard({
   const corpo = data?.processor ? aiConsentBody('chat', data.processor) : null;
   return (
     <View className="m-3 gap-3 rounded-3xl border border-border bg-card p-5 pb-8">
-      <View className="size-10 items-center justify-center rounded-2xl bg-primary/15">
-        <ShieldCheck size={20} color={colors.primaryText} />
-      </View>
-      <Text accessibilityRole="header" className="text-lg font-bold text-foreground">
+      <Text accessibilityRole="header" className="text-base font-bold text-foreground">
         {textos.title}
       </Text>
       {corpo ? (
@@ -78,22 +75,26 @@ export function AiConsentCard({
         <Text className="text-sm text-muted-foreground">Carregando o aviso…</Text>
       )}
       <Pressable accessibilityRole="link" onPress={() => openLegal('/privacy')}>
-        <Text className="text-sm font-semibold text-primary-text underline">{textos.link}</Text>
+        <Text className="text-xs text-muted-foreground underline">{textos.link}</Text>
       </Pressable>
       {aceitar.isError ? (
         <Text accessibilityRole="alert" className="text-xs text-danger">
           Não consegui gravar o aceite. Tente de novo.
         </Text>
       ) : null}
-      <Button
-        disabled={!corpo || aceitar.isPending}
-        onPress={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
-      >
-        {textos.accept}
-      </Button>
-      <Button variant="secondary" onPress={onDecline}>
-        {textos.decline}
-      </Button>
+      {/* Concordo e Agora não lado a lado (prancha IA-Estados, "Aceite"). */}
+      <View className="flex-row gap-2">
+        <Button
+          className="flex-1"
+          disabled={!corpo || aceitar.isPending}
+          onPress={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
+        >
+          {textos.accept}
+        </Button>
+        <Button variant="secondary" className="flex-1" onPress={onDecline}>
+          {textos.decline}
+        </Button>
+      </View>
     </View>
   );
 }

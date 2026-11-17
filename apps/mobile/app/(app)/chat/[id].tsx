@@ -42,8 +42,18 @@ export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const sessao = useChatSession();
-  const { thread, agent, isNew, loading, loadError, conversationId, queue, queuePaused, quote } =
-    useChatSnapshot();
+  const {
+    thread,
+    title,
+    agent,
+    isNew,
+    loading,
+    loadError,
+    conversationId,
+    queue,
+    queuePaused,
+    quote,
+  } = useChatSnapshot();
   const lista = useRef<FlatList<ChatThreadMessage>>(null);
 
   useEffect(() => {
@@ -90,7 +100,7 @@ export default function ConversationScreen() {
 
   return (
     <Screen
-      title={nomeDoAgente ?? 'Chat'}
+      title={nomeDoAgente ?? title ?? (isNew ? 'Nova conversa' : 'Conversa')}
       scroll={false}
       actions={
         <>
@@ -180,7 +190,12 @@ export default function ConversationScreen() {
             }
             renderItem={({ item, index }) =>
               item.role === 'user' ? (
-                <UserBubble text={item.text} photos={item.photos} images={item.images} />
+                <UserBubble
+                  text={item.text}
+                  photos={item.photos}
+                  images={item.images}
+                  headline={index === 0}
+                />
               ) : (
                 <AssistantBlock
                   message={item}

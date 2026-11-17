@@ -521,3 +521,21 @@ describe('ChatSession — motivo do 👎 (#384)', () => {
     });
   });
 });
+
+describe('ChatSession — título no topo (prancha IA-Estados, "Título e topo")', () => {
+  it('abrir guarda o título da conversa; a nova não tem', async () => {
+    conversa = {
+      id: 'c-titulo',
+      title: 'Registro do almoço',
+      createdAt: '2026-11-17T12:00:00.000Z',
+      updatedAt: '2026-11-17T12:00:00.000Z',
+      messages: [],
+    };
+    const s = sessao();
+    await s.open('c-titulo');
+    expect(s.getSnapshot().title).toBe('Registro do almoço');
+
+    s.startNew();
+    expect(s.getSnapshot().title).toBeNull();
+  });
+});

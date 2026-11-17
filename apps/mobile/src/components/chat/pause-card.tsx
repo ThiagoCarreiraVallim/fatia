@@ -2,14 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
-import {
-  AlertCircle,
-  Globe,
-  HelpCircle,
-  Layers,
-  PencilLine,
-  PlayCircle,
-} from 'lucide-react-native';
+import { AlertCircle, Globe, HelpCircle, Layers, PencilLine, Clock } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
   aiConsentBody,
@@ -49,21 +42,28 @@ export function PauseCard({
       <View
         accessibilityRole="summary"
         accessibilityLabel={pausa.prompt}
-        className="gap-3 rounded-2xl border border-border bg-card p-4"
+        className="gap-3 rounded-2xl border border-primary/60 bg-card p-3.5"
       >
-        <View className="flex-row items-center gap-2">
-          <PlayCircle size={16} color={colors.primaryText} />
-          <Text className="flex-1 text-sm font-semibold text-foreground">{pausa.prompt}</Text>
-        </View>
+        <Cabecalho
+          icone={<Clock size={18} color={colors.primaryText} />}
+          acima="Pausa"
+          titulo="Está mais longo que o previsto"
+        />
+        {pausa.prompt ? <Text className="text-sm text-foreground/75">{pausa.prompt}</Text> : null}
         {pausa.summary ? (
           <Text className="text-xs text-muted-foreground">{pausa.summary}</Text>
         ) : null}
         <View className="flex-row gap-2">
-          <Button size="sm" disabled={ocupado} onPress={() => onResponder(true)}>
-            <Text className="text-sm font-bold text-primary-foreground">Continuar</Text>
+          <Button
+            variant="ink"
+            className="flex-1"
+            disabled={ocupado}
+            onPress={() => onResponder(true)}
+          >
+            <Text className="text-sm font-bold text-background">Continuar</Text>
           </Button>
-          <Button size="sm" variant="outline" disabled={ocupado} onPress={() => onResponder(false)}>
-            <Text className="text-sm text-foreground">Parar aqui</Text>
+          <Button variant="secondary" disabled={ocupado} onPress={() => onResponder(false)}>
+            <Text className="text-sm font-semibold text-secondary-foreground">Parar aqui</Text>
           </Button>
         </View>
       </View>
@@ -102,6 +102,7 @@ function Acoes({
   // A busca conta como decisão: escrita + busca já é lote.
   const decisoesNoLote = pauseDecisionCount(pausa.actions);
   const emLote = decisoesNoLote > 1;
+  const soPergunta = perguntas.length > 0 && escritas.length + buscas.length === 0;
 
   const faltaDecidir = [...escritas, ...buscas].some((a) => decisoes[a.toolCallId] === undefined);
   const faltaResponder = perguntas.some((a) =>
@@ -160,7 +161,12 @@ function Acoes({
   }
 
   return (
-    <View className="gap-3 rounded-2xl border border-primary/60 bg-card p-4">
+    <View
+      className={cn(
+        'gap-3 rounded-2xl border bg-card p-3.5',
+        soPergunta ? 'border-info/60' : 'border-primary/60',
+      )}
+    >
       {emLote ? (
         <Cabecalho
           icone={<Layers size={18} color={colors.primaryText} />}
@@ -169,9 +175,10 @@ function Acoes({
         />
       ) : perguntas.length ? (
         <Cabecalho
-          icone={<HelpCircle size={18} color={colors.primaryText} />}
+          icone={<HelpCircle size={18} color={colors.info} />}
           acima="Pergunta"
           titulo={pausa.prompt || 'Pergunta do assistente'}
+          pergunta
         />
       ) : null}
       {buscas.map((acao) => (
@@ -198,6 +205,8 @@ function Acoes({
         <Pergunta
           key={acao.toolCallId}
           acao={acao}
+          // O cabeçalho já mostra a pergunta quando ela é a única coisa do cartão.
+          semEnunciado={soPergunta && acao.prompt === pausa.prompt}
           valores={respostas[acao.toolCallId] ?? {}}
           onMudar={(nome, valor) =>
             setRespostas((r) => ({
@@ -214,11 +223,12 @@ function Acoes({
       ) : null}
       {soUmaEscrita ? null : (
         <Button
+          variant="ink"
           disabled={ocupado || faltaDecidir || faltaResponder || aceitar.isPending}
           onPress={() => void enviarLote()}
         >
-          <Text className="text-sm font-bold text-primary-foreground">
-            {emLote ? `Enviar ${decisoesNoLote} decisões` : 'Enviar'}
+          <Text className="text-sm font-bold text-background">
+            {emLote ? `Enviar ${decisoesNoLote} decisões` : 'Responder'}
           </Text>
         </Button>
       )}
@@ -231,18 +241,21 @@ function Cabecalho({
   acima,
   titulo,
   perigo = false,
+  pergunta = false,
 }: {
   icone: ReactNode;
   acima: string;
   titulo: string;
   perigo?: boolean;
+  /** A pergunta do assistente sai em azul, para não se confundir com uma escrita. */
+  pergunta?: boolean;
 }) {
   return (
     <View className="flex-row items-center gap-3">
       <View
         className={cn(
           'size-9 items-center justify-center rounded-xl',
-          perigo ? 'bg-danger/15' : 'bg-primary/15',
+          perigo ? 'bg-danger/15' : pergunta ? 'bg-info/15' : 'bg-primary/15',
         )}
       >
         {icone}
@@ -335,10 +348,11 @@ function Escrita({
           <Button
             disabled={ocupado || travado}
             onPress={() => onDecidir(true)}
+            variant="ink"
             className={cn('flex-1', decisao === false && 'opacity-40')}
             accessibilityState={{ selected: decisao === true, disabled: ocupado || travado }}
           >
-            <Text className="text-sm font-bold text-primary-foreground">Gravar</Text>
+            <Text className="text-sm font-bold text-background">Gravar</Text>
           </Button>
         )}
         <Button
@@ -349,7 +363,7 @@ function Escrita({
           accessibilityHint="Não grava. Diga no campo o que mudar."
           accessibilityState={{ selected: decisao === false, disabled: ocupado }}
         >
-          <Text className="text-sm text-secondary-foreground">Ajustar</Text>
+          <Text className="text-sm font-semibold text-secondary-foreground">Ajustar</Text>
         </Button>
       </View>
     </View>
@@ -403,38 +417,40 @@ function AceiteDaBusca({
           Não consegui gravar o aceite. Tente de novo.
         </Text>
       ) : null}
-      <Button
-        accessibilityState={emLote ? { selected: decisao === true } : undefined}
-        className={cn(decisao === false && 'opacity-40')}
-        disabled={ocupado || aceitar.isPending || !aceites?.processor}
-        onPress={async () => {
-          if (emLote) {
-            onDecidir(true);
-            return;
-          }
-          setFalhou(false);
-          if (!aceites?.webSearch.accepted) {
-            try {
-              await aceitar.mutateAsync('web_search');
-            } catch {
-              setFalhou(true);
+      <View className="flex-row gap-2">
+        <Button
+          accessibilityState={emLote ? { selected: decisao === true } : undefined}
+          className={cn('flex-1', decisao === false && 'opacity-40')}
+          disabled={ocupado || aceitar.isPending || !aceites?.processor}
+          onPress={async () => {
+            if (emLote) {
+              onDecidir(true);
               return;
             }
-          }
-          onDecidir(true);
-        }}
-      >
-        <Text className="text-sm font-bold text-primary-foreground">{textos.accept}</Text>
-      </Button>
-      <Button
-        variant="secondary"
-        accessibilityState={emLote ? { selected: decisao === false } : undefined}
-        className={cn(decisao === true && 'opacity-40')}
-        disabled={ocupado}
-        onPress={() => onDecidir(false)}
-      >
-        <Text className="text-sm text-secondary-foreground">{textos.decline}</Text>
-      </Button>
+            setFalhou(false);
+            if (!aceites?.webSearch.accepted) {
+              try {
+                await aceitar.mutateAsync('web_search');
+              } catch {
+                setFalhou(true);
+                return;
+              }
+            }
+            onDecidir(true);
+          }}
+        >
+          <Text className="text-sm font-bold text-primary-foreground">{textos.accept}</Text>
+        </Button>
+        <Button
+          variant="secondary"
+          accessibilityState={emLote ? { selected: decisao === false } : undefined}
+          className={cn(decisao === true && 'opacity-40')}
+          disabled={ocupado}
+          onPress={() => onDecidir(false)}
+        >
+          <Text className="text-sm font-semibold text-secondary-foreground">{textos.decline}</Text>
+        </Button>
+      </View>
       <Text className="text-[11px] text-muted-foreground">{textos.footnote}</Text>
     </View>
   );
@@ -444,14 +460,18 @@ function Pergunta({
   acao,
   valores,
   onMudar,
+  semEnunciado = false,
 }: {
   acao: ChatQuestionAction;
   valores: Record<string, string>;
   onMudar: (nome: string, valor: string) => void;
+  semEnunciado?: boolean;
 }) {
   return (
-    <View className="gap-3 rounded-lg border border-border p-3">
-      <Text className="text-sm font-semibold text-foreground">{acao.prompt}</Text>
+    <View className={cn('gap-3', !semEnunciado && 'rounded-lg border border-border p-3')}>
+      {semEnunciado ? null : (
+        <Text className="text-sm font-semibold text-foreground">{acao.prompt}</Text>
+      )}
       {askFieldsOf(acao).map((campo) => (
         <Campo
           key={campo.name}
@@ -495,7 +515,7 @@ function Campo({
               onPress={() => onMudar(o)}
               className={cn(
                 'min-h-[44px] justify-center rounded-full border px-4',
-                valor === o ? 'border-primary bg-primary' : 'border-border',
+                valor === o ? 'border-primary bg-primary' : 'border-transparent bg-secondary',
               )}
             >
               <Text

@@ -35,6 +35,8 @@ import {
 
 export interface ChatSessionSnapshot {
   conversationId: string | null;
+  /** O nome da conversa, para o topo. `null` na nova, que ganha nome depois da 1ª resposta. */
+  title: string | null;
   thread: ChatThreadState;
   /** O agente da conversa (cabeçalho). `null` é o assistente da Fatia. */
   agent: ChatAgentHeader | null;
@@ -87,6 +89,7 @@ export type ChatPhotoUploader = (photo: LocalChatPhoto) => Promise<ChatHistoryPh
 
 const VAZIO: ChatSessionSnapshot = {
   conversationId: null,
+  title: null,
   thread: EMPTY_CHAT_THREAD,
   agent: null,
   isNew: true,
@@ -152,6 +155,7 @@ export class ChatSession {
       if (this.snapshot.conversationId !== conversationId) return;
       this.set({
         thread: threadFromHistory(conversa.messages),
+        title: conversa.title ?? null,
         agent: conversa.agent ?? null,
         isNew: false,
         loading: false,

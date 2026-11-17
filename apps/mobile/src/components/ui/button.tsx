@@ -35,6 +35,8 @@ const buttonVariants = cva('flex-row items-center justify-center gap-2 rounded-m
     variant: {
       default: 'bg-primary',
       secondary: 'bg-secondary',
+      /** A ação principal dos cartões do chat: pílula clara (prancha IA-Cartoes, "Um botão principal"). */
+      ink: 'bg-foreground',
       outline: 'border border-border-strong bg-transparent',
       /** "Texto" da prancha: sem fundo. */
       text: 'bg-transparent',
@@ -73,6 +75,7 @@ const labelVariants = cva('text-sm font-semibold', {
     variant: {
       default: 'text-primary-foreground',
       secondary: 'text-secondary-foreground',
+      ink: 'text-background',
       outline: 'text-foreground',
       text: 'text-foreground',
       danger: 'text-danger',

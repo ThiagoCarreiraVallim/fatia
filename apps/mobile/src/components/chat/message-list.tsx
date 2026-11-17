@@ -7,23 +7,25 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  CircleX,
+  CircleAlert,
   Copy,
   Image as ImageIcon,
+  Pause,
   Quote,
   ThumbsDown,
   ThumbsUp,
+  X,
 } from 'lucide-react-native';
 import {
   AGENT_LOCAL_TOOLS,
   CHAT_FEEDBACK_REASON_LABELS,
-  FATIA_AGENT_NAME,
   chatCardTitle,
   chatMarkdownPlainText,
   collapsedLabel,
   groupToolCalls,
   toolCallStatusOf,
   toolLineLabel,
+  webSearchLineLabel,
   type ChatToolPart,
   type ToolCallStatus,
   splitQuote,
@@ -48,18 +50,33 @@ export function UserBubble({
   text,
   photos,
   images,
+  headline = false,
 }: {
   text: string;
   photos: number;
   images?: string[];
+  /**
+   * A primeira fala é o assunto da conversa: grande, à direita, com uma linha embaixo (prancha
+   * IA-Estados, "Sua mensagem"). As seguintes são respostas curtas, em balão (Al-M20).
+   */
+  headline?: boolean;
 }) {
   // A citação de uma resposta vem no começo do texto (`withQuote`), e aqui se
   // desenha à parte — inclusive depois de reabrir a conversa.
   const { quote, text: fala } = splitQuote(text);
   return (
-    <View className="max-w-[85%] gap-1 self-end">
-      <Text className="self-end pr-1 text-xs font-semibold text-muted-foreground">Você</Text>
-      <View className="rounded-3xl rounded-br-md bg-secondary px-4 py-2.5">
+    <View
+      className={cn(
+        'gap-1 self-end',
+        headline ? 'w-full items-end border-b border-border pb-4' : 'max-w-[85%]',
+      )}
+    >
+      <Text className="self-end pr-1 text-xs text-muted-foreground">Você</Text>
+      <View
+        className={cn(
+          headline ? 'max-w-[92%] pr-1' : 'rounded-3xl rounded-br-md bg-secondary px-4 py-2.5',
+        )}
+      >
         {images?.length ? (
           <View className="mb-2 flex-row flex-wrap justify-end gap-2">
             {images.map((uri, i) => (
@@ -91,7 +108,15 @@ export function UserBubble({
           </Text>
         ) : null}
         {fala ? (
-          <Text selectable className="text-[15px] leading-6 text-foreground">
+          <Text
+            selectable
+            className={cn(
+              'text-foreground',
+              headline
+                ? 'text-right text-[22px] font-bold leading-7 tracking-tight'
+                : 'text-[15px] leading-6',
+            )}
+          >
             {fala}
           </Text>
         ) : null}
@@ -131,8 +156,10 @@ export function AssistantBlock({
   const [motivo, setMotivo] = useState<'fechado' | 'aberto' | 'enviado'>('fechado');
   return (
     <View className="gap-2">
-      {showName ? (
-        <Text className="text-xs font-semibold text-primary">{agentName ?? FATIA_AGENT_NAME}</Text>
+      {/* O assistente do Fatia não se apresenta a cada resposta (prancha IA-Estados); o agente
+          de uma comunidade, sim, porque a pessoa precisa saber com quem fala. */}
+      {showName && agentName ? (
+        <Text className="text-xs font-semibold text-primary">{agentName}</Text>
       ) : null}
       {message.reasoning ? (
         <Pressable
@@ -154,10 +181,14 @@ export function AssistantBlock({
           ) : null}
         </Pressable>
       ) : null}
-      <ToolLines message={message} thread={thread} last={last} />
+      {/* O texto vem antes das linhas e dos cartões, como no PWA (prancha IA-Estados). */}
       {message.text ? <ChatMarkdown source={message.text} /> : null}
+      <ToolLines message={message} thread={thread} last={last} />
       {message.stopped ? (
-        <Text className="text-xs text-muted-foreground">Resposta interrompida</Text>
+        <View className={CAIXA_DA_LINHA}>
+          <LineBadge kind="stopped" />
+          <Text className="flex-1 text-[13.5px] text-muted-foreground">Resposta interrompida</Text>
+        </View>
       ) : null}
       {message.text && !thread.running ? (
         <View className="flex-row items-center gap-1">
@@ -324,10 +355,14 @@ function ToolLines({
   last: boolean;
 }) {
   const [grupoAberto, setGrupoAberto] = useState<Record<number, boolean>>({});
-  const linhas: Linha[] = message.tools.map((tool) => ({
-    tool,
-    status: toolCallStatusOf(tool, thread.artifacts[tool.id]),
-  }));
+  // A escrita à espera do sim já está no cartão da pausa: uma linha "rodando" só repetiria.
+  const esperando = new Set(thread.interrupt?.value.actions.map((a) => a.toolCallId) ?? []);
+  const linhas: Linha[] = message.tools
+    .filter((tool) => !(tool.status === 'running' && esperando.has(tool.id)))
+    .map((tool) => ({
+      tool,
+      status: toolCallStatusOf(tool, thread.artifacts[tool.id]),
+    }));
   const segmentos = groupToolCalls(linhas);
   return (
     <>
@@ -346,17 +381,16 @@ function ToolLines({
               accessibilityRole="button"
               accessibilityState={{ expanded: aberto }}
               onPress={() => setGrupoAberto((g) => ({ ...g, [i]: !aberto }))}
-              className="min-h-[36px] flex-row items-center gap-2 self-start rounded-full bg-secondary px-3"
+              accessibilityLabel={collapsedLabel(segmento.items.length)}
+              className={CAIXA_DA_LINHA}
             >
-              <Check size={14} color={colors.primaryText} />
-              <Text className="text-xs font-semibold text-foreground">
-                {collapsedLabel(segmento.items.length)}
-              </Text>
-              {aberto ? (
-                <ChevronDown size={14} color={colors.mutedForeground} />
-              ) : (
-                <ChevronRight size={14} color={colors.mutedForeground} />
-              )}
+              <LineBadge kind="done" />
+              <LineLabel text={collapsedLabel(segmento.items.length)} failed={false} />
+              <ChevronDown
+                size={16}
+                color={colors.mutedForeground}
+                style={aberto ? { transform: [{ rotate: '180deg' }] } : undefined}
+              />
             </Pressable>
             {aberto
               ? segmento.items.map((l) => (
@@ -388,13 +422,34 @@ function ToolLine({
   const write = catalogo?.[tool.name]?.kind === 'confirm';
   const cartao = status === 'done' ? thread.artifacts[tool.id] : undefined;
 
-  if (cartao && last) return <ArtifactCard artifact={cartao} tool={titulo} />;
+  const busca = tool.name === 'web_search';
+  const aviso =
+    busca && (status === 'running' || status === 'done' || status === 'empty') ? (
+      <Text className="px-1 text-xs text-muted-foreground">
+        Só a pergunta vai a um serviço de busca, sem seu nome nem seus dados.
+      </Text>
+    ) : null;
+
+  if (cartao && last) {
+    return (
+      <View className="gap-2">
+        <ArtifactCard artifact={cartao} tool={titulo} />
+        {aviso}
+      </View>
+    );
+  }
 
   // A escrita feita diz "gravado" (o app não guarda a hora de cada fala para dizer "às 15:02").
-  const rotulo = toolLineLabel(titulo, status, {
-    write,
-    cardTitle: cartao ? chatCardTitle(cartao) : write && status === 'done' ? 'gravado' : undefined,
-  });
+  const rotulo = busca
+    ? webSearchLineLabel(status, cartao?.kind === 'sources' ? cartao.sources.length : undefined)
+    : toolLineLabel(titulo, status, {
+        write,
+        cardTitle: cartao
+          ? chatCardTitle(cartao)
+          : write && status === 'done'
+            ? 'gravado'
+            : undefined,
+      });
   return (
     <View className="gap-2">
       <Pressable
@@ -403,40 +458,91 @@ function ToolLine({
         accessibilityLabel={rotulo}
         disabled={!cartao && !tool.errorText}
         onPress={() => (cartao ? setAberto((v) => !v) : setDetalhe((v) => !v))}
-        className="min-h-[36px] flex-row items-center gap-2 self-start rounded-full bg-secondary px-3"
+        className={CAIXA_DA_LINHA}
       >
-        {status === 'running' ? (
-          <ActivityIndicator size="small" color={colors.primaryText} />
-        ) : status === 'done' ? (
-          <Check size={14} color={colors.primaryText} />
-        ) : status === 'error' ? (
-          <CircleX size={14} color={colors.danger} />
-        ) : null}
-        <Text
-          numberOfLines={1}
-          className={cn('shrink text-xs', status === 'error' ? 'text-danger' : 'text-foreground')}
-        >
-          {rotulo}
-        </Text>
+        <LineBadge
+          kind={
+            status === 'running'
+              ? 'running'
+              : status === 'done'
+                ? 'done'
+                : status === 'error'
+                  ? 'error'
+                  : status === 'empty'
+                    ? 'empty'
+                    : 'neutral'
+          }
+        />
+        <LineLabel text={rotulo} failed={status === 'error'} />
         {status === 'error' && tool.errorText ? (
           <Text className="text-xs text-muted-foreground underline">
             {detalhe ? 'ocultar' : 'ver detalhe'}
           </Text>
         ) : null}
         {cartao ? (
-          aberto ? (
-            <ChevronDown size={14} color={colors.mutedForeground} />
-          ) : (
-            <ChevronRight size={14} color={colors.mutedForeground} />
-          )
+          <ChevronDown
+            size={16}
+            color={colors.mutedForeground}
+            style={aberto ? { transform: [{ rotate: '180deg' }] } : undefined}
+          />
         ) : null}
       </Pressable>
+      {aviso}
       {detalhe && tool.errorText ? (
         <Text className="rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
           {tool.errorText}
         </Text>
       ) : null}
       {cartao && aberto ? <ArtifactCard artifact={cartao} tool={titulo} /> : null}
+    </View>
+  );
+}
+
+/** A caixa da linha: pílula cinza da largura da conversa (prancha IA-Estados, "Consultando"). */
+const CAIXA_DA_LINHA =
+  'min-h-[40px] w-full flex-row items-center gap-2.5 rounded-2xl bg-secondary px-3 py-2.5';
+
+/** "Título · resultado": o resultado em destaque, como na prancha IA-Estados. */
+function LineLabel({ text, failed }: { text: string; failed: boolean }) {
+  const corte = text.indexOf(' · ');
+  // "Consultei 3 coisas": a contagem em destaque.
+  const contagem = corte < 0 ? /^(\D*)(\d.*)$/.exec(text) : null;
+  const [antes, depois] =
+    corte >= 0
+      ? [`${text.slice(0, corte)} · `, text.slice(corte + 3)]
+      : contagem
+        ? [contagem[1]!, contagem[2]!]
+        : [text, ''];
+  return (
+    <Text className="flex-1 text-[13.5px] text-muted-foreground">
+      {antes}
+      {depois ? (
+        <Text className={cn('font-semibold', failed ? 'text-danger' : 'text-foreground')}>
+          {depois}
+        </Text>
+      ) : null}
+    </Text>
+  );
+}
+
+/** O selo redondo à esquerda da linha: ✓, vazio, erro, rodando ou interrompida. */
+function LineBadge({
+  kind,
+}: {
+  kind: 'done' | 'empty' | 'error' | 'running' | 'neutral' | 'stopped';
+}) {
+  if (kind === 'running') return <ActivityIndicator size="small" color={colors.primaryText} />;
+  return (
+    <View
+      className={cn(
+        'size-6 items-center justify-center rounded-full',
+        kind === 'done' ? 'bg-primary/15' : kind === 'error' ? 'bg-danger/15' : 'bg-foreground/10',
+      )}
+    >
+      {kind === 'done' ? <Check size={14} color={colors.primaryText} /> : null}
+      {kind === 'error' ? <CircleAlert size={14} color={colors.danger} /> : null}
+      {kind === 'empty' ? <X size={14} color={colors.mutedForeground} /> : null}
+      {kind === 'stopped' ? <Pause size={14} color={colors.mutedForeground} /> : null}
     </View>
   );
 }
@@ -480,7 +586,7 @@ function VoteReasons({
               onPress={() => setEscolhidos((e) => (ativo ? e.filter((x) => x !== m) : [...e, m]))}
               className={cn(
                 'min-h-[36px] justify-center rounded-full border px-3.5',
-                ativo ? 'border-primary bg-primary' : 'border-border',
+                ativo ? 'border-primary bg-primary' : 'border-transparent bg-secondary',
               )}
             >
               <Text
@@ -493,11 +599,16 @@ function VoteReasons({
         })}
       </View>
       <View className="flex-row gap-2">
-        <Button className="flex-1" disabled={!escolhidos.length} onPress={() => onSend(escolhidos)}>
-          Enviar
+        <Button
+          variant="ink"
+          className="flex-1"
+          disabled={!escolhidos.length}
+          onPress={() => onSend(escolhidos)}
+        >
+          <Text className="text-sm font-bold text-background">Enviar</Text>
         </Button>
         <Button variant="secondary" onPress={onClose}>
-          Agora não
+          <Text className="text-sm font-semibold text-secondary-foreground">Agora não</Text>
         </Button>
       </View>
     </View>

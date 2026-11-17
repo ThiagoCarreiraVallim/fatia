@@ -229,39 +229,45 @@ export function Composer({
         </View>
       ) : null}
       <View className="flex-row items-end gap-2">
-        {photosEnabled ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Anexar foto"
-            disabled={disabled || running || fotos.length >= MAX_FOTOS}
-            onPress={attachPhoto}
+        {/* A câmera fica dentro do campo, com a borda verde (prancha Al-M20). */}
+        <View className="min-h-11 flex-1 flex-row items-end rounded-3xl border border-primary/35 bg-card">
+          {photosEnabled ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Anexar foto"
+              disabled={disabled || running || fotos.length >= MAX_FOTOS}
+              onPress={attachPhoto}
+              className={cn(
+                'h-11 w-10 items-center justify-center pl-1',
+                (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
+              )}
+            >
+              <Camera size={20} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+          <TextInput
+            accessibilityLabel="Mensagem para o Fatia"
+            value={texto}
+            onChangeText={setTexto}
+            editable={!disabled && ditado.state === 'idle'}
+            multiline
+            maxLength={MAX_CARACTERES}
+            placeholder={
+              ditado.state === 'recording'
+                ? 'Ouvindo… toque no quadrado para parar'
+                : ditado.state === 'transcribing'
+                  ? 'Transcrevendo…'
+                  : disabled
+                    ? 'Abrindo a conversa…'
+                    : 'Responda ou peça outra coisa'
+            }
+            placeholderTextColor={colors.mutedForeground}
             className={cn(
-              'h-11 w-11 items-center justify-center',
-              (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
+              'max-h-32 min-h-[44px] flex-1 py-2.5 pr-4 text-[15px] text-foreground',
+              !photosEnabled && 'pl-4',
             )}
-          >
-            <Camera size={20} color={colors.mutedForeground} />
-          </Pressable>
-        ) : null}
-        <TextInput
-          accessibilityLabel="Mensagem para o Fatia"
-          value={texto}
-          onChangeText={setTexto}
-          editable={!disabled && ditado.state === 'idle'}
-          multiline
-          maxLength={MAX_CARACTERES}
-          placeholder={
-            ditado.state === 'recording'
-              ? 'Ouvindo… toque no quadrado para parar'
-              : ditado.state === 'transcribing'
-                ? 'Transcrevendo…'
-                : disabled
-                  ? 'Abrindo a conversa…'
-                  : 'Escreva sua mensagem'
-          }
-          placeholderTextColor={colors.mutedForeground}
-          className="max-h-32 min-h-[44px] flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-[15px] text-foreground"
-        />
+          />
+        </View>
         {dictationEnabled && !running && !texto.trim() ? (
           <Pressable
             accessibilityRole="button"

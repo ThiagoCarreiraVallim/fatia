@@ -1,5 +1,6 @@
 import { useState, type ComponentType } from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -24,13 +25,23 @@ import {
 import {
   UNKNOWN_CHAT_ARTIFACT_TEXT,
   appOnlyHref,
+  cardEyebrow,
   chatCardTitle,
   getChatToolCatalog,
   isRenderableChatArtifact,
+  timelineAxisLabels,
+  timelinePeriodLabel,
   type ChatArtifact,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
-import { LineChart, formatDecimal } from '@/components/charts';
+import {
+  chartColors,
+  extent,
+  formatDecimal,
+  formatInteger,
+  linearScale,
+  monotonePath,
+} from '@/components/charts';
 import { Button, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 
@@ -41,7 +52,8 @@ import { colors } from '@/theme/colors';
  */
 
 const MAX_LINHAS = 20;
-const numero = (v: number) => formatDecimal(v, Number.isInteger(v) ? 0 : 1);
+// "1.700", com o ponto do milhar, como na prancha IA-Cartoes.
+const numero = (v: number) => (Number.isInteger(v) ? formatInteger(v) : formatDecimal(v, 1));
 const comUnidade = (v: number, unidade?: string) => `${numero(v)}${unidade ? ` ${unidade}` : ''}`;
 const CAIXA = 'rounded-xl bg-secondary px-3';
 
@@ -101,6 +113,7 @@ export function ArtifactCard({ artifact, tool }: { artifact: ChatArtifact; tool?
   }
   const Icone = ICONES[artifact.kind];
   const titulo = chatCardTitle(artifact);
+  const acima = cardEyebrow(artifact.kind, tool);
   const video = artifact.kind === 'instructions' ? artifact.videoUrl : undefined;
   return (
     <View
@@ -120,9 +133,9 @@ export function ArtifactCard({ artifact, tool }: { artifact: ChatArtifact; tool?
           />
         </View>
         <View className="flex-1">
-          {tool ? (
+          {acima ? (
             <Text numberOfLines={1} className="text-xs text-muted-foreground">
-              {tool}
+              {acima}
             </Text>
           ) : null}
           <Text className="text-[15px] font-bold text-foreground">{titulo}</Text>
@@ -264,26 +277,68 @@ function Barras({ artifact }: De<'bars'>) {
   );
 }
 
+/**
+ * A linha da evolução sem eixos (prancha IA-Cartoes, "Linha do tempo"): o traço, o último ponto
+ * marcado e três datas embaixo. O valor de cada ponto vai para o leitor de tela.
+ */
 function LinhaDoTempo({ artifact }: De<'timeline'>) {
+  const [largura, setLargura] = useState(0);
   if (artifact.events.length === 0) return <Vazio texto="Sem registros no período." />;
+  const valores = artifact.events.map((e) => e.value);
+  const datas = timelineAxisLabels(artifact.events);
+  const altura = 110;
+  const [min, max] = extent(valores) ?? [0, 1];
+  const folga = max === min ? 1 : (max - min) * 0.12;
+  const y = linearScale([min - folga, max + folga], [altura - 6, 6]);
+  const pontos = valores.map((v, i) => ({
+    x: valores.length === 1 ? largura / 2 : 6 + (i * (largura - 12)) / (valores.length - 1),
+    y: y(v),
+  }));
+  const ultimo = pontos.at(-1);
   return (
     <View className="gap-2">
       {artifact.delta != null ? (
         <View className="self-start rounded-full bg-primary/15 px-2 py-0.5">
           <Text className="text-xs font-bold text-primary-text">
             {artifact.delta > 0 ? '+' : ''}
-            {comUnidade(artifact.delta, artifact.unit)} no período
+            {comUnidade(artifact.delta, artifact.unit)} {timelinePeriodLabel(artifact.events)}
           </Text>
         </View>
       ) : null}
       {artifact.events.length > 1 ? (
-        <LineChart
-          name={artifact.label ?? 'Evolução'}
-          labels={artifact.events.map((e) => e.date)}
-          values={artifact.events.map((e) => e.value)}
-          height={150}
-          area
-        />
+        <View
+          accessibilityRole="image"
+          accessibilityLabel={`${artifact.label ?? 'Evolução'}: ${artifact.events
+            .map((e) => `${e.date.slice(0, 10)} ${comUnidade(e.value, artifact.unit)}`)
+            .join(', ')}`}
+          onLayout={(e: LayoutChangeEvent) => setLargura(Math.round(e.nativeEvent.layout.width))}
+          style={{ height: altura }}
+        >
+          {largura > 0 ? (
+            <Svg width={largura} height={altura}>
+              <Path
+                d={monotonePath(pontos)}
+                stroke={chartColors.primary}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+              {ultimo ? (
+                <Circle cx={ultimo.x} cy={ultimo.y} r={4.5} fill={chartColors.primary} />
+              ) : null}
+            </Svg>
+          ) : null}
+        </View>
+      ) : null}
+      {datas.length > 1 ? (
+        <View className="flex-row justify-between">
+          {datas.map((d, i) => (
+            <Text key={`${d}-${i}`} className="text-[11px] text-muted-foreground">
+              {d}
+            </Text>
+          ))}
+        </View>
       ) : null}
     </View>
   );
