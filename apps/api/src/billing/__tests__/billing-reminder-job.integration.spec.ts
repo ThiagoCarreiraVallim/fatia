@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma.service';
 import type { EmailService } from '../../notifications/email.service';
 import type { NotificationService } from '../../notifications/notification.service';
 import { BillingReminderJob } from '../billing-reminder-job.service';
+import type { UserSubscriptionService } from '../user-subscription.service';
 
 /**
  * O job diário dos avisos de cobrança (#386) contra o Postgres de teste: manda
@@ -17,11 +18,13 @@ describe('BillingReminderJob (banco real)', () => {
   } as unknown as ConfigService;
   const notify = jest.fn();
   const send = jest.fn(async () => true);
+  const expireUnpaidTrials = jest.fn(async () => 0);
   const job = new BillingReminderJob(
     prisma,
     config,
     { notify } as unknown as NotificationService,
     { send } as unknown as EmailService,
+    { expireUnpaidTrials } as unknown as UserSubscriptionService,
   );
   const stamp = `lembrete-${Date.now()}`;
   // 09:00 em São Paulo.
@@ -97,6 +100,12 @@ describe('BillingReminderJob (banco real)', () => {
     expect(
       await prisma.billingReminder.count({ where: { subscription: { userId: ids.loja } } }),
     ).toBe(0);
+  });
+
+  it('cada rodada também encerra os testes que acabaram sem pagamento', async () => {
+    expireUnpaidTrials.mockClear();
+    await job.run(HOJE);
+    expect(expireUnpaidTrials).toHaveBeenCalledWith(HOJE);
   });
 
   it('rodar de novo no mesmo dia não repete', async () => {

@@ -94,6 +94,11 @@ export interface PlanoDaPessoa {
 }
 
 const DIA_MS = 24 * 60 * 60 * 1000;
+/**
+ * Quanto esperar depois do fim do teste antes de cancelar a recorrência no
+ * Asaas: boleto pago no vencimento leva até 3 dias úteis para confirmar.
+ */
+const PRAZO_DE_COMPENSACAO_MS = 4 * DIA_MS;
 
 /** O estado da tela, a partir do direito. */
 export function planState(
@@ -209,8 +214,12 @@ export class UserSubscriptionService {
         })
       : null;
     const loja = sub && (sub.source === 'APPLE' || sub.source === 'GOOGLE') ? sub.source : null;
+    // Cancelada (inclusive até o fim do período) não tem cobrança a pagar.
     const vivaNaWeb =
-      sub?.source === 'ASAAS' && sub.status !== 'CANCELED' && sub.status !== 'EXPIRED';
+      sub?.source === 'ASAAS' &&
+      sub.status !== 'CANCELED' &&
+      sub.status !== 'EXPIRED' &&
+      !sub.cancelAtPeriodEnd;
 
     return {
       ...base,
@@ -278,8 +287,19 @@ export class UserSubscriptionService {
     );
     if (reusavel) return this.plan(userId);
 
-    // Checkouts antigos (outro intervalo, outra forma ou link vencido) saem do caminho.
-    for (const antigo of pendentes) {
+    // Tudo o que ainda está vivo no Asaas sai do caminho antes da assinatura
+    // nova: checkouts antigos (outro intervalo, outra forma, link vencido), o
+    // teste que acabou sem pagamento e o PRO vencido além da carência. Quem
+    // chega aqui é Free, então nenhuma delas dá direito — e duas vivas no
+    // provedor seriam duas cobranças.
+    const vivas = await this.prisma.userSubscription.findMany({
+      where: {
+        userId,
+        source: 'ASAAS',
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
+      },
+    });
+    for (const antigo of vivas) {
       if (antigo.providerRef) {
         await provedor.cancelSubscription(antigo.providerRef).catch((err: Error) => {
           this.logger.warn({
@@ -291,7 +311,11 @@ export class UserSubscriptionService {
       }
       await this.prisma.userSubscription.update({
         where: { id: antigo.id },
-        data: { status: 'CANCELED', canceledAt: new Date(), paymentUrl: null },
+        data: {
+          status: antigo.status === 'PENDING' ? 'CANCELED' : 'EXPIRED',
+          canceledAt: new Date(),
+          paymentUrl: null,
+        },
       });
     }
 
@@ -410,10 +434,53 @@ export class UserSubscriptionService {
       data:
         alvo.status === 'PENDING'
           ? { status: 'CANCELED', canceledAt: new Date(), paymentUrl: null }
-          : { cancelAtPeriodEnd: true, canceledAt: new Date() },
+          : // A cobrança em aberto foi cancelada junto: o link não serve mais.
+            { cancelAtPeriodEnd: true, canceledAt: new Date(), paymentUrl: null },
     });
     this.logger.log({ event: 'assinatura_cancelada', userId, status: alvo.status });
     return this.plan(userId);
+  }
+
+  /**
+   * Teste da web que acabou sem pagamento (#386): cancela a recorrência no
+   * Asaas e marca `EXPIRED`, para a cobrança não ficar viva lá e uma nova
+   * assinatura não virar a segunda. Espera `PRAZO_DE_COMPENSACAO_MS` depois do
+   * fim — boleto pago no vencimento leva dias úteis para confirmar —; até lá o
+   * direito já é Free (`teste_acabou`). Idempotente: só pega `TRIALING`, e o
+   * provedor fora do ar deixa a linha para a próxima rodada.
+   */
+  async expireUnpaidTrials(now: Date): Promise<number> {
+    const provedor = this.provedor;
+    if (!provedor) return 0;
+    const vencidos = await this.prisma.userSubscription.findMany({
+      where: {
+        source: 'ASAAS',
+        status: 'TRIALING',
+        trialEndsAt: { lt: new Date(now.getTime() - PRAZO_DE_COMPENSACAO_MS) },
+      },
+      select: { id: true, providerRef: true },
+    });
+    let expirados = 0;
+    for (const sub of vencidos) {
+      try {
+        if (sub.providerRef) await provedor.cancelSubscription(sub.providerRef);
+      } catch (err) {
+        this.logger.warn({
+          event: 'teste_vencido_nao_cancelado',
+          id: sub.id,
+          err: (err as Error).name,
+        });
+        continue;
+      }
+      const { count } = await this.prisma.userSubscription.updateMany({
+        // O pagamento pode ter chegado no meio do caminho: só expira o que ainda é teste.
+        where: { id: sub.id, status: 'TRIALING' },
+        data: { status: 'EXPIRED', canceledAt: now, paymentUrl: null },
+      });
+      expirados += count;
+      if (count) this.logger.log({ event: 'teste_expirado_sem_pagamento', id: sub.id });
+    }
+    return expirados;
   }
 
   /**

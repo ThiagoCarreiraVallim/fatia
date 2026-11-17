@@ -471,3 +471,223 @@ describe('UserSubscriptionService — teste grátis e forma de pagamento (banco 
     });
   });
 });
+
+/**
+ * Teste que acaba sem pagamento e assinatura que fica viva no Asaas (revisão da
+ * #386): ninguém pode terminar com duas recorrências vivas no provedor.
+ */
+describe('UserSubscriptionService — assinaturas vivas no provedor (banco real)', () => {
+  const stamp = `vivas-${Date.now()}`;
+  const comTeste = configCom({ BILLING_PRO_TRIAL_DAYS: 7 });
+  const DIA = 86_400_000;
+  const ids: string[] = [];
+
+  async function pessoa(nome: string, testou = true) {
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-${nome}`,
+        email: `${stamp}-${nome}@test.local`,
+        name: nome,
+        asaasCustomerId: `${stamp}-cus-${nome}`,
+        proTrialStartedAt: testou ? new Date(Date.now() - 10 * DIA) : null,
+      },
+    });
+    ids.push(u.id);
+    return u.id;
+  }
+
+  function testeVencido(userId: string, ref: string, diasAtras: number) {
+    const fim = new Date(Date.now() - diasAtras * DIA);
+    return prisma.userSubscription.create({
+      data: {
+        userId,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        interval: 'MONTHLY',
+        paymentMethod: 'PIX',
+        providerRef: ref,
+        paymentUrl: `https://www.asaas.com/i/${ref}`,
+        trialEndsAt: fim,
+        currentPeriodEnd: fim,
+      },
+    });
+  }
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+    await prisma.billingWebhookEvent.deleteMany({ where: { eventId: { startsWith: stamp } } });
+  });
+
+  it('teste que acabou sem pagamento: cancela no provedor e expira, uma vez só', async () => {
+    const { service, provedor } = montar(comTeste);
+    const vencido = await pessoa('vencido');
+    const emCurso = await pessoa('em-curso');
+    const recente = await pessoa('recente');
+    await testeVencido(vencido, `${stamp}-vencido`, 5);
+    await testeVencido(recente, `${stamp}-recente`, 1); // boleto ainda pode compensar
+    await prisma.userSubscription.create({
+      data: {
+        userId: emCurso,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-em-curso`,
+        trialEndsAt: new Date(Date.now() + 3 * DIA),
+        currentPeriodEnd: new Date(Date.now() + 3 * DIA),
+      },
+    });
+
+    expect(await service.expireUnpaidTrials(new Date())).toBe(1);
+    expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-vencido`);
+    expect(
+      await prisma.userSubscription.findFirstOrThrow({ where: { userId: vencido } }),
+    ).toMatchObject({ status: 'EXPIRED', paymentUrl: null });
+    expect(
+      (await prisma.userSubscription.findFirstOrThrow({ where: { userId: emCurso } })).status,
+    ).toBe('TRIALING');
+
+    // De novo: nada a fazer.
+    expect(await service.expireUnpaidTrials(new Date())).toBe(0);
+    expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('provedor fora do ar: o teste continua para a próxima rodada tentar', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await pessoa('provedor-fora');
+    await testeVencido(u, `${stamp}-provedor-fora`, 5);
+    provedor.cancelSubscription.mockRejectedValueOnce(new Error('503'));
+
+    expect(await service.expireUnpaidTrials(new Date())).toBe(0);
+    expect((await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } })).status).toBe(
+      'TRIALING',
+    );
+  });
+
+  it('assinar de novo encerra no provedor toda assinatura ainda viva, não só a pendente', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await pessoa('reassina');
+    await testeVencido(u, `${stamp}-reassina-teste`, 2);
+    // PRO antigo vencido além da carência, com a recorrência ainda viva.
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'PAST_DUE',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-reassina-atraso`,
+        currentPeriodEnd: new Date(Date.now() - 30 * DIA),
+        graceEndsAt: new Date(Date.now() - 23 * DIA),
+      },
+    });
+
+    const plano = await service.checkout(u, { interval: 'MONTHLY', cpf: CPF });
+
+    expect(plano.state).toBe('PENDING');
+    const canceladas = provedor.cancelSubscription.mock.calls.map(([id]) => id);
+    expect(canceladas).toEqual(
+      expect.arrayContaining([`${stamp}-reassina-teste`, `${stamp}-reassina-atraso`]),
+    );
+    const vivas = await prisma.userSubscription.findMany({
+      where: { userId: u, status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] } },
+    });
+    expect(vivas).toHaveLength(1);
+    expect(vivas[0]!.status).toBe('PENDING');
+  });
+
+  it('evento da assinatura antiga nunca mexe na nova', async () => {
+    const { service } = montar(comTeste);
+    const u = ids[ids.length - 1]!; // "reassina"
+    const nova = await prisma.userSubscription.findFirstOrThrow({
+      where: { userId: u, status: 'PENDING' },
+    });
+    for (const [n, event] of ['PAYMENT_CREATED', 'PAYMENT_OVERDUE'].entries()) {
+      await service.handleAsaasWebhook(
+        { 'asaas-access-token': TOKEN },
+        JSON.stringify({
+          id: `${stamp}-velho-${n}`,
+          event,
+          payment: {
+            id: `pay_velho_${n}`,
+            status: 'PENDING',
+            dueDate: '2026-11-01',
+            subscription: `${stamp}-reassina-teste`,
+            invoiceUrl: 'https://www.asaas.com/i/velho',
+          },
+        }),
+      );
+    }
+    expect(await prisma.userSubscription.findUniqueOrThrow({ where: { id: nova.id } })).toEqual(
+      nova,
+    );
+    expect(
+      await prisma.userSubscription.findFirstOrThrow({
+        where: { providerRef: `${stamp}-reassina-teste` },
+      }),
+    ).toMatchObject({ status: 'EXPIRED', paymentUrl: null });
+  });
+
+  it('cancelar o teste apaga o link: não sobra "pagar" de uma assinatura cancelada', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('cancela-link', false);
+    await service.checkout(u, { interval: 'MONTHLY', cpf: CPF });
+    const plano = await service.cancel(u);
+    expect(plano).toMatchObject({ state: 'CANCELED', paymentUrl: null });
+    expect(
+      (await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } })).paymentUrl,
+    ).toBeNull();
+  });
+
+  it('PRO ativo com a renovação criada e depois cancelado: o link da renovação some', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('ativa-cancela');
+    const ref = `${stamp}-ativa-cancela`;
+    const fim = new Date(Date.now() + 2 * DIA);
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'ACTIVE',
+        interval: 'MONTHLY',
+        providerRef: ref,
+        currentPeriodEnd: fim,
+      },
+    });
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      JSON.stringify({
+        id: `${stamp}-renova`,
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_ativa',
+          status: 'PENDING',
+          dueDate: fim.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+          subscription: ref,
+          invoiceUrl: 'https://www.asaas.com/i/renova',
+        },
+      }),
+    );
+    expect((await service.plan(u)).paymentUrl).toBe('https://www.asaas.com/i/renova');
+
+    const plano = await service.cancel(u);
+    expect(plano).toMatchObject({ state: 'CANCELED', paymentUrl: null });
+  });
+
+  it('linha cancelada até o fim do período com link velho no banco: o plano não mostra o link', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('link-velho');
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'ACTIVE',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-link-velho`,
+        currentPeriodEnd: new Date(Date.now() + 5 * DIA),
+        cancelAtPeriodEnd: true,
+        paymentUrl: 'https://www.asaas.com/i/velho',
+      },
+    });
+    expect((await service.plan(u)).paymentUrl).toBeNull();
+  });
+});

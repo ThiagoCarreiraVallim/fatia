@@ -7,6 +7,7 @@ import { EmailService } from '../notifications/email.service';
 import { NotificationService } from '../notifications/notification.service';
 import { localClock } from '../notifications/reminders/reminder-rules';
 import { billingReminderFor, billingReminderTexts } from './billing-reminders';
+import { UserSubscriptionService } from './user-subscription.service';
 
 /** Roda de hora em hora; cada aviso sai uma vez por dia de vencimento. */
 const EVERY_MS = 60 * 60_000;
@@ -37,6 +38,7 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly notifications: NotificationService,
     private readonly email: EmailService,
+    private readonly subscriptions: UserSubscriptionService,
   ) {}
 
   onModuleInit(): void {
@@ -57,6 +59,14 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
 
   /** Uma rodada. Devolve quantos avisos saíram. */
   async run(now: Date): Promise<number> {
+    // Antes dos avisos: o teste que acabou sem pagamento sai do Asaas (#386).
+    await this.subscriptions
+      .expireUnpaidTrials(now)
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `Testes vencidos não encerrados: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
     const subs = await this.prisma.userSubscription.findMany({
       where: {
         source: { in: ['ASAAS', 'APPLE', 'GOOGLE'] },
