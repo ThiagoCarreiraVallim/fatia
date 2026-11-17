@@ -14,13 +14,11 @@ Worktree `.claude/worktrees/385-ia-config`, branch `redesign/385-ia-config`. Nã
 - [x] 3. Limpeza de `input/result/before` após 24 h, ao apagar o registro e no desfazer; export; DATA_RETENTION
 - [x] 4. Header só com a credencial do agente; `runId` amarrado a `ChatRun` ativo; teto por mensagem da pessoa
 - [x] 5. `toolCallId` repetido: mesmo input → idempotente; senão `AUTO_WRITE_NEEDS_OK`
-- [ ] 6. UI do Desfazer (erros, persistência, antes → depois) e falha do `updateMe` na foto
+- [x] 6. UI do Desfazer (erros, persistência, antes → depois) e falha do `updateMe` na foto
 - [ ] 7. lint, typecheck, testes, docs (ADR 039, REDESIGN_PROGRESS), commit final sem este arquivo
 
 ## Próximo passo exato
 
-Itens 1-5 prontos. Falta:
-item 6 (GET /chat/auto-writes/:id → status; api-client getAutoWriteStatus
-
-- mensagens de erro do desfazer; web artefato.tsx e app artifact-card.tsx; meal-photo-screen updateMe),
-  docs (ADR 039, REDESIGN_PROGRESS), lint/typecheck/suítes, commit final sem este arquivo.
+Itens 1-6 prontos. Falta o 7: docs (ADR 039 notas, REDESIGN_PROGRESS bloco #385), `df -h /`, lint,
+typecheck, suíte da API inteira em fatia_t385, agente (pytest/ruff/mypy src), web, app, api-client;
+commit final removendo este arquivo.

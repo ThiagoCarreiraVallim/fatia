@@ -131,11 +131,19 @@ export function MealPhotoScreen() {
     reconhecer.mutate(arquivo);
   }
 
-  async function escolherGuardar(guardar: boolean) {
-    const atualizado = await usersApi.updateMe({ keepMealPhotos: guardar });
-    queryClient.setQueryData(CHAVE_DO_PERFIL, atualizado);
-    setAvisoDaFoto(guardar ? MEAL_PHOTO_COPY.keptYes : MEAL_PHOTO_COPY.keptNo);
-    if (arquivo) reconhecer.mutate(arquivo);
+  // A escolha de guardar as fotos. Se falha, a pergunta fica aberta com o aviso e os botões
+  // voltam: a pessoa tenta de novo em vez de ficar parada sem saber.
+  const guardarEscolha = useMutation({
+    mutationFn: (guardar: boolean) => usersApi.updateMe({ keepMealPhotos: guardar }),
+    onSuccess: (atualizado, guardar) => {
+      queryClient.setQueryData(CHAVE_DO_PERFIL, atualizado);
+      setAvisoDaFoto(guardar ? MEAL_PHOTO_COPY.keptYes : MEAL_PHOTO_COPY.keptNo);
+      if (arquivo) reconhecer.mutate(arquivo);
+    },
+  });
+
+  function escolherGuardar(guardar: boolean) {
+    guardarEscolha.mutate(guardar);
   }
 
   async function aoEscolher(lista: FileList | null) {
@@ -274,17 +282,24 @@ export function MealPhotoScreen() {
             {MEAL_PHOTO_COPY.keepTitle}
           </h2>
           <p className="text-sm leading-relaxed text-foreground/75">{MEAL_PHOTO_COPY.keepBody}</p>
+          {guardarEscolha.isError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {MEAL_PHOTO_COPY.keepFailed}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => void escolherGuardar(true)}
+              disabled={guardarEscolha.isPending}
+              onClick={() => escolherGuardar(true)}
               className={cn(inkButton, 'flex-1 rounded-full px-4 py-2.5 text-sm font-bold')}
             >
               {MEAL_PHOTO_COPY.keepYes}
             </button>
             <button
               type="button"
-              onClick={() => void escolherGuardar(false)}
+              disabled={guardarEscolha.isPending}
+              onClick={() => escolherGuardar(false)}
               className={cn(ghostButton, 'flex-1 rounded-full px-4 py-2.5 text-sm')}
             >
               {MEAL_PHOTO_COPY.keepNo}

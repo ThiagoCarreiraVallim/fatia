@@ -104,12 +104,20 @@ export default function PhotoScreen() {
       reconhecer.mutate(jpegBase64);
       return;
     }
+    // A escolha só vale gravada: se falha, avisa e pergunta de novo, sem seguir com a foto num
+    // estado que a pessoa não escolheu (#385).
     const choose = (keep: boolean) => {
-      setAvisoDaFoto(keep ? MEAL_PHOTO_COPY.keptYes : MEAL_PHOTO_COPY.keptNo);
-      void usersApi
-        .updateMe({ keepMealPhotos: keep })
-        .then((user) => qc.setQueryData(['users', 'me'], user))
-        .finally(() => reconhecer.mutate(jpegBase64));
+      usersApi.updateMe({ keepMealPhotos: keep }).then(
+        (user) => {
+          qc.setQueryData(['users', 'me'], user);
+          setAvisoDaFoto(keep ? MEAL_PHOTO_COPY.keptYes : MEAL_PHOTO_COPY.keptNo);
+          reconhecer.mutate(jpegBase64);
+        },
+        () => {
+          setAvisoDaFoto(MEAL_PHOTO_COPY.keepFailed);
+          perguntarSeGuarda(jpegBase64);
+        },
+      );
     };
     actionSheet({
       title: MEAL_PHOTO_COPY.keepTitle,

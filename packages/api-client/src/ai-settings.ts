@@ -265,6 +265,7 @@ export const MEAL_PHOTO_COPY = {
   keepNo: 'Agora não',
   keptYes: 'Fotos das refeições: guardadas. Muda em Você.',
   keptNo: 'Fotos das refeições: não guardadas. Esta foi descartada.',
+  keepFailed: 'Não deu para salvar sua escolha. Tente de novo.',
   /**
    * Texto de permissão da câmera (Apple 5.1.1): diz o uso de verdade. O mesmo de
    * `apps/mobile/app.config.ts`, que não importa pacote do monorepo.

@@ -156,6 +156,28 @@ describe('foto do prato no PWA (Al-M12 e Al-M10, por arquivo)', () => {
     h.keep = true;
   });
 
+  it('se gravar a escolha falha, avisa, fica na pergunta e tenta de novo (#385)', async () => {
+    h.keep = null;
+    h.updateMe.mockRejectedValueOnce(new ApiError('falhou', 500));
+    const user = userEvent.setup();
+    montar();
+    await escolherFoto(user);
+    await user.click(await screen.findByRole('button', { name: 'Usar foto' }));
+    await user.click(await screen.findByRole('button', { name: 'Guardar' }));
+
+    expect(
+      await screen.findByText('Não deu para salvar sua escolha. Tente de novo.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Guardar as fotos das refeições?')).toBeInTheDocument();
+    expect(h.recognize).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(h.recognize).toHaveBeenCalled());
+    expect(h.updateMe).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Não deu para salvar sua escolha. Tente de novo.')).toBeNull();
+    h.keep = true;
+  });
+
   it('o 403 do aceite traz o aviso do provedor de volta, em vez de um erro', async () => {
     h.recognize.mockRejectedValueOnce(new ApiError('aceite', 403, { code: 'AI_CONSENT_REQUIRED' }));
     const user = userEvent.setup();
