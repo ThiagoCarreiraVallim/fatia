@@ -15,7 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from fatia_agent.chat.graph import GrafoDaConversa, montar_grafo, stream_chat_events
 from fatia_agent.chat.mcp_client import McpClient
 from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
-from fatia_agent.chat.tool_policy import todas_permitidas
+from fatia_agent.chat.tool_policy import camada_restrita, todas_permitidas
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
 from fatia_agent.tracing import NOOP_TRACE, TracedProvider, TurnTrace
@@ -130,6 +130,9 @@ async def turno(
     planejar: bool = False,
     fotos: Sequence[FotoDoTurno] = (),
     trace: TurnTrace = NOOP_TRACE,
+    web_search: str = "off",
+    buscar: Any = None,
+    pausar_apos_consultas: int = 14,
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
@@ -138,7 +141,8 @@ async def turno(
     client = McpClient(base_url="http://localhost:3000/mcp", bearer=token, transport=transporte_mcp)
     compilado = grafo if grafo is not None else montar_grafo(InMemorySaver())
 
-    permitidas = todas_permitidas(await client.list_tools())
+    anunciadas = await client.list_tools()
+    permitidas = todas_permitidas(anunciadas)
     client.tool_tracer = trace.tool
     contexto = ContextoDoTurno(
         provider=provider if trace is NOOP_TRACE else TracedProvider(provider, trace, model="m"),
@@ -152,6 +156,10 @@ async def turno(
         persona=persona,
         planejar=planejar,
         fotos=tuple(fotos),
+        restritas=tuple(camada_restrita(anunciadas)),
+        web_search=web_search,
+        buscar=buscar,
+        pausar_apos_consultas=pausar_apos_consultas,
     )
     brutos = [
         quadro

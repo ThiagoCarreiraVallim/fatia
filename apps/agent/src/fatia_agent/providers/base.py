@@ -92,6 +92,24 @@ class Usage:
 
 
 @dataclass(frozen=True)
+class WebSource:
+    """Uma fonte que a busca na web achou (#384). `content` é o trecho que o motor leu."""
+
+    url: str
+    title: str
+    domain: str
+    content: str = ""
+
+
+@dataclass(frozen=True)
+class WebSearchResult:
+    """As fontes de uma busca e o que ela custou. Sem fonte é resultado legítimo."""
+
+    sources: tuple[WebSource, ...] = ()
+    usage: Usage | None = None
+
+
+@dataclass(frozen=True)
 class TurnEnd:
     """Fim de um turno do modelo: ou ele respondeu, ou pediu tools."""
 
