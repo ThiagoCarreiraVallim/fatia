@@ -11,3 +11,10 @@
 - Migration renomeada para 20261117120000_ai_write_modes_and_memory_category.
 - promoteChatPhotoToMeal: #385 não grava foto do chat como refeição; registrado como pendência no REDESIGN_PROGRESS.
 - Ajustes de teste do merge: gravado.test usa ChatArtifactCard; chat-screen 'Tentar de novo' espera o título Al-M11 de fora do ar; meal-photo fixture ganhou processor; settings do app aponta '/profile/connect' (a #388 apagou '/profile/tokens').
+
+## Passo 2 (checkout principal, branch redesign/385-ia-config)
+
+- Worktree destacado; checkout principal na branch; migrations aplicadas no banco dev (deploy limpo, sem resolve).
+- As 5 pranchas não estavam em .canvas/project: baixadas do artifact compartilhado "Fatia — redesign e novo plano" (https://claude.ai/artifact/GvL8GtYkJGjK5e4YovhZ3o, files project/Al-M*.dc.html) e copiadas para .canvas/project. Renders em ~/.cache/fatia-vis/385/board.
+- Demo: linhas criadas listadas em ~/.cache/fatia-vis/385/demo-rows.txt (baseline no topo). Restaurar no fim.
+- Consultas no banco: node <scratchpad>/q.cjs "SQL" (Prisma raw; psql não existe).
