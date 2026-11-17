@@ -6,7 +6,9 @@ import {
   AI_CONSENT_TEXTS,
   AI_CONSENT_VERSIONS,
   appOnlyHref,
+  chatCardTitle,
   collapsedLabel,
+  isEmptyChatArtifact,
   groupConversationsByDay,
   groupToolCalls,
   quickReplies,
@@ -163,5 +165,105 @@ describe('ferramentas locais do agente (#384)', () => {
         /^(?:NOME|NAME) = "([a-z_]+)"/m.exec(readFileSync(resolve(chat, arquivo), 'utf8'))?.[1],
     );
     expect(nomes.sort()).toEqual(Object.keys(AGENT_LOCAL_TOOLS).sort());
+  });
+});
+
+describe('chatCardTitle e isEmptyChatArtifact — o título do cartão e o "nada encontrado"', () => {
+  const t = 'c1';
+  it('o resultado vira o título, em pt-BR', () => {
+    expect(
+      chatCardTitle({ toolCallId: t, kind: 'metric', label: 'Calorias de hoje', value: 934 }),
+    ).toBe('Calorias de hoje');
+    expect(chatCardTitle({ toolCallId: t, kind: 'metric', value: 934.4, unit: 'kcal' })).toBe(
+      '934,4 kcal',
+    );
+    expect(
+      chatCardTitle({ toolCallId: t, kind: 'bars', unit: 'passos', average: 8884, bars: [] }),
+    ).toBe('8.884 passos por dia');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'timeline',
+        unit: 'kg',
+        events: [
+          { date: '2026-10-06', value: 72.7 },
+          { date: '2026-11-04', value: 70.2 },
+        ],
+      }),
+    ).toBe('70,2 kg');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'badges',
+        badges: [],
+        unlocked: 7,
+        total: 9,
+      }),
+    ).toBe('7 de 9 desbloqueadas');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'progress',
+        items: [{ title: 'a', percent: 54 }],
+      }),
+    ).toBe('1 meta');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'sources',
+        sources: [
+          { title: 'a', url: 'https://a', domain: 'a' },
+          { title: 'b', url: 'https://b', domain: 'b' },
+        ],
+      }),
+    ).toBe('Fontes · 2 sites');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'scoreboard',
+        label: 'Semana ativa',
+        entries: [{ position: 3, name: 'Você', value: 5, you: true }],
+      }),
+    ).toBe('Semana ativa · você em 3º');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'range',
+        rows: [
+          { label: 'Calorias', value: 934, min: 1700, max: 1900 },
+          { label: 'Fibra', value: 30, min: 25, max: 40 },
+        ],
+      }),
+    ).toBe('1 fora da faixa');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'range',
+        rows: [{ label: 'Fibra', value: 30, min: 25, max: 40 }],
+      }),
+    ).toBe('Hoje, na faixa');
+    expect(
+      chatCardTitle({
+        toolCallId: t,
+        kind: 'app_only',
+        tool: 'delete_meal',
+        title: 'Excluir refeição',
+        params: {},
+      }),
+    ).toBe('Excluir refeição é pelo app');
+  });
+
+  it('vazio é o cartão sem linhas; métrica, arquivo e só no app nunca são vazios', () => {
+    expect(isEmptyChatArtifact({ toolCallId: t, kind: 'report', columns: ['a'], rows: [] })).toBe(
+      true,
+    );
+    expect(isEmptyChatArtifact({ toolCallId: t, kind: 'timeline', events: [] })).toBe(true);
+    expect(isEmptyChatArtifact({ toolCallId: t, kind: 'list', items: [{ title: 'x' }] })).toBe(
+      false,
+    );
+    expect(isEmptyChatArtifact({ toolCallId: t, kind: 'metric', value: 0 })).toBe(false);
+    expect(
+      isEmptyChatArtifact({ toolCallId: t, kind: 'file', url: 'u', filename: 'f', expiresAt: '' }),
+    ).toBe(false);
   });
 });

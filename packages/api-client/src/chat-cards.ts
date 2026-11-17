@@ -1,6 +1,6 @@
 import { apiFetch } from './http';
 import { ROUTES } from './navigation';
-import type { ChatInterruptValue } from './chat';
+import type { ChatArtifact, ChatInterruptValue } from './chat';
 
 /**
  * O que a tela do chat precisa para desenhar as ferramentas (#384): o contrato de cartão de
@@ -10,7 +10,7 @@ import type { ChatInterruptValue } from './chat';
 
 // ---------------------------------------------------------------- catálogo
 
-/** O formato do cartão de uma consulta (prancha IA-Cartoes). `report` é a Tabela, o padrão. */
+/** O formato do cartão de uma consulta (prancha IA-Cartoes). `report` é a Tabela. */
 export type ChatCardFormat =
   | 'metric'
   | 'bars'
@@ -80,6 +80,99 @@ export function appOnlyHref(
     atual = rota?.parent ?? atual.slice(0, atual.indexOf('/:'));
   }
   return atual.includes(':') ? '/' : atual || '/';
+}
+
+// ---------------------------------------------------------------- cabeçalho do cartão
+
+/** Número em pt-BR, como o cartão mostra: `8.884`, `70,2`. */
+export function formatChatNumber(valor: number, casas = 1): string {
+  return valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
+}
+
+const comUnidade = (valor: number, unidade?: string) =>
+  `${formatChatNumber(valor)}${unidade ? ` ${unidade}` : ''}`;
+
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+const naFaixa = (r: { value: number; min?: number | null; max?: number | null }) =>
+  (r.min == null || r.value >= r.min) && (r.max == null || r.value <= r.max);
+
+/**
+ * O título do cartão: o resultado, e não o nome da ferramenta, que vai pequeno em cima
+ * (prancha IA-Cartoes, "Cabeçalho igual em todos"). É também o que sobra na linha quando o
+ * cartão recolhe: "Resumo de hoje · 934 kcal".
+ */
+export function chatCardTitle(a: ChatArtifact): string {
+  switch (a.kind) {
+    case 'metric':
+      return a.label ?? comUnidade(a.value, a.unit);
+    case 'bars':
+      return a.average != null
+        ? `${comUnidade(a.average, a.unit)} por dia`
+        : (a.label ?? 'Por dia');
+    case 'timeline': {
+      const ultimo = a.events.at(-1);
+      return ultimo ? comUnidade(ultimo.value, a.unit) : (a.label ?? 'Sem registros');
+    }
+    case 'list':
+      return a.label ?? plural(a.items.length, 'item', 'itens');
+    case 'report':
+      return a.label ?? plural(a.rows.length, 'linha', 'linhas');
+    case 'range': {
+      const fora = a.rows.filter((r) => !naFaixa(r)).length;
+      return fora === 0 ? 'Hoje, na faixa' : `${fora} fora da faixa`;
+    }
+    case 'progress':
+      return plural(a.items.length, 'meta', 'metas');
+    case 'comparison':
+      return a.label ?? 'Comparação';
+    case 'scoreboard': {
+      const voce = a.entries.find((e) => e.you);
+      const posicao = voce
+        ? `você em ${voce.position}º`
+        : plural(a.entries.length, 'pessoa', 'pessoas');
+      return a.label ? `${a.label} · ${posicao}` : posicao;
+    }
+    case 'badges':
+      return `${a.unlocked} de ${a.total} desbloqueadas`;
+    case 'instructions':
+      return a.label ?? plural(a.steps.length, 'passo', 'passos');
+    case 'file':
+      return a.label ?? 'Seus dados estão prontos';
+    case 'sources':
+      return `Fontes · ${plural(a.sources.length, 'site', 'sites')}`;
+    case 'app_only':
+      return `${a.title ?? 'Isso'} é pelo app`;
+    case 'saved':
+      return a.label ?? 'Gravado';
+  }
+}
+
+/** "Nada encontrado": a consulta rodou e voltou sem linha nenhuma (fica neutra, não vermelha). */
+export function isEmptyChatArtifact(a: ChatArtifact): boolean {
+  switch (a.kind) {
+    case 'timeline':
+      return a.events.length === 0;
+    case 'report':
+    case 'range':
+      return a.rows.length === 0;
+    case 'list':
+    case 'progress':
+    case 'comparison':
+      return a.items.length === 0;
+    case 'bars':
+      return a.bars.length === 0;
+    case 'scoreboard':
+      return a.entries.length === 0;
+    case 'badges':
+      return a.total === 0;
+    case 'instructions':
+      return a.steps.length === 0;
+    case 'sources':
+      return a.sources.length === 0;
+    default:
+      return false;
+  }
 }
 
 // ---------------------------------------------------------------- linhas das ferramentas
