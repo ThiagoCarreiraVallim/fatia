@@ -86,15 +86,15 @@ export function LogHistory({
                   key={entry.id}
                   className={cn(
                     // O `.list` da prancha: um cartão, linhas separadas por um fio.
-                    'flex-row items-center gap-2 px-4 py-2.5',
+                    'flex-row items-center gap-2 px-4 py-3',
                     i > 0 && 'border-t border-border',
                     editing && 'rounded-card border-[1.5px] border-primary',
                     pending && 'opacity-50',
                   )}
                 >
                   <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-bold text-foreground">{entry.title}</Text>
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-[15px] font-bold text-foreground">{entry.title}</Text>
+                    <Text className="text-[13px] text-muted-foreground">
                       {entry.subtitle}
                       {entry.time ? ` · ${entry.time}` : ''}
                     </Text>

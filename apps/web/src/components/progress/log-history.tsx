@@ -116,7 +116,7 @@ export function LogHistory({
         // vaul como arrastar o sheet para baixo, e o drawer fecha na cara de
         // quem só queria ver o registro de ontem. A altura precisa ser limitada
         // ou a lista empurra os botões para fora da tela.
-        <ul data-vaul-no-drag className="max-h-[210px] overflow-y-auto rounded-card bg-muted">
+        <ul data-vaul-no-drag className="max-h-[240px] overflow-y-auto rounded-card bg-muted">
           {entries.map((entry) => {
             const isEditing = entry.id === editingId;
             const isPending = entry.id === pendingId;
@@ -126,14 +126,14 @@ export function LogHistory({
                 key={entry.id}
                 className={cn(
                   // O `.list` da prancha: um cartão, linhas separadas por um fio.
-                  'flex items-center gap-2 px-4 py-2.5 [&+&]:shadow-[inset_0_1px_0_hsl(var(--border))]',
+                  'flex items-center gap-2 px-4 py-3 [&+&]:shadow-[inset_0_1px_0_hsl(var(--border))]',
                   isEditing && 'rounded-card shadow-[inset_0_0_0_1.5px_hsl(var(--primary))]',
                   isPending && 'opacity-50',
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{entry.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-[15px] font-bold">{entry.title}</p>
+                  <p className="truncate text-[13px] text-muted-foreground">
                     {entry.subtitle}
                     {entry.time ? ` · ${entry.time}` : ''}
                   </p>

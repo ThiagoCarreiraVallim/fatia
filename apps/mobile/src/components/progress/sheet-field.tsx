@@ -22,6 +22,7 @@ export function SheetField({
   autoFocus,
   error,
   hint,
+  filled = false,
 }: {
   label: string;
   value: string;
@@ -31,6 +32,8 @@ export function SheetField({
   autoFocus?: boolean;
   error?: string | null;
   hint?: string;
+  /** O campo cheio, sem borda, da prancha Al-G10 (o título da meta). */
+  filled?: boolean;
 }) {
   return (
     <View className="gap-1.5">
@@ -47,10 +50,11 @@ export function SheetField({
         keyboardType={keyboardType}
         autoFocus={autoFocus}
         style={{
-          minHeight: 44,
-          borderRadius: 10,
+          minHeight: filled ? 52 : 44,
+          borderRadius: filled ? 14 : 10,
           borderWidth: 1,
-          borderColor: chartColors.border,
+          borderColor: filled ? 'transparent' : chartColors.border,
+          backgroundColor: filled ? colors.muted : undefined,
           paddingHorizontal: 12,
           paddingVertical: 8,
           fontSize: 16,

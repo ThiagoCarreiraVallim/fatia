@@ -105,7 +105,7 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
                       setKind(o.kind);
                       setTarget(String(o.initialTarget));
                     }}
-                    className={kind === o.kind ? 'justify-start' : 'justify-start bg-card'}
+                    className={kind === o.kind ? 'justify-start' : 'justify-start bg-transparent'}
                   />
                 </View>
               ))}
@@ -118,6 +118,7 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
               onChangeText={setTitle}
               placeholder={option.placeholder}
               keyboardType="default"
+              filled
             />
 
             {kind === 'custom' ? (
@@ -154,7 +155,10 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
                       label={c.label}
                       selected={deadlineChoice === c.value}
                       onPress={() => setDeadlineChoice(c.value)}
-                      className={cn('min-h-[34px] px-3', deadlineChoice !== c.value && 'bg-card')}
+                      className={cn(
+                        'min-h-[34px] px-3',
+                        deadlineChoice !== c.value && 'bg-transparent',
+                      )}
                     />
                   ))}
                 </View>
