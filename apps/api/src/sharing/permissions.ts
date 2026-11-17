@@ -86,6 +86,11 @@ export const GROUP_PERMISSIONS = {
    * a equipe (`Group.postPolicy`), e quem confere é o `PostService`.
    */
   'post.create': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /**
+   * Comunicados (#394): notificação a todos, agendada ou repetida, e aviso no
+   * topo do mural. Não modera: a fila de denúncias segue em `content.moderate`.
+   */
+  'announcement.publish': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /** Banir é mais forte que remover membro: fica com quem remove. */
   'member.ban': [GroupRole.OWNER],
   /**

@@ -7,9 +7,13 @@ import {
 } from '@nestjs/common';
 import {
   AvatarVisibility,
+  GroupRole,
   MembershipStatus,
+  PostAuthorAs,
+  PostKind,
   PostPolicy,
-  type GroupRole,
+  type AutoPostKind,
+  type GroupAnnouncement,
   type MediaFile,
   type PostReactionKind,
   type Prisma,
@@ -28,6 +32,7 @@ import {
   removedNotice,
   reportReviewedNotice,
 } from './community-notices';
+import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -39,6 +44,23 @@ export const REPORT_NOTE_MAX = 500;
 /** Fixados ao mesmo tempo: o topo do mural é recado da equipe, não arquivo. */
 export const MAX_PINNED = 3;
 export const FEED_PAGE_SIZE = 20;
+/** Aviso fixado fica no topo no máximo isto; depois volta a ser post comum. */
+export const PIN_MAX_DAYS = 90;
+/**
+ * Votos mínimos para qualquer resultado de enquete, para todo mundo, inclusive
+ * a equipe: com menos, as % apontariam quem votou em quê (o `MIN_CELL` da
+ * ADR 026). Abaixo disso a API não manda nem o total.
+ */
+export const POLL_MIN_VOTES = 5;
+export const POLL_MIN_OPTIONS = 2;
+export const POLL_MAX_OPTIONS = 4;
+export const POLL_QUESTION_MAX = 200;
+export const POLL_OPTION_MAX = 80;
+export const POLL_MAX_DAYS = 30;
+export const ANNOUNCEMENT_TITLE_MAX = 120;
+export const FEED_FILTERS = ['all', 'team', 'content', 'members'] as const;
+export type FeedFilter = (typeof FEED_FILTERS)[number];
+const DIA_MS = 86_400_000;
 /** Trecho do post na fila de moderação e no cartão do chat. */
 const EXCERPT_MAX = 280;
 
@@ -55,6 +77,10 @@ export interface AuthorView {
   displayName: string;
   /** Dono, profissional ou criador: o mural mostra o selo "Equipe". */
   team: boolean;
+  /** O papel de quem é da equipe ("personal", "dono"); nulo para membro. */
+  role: GroupRole | null;
+  /** Publicado em nome da comunidade: o nome e a foto são os dela. */
+  asGroup: boolean;
   isMe: boolean;
   /**
    * Foto de perfil, só quando a visibilidade escolhida deixa quem lê ver
@@ -64,13 +90,42 @@ export interface AuthorView {
   avatarUrl: string | null;
 }
 
+export interface PollOptionView {
+  id: string;
+  label: string;
+  /** % inteiro; nulo enquanto o resultado está escondido. */
+  percent: number | null;
+}
+
+/**
+ * A enquete como quem pergunta pode vê-la. O resultado (`totalVotes` e as %)
+ * só vem com `POLL_MIN_VOTES` votos e, para o membro, depois de votar ou com
+ * a enquete encerrada (prancha Cm-21). Quem votou em quê nunca sai daqui.
+ */
+export interface PollView {
+  question: string;
+  closesAt: Date;
+  closed: boolean;
+  myOptionId: string | null;
+  totalVotes: number | null;
+  options: PollOptionView[];
+  canClose: boolean;
+}
+
 export interface PostView {
   id: string;
+  kind: PostKind;
+  /** Título do comunicado ou do conteúdo novo; nulo no post comum. */
+  title: string | null;
   body: string;
   createdAt: Date;
   author: AuthorView;
   images: MediaView[];
   pinned: boolean;
+  pinnedUntil: Date | null;
+  poll: PollView | null;
+  /** Post automático: o conteúdo que ele anuncia. */
+  auto: { kind: AutoPostKind; refId: string } | null;
   /** Só chega ao autor: para os outros, post removido não existe. */
   removed: { reason: ReportReason | null } | null;
   reactions: { counts: Record<PostReactionKind, number>; mine: PostReactionKind | null };
@@ -79,6 +134,9 @@ export interface PostView {
   canDelete: boolean;
   /** Quem modera remove e fixa (`content.moderate`). */
   canModerate: boolean;
+  /** "Ocultar este post" e "Bloquear": não valem para o que é seu. */
+  canHide: boolean;
+  canBlock: boolean;
 }
 
 export interface CommentView {
@@ -89,12 +147,21 @@ export interface CommentView {
   removed: boolean;
   canDelete: boolean;
   canModerate: boolean;
+  canBlock: boolean;
 }
 
 export interface FeedPage {
   policy: PostPolicy;
   canPost: boolean;
   canModerate: boolean;
+  /** Equipe: publica em nome da comunidade e fixa como aviso (prancha Cm-06). */
+  isTeam: boolean;
+  /** O nome da comunidade, para o "Publicar como". */
+  groupName: string;
+  /** O carrossel de avisos, na ordem da equipe. Só na primeira página. */
+  pins: PostView[];
+  /** Posts dos outros desde a última visita (`markSeen`). */
+  unseen: number;
   /** O apelido com que a pessoa aparece, ou `null` se ainda não tem. */
   displayName: string | null;
   suggestedDisplayName: string;
@@ -107,10 +174,38 @@ export interface PostDetail extends PostView {
   comments: CommentView[];
 }
 
+export interface PollInput {
+  question: string;
+  options: string[];
+  /** Fecha em N dias (1 a `POLL_MAX_DAYS`). */
+  days: number;
+}
+
 export interface CreatePostInput {
+  kind?: 'POST' | 'POLL';
   body?: string;
   imageFileIds?: string[];
   displayName?: string;
+  /** Só a equipe: em nome da comunidade. */
+  publishedAs?: 'PERSON' | 'GROUP';
+  /** Só a equipe: "Fixar como aviso", por `pinDays` dias (nulo = sem prazo). */
+  pin?: boolean;
+  pinDays?: number | null;
+  poll?: PollInput;
+}
+
+/** Uma linha do painel de enquetes (prancha Pn-26). */
+export interface PanelPollView {
+  postId: string;
+  question: string;
+  author: string;
+  createdAt: Date;
+  closesAt: Date;
+  closed: boolean;
+  totalVotes: number | null;
+  options: { label: string; percent: number | null }[];
+  /** A opção com mais votos; nula enquanto o resultado está escondido. */
+  top: string | null;
 }
 
 export interface ReportInput {
@@ -147,6 +242,7 @@ export interface RemovedPostView {
 const AUTOR = {
   select: {
     id: true,
+    userId: true,
     role: true,
     displayName: true,
     user: {
@@ -158,15 +254,33 @@ const AUTOR = {
 const INCLUIR = {
   author: AUTOR,
   images: { include: { file: true }, orderBy: { order: 'asc' } },
-  reactions: { select: { membershipId: true, kind: true } },
+  reactions: {
+    select: { membershipId: true, kind: true, membership: { select: { userId: true } } },
+  },
+  poll: {
+    include: {
+      options: {
+        orderBy: { order: 'asc' },
+        include: { _count: { select: { votes: true } } },
+      },
+    },
+  },
 } satisfies Prisma.GroupPostInclude;
 
-type PostRow = Prisma.GroupPostGetPayload<{ include: typeof INCLUIR }> & { comments: number };
+type PostBase = Prisma.GroupPostGetPayload<{ include: typeof INCLUIR }>;
+type PostRow = PostBase & { comments: number; myOptionId: string | null };
+type PollRow = NonNullable<PostBase['poll']>;
 type Autor = Prisma.GroupMembershipGetPayload<typeof AUTOR>;
 
 interface Eu {
+  userId: string;
   role: GroupRole;
   membershipId: string;
+  /** Contas bloqueadas em qualquer sentido: somem do mural inteiro. */
+  hidden: string[];
+  group: { name: string; policy: PostPolicy; avatar: MediaFile | null };
+  /** Desde quando contam os "posts novos". */
+  seenSince: Date;
   displayName: string | null;
   userName: string;
   /** O apelido do perfil (Você, #387), que vale em toda comunidade sem apelido próprio. */
@@ -174,7 +288,59 @@ interface Eu {
   moderates: boolean;
 }
 
-const zeradas = (): Record<PostReactionKind, number> => ({ STRONG: 0, FIRE: 0, CLAP: 0, HEART: 0 });
+const emptyReactionCounts = (): Record<PostReactionKind, number> => ({
+  STRONG: 0,
+  FIRE: 0,
+  CLAP: 0,
+  HEART: 0,
+});
+
+/** Aviso fixado que ainda está no topo: fixado, no ar e dentro do prazo. */
+function activePin(now: Date): Prisma.GroupPostWhereInput {
+  return {
+    pinnedAt: { not: null },
+    removedAt: null,
+    OR: [{ pinnedUntil: null }, { pinnedUntil: { gt: now } }],
+  };
+}
+
+function filterWhere(filter: FeedFilter): Prisma.GroupPostWhereInput {
+  if (filter === 'content') return { kind: PostKind.AUTO };
+  if (filter === 'team') {
+    return {
+      kind: { not: PostKind.AUTO },
+      OR: [{ publishedAs: PostAuthorAs.GROUP }, { author: { role: { in: [...TEAM_ROLES] } } }],
+    };
+  }
+  if (filter === 'members') {
+    return {
+      kind: { not: PostKind.AUTO },
+      publishedAs: PostAuthorAs.PERSON,
+      author: { role: GroupRole.MEMBER },
+    };
+  }
+  return {};
+}
+
+/** A enquete acabou: prazo vencido ou encerrada antes. */
+function pollClosed(p: { closesAt: Date; closedAt: Date | null }, now = new Date()): boolean {
+  return p.closedAt !== null || p.closesAt.getTime() <= now.getTime();
+}
+
+/**
+ * As % da enquete, só quando pode mostrar. Arredondadas, cada uma por si: a
+ * soma pode dar 99 ou 101, como em qualquer enquete.
+ */
+function pollResults(
+  options: { _count: { votes: number } }[],
+  show: (total: number) => boolean,
+): { total: number | null; percents: (number | null)[] } {
+  const total = options.reduce((s, o) => s + o._count.votes, 0);
+  if (total < POLL_MIN_VOTES || !show(total)) {
+    return { total: null, percents: options.map(() => null) };
+  }
+  return { total, percents: options.map((o) => Math.round((o._count.votes / total) * 100)) };
+}
 
 function excerpt(body: string): string {
   const linha = body.replace(/\s+/g, ' ').trim();
@@ -182,16 +348,21 @@ function excerpt(body: string): string {
 }
 
 /**
- * O mural da comunidade (Fase 8b).
+ * O mural da comunidade (Fase 8b, redesenhado na #394).
  *
  * Todo membro ativo lê (`post.read`); publica quem a política deixa
  * (`post.create`, e `TEAM_ONLY` fecha para `MEMBER`); quem modera
- * (`content.moderate`) remove, restaura e fixa, e trata a fila de denúncias.
+ * (`content.moderate`) remove, restaura, fixa e ordena os avisos, e trata a
+ * fila de denúncias.
  *
- * **Tudo é buscado com o `groupId` da URL**: `postId`, `commentId`, `reportId`
- * e os `fileId` das imagens chegam por input e nunca valem fora dela. Post
- * removido some para todo mundo menos o autor, que vê o aviso — e as imagens
- * ficam só para ele até apagar (ADR 028 §4).
+ * **Tudo é buscado com o `groupId` da URL**: `postId`, `commentId`, `reportId`,
+ * `optionId` e os `fileId` das imagens chegam por input e nunca valem fora
+ * dela. Post removido some para todo mundo menos o autor, que vê o aviso — e as
+ * imagens ficam só para ele até apagar (ADR 028 §4).
+ *
+ * **Bloqueio (#394):** quem bloqueou e quem foi bloqueado deixam de se ver em
+ * todo o mural: posts, comentários, reações e as contagens deles. O post
+ * publicado em nome da comunidade não é de uma pessoa e continua visível.
  */
 @Injectable()
 export class PostService {
@@ -203,13 +374,15 @@ export class PostService {
 
   // ---------------------------------------------------------------- leitura
 
-  async list(userId: string, groupId: string, cursor?: string | null): Promise<FeedPage> {
+  async list(
+    userId: string,
+    groupId: string,
+    cursor?: string | null,
+    filter: FeedFilter = 'all',
+  ): Promise<FeedPage> {
     const eu = await this.me(userId, groupId, 'post.read');
-    const policy = await this.policyOf(groupId);
-    const visivel: Prisma.GroupPostWhereInput = {
-      groupId,
-      OR: [{ removedAt: null }, { membershipId: eu.membershipId }],
-    };
+    const agora = new Date();
+    const visivel = this.visibleWhere(groupId, eu);
 
     let depois: { createdAt: Date; id: string } | null = null;
     if (cursor) {
@@ -220,19 +393,20 @@ export class PostService {
       if (!depois) throw new BadRequestException('Página inválida');
     }
 
-    // Os fixados vão no topo da primeira página e não se repetem no resto.
+    // Os avisos vão no carrossel da primeira página e não se repetem no resto.
     const fixados = depois
       ? []
       : await this.prisma.groupPost.findMany({
-          where: { groupId, removedAt: null, pinnedAt: { not: null } },
+          where: { AND: [visivel, activePin(agora)] },
           include: INCLUIR,
-          orderBy: { pinnedAt: 'desc' },
+          orderBy: [{ pinOrder: { sort: 'asc', nulls: 'last' } }, { pinnedAt: 'desc' }],
         });
     const linhas = await this.prisma.groupPost.findMany({
       where: {
-        ...visivel,
         AND: [
-          { OR: [{ pinnedAt: null }, { removedAt: { not: null } }] },
+          visivel,
+          { NOT: activePin(agora) },
+          filterWhere(filter),
           depois
             ? {
                 OR: [
@@ -249,15 +423,19 @@ export class PostService {
     });
     const temMais = linhas.length > FEED_PAGE_SIZE;
     const pagina = linhas.slice(0, FEED_PAGE_SIZE);
-    const rows = await this.withCommentCounts([...fixados, ...pagina], eu);
+    const [pins, rows] = await Promise.all([this.enrich(fixados, eu), this.enrich(pagina, eu)]);
 
     return {
-      policy,
-      canPost: this.canPost(eu.role, policy),
+      policy: eu.group.policy,
+      canPost: this.canPost(eu.role, eu.group.policy),
       canModerate: eu.moderates,
+      isTeam: TEAM_ROLES.includes(eu.role),
+      groupName: eu.group.name,
       displayName: eu.displayName,
       suggestedDisplayName: eu.displayName ?? eu.userNickname ?? firstName(eu.userName),
+      pins: await Promise.all(pins.map((r) => this.view(r, eu))),
       posts: await Promise.all(rows.map((r) => this.view(r, eu))),
+      unseen: depois ? 0 : await this.countUnseen(groupId, eu),
       nextCursor: temMais ? (pagina.at(-1)?.id ?? null) : null,
     };
   }
@@ -266,17 +444,14 @@ export class PostService {
     const eu = await this.me(userId, groupId, 'post.read');
     const row = await this.findVisible(groupId, postId, eu);
     const comentarios = await this.prisma.groupPostComment.findMany({
-      where: {
-        postId: row.id,
-        OR: [{ removedAt: null }, { membershipId: eu.membershipId }],
-      },
+      where: { postId: row.id, ...this.visibleCommentWhere(eu) },
       include: { author: AUTOR },
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
-    const [comContagem] = await this.withCommentCounts([row], eu);
+    const [completo] = await this.enrich([row], eu);
     return {
-      ...(await this.view(comContagem!, eu)),
+      ...(await this.view(completo!, eu)),
       comments: await Promise.all(
         comentarios.map(async (c) => ({
           id: c.id,
@@ -286,19 +461,42 @@ export class PostService {
           removed: c.removedAt !== null,
           canDelete: c.membershipId === eu.membershipId,
           canModerate: eu.moderates && c.removedAt === null,
+          canBlock: c.membershipId !== eu.membershipId && c.removedAt === null,
         })),
       ),
     };
+  }
+
+  /** Quantos posts dos outros chegaram desde a última visita ao mural. */
+  async unseen(userId: string, groupId: string): Promise<{ count: number }> {
+    const eu = await this.me(userId, groupId, 'post.read');
+    return { count: await this.countUnseen(groupId, eu) };
+  }
+
+  /** A pessoa abriu o mural: zera os "posts novos". */
+  async markSeen(userId: string, groupId: string): Promise<{ seenAt: Date }> {
+    const eu = await this.me(userId, groupId, 'post.read');
+    const seenAt = new Date();
+    await this.prisma.groupMembership.update({
+      where: { id: eu.membershipId },
+      data: { feedSeenAt: seenAt },
+    });
+    return { seenAt };
   }
 
   // ---------------------------------------------------------------- escrita do membro
 
   async create(userId: string, groupId: string, input: CreatePostInput): Promise<PostView> {
     const eu = await this.me(userId, groupId, 'post.create');
-    const policy = await this.policyOf(groupId);
-    if (!this.canPost(eu.role, policy)) {
+    if (!this.canPost(eu.role, eu.group.policy)) {
       throw new ForbiddenException('Nesta comunidade, só a equipe publica no mural');
     }
+    const equipe = TEAM_ROLES.includes(eu.role);
+    const comoGrupo = input.publishedAs === 'GROUP';
+    if ((comoGrupo || input.pin) && !equipe) {
+      throw new ForbiddenException('Só a equipe publica como a comunidade e fixa avisos');
+    }
+    const kind = input.kind === 'POLL' ? PostKind.POLL : PostKind.POST;
     const body = (input.body ?? '').trim();
     const ids = input.imageFileIds ?? [];
     if (body.length > POST_BODY_MAX) {
@@ -308,21 +506,43 @@ export class PostService {
       throw new BadRequestException(`Até ${POST_MAX_IMAGES} imagens por post`);
     }
     if (new Set(ids).size !== ids.length) throw new BadRequestException('Imagem repetida');
-    if (!body && ids.length === 0)
+    const poll = kind === PostKind.POLL ? this.cleanPoll(input.poll) : null;
+    if (poll && ids.length > 0) throw new BadRequestException('Enquete não leva imagem');
+    if (!poll && !body && ids.length === 0) {
       throw new BadRequestException('Escreva algo ou envie uma imagem');
+    }
+    const pinUntil = input.pin ? this.pinDeadline(input.pinDays ?? null) : undefined;
+    if (input.pin) await this.assertPinRoom(groupId);
 
     const arquivos = await this.ownImages(userId, groupId, ids);
     const nome = await this.ensureDisplayName(eu, input.displayName);
+    const agora = new Date();
     const row = await this.prisma.groupPost.create({
       data: {
         groupId,
         membershipId: eu.membershipId,
+        kind,
         body,
+        publishedAs: comoGrupo ? PostAuthorAs.GROUP : PostAuthorAs.PERSON,
+        ...(input.pin
+          ? { pinnedAt: agora, pinOrder: await this.frontPinOrder(groupId), pinnedUntil: pinUntil }
+          : {}),
         images: { create: arquivos.map((f, order) => ({ fileId: f.id, order })) },
+        ...(poll
+          ? {
+              poll: {
+                create: {
+                  question: poll.question,
+                  closesAt: new Date(agora.getTime() + poll.days * DIA_MS),
+                  options: { create: poll.options.map((label, order) => ({ label, order })) },
+                },
+              },
+            }
+          : {}),
       },
       include: INCLUIR,
     });
-    return this.view({ ...row, comments: 0 }, { ...eu, displayName: nome });
+    return this.view({ ...row, comments: 0, myOptionId: null }, { ...eu, displayName: nome });
   }
 
   /** O autor apaga o próprio post, com as imagens. Moderação remove, não apaga. */
@@ -338,6 +558,21 @@ export class PostService {
     return { deleted: true };
   }
 
+  /** "Ocultar este post": some só para quem ocultou (prancha Cm-07). */
+  async hide(userId: string, groupId: string, postId: string): Promise<{ hidden: boolean }> {
+    const eu = await this.me(userId, groupId, 'post.read');
+    const row = await this.findVisible(groupId, postId, eu);
+    if (row.membershipId === eu.membershipId) {
+      throw new BadRequestException('Para tirar o que é seu, apague o post');
+    }
+    await this.prisma.groupPostHide.upsert({
+      where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
+      create: { postId: row.id, membershipId: eu.membershipId },
+      update: {},
+    });
+    return { hidden: true };
+  }
+
   async react(
     userId: string,
     groupId: string,
@@ -345,7 +580,7 @@ export class PostService {
     kind: PostReactionKind | null,
   ): Promise<PostView> {
     const eu = await this.me(userId, groupId, 'post.read');
-    const row = await this.findLive(groupId, postId);
+    const row = await this.findLive(groupId, postId, eu);
     if (kind) {
       const before = await this.prisma.groupPostReaction.findUnique({
         where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
@@ -371,9 +606,7 @@ export class PostService {
         where: { postId: row.id, membershipId: eu.membershipId },
       });
     }
-    const atual = await this.findVisible(groupId, postId, eu);
-    const [comContagem] = await this.withCommentCounts([atual], eu);
-    return this.view(comContagem!, eu);
+    return this.viewOne(groupId, postId, eu);
   }
 
   async comment(
@@ -383,7 +616,7 @@ export class PostService {
     input: { body: string; displayName?: string },
   ): Promise<CommentView> {
     const eu = await this.me(userId, groupId, 'post.read');
-    const row = await this.findLive(groupId, postId);
+    const row = await this.findLive(groupId, postId, eu);
     const body = input.body.trim();
     if (!body) throw new BadRequestException('Escreva o comentário');
     if (body.length > COMMENT_BODY_MAX) {
@@ -410,6 +643,7 @@ export class PostService {
       removed: false,
       canDelete: true,
       canModerate: eu.moderates,
+      canBlock: false,
     };
   }
 
@@ -440,7 +674,7 @@ export class PostService {
     input: ReportInput,
   ): Promise<{ reported: boolean }> {
     const eu = await this.me(userId, groupId, 'post.read');
-    const post = await this.findLive(groupId, postId);
+    const post = await this.findLive(groupId, postId, eu);
     const comentario = input.commentId
       ? await this.findComment(groupId, postId, input.commentId)
       : null;
@@ -478,6 +712,104 @@ export class PostService {
     return { reported: true };
   }
 
+  // ---------------------------------------------------------------- enquetes
+
+  /**
+   * Votar, ou mudar o voto, até o prazo. `null` tira o voto ("Mudar voto").
+   * Opção de outra enquete responde como inexistente.
+   */
+  async vote(
+    userId: string,
+    groupId: string,
+    postId: string,
+    optionId: string | null,
+  ): Promise<PostView> {
+    const eu = await this.me(userId, groupId, 'post.read');
+    const row = await this.findLive(groupId, postId, eu);
+    const poll = await this.prisma.groupPoll.findUnique({
+      where: { postId: row.id },
+      select: { id: true, closesAt: true, closedAt: true },
+    });
+    if (!poll) throw new NotFoundException('Poll not found');
+    if (pollClosed(poll)) throw new ConflictException('A enquete já encerrou');
+    if (optionId) {
+      const opcao = await this.prisma.groupPollOption.findFirst({
+        where: { id: optionId, pollId: poll.id },
+        select: { id: true },
+      });
+      if (!opcao) throw new NotFoundException('Option not found');
+      await this.prisma.groupPollVote.upsert({
+        where: { pollId_membershipId: { pollId: poll.id, membershipId: eu.membershipId } },
+        create: { pollId: poll.id, optionId: opcao.id, membershipId: eu.membershipId },
+        update: { optionId: opcao.id },
+      });
+    } else {
+      await this.prisma.groupPollVote.deleteMany({
+        where: { pollId: poll.id, membershipId: eu.membershipId },
+      });
+    }
+    return this.viewOne(groupId, postId, eu);
+  }
+
+  /** Encerrar antes do prazo: quem publicou, quem modera ou quem comunica. */
+  async closePoll(userId: string, groupId: string, postId: string): Promise<PostView> {
+    const eu = await this.me(userId, groupId, 'post.read');
+    const row = await this.findLive(groupId, postId, eu);
+    const poll = await this.prisma.groupPoll.findUnique({
+      where: { postId: row.id },
+      select: { id: true, closesAt: true, closedAt: true },
+    });
+    if (!poll) throw new NotFoundException('Poll not found');
+    if (!this.canClosePoll(eu, row.membershipId)) {
+      throw new ForbiddenException('Só quem publicou ou a equipe encerra a enquete');
+    }
+    if (!pollClosed(poll)) {
+      await this.prisma.groupPoll.update({
+        where: { id: poll.id },
+        data: { closedAt: new Date() },
+      });
+    }
+    return this.viewOne(groupId, postId, eu);
+  }
+
+  /**
+   * O painel de enquetes da equipe (prancha Pn-26): todas as enquetes no ar,
+   * com o resultado só a partir de `POLL_MIN_VOTES`, como para o membro.
+   */
+  async polls(userId: string, groupId: string): Promise<PanelPollView[]> {
+    await this.me(userId, groupId, 'content.publish');
+    const rows = await this.prisma.groupPost.findMany({
+      where: { groupId, kind: PostKind.POLL, removedAt: null, poll: { isNot: null } },
+      include: { author: AUTOR, poll: INCLUIR.poll },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const grupo = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { name: true },
+    });
+    return rows.map((r) => {
+      const poll = r.poll!;
+      const { total, percents } = pollResults(poll.options, () => true);
+      let top: string | null = null;
+      if (total !== null) {
+        const maior = [...poll.options].sort((a, b) => b._count.votes - a._count.votes)[0];
+        top = maior?.label ?? null;
+      }
+      return {
+        postId: r.id,
+        question: poll.question,
+        author: r.publishedAs === PostAuthorAs.GROUP ? grupo.name : this.nameOf(r.author),
+        createdAt: r.createdAt,
+        closesAt: poll.closesAt,
+        closed: pollClosed(poll),
+        totalVotes: total,
+        options: poll.options.map((o, i) => ({ label: o.label, percent: percents[i] ?? null })),
+        top,
+      };
+    });
+  }
+
   // ---------------------------------------------------------------- moderação
 
   async moderatePost(
@@ -487,6 +819,10 @@ export class PostService {
     action: 'remove' | 'restore' | 'pin' | 'unpin',
     reason?: ReportReason | null,
   ): Promise<{ id: string; pinned: boolean; removed: boolean }> {
+    if (action === 'pin') {
+      const r = await this.pin(userId, groupId, postId, null);
+      return { id: r.id, pinned: true, removed: false };
+    }
     const eu = await this.me(userId, groupId, 'content.moderate');
     const row = await this.prisma.groupPost.findFirst({
       where: { id: postId, groupId },
@@ -504,6 +840,8 @@ export class PostService {
             removedById: eu.membershipId,
             removedReason: reason ?? null,
             pinnedAt: null,
+            pinOrder: null,
+            pinnedUntil: null,
           },
         }),
         this.resolveOp({ postId: row.id }, eu.membershipId, 'removed', agora),
@@ -523,19 +861,122 @@ export class PostService {
       return { id: row.id, pinned: false, removed: false };
     }
     if (row.removedAt) throw new ConflictException('Post removido não fica fixado');
-    if (action === 'pin' && !row.pinnedAt) {
-      const fixados = await this.prisma.groupPost.count({
-        where: { groupId, removedAt: null, pinnedAt: { not: null } },
+    if (row.pinnedAt) {
+      await this.prisma.groupPost.update({
+        where: { id: row.id },
+        data: { pinnedAt: null, pinOrder: null, pinnedUntil: null },
       });
-      if (fixados >= MAX_PINNED) {
-        throw new ConflictException(`Até ${MAX_PINNED} posts fixados. Desafixe um antes.`);
+    }
+    return { id: row.id, pinned: false, removed: false };
+  }
+
+  /**
+   * Fixar como aviso (até `MAX_PINNED` no topo): entra na frente do carrossel,
+   * por `days` dias ou sem prazo. Fixar de novo um aviso só troca o prazo.
+   */
+  async pin(
+    userId: string,
+    groupId: string,
+    postId: string,
+    days: number | null,
+  ): Promise<{ id: string; pinnedUntil: Date | null }> {
+    await this.me(userId, groupId, 'content.moderate');
+    const agora = new Date();
+    const row = await this.prisma.groupPost.findFirst({
+      where: { id: postId, groupId },
+      select: { id: true, removedAt: true },
+    });
+    if (!row) throw new NotFoundException('Post not found');
+    if (row.removedAt) throw new ConflictException('Post removido não fica fixado');
+    const pinnedUntil = this.pinDeadline(days);
+    const jaNoTopo = await this.prisma.groupPost.count({
+      where: { id: row.id, ...activePin(agora) },
+    });
+    if (jaNoTopo) {
+      await this.prisma.groupPost.update({ where: { id: row.id }, data: { pinnedUntil } });
+    } else {
+      await this.assertPinRoom(groupId);
+      await this.prisma.groupPost.update({
+        where: { id: row.id },
+        data: { pinnedAt: agora, pinnedUntil, pinOrder: await this.frontPinOrder(groupId) },
+      });
+    }
+    return { id: row.id, pinnedUntil };
+  }
+
+  /** A ordem do carrossel, como a equipe arrastou. Precisa trazer todos os avisos. */
+  async reorderPins(
+    userId: string,
+    groupId: string,
+    postIds: string[],
+  ): Promise<{ order: string[] }> {
+    await this.me(userId, groupId, 'content.moderate');
+    const atuais = await this.prisma.groupPost.findMany({
+      where: { groupId, ...activePin(new Date()) },
+      select: { id: true },
+    });
+    const ids = new Set(atuais.map((p) => p.id));
+    if (
+      postIds.length !== ids.size ||
+      new Set(postIds).size !== postIds.length ||
+      postIds.some((id) => !ids.has(id))
+    ) {
+      throw new BadRequestException('A nova ordem precisa ter todos os avisos fixados');
+    }
+    await this.prisma.$transaction(
+      postIds.map((id, pinOrder) =>
+        this.prisma.groupPost.update({ where: { id }, data: { pinOrder } }),
+      ),
+    );
+    return { order: postIds };
+  }
+
+  /**
+   * Publica um comunicado (agora ou pelo job dos agendados). Com o topo cheio,
+   * o aviso novo entra e o último do carrossel volta a ser post comum: o
+   * horário marcado não pode falhar por falta de espaço.
+   */
+  async publishAnnouncement(a: GroupAnnouncement, now: Date): Promise<{ postId: string }> {
+    const ativa = await this.prisma.groupMembership.findFirst({
+      where: { id: a.membershipId, status: MembershipStatus.ACTIVE },
+      select: { id: true },
+    });
+    if (!ativa) throw new ConflictException('Quem agendou não está mais na comunidade');
+    if (a.pin) {
+      const fixados = await this.prisma.groupPost.findMany({
+        where: { groupId: a.groupId, ...activePin(now) },
+        orderBy: [{ pinOrder: { sort: 'asc', nulls: 'last' } }, { pinnedAt: 'desc' }],
+        select: { id: true },
+      });
+      const sobra = fixados.slice(MAX_PINNED - 1);
+      if (sobra.length > 0) {
+        await this.prisma.groupPost.updateMany({
+          where: { id: { in: sobra.map((p) => p.id) } },
+          data: { pinnedAt: null, pinOrder: null, pinnedUntil: null },
+        });
       }
-      await this.prisma.groupPost.update({ where: { id: row.id }, data: { pinnedAt: agora } });
     }
-    if (action === 'unpin' && row.pinnedAt) {
-      await this.prisma.groupPost.update({ where: { id: row.id }, data: { pinnedAt: null } });
-    }
-    return { id: row.id, pinned: action === 'pin', removed: false };
+    const post = await this.prisma.groupPost.create({
+      data: {
+        groupId: a.groupId,
+        membershipId: a.membershipId,
+        kind: PostKind.ANNOUNCEMENT,
+        title: a.title,
+        body: a.body,
+        publishedAs: a.publishedAs,
+        announcementId: a.id,
+        createdAt: now,
+        ...(a.pin
+          ? {
+              pinnedAt: now,
+              pinOrder: await this.frontPinOrder(a.groupId),
+              pinnedUntil: a.pinDays ? new Date(now.getTime() + a.pinDays * DIA_MS) : null,
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+    return { postId: post.id };
   }
 
   async removeComment(
@@ -707,10 +1148,16 @@ export class PostService {
     return policy === PostPolicy.ALL_MEMBERS || TEAM_ROLES.includes(role);
   }
 
+  private canClosePoll(eu: Eu, authorMembershipId: string): boolean {
+    return (
+      authorMembershipId === eu.membershipId || eu.moderates || can(eu.role, 'announcement.publish')
+    );
+  }
+
   private async me(
     userId: string,
     groupId: string,
-    action: 'post.read' | 'post.create' | 'content.moderate',
+    action: 'post.read' | 'post.create' | 'content.moderate' | 'content.publish',
   ): Promise<Eu> {
     const role = await requireContentRole(
       this.prisma,
@@ -721,17 +1168,28 @@ export class PostService {
         ? 'Seu papel não modera esta comunidade'
         : 'Seu papel não publica no mural',
     );
-    const m = await this.prisma.groupMembership.findUniqueOrThrow({
-      where: { groupId_userId: { groupId, userId } },
-      select: {
-        id: true,
-        displayName: true,
-        user: { select: { name: true, nickname: true } },
-      },
-    });
+    const [m, hidden] = await Promise.all([
+      this.prisma.groupMembership.findUniqueOrThrow({
+        where: { groupId_userId: { groupId, userId } },
+        select: {
+          id: true,
+          displayName: true,
+          feedSeenAt: true,
+          joinedAt: true,
+          createdAt: true,
+          user: { select: { name: true, nickname: true } },
+          group: { select: { name: true, postPolicy: true, avatarFile: true } },
+        },
+      }),
+      blockedUserIds(this.prisma, userId),
+    ]);
     return {
+      userId,
       role,
       membershipId: m.id,
+      hidden,
+      group: { name: m.group.name, policy: m.group.postPolicy, avatar: m.group.avatarFile },
+      seenSince: m.feedSeenAt ?? m.joinedAt ?? m.createdAt,
       displayName: m.displayName,
       userName: m.user.name,
       userNickname: m.user.nickname,
@@ -739,12 +1197,91 @@ export class PostService {
     };
   }
 
-  private async policyOf(groupId: string): Promise<PostPolicy> {
-    const g = await this.prisma.group.findUniqueOrThrow({
-      where: { id: groupId },
-      select: { postPolicy: true },
+  /**
+   * O que quem pergunta enxerga: no ar (ou removido mas dele), não ocultado
+   * por ele e de ninguém com quem haja bloqueio — a não ser que o post seja
+   * da comunidade, e não de uma pessoa.
+   */
+  private visibleWhere(groupId: string, eu: Eu): Prisma.GroupPostWhereInput {
+    const e: Prisma.GroupPostWhereInput[] = [
+      { OR: [{ removedAt: null }, { membershipId: eu.membershipId }] },
+      { hides: { none: { membershipId: eu.membershipId } } },
+    ];
+    if (eu.hidden.length > 0) {
+      e.push({
+        OR: [{ publishedAs: PostAuthorAs.GROUP }, { author: { userId: { notIn: eu.hidden } } }],
+      });
+    }
+    return { groupId, AND: e };
+  }
+
+  private visibleCommentWhere(eu: Eu): Prisma.GroupPostCommentWhereInput {
+    return {
+      OR: [{ removedAt: null }, { membershipId: eu.membershipId }],
+      ...(eu.hidden.length > 0 ? { author: { userId: { notIn: eu.hidden } } } : {}),
+    };
+  }
+
+  private countUnseen(groupId: string, eu: Eu): Promise<number> {
+    return this.prisma.groupPost.count({
+      where: {
+        AND: [
+          this.visibleWhere(groupId, eu),
+          { removedAt: null, createdAt: { gt: eu.seenSince } },
+          { membershipId: { not: eu.membershipId } },
+        ],
+      },
     });
-    return g.postPolicy;
+  }
+
+  private cleanPoll(poll: PollInput | undefined): PollInput {
+    if (!poll) throw new BadRequestException('Escreva a pergunta e as opções da enquete');
+    const question = poll.question.trim();
+    const options = poll.options.map((o) => o.trim());
+    if (!question || question.length > POLL_QUESTION_MAX) {
+      throw new BadRequestException(`A pergunta tem de 1 a ${POLL_QUESTION_MAX} caracteres`);
+    }
+    if (options.length < POLL_MIN_OPTIONS || options.length > POLL_MAX_OPTIONS) {
+      throw new BadRequestException(
+        `A enquete tem de ${POLL_MIN_OPTIONS} a ${POLL_MAX_OPTIONS} opções`,
+      );
+    }
+    if (options.some((o) => !o || o.length > POLL_OPTION_MAX)) {
+      throw new BadRequestException(`Cada opção tem de 1 a ${POLL_OPTION_MAX} caracteres`);
+    }
+    if (new Set(options.map((o) => o.toLocaleLowerCase('pt-BR'))).size !== options.length) {
+      throw new BadRequestException('Opção repetida');
+    }
+    if (!Number.isInteger(poll.days) || poll.days < 1 || poll.days > POLL_MAX_DAYS) {
+      throw new BadRequestException(`A enquete fica aberta de 1 a ${POLL_MAX_DAYS} dias`);
+    }
+    return { question, options, days: poll.days };
+  }
+
+  private pinDeadline(days: number | null): Date | null {
+    if (days === null) return null;
+    if (!Number.isInteger(days) || days < 1 || days > PIN_MAX_DAYS) {
+      throw new BadRequestException(`O aviso fica no topo de 1 a ${PIN_MAX_DAYS} dias`);
+    }
+    return new Date(Date.now() + days * DIA_MS);
+  }
+
+  private async assertPinRoom(groupId: string): Promise<void> {
+    const fixados = await this.prisma.groupPost.count({
+      where: { groupId, ...activePin(new Date()) },
+    });
+    if (fixados >= MAX_PINNED) {
+      throw new ConflictException(`Até ${MAX_PINNED} avisos fixados. Desafixe um antes.`);
+    }
+  }
+
+  /** A posição da frente do carrossel: uma antes do primeiro aviso. */
+  private async frontPinOrder(groupId: string): Promise<number> {
+    const r = await this.prisma.groupPost.aggregate({
+      where: { groupId, ...activePin(new Date()) },
+      _min: { pinOrder: true },
+    });
+    return (r._min.pinOrder ?? 1) - 1;
   }
 
   /**
@@ -783,24 +1320,23 @@ export class PostService {
     return arquivos;
   }
 
-  /** Visível para quem pergunta: no ar, ou removido mas dele. */
+  /** Visível para quem pergunta (`visibleWhere`). */
   private async findVisible(groupId: string, postId: string, eu: Eu) {
     const row = await this.prisma.groupPost.findFirst({
-      where: {
-        id: postId,
-        groupId,
-        OR: [{ removedAt: null }, { membershipId: eu.membershipId }],
-      },
+      where: { AND: [{ id: postId }, this.visibleWhere(groupId, eu)] },
       include: INCLUIR,
     });
     if (!row) throw new NotFoundException('Post not found');
     return row;
   }
 
-  /** No ar: reagir, comentar e denunciar só valem para post que todo mundo vê. */
-  private async findLive(groupId: string, postId: string) {
+  /**
+   * No ar e visível: reagir, comentar, votar e denunciar só valem para post
+   * que todo mundo vê — e que quem pergunta enxerga (bloqueio responde 404).
+   */
+  private async findLive(groupId: string, postId: string, eu: Eu) {
     const row = await this.prisma.groupPost.findFirst({
-      where: { id: postId, groupId, removedAt: null },
+      where: { AND: [{ id: postId, removedAt: null }, this.visibleWhere(groupId, eu)] },
       select: { id: true, membershipId: true },
     });
     if (!row) throw new NotFoundException('Post not found');
@@ -844,22 +1380,39 @@ export class PostService {
     return melhor;
   }
 
-  /** Comentários que quem pergunta enxerga, contados numa consulta só. */
-  private async withCommentCounts(
-    rows: Prisma.GroupPostGetPayload<{ include: typeof INCLUIR }>[],
-    eu: Eu,
-  ): Promise<PostRow[]> {
+  /**
+   * Os comentários que quem pergunta enxerga, contados numa consulta só, e o
+   * voto dele nas enquetes da página.
+   */
+  private async enrich(rows: PostBase[], eu: Eu): Promise<PostRow[]> {
     if (rows.length === 0) return [];
-    const contagem = await this.prisma.groupPostComment.groupBy({
-      by: ['postId'],
-      where: {
-        postId: { in: rows.map((r) => r.id) },
-        OR: [{ removedAt: null }, { membershipId: eu.membershipId }],
-      },
-      _count: { _all: true },
-    });
+    const [contagem, votos] = await Promise.all([
+      this.prisma.groupPostComment.groupBy({
+        by: ['postId'],
+        where: { postId: { in: rows.map((r) => r.id) }, ...this.visibleCommentWhere(eu) },
+        _count: { _all: true },
+      }),
+      this.prisma.groupPollVote.findMany({
+        where: {
+          membershipId: eu.membershipId,
+          pollId: { in: rows.flatMap((r) => (r.poll ? [r.poll.id] : [])) },
+        },
+        select: { pollId: true, optionId: true },
+      }),
+    ]);
     const porPost = new Map(contagem.map((c) => [c.postId, c._count._all]));
-    return rows.map((r) => ({ ...r, comments: porPost.get(r.id) ?? 0 }));
+    const meuVoto = new Map(votos.map((v) => [v.pollId, v.optionId]));
+    return rows.map((r) => ({
+      ...r,
+      comments: porPost.get(r.id) ?? 0,
+      myOptionId: r.poll ? (meuVoto.get(r.poll.id) ?? null) : null,
+    }));
+  }
+
+  private async viewOne(groupId: string, postId: string, eu: Eu): Promise<PostView> {
+    const atual = await this.findVisible(groupId, postId, eu);
+    const [completo] = await this.enrich([atual], eu);
+    return this.view(completo!, eu);
   }
 
   /** Apelido da comunidade, senão o do perfil (Você, #387), senão o primeiro nome. */
@@ -867,40 +1420,86 @@ export class PostService {
     return a.displayName ?? a.user.nickname ?? firstName(a.user.name);
   }
 
-  private async author(a: Autor, eu: Eu): Promise<AuthorView> {
+  private async author(a: Autor, eu: Eu, asGroup = false): Promise<AuthorView> {
     const isMe = a.id === eu.membershipId;
+    if (asGroup) {
+      const foto = await this.media.viewOrNull(eu.group.avatar);
+      return {
+        avatarUrl: foto?.url ?? null,
+        displayName: eu.group.name,
+        team: true,
+        role: null,
+        asGroup: true,
+        isMe,
+      };
+    }
     const podeVer =
       a.user.avatarVisibility === AvatarVisibility.COMMUNITIES ||
       isMe ||
       TEAM_ROLES.includes(eu.role);
     const foto = podeVer ? await this.media.viewOrNull(a.user.avatarFile) : null;
+    const team = TEAM_ROLES.includes(a.role);
     return {
       avatarUrl: foto?.url ?? null,
       displayName: this.nameOf(a),
-      team: TEAM_ROLES.includes(a.role),
-      isMe: a.id === eu.membershipId,
+      team,
+      role: team ? a.role : null,
+      asGroup: false,
+      isMe,
+    };
+  }
+
+  private pollView(poll: PollRow, myOptionId: string | null, eu: Eu, authorId: string): PollView {
+    const closed = pollClosed(poll);
+    const { total, percents } = pollResults(poll.options, () => myOptionId !== null || closed);
+    return {
+      question: poll.question,
+      closesAt: poll.closesAt,
+      closed,
+      myOptionId,
+      totalVotes: total,
+      options: poll.options.map((o, i) => ({
+        id: o.id,
+        label: o.label,
+        percent: percents[i] ?? null,
+      })),
+      canClose: !closed && this.canClosePoll(eu, authorId),
     };
   }
 
   private async view(r: PostRow, eu: Eu): Promise<PostView> {
-    const counts = zeradas();
-    for (const re of r.reactions) counts[re.kind] += 1;
+    const counts = emptyReactionCounts();
+    // Reação de quem tem bloqueio com quem pergunta não conta nem aparece.
+    const reacoes = r.reactions.filter((re) => !eu.hidden.includes(re.membership.userId));
+    for (const re of reacoes) counts[re.kind] += 1;
     const meu = r.membershipId === eu.membershipId;
+    const asGroup = r.publishedAs === PostAuthorAs.GROUP;
+    const pinned =
+      r.pinnedAt !== null &&
+      r.removedAt === null &&
+      (r.pinnedUntil === null || r.pinnedUntil.getTime() > Date.now());
     return {
       id: r.id,
+      kind: r.kind,
+      title: r.title,
       body: r.body,
       createdAt: r.createdAt,
-      author: await this.author(r.author, eu),
+      author: await this.author(r.author, eu, asGroup),
       images: await Promise.all(r.images.map((i) => this.media.view(i.file))),
-      pinned: r.pinnedAt !== null && r.removedAt === null,
+      pinned,
+      pinnedUntil: pinned ? r.pinnedUntil : null,
+      poll: r.poll ? this.pollView(r.poll, r.myOptionId, eu, r.membershipId) : null,
+      auto: r.autoKind && r.autoRefId ? { kind: r.autoKind, refId: r.autoRefId } : null,
       removed: r.removedAt ? { reason: r.removedReason } : null,
       reactions: {
         counts,
-        mine: r.reactions.find((re) => re.membershipId === eu.membershipId)?.kind ?? null,
+        mine: reacoes.find((re) => re.membershipId === eu.membershipId)?.kind ?? null,
       },
       commentCount: r.comments,
       canDelete: meu,
       canModerate: eu.moderates && r.removedAt === null,
+      canHide: !meu,
+      canBlock: !meu && !asGroup,
     };
   }
 }

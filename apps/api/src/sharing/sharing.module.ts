@@ -11,6 +11,10 @@ import { ChallengeController } from './challenge.controller';
 import { ChallengeService } from './challenge.service';
 import { ModerationController } from './moderation.controller';
 import { PostController } from './post.controller';
+import { AnnouncementController } from './announcement.controller';
+import { AnnouncementService } from './announcement.service';
+import { BlockController } from './block.controller';
+import { BlockService } from './block.service';
 import { PostService } from './post.service';
 import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
 import { CreateGroupPostTool } from './mcp/create-group-post.tool';
@@ -115,6 +119,8 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupAgentController,
     ChallengeController,
     PostController,
+    AnnouncementController,
+    BlockController,
     ModerationController,
     PlanOfferController,
   ],
@@ -134,6 +140,8 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupAgentService,
     ChallengeService,
     PostService,
+    AnnouncementService,
+    BlockService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
