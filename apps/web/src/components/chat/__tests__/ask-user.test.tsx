@@ -167,7 +167,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText(/Gramas/), '150');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: { Gramas: '150' } } });
   });
@@ -190,7 +190,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText('Sua resposta'), 'o jantar');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: 'o jantar' } });
   });

@@ -83,20 +83,31 @@ const SUGESTOES = [
 ] as const;
 
 function MensagemDaPessoa() {
+  // A primeira fala é o assunto da conversa: grande, à direita, com uma linha embaixo (prancha
+  // IA-Estados, "Sua mensagem"). As seguintes são respostas curtas, em balão (Al-M20).
+  const assunto = useAuiState((s) => s.thread.messages[0]?.id === s.message.id);
   return (
     // Citar é para a resposta: a própria fala a pessoa reescreve.
     <MessagePrimitive.Root
       data-aui-quote-selectable="false"
-      className="flex w-full flex-col items-end gap-2"
+      className={cn(
+        'flex w-full flex-col items-end gap-2',
+        assunto && 'border-b border-foreground/10 pb-4',
+      )}
     >
-      <span className="pr-1 text-xs font-semibold text-foreground/50">Você</span>
+      <span className="pr-1 text-xs text-foreground/50">Você</span>
       <AnexosDaMensagem />
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
       <div
         className={cn(
-          field,
-          'max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg px-4 py-2.5 text-[15px] leading-relaxed',
+          'whitespace-pre-wrap',
+          assunto
+            ? 'max-w-[92%] pr-1 text-right text-[22px] font-bold leading-tight tracking-tight'
+            : cn(
+                field,
+                'max-w-[85%] rounded-3xl rounded-br-lg px-4 py-2.5 text-[15px] leading-relaxed',
+              ),
         )}
       >
         <MessagePrimitive.Parts components={{ Text: TextoDaPessoa, Image: FotoDaFala }} />
@@ -566,11 +577,8 @@ function Composer() {
         onBlur={() => setDigitando(false)}
         label="Mensagem para o Fatia"
         placeholder={
-          abrindo
-            ? 'Abrindo a conversa…'
-            : pausado
-              ? 'Responda no cartão acima, ou escreva outra coisa'
-              : 'Escreva sua mensagem'
+          // O texto da prancha IA-Estados; com uma pausa na mesa, o cartão acima já pede a resposta.
+          abrindo ? 'Abrindo a conversa…' : 'Responda ou peça outra coisa'
         }
         disabled={abrindo}
         sendLabel="Enviar mensagem"

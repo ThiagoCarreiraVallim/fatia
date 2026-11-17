@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Globe, ShieldCheck } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AI_CONSENT_TEXTS, aiConsentBody, erroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
-import { floating, ghostButton, inkButton } from '@/components/elements/surfaces';
+import { floating, ghostButton, grayButton, limeButton } from '@/components/elements/surfaces';
 import { CHAVE_DOS_ACEITES, useAceitar, useAceitesDaIa, useChaveDaBusca } from './catalogo';
 import { useTurnError } from './chat-runtime-provider';
 
@@ -57,13 +57,7 @@ export function AiConsentCard({
       aria-labelledby="aceite-do-chat"
       className={cn(floating, 'mx-3 mb-3 flex shrink-0 flex-col gap-3 rounded-3xl p-5', className)}
     >
-      <span
-        aria-hidden
-        className="grid size-10 place-items-center rounded-2xl bg-primary/15 text-success"
-      >
-        <ShieldCheck size={20} />
-      </span>
-      <h2 id="aceite-do-chat" className="text-lg font-bold text-foreground">
+      <h2 id="aceite-do-chat" className="text-base font-bold text-foreground">
         {textos.title}
       </h2>
       {corpo ? (
@@ -82,7 +76,10 @@ export function AiConsentCard({
       ) : (
         <p className="text-sm text-foreground/60">Carregando o aviso…</p>
       )}
-      <Link href="/privacy" className="text-sm font-semibold text-success underline">
+      <Link
+        href="/privacy"
+        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
         {textos.link}
       </Link>
       {aceitar.isError ? (
@@ -90,19 +87,19 @@ export function AiConsentCard({
           Não consegui gravar o aceite. Tente de novo.
         </p>
       ) : null}
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex gap-2">
         <button
           type="button"
           disabled={!corpo || aceitar.isPending}
           onClick={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
-          className={cn(inkButton, 'flex-1 rounded-full px-4 py-2.5 text-sm font-bold')}
+          className={cn(limeButton, 'flex-1 rounded-full px-4 py-2.5 text-sm font-bold')}
         >
           {textos.accept}
         </button>
         <button
           type="button"
           onClick={onDecline}
-          className={cn(ghostButton, 'flex-1 rounded-full px-4 py-2.5 text-sm')}
+          className={cn(grayButton, 'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold')}
         >
           {textos.decline}
         </button>

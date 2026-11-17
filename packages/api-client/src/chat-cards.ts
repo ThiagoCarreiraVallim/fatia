@@ -305,6 +305,63 @@ export function toolLineLabel(
   }
 }
 
+/**
+ * A linha da busca na web fala da busca, não da ferramenta (pranchas IA-Estados e Al-M16):
+ * "Pesquisei na web · 3 sites", "nada confiável" quando não achou fonte boa, e "indisponível"
+ * quando o serviço falhou — a resposta segue sem a web nos dois casos.
+ */
+export function webSearchLineLabel(status: ToolCallStatus, sites?: number): string {
+  switch (status) {
+    case 'running':
+      return 'Pesquisando na web…';
+    case 'pending':
+      return 'Buscar na web · aguardando sua confirmação';
+    case 'empty':
+      return 'Pesquisei na web · nada confiável';
+    case 'error':
+      return 'Busca na web indisponível agora';
+    case 'declined':
+      return 'Busca na web · você recusou';
+    case 'not_run':
+      return 'Busca na web · não chegou a rodar';
+    case 'done':
+      return sites === undefined
+        ? 'Pesquisei na web'
+        : `Pesquisei na web · ${plural(sites, 'site', 'sites')}`;
+  }
+}
+
+/** O texto pequeno acima do título do cartão: o nome da ferramenta; no só no app, "Só no app". */
+export function cardEyebrow(kind: string, toolTitle: string | undefined): string | undefined {
+  return kind === 'app_only' ? 'Só no app' : toolTitle;
+}
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** "2026-10-06" → "6 out". Lê só a data, sem fuso: o dia é o que a tool gravou. */
+function diaCurto(iso: string): string {
+  const [, mes, dia] = iso.slice(0, 10).split('-').map(Number);
+  return mes && dia ? `${dia} ${MESES[mes - 1]}` : iso;
+}
+
+/** O período da variação da linha do tempo: "em 30 dias", do primeiro ao último ponto. */
+export function timelinePeriodLabel(events: readonly { date: string }[]): string {
+  const dia = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  const primeiro = events[0];
+  const ultimo = events.at(-1);
+  const dias =
+    primeiro && ultimo ? Math.round((dia(ultimo.date) - dia(primeiro.date)) / 86_400_000) : 0;
+  if (!Number.isFinite(dias) || dias <= 0) return 'no período';
+  return `em ${plural(dias, 'dia', 'dias')}`;
+}
+
+/** As datas embaixo da curva da linha do tempo: a primeira, a do meio e a última. */
+export function timelineAxisLabels(events: readonly { date: string }[]): string[] {
+  if (events.length === 0) return [];
+  const indices = [...new Set([0, Math.floor((events.length - 1) / 2), events.length - 1])];
+  return indices.map((i) => diaCurto(events[i]!.date));
+}
+
 /** A última tool da última resposta, para as respostas rápidas; nada se a pessoa falou por último. */
 export function lastToolName(messages: readonly ChatThreadMessage[]): string | null {
   const ultima = messages.at(-1);

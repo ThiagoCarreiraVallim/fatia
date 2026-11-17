@@ -13,6 +13,10 @@ import {
   lastToolName,
   toolCallStatusOf,
   toolLineLabel,
+  webSearchLineLabel,
+  cardEyebrow,
+  timelineAxisLabels,
+  timelinePeriodLabel,
   groupConversationsByDay,
   groupToolCalls,
   quickReplies,
@@ -402,5 +406,46 @@ describe('lote da pausa com a busca', () => {
     expect(webConsentToSaveOnSend(acoes, { c1: true, w1: false }, false)).toBe(false);
     expect(webConsentToSaveOnSend(acoes, { c1: true, w1: true }, true)).toBe(false);
     expect(webConsentToSaveOnSend(acoes, { c1: true }, false)).toBe(false);
+  });
+});
+
+describe('webSearchLineLabel — a linha da busca na web (prancha IA-Estados e Al-M16)', () => {
+  it('fala da busca, não da ferramenta', () => {
+    expect(webSearchLineLabel('running')).toBe('Pesquisando na web…');
+    expect(webSearchLineLabel('done', 3)).toBe('Pesquisei na web · 3 sites');
+    expect(webSearchLineLabel('done', 1)).toBe('Pesquisei na web · 1 site');
+    expect(webSearchLineLabel('empty')).toBe('Pesquisei na web · nada confiável');
+    expect(webSearchLineLabel('error')).toBe('Busca na web indisponível agora');
+    expect(webSearchLineLabel('declined')).toBe('Busca na web · você recusou');
+    expect(webSearchLineLabel('pending')).toBe('Buscar na web · aguardando sua confirmação');
+  });
+});
+
+describe('cardEyebrow — o texto pequeno acima do título do cartão', () => {
+  it('é o nome da ferramenta, e "Só no app" no cartão do só no app', () => {
+    expect(cardEyebrow('get_today_summary', 'Resumo de hoje')).toBe('Resumo de hoje');
+    expect(cardEyebrow('app_only', 'Abrir no app')).toBe('Só no app');
+  });
+});
+
+describe('timelineAxisLabels — as datas embaixo da curva', () => {
+  it('primeira, do meio e última, em "6 out"', () => {
+    const events = ['2026-10-06', '2026-10-13', '2026-10-20', '2026-10-27', '2026-11-04'].map(
+      (date, i) => ({ date, value: i }),
+    );
+    expect(timelineAxisLabels(events)).toEqual(['6 out', '20 out', '4 nov']);
+  });
+  it('com um ou dois pontos, só os que existem', () => {
+    expect(timelineAxisLabels([{ date: '2026-11-04T10:00:00Z', value: 1 }])).toEqual(['4 nov']);
+    expect(timelineAxisLabels([])).toEqual([]);
+  });
+});
+
+describe('timelinePeriodLabel — o período da variação', () => {
+  it('conta os dias entre o primeiro e o último ponto', () => {
+    const e = (date: string) => ({ date, value: 1 });
+    expect(timelinePeriodLabel([e('2026-10-06'), e('2026-11-05')])).toBe('em 30 dias');
+    expect(timelinePeriodLabel([e('2026-11-04'), e('2026-11-05')])).toBe('em 1 dia');
+    expect(timelinePeriodLabel([e('2026-11-05')])).toBe('no período');
   });
 });
