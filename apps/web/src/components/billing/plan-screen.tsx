@@ -46,6 +46,14 @@ const BADGE: Record<PlanTone, 'pro' | 'trial' | 'lite' | 'pending' | 'free'> = {
   free: 'free',
 };
 
+/** O contorno do cartão, como nas pranchas (Al-M13, Al-M13b). */
+const OUTLINE = {
+  none: '',
+  info: 'border-[hsl(var(--info)/0.6)]',
+  warn: 'border-[hsl(var(--warning)/0.6)]',
+  danger: 'border-[hsl(var(--danger)/0.6)]',
+} as const;
+
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'PIX', label: 'Pix' },
   { value: 'BOLETO', label: 'Boleto' },
@@ -140,9 +148,18 @@ export function PlanScreen() {
           A assinatura pela web não está disponível nesta instância.
         </p>
       ) : null}
-      <p className="px-1 text-center text-xs text-muted-foreground">
-        Livre em qualquer plano: registro manual, metas e conquistas, sua própria IA pelo MCP,
-        exportar e apagar seus dados.
+      <p className="px-1 text-xs text-muted-foreground">
+        <b className="font-semibold text-foreground/80">Livre em qualquer plano:</b> registro
+        manual, metas e conquistas, sua própria IA pelo MCP, exportar e apagar seus dados.
+      </p>
+      <p className="flex gap-2 px-1 text-xs text-muted-foreground">
+        <Link href="/terms" className="underline">
+          Termos de uso
+        </Link>
+        <span aria-hidden>·</span>
+        <Link href="/privacy" className="underline">
+          Privacidade
+        </Link>
       </p>
     </div>
   );
@@ -195,7 +212,7 @@ function StatusCard({
         aria-labelledby="plano-atual"
         className={cn(
           'space-y-3 rounded-2xl border border-subtle bg-card p-4',
-          view.tone === 'warn' && 'border-[hsl(var(--warning)/0.6)]',
+          OUTLINE[view.outline ?? 'none'],
         )}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -222,7 +239,8 @@ function StatusCard({
                 <Button
                   key={a.kind}
                   asChild
-                  variant={i === 0 ? 'default' : 'outline'}
+                  // "Cancelar nas assinaturas da loja" não é a ação principal (Al-M13).
+                  variant={i === 0 && !a.label.startsWith('Cancelar') ? 'default' : 'outline'}
                   className="w-full"
                 >
                   <a href={a.url} target="_blank" rel="noopener noreferrer">

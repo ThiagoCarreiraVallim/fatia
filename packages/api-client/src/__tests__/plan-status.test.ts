@@ -702,3 +702,46 @@ describe('planStatusView: expirada no app (passada visual da #386)', () => {
     expect(planStatusView(pausada, app(false)).via).toBe('Terminou em 4 nov');
   });
 });
+
+describe('planStatusView: contorno do cartão (Al-M13, Al-M13b)', () => {
+  const asaas = {
+    source: 'ASAAS' as const,
+    paymentMethod: 'PIX' as const,
+    paidBy: 'PERSONAL' as const,
+  };
+
+  it('pendente: âmbar nas duas superfícies', () => {
+    const p = plan({ ...asaas, reason: 'pendente', state: 'PENDING', status: 'PENDING' });
+    expect(planStatusView(p, web).outline).toBe('warn');
+    expect(planStatusView(p, app(false)).outline).toBe('warn');
+  });
+
+  it('vence em breve: azul; atrasada: âmbar; IA pausada: vermelho; ativa: nenhum', () => {
+    const vence = plan({
+      ...asaas,
+      tier: 'PRO',
+      reason: 'ativa',
+      state: 'ACTIVE',
+      status: 'ACTIVE',
+      interval: 'MONTHLY',
+      currentPeriodEnd: '2026-11-12T15:00:00Z',
+      paymentUrl: 'https://www.asaas.com/i/abc',
+    });
+    expect(planStatusView(vence, web).outline).toBe('info');
+    expect(
+      planStatusView({ ...vence, currentPeriodEnd: '2026-12-10T15:00:00Z' }, web).outline,
+    ).toBeNull();
+    expect(planStatusView(ASAAS_ATRASADA, web).outline).toBe('warn');
+    const pausada = plan({
+      ...asaas,
+      reason: 'expirada',
+      state: 'EXPIRED',
+      degraded: true,
+      status: 'PAST_DUE',
+      currentPeriodEnd: '2026-10-01T03:00:00Z',
+      paymentUrl: 'https://www.asaas.com/i/abc',
+      trialEligible: false,
+    });
+    expect(planStatusView(pausada, web).outline).toBe('danger');
+  });
+});

@@ -20,7 +20,13 @@ import {
 } from '@/billing/purchases';
 import { PRO_VIA_COMMUNITY } from '@/billing/plan-offer';
 import { PlanStatusCard } from '@/components/billing/plan-status-card';
-import { CommunityOffer, ProHero, StoreOffer, TrialDrawer } from '@/components/billing/store-offer';
+import {
+  CommunityOffer,
+  LegalLinks,
+  ProHero,
+  StoreOffer,
+  TrialDrawer,
+} from '@/components/billing/store-offer';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { Screen } from '@/components/layout/screen';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
@@ -168,10 +174,14 @@ export default function PlanScreen() {
             />
           ) : null}
 
-          <Text className="text-center text-xs text-muted-foreground">
-            Livre em qualquer plano: registro manual, metas e conquistas, sua própria IA pelo MCP,
-            exportar e apagar seus dados.
+          <Text className="px-1 text-xs text-muted-foreground">
+            <Text className="font-sans-semibold text-xs text-foreground/80">
+              Livre em qualquer plano:
+            </Text>{' '}
+            registro manual, metas e conquistas, sua própria IA pelo MCP, exportar e apagar seus
+            dados.
           </Text>
+          {view.offer === 'store' ? null : <LegalLinks />}
 
           {erro ? (
             <Text accessibilityRole="alert" className="text-center text-sm text-destructive">

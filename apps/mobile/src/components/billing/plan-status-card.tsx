@@ -12,6 +12,13 @@ import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui/utils';
 import { colors } from '@/theme/colors';
 
+/** O contorno do cartão, como nas pranchas (Al-M13, Al-M13b). */
+const OUTLINE = {
+  info: 'border-info/60',
+  warn: 'border-warning/60',
+  danger: 'border-danger/60',
+} as const;
+
 const BADGE: Record<PlanTone, BadgeVariant> = {
   pro: 'pro',
   trial: 'trial',
@@ -36,7 +43,6 @@ export function PlanStatusCard({
   highlight?: string;
   onAction: (action: PlanAction) => void;
 }) {
-  const attention = view.tone === 'warn';
   return (
     <View className="gap-4">
       {view.community ? <CommunityCard view={view} /> : null}
@@ -44,7 +50,8 @@ export function PlanStatusCard({
       <View
         className={cn(
           'gap-3 rounded-card bg-card p-5',
-          attention && 'border-[1.5px] border-warning/60',
+          view.outline && 'border-[1.5px]',
+          view.outline && OUTLINE[view.outline],
         )}
       >
         <View className="flex-row items-center gap-2">
@@ -68,7 +75,14 @@ export function PlanStatusCard({
         {view.actions.map((a, i) => (
           <Button
             key={a.kind}
-            variant={i === 0 ? (view.community ? 'brand' : 'default') : 'outline'}
+            variant={
+              i > 0 || a.label.startsWith('Cancelar')
+                ? // "Cancelar nas assinaturas da loja" não é a ação principal (Al-M13).
+                  'outline'
+                : view.community
+                  ? 'brand'
+                  : 'default'
+            }
             onPress={() => (a.kind === 'store' ? void Linking.openURL(a.url) : onAction(a))}
           >
             {a.label}

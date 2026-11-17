@@ -68,7 +68,7 @@ export function ProHero() {
   );
 }
 
-function LegalLinks() {
+export function LegalLinks() {
   return (
     <View className="flex-row justify-center gap-2">
       <Text

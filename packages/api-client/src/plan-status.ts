@@ -52,6 +52,11 @@ export interface PlanStatusView {
   note: string | null;
   /** "Por que não dá para pagar aqui?" da assinatura da loja (Al-M13d). */
   why: { title: string; body: string } | null;
+  /**
+   * O contorno do cartão, como nas pranchas: âmbar no pendente e no atraso,
+   * azul no "vence em breve", vermelho na IA pausada.
+   */
+  outline: 'info' | 'warn' | 'danger' | null;
   /** Título da lista de recursos de IA e se eles estão ligados. */
   featuresTitle: string;
   featuresOn: boolean;
@@ -160,6 +165,7 @@ function view(p: Partial<PlanStatusView> & Pick<PlanStatusView, 'badge' | 'title
     offer: null,
     community: null,
     ...p,
+    outline: p.outline ?? (p.tone === 'warn' ? 'warn' : null),
   } satisfies PlanStatusView;
 }
 
@@ -266,6 +272,7 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         return view({
           badge: 'Pendente',
           tone: 'trial',
+          outline: 'warn',
           via: viaOf(plan, ctx),
           title: 'Aguardando o pagamento',
           body:
@@ -281,6 +288,7 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
       return view({
         badge: 'Pendente',
         tone: 'trial',
+        outline: 'warn',
         via: 'Fora do app',
         title: 'Pagamento em confirmação',
         body: 'Você assinou fora do app. Avisamos por e-mail quando confirmar; esta tela atualiza sozinha.',
@@ -400,6 +408,7 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         return view({
           badge: 'Vence em breve',
           tone: 'trial',
+          outline: 'info',
           via: viaOf(plan, ctx),
           title: dueIn === 0 ? 'Seu PRO vence hoje' : `Seu PRO vence em ${days(dueIn)}`,
           body:
@@ -427,6 +436,7 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         return view({
           badge: 'IA pausada',
           tone: 'mute',
+          outline: 'danger',
           via: viaOf(plan, ctx),
           title: 'A IA pausou',
           body: 'Seu registro continua normal. Pague e a IA volta na hora.',
