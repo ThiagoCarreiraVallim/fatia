@@ -17,6 +17,7 @@ import { PrismaService } from '../common/prisma.service';
 import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
+import { findGroupByEntryCode } from './entry-code';
 import { canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -87,6 +88,12 @@ export interface MembershipResult {
  *    `groupId`, na mesma transação da mudança de status — senão existe uma
  *    janela em que a membership já acabou e a permissão ainda vale.
  */
+/** O código revogado entre a leitura e o commit responde como código inexistente. */
+function codigoEsgotado(err: unknown): never {
+  if ((err as { code?: string })?.code === 'P2025') throw new NotFoundException(NOT_FOUND);
+  throw err;
+}
+
 @Injectable()
 export class MembershipService {
   constructor(
@@ -111,13 +118,27 @@ export class MembershipService {
    */
   async requestJoin(
     userId: string,
-    slug: string,
+    code: string,
     consent: JoinConsent = { scopes: [], statsOptIn: false },
   ): Promise<MembershipResult> {
-    const group = await this.prisma.group.findUnique({ where: { slug } });
-    if (!group || group.joinPolicy === JoinPolicy.INVITE_ONLY) {
-      throw new NotFoundException(NOT_FOUND);
-    }
+    // Código legível da equipe ou slug (#393); só por convite não abre a porta.
+    const entrada = await findGroupByEntryCode(this.prisma, code);
+    if (!entrada) throw new NotFoundException(NOT_FOUND);
+    const { group } = entrada;
+    // Conta o uso do código no mesmo commit da entrada; o filtro de `maxUses`
+    // faz o último uso disputado falhar inteiro (P2025 → 404).
+    const usoDoCodigo = entrada.inviteId
+      ? [
+          this.prisma.groupInvite.update({
+            where: {
+              id: entrada.inviteId,
+              revokedAt: null,
+              ...(entrada.inviteMaxUses !== null ? { uses: { lt: entrada.inviteMaxUses } } : {}),
+            },
+            data: { uses: { increment: 1 } },
+          }),
+        ]
+      : [];
 
     const existente = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: group.id, userId } },
@@ -146,7 +167,9 @@ export class MembershipService {
         consent,
         at: new Date(),
       });
-      const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
+      const [membership] = (await this.prisma
+        .$transaction([...ops, ...usoDoCodigo])
+        .catch(codigoEsgotado)) as [GroupMembership];
       return {
         membershipId: membership.id,
         groupId: group.id,
@@ -164,11 +187,16 @@ export class MembershipService {
       consentAt: new Date(),
       statsOptIn: consent.statsOptIn,
     };
-    const membership = existente
-      ? await this.prisma.groupMembership.update({ where: { id: existente.id }, data: pedido })
-      : await this.prisma.groupMembership.create({
-          data: { groupId: group.id, userId, ...pedido },
-        });
+    const [membership] = (await this.prisma
+      .$transaction([
+        existente
+          ? this.prisma.groupMembership.update({ where: { id: existente.id }, data: pedido })
+          : this.prisma.groupMembership.create({
+              data: { groupId: group.id, userId, ...pedido },
+            }),
+        ...usoDoCodigo,
+      ])
+      .catch(codigoEsgotado)) as [GroupMembership];
 
     const quem = await this.prisma.user.findUnique({
       where: { id: userId },

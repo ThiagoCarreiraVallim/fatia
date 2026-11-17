@@ -24,6 +24,7 @@ import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { normalizarEscopos } from './consent-scopes';
+import { findGroupByEntryCode, groupHasFreeSeat } from './entry-code';
 import { canReceiveLink, TEAM_ROLES } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -102,13 +103,18 @@ export interface GroupPreview {
   type: GroupType;
   name: string;
   slug: string;
+  /** O que mandar de volta ao entrar (`POST /groups/join`): o código normalizado ou o slug. */
+  code: string;
   memberCount: number;
   description: string | null;
   joinPolicy: JoinPolicy;
+  visibility: GroupVisibility;
   /** Quem vai receber o que a pessoa escolher compartilhar. Só nome e papel. */
   team: { name: string; role: GroupRole }[];
   /** O que é obrigatório compartilhar para entrar pelo código (sempre como membro). */
   requiredSharingScopes: ShareScope[];
+  /** A comunidade tem assento livre (ou dá a todos): "A academia libera o PRO". */
+  proOffer: boolean;
 }
 
 const INCLUIR = {
@@ -258,18 +264,21 @@ export class GroupService {
   }
 
   /**
-   * Preview pelo slug — o que a pessoa vê antes de pedir para entrar.
+   * Preview pelo código (#393, Cm-02) — o que a pessoa vê antes de pedir para
+   * entrar. Vale o código legível da equipe ou o slug (`entry-code.ts`).
    *
    * Exige autenticação (não é `@Public()`) e devolve só metadado do grupo:
-   * nome, tipo e quantos membros. **Nunca** a lista de membros — quem está numa
-   * academia é informação sobre pessoas, não sobre o grupo.
+   * nome, tipo e quantos membros, e a equipe que receberá o que for
+   * compartilhado. **Nunca** a lista de membros — quem está numa academia é
+   * informação sobre pessoas, não sobre o grupo.
    */
-  async previewBySlug(slug: string): Promise<GroupPreview> {
-    const group = await this.prisma.group.findUnique({ where: { slug } });
-    // Só convite abre a porta: o código não revela nem que a comunidade existe.
-    if (!group || group.joinPolicy === 'INVITE_ONLY') throw new NotFoundException(NOT_FOUND);
+  async previewByCode(raw: string): Promise<GroupPreview> {
+    const entrada = await findGroupByEntryCode(this.prisma, raw);
+    // Inválido, vencido, revogado e só por convite: o mesmo 404.
+    if (!entrada) throw new NotFoundException(NOT_FOUND);
+    const { group } = entrada;
 
-    const [memberCount, equipe] = await Promise.all([
+    const [memberCount, equipe, proOffer] = await Promise.all([
       this.prisma.groupMembership.count({
         where: { groupId: group.id, status: MembershipStatus.ACTIVE },
       }),
@@ -282,6 +291,7 @@ export class GroupService {
         select: { role: true, user: { select: { name: true } } },
         orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
       }),
+      groupHasFreeSeat(this.prisma, group.id),
     ]);
 
     return {
@@ -289,11 +299,14 @@ export class GroupService {
       type: group.type,
       name: group.name,
       slug: group.slug,
+      code: entrada.code,
       memberCount,
       description: group.description,
       joinPolicy: group.joinPolicy,
+      visibility: group.visibility,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
       requiredSharingScopes: group.requiredSharingScopes,
+      proOffer,
     };
   }
 

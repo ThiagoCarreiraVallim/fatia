@@ -15,6 +15,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import {
   GroupRole,
@@ -115,11 +116,22 @@ export class JoinConsentDto {
   statsOptIn?: boolean;
 }
 
+/**
+ * Entrar pelo código (#393): o código legível da equipe ou o slug. `slug` é o
+ * nome antigo do campo, e o app instalado ainda manda; um dos dois basta.
+ */
 export class JoinGroupDto extends JoinConsentDto {
+  @ValidateIf((o: JoinGroupDto) => o.code === undefined)
   @IsString()
   @MinLength(3)
   @MaxLength(60)
-  slug!: string;
+  slug?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(60)
+  code?: string;
 }
 
 /** Papéis que um convite oferece. Dono não se convida: transfere-se. */
@@ -131,7 +143,10 @@ export class CreateInviteDto {
 
   @IsOptional() @IsEmail() @MaxLength(254) email?: string;
   @IsOptional() @IsInt() @Min(1) @Max(1000) maxUses?: number;
-  @IsOptional() @IsInt() @Min(1) @Max(30) expiresInDays?: number;
+  /** Link: até 30 dias (o service corta). Código de entrada: até 365. */
+  @IsOptional() @IsInt() @Min(1) @Max(365) expiresInDays?: number;
+  /** Código de entrada legível em vez de link (#393). */
+  @IsOptional() @IsBoolean() code?: boolean;
 }
 
 /** Convite em lote: até um dia inteiro de convites numa chamada. */
@@ -168,11 +183,19 @@ export class InviteTokenParamDto {
  * `PrismaClientValidationError` e — não havendo `ExceptionFilter` global — a
  * chamada sem query string virava **500** em vez de 400.
  */
+/** `?code=` (código legível ou slug, #393) ou `?slug=`, o nome antigo. */
 export class PreviewGroupDto {
+  @ValidateIf((o: PreviewGroupDto) => o.code === undefined)
   @IsString()
   @MinLength(3)
   @MaxLength(60)
-  slug!: string;
+  slug?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(60)
+  code?: string;
 }
 
 export class ChangeRoleDto {

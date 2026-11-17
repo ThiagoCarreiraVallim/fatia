@@ -90,15 +90,18 @@ export class SharingController {
   }
 
   /**
-   * Preview pelo slug, antes de pedir para entrar. Só metadado do grupo.
+   * Preview pelo código (o legível da equipe ou o slug, #393), antes de pedir
+   * para entrar. Só metadado do grupo. Throttle: o código é curto, e a rota
+   * não pode virar máquina de adivinhar.
    *
    * `@Query()` com DTO, e não `@Query('slug')`: primitivo avulso escapa do
    * `ValidationPipe` global e a chamada sem slug morria em 500 no Prisma.
    */
   @Get('preview')
   @SelfOnly()
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   preview(@Query() q: PreviewGroupDto) {
-    return this.groups.previewBySlug(q.slug);
+    return this.groups.previewByCode(q.code ?? q.slug ?? '');
   }
 
   /**
@@ -144,8 +147,9 @@ export class SharingController {
   /** Pedido de entrada do próprio usuário. Quem entra é sempre quem chamou. */
   @Post('join')
   @SelfOnly()
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   join(@CurrentUser() user: CurrentUserPayload, @Body() dto: JoinGroupDto) {
-    return this.memberships.requestJoin(user.id, dto.slug, {
+    return this.memberships.requestJoin(user.id, dto.code ?? dto.slug ?? '', {
       scopes: dto.scopes ?? [],
       statsOptIn: dto.statsOptIn ?? false,
     });

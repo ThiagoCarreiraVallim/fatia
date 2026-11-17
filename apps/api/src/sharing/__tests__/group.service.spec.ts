@@ -7,14 +7,17 @@ import type { PrismaService } from '../../common/prisma.service';
 type MockPrisma = {
   group: { create: jest.Mock; findUnique: jest.Mock };
   groupMembership: { findMany: jest.Mock; findUnique: jest.Mock; count: jest.Mock };
-  groupSeatPool: { findMany: jest.Mock };
+  groupSeatPool: { findMany: jest.Mock; findUnique: jest.Mock };
   groupSeatAssignment: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   group: { create: jest.fn(), findUnique: jest.fn() },
   groupMembership: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
-  groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
+  groupSeatPool: {
+    findMany: jest.fn().mockResolvedValue([]),
+    findUnique: jest.fn().mockResolvedValue(null),
+  },
   groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
@@ -179,7 +182,7 @@ describe('GroupService', () => {
     });
   });
 
-  describe('previewBySlug', () => {
+  describe('previewByCode', () => {
     it('devolve metadado, a contagem e a equipe — nunca a lista de membros', async () => {
       prisma.group.findUnique.mockResolvedValue({
         id: 'g1',
@@ -188,13 +191,15 @@ describe('GroupService', () => {
         slug: 'academia-x',
         description: null,
         joinPolicy: 'APPROVAL',
+        visibility: 'PRIVATE',
+        requiredSharingScopes: [],
       });
       prisma.groupMembership.count.mockResolvedValue(12);
       prisma.groupMembership.findMany.mockResolvedValue([
         { role: GroupRole.OWNER, user: { name: 'Dona' } },
       ]);
 
-      const preview = await service.previewBySlug('academia-x');
+      const preview = await service.previewByCode('academia-x');
 
       // A equipe aparece porque é ela quem vai receber o que a pessoa escolher
       // compartilhar (ADR 026). Os outros alunos, nunca: quem está numa academia
@@ -205,9 +210,13 @@ describe('GroupService', () => {
         name: 'Academia X',
         slug: 'academia-x',
         description: null,
+        code: 'academia-x',
         joinPolicy: 'APPROVAL',
+        visibility: 'PRIVATE',
         memberCount: 12,
         team: [{ name: 'Dona', role: GroupRole.OWNER }],
+        requiredSharingScopes: [],
+        proOffer: false,
       });
       expect(prisma.groupMembership.findMany.mock.calls[0][0].where.role).toEqual({
         in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
@@ -216,7 +225,7 @@ describe('GroupService', () => {
 
     it('comunidade só por convite não aparece pelo código', async () => {
       prisma.group.findUnique.mockResolvedValue({ id: 'g1', joinPolicy: 'INVITE_ONLY' });
-      await expect(service.previewBySlug('academia-x')).rejects.toThrow(NotFoundException);
+      await expect(service.previewByCode('academia-x')).rejects.toThrow(NotFoundException);
     });
   });
 });

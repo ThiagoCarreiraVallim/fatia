@@ -299,7 +299,7 @@ describe('comunidade (integração)', () => {
       const { grupo } = await comunidade('INVITE_ONLY');
       const aluno = await pessoa('Aluno');
       await expect(memberships.requestJoin(aluno, grupo.slug)).rejects.toThrow(NotFoundException);
-      await expect(groups.previewBySlug(grupo.slug)).rejects.toThrow(NotFoundException);
+      await expect(groups.previewByCode(grupo.slug)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -358,7 +358,7 @@ describe('comunidade (integração)', () => {
     it('nasce normalizada e aparece no cartão do código e na leitura do dono', async () => {
       const { dono, grupo } = await exigente();
       expect(grupo.requiredSharingScopes).toEqual(['WORKOUT']);
-      expect((await groups.previewBySlug(grupo.slug)).requiredSharingScopes).toEqual(['WORKOUT']);
+      expect((await groups.previewByCode(grupo.slug)).requiredSharingScopes).toEqual(['WORKOUT']);
       expect((await groups.findByIdForMember(dono, grupo.id)).requiredSharingScopes).toEqual([
         'WORKOUT',
       ]);
