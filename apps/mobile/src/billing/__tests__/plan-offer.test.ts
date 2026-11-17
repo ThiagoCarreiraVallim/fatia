@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { iapEnabled, planOffer, PRO_VIA_COMMUNITY } from '../plan-offer';
-
-const free = { tier: 'FREE' as const, source: null, requiresPlan: true };
-const proWeb = { tier: 'PRO' as const, source: 'ASAAS' as const, requiresPlan: true };
+import {
+  iapEnabled,
+  PRO_VIA_COMMUNITY,
+  storeOption,
+  storeTrialDays,
+  type StorePackageLike,
+} from '../plan-offer';
 
 describe('iapEnabled', () => {
   it('só com a flag "true" e a chave da loja no build', () => {
@@ -14,42 +17,72 @@ describe('iapEnabled', () => {
   });
 });
 
-describe('planOffer — compra no app desligada (regras das lojas)', () => {
-  it('não oferece compra, nem restaurar, nem renovação', () => {
-    expect(planOffer(free, false)).toMatchObject({
-      purchase: false,
-      restore: false,
-      renewalNote: false,
-    });
-  });
-
+describe('PRO_VIA_COMMUNITY (Al-M2 sem compra no app)', () => {
   it('diz que o PRO chega pela comunidade, sem preço nem web', () => {
-    const { notice } = planOffer(free, false);
-    expect(notice).toBe(PRO_VIA_COMMUNITY);
-    expect(notice).not.toMatch(/R\$|web|navegador|site|assin/i);
-  });
-
-  it('não aponta para a web nem a quem já assinou por lá', () => {
-    expect(planOffer(proWeb, false).webManageNote).toBe(false);
+    expect(PRO_VIA_COMMUNITY).toBe(
+      'Neste app, o PRO é liberado pela academia ou pelo profissional que você acompanha. Peça o código à equipe.',
+    );
+    expect(PRO_VIA_COMMUNITY).not.toMatch(/R\$|web|navegador|site|assin|pix|boleto/i);
   });
 });
 
-describe('planOffer — compra no app ligada', () => {
-  it('oferece a loja a quem está no Free', () => {
-    expect(planOffer(free, true)).toEqual({
-      purchase: true,
-      restore: true,
-      renewalNote: true,
-      webManageNote: false,
-      notice: null,
+const pacote = (
+  p: Partial<StorePackageLike['product']> & { packageType?: string },
+): StorePackageLike => ({
+  identifier: '$rc_annual',
+  packageType: p.packageType ?? 'ANNUAL',
+  product: { priceString: 'R$ 179,90', introPrice: null, ...p },
+});
+
+describe('storeTrialDays: o teste é o que a loja oferece, não o que o Fatia supõe', () => {
+  it('oferta introdutória grátis de 1 semana = 7 dias', () => {
+    expect(
+      storeTrialDays(
+        pacote({ introPrice: { price: 0, periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } }),
+      ),
+    ).toBe(7);
+  });
+
+  it('7 dias declarados em dias', () => {
+    expect(
+      storeTrialDays(
+        pacote({ introPrice: { price: 0, periodUnit: 'DAY', periodNumberOfUnits: 7, cycles: 1 } }),
+      ),
+    ).toBe(7);
+  });
+
+  it('preço introdutório pago não é teste grátis', () => {
+    expect(
+      storeTrialDays(
+        pacote({
+          introPrice: { price: 9.9, periodUnit: 'MONTH', periodNumberOfUnits: 1, cycles: 1 },
+        }),
+      ),
+    ).toBe(0);
+  });
+
+  it('sem oferta, sem teste', () => {
+    expect(storeTrialDays(pacote({}))).toBe(0);
+  });
+});
+
+describe('storeOption: o cartão do plano com o preço da loja', () => {
+  it('anual e mensal com o preço que a loja mostra', () => {
+    expect(storeOption(pacote({}))).toEqual({
+      interval: 'YEARLY',
+      title: 'Anual',
+      price: 'R$ 179,90',
+      per: 'por ano',
+    });
+    expect(storeOption(pacote({ packageType: 'MONTHLY', priceString: 'R$ 19,90' }))).toEqual({
+      interval: 'MONTHLY',
+      title: 'Mensal',
+      price: 'R$ 19,90',
+      per: 'sem fidelidade',
     });
   });
 
-  it('a assinatura da web é gerenciada na web', () => {
-    expect(planOffer(proWeb, true).webManageNote).toBe(true);
-  });
-
-  it('instância sem exigência de plano não oferece nada', () => {
-    expect(planOffer({ ...free, requiresPlan: false }, true).purchase).toBe(false);
+  it('pacote que não é mensal nem anual fica de fora', () => {
+    expect(storeOption(pacote({ packageType: 'LIFETIME' }))).toBeNull();
   });
 });

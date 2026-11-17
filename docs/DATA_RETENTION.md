@@ -542,12 +542,14 @@ transcrição.
 
 ## Autenticação e OAuth
 
-| Dado                                                         | Onde                                                                 | Retenção                                                                           |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Identidade, senha, sessões                                   | Logto (self-hosted)                                                  | Regido pelo Logto; apagada junto da conta quando a Management API está configurada |
-| `McpOAuthClient` — clientes registrados via DCR              | Postgres                                                             | Enquanto o cliente existir. Sem expiração automática hoje                          |
-| `McpOAuthAuthorization` — códigos de autorização em trânsito | Postgres                                                             | **Efêmero.** Tem `expiresAt` e `consumedAt`; o código é de uso único               |
-| Access/refresh tokens                                        | **Não armazenados.** Emitidos pelo Logto, guardados pelo cliente MCP | —                                                                                  |
+| Dado                                                           | Onde                                                                           | Retenção                                                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Identidade, senha, sessões                                     | Logto (self-hosted)                                                            | Regido pelo Logto; apagada junto da conta quando a Management API está configurada                                       |
+| `McpOAuthClient` — clientes registrados via DCR                | Postgres                                                                       | Enquanto o cliente existir. Sem expiração automática hoje                                                                |
+| `McpOAuthAuthorization` — códigos de autorização em trânsito   | Postgres                                                                       | **Efêmero.** Tem `expiresAt` e `consumedAt`; o código é de uso único                                                     |
+| `McpOAuthConnection` — qual app de IA a pessoa conectou (#388) | Postgres: pessoa, cliente e datas                                              | Apagada com a conta (cascade) ou com o cliente; vai no export de dados                                                   |
+| `McpOAuthConnectionToken` — tokens de cada conexão (#388)      | Postgres: só o **SHA-256** dos access e refresh tokens entregues, com validade | **Efêmero.** Apagado ao vencer (access: `expires_in`; refresh: na rotação ou em 90 dias) e com a conexão; fora do export |
+| Access/refresh tokens                                          | **Não armazenados.** Emitidos pelo Logto, guardados pelo cliente MCP           | —                                                                                                                        |
 
 > **Pendência conhecida:** não há job de limpeza que apague fisicamente as linhas de
 > `McpOAuthAuthorization` já expiradas ou consumidas. Elas não dão acesso a nada — a validação

@@ -67,6 +67,8 @@ export class AccountService {
         activityLevel: true,
         objective: true,
         onboardedAt: true,
+        // Quando começou o teste grátis do PRO (#386): um por pessoa.
+        proTrialStartedAt: true,
         // Retomada do onboarding (#371): a etapa, o rascunho (peso e metas ainda
         // não confirmados) e o cartão "Primeiros passos".
         onboardingStep: true,
@@ -135,6 +137,7 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -351,8 +354,9 @@ export class AccountService {
         select: { content: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
-      // temporário, e sem nada do provedor além do id.
+      // Histórico do plano (ADR 024) e da cobrança (#386): teste, forma de
+      // pagamento, carência e os avisos que mandamos. Sem `paymentUrl`, que é
+      // link de cobrança temporário, e sem nada do provedor além do id.
       this.prisma.userSubscription.findMany({
         where: { userId },
         select: {
@@ -361,11 +365,18 @@ export class AccountService {
           status: true,
           interval: true,
           productId: true,
+          paymentMethod: true,
+          trialEndsAt: true,
           currentPeriodEnd: true,
+          graceEndsAt: true,
           cancelAtPeriodEnd: true,
           canceledAt: true,
           createdAt: true,
           updatedAt: true,
+          reminders: {
+            select: { kind: true, dueDate: true, sentAt: true },
+            orderBy: { sentAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -585,6 +596,12 @@ export class AccountService {
         select: { kind: true, version: true, acceptedAt: true },
         orderBy: { acceptedAt: 'asc' },
       }),
+      // Conectar sua IA (#388): o app e as datas. O hash do token fica de fora.
+      this.prisma.mcpOAuthConnection.findMany({
+        where: { userId },
+        select: { createdAt: true, lastUsedAt: true, client: { select: { clientName: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -650,6 +667,11 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      mcpConnections: mcpConnections.map((c) => ({
+        clientName: c.client.clientName,
+        connectedAt: c.createdAt,
+        lastUsedAt: c.lastUsedAt,
+      })),
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -678,6 +700,7 @@ export class AccountService {
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
         aiConsents: aiConsents.length,
+        mcpConnections: mcpConnections.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

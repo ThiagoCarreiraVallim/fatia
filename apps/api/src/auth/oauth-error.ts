@@ -18,7 +18,8 @@ export type OAuthErrorCode =
   | 'unauthorized_client'
   | 'unsupported_grant_type'
   | 'invalid_scope'
-  | 'server_error';
+  | 'server_error'
+  | 'temporarily_unavailable';
 
 /** Códigos que a RFC manda responder com 401 em vez de 400. */
 const UNAUTHORIZED_CODES: ReadonlySet<OAuthErrorCode> = new Set([
@@ -26,15 +27,23 @@ const UNAUTHORIZED_CODES: ReadonlySet<OAuthErrorCode> = new Set([
   'unauthorized_client',
 ]);
 
+/**
+ * Status de cada código. `server_error` e `temporarily_unavailable` são falha
+ * nossa (ou do Logto), não do cliente: com 5xx o cliente tenta de novo mais
+ * tarde e guarda o refresh token, em vez de descartá-lo como num 400.
+ */
+function statusOf(code: OAuthErrorCode): HttpStatus {
+  if (code === 'server_error') return HttpStatus.INTERNAL_SERVER_ERROR;
+  if (code === 'temporarily_unavailable') return HttpStatus.SERVICE_UNAVAILABLE;
+  return UNAUTHORIZED_CODES.has(code) ? HttpStatus.UNAUTHORIZED : HttpStatus.BAD_REQUEST;
+}
+
 export class OAuthError extends HttpException {
   constructor(
     readonly code: OAuthErrorCode,
     description: string,
   ) {
-    super(
-      { error: code, error_description: description },
-      UNAUTHORIZED_CODES.has(code) ? HttpStatus.UNAUTHORIZED : HttpStatus.BAD_REQUEST,
-    );
+    super({ error: code, error_description: description }, statusOf(code));
     // O `HttpException` só usa a resposta como `message` quando ela é string.
     // Com o objeto da RFC, `message` viraria o genérico "Auth Error" — inútil no
     // log e em qualquer stack trace, justamente quando se precisa dele.

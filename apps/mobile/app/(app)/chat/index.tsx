@@ -30,6 +30,7 @@ import {
 } from '@/components/ui';
 import { DrawerInput } from '@/components/nutrition/drawer-input';
 import { CHAT_KEYS, useChatSession } from '@/chat/chat-provider';
+import { ChatLocked } from '@/components/billing/chat-locked';
 import { colors } from '@/theme/colors';
 
 /** Data curta da última mensagem: "hoje", "ontem" ou dia/mês. */
@@ -120,23 +121,7 @@ export default function ConversationsScreen() {
         refreshing={conversas.isRefetching}
       >
         <View className="gap-2 p-4">
-          {semAcesso ? (
-            <View className="gap-3 rounded-xl border border-border bg-card p-4">
-              <Text className="text-base font-semibold text-foreground">
-                {disponivel.data?.available
-                  ? 'O chat com a IA do Fatia faz parte do plano PRO'
-                  : 'O assistente não está disponível neste app'}
-              </Text>
-              <Text className="text-sm text-muted-foreground">
-                O registro manual e a sua própria IA pelo MCP continuam livres.
-              </Text>
-              {disponivel.data?.available ? (
-                <Button onPress={() => router.push('/plan')}>
-                  <Text className="text-sm font-bold text-primary-foreground">Ver o plano PRO</Text>
-                </Button>
-              ) : null}
-            </View>
-          ) : null}
+          {semAcesso ? <ChatLocked available={disponivel.data?.available === true} /> : null}
           {conversas.isPending ? <LoadingState /> : null}
           {conversas.isError ? (
             <ErrorState error={conversas.error} onRetry={() => conversas.refetch()} />

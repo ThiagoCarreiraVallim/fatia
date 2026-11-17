@@ -30,20 +30,36 @@ export function fimDoPeriodo(dueDate: string, interval: BillingInterval | null):
 export interface MudancaDeAssinatura {
   status?: SubscriptionStatus;
   graceEndsAt?: Date | null;
-  paymentUrl?: null;
+  /** O link da cobrança em aberto (só `https`), ou `null` quando ela foi paga. */
+  paymentUrl?: string | null;
   currentPeriodEnd?: Date;
   canceledAt?: Date;
   cancelAtPeriodEnd?: boolean;
 }
 
-/** O que um evento muda na assinatura. `null` = nada (evento velho ou irrelevante). */
-export function mudancaDoEvento(
+/**
+ * O que um evento muda na assinatura. `null` = nada (evento velho ou irrelevante).
+ *
+ * `invoiceUrl` é a página da cobrança do evento: a da renovação criada ou
+ * vencida vira o "Abrir página de pagamento" da web (#386). Quem não passa
+ * (os assentos) não guarda link de renovação.
+ */
+export function subscriptionEventChange(
   sub: Pick<UserSubscription, 'status' | 'interval' | 'currentPeriodEnd'>,
   evento: string,
   dueDate: string | null,
+  invoiceUrl?: string | null,
 ): MudancaDeAssinatura | null {
   const encerrada = sub.status === 'CANCELED' || sub.status === 'EXPIRED';
+  const link = invoiceUrl && /^https:\/\//.test(invoiceUrl) ? invoiceUrl : null;
+  // A cobrança é de um período que já está pago (reentrega, fora de ordem).
+  const jaPaga = (due: string) =>
+    sub.currentPeriodEnd !== null && fimDoPeriodo(due, sub.interval) <= sub.currentPeriodEnd;
   switch (evento) {
+    case 'PAYMENT_CREATED': {
+      if (!link || !dueDate || encerrada || jaPaga(dueDate)) return null;
+      return { paymentUrl: link };
+    }
     case 'PAYMENT_CONFIRMED':
     case 'PAYMENT_RECEIVED': {
       if (!dueDate) return null;
@@ -60,14 +76,16 @@ export function mudancaDoEvento(
       };
     }
     case 'PAYMENT_OVERDUE': {
-      // O primeiro pagamento nunca feito não é atraso: o checkout só não foi pago.
-      if (!dueDate || sub.status === 'PENDING' || encerrada) return null;
-      if (sub.currentPeriodEnd && fimDoPeriodo(dueDate, sub.interval) <= sub.currentPeriodEnd) {
-        return null; // atraso de uma cobrança que já foi superada
+      // O primeiro pagamento nunca feito não é atraso: o checkout só não foi
+      // pago, ou o teste acabou sem pagamento (carência é de quem já pagou).
+      if (!dueDate || sub.status === 'PENDING' || sub.status === 'TRIALING' || encerrada) {
+        return null;
       }
+      if (jaPaga(dueDate)) return null; // atraso de uma cobrança que já foi superada
       return {
         status: 'PAST_DUE',
         graceEndsAt: dayBoundsInTz(addDaysIso(dueDate, CARENCIA_DIAS), FUSO_DO_PROVEDOR).start,
+        ...(link ? { paymentUrl: link } : {}),
       };
     }
     case 'PAYMENT_REFUNDED':

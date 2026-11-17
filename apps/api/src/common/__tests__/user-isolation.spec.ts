@@ -1,11 +1,13 @@
 import { SharedWithService } from '../../sharing/shared-with.service';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  UnauthorizedException,
+  type ExecutionContext,
 } from '@nestjs/common';
 import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
@@ -62,6 +64,17 @@ import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { AgendaService } from '../../workout/agenda.service';
+import { SubscriptionEntitlementsService } from '../../billing/subscription-entitlements.service';
+import { UserSubscriptionService } from '../../billing/user-subscription.service';
+import type { SubscriptionProvider } from '../../billing/billing-provider.port';
+import type { ConfigService } from '@nestjs/config';
+import type { Reflector } from '@nestjs/core';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import type { JwtValidationService } from '../../auth/jwt-validation.service';
+import { McpConnectionRecorder, McpConnectionService } from '../../auth/mcp-connection.service';
+import { OAuthFacadeService } from '../../auth/oauth-facade.service';
+import { UserProvisioningService } from '../../auth/user-provisioning.service';
+import { UsersController } from '../../users/users.controller';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -3280,6 +3293,237 @@ describe('isolamento entre usuários', () => {
   });
 
   /**
+   * Conectar sua IA (#388). O token que o Claude ou o ChatGPT recebem pelo
+   * facade OAuth é do Logto, emitido para o app do facade: a única coisa que
+   * diz de quem ele é é o `sub`. Este bloco faz o fluxo inteiro (DCR →
+   * authorize → callback → token) com o Logto falso e confere que a conexão, o
+   * guard e o último acesso ficam com o dono do token, e só com ele.
+   */
+  describe('Conectar sua IA: conexões e o caminho OAuth (#388)', () => {
+    const REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
+    const CALLBACK = 'https://api.example.com/oauth/callback';
+    const config = {
+      getOrThrow: (key: string) =>
+        ({
+          LOGTO_ENDPOINT: 'https://logto.example.com',
+          LOGTO_AUDIENCE: 'https://api.example.com',
+          LOGTO_MCP_APP_ID: 'mcp-app',
+          LOGTO_MCP_APP_SECRET: 'segredo',
+        })[key],
+    } as unknown as ConfigService;
+    /** access token → sub, como o Logto assinaria. */
+    const issued: Record<string, string> = {};
+    const validation = {
+      verify: async (token: string) => {
+        const sub = issued[token];
+        if (!sub) throw new UnauthorizedException('Invalid token');
+        return { sub };
+      },
+    } as unknown as JwtValidationService;
+    const provisioning = new UserProvisioningService(prisma);
+    const connections = new McpConnectionService(prisma);
+    const recorder = new McpConnectionRecorder(prisma, validation, provisioning, connections);
+    const facade = new OAuthFacadeService(prisma, config, recorder);
+    const users = new UsersController(
+      {} as AccountService,
+      {} as ProfileService,
+      {} as DataExportService,
+      connections,
+    );
+    const realFetch = global.fetch;
+    const clientIds: string[] = [];
+    let subA = '';
+    let subB = '';
+
+    /** O Logto responde ao /oidc/token com estes tokens. */
+    function logtoIssues(sub: string) {
+      const accessToken = `at-${randomUUID()}`;
+      const refreshToken = `rt-${randomUUID()}`;
+      issued[accessToken] = sub;
+      global.fetch = (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      })) as unknown as typeof fetch;
+      return { accessToken, refreshToken };
+    }
+
+    /** Renova pelo facade e espera a gravação da conexão, que roda depois da resposta. */
+    async function refreshAs(sub: string, presented: string, clientId?: string) {
+      const tokens = logtoIssues(sub);
+      await facade.refreshToken({ refreshToken: presented, clientId });
+      await recorder.flush();
+      return tokens;
+    }
+
+    /** Conecta um app de IA como a pessoa do `sub`, pelo facade, e devolve os tokens. */
+    async function connectAs(sub: string, clientName: string) {
+      const reg = await facade.registerClient({ redirectUris: [REDIRECT], clientName });
+      clientIds.push(reg.client_id);
+      const verifier = randomUUID() + randomUUID();
+      const { logtoAuthorizeUrl } = await facade.startAuthorization(
+        {
+          clientId: reg.client_id,
+          redirectUri: REDIRECT,
+          clientState: 'st',
+          clientCodeChallenge: createHash('sha256').update(verifier).digest('base64url'),
+          scope: undefined,
+          resource: undefined,
+        },
+        CALLBACK,
+      );
+      const state = new URL(logtoAuthorizeUrl).searchParams.get('state')!;
+      const { redirectUrl } = await facade.handleCallback(state, `logto-${randomUUID()}`);
+      const tokens = logtoIssues(sub);
+      await facade.exchangeCode(
+        {
+          code: new URL(redirectUrl).searchParams.get('code')!,
+          redirectUri: REDIRECT,
+          clientId: reg.client_id,
+          codeVerifier: verifier,
+        },
+        CALLBACK,
+      );
+      await recorder.flush();
+      return { clientId: reg.client_id, ...tokens };
+    }
+
+    /** O guard de toda rota, com o token no cabeçalho, como o /mcp recebe. */
+    async function guardUser(token: string) {
+      const guard = new JwtAuthGuard(
+        { getAllAndOverride: () => false } as unknown as Reflector,
+        validation,
+        provisioning,
+      );
+      const req = { headers: { authorization: `Bearer ${token}`, host: 'api.example.com' } } as {
+        headers: Record<string, string>;
+        user?: { id: string };
+      };
+      const ctx = {
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => req, getResponse: () => ({ setHeader() {} }) }),
+      } as unknown as ExecutionContext;
+      await guard.canActivate(ctx);
+      return req.user!.id;
+    }
+
+    let claudeA = { clientId: '', accessToken: '', refreshToken: '' };
+    let claudeB = { clientId: '', accessToken: '', refreshToken: '' };
+
+    beforeAll(async () => {
+      subA = (await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } })).logtoSub;
+      subB = (await prisma.user.findUniqueOrThrow({ where: { id: owned.userB } })).logtoSub;
+      claudeA = await connectAs(subA, 'Claude');
+    });
+
+    afterAll(async () => {
+      global.fetch = realFetch;
+      await prisma.mcpOAuthClient.deleteMany({ where: { clientId: { in: clientIds } } });
+    });
+
+    it('a conexão que o user-A autorizou é dele (caminho feliz)', async () => {
+      const deA = await users.mcpConnections({ id: owned.userA } as never);
+      expect(deA.connections.map((c) => c.clientName)).toEqual(['Claude']);
+    });
+
+    it('GET /users/me/mcp-connections do user-B não mostra a do user-A', async () => {
+      const deB = await users.mcpConnections({ id: owned.userB } as never);
+      expect(deB.connections).toEqual([]);
+      expect(deB.serverUrl).toMatch(/\/mcp$/);
+    });
+
+    it('o token que o user-A deu à IA resolve para o user-A no guard, nunca para o user-B', async () => {
+      expect(await guardUser(claudeA.accessToken)).toBe(owned.userA);
+    });
+
+    it('o user-B conectando o mesmo tipo de app ganha a própria conexão, sem herdar a do user-A', async () => {
+      claudeB = await connectAs(subB, 'Claude');
+      expect(await guardUser(claudeB.accessToken)).toBe(owned.userB);
+
+      const deB = await users.mcpConnections({ id: owned.userB } as never);
+      expect(deB.connections).toHaveLength(1);
+      const noBanco = await prisma.mcpOAuthConnection.findMany({
+        where: { clientId: { in: [claudeA.clientId, claudeB.clientId] } },
+      });
+      expect(noBanco.map((c) => [c.clientId, c.userId]).sort()).toEqual(
+        [
+          [claudeA.clientId, owned.userA],
+          [claudeB.clientId, owned.userB],
+        ].sort(),
+      );
+    });
+
+    // Revisão da #388: o client_id do corpo é público. B mandando o do app da A
+    // não pode criar linha de B no cliente da A nem renovar a conexão da A.
+    it('refresh do user-B com o client_id do app do user-A não cria linha do B no cliente da A', async () => {
+      const novo = await refreshAs(subB, claudeB.refreshToken, claudeA.clientId);
+      claudeB = { ...claudeB, ...novo };
+
+      const noClienteDaA = await prisma.mcpOAuthConnection.findMany({
+        where: { clientId: claudeA.clientId },
+      });
+      expect(noClienteDaA.map((c) => c.userId)).toEqual([owned.userA]);
+      // O token novo do B não ficou preso à conexão da A.
+      const daA = await prisma.mcpOAuthConnectionToken.findMany({
+        where: { connection: { userId: owned.userA, clientId: claudeA.clientId } },
+      });
+      expect(daA.map((t) => t.hash)).not.toContain(
+        createHash('sha256').update(novo.accessToken).digest('hex'),
+      );
+      expect((await users.mcpConnections({ id: owned.userB } as never)).connections).toHaveLength(
+        1,
+      );
+    });
+
+    it('refresh do user-A sem client_id renova a conexão da A e só ela', async () => {
+      const novo = await refreshAs(subA, claudeA.refreshToken);
+      claudeA = { ...claudeA, ...novo };
+
+      const antigo = new Date('2026-01-01T00:00:00Z');
+      await prisma.mcpOAuthConnection.updateMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+        data: { lastUsedAt: antigo },
+      });
+      await connections.touch(novo.accessToken);
+
+      const linhas = await prisma.mcpOAuthConnection.findMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+      });
+      for (const linha of linhas) {
+        const daA = linha.userId === owned.userA && linha.clientId === claudeA.clientId;
+        expect(linha.lastUsedAt.getTime() > antigo.getTime()).toBe(daA);
+      }
+    });
+
+    it('o toque do /mcp com o token do user-A não mexe no último acesso do user-B', async () => {
+      const antigo = new Date('2026-01-01T00:00:00Z');
+      await prisma.mcpOAuthConnection.updateMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+        data: { lastUsedAt: antigo },
+      });
+
+      await connections.touch(claudeA.accessToken);
+
+      const linhas = await prisma.mcpOAuthConnection.findMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+      });
+      for (const linha of linhas) {
+        if (linha.userId === owned.userA && linha.clientId === claudeA.clientId) {
+          expect(linha.lastUsedAt.getTime()).toBeGreaterThan(antigo.getTime());
+        } else {
+          expect(linha.lastUsedAt.getTime()).toBe(antigo.getTime());
+        }
+      }
+    });
+  });
+
+  /**
    * Plano alimentar do profissional (#376). O plano é do aluno: refeição, opção,
    * item, equivalente e troca são procurados dentro do plano de quem chama, e a
    * equipe só lê trocas e aderência pela porta de Alimentação.
@@ -3876,6 +4120,108 @@ describe('isolamento entre usuários', () => {
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain(o.offerId);
       expect(JSON.stringify(deB)).not.toContain(o.sessionId);
+    });
+  });
+
+  describe('plano e cobrança (#386)', () => {
+    const cfg = {
+      get: (k: string, padrao?: unknown) =>
+        (({ AI_REQUIRES_PLAN: true, BILLING_PRO_TRIAL_DAYS: 7 }) as Record<string, unknown>)[k] ??
+        padrao,
+    } as never;
+    const provedor = {
+      ensurePersonCustomer: jest.fn(),
+      createSubscription: jest.fn(),
+      firstPaymentUrl: jest.fn(),
+      cancelSubscription: jest.fn(async () => undefined),
+      verifySubscriptionWebhook: jest.fn(),
+    } as unknown as SubscriptionProvider;
+    const direitos = new SubscriptionEntitlementsService(prisma, cfg);
+    const assinaturas = new UserSubscriptionService(prisma, cfg, direitos, provedor);
+    let subA: string;
+
+    beforeAll(async () => {
+      const sub = await prisma.userSubscription.create({
+        data: {
+          userId: owned.userA,
+          source: 'ASAAS',
+          status: 'PAST_DUE',
+          interval: 'MONTHLY',
+          paymentMethod: 'PIX',
+          providerRef: `iso-386-${owned.userA}`,
+          paymentUrl: 'https://www.asaas.com/i/pay_do_A',
+          currentPeriodEnd: new Date(Date.now() - 2 * 86_400_000),
+          graceEndsAt: new Date(Date.now() + 5 * 86_400_000),
+        },
+      });
+      subA = sub.id;
+      await prisma.billingReminder.create({
+        data: { subscriptionId: subA, kind: 'GRACE_5_LEFT', dueDate: '2026-11-08' },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.userSubscription.deleteMany({ where: { id: subA } });
+    });
+
+    it('o plano, a forma de pagamento e o link de pagamento são só do dono', async () => {
+      expect(await assinaturas.plan(owned.userA)).toMatchObject({
+        state: 'PAST_DUE',
+        paymentUrl: 'https://www.asaas.com/i/pay_do_A',
+        paymentMethod: 'PIX',
+      });
+      const deB = await assinaturas.plan(owned.userB);
+      expect(deB).toMatchObject({
+        tier: 'FREE',
+        state: 'FREE',
+        paymentUrl: null,
+        paymentMethod: null,
+      });
+      expect(JSON.stringify(deB)).not.toContain('pay_do_A');
+    });
+
+    it('o B não cancela a assinatura do A', async () => {
+      await expect(assinaturas.cancel(owned.userB)).rejects.toBeInstanceOf(NotFoundException);
+      expect(provedor.cancelSubscription).not.toHaveBeenCalled();
+      expect(
+        (await prisma.userSubscription.findUniqueOrThrow({ where: { id: subA } }))
+          .cancelAtPeriodEnd,
+      ).toBe(false);
+    });
+
+    it('o teste do A não tira o teste do B', async () => {
+      await prisma.user.update({
+        where: { id: owned.userA },
+        data: { proTrialStartedAt: new Date() },
+      });
+      expect(await assinaturas.trialEligible(owned.userA)).toBe(false);
+      expect(await assinaturas.trialEligible(owned.userB)).toBe(true);
+    });
+
+    it('o painel da comunidade vê só se o membro tem PRO pela comunidade, não como ele paga', async () => {
+      // O user-B é dono da academia em que o A é membro; o A paga o próprio PRO.
+      const lista = await memberships.listMembers(owned.userB, owned.groupId);
+      const a = lista.find((m) => m.membershipId === owned.membershipA)!;
+      expect(a.hasAiSeat).toBe(false);
+      const texto = JSON.stringify(lista);
+      for (const campo of ['paymentUrl', 'paymentMethod', 'source', 'interval', 'graceEndsAt']) {
+        expect(texto).not.toContain(campo);
+      }
+      expect(texto).not.toContain('pay_do_A');
+    });
+
+    it('o export do A leva a assinatura e os avisos; o do B, nada disso', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      const sub = deA.subscriptions.find((x) => x.paymentMethod === 'PIX');
+      expect(sub?.reminders).toEqual([expect.objectContaining({ kind: 'GRACE_5_LEFT' })]);
+      expect(JSON.stringify(deA)).not.toContain('pay_do_A'); // link de cobrança não sai
+      const deB = await conta.exportData(owned.userB);
+      expect(JSON.stringify(deB)).not.toContain('GRACE_5_LEFT');
     });
   });
 

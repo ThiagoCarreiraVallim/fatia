@@ -10,18 +10,27 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type BillingInterval, type UserSubscription } from '@prisma/client';
+import {
+  Prisma,
+  type BillingInterval,
+  type PaymentMethod,
+  type UserSubscription,
+} from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import type { AiEntitlement } from './ai-entitlement';
+import type { AiEntitlement, GroupPayer } from './ai-entitlement';
 import type { SubscriptionProvider } from './billing-provider.port';
 import { cpfValido, somenteDigitos } from './cpf';
 import { SeatPoolService } from './seat-pool.service';
-import { mudancaDoEvento } from './subscription-events';
+import { subscriptionEventChange } from './subscription-events';
 import { AiEntitlements } from './subscription-entitlements.service';
 
 // A regra dos eventos mora em `subscription-events.ts`; reexportada para quem
 // já a importava daqui.
-export { fimDoPeriodo, mudancaDoEvento, type MudancaDeAssinatura } from './subscription-events';
+export {
+  fimDoPeriodo,
+  subscriptionEventChange,
+  type MudancaDeAssinatura,
+} from './subscription-events';
 
 /** Token do provedor de assinatura web. `null` = instância sem Asaas configurado. */
 export const SUBSCRIPTION_PROVIDER = Symbol('SUBSCRIPTION_PROVIDER');
@@ -29,33 +38,92 @@ export const SUBSCRIPTION_PROVIDER = Symbol('SUBSCRIPTION_PROVIDER');
 /** Link de pagamento ainda vale para reabrir o mesmo checkout. */
 const CHECKOUT_REUSAVEL_MS = 24 * 60 * 60 * 1000;
 
+/** A assinatura nasceu no provedor, mas não chegou ao banco: precisa de compensação. */
+class CheckoutNotRecorded extends Error {
+  constructor(
+    readonly providerSubscriptionId: string,
+    readonly original: unknown,
+  ) {
+    super('checkout não gravado');
+  }
+}
+
 /** Onde a pessoa gerencia uma assinatura de loja. */
 export const GESTAO_NA_LOJA = {
   APPLE: 'https://apps.apple.com/account/subscriptions',
   GOOGLE: 'https://play.google.com/store/account/subscriptions',
 } as const;
 
+/**
+ * O estado que a tela "Meu plano" desenha (#386, `Al-M13`): um só, derivado do
+ * direito e da assinatura que decidiu.
+ */
+export type PlanState =
+  'FREE' | 'TRIAL' | 'ACTIVE' | 'PENDING' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+
+/** Quem paga o PRO (#386): a própria pessoa, um assento, a comunidade ou um programa. */
+export type PlanPayer = 'PERSONAL' | GroupPayer;
+
 export interface PlanoDaPessoa {
   tier: 'FREE' | 'PRO';
   source: AiEntitlement['source'];
   reason: AiEntitlement['motivo'];
   degraded: boolean;
+  state: PlanState;
   status: UserSubscription['status'] | null;
   interval: BillingInterval | null;
   currentPeriodEnd: string | null;
   graceEndsAt: string | null;
   cancelAtPeriodEnd: boolean;
-  /** Link do checkout aberto, enquanto `PENDING`. */
+  /** Fim do teste grátis, enquanto `TRIAL`. */
+  trialEndsAt: string | null;
+  /** Pode começar o teste grátis: nunca teve teste nem PRO pessoal. */
+  trialEligible: boolean;
+  /** Dias do teste grátis (`BILLING_PRO_TRIAL_DAYS`); 0 = sem teste. */
+  trialDays: number;
+  /** Pix, boleto ou cartão, quando a assinatura é da web. */
+  paymentMethod: PaymentMethod | null;
+  /**
+   * Página da cobrança em aberto no Asaas (checkout, teste, renovação ou
+   * atraso). Só na assinatura da web; **o app nunca mostra** (regra das lojas).
+   */
   paymentUrl: string | null;
   /** Gestão fora do app (lojas). */
   manageUrl: string | null;
-  /** A comunidade que paga, quando o PRO é um assento (`source: 'GROUP'`). */
+  /** Quem paga: a pessoa, um assento, a comunidade ou um programa. */
+  paidBy: PlanPayer | null;
+  /** A comunidade que paga, quando o PRO vem dela (`source: 'GROUP'`). */
   groupName: string | null;
+  /** Nome do programa ("Verão 21"), quando `paidBy` é `PROGRAM`. */
+  programName: string | null;
   /** A instância exige plano para a IA? Sem exigência, não há o que vender. */
   requiresPlan: boolean;
   /** Assinatura pela web disponível (Asaas configurado). */
   webCheckout: boolean;
   prices: { monthlyCents: number; yearlyCents: number };
+}
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+/**
+ * Quanto esperar depois do fim do teste antes de cancelar a recorrência no
+ * Asaas: boleto pago no vencimento leva até 3 dias úteis para confirmar.
+ */
+const PRAZO_DE_COMPENSACAO_MS = 4 * DIA_MS;
+
+/** O estado da tela, a partir do direito. */
+export function planState(
+  direito: Pick<AiEntitlement, 'tier' | 'source' | 'motivo' | 'degraded'>,
+  cancelAtPeriodEnd: boolean,
+): PlanState {
+  if (direito.source === 'INSTANCE') return 'ACTIVE';
+  if (direito.tier === 'PRO') {
+    // Teste cancelado: nada será cobrado; o PRO segue até o fim do teste.
+    if (direito.motivo === 'teste') return cancelAtPeriodEnd ? 'CANCELED' : 'TRIAL';
+    if (direito.motivo === 'carencia') return 'PAST_DUE';
+    return cancelAtPeriodEnd ? 'CANCELED' : 'ACTIVE';
+  }
+  if (direito.motivo === 'pendente') return 'PENDING';
+  return direito.degraded ? 'EXPIRED' : 'FREE';
 }
 
 /**
@@ -76,14 +144,42 @@ export class UserSubscriptionService {
     @Optional() private readonly assentos?: SeatPoolService,
   ) {}
 
-  precos() {
+  prices() {
     return {
       monthlyCents: this.config.get<number>('BILLING_PRO_MONTHLY_CENTS', 1990),
       yearlyCents: this.config.get<number>('BILLING_PRO_YEARLY_CENTS', 17900),
     };
   }
 
-  async plano(userId: string): Promise<PlanoDaPessoa> {
+  /** Dias do teste grátis do PRO; 0 desliga. */
+  trialDays(): number {
+    const dias = Number(this.config.get<number | string>('BILLING_PRO_TRIAL_DAYS', 7));
+    return Number.isInteger(dias) && dias > 0 ? dias : 0;
+  }
+
+  /**
+   * Pode começar o teste? Um por pessoa (#386): quem já começou um teste, ou
+   * já teve PRO pessoal de qualquer origem (pago ou cortesia), não ganha outro.
+   * O PRO dado pela comunidade não conta: não foi da pessoa.
+   */
+  async trialEligible(userId: string): Promise<boolean> {
+    if (this.trialDays() === 0) return false;
+    const [user, jaTeve] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { proTrialStartedAt: true } }),
+      this.prisma.userSubscription.count({
+        where: {
+          userId,
+          OR: [
+            { status: { in: ['ACTIVE', 'PAST_DUE', 'TRIALING', 'EXPIRED'] } },
+            { currentPeriodEnd: { not: null } },
+          ],
+        },
+      }),
+    ]);
+    return Boolean(user) && user!.proTrialStartedAt === null && jaTeve === 0;
+  }
+
+  async plan(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
     const base = {
       tier: direito.tier,
@@ -92,23 +188,33 @@ export class UserSubscriptionService {
       degraded: direito.degraded,
       requiresPlan: this.direitos.exigePlano(),
       webCheckout: this.provedor !== null,
-      prices: this.precos(),
+      prices: this.prices(),
+      trialDays: this.trialDays(),
+      trialEligible:
+        direito.tier === 'FREE' && this.direitos.exigePlano()
+          ? await this.trialEligible(userId)
+          : false,
     };
 
-    // Assento de comunidade (ADR 025): a validade é a do pool, e quem gerencia
-    // é a equipe — não há checkout, cancelamento nem loja.
+    // PRO pela comunidade (ADR 025, #288): a validade é a do pool, e quem
+    // gerencia é a equipe — não há checkout, cancelamento nem loja.
     if (direito.source === 'GROUP' && direito.subscription) {
       const assento = direito.subscription;
       return {
         ...base,
+        state: planState(direito, assento.cancelAtPeriodEnd && !assento.programName),
         status: assento.status,
         interval: null,
         currentPeriodEnd: assento.currentPeriodEnd?.toISOString() ?? null,
         graceEndsAt: assento.graceEndsAt?.toISOString() ?? null,
         cancelAtPeriodEnd: assento.cancelAtPeriodEnd,
+        trialEndsAt: null,
+        paymentMethod: null,
         paymentUrl: null,
         manageUrl: null,
+        paidBy: assento.paidBy ?? 'SEAT',
         groupName: assento.group?.name ?? null,
+        programName: assento.programName ?? null,
       };
     }
 
@@ -118,17 +224,28 @@ export class UserSubscriptionService {
         })
       : null;
     const loja = sub && (sub.source === 'APPLE' || sub.source === 'GOOGLE') ? sub.source : null;
+    // Cancelada (inclusive até o fim do período) não tem cobrança a pagar.
+    const vivaNaWeb =
+      sub?.source === 'ASAAS' &&
+      sub.status !== 'CANCELED' &&
+      sub.status !== 'EXPIRED' &&
+      !sub.cancelAtPeriodEnd;
 
     return {
       ...base,
+      state: planState(direito, sub?.cancelAtPeriodEnd ?? false),
       status: sub?.status ?? null,
       interval: sub?.interval ?? null,
       currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
       graceEndsAt: sub?.graceEndsAt?.toISOString() ?? null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
-      paymentUrl: sub?.status === 'PENDING' ? sub.paymentUrl : null,
+      trialEndsAt: sub?.status === 'TRIALING' ? (sub.trialEndsAt?.toISOString() ?? null) : null,
+      paymentMethod: sub?.paymentMethod ?? null,
+      paymentUrl: vivaNaWeb ? sub.paymentUrl : null,
       manageUrl: loja ? GESTAO_NA_LOJA[loja] : null,
+      paidBy: direito.tier === 'PRO' && direito.source !== 'INSTANCE' ? 'PERSONAL' : null,
       groupName: null,
+      programName: null,
     };
   }
 
@@ -141,7 +258,7 @@ export class UserSubscriptionService {
    */
   async checkout(
     userId: string,
-    entrada: { interval: BillingInterval; cpf: string },
+    entrada: { interval: BillingInterval; cpf: string; paymentMethod?: PaymentMethod },
   ): Promise<PlanoDaPessoa> {
     if (!cpfValido(entrada.cpf)) {
       throw new BadRequestException('CPF inválido. Confira os números e tente de novo.');
@@ -156,15 +273,57 @@ export class UserSubscriptionService {
       );
     }
 
+    // Uma pessoa, um checkout por vez (revisão da #386): duas abas enviando
+    // juntas abririam duas assinaturas no Asaas (TRIALING + PENDING). A trava
+    // é do Postgres, presa à transação: solta sozinha no commit ou no rollback.
+    let criada = null as string | null;
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`checkout:${userId}`}))`;
+          criada = await this.openCheckout(tx, provedor, userId, entrada);
+        },
+        { maxWait: 10_000, timeout: 30_000 },
+      );
+    } catch (err) {
+      // A assinatura nasceu no Asaas mas não ficou no banco (link, insert ou
+      // commit falhou): cancela lá, senão ela cobraria sem ninguém ver.
+      const ref = err instanceof CheckoutNotRecorded ? err.providerSubscriptionId : criada;
+      if (ref) {
+        await provedor.cancelSubscription(ref).then(
+          () => this.logger.warn({ event: 'checkout_compensado', userId, ref }),
+          (e: Error) =>
+            this.logger.error({ event: 'checkout_compensacao_falhou', userId, ref, err: e.name }),
+        );
+      }
+      throw err instanceof CheckoutNotRecorded ? err.original : err;
+    }
+    return this.plan(userId);
+  }
+
+  /**
+   * O miolo do checkout, dentro da trava da pessoa. Devolve o id da
+   * assinatura criada no provedor (ou `null` quando reaproveitou a aberta).
+   * O teste grátis é reservado na transação: se o Asaas falhar, o rollback
+   * devolve o teste.
+   */
+  private async openCheckout(
+    tx: Prisma.TransactionClient,
+    provedor: SubscriptionProvider,
+    userId: string,
+    entrada: { interval: BillingInterval; cpf: string; paymentMethod?: PaymentMethod },
+  ): Promise<string | null> {
+    // Relido dentro da trava: a outra aba pode ter acabado de abrir o PRO.
     const direito = await this.direitos.aiTierForUser(userId);
     if (direito.tier === 'PRO') {
       throw new ConflictException(
         direito.source === 'GROUP'
-          ? 'Você já tem o PRO por um assento da sua comunidade.'
+          ? 'Você já tem o PRO pela sua comunidade.'
           : 'Você já tem o plano PRO.',
       );
     }
 
+    const metodo = entrada.paymentMethod ?? null;
     const pendentes = await this.prisma.userSubscription.findMany({
       where: { userId: userId, source: 'ASAAS', status: 'PENDING' },
       orderBy: { createdAt: 'desc' },
@@ -173,13 +332,26 @@ export class UserSubscriptionService {
     const reusavel = pendentes.find(
       (p) =>
         p.interval === entrada.interval &&
+        p.paymentMethod === metodo &&
         p.paymentUrl &&
         agora - p.createdAt.getTime() < CHECKOUT_REUSAVEL_MS,
     );
-    if (reusavel) return this.plano(userId);
+    if (reusavel) return null;
 
-    // Checkouts antigos (outro intervalo ou link vencido) saem do caminho.
-    for (const antigo of pendentes) {
+    // Tudo o que ainda está vivo no Asaas sai do caminho antes da assinatura
+    // nova: checkouts antigos (outro intervalo, outra forma, link vencido), o
+    // teste que acabou sem pagamento e o PRO vencido além da carência. Quem
+    // chega aqui é Free, então nenhuma delas dá direito — e duas vivas no
+    // provedor seriam duas cobranças. Grava fora da transação: o cancelamento
+    // no provedor não volta atrás.
+    const vivas = await this.prisma.userSubscription.findMany({
+      where: {
+        userId,
+        source: 'ASAAS',
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
+      },
+    });
+    for (const antigo of vivas) {
       if (antigo.providerRef) {
         await provedor.cancelSubscription(antigo.providerRef).catch((err: Error) => {
           this.logger.warn({
@@ -191,7 +363,11 @@ export class UserSubscriptionService {
       }
       await this.prisma.userSubscription.update({
         where: { id: antigo.id },
-        data: { status: 'CANCELED', canceledAt: new Date(), paymentUrl: null },
+        data: {
+          status: antigo.status === 'PENDING' ? 'CANCELED' : 'EXPIRED',
+          canceledAt: new Date(),
+          paymentUrl: null,
+        },
       });
     }
 
@@ -213,38 +389,87 @@ export class UserSubscriptionService {
       });
     }
 
-    const precos = this.precos();
+    // Teste grátis (#386): a primeira cobrança vence no fim do teste. A
+    // reserva é da transação: só vale se a assinatura nascer no Asaas e no
+    // banco; qualquer falha daqui para baixo devolve o teste.
+    const dias = this.trialDays();
+    const comTeste =
+      (await this.trialEligible(user.id)) &&
+      (
+        await tx.user.updateMany({
+          where: { id: user.id, proTrialStartedAt: null },
+          data: { proTrialStartedAt: new Date() },
+        })
+      ).count === 1;
+    const fimDoTeste = comTeste ? new Date(agora + dias * DIA_MS) : null;
+
+    const precos = this.prices();
     const { providerSubscriptionId } = await provedor.createSubscription({
       providerCustomerId: clienteId,
       valueCents: entrada.interval === 'YEARLY' ? precos.yearlyCents : precos.monthlyCents,
       cycle: entrada.interval,
-      nextDueAt: new Date(),
+      nextDueAt: fimDoTeste ?? new Date(),
+      billingType: metodo ?? undefined,
       description:
         entrada.interval === 'YEARLY' ? 'Fatia PRO — plano anual' : 'Fatia PRO — plano mensal',
       externalReference: `user:${user.id}`,
     });
-    const paymentUrl = await provedor.firstPaymentUrl(providerSubscriptionId);
-
-    await this.prisma.userSubscription.create({
-      data: {
-        userId: user.id,
-        source: 'ASAAS',
-        status: 'PENDING',
-        interval: entrada.interval,
-        providerRef: providerSubscriptionId,
-        paymentUrl,
-      },
+    return this.recordCheckout(tx, provedor, providerSubscriptionId, {
+      userId: user.id,
+      status: comTeste ? 'TRIALING' : 'PENDING',
+      interval: entrada.interval,
+      paymentMethod: metodo,
+      fimDoTeste,
     });
-    this.logger.log({ event: 'checkout_aberto', userId: user.id, interval: entrada.interval });
+  }
 
-    return this.plano(user.id);
+  /**
+   * Busca o link e grava a assinatura recém-criada. Se algo falhar aqui, o
+   * erro leva o id junto para o `checkout` cancelar no provedor.
+   */
+  private async recordCheckout(
+    tx: Prisma.TransactionClient,
+    provedor: SubscriptionProvider,
+    providerSubscriptionId: string,
+    d: {
+      userId: string;
+      status: 'TRIALING' | 'PENDING';
+      interval: BillingInterval;
+      paymentMethod: PaymentMethod | null;
+      fimDoTeste: Date | null;
+    },
+  ): Promise<string> {
+    try {
+      const paymentUrl = await provedor.firstPaymentUrl(providerSubscriptionId);
+      await tx.userSubscription.create({
+        data: {
+          userId: d.userId,
+          source: 'ASAAS',
+          status: d.status,
+          interval: d.interval,
+          providerRef: providerSubscriptionId,
+          paymentUrl,
+          paymentMethod: d.paymentMethod,
+          trialEndsAt: d.fimDoTeste,
+          currentPeriodEnd: d.fimDoTeste,
+        },
+      });
+    } catch (err) {
+      throw new CheckoutNotRecorded(providerSubscriptionId, err);
+    }
+    this.logger.log({
+      event: d.status === 'TRIALING' ? 'teste_iniciado' : 'checkout_aberto',
+      userId: d.userId,
+      interval: d.interval,
+    });
+    return providerSubscriptionId;
   }
 
   /**
    * Cancela a recorrência. Quem já pagou continua PRO até o fim do período;
    * checkout ainda não pago é simplesmente fechado.
    */
-  async cancelar(userId: string): Promise<PlanoDaPessoa> {
+  async cancel(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
     if (direito.source === 'GROUP') {
       throw new ConflictException(
@@ -272,7 +497,7 @@ export class UserSubscriptionService {
     if (alvo.source === 'MANUAL') {
       throw new ConflictException('Este PRO é uma cortesia da equipe; não há cobrança a cancelar.');
     }
-    if (alvo.cancelAtPeriodEnd && alvo.status !== 'PENDING') return this.plano(userId);
+    if (alvo.cancelAtPeriodEnd && alvo.status !== 'PENDING') return this.plan(userId);
 
     if (alvo.providerRef) {
       if (!this.provedor) {
@@ -288,10 +513,53 @@ export class UserSubscriptionService {
       data:
         alvo.status === 'PENDING'
           ? { status: 'CANCELED', canceledAt: new Date(), paymentUrl: null }
-          : { cancelAtPeriodEnd: true, canceledAt: new Date() },
+          : // A cobrança em aberto foi cancelada junto: o link não serve mais.
+            { cancelAtPeriodEnd: true, canceledAt: new Date(), paymentUrl: null },
     });
     this.logger.log({ event: 'assinatura_cancelada', userId, status: alvo.status });
-    return this.plano(userId);
+    return this.plan(userId);
+  }
+
+  /**
+   * Teste da web que acabou sem pagamento (#386): cancela a recorrência no
+   * Asaas e marca `EXPIRED`, para a cobrança não ficar viva lá e uma nova
+   * assinatura não virar a segunda. Espera `PRAZO_DE_COMPENSACAO_MS` depois do
+   * fim — boleto pago no vencimento leva dias úteis para confirmar —; até lá o
+   * direito já é Free (`teste_acabou`). Idempotente: só pega `TRIALING`, e o
+   * provedor fora do ar deixa a linha para a próxima rodada.
+   */
+  async expireUnpaidTrials(now: Date): Promise<number> {
+    const provedor = this.provedor;
+    if (!provedor) return 0;
+    const vencidos = await this.prisma.userSubscription.findMany({
+      where: {
+        source: 'ASAAS',
+        status: 'TRIALING',
+        trialEndsAt: { lt: new Date(now.getTime() - PRAZO_DE_COMPENSACAO_MS) },
+      },
+      select: { id: true, providerRef: true },
+    });
+    let expirados = 0;
+    for (const sub of vencidos) {
+      try {
+        if (sub.providerRef) await provedor.cancelSubscription(sub.providerRef);
+      } catch (err) {
+        this.logger.warn({
+          event: 'teste_vencido_nao_cancelado',
+          id: sub.id,
+          err: (err as Error).name,
+        });
+        continue;
+      }
+      const { count } = await this.prisma.userSubscription.updateMany({
+        // O pagamento pode ter chegado no meio do caminho: só expira o que ainda é teste.
+        where: { id: sub.id, status: 'TRIALING' },
+        data: { status: 'EXPIRED', canceledAt: now, paymentUrl: null },
+      });
+      expirados += count;
+      if (count) this.logger.log({ event: 'teste_expirado_sem_pagamento', id: sub.id });
+    }
+    return expirados;
   }
 
   /**
@@ -299,12 +567,13 @@ export class UserSubscriptionService {
    * cobrado depois de sair. Lança se não conseguir — a conta fica inteira e a
    * pessoa tenta de novo.
    */
-  async encerrarAntesDeApagar(userId: string): Promise<void> {
+  async cancelBeforeAccountDeletion(userId: string): Promise<void> {
     const vivas = await this.prisma.userSubscription.findMany({
       where: {
         userId,
         source: 'ASAAS',
-        status: { in: ['PENDING', 'ACTIVE', 'PAST_DUE'] },
+        // O teste também: a primeira cobrança já está agendada no Asaas.
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
         providerRef: { not: null },
       },
     });
@@ -332,7 +601,7 @@ export class UserSubscriptionService {
    * Eventos fora de ordem não regridem o estado: uma confirmação só **avança**
    * `currentPeriodEnd`, e um atraso de uma cobrança já superada é ignorado.
    */
-  async processarWebhookAsaas(
+  async handleAsaasWebhook(
     headers: Record<string, string | undefined>,
     corpo: string,
   ): Promise<{ received: true; duplicate?: true; ignored?: string }> {
@@ -390,7 +659,7 @@ export class UserSubscriptionService {
         return { received: true as const, ignored: 'assinatura_desconhecida' };
       }
 
-      const mudanca = mudancaDoEvento(sub, r.event, r.dueDate);
+      const mudanca = subscriptionEventChange(sub, r.event, r.dueDate, r.invoiceUrl);
       if (mudanca) await tx.userSubscription.update({ where: { id: sub.id }, data: mudanca });
       await marcar(mudanca ? null : 'sem_efeito');
       return { received: true as const };

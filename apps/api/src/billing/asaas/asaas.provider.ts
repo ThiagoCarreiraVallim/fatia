@@ -206,8 +206,8 @@ export class AsaasProvider implements BillingProvider, SubscriptionProvider, Sea
   ): Promise<{ providerSubscriptionId: string }> {
     const assinatura = await this.request<AsaasAssinatura>('POST', '/v3/subscriptions', {
       customer: entrada.providerCustomerId,
-      // A pessoa escolhe Pix, boleto ou cartão na página de pagamento.
-      billingType: 'UNDEFINED' satisfies AsaasBillingType,
+      // A forma escolhida no Fatia; sem ela, a pessoa escolhe na página de pagamento.
+      billingType: (entrada.billingType ?? 'UNDEFINED') satisfies AsaasBillingType,
       value: Number((entrada.valueCents / 100).toFixed(2)),
       nextDueDate: dateInTz(entrada.nextDueAt, FUSO_DO_PROVEDOR),
       cycle: entrada.cycle,

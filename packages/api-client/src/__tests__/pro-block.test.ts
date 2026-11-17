@@ -8,14 +8,21 @@ const base: MyPlan = {
   source: null,
   reason: 'sem_assinatura',
   degraded: false,
+  state: 'FREE',
   status: null,
   interval: null,
   currentPeriodEnd: null,
   graceEndsAt: null,
   cancelAtPeriodEnd: false,
+  trialEndsAt: null,
+  trialEligible: true,
+  trialDays: 7,
+  paymentMethod: null,
   paymentUrl: null,
   manageUrl: null,
+  paidBy: null,
   groupName: null,
+  programName: null,
   requiresPlan: true,
   webCheckout: true,
   prices: { monthlyCents: 1990, yearlyCents: 19900 },
@@ -35,10 +42,14 @@ describe('proBlockState', () => {
 
   it('2. Teste: N de 7, com os dias que faltam', () => {
     expect(
-      state(
-        { tier: 'PRO', source: 'ASAAS', reason: 'ativa', status: 'ACTIVE' },
-        { trial: { endsAt: '2026-11-17T12:00:00Z', totalDays: 7 } },
-      ),
+      state({
+        tier: 'PRO',
+        source: 'ASAAS',
+        reason: 'teste',
+        state: 'TRIAL',
+        status: 'TRIALING',
+        trialEndsAt: '2026-11-17T12:00:00Z',
+      }),
     ).toEqual({ kind: 'trial', day: 4, totalDays: 7, daysLeft: 3 });
   });
 
@@ -79,6 +90,10 @@ describe('proBlockState', () => {
       remaining: 3,
       limit: 30,
     });
+  });
+
+  it('quem já usou o teste vê o Free sem dias de teste', () => {
+    expect(state({ trialEligible: false })).toEqual({ kind: 'free', trialDays: 0 });
   });
 
   it('Lite com folga continua Free', () => {

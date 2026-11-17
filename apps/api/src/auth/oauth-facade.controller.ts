@@ -119,6 +119,7 @@ export class OAuthFacadeController {
         refreshToken: body.refresh_token,
         resource: body.resource,
         scope: body.scope,
+        clientId: body.client_id,
       });
     }
     throw new OAuthError(

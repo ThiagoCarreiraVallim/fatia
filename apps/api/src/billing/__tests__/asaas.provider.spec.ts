@@ -314,6 +314,24 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
     });
   });
 
+  it('a forma de pagamento escolhida vai como billingType (#386)', async () => {
+    const fetchMock = responde(200, { id: 'sub_2' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await provider().createSubscription({
+      providerCustomerId: 'cus_9',
+      valueCents: 1990,
+      cycle: 'MONTHLY',
+      nextDueAt: new Date('2026-10-23T12:00:00Z'),
+      billingType: 'PIX',
+      description: 'Fatia PRO — plano mensal',
+      externalReference: 'user:u1',
+    });
+    expect(corpoEnviado(fetchMock)).toMatchObject({
+      billingType: 'PIX',
+      nextDueDate: '2026-10-23',
+    });
+  });
+
   it('o link de pagamento é o da primeira cobrança da assinatura', async () => {
     const fetchMock = responde(200, {
       data: [

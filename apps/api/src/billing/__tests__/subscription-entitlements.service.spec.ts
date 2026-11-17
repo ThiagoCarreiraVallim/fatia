@@ -8,7 +8,9 @@ function montar(env: Record<string, unknown>, findMany: jest.Mock, assentos: unk
   } as unknown as ConfigService;
   const prisma = {
     userSubscription: { findMany },
+    groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
     groupSeatAssignment: { findMany: jest.fn().mockResolvedValue(assentos) },
+    groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
   const service = new SubscriptionEntitlementsService(prisma, config);
   jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined);

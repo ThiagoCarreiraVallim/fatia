@@ -569,18 +569,16 @@ describe('ChatScreen', () => {
     expect(screen.queryByText(/Bearer recusado/)).not.toBeInTheDocument();
   });
 
-  it('no Free, o chat mostra o que o PRO acrescenta e os dois caminhos, sem caixa de mensagem', async () => {
+  it('no Free, o chat mostra o Al-M1 (#386) e os caminhos, sem caixa de mensagem', async () => {
     acesso = { allowed: false, reason: 'plan_required' };
     montar();
 
-    expect(
-      await screen.findByRole('heading', { name: /o chat com a ia faz parte do pro/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /assinar pro/i })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { name: 'Fotografe o prato' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver o PRO' })).toHaveAttribute(
       'href',
       '/plan?recurso=chat',
     );
-    expect(screen.getByRole('link', { name: /sua própria ia pelo mcp/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /usar minha ia pelo mcp/i })).toHaveAttribute(
       'href',
       '/profile/connect',
     );

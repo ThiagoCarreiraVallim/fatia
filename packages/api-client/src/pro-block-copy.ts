@@ -29,10 +29,14 @@ export function proBlockCopy(state: ProBlockState, canPurchase = true): ProBlock
   const buy = canPurchase ? 'Assinar o PRO' : 'Tenho um código';
   switch (state.kind) {
     case 'free':
+      // O teste vira assinatura no fim (renova sozinho): nunca "sem cobrança no fim".
       return {
         title: 'IA no registro, no chat e na foto',
-        body: `Teste o PRO por ${days(state.trialDays)}, sem cobrança no fim.`,
-        action: canPurchase ? 'Começar o teste' : 'Tenho um código',
+        body:
+          state.trialDays > 0
+            ? `${days(state.trialDays)} grátis, sem cobrar nada hoje.`
+            : 'Chat, foto do prato e ditado, sem limite diário.',
+        action: canPurchase ? (state.trialDays > 0 ? 'Começar o teste' : buy) : 'Tenho um código',
         tone: 'neutral',
       };
     case 'trial':
@@ -85,7 +89,9 @@ export function proBlockCopy(state: ProBlockState, canPurchase = true): ProBlock
         body: state.aiUntil
           ? `A IA segue ligada até ${dateBr(state.aiUntil)}. Faltam ${days(state.graceDaysLeft)}.`
           : `Faltam ${days(state.graceDaysLeft)} para regularizar.`,
-        action: canPurchase ? 'Pagar agora' : 'Tenho um código',
+        // Leva ao "Meu plano", que decide o que mostrar: no app nunca há
+        // pagamento fora da loja (`planStatusView`).
+        action: 'Ver o plano',
         tone: 'attention',
       };
     case 'pro-expired':

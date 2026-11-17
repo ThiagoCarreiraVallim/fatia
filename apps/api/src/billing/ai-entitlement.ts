@@ -37,9 +37,22 @@ export interface AssinaturaLida {
   createdAt: Date;
   /** A comunidade que paga, quando `source` é `GROUP`. */
   group?: { id: string; name: string } | null;
+  /** Fim do teste grátis, quando `status` é `TRIALING` (#386). */
+  trialEndsAt?: Date | null;
+  /**
+   * Quem paga, quando `source` é `GROUP` (#386): o assento escolhido (ADR 025),
+   * a comunidade para todos os membros (`ALL_MEMBERS`, #288) ou um programa com
+   * data final.
+   */
+  paidBy?: GroupPayer;
+  /** Nome do programa, quando `paidBy` é `PROGRAM`. */
+  programName?: string | null;
 }
 
-export type MotivoDoDireito = DecisaoDeTier['motivo'] | 'instancia' | 'pendente' | 'expirada';
+export type GroupPayer = 'SEAT' | 'COMMUNITY' | 'PROGRAM';
+
+export type MotivoDoDireito =
+  DecisaoDeTier['motivo'] | 'instancia' | 'pendente' | 'expirada' | 'teste' | 'teste_acabou';
 
 export interface AiEntitlement {
   tier: 'FREE' | 'PRO';
@@ -61,7 +74,7 @@ export const INSTANCIA_LIBERADA: AiEntitlement = {
 };
 
 /** Como `decideAiTier` lê uma assinatura nossa, agora. `null` = não conta. */
-function paraTier(a: AssinaturaLida, agora: Date): DecisaoDeTier | null {
+function toTierDecision(a: AssinaturaLida, agora: Date): DecisaoDeTier | null {
   const fim = a.currentPeriodEnd;
   let status: StatusDeAssinatura;
   let carencia: Date | null = a.graceEndsAt;
@@ -69,6 +82,16 @@ function paraTier(a: AssinaturaLida, agora: Date): DecisaoDeTier | null {
   switch (a.status) {
     case 'PENDING':
       return null;
+    case 'TRIALING': {
+      // O fim do teste com a mesma folga da renovação: a conversão (o primeiro
+      // Pix, o webhook da loja) chega horas depois. Sem pagamento, volta ao
+      // Free sem carência — carência é de quem já pagou.
+      const fimDoTeste = a.trialEndsAt ?? fim;
+      if (!fimDoTeste || agora.getTime() - fimDoTeste.getTime() <= FOLGA_DE_RENOVACAO_MS) {
+        return { tier: 'PRO', degraded: false, motivo: 'ativa' };
+      }
+      return { tier: SEM_IA, degraded: true, motivo: 'cancelada' };
+    }
     case 'EXPIRED':
       return { tier: SEM_IA, degraded: true, motivo: 'cancelada' };
     case 'CANCELED':
@@ -109,12 +132,12 @@ function paraTier(a: AssinaturaLida, agora: Date): DecisaoDeTier | null {
  * própria pessoa: a comunidade não paga o uso de quem já paga (ADR 025), e a
  * tela mostra o plano que a pessoa gerencia.
  */
-export function resolverDireitoIa(
+export function resolveAiEntitlement(
   assinaturas: AssinaturaLida[],
   agora: Date = new Date(),
 ): AiEntitlement {
   const lidas = assinaturas
-    .map((a) => ({ a, d: paraTier(a, agora) }))
+    .map((a) => ({ a, d: toTierDecision(a, agora) }))
     .filter((x): x is { a: AssinaturaLida; d: DecisaoDeTier } => x.d !== null);
 
   const ordem = (m: DecisaoDeTier['motivo']) => (m === 'ativa' ? 0 : m === 'carencia' ? 1 : 2);
@@ -132,7 +155,7 @@ export function resolverDireitoIa(
     return {
       tier: 'PRO',
       source: valendo.a.source,
-      motivo: valendo.d.motivo,
+      motivo: valendo.a.status === 'TRIALING' ? 'teste' : valendo.d.motivo,
       degraded: false,
       subscription: valendo.a,
     };
@@ -157,7 +180,12 @@ export function resolverDireitoIa(
     return {
       tier: 'FREE',
       source: recente.a.source,
-      motivo: recente.a.status === 'EXPIRED' ? 'expirada' : recente.d.motivo,
+      motivo:
+        recente.a.status === 'EXPIRED'
+          ? 'expirada'
+          : recente.a.status === 'TRIALING'
+            ? 'teste_acabou'
+            : recente.d.motivo,
       degraded: true,
       subscription: recente.a,
     };

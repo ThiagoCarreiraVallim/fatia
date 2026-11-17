@@ -51,7 +51,9 @@ model User {
 
   // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
   // CPF e cartão ficam no Asaas, nunca aqui.
-  asaasCustomerId String? @unique
+  asaasCustomerId   String?   @unique
+  /// Quando a pessoa começou o teste grátis do PRO (#386): um por pessoa.
+  proTrialStartedAt DateTime?
 
   // Perfil nas comunidades (Você › Editar perfil, #387). O apelido vale para
   // mural, comentários e ranking quando a comunidade não tem um próprio
@@ -147,6 +149,9 @@ model User {
   tutorialsSeen UserTutorialSeen[]
   feedbackIdeas FeedbackIdea[]
   dataExports   DataExport[]
+
+  // IAs de fora ligadas pelo MCP (#388): o "Último acesso" de Conectar sua IA.
+  mcpConnections McpOAuthConnection[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -271,6 +276,46 @@ model McpOAuthClient {
   lastUsedAt   DateTime?
 
   authorizations McpOAuthAuthorization[]
+  connections    McpOAuthConnection[]
+}
+
+/// Quem autorizou cada cliente MCP (#388). A `McpOAuthAuthorization` não serve
+/// de vínculo: ela é apagada minutos depois do login (`expiresAt`). Esta linha
+/// nasce só na troca do code no `/oauth/token` (cliente da autorização, dono lido
+/// do token que o Logto emitiu); o refresh só a renova, achada pelo refresh token.
+/// É o que a tela "Conectar sua IA" lista.
+model McpOAuthConnection {
+  id         String   @id @default(uuid())
+  userId     String
+  clientId   String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client McpOAuthClient            @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  tokens McpOAuthConnectionToken[]
+
+  @@unique([userId, clientId])
+}
+
+/// Hashes (sha256) dos tokens que o facade entregou a uma conexão (#388). O
+/// refresh token apresentado no /oauth/token diz qual conexão renovou; os access
+/// tokens dizem qual conexão o /mcp está usando. Vários por conexão (aparelhos,
+/// token antigo ainda válido); cada um vence no `expiresAt` e é apagado na
+/// gravação seguinte. Nunca guarda o token em si.
+model McpOAuthConnectionToken {
+  id           String   @id @default(uuid())
+  connectionId String
+  /// 'access' | 'refresh'
+  kind         String
+  hash         String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  connection McpOAuthConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([expiresAt])
 }
 
 model McpOAuthAuthorization {
@@ -820,10 +865,10 @@ model WorkoutPlan {
   fromOffer       PlanOffer?            @relation("PlanFromOffer", fields: [fromOfferId], references: [id], onDelete: SetNull)
   plannedSessions PlannedSession[]
 
+  @@unique([userId, fromSessionId])
   @@index([userId])
   @@index([userId, fromTemplateId])
   @@index([fromOfferId])
-  @@unique([userId, fromSessionId])
 }
 
 enum WorkoutPlanKind {
@@ -1009,7 +1054,7 @@ model WorkoutSession {
   /// cada exercício continuam em `SessionSet`, para estatística e "previous".
   circuit Json?
 
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan       WorkoutPlan?    @relation("SessionPlan", fields: [planId], references: [id])
   sets       SessionSet[]
   checkin    WorkoutCheckin?
@@ -1891,6 +1936,17 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   EXPIRED
+  /// Teste grátis do PRO (#386): PRO até `trialEndsAt`. Na web, a primeira
+  /// cobrança vence no fim do teste; na loja, é a oferta introdutória.
+  TRIALING
+}
+
+/// Forma de pagamento escolhida no checkout web (#386). O Asaas emite a
+/// cobrança nela; cartão e CPF ficam no Asaas, nunca aqui.
+enum PaymentMethod {
+  PIX
+  BOLETO
+  CREDIT_CARD
 }
 
 enum AiPaidBy {
@@ -1918,18 +1974,57 @@ model UserSubscription {
   currentPeriodEnd  DateTime?
   /// Fim da carência de inadimplência (`decideAiTier`).
   graceEndsAt       DateTime?
-  cancelAtPeriodEnd Boolean   @default(false)
+  cancelAtPeriodEnd Boolean        @default(false)
   canceledAt        DateTime?
-  /// Link de pagamento do Asaas enquanto `PENDING`. Não vai no export.
+  /// Link de pagamento do Asaas: o do checkout (`PENDING`, teste) ou o da
+  /// cobrança em aberto (atraso). Só `https`. Não vai no export.
   paymentUrl        String?
+  /// Fim do teste grátis, enquanto `TRIALING` (#386).
+  trialEndsAt       DateTime?
+  /// Pix, boleto ou cartão (só web). Nulo na loja e na cortesia.
+  paymentMethod     PaymentMethod?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders BillingReminder[]
 
   @@unique([source, providerRef])
   @@index([userId, status])
+}
+
+/// Avisos de cobrança e de fim do teste (#386, prancha Ex-03). Uma linha por
+/// aviso enviado: o job diário grava antes de mandar, e o unique impede o
+/// mesmo aviso duas vezes para o mesmo vencimento.
+enum BillingReminderKind {
+  /// Teste acaba em 2 dias (dia 5 de 7).
+  TRIAL_ENDING
+  /// Vence em 3 dias (Pix e boleto).
+  DUE_SOON
+  /// Vence hoje.
+  DUE_TODAY
+  /// Vencido há 2 dias: faltam 5 da carência.
+  GRACE_5_LEFT
+  /// Vencido há 5 dias: faltam 2 da carência.
+  GRACE_2_LEFT
+  /// Fim da carência: a IA pausou.
+  AI_PAUSED
+  /// A loja não conseguiu cobrar: "atualize na loja" (Apple/Google).
+  STORE_BILLING_ISSUE
+}
+
+model BillingReminder {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  kind           BillingReminderKind
+  /// O vencimento (ou o fim do teste) do aviso, `YYYY-MM-DD` no fuso do provedor.
+  dueDate        String
+  sentAt         DateTime            @default(now())
+
+  subscription UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, kind, dueDate])
 }
 
 /// Idempotência dos webhooks: o mesmo evento entregue duas vezes é no-op.
@@ -1976,11 +2071,24 @@ model GroupInvite {
   @@index([createdById])
 }
 
+/// Como a comunidade dá o PRO (#386, #288): por assento escolhido (ADR 025) ou
+/// a todos os membros ativos.
+enum GroupAiMode {
+  SEATS
+  ALL_MEMBERS
+}
+
 /// Assentos de IA que a comunidade paga (ADR 025). Um pool por comunidade;
 /// mesma máquina de estados da assinatura pessoal.
 model GroupSeatPool {
   id                String             @id @default(uuid())
   groupId           String             @unique
+  /// `ALL_MEMBERS`: todo membro ativo (papel MEMBER) tem o PRO enquanto o pool
+  /// vale, sem atribuição; `seats` não limita.
+  mode              GroupAiMode        @default(SEATS)
+  /// Programa com data final ("PRO até 30/11 · Programa Verão 21"): o fim é
+  /// `currentPeriodEnd`, com `cancelAtPeriodEnd`. Nulo = contrato contínuo.
+  programName       String?
   seats             Int
   /// Redução pedida: vale na próxima renovação.
   nextPeriodSeats   Int?
@@ -2497,6 +2605,8 @@ enum NotificationKind {
   BIRTHDAY
   /// Os lembretes pessoais (`Reminder`). Sem chave na tela: cada lembrete tem a sua.
   REMINDERS
+  /// Cobrança e fim do teste do PRO (#386). Sem chave na tela: é aviso de conta.
+  BILLING
 }
 
 /// Um celular em que a pessoa ligou os avisos. O token é da Expo e é único: o

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@fatia/db';
+import { runGuarded } from './production-guard';
 
 /**
  * `pnpm billing:grant-pro` — PRO de cortesia (fonte `MANUAL`), sem cobrança.
@@ -15,6 +16,8 @@ import { PrismaClient } from '@fatia/db';
  * pnpm billing:grant-pro <email> --revoke
  * pnpm billing:grant-pro <email> --purge
  * ```
+ *
+ * Em produção recusa sem `--i-know-this-is-production` (`production-guard.ts`).
  */
 
 export interface Argumentos {
@@ -42,6 +45,14 @@ export function leArgumentos(argv: string[]): Argumentos {
       throw new Error('--days precisa ser um inteiro positivo');
   }
   return { email: email.toLowerCase(), dias, revogar, apagar };
+}
+
+/** O que o script vai mudar, mostrado antes de aplicar. */
+export function describeGrantPro(args: Argumentos): string {
+  if (args.apagar) return `Apagar todas as cortesias PRO de ${args.email}, inclusive as expiradas`;
+  if (args.revogar) return `Expirar as cortesias PRO ativas de ${args.email}`;
+  const prazo = args.dias ? `por ${args.dias} dias` : 'sem prazo';
+  return `Criar cortesia PRO (MANUAL) para ${args.email}, ${prazo}`;
 }
 
 export async function concederOuRevogar(
@@ -79,19 +90,22 @@ export async function concederOuRevogar(
 }
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
   let args: Argumentos;
   try {
-    args = leArgumentos(process.argv.slice(2));
+    args = leArgumentos(argv);
   } catch (err) {
     console.error((err as Error).message);
     process.exit(1);
   }
   const prisma = new PrismaClient();
   try {
-    console.log(await concederOuRevogar(prisma, args));
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exitCode = 1;
+    process.exitCode = await runGuarded({
+      argv,
+      env: process.env,
+      plan: describeGrantPro(args),
+      apply: () => concederOuRevogar(prisma, args),
+    });
   } finally {
     await prisma.$disconnect();
   }

@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsTimeZone,
   Matches,
   MaxLength,
   MinLength,
@@ -35,6 +36,7 @@ export class UpdateMeDto {
   @IsString()
   @MinLength(3)
   @MaxLength(60)
+  @IsTimeZone({ message: 'timezone precisa ser um fuso IANA, ex.: America/Sao_Paulo' })
   timezone?: string;
 
   @IsOptional() @IsEnum(BiologicalSex) sex?: BiologicalSex;
