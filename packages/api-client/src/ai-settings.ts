@@ -48,7 +48,7 @@ export const AI_NEVER_AUTOMATIC = [
 ] as const;
 
 export const AI_SETTINGS_COPY = {
-  title: 'Config da IA',
+  title: 'Configurações da IA',
   modesTitle: 'O que a IA grava sozinha',
   modesNote:
     '“Perguntar antes” mostra um cartão para você confirmar. “Automático” grava e mostra o ' +

@@ -19,3 +19,4 @@
 - Demo: linhas criadas listadas em ~/.cache/fatia-vis/385/demo-rows.txt (baseline no topo). Restaurar no fim.
 - Consultas no banco: node <scratchpad>/q.cjs "SQL" (Prisma raw; psql não existe).
 - Feito: print web da Config da IA (~/.cache/fatia-vis/385/web). Diferenças web Al-M24: linhas sem ícones (categorias, busca, Mais), categorias e Mais fora de cartão, cadeados por item no "Nunca". Próximo: print do app (/chat/settings), depois corrigir.
+- Al-M24 feito: ícones, cartões, cadeados e título "Configurações da IA" (web e app). cmp em ~/.cache/fatia-vis/385/cmp-Al-M24-Config-IA.png. Comparador: node <scratchpad>/cmp.mjs <saída> <prancha> <web> <app>. Próximo: Al-M9 Memórias.

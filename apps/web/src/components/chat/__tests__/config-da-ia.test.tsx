@@ -73,7 +73,7 @@ function comCliente(ui: React.ReactNode) {
 describe('Config da IA (Al-M24)', () => {
   it('mostra o modo de cada categoria e o toque gira para o próximo', async () => {
     comCliente(<ConfigDaIa />);
-    await userEvent.click(screen.getByRole('button', { name: 'Config da IA' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurações da IA' }));
 
     const registros = await screen.findByRole('button', { name: /Registros do dia/ });
     expect(registros).toHaveTextContent('Perguntar antes');
@@ -87,7 +87,7 @@ describe('Config da IA (Al-M24)', () => {
 
   it('o que nunca é automático, e a busca na web pela mesma preferência do chat', async () => {
     comCliente(<ConfigDaIa />);
-    await userEvent.click(screen.getByRole('button', { name: 'Config da IA' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurações da IA' }));
 
     const nunca = await screen.findByRole('list', { name: 'Nunca é automático' });
     expect(

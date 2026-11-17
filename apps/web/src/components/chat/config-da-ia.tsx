@@ -3,7 +3,19 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Globe, Lock, Settings2 } from 'lucide-react';
+import {
+  Apple,
+  BookOpen,
+  ChevronRight,
+  Crown,
+  Dumbbell,
+  Link2,
+  Lock,
+  Search,
+  Settings2,
+  Target,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   AI_NEVER_AUTOMATIC,
   AI_SETTINGS_COPY,
@@ -30,6 +42,14 @@ import { ghostButton } from '@/components/elements/surfaces';
 import { useChaveDaBusca } from './catalogo';
 
 export const CHAVE_DA_CONFIG_DA_IA = ['chat', 'settings'] as const;
+
+/** O ícone de cada categoria, como na prancha Al-M24. */
+const CATEGORY_ICONS: Record<AiWriteCategory, LucideIcon> = {
+  DAY_LOG: Apple,
+  WORKOUT: Dumbbell,
+  GOALS: Target,
+  MEMORIES: BookOpen,
+};
 
 const COR_DO_MODO: Record<AiWriteMode, string> = {
   ASK: 'bg-foreground/[0.08] text-foreground',
@@ -65,7 +85,7 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
   return (
     <Drawer open={aberta} onOpenChange={setAberta}>
       <DrawerTrigger
-        aria-label="Config da IA"
+        aria-label={textos.title}
         className={cn(ghostButton, 'rounded-full p-2 text-foreground/70')}
       >
         <Settings2 size={20} aria-hidden />
@@ -83,11 +103,12 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
           ) : (
             <>
               <section className="flex flex-col gap-2">
-                <ul className="flex flex-col gap-1">
-                  {AI_WRITE_CATEGORIES.map((c) => {
+                <ul className="flex flex-col rounded-2xl bg-foreground/[0.04] px-2">
+                  {AI_WRITE_CATEGORIES.map((c, i) => {
                     const modo = data.modes[c.key];
+                    const Icone = CATEGORY_ICONS[c.key];
                     return (
-                      <li key={c.key}>
+                      <li key={c.key} className={cn(i > 0 && 'border-t border-border')}>
                         <button
                           type="button"
                           disabled={mudarModo.isPending}
@@ -96,6 +117,7 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
                           }
                           className="flex min-h-14 w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-foreground/[0.04]"
                         >
+                          <Icone size={16} aria-hidden className="shrink-0 text-foreground/60" />
                           <span className="min-w-0 flex-1">
                             <span className="block text-sm font-semibold text-foreground">
                               {c.title}
@@ -127,13 +149,11 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
               </section>
 
               <section className="flex flex-col gap-2 rounded-2xl bg-foreground/[0.04] p-4">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Lock size={14} aria-hidden />
-                  {textos.neverTitle}
-                </h3>
+                <h3 className="text-sm font-semibold text-foreground">{textos.neverTitle}</h3>
                 <ul aria-label={textos.neverTitle} className="flex flex-col gap-1">
                   {AI_NEVER_AUTOMATIC.map((item) => (
-                    <li key={item} className="text-sm text-foreground/80">
+                    <li key={item} className="flex items-center gap-2 text-sm text-foreground/80">
+                      <Lock size={14} aria-hidden className="shrink-0 text-foreground/60" />
                       {item}
                     </li>
                   ))}
@@ -156,9 +176,9 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
                         ),
                     })
                   }
-                  className="flex min-h-14 w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-foreground/[0.04]"
+                  className="flex min-h-14 w-full items-center gap-3 rounded-2xl bg-foreground/[0.04] px-4 py-2 text-left hover:bg-foreground/[0.06]"
                 >
-                  <Globe size={18} aria-hidden className="text-foreground/60" />
+                  <Search size={16} aria-hidden className="shrink-0 text-foreground/60" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-foreground">
                       {textos.webTitle}
@@ -183,34 +203,39 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
                 <h3 className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {textos.moreTitle}
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAberta(false);
-                    onAbrirMemorias?.();
-                  }}
-                  className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-left text-sm text-foreground hover:bg-foreground/[0.04]"
-                >
-                  <span className="flex-1">{textos.memories}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {memoryCountLabel(data.memories.count, data.memories.limit)}
-                  </span>
-                  <ChevronRight size={16} aria-hidden className="text-foreground/40" />
-                </button>
-                <Link
-                  href="/profile/connect"
-                  className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-sm text-foreground hover:bg-foreground/[0.04]"
-                >
-                  <span className="flex-1">{textos.ownAi}</span>
-                  <ChevronRight size={16} aria-hidden className="text-foreground/40" />
-                </Link>
-                <Link
-                  href="/plan"
-                  className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-sm text-foreground hover:bg-foreground/[0.04]"
-                >
-                  <span className="flex-1">{textos.plan}</span>
-                  <ChevronRight size={16} aria-hidden className="text-foreground/40" />
-                </Link>
+                <div className="flex flex-col rounded-2xl bg-foreground/[0.04] px-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAberta(false);
+                      onAbrirMemorias?.();
+                    }}
+                    className="flex min-h-12 items-center gap-3 px-2 text-left text-sm text-foreground hover:bg-foreground/[0.04]"
+                  >
+                    <BookOpen size={16} aria-hidden className="shrink-0 text-foreground/60" />
+                    <span className="flex-1">{textos.memories}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {memoryCountLabel(data.memories.count, data.memories.limit)}
+                    </span>
+                    <ChevronRight size={16} aria-hidden className="text-foreground/40" />
+                  </button>
+                  <Link
+                    href="/profile/connect"
+                    className="flex min-h-12 items-center gap-3 border-t border-border px-2 text-sm text-foreground hover:bg-foreground/[0.04]"
+                  >
+                    <Link2 size={16} aria-hidden className="shrink-0 text-foreground/60" />
+                    <span className="flex-1">{textos.ownAi}</span>
+                    <ChevronRight size={16} aria-hidden className="text-foreground/40" />
+                  </Link>
+                  <Link
+                    href="/plan"
+                    className="flex min-h-12 items-center gap-3 border-t border-border px-2 text-sm text-foreground hover:bg-foreground/[0.04]"
+                  >
+                    <Crown size={16} aria-hidden className="shrink-0 text-foreground/60" />
+                    <span className="flex-1">{textos.plan}</span>
+                    <ChevronRight size={16} aria-hidden className="text-foreground/40" />
+                  </Link>
+                </div>
               </section>
             </>
           )}

@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { List, Settings2, SquarePen } from 'lucide-react-native';
 import {
+  AI_SETTINGS_COPY,
   AI_STATES_COPY,
   quotaResetLabel,
   FATIA_AGENT_NAME,
@@ -111,7 +112,7 @@ export default function ConversationScreen() {
           <WebSearchSwitch />
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Config da IA"
+            accessibilityLabel={AI_SETTINGS_COPY.title}
             onPress={() => router.push('/chat/settings')}
             className={TOP_BAR_ACTION}
           >
