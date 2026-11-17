@@ -4,8 +4,10 @@ import {
   AI_NEVER_AUTOMATIC,
   AI_WRITE_CATEGORIES,
   adjustReviewGrams,
+  aiTurnState,
   forgetAllChatMemories,
   getAiSettings,
+  isAiConsentRequired,
   memoryCountLabel,
   memoryMeta,
   nextAiWriteMode,
@@ -207,5 +209,37 @@ describe('revisão da foto do prato (Al-M10)', () => {
       },
     ]);
     expect(reviewMealItems([itens[0]!])).toEqual([{ foodId: 1, grams: 120, source: 'AI' }]);
+  });
+});
+
+describe('o 403 do aceite da IA (#384) na foto', () => {
+  it('reconhece só o 403 com o código do aceite', async () => {
+    const { ApiError } = await import('../http');
+    expect(isAiConsentRequired(new ApiError('x', 403, { code: 'AI_CONSENT_REQUIRED' }))).toBe(true);
+    expect(isAiConsentRequired(new ApiError('x', 403, { code: 'OUTRO' }))).toBe(false);
+    expect(isAiConsentRequired(new ApiError('x', 402, { code: 'AI_CONSENT_REQUIRED' }))).toBe(
+      false,
+    );
+    expect(isAiConsentRequired(new Error('x'))).toBe(false);
+  });
+});
+
+describe('qual estado da Al-M11 um erro de turno vira', () => {
+  it('cota, fora do ar e interrompida; o resto fica no cartão de erro de sempre', () => {
+    expect(aiTurnState('AI_QUOTA_EXCEEDED')).toBe('quota');
+    for (const code of [
+      'AI_PROVIDER_UNREACHABLE',
+      'AI_PROVIDER_TIMEOUT',
+      'AI_PROVIDER_ERROR',
+      'AI_PROVIDER_REFUSED',
+      'AI_PROVIDER_NOT_CONFIGURED',
+      'MCP_UNREACHABLE',
+      'AI_NETWORK_ERROR',
+    ] as const) {
+      expect(aiTurnState(code)).toBe('down');
+    }
+    expect(aiTurnState('AGENT_STREAM_INTERRUPTED')).toBe('interrupted');
+    expect(aiTurnState('AI_PLAN_REQUIRED')).toBe('other');
+    expect(aiTurnState('AI_RESPONSE_TRUNCATED')).toBe('other');
   });
 });

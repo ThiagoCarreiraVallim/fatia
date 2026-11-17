@@ -23,7 +23,16 @@ import {
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
 import Link from 'next/link';
-import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat, withQuote } from '@fatia/api-client';
+import {
+  AI_STATES_COPY,
+  aiTurnState,
+  erroDoChat,
+  planHref,
+  quotaResetLabel,
+  stopChatRun,
+  textoDeErroDoChat,
+  withQuote,
+} from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { LiveJoin } from './live-join';
 import { DrawerMessage } from './drawer-message';
@@ -44,7 +53,7 @@ import { AssistantReasoning, TextoDoAssistente, ToolCallGroup, ToolCallPart } fr
 import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
-import { AvisoDeCota } from './cota';
+import { AvisoDeCota, useCotaEsgotada } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
 import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
@@ -128,12 +137,36 @@ function FailedAnswer({ error }: { error: unknown }) {
       </div>
     );
   }
+  const estado = aiTurnState(erro.code);
+  // Prancha Al-M11, "Cota": volta tal hora, e o registro manual segue — tentar de novo não adianta.
+  if (estado === 'quota') {
+    return (
+      <div role="alert" className={cn(field, 'w-full space-y-2 rounded-2xl px-4 py-3 text-sm')}>
+        <p className="font-semibold text-foreground">{AI_STATES_COPY.quotaTitle}</p>
+        <p className="text-foreground/75">
+          {erro.resetsAt ? quotaResetLabel(erro.resetsAt) : textoDeErroDoChat(erro)}{' '}
+          {AI_STATES_COPY.quotaManual}
+        </p>
+        <Link href="/nutrition" className="font-semibold text-success underline">
+          {AI_STATES_COPY.quotaAction}
+        </Link>
+      </div>
+    );
+  }
+  const foraDoAr = estado === 'down';
+  const interrompida = estado === 'interrupted';
   return (
     <ErrorState
       className="max-w-none"
-      title="A resposta falhou"
-      detail={textoDeErroDoChat(erro)}
-      retryLabel="Tentar de novo"
+      title={
+        foraDoAr
+          ? AI_STATES_COPY.downTitle
+          : interrompida
+            ? AI_STATES_COPY.interrupted
+            : 'A resposta falhou'
+      }
+      detail={foraDoAr ? AI_STATES_COPY.downBody : textoDeErroDoChat(erro)}
+      retryLabel={interrompida ? AI_STATES_COPY.continue : 'Tentar de novo'}
       // Reenvia a pergunta como mensagem nova: o estado da conversa está no
       // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.
       onRetry={() => {
@@ -180,7 +213,15 @@ function Pensando() {
   if (!rodando || (temConteudo && !stalled)) return null;
   // `aria-label` além do rótulo visível: é o nome estável pelo qual o leitor de
   // tela encontra o único retorno entre apertar enviar e o primeiro token.
-  return <ThinkingIndicator aria-label="Pensando" label="Pensando" />;
+  return (
+    <div className="flex flex-col gap-1">
+      <ThinkingIndicator aria-label="Pensando" label="Pensando" />
+      {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
+      {temConteudo ? null : (
+        <p className="text-xs text-muted-foreground">{AI_STATES_COPY.background}</p>
+      )}
+    </div>
+  );
 }
 
 /** "Resposta interrompida" e o tempo da resposta, quando ela já não está chegando. */
@@ -190,8 +231,28 @@ function AnswerFooter() {
   const stopped = useIsStopped(id);
   const stats = timingStats(useTurnTiming(id));
   if (running) return null;
-  if (stopped) return <StoppedRun reason="Resposta interrompida" />;
+  if (stopped) return <ContinuarParada />;
   return <MessageTiming stats={stats} />;
+}
+
+/** Prancha Al-M11, "Interrompida": a etiqueta e o "Continuar", que pede o resto da resposta. */
+function ContinuarParada() {
+  const aui = useAui();
+  const rodando = useAuiState((s) => s.thread.isRunning);
+  return (
+    <span className="flex items-center gap-2">
+      <StoppedRun reason={AI_STATES_COPY.interrupted} />
+      {rodando ? null : (
+        <button
+          type="button"
+          onClick={() => aui.thread().append('Continue de onde parou.')}
+          className="rounded-full px-3 py-1 text-xs font-semibold text-success hover:bg-foreground/[0.04]"
+        >
+          {AI_STATES_COPY.continue}
+        </button>
+      )}
+    </span>
+  );
 }
 
 function BarraDeAcoes() {
@@ -440,6 +501,7 @@ function Composer() {
   // Com uma pausa na mesa, a resposta é o cartão: a mensagem nova descartaria a
   // pausa (o agente segue), e é fácil fazer isso sem querer.
   const pausado = Boolean(useLangGraphInterruptState()?.value);
+  const cotaEsgotada = useCotaEsgotada();
   const markStopped = useMarkStopped();
   const [digitando, setDigitando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -513,9 +575,11 @@ function Composer() {
         placeholder={
           abrindo
             ? 'Abrindo a conversa…'
-            : pausado
-              ? 'Responda no cartão acima, ou escreva outra coisa'
-              : 'Escreva sua mensagem'
+            : cotaEsgotada
+              ? AI_STATES_COPY.quotaPlaceholder
+              : pausado
+                ? 'Responda no cartão acima, ou escreva outra coisa'
+                : 'Escreva sua mensagem'
         }
         disabled={abrindo}
         sendLabel="Enviar mensagem"

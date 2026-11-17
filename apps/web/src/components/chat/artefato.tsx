@@ -22,7 +22,14 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { appOnlyHref, chatCardTitle, type ChatArtifact } from '@fatia/api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  appOnlyHref,
+  chatCardTitle,
+  savedUndoId,
+  undoAutoWrite,
+  type ChatArtifact,
+} from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { field, ghostButton, inkButton } from '@/components/elements/surfaces';
 import { useCatalogoDasTools } from './catalogo';
@@ -610,8 +617,8 @@ function SoNoApp({ artefato }: De<'app_only'>) {
 }
 
 /**
- * "Gravado", com Desfazer. Só o componente nesta issue: quem emite o artefato e executa o
- * desfazer é a #385 — sem `onDesfazer`, o botão não aparece.
+ * "Gravado", com Desfazer (ADR 039): o `/mcp` emite o artefato na gravação automática, e o
+ * Desfazer volta o estado de antes pela API. Sem `onDesfazer`, o botão não aparece.
  */
 export function Gravado({
   artefato,
@@ -658,6 +665,25 @@ export function Gravado({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** O Desfazer de verdade: pela API, e depois relê tudo — o registro desfeito sai das telas. */
+function GravadoComDesfazer({ artefato }: De<'saved'>) {
+  const queryClient = useQueryClient();
+  const id = savedUndoId(artefato);
+  return (
+    <Gravado
+      artefato={artefato}
+      onDesfazer={
+        id
+          ? async () => {
+              await undoAutoWrite(id);
+              void queryClient.invalidateQueries();
+            }
+          : undefined
+      }
+    />
   );
 }
 
@@ -710,7 +736,7 @@ function Corpo({ artefato }: { artefato: ChatArtifact }): ReactNode {
     case 'app_only':
       return <SoNoApp artefato={artefato} />;
     case 'saved':
-      return <Gravado artefato={artefato} />;
+      return <GravadoComDesfazer artefato={artefato} />;
   }
 }
 

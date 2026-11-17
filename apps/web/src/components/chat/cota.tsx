@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { getChatQuota, type ChatQuota } from '@fatia/api-client';
+import Link from 'next/link';
+import { AI_STATES_COPY, getChatQuota, quotaResetLabel, type ChatQuota } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { CHAVE_DA_COTA } from './chat-runtime-provider';
 
@@ -27,12 +28,31 @@ export function avisoDaCota(cota: ChatQuota | undefined): string | null {
   return null;
 }
 
+function useCota() {
+  return useQuery({ queryKey: CHAVE_DA_COTA, queryFn: getChatQuota, staleTime: 60_000 }).data;
+}
+
+/** A cota do dia acabou: o campo diz "Volta amanhã" (prancha Al-M11). */
+export function useCotaEsgotada(): boolean {
+  return useCota()?.allowed === false;
+}
+
 export function AvisoDeCota() {
-  const { data: cota } = useQuery({
-    queryKey: CHAVE_DA_COTA,
-    queryFn: getChatQuota,
-    staleTime: 60_000,
-  });
+  const cota = useCota();
+  // Prancha Al-M11, "Cota": o cartão com a hora da volta e o registro manual a um toque.
+  if (cota && !cota.allowed) {
+    return (
+      <div role="status" className="mx-3 mb-2 shrink-0 rounded-2xl bg-foreground/[0.04] px-4 py-3">
+        <p className="text-sm font-semibold text-foreground">{AI_STATES_COPY.quotaTitle}</p>
+        <p className="text-xs text-foreground/75">
+          {quotaResetLabel(cota.resetsAt)} {AI_STATES_COPY.quotaManual}
+        </p>
+        <Link href="/nutrition" className="mt-1 inline-block text-sm font-semibold text-success">
+          {AI_STATES_COPY.quotaAction}
+        </Link>
+      </div>
+    );
+  }
   const aviso = avisoDaCota(cota);
   if (!aviso) return null;
   const ratio = cota?.usedRatio ?? 1;

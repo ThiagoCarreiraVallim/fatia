@@ -1,5 +1,5 @@
-import { apiFetch } from './http';
-import type { ChatArtifact, ChatMemory } from './chat';
+import { ApiError, apiFetch } from './http';
+import type { ChatArtifact, ChatErrorCode, ChatMemory } from './chat';
 import type { MealItemSource, MealRecognition, RecognizedFoodItem } from './nutrition';
 
 /**
@@ -297,4 +297,36 @@ export function reviewMealItems(items: readonly ReviewItem[]): Array<
             source: 'AI' as const,
           },
     );
+}
+
+/**
+ * O 403 do aceite da IA (#384): toda chamada ao provedor, a foto inclusive, exige o aceite da
+ * versão atual. A tela mostra o aceite e tenta de novo, em vez de um erro genérico.
+ */
+export function isAiConsentRequired(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 403) return false;
+  const body = err.body as { code?: unknown } | null | undefined;
+  return body?.code === 'AI_CONSENT_REQUIRED';
+}
+
+/** Qual estado da Al-M11 um erro de turno vira. `other` fica no cartão de erro de sempre. */
+export type AiTurnState = 'quota' | 'down' | 'interrupted' | 'other';
+
+const FORA_DO_AR: ReadonlySet<ChatErrorCode> = new Set<ChatErrorCode>([
+  'AI_PROVIDER_ERROR',
+  'AI_PROVIDER_NOT_CONFIGURED',
+  'AI_PROVIDER_TIMEOUT',
+  'AI_PROVIDER_UNREACHABLE',
+  'AI_PROVIDER_REFUSED',
+  'MCP_NOT_CONFIGURED',
+  'MCP_UNREACHABLE',
+  'MCP_TIMEOUT',
+  'MCP_REFUSED',
+  'AI_NETWORK_ERROR',
+]);
+
+export function aiTurnState(code: ChatErrorCode): AiTurnState {
+  if (code === 'AI_QUOTA_EXCEEDED') return 'quota';
+  if (code === 'AGENT_STREAM_INTERRUPTED') return 'interrupted';
+  return FORA_DO_AR.has(code) ? 'down' : 'other';
 }

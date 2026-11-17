@@ -83,7 +83,13 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   `forgetAllChatMemories`, `memoryMeta`, `quotaResetLabel`, revisão da foto com ±10 g) + teste (11).
   `ChatMemory.category`, `autoWriteId` no `saved`. 921 testes verdes.
 
+- Web (chat): `config-da-ia.tsx` (engrenagem no topo do chat, Al-M24), `memorias.tsx` (Al-M9:
+  categoria · data, n de 50, aviso da equipe, Apagar todas com confirmação; controlável pela Config),
+  `artefato.tsx` (Desfazer de verdade no Gravado), `thread.tsx`/`cota.tsx` (Al-M11: cota com
+  "Registrar à mão" e placeholder "Volta amanhã", fora do ar, interrompida com Continuar, "Pode sair
+  da tela"). Testes: `gravado.test.tsx`, `config-da-ia.test.tsx`, casos novos em `chat-screen.test.tsx`.
+
 ## Próximo passo exato
 
-Web: Config da IA (`/chat/settings`?), memórias com categoria e "Apagar todas", Desfazer do Gravado,
-estados da Al-M11 e foto do prato por upload.
+Web: `/nutrition/photo` (o menu da IA já aponta para lá e a página não existe): upload de arquivo,
+aviso do provedor na primeira foto, pergunta de guardar, revisão Al-M10, 403 do aceite.
