@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
+import { APP_DELETE_CONFIRMATION, AccountService } from '../../users/account.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 import { WorkoutPlanService } from '../workout-plan.service';
 import { WorkoutSessionService } from '../workout-session.service';
 
@@ -234,6 +237,45 @@ describe('histórico e salvar como plano — correções do review #381 (banco r
       } while (cursor);
       expect(seen).toHaveLength(4);
       expect(new Set(seen)).toEqual(new Set(made.map((m) => m.id)));
+    });
+  });
+
+  describe('LGPD', () => {
+    it('a exportação leva o retrato do plano e a origem do plano; apagar a conta leva tudo', async () => {
+      const account = new AccountService(
+        prisma,
+        { deleteUser: async () => true } as unknown as LogtoManagementService,
+        { apagarDoUsuario: async () => undefined } as unknown as CheckpointPurgeService,
+      );
+      const owner = await prisma.user.create({
+        data: { logtoSub: `${stamp}-c`, email: `${stamp}-c@test.local`, name: 'Titular' },
+      });
+      const plan = await prisma.workoutPlan.create({ data: { userId: owner.id, name: 'Costas' } });
+      const fromPlan = await sessions.start(owner.id, { planId: plan.id });
+      await sessions.finish(owner.id, fromPlan.id, {});
+      // Exercício do catálogo: o pessoal da outra conta não é legível para a titular.
+      const seeded = await prisma.exercise.findFirstOrThrow({
+        where: { createdByUserId: null, groupId: null },
+        select: { id: true },
+      });
+      const free = await doneSession('2026-11-07T10:00:00Z', [seeded.id], owner.id);
+      const saved = await plans.createFromSession(owner.id, free.id, {});
+
+      const data = (await account.exportData(owner.id)) as unknown as {
+        workoutSessions: Array<{ id: string; fromPlan: boolean; planName: string | null }>;
+        workoutPlans: Array<{ id: string; fromSessionId: string | null }>;
+      };
+      expect(data.workoutSessions.find((x) => x.id === fromPlan.id)).toMatchObject({
+        fromPlan: true,
+        planName: 'Costas',
+      });
+      expect(data.workoutPlans.find((x) => x.id === saved.id)).toMatchObject({
+        fromSessionId: free.id,
+      });
+
+      await account.deleteAccount(owner.id, APP_DELETE_CONFIRMATION, APP_DELETE_CONFIRMATION);
+      expect(await prisma.workoutSession.count({ where: { userId: owner.id } })).toBe(0);
+      expect(await prisma.workoutPlan.count({ where: { userId: owner.id } })).toBe(0);
     });
   });
 });
