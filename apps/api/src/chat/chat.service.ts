@@ -285,11 +285,24 @@ export class ChatService {
     }
   }
 
-  /** Para a resposta em andamento desta conversa. `false` quando não há nenhuma. */
-  stop(userId: string, conversationId: string): boolean {
+  /**
+   * Para a resposta em andamento desta conversa e **espera ela fechar** (gravada e fora do
+   * registro), com teto: a próxima mensagem logo depois não esbarra no 409
+   * `CHAT_RUN_IN_PROGRESS`. `false` quando não havia nenhuma.
+   */
+  async stop(userId: string, conversationId: string): Promise<boolean> {
     const run = this.runs.find(userId, conversationId);
     if (!run || run.done) return false;
     run.stop();
+    let teto: NodeJS.Timeout | undefined;
+    await Promise.race([
+      run.closed,
+      new Promise<void>((resolve) => {
+        teto = setTimeout(resolve, STOP_WAIT_MS);
+        teto.unref?.();
+      }),
+    ]);
+    clearTimeout(teto);
     return true;
   }
 
@@ -343,6 +356,9 @@ export class ChatService {
     return linha;
   }
 }
+
+/** Quanto o `stop` espera o turno fechar; acima disso responde e o cliente tenta de novo. */
+export const STOP_WAIT_MS = 10_000;
 
 /**
  * O turno que a pessoa parou é `stopped`, e não `error`, com o que já tinha chegado.

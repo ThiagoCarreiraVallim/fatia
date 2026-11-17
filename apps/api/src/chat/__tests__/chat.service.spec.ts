@@ -500,7 +500,7 @@ describe('ChatService — repasse do SSE', () => {
     await respirar();
     canal.emitir(fragmento('ai-1', 'Você comeu '));
     await respirar();
-    expect(service.stop(USUARIO.id, CONVERSA)).toBe(true);
+    await expect(service.stop(USUARIO.id, CONVERSA)).resolves.toBe(true);
     await turno;
 
     expect(canal.foiCancelado()).toBe(true);
@@ -508,6 +508,22 @@ describe('ChatService — repasse do SSE', () => {
     expect(resposta.status).toBe('stopped');
     expect(resposta.texto).toBe('Você comeu ');
     expect(saida.tudo()).toContain(fim('stopped'));
+  });
+
+  it('parar só volta depois de o turno fechar: a próxima mensagem não esbarra no 409', async () => {
+    const { service, canal, agent } = montar();
+
+    void service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    await expect(service.stop(USUARIO.id, CONVERSA)).resolves.toBe(true);
+
+    void service
+      .converse(USUARIO, turnoNovo('de novo'), 'tok', destinoDeTeste().destino)
+      .catch(() => undefined);
+    await respirar();
+    expect(agent.openTurn).toHaveBeenCalledTimes(2);
   });
 
   it('parar ANTES de o agente responder corta assim que ele abre', async () => {
