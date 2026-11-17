@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApiError } from '@fatia/api-client';
 import type {
   SessionSet,
   WeeklyMuscleSummary,
@@ -661,17 +660,21 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     );
   });
 
-  it('"Outros jeitos de treinar": livre e só cardio; os treinos rápidos vêm depois', async () => {
-    startSession.mockResolvedValue(session);
-    const user = userEvent.setup();
+  it('"Outros jeitos de treinar": livre e só cardio abrem o Treino livre sem começar nada (#381)', async () => {
     renderPage();
     const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
-    expect(within(other).getByRole('button', { name: /Só cardio/ })).toBeInTheDocument();
+    // O relógio só anda no "Iniciar treino" do Treino livre (Al-T17b).
+    expect(within(other).getByRole('link', { name: /Livre/ })).toHaveAttribute(
+      'href',
+      '/workout/free',
+    );
+    expect(within(other).getByRole('link', { name: /Só cardio/ })).toHaveAttribute(
+      'href',
+      '/workout/free?add=cardio',
+    );
     expect(within(other).queryByText('Treinos rápidos')).toBeNull();
     expect(screen.getByRole('region', { name: 'Treinos rápidos' })).toBeInTheDocument();
-    await user.click(within(other).getByRole('button', { name: /Livre/ }));
-    await waitFor(() => expect(startSession).toHaveBeenCalledTimes(1));
-    expect(startSession.mock.calls[0]![0].planId).toBeUndefined();
+    expect(startSession).not.toHaveBeenCalled();
   });
 
   it('o bloco numa linha; o toque abre o detalhe', async () => {
@@ -681,21 +684,6 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     expect(row).toHaveAttribute('aria-expanded', 'false');
     await user.click(row);
     expect(row).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('se já havia um treino aberto (409), abre esse em vez de dar erro', async () => {
-    startSession.mockRejectedValue(
-      new ApiError('aberta', 409, { activeSessionId: 'sessao-de-hoje' }),
-    );
-    getActiveSession.mockResolvedValueOnce(null).mockResolvedValue(session);
-    getLastSet.mockResolvedValue(null);
-    getPersonalRecord.mockResolvedValue(null);
-    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
-    const user = userEvent.setup();
-    renderPage();
-    const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
-    await user.click(within(other).getByRole('button', { name: /Livre/ }));
-    expect(await screen.findByRole('heading', { name: 'Supino reto' })).toBeInTheDocument();
   });
 });
 
@@ -754,5 +742,75 @@ describe('WorkoutPage — sem sessão aberta', () => {
     const week = await screen.findByRole('region', { name: 'Semana' });
     expect(notice.compareDocumentPosition(week) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Agenda' })).toHaveAttribute('href', '/workout/agenda');
+  });
+});
+
+/**
+ * Os escolhidos no Treino livre e ainda sem série (#381) moram no cache do
+ * React Query, como no app: tirar um precisa valer quando a sessão volta à
+ * tela, e a lista não pode sumir com a coleta de lixo do cache (5 min) só
+ * porque a pessoa foi a outra página no meio do treino.
+ */
+describe('WorkoutPage — escolhidos do Treino livre', () => {
+  const free: WorkoutSession = { ...session, id: 'sessao-livre', plannedExercises: [] };
+  const picked = [
+    { id: 11, name: 'Remada curvada', muscleGroup: 'costas' },
+    { id: 12, name: 'Desenvolvimento', muscleGroup: 'ombro' },
+  ];
+
+  function renderWith(client: QueryClient) {
+    return render(
+      <QueryClientProvider client={client}>
+        <WorkoutPage />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    getActiveSession.mockResolvedValue(free);
+    getPersonalRecord.mockResolvedValue(null);
+    getLastSet.mockResolvedValue(null);
+    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
+  });
+
+  it('tirar um escolhido vale quando a sessão volta à tela', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['workout', 'session', free.id, 'pending'], picked);
+    const user = userEvent.setup();
+    const first = renderWith(client);
+    expect(await screen.findByRole('heading', { name: 'Remada curvada' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Todas/ }));
+    const sheet = (await screen.findByRole('heading', { name: 'Treino atual' })).closest(
+      '[role="dialog"]',
+    ) as HTMLElement;
+    await user.click(within(sheet).getByRole('button', { name: 'Tirar Remada curvada do treino' }));
+    expect(await screen.findByRole('heading', { name: 'Desenvolvimento' })).toBeInTheDocument();
+
+    first.unmount();
+    renderWith(client);
+    expect(await screen.findByRole('heading', { name: 'Desenvolvimento' })).toBeInTheDocument();
+    expect(screen.queryByText('Remada curvada')).toBeNull();
+  });
+
+  it('a lista sobrevive à coleta de lixo do cache com a sessão fora da tela', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(['workout', 'session', free.id, 'pending'], picked);
+      const first = renderWith(client);
+      expect(await screen.findByRole('heading', { name: 'Remada curvada' })).toBeInTheDocument();
+      first.unmount();
+
+      // Mais que os 5 min de `gcTime` padrão.
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+
+      renderWith(client);
+      expect(await screen.findByRole('heading', { name: 'Remada curvada' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

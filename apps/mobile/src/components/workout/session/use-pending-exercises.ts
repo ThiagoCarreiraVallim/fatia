@@ -1,41 +1,43 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PendingExercise } from '@fatia/api-client';
+import {
+  addPendingExercise,
+  dropPendingExercise,
+  pendingExercisesKey,
+  pendingExercisesQueryOptions,
+  type PendingExercise,
+} from '@fatia/api-client';
 
 /**
  * Exercícios escolhidos na busca e ainda sem série (ver `buildExerciseGroups`).
  * Não vão ao servidor — uma série falsa sujaria volume e recordes —, mas
  * precisam valer nas duas telas da sessão: a guiada e o "Treino atual"
  * (prancha `Al-T17`). O cache do React Query é o lugar comum das duas, sem
- * contexto novo em volta da rota.
+ * contexto novo em volta da rota; chave e regras vêm de `@fatia/api-client`,
+ * as mesmas do PWA.
  */
 export function usePendingExercises(sessionId: string) {
   const qc = useQueryClient();
-  const key = ['workout', 'session', sessionId, 'pending'] as const;
   const query = useQuery({
-    queryKey: key,
-    queryFn: () => qc.getQueryData<PendingExercise[]>(key) ?? [],
+    queryKey: pendingExercisesKey(sessionId),
+    queryFn: () => qc.getQueryData<PendingExercise[]>(pendingExercisesKey(sessionId)) ?? [],
     initialData: [] as PendingExercise[],
-    staleTime: Infinity,
-    gcTime: Infinity,
+    ...pendingExercisesQueryOptions,
   });
 
   const add = useCallback(
     (exercise: PendingExercise) =>
-      qc.setQueryData<PendingExercise[]>(key, (current = []) =>
-        current.some((p) => p.id === exercise.id) ? current : [...current, exercise],
+      qc.setQueryData<PendingExercise[]>(pendingExercisesKey(sessionId), (current) =>
+        addPendingExercise(current, exercise),
       ),
-    // A chave é derivada só do id.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [qc, sessionId],
   );
 
   const drop = useCallback(
     (exerciseId: number) =>
-      qc.setQueryData<PendingExercise[]>(key, (current = []) =>
-        current.filter((p) => p.id !== exerciseId),
+      qc.setQueryData<PendingExercise[]>(pendingExercisesKey(sessionId), (current) =>
+        dropPendingExercise(current, exerciseId),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [qc, sessionId],
   );
 

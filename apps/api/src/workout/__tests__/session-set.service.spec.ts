@@ -313,8 +313,9 @@ describe('SessionSetService', () => {
       reps,
       distanceMeters: null,
       durationSeconds: null,
+      sessionId: id,
       exercise: ex,
-      session: { id, startedAt, completedAt },
+      session: { startedAt, completedAt },
     });
     const diasAtras = (n: number) => new Date(agora.getTime() - n * 86_400_000);
 
@@ -413,6 +414,7 @@ describe('SessionSetService', () => {
           reps: null,
           distanceMeters: 5000,
           durationSeconds: 1800,
+          sessionId: 's1',
           exercise: cardioExercise,
           session: { startedAt: d1 },
         },
@@ -422,6 +424,7 @@ describe('SessionSetService', () => {
           reps: null,
           distanceMeters: 10000,
           durationSeconds: 3600,
+          sessionId: 's2',
           exercise: cardioExercise,
           session: { startedAt: d2 },
         },

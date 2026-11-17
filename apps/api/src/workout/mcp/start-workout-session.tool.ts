@@ -20,7 +20,9 @@ export class StartWorkoutSessionTool implements McpToolDef {
 
   readonly hostedInference = false;
   readonly description =
-    'Inicia uma sessão de treino (livre ou vinculada a um plano). ' +
+    'Inicia uma sessão de treino. Sem planId é treino livre: monte na hora registrando séries ' +
+    'de qualquer exercício (cardio é exercício como os outros; uma sessão só de esteira é um ' +
+    'treino livre com um exercício). ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","startedAt":"2026-07-31T19:00:00-03:00"}';
   readonly inputSchema = {
     planId: z.string().uuid().optional().describe('ID do plano a seguir (opcional)'),

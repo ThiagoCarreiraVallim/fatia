@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { ChevronDown, ChevronUp, Pencil, Plus } from 'lucide-react-native';
 import {
+  invalidateSessionLists,
   feelingOf,
   formatBestSet,
   newSetClientKey,
@@ -49,6 +50,7 @@ export function useSessionExerciseActions(
       toast.show({ message: 'Série adicionada' });
       void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       void qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
+      invalidateSessionLists(qc);
     },
   });
 

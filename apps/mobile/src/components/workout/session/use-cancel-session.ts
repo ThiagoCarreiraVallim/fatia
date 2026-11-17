@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { workoutApi } from '@fatia/api-client';
+import { invalidateSessionLists, workoutApi } from '@fatia/api-client';
 
 /**
  * `apps/web/src/components/workout/cancel-session-modal.tsx`.
@@ -30,7 +30,7 @@ export function useCancelSession(sessionId: string) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      invalidateSessionLists(qc);
       setCancelOpen(false);
       router.replace('/workout');
     },

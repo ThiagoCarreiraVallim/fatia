@@ -551,6 +551,28 @@ describe('isolamento entre usuários', () => {
       await expect(sessions.list(owned.userB, {})).resolves.toEqual([]);
     });
 
+    it('o histórico (#381): o dono vê a sessão dele, o vizinho vê lista e totais zerados', async () => {
+      // Caminho feliz primeiro: um histórico sempre vazio passaria no vizinho.
+      await prisma.workoutSession.update({
+        where: { id: owned.sessionId },
+        data: { completedAt: new Date() },
+      });
+      try {
+        const dono = await sessions.history(owned.userA, {});
+        expect(dono.items.map((i) => i.id)).toContain(owned.sessionId);
+        await expect(sessions.history(owned.userB, {})).resolves.toEqual({
+          totals: { sessions: 0, avgDurationMinutes: null, volumeKg: 0 },
+          items: [],
+          nextCursor: null,
+        });
+      } finally {
+        await prisma.workoutSession.update({
+          where: { id: owned.sessionId },
+          data: { completedAt: null },
+        });
+      }
+    });
+
     it('list_nutrient_targets volta vazio', async () => {
       await expect(nutrientTargets.list(owned.userB)).resolves.toEqual([]);
     });
@@ -918,6 +940,14 @@ describe('isolamento entre usuários', () => {
       await expect(sessions.finish(owned.userB, owned.sessionId, {})).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('save_session_as_plan (#381) recusa a sessão de outro e não cria plano', async () => {
+      const before = await prisma.workoutPlan.count({ where: { userId: owned.userB } });
+      await expect(plans.createFromSession(owned.userB, owned.sessionId, {})).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(await prisma.workoutPlan.count({ where: { userId: owned.userB } })).toBe(before);
     });
 
     it('update_workout_session recusa', async () => {
@@ -1427,6 +1457,11 @@ describe('isolamento entre usuários', () => {
       expect(sessao).toBeDefined();
       expect(sessao).toHaveProperty('completedAt');
       expect(sessao).not.toHaveProperty('finishedAt');
+      // #381: o tipo da sessão e a nota livre só chegam à equipe por esta porta
+      // (Treino liberado, com registro de acesso).
+      expect(sessao).toHaveProperty('kind', 'free');
+      expect(sessao).toHaveProperty('notes');
+      expect(sessao).toHaveProperty('feeling');
 
       const nutrition = await studentView.read(
         owned.pro,

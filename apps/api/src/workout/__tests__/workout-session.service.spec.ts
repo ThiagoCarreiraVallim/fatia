@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WorkoutSessionService } from '../workout-session.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -40,8 +40,8 @@ describe('WorkoutSessionService', () => {
   });
 
   describe('start', () => {
-    it('creates a session with planId, parsed startedAt, and notes when provided', async () => {
-      prisma.workoutPlan.findFirst.mockResolvedValue({ id: 'plan-1' });
+    it('creates a session with planId, the plan snapshot, parsed startedAt, and notes', async () => {
+      prisma.workoutPlan.findFirst.mockResolvedValue({ id: 'plan-1', name: 'Push' });
       prisma.workoutSession.create.mockResolvedValue({ id: 'sess-1' });
 
       await service.start(userId, {
@@ -54,8 +54,11 @@ describe('WorkoutSessionService', () => {
         data: {
           userId,
           planId: 'plan-1',
+          fromPlan: true,
+          planName: 'Push',
           startedAt: new Date('2026-01-15T09:00:00Z'),
           notes: 'Heavy day',
+          exerciseOrder: [],
         },
       });
     });
@@ -67,6 +70,8 @@ describe('WorkoutSessionService', () => {
 
       const data = prisma.workoutSession.create.mock.calls[0][0].data;
       expect(data.planId).toBeNull();
+      expect(data.fromPlan).toBe(false);
+      expect(data.planName).toBeNull();
       expect(data.startedAt).toBeInstanceOf(Date);
     });
   });
@@ -242,7 +247,7 @@ describe('WorkoutSessionService', () => {
 
       await service.list(userId, {});
 
-      expect(prisma.workoutSession.findMany.mock.calls[0][0].where.userId).toBe(userId);
+      expect(prisma.workoutSession.findMany.mock.calls[0][0].where.AND).toContainEqual({ userId });
     });
 
     it('applies a UTC day window when date is provided', async () => {
@@ -251,19 +256,40 @@ describe('WorkoutSessionService', () => {
       await service.list(userId, { date: '2026-01-15' });
 
       const where = prisma.workoutSession.findMany.mock.calls[0][0].where;
-      expect(where.startedAt.gte).toEqual(new Date('2026-01-15T00:00:00.000Z'));
-      expect(where.startedAt.lt).toEqual(new Date('2026-01-16T00:00:00.000Z'));
+      expect(where.AND).toContainEqual({
+        startedAt: {
+          gte: new Date('2026-01-15T00:00:00.000Z'),
+          lt: new Date('2026-01-16T00:00:00.000Z'),
+        },
+      });
     });
 
-    it('caps limit at 50 and forwards cursor pagination', async () => {
+    it('caps limit at 50 and pages after the cursor session, read for this user only', async () => {
+      const startedAt = new Date('2026-01-15T09:00:00Z');
+      prisma.workoutSession.findFirst.mockResolvedValue({ id: 'sess-50', startedAt });
       prisma.workoutSession.findMany.mockResolvedValue([]);
 
       await service.list(userId, { limit: 9999, cursor: 'sess-50' });
 
+      expect(prisma.workoutSession.findFirst.mock.calls[0][0].where).toEqual({
+        id: 'sess-50',
+        userId,
+      });
       const callArg = prisma.workoutSession.findMany.mock.calls[0][0];
       expect(callArg.take).toBe(50);
-      expect(callArg.cursor).toEqual({ id: 'sess-50' });
-      expect(callArg.skip).toBe(1);
+      expect(callArg.cursor).toBeUndefined();
+      expect(callArg.where.AND).toContainEqual({
+        OR: [{ startedAt: { lt: startedAt } }, { startedAt, id: { lt: 'sess-50' } }],
+      });
+    });
+
+    it("a cursor that is not this user's session is a 400", async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue(null);
+
+      await expect(service.list(userId, { cursor: 'sess-of-B' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.workoutSession.findMany).not.toHaveBeenCalled();
     });
   });
 

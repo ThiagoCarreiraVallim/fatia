@@ -33,7 +33,9 @@ import {
 } from './dto/plan.dto';
 import {
   FinishSessionDto,
+  HistoryQueryDto,
   ListSessionsDto,
+  SaveSessionAsPlanDto,
   StartSessionDto,
   UpdateSessionDto,
   WorkoutCheckinDto,
@@ -269,6 +271,12 @@ export class WorkoutController {
     return this.muscles.weekly(user.id, user.timezone);
   }
 
+  /** O histórico (#381, Al-T10): totais e linhas das sessões concluídas, com filtro por tipo. */
+  @Get('history')
+  history(@CurrentUser() user: CurrentUserPayload, @Query() q: HistoryQueryDto) {
+    return this.sessions.history(user.id, q);
+  }
+
   @Get('sessions/active')
   getActiveSession(@CurrentUser() user: CurrentUserPayload) {
     return this.sessions.findActive(user.id);
@@ -306,6 +314,16 @@ export class WorkoutController {
   @Get('sessions/:id/summary')
   sessionSummary(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
     return this.sessions.summary(user.id, id);
+  }
+
+  /** "Salvar como plano" (#381, Al-T11b): um plano novo com as metas observadas na sessão. */
+  @Post('sessions/:id/plan')
+  saveSessionAsPlan(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveSessionAsPlanDto,
+  ) {
+    return this.plans.createFromSession(user.id, id, dto);
   }
 
   /** As respostas do fim do treino (#377). PUT: reenviar substitui, não duplica. */
