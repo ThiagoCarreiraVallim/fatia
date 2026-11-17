@@ -53,6 +53,7 @@ describe('quem abre o painel e com que seções', () => {
       'moderation',
       'agent',
       'seats',
+      'benefits',
       'settings',
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([

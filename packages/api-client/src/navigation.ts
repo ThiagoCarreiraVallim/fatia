@@ -425,6 +425,12 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/community/:id/feed', title: 'Mural', parent: '/community/:id' },
   // O que era a tela principal da comunidade, atrás da engrenagem do mural.
   { pattern: '/community/:id/settings', title: 'Sobre a comunidade', parent: '/community/:id' },
+  // Benefícios de parceiros (Cm-22, #393): entra e volta pelo Sobre.
+  {
+    pattern: '/community/:id/benefits',
+    title: 'Benefícios',
+    parent: '/community/:id/settings',
+  },
   { pattern: '/community/:id/challenges', title: 'Desafios', parent: '/community/:id' },
   {
     pattern: '/community/:id/challenges/:challengeId',
@@ -456,6 +462,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
   { pattern: '/org/:id/moderation', title: 'Moderação', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
+  { pattern: '/org/:id/benefits', title: 'Benefícios', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];

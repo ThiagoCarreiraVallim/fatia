@@ -37,6 +37,7 @@ export type PanelSection =
   | 'moderation'
   | 'agent'
   | 'seats'
+  | 'benefits'
   | 'settings';
 
 export interface PanelLink {
@@ -56,6 +57,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   moderation: { section: 'moderation', label: 'Moderação', path: '/moderation' },
   agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
+  benefits: { section: 'benefits', label: 'Benefícios', path: '/benefits' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
 
