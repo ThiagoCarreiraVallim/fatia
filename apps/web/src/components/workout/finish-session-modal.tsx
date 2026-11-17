@@ -11,7 +11,12 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { ApiError, workoutApi, type WorkoutSession } from '@fatia/api-client';
+import {
+  invalidateSessionLists,
+  ApiError,
+  workoutApi,
+  type WorkoutSession,
+} from '@fatia/api-client';
 import { elapsedLabel, formatInteger, totalVolumeKg } from './format';
 
 interface Props {
@@ -43,7 +48,7 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
     onSuccess: (result) => {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      invalidateSessionLists(qc);
       // Como no app: a sessão concluída e o painel (treino do dia, sequência)
       // mudam com o fim do treino, e ficavam velhos até o próximo refetch.
       qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });

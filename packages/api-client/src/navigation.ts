@@ -263,6 +263,8 @@ const FOCUS_ROUTES = [
   '/workout/circuits/new',
   '/workout/circuits/:id',
   '/workout/circuit/:id',
+  // Al-T17b: o Treino livre fecha no X e tem o "Iniciar treino" embaixo, sem a barra.
+  '/workout/free',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -353,7 +355,12 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
   { pattern: '/nutrition/meals/:id', title: 'Refeição', parent: '/nutrition' },
   { pattern: '/workout', title: 'Treino', parent: null },
-  { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
+  // Al-T10: a prancha chama de "Histórico".
+  { pattern: '/workout/history', title: 'Histórico', parent: '/workout' },
+  // Al-T11: uma sessão antiga, aberta do histórico; a tela troca o título pelo dia.
+  { pattern: '/workout/history/:id', title: 'Treino', parent: '/workout/history' },
+  // Al-T17b: o treino livre antes de começar ("Treino atual · livre").
+  { pattern: '/workout/free', title: 'Treino atual', parent: '/workout', dismiss: true },
   { pattern: '/workout/plans', title: 'Planos e circuitos', parent: '/workout' },
   { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },

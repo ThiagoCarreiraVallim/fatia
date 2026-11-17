@@ -74,6 +74,10 @@ export interface StudentSession {
   /** O schema fecha a sessão em `completedAt`; não existe `finishedAt`. */
   completedAt: string | null;
   notes: string | null;
+  /** Plano, circuito ou livre (#381), derivado. */
+  kind: 'plan' | 'circuit' | 'free';
+  /** "Como foi o treino?", 1 a 5. */
+  feeling: number | null;
 }
 
 export interface StudentVolume {

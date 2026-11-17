@@ -45,9 +45,12 @@ interface Props {
   onAdd?: (exercise: Exercise) => void;
   /** Mantido por compatibilidade: a API põe no fim sozinha. */
   nextOrder?: number;
+  /** A aba que abre (o "Só cardio" do treino livre abre em Cardio, #381). */
+  initialTab?: Tab;
 }
 
-type Tab = 'favoritos' | 'todos' | (typeof MUSCLE_GROUPS)[number];
+export type AddExerciseTab = 'favoritos' | 'todos' | (typeof MUSCLE_GROUPS)[number];
+type Tab = AddExerciseTab;
 
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: 'favoritos', label: 'Favoritos' },
@@ -63,13 +66,15 @@ export function AddExerciseDrawer({
   planName,
   onAddMany,
   onAdd,
+  initialTab,
 }: Props) {
   const qc = useQueryClient();
   const multi = !!planId || !!onAddMany;
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [naAcademia, setNaAcademia] = useState(false);
-  const [tab, setTab] = useState<Tab>(multi ? 'favoritos' : 'todos');
+  const firstTab: Tab = initialTab ?? (multi ? 'favoritos' : 'todos');
+  const [tab, setTab] = useState<Tab>(firstTab);
   const [selected, setSelected] = useState<Map<number, Exercise>>(new Map());
   const emComunidade = useInCommunity(open);
 
@@ -77,11 +82,12 @@ export function AddExerciseDrawer({
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
+    // Ao abrir, a aba pedida agora (ela muda: o "Só cardio" só vale na primeira vez).
+    if (open) setTab(firstTab);
     if (!open) {
       setQ('');
       setDebounced('');
       setNaAcademia(false);
-      setTab(multi ? 'favoritos' : 'todos');
       setSelected(new Map());
     }
   }

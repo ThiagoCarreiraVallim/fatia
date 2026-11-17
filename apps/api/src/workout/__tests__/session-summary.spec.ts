@@ -233,4 +233,58 @@ describe('summarizeSession', () => {
     expect(s.records).toEqual([]);
     expect(s.exercises[0]).toMatchObject({ isRecord: false });
   });
+
+  describe('detalhe da sessão no histórico (#381, Al-T11 e Al-T11b)', () => {
+    it('o tipo vem do plano: com plano é "plan", sem plano é treino livre', () => {
+      expect(summarizeSession(base()).kind).toBe('plan');
+      expect(summarizeSession(base({ planId: null, plan: null })).kind).toBe('free');
+    });
+
+    it('cada exercício traz as séries na ordem, com a sensação de cada uma', () => {
+      const s = summarizeSession(
+        base({ sets: [strength(BENCH, 2, 52.5, 9, 9), strength(BENCH, 1, 50, 10, 7)] }),
+      );
+      expect(s.exercises[0]!.setList).toEqual([
+        {
+          setNumber: 1,
+          weightKg: 50,
+          reps: 10,
+          durationSeconds: null,
+          distanceMeters: null,
+          feeling: 2,
+        },
+        {
+          setNumber: 2,
+          weightKg: 52.5,
+          reps: 9,
+          durationSeconds: null,
+          distanceMeters: null,
+          feeling: 4,
+        },
+      ]);
+    });
+
+    it('cardio soma as kcal digitadas', () => {
+      const s = summarizeSession(
+        base({
+          sets: [
+            { ...cardio(1, 3, 20, 140), kcalBurned: 200 },
+            { ...cardio(2, 2.1, 12, 152), kcalBurned: 140 },
+          ],
+        }),
+      );
+      expect(s.exercises[0]!.best).toMatchObject({ distanceMeters: 5100, kcalBurned: 340 });
+    });
+
+    it('sem kcal digitada, kcal fica nula (e não zero)', () => {
+      const s = summarizeSession(base({ sets: [cardio(1, 3, 20, 140)] }));
+      expect(s.exercises[0]!.best?.kcalBurned).toBeNull();
+    });
+
+    it('o recorde diz o melhor de antes: "antes 2 km", "antes 50 kg × 10"', () => {
+      const s = summarizeSession(base());
+      expect(s.records[0]!.previous).toEqual({ weightKg: 50, reps: 10, distanceMeters: null });
+      expect(s.records[1]!.previous).toEqual({ weightKg: null, reps: null, distanceMeters: 2000 });
+    });
+  });
 });

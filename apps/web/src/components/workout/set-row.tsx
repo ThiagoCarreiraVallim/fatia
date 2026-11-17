@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
+  invalidateSessionLists,
   distanceToMeters,
   distanceUnitLabel,
   getRpeInfo,
@@ -48,6 +49,7 @@ export function SetRow({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      invalidateSessionLists(qc);
     },
   });
 
@@ -60,6 +62,7 @@ export function SetRow({
       setConfirmOpen(false);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      invalidateSessionLists(qc);
     },
   });
 

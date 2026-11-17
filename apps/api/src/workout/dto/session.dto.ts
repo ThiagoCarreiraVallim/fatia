@@ -3,6 +3,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsIn,
   IsISO8601,
   IsInt,
   IsOptional,
@@ -14,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SESSION_KINDS, type SessionKind } from '../helpers/session-kind';
 
 /**
  * As perguntas rápidas do fim do treino (#377, parte da #304). Todas
@@ -34,6 +36,19 @@ export class StartSessionDto {
   @IsOptional() @IsUUID() planId?: string;
   @IsOptional() @IsISO8601() startedAt?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+
+  /**
+   * A ordem dos exercícios escolhidos antes de começar (Treino livre, #381),
+   * por id. Gravada como a `exerciseOrder` da sessão: o detalhe e o "Salvar
+   * como plano" saem na ordem em que a pessoa escolheu.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  exerciseOrder?: number[];
 }
 
 export class FinishSessionDto {
@@ -83,4 +98,19 @@ export class ListSessionsDto {
   @IsOptional() @IsString() date?: string;
   @IsOptional() @IsUUID() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+  /** Plano, circuito ou livre (#381). Sem filtro, todas. */
+  @IsOptional() @IsIn(SESSION_KINDS) kind?: SessionKind;
+}
+
+/** O histórico (#381, Al-T10): só sessões concluídas, com totais do mesmo filtro. */
+export class HistoryQueryDto {
+  @IsOptional() @IsIn(SESSION_KINDS) kind?: SessionKind;
+  /** O `nextCursor` da página anterior: opaco (`helpers/session-cursor.ts`). */
+  @IsOptional() @IsString() @MaxLength(200) cursor?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+}
+
+/** "Salvar como plano" (#381). Sem nome, o plano sai com o da sessão. */
+export class SaveSessionAsPlanDto {
+  @IsOptional() @IsString() @MaxLength(100) name?: string;
 }

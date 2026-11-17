@@ -199,6 +199,9 @@ describe('navegação', () => {
       '/workout/circuits/new',
       '/workout/circuits/c1',
       '/workout/circuit/s1',
+      // Al-T17b: o Treino livre fecha no X, com o "Iniciar treino" embaixo.
+      '/workout/free',
+      '/workout/free?add=cardio',
     ])('%s esconde a barra', (path) => {
       expect(navBarMode(path)).toBe('hidden');
     });
@@ -211,6 +214,8 @@ describe('navegação', () => {
       '/workout/plans',
       '/workout/plans/p1',
       '/workout/history',
+      // Al-T11: o detalhe de uma sessão antiga tem a barra (o "Treino feito" é que não).
+      '/workout/history/s1',
       '/community',
       '/community/g1',
       '/you',
@@ -258,7 +263,9 @@ describe('navegação', () => {
       ['/workout/circuit/s1', 'Circuito', '/workout', 'Treino'],
       ['/workout/agenda', 'Agenda', '/workout', 'Treino'],
       ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos e circuitos'],
-      ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
+      ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico'],
+      ['/workout/history/s1', 'Treino', '/workout/history', 'Histórico'],
+      ['/workout/free', 'Treino atual', '/workout', 'Treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
       ['/plan', 'Meu plano', '/you', 'Você'],
       ['/chat/c1', 'Chat', '/', 'Hoje'],
@@ -352,6 +359,10 @@ describe('dockedActionBottom', () => {
 describe('routeInfo.dismiss: tela que fecha no X em vez de voltar', () => {
   it('o Novo plano (Al-T19) fecha no X', () => {
     expect(routeInfo('/workout/plans/new').dismiss).toBe(true);
+  });
+
+  it('o Treino livre (Al-T17b) fecha no X', () => {
+    expect(routeInfo('/workout/free').dismiss).toBe(true);
   });
 
   it('as outras voltam pela seta', () => {

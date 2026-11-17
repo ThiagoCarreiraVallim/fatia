@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Check, Plus, Share2, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  invalidateSessionLists,
   ApiError,
   appendNoteShortcut,
   checkinDoneMessage,
@@ -331,7 +332,7 @@ function HowItWent({ summary, unit }: { summary: WorkoutSessionSummary; unit: Lo
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['workout', 'session', summary.sessionId] });
-      void qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      invalidateSessionLists(qc);
       router.push('/workout');
     },
   });
@@ -436,6 +437,7 @@ function TeamQuestions({
     onSuccess: (_r, body) => {
       onSent(checkinDoneMessage(body.skipped === true, askedBy));
       void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      invalidateSessionLists(qc);
     },
   });
 

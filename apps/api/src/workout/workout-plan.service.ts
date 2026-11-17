@@ -17,6 +17,9 @@ import type {
 } from './dto/plan.dto';
 import type { SaveCircuitDto } from './dto/circuit.dto';
 import { normalizeCircuitConfig } from './helpers/circuit';
+import type { SaveSessionAsPlanDto } from './dto/session.dto';
+import { planExercisesFromSession } from './helpers/plan-from-session';
+import { orderExercisesLikeSession } from './session-summary';
 import { readableExercises } from './helpers/exercise-access';
 import { isCardioExercise } from './helpers/is-cardio';
 import {
@@ -135,6 +138,119 @@ export class WorkoutPlanService {
       loadMode: 'BODYWEIGHT' as const,
     }));
     return { config, exercises };
+  }
+
+  /**
+   * "Salvar como plano" (#381, prancha `Al-T11b`): um plano novo com os
+   * exercícios da sessão, na ordem dela, e as metas observadas
+   * (`planExercisesFromSession`). Cardio vira meta de cardio (#378).
+   *
+   * A sessão é lida pelo dono (`id` + `userId`): a de outra pessoa é 404, igual
+   * a inexistente. Exercício que a pessoa não enxerga mais (o da comunidade que
+   * ela deixou) fica de fora, como no "Adicionar exercício".
+   *
+   * Só treino terminado (409 no aberto: as séries ainda mudam) e **um plano por
+   * sessão**: salvar de novo (duplo toque, a web e o app, o MCP repetindo a
+   * chamada) devolve o plano que a sessão já virou. Quem garante é o índice
+   * único `(userId, fromSessionId)`; a leitura antes só poupa o trabalho.
+   */
+  async createFromSession(
+    userId: string,
+    sessionId: string,
+    dto: SaveSessionAsPlanDto,
+  ): Promise<PlanView> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { id: sessionId, userId },
+      select: {
+        completedAt: true,
+        exerciseOrder: true,
+        planName: true,
+        plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
+        sets: {
+          select: {
+            exerciseId: true,
+            setNumber: true,
+            weightKg: true,
+            reps: true,
+            durationSeconds: true,
+            distanceMeters: true,
+            exercise: { select: { name: true, muscleGroup: true } },
+          },
+          // A mesma ordem do resumo (`summary`): o desempate de
+          // `orderExercisesLikeSession` é a ordem de chegada destas linhas, e
+          // sem `orderBy` o plano saía numa ordem diferente da do detalhe.
+          orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
+        },
+      },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    if (!session.completedAt) {
+      throw new ConflictException('Termine o treino antes de salvar como plano');
+    }
+    const saved = await this.planFromSession(userId, sessionId);
+    if (saved) return this.findById(userId, saved);
+
+    const ids = [...new Set(session.sets.map((s) => s.exerciseId))];
+    const readable = new Set(
+      (
+        await this.prisma.exercise.findMany({
+          where: { id: { in: ids }, ...readableExercises(userId) },
+          select: { id: true },
+        })
+      ).map((e) => e.id),
+    );
+    const ordered = orderExercisesLikeSession(
+      ids,
+      session.exerciseOrder,
+      session.plan?.exercises ?? [],
+    );
+    const rows = planExercisesFromSession(
+      ordered
+        .filter((id) => readable.has(id))
+        .map((id) => {
+          const own = session.sets.filter((s) => s.exerciseId === id);
+          return { exerciseId: id, muscleGroup: own[0]!.exercise.muscleGroup, sets: own };
+        }),
+    );
+    if (rows.length === 0) {
+      throw new BadRequestException('Esse treino não tem série registrada para virar plano.');
+    }
+
+    const only =
+      rows.length === 1 ? session.sets.find((s) => s.exerciseId === rows[0]!.exerciseId) : null;
+    const name =
+      dto.name?.trim() ||
+      session.plan?.name ||
+      session.planName ||
+      only?.exercise.name ||
+      'Treino livre';
+    try {
+      const plan = await this.prisma.workoutPlan.create({
+        data: {
+          userId,
+          name: name.slice(0, 100),
+          fromSessionId: sessionId,
+          exercises: { create: rows },
+        },
+      });
+      return await this.findById(userId, plan.id);
+    } catch (err) {
+      // Dois pedidos juntos passam pela leitura acima; o segundo bate no índice
+      // único e devolve o plano do primeiro.
+      if (!isPrismaCode(err, 'P2002')) throw err;
+      const winner = await this.planFromSession(userId, sessionId);
+      if (!winner) throw err;
+      return this.findById(userId, winner);
+    }
+  }
+
+  /** O plano que a sessão já virou no "Salvar como plano", se virou. */
+  async planFromSession(userId: string, sessionId: string): Promise<string | null> {
+    const plan = await this.prisma.workoutPlan.findFirst({
+      where: { userId, fromSessionId: sessionId },
+      select: { id: true },
+    });
+    return plan?.id ?? null;
   }
 
   async findById(userId: string, id: string): Promise<PlanView> {

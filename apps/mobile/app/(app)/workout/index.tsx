@@ -24,7 +24,6 @@ import { Screen } from '@/components/layout/screen';
 import { Carousel, ErrorState, LoadingState } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
-import { useStartSession } from '@/components/workout/use-start-session';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
@@ -37,6 +36,9 @@ import { cn } from '@/components/ui/utils';
  * O treino em andamento não tem mais aviso aqui: a barra acima da navegação
  * (`ActiveWorkoutBar`, prancha `Al-T1b`) já leva a ele em qualquer tela. E
  * começar outro com um aberto cai no aberto (`useStartSession`, 409).
+ *
+ * "Livre" e "Só cardio" levam ao Treino livre (Al-T17b, #381), que monta
+ * antes de começar: o relógio só anda no "Iniciar treino".
  */
 
 function SectionTitle({ children, action }: { children: string; action?: React.ReactNode }) {
@@ -317,7 +319,6 @@ function QuickCard({ template, width }: { template: QuickTemplate; width: number
 export default function WorkoutScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const start = useStartSession();
 
   const active = useQuery({
     queryKey: ['workout', 'active'],
@@ -465,16 +466,14 @@ export default function WorkoutScreen() {
               subtitle="monte na hora"
               icon={Zap}
               tone={colors.primaryText}
-              disabled={start.isPending}
-              onPress={() => start.mutate({})}
+              onPress={() => router.push('/workout/free' as Href)}
             />
             <WayCard
               title="Só cardio"
               subtitle="esteira, bike…"
               icon={Heart}
               tone={colors.danger}
-              disabled={start.isPending}
-              onPress={() => start.mutate({ then: 'cardio' })}
+              onPress={() => router.push('/workout/free?add=cardio' as Href)}
             />
           </View>
           <View className="flex-row gap-2">

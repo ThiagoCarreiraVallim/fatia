@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Minus, Plus } from 'lucide-react';
 import {
+  invalidateSessionLists,
   FEELINGS,
   currentChipIndex,
   revealOffset,
@@ -287,6 +288,7 @@ export function SetEditor({
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
     void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+    invalidateSessionLists(qc);
   };
 
   const save = useMutation({

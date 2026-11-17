@@ -11,7 +11,7 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { invalidateSessionLists, workoutApi, type WorkoutSession } from '@fatia/api-client';
 
 interface Props {
   open: boolean;
@@ -35,7 +35,7 @@ export function CancelSessionModal({ open, onOpenChange, session }: Props) {
     onSuccess: () => {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      invalidateSessionLists(qc);
       onOpenChange(false);
       router.push('/workout');
     },

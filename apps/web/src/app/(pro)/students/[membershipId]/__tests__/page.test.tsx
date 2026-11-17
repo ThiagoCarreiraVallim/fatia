@@ -141,12 +141,16 @@ const WORKOUT = envelope({
       startedAt: '2026-08-01T09:00:00.000Z',
       completedAt: '2026-08-01T10:05:00.000Z',
       notes: null,
+      kind: 'plan',
+      feeling: 2,
     },
     {
       id: 'ses-2',
       startedAt: '2026-08-02T09:00:00.000Z',
       completedAt: null,
       notes: null,
+      kind: 'free',
+      feeling: null,
     },
   ],
   volume: {
