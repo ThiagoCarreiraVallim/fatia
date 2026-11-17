@@ -340,6 +340,25 @@ describe('ConversationService — o que sobra do turno', () => {
     );
   });
 
+  it('o preview tira a citação (`> …`) da frente da fala (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      '> Você comeu 1.800 kcal\n> ontem\n\nE de proteína?',
+    );
+    const item = (await conversas.list(userId)).find((c) => c.id === conversationId);
+    expect(item?.preview).toBe('E de proteína?');
+
+    const { conversationId: soCitacao } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      '> só o trecho',
+    );
+    expect((await conversas.list(userId)).find((c) => c.id === soCitacao)?.preview).toBe(
+      'só o trecho',
+    );
+  });
+
   describe('o estado da conversa para o botão da IA (#369)', () => {
     const pausa = { id: 'int-1', value: { kind: 'confirm', prompt: 'Gravo?', actions: [] } };
 

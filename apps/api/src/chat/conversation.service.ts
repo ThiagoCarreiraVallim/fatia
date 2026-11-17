@@ -68,8 +68,22 @@ export interface ConversationListItem {
 
 const TETO_DO_PREVIEW = 120;
 
-function previewDe(texto: string | undefined): string | null {
-  const linha = (texto ?? '').replace(/\s+/g, ' ').trim();
+/**
+ * A última fala numa linha, para a lista. A citação (`> …`, o trecho respondido) sai da frente:
+ * o que importa é o que a pessoa escreveu; sobra a citação só quando não há mais nada.
+ */
+function conversationPreview(texto: string | undefined): string | null {
+  const linhas = (texto ?? '').split('\n');
+  let i = 0;
+  while (i < linhas.length && linhas[i].startsWith('>')) i++;
+  const resto = linhas.slice(i).join(' ').trim();
+  const fala =
+    resto ||
+    linhas
+      .slice(0, i)
+      .map((l) => l.replace(/^> ?/, ''))
+      .join(' ');
+  const linha = fala.replace(/\s+/g, ' ').trim();
   if (!linha) return null;
   return linha.length > TETO_DO_PREVIEW ? `${linha.slice(0, TETO_DO_PREVIEW).trimEnd()}…` : linha;
 }
@@ -147,7 +161,7 @@ export class ConversationService {
     const comEstado = conversas.map(({ messages, ...c }) => ({
       ...c,
       state: conversationState(isRunning(c.id), waiting.has(c.id)),
-      preview: previewDe(messages[0]?.content),
+      preview: conversationPreview(messages[0]?.content),
     }));
     const filtradas = opts.state ? comEstado.filter((c) => c.state === opts.state) : comEstado;
     return opts.limit !== undefined ? filtradas.slice(0, opts.limit) : filtradas;
