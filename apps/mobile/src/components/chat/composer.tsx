@@ -5,7 +5,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, ListPlus, Mic, Square, X } from 'lucide-react-native';
 import type { LocalChatPhoto, QueuedChatMessage } from '@/chat/chat-session';
 import { cn, useActionSheet, useToast } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDictation } from '@/chat/dictation';
+import { AI_CONSENT_KEY } from '@/chat/ai-consent';
 import { colors } from '@/theme/colors';
 
 /** O teto do agente por mensagem (`MAX_FOTOS_POR_MENSAGEM`). */
@@ -57,7 +59,13 @@ export function Composer({
     (ditado: string) => setTexto((t) => (t.trim() ? `${t.trimEnd()} ${ditado}` : ditado)),
     [],
   );
-  const ditado = useDictation(aoDitar);
+  const queryClient = useQueryClient();
+  // O aceite caiu (403): relê os aceites e o cartão do aceite volta no lugar do campo.
+  const semAceite = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: AI_CONSENT_KEY }),
+    [queryClient],
+  );
+  const ditado = useDictation(aoDitar, semAceite);
 
   const podeEnviar = !disabled && !running && (texto.trim().length > 0 || fotos.length > 0);
 

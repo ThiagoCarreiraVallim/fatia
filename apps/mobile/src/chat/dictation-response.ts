@@ -8,7 +8,12 @@ import {
 const PATH = '/api/chat/transcribe';
 const FALHOU = 'Não deu para transcrever agora. Tente de novo ou digite.';
 
-export type DictationOutcome = { text: string | null; error: string | null };
+export type DictationOutcome = {
+  text: string | null;
+  error: string | null;
+  /** 403 `AI_CONSENT_REQUIRED`: o aceite da IA caiu; quem chama abre o aceite. */
+  consentRequired?: true;
+};
 
 /**
  * A resposta do `/chat/transcribe` lida como o resto do app lê as suas.
@@ -32,6 +37,9 @@ export async function readDictationResponse(
   const parsed = parseJson(body);
   if (status >= 400) {
     const error = erroDoChat(parsed);
+    if (error.code === 'AI_CONSENT_REQUIRED') {
+      return { text: null, error: textoDeErroDoChat(error), consentRequired: true };
+    }
     if (error.code !== 'AI_UNKNOWN_ERROR') return { text: null, error: textoDeErroDoChat(error) };
     if (status === 402) {
       return { text: null, error: textoDeErroDoChat({ code: 'AI_PLAN_REQUIRED' }) };

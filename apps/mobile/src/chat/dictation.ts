@@ -24,7 +24,11 @@ export type DictationState = 'idle' | 'recording' | 'transcribing';
 /** Ditado é curto; dois minutos já passam do que se fala para um campo de mensagem. */
 const MAX_MS = 120_000;
 
-export function useDictation(onText: (texto: string) => void) {
+/**
+ * `onConsentRequired`: o servidor recusou com 403 `AI_CONSENT_REQUIRED` (o aceite caiu); quem
+ * chama traz o aceite de volta em vez de mostrar erro.
+ */
+export function useDictation(onText: (texto: string) => void, onConsentRequired?: () => void) {
   const { getAccessToken } = useAuth();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [state, setState] = useState<DictationState>('idle');
@@ -52,8 +56,13 @@ export function useDictation(onText: (texto: string) => void) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      const { text, error: falha } = await readDictationResponse(resposta.status, resposta.body);
-      if (falha) setError(falha);
+      const {
+        text,
+        error: falha,
+        consentRequired,
+      } = await readDictationResponse(resposta.status, resposta.body);
+      if (consentRequired && onConsentRequired) onConsentRequired();
+      else if (falha) setError(falha);
       else if (text) onText(text);
     } catch {
       setError('Não deu para transcrever agora. Tente de novo ou digite.');
@@ -61,7 +70,7 @@ export function useDictation(onText: (texto: string) => void) {
       await deleteAsync(uri, { idempotent: true }).catch(() => undefined);
       setState('idle');
     }
-  }, [getAccessToken, onText, recorder]);
+  }, [getAccessToken, onConsentRequired, onText, recorder]);
 
   const start = useCallback(async () => {
     setError(null);

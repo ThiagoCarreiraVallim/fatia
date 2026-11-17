@@ -19,6 +19,7 @@ import {
   useAiConsent,
   useWebSearchSwitch,
 } from '@/chat/ai-consent';
+import { chatUnlocked, showChatConsent } from '@/chat/ai-consent-state';
 import { openLegal } from '@/components/profile/legal';
 import { colors } from '@/theme/colors';
 
@@ -28,15 +29,29 @@ import { colors } from '@/theme/colors';
  * Devolve `null` quando já há aceite.
  */
 export function ChatConsentSheet({ error }: { error: ChatStreamError | null }) {
-  const { data } = useAiConsent();
-  const aceitar = useAcceptAiConsent();
+  const { data, isPending } = useAiConsent();
   const router = useRouter();
   const queryClient = useQueryClient();
   const recusado = error?.code === 'AI_CONSENT_REQUIRED';
   useEffect(() => {
     if (recusado) void queryClient.invalidateQueries({ queryKey: AI_CONSENT_KEY });
   }, [recusado, queryClient]);
-  if (!data || data.chat.accepted) return null;
+  if (!showChatConsent({ data, isPending })) return null;
+  return <AiConsentCard onDecline={() => router.back()} />;
+}
+
+/**
+ * O cartão do aceite da IA, também fora do chat: o ditado, a foto do prato e o rótulo passam
+ * pelo mesmo aceite (403 `AI_CONSENT_REQUIRED` sem ele). `onAccepted` avisa depois de gravado.
+ */
+export function AiConsentCard({
+  onDecline,
+  onAccepted,
+}: {
+  onDecline: () => void;
+  onAccepted?: () => void;
+}) {
+  const aceitar = useAcceptAiConsent();
   const textos = AI_CONSENT_TEXTS.chat;
   return (
     <View className="m-3 gap-3 rounded-3xl border border-border bg-card p-5 pb-8">
@@ -55,19 +70,25 @@ export function ChatConsentSheet({ error }: { error: ChatStreamError | null }) {
           Não consegui gravar o aceite. Tente de novo.
         </Text>
       ) : null}
-      <Button disabled={aceitar.isPending} onPress={() => aceitar.mutate('chat')}>
+      <Button
+        disabled={aceitar.isPending}
+        onPress={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
+      >
         {textos.accept}
       </Button>
-      <Button variant="secondary" onPress={() => router.back()}>
+      <Button variant="secondary" onPress={onDecline}>
         {textos.decline}
       </Button>
     </View>
   );
 }
 
-/** Sem o aceite do chat, o campo não aparece: escrever só para ouvir um 403 seria pior. */
+/**
+ * O campo só aparece com o aceite confirmado: carregando ou sem conseguir ler, não. Escrever
+ * só para ouvir um 403 seria pior que esperar o aceite.
+ */
 export function useChatUnlocked(): boolean {
-  return useAiConsent().data?.chat.accepted !== false;
+  return chatUnlocked(useAiConsent().data);
 }
 
 /** A chave da busca na web no topo (prancha Al-M16): o globo verde com ponto quando ligada. */
