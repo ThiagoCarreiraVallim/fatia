@@ -54,7 +54,7 @@ describe('OAuthFacadeService', () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    connections.recordIssuedToken.mockClear();
+    connections.recordIssuedToken.mockReset().mockResolvedValue(undefined);
     service = new OAuthFacadeService(
       prisma as unknown as PrismaService,
       makeConfig(),
@@ -368,6 +368,23 @@ describe('OAuthFacadeService', () => {
       expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_xxx', tokenResponse);
     });
 
+    // Revisão da #388: o Logto já girou o refresh token quando responde. Se a
+    // gravação da conexão (provision, Management API, banco lento) segurar a
+    // resposta, o cliente pode desistir e perder o único refresh token válido.
+    it('gravar a conexão nunca segura a resposta do /oauth/token', async () => {
+      prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
+      const tokenResponse = { access_token: 'acc', refresh_token: 'ref', expires_in: 3600 };
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => tokenResponse });
+      connections.recordIssuedToken.mockImplementation(() => new Promise(() => undefined));
+
+      const result = await Promise.race([
+        service.exchangeCode(validParams, 'https://api.example.com/oauth/callback'),
+        new Promise((resolve) => setTimeout(() => resolve('pendurou'), 200)),
+      ]);
+
+      expect(result).toEqual(tokenResponse);
+    });
+
     it('throws OAuthError when Logto returns a non-ok response', async () => {
       prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
       fetchMock.mockResolvedValue({
@@ -506,6 +523,22 @@ describe('OAuthFacadeService', () => {
       expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_yyy', {
         access_token: 'new-access',
       });
+    });
+
+    it('gravar a conexão nunca segura a resposta do refresh', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'new-access' }),
+      });
+      connections.recordIssuedToken.mockImplementation(() => new Promise(() => undefined));
+
+      const result = await Promise.race([
+        service.refreshToken({ refreshToken: 'old-refresh', clientId: 'mcp_yyy' }),
+        new Promise((resolve) => setTimeout(() => resolve('pendurou'), 200)),
+      ]);
+
+      expect(result).toEqual({ access_token: 'new-access' });
     });
 
     it('refresh recusado pelo Logto sai como invalid_grant, o que faz o cliente refazer o login', async () => {
