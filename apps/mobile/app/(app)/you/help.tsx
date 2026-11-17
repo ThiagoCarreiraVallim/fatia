@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { Linking, Pressable, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { searchTutorials, tutorialsApi, tutorialSubtitle, type Tutorial } from '@fatia/api-client';
+import {
+  searchTutorials,
+  tutorialById,
+  tutorialsApi,
+  tutorialSubtitle,
+  type Tutorial,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import {
   Button,
@@ -24,13 +30,15 @@ const SEEN_KEY = ['you', 'tutorials', 'seen'] as const;
  * `apps/web/src/components/you/help-screen.tsx`. O texto vem no pacote, então
  * funciona sem internet. O app não tem leitor de rede no Expo Go; "sem
  * conexão" é a lista de assistidos que não chegou — o mesmo pedido que o
- * vídeo faria.
+ * vídeo faria. `?tutorial=` abre um tutorial direto, como o "Ver o tutorial"
+ * de Conectar sua IA (#388).
  */
 export default function HelpScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { tutorial } = useLocalSearchParams<{ tutorial?: string }>();
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState<Tutorial | null>(null);
+  const [open, setOpen] = useState<Tutorial | null>(() => tutorialById(tutorial));
 
   const seen = useQuery({ queryKey: SEEN_KEY, queryFn: () => tutorialsApi.seen(), retry: false });
   const online = !seen.isError;
