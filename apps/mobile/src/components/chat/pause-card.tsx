@@ -1,9 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, HelpCircle, PlayCircle } from 'lucide-react-native';
 import {
+  AlertCircle,
+  Globe,
+  HelpCircle,
+  Layers,
+  PencilLine,
+  PlayCircle,
+} from 'lucide-react-native';
+import {
+  AI_CONSENT_TEXTS,
   askFieldsOf,
   previewChatAction,
   questionAnswer,
@@ -12,7 +20,9 @@ import {
   type ChatInterruptValue,
   type ChatQuestionAction,
   type ChatResumeValue,
+  type ChatWebConsentAction,
 } from '@fatia/api-client';
+import { useAcceptAiConsent, useAiConsent } from '@/chat/ai-consent';
 import { Button, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 
@@ -35,7 +45,8 @@ export function PauseCard({
     return (
       <View
         accessibilityRole="summary"
-        className="gap-3 rounded-xl border border-border bg-card p-4"
+        accessibilityLabel={pausa.prompt}
+        className="gap-3 rounded-2xl border border-border bg-card p-4"
       >
         <View className="flex-row items-center gap-2">
           <PlayCircle size={16} color={colors.primaryText} />
@@ -49,7 +60,7 @@ export function PauseCard({
             <Text className="text-sm font-bold text-primary-foreground">Continuar</Text>
           </Button>
           <Button size="sm" variant="outline" disabled={ocupado} onPress={() => onResponder(false)}>
-            <Text className="text-sm text-foreground">Parar por aqui</Text>
+            <Text className="text-sm text-foreground">Parar aqui</Text>
           </Button>
         </View>
       </View>
@@ -75,11 +86,16 @@ function Acoes({
     () => pausa.actions.filter((a): a is ChatQuestionAction => a.kind === 'question'),
     [pausa.actions],
   );
+  const buscas = useMemo(
+    () => pausa.actions.filter((a): a is ChatWebConsentAction => a.kind === 'web_consent'),
+    [pausa.actions],
+  );
   const [decisoes, setDecisoes] = useState<Record<string, boolean>>({});
   const [respostas, setRespostas] = useState<Record<string, Record<string, string>>>({});
-  const soUmaEscrita = escritas.length === 1 && perguntas.length === 0;
+  const soUmaEscrita = escritas.length + buscas.length === 1 && perguntas.length === 0;
+  const emLote = escritas.length > 1;
 
-  const faltaDecidir = escritas.some((a) => decisoes[a.toolCallId] === undefined);
+  const faltaDecidir = [...escritas, ...buscas].some((a) => decisoes[a.toolCallId] === undefined);
   const faltaResponder = perguntas.some((a) =>
     askFieldsOf(a).some(
       (c) =>
@@ -98,36 +114,60 @@ function Acoes({
       ),
     });
 
-  const titulo =
-    escritas.length > 1
-      ? `${escritas.length} ações aguardando confirmação`
-      : escritas.length === 1
-        ? 'Ação aguardando confirmação'
-        : 'Pergunta do assistente';
+  const decidir = (id: string) => (aprovada: boolean) => {
+    if (soUmaEscrita) enviar({ [id]: aprovada });
+    else setDecisoes((d) => ({ ...d, [id]: aprovada }));
+  };
+
+  // A escrita ou a busca sozinhas são o próprio cartão, sem moldura em volta.
+  if (soUmaEscrita && escritas[0]) {
+    return (
+      <Escrita
+        acao={escritas[0]}
+        decisao={undefined}
+        ocupado={ocupado}
+        emLote={false}
+        onDecidir={decidir(escritas[0].toolCallId)}
+      />
+    );
+  }
+  if (soUmaEscrita && buscas[0]) {
+    return (
+      <AceiteDaBusca acao={buscas[0]} ocupado={ocupado} onDecidir={decidir(buscas[0].toolCallId)} />
+    );
+  }
 
   return (
-    <View className="gap-3 rounded-xl border border-border bg-card p-4">
-      <View className="flex-row items-center gap-2">
-        {escritas.length ? (
-          <AlertTriangle size={16} color={colors.primaryText} />
-        ) : (
-          <HelpCircle size={16} color={colors.primaryText} />
-        )}
-        <Text accessibilityRole="header" className="flex-1 text-sm font-semibold text-foreground">
-          {titulo}
-        </Text>
-      </View>
-      {pausa.prompt ? <Text className="text-sm text-muted-foreground">{pausa.prompt}</Text> : null}
+    <View className="gap-3 rounded-2xl border border-primary/60 bg-card p-4">
+      {emLote ? (
+        <Cabecalho
+          icone={<Layers size={18} color={colors.primaryText} />}
+          acima="Lote"
+          titulo={`${escritas.length} ações para decidir`}
+        />
+      ) : perguntas.length ? (
+        <Cabecalho
+          icone={<HelpCircle size={18} color={colors.primaryText} />}
+          acima="Pergunta"
+          titulo={pausa.prompt || 'Pergunta do assistente'}
+        />
+      ) : null}
+      {buscas.map((acao) => (
+        <AceiteDaBusca
+          key={acao.toolCallId}
+          acao={acao}
+          ocupado={ocupado}
+          onDecidir={decidir(acao.toolCallId)}
+        />
+      ))}
       {escritas.map((acao) => (
         <Escrita
           key={acao.toolCallId}
           acao={acao}
           decisao={decisoes[acao.toolCallId]}
           ocupado={ocupado}
-          onDecidir={(aprovada) => {
-            if (soUmaEscrita) enviar({ [acao.toolCallId]: aprovada });
-            else setDecisoes((d) => ({ ...d, [acao.toolCallId]: aprovada }));
-          }}
+          emLote
+          onDecidir={decidir(acao.toolCallId)}
         />
       ))}
       {perguntas.map((acao) => (
@@ -145,22 +185,63 @@ function Acoes({
       ))}
       {soUmaEscrita ? null : (
         <Button disabled={ocupado || faltaDecidir || faltaResponder} onPress={() => enviar()}>
-          <Text className="text-sm font-bold text-primary-foreground">Enviar</Text>
+          <Text className="text-sm font-bold text-primary-foreground">
+            {emLote ? `Enviar ${escritas.length} decisões` : 'Enviar'}
+          </Text>
         </Button>
       )}
     </View>
   );
 }
 
+function Cabecalho({
+  icone,
+  acima,
+  titulo,
+  perigo = false,
+}: {
+  icone: ReactNode;
+  acima: string;
+  titulo: string;
+  perigo?: boolean;
+}) {
+  return (
+    <View className="flex-row items-center gap-3">
+      <View
+        className={cn(
+          'size-9 items-center justify-center rounded-xl',
+          perigo ? 'bg-danger/15' : 'bg-primary/15',
+        )}
+      >
+        {icone}
+      </View>
+      <View className="flex-1">
+        <Text numberOfLines={1} className="text-xs text-muted-foreground">
+          {acima}
+        </Text>
+        <Text accessibilityRole="header" className="text-[15px] font-bold text-foreground">
+          {titulo}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Uma escrita à espera do sim (prancha IA-Cartoes): Gravar e Ajustar. Ajustar recusa — nada é
+ * gravado — e a pessoa diz no campo o que mudar. Inválida, o cartão fica vermelho e só ajusta.
+ */
 function Escrita({
   acao,
   decisao,
   ocupado,
+  emLote,
   onDecidir,
 }: {
   acao: ChatConfirmAction;
   decisao: boolean | undefined;
   ocupado: boolean;
+  emLote: boolean;
   onDecidir: (aprovada: boolean) => void;
 }) {
   const previa = useQuery({
@@ -169,53 +250,136 @@ function Escrita({
     staleTime: Infinity,
     retry: 1,
   });
-  // Confirmar antes de ler o resumo seria aprovar às cegas.
-  const travado = previa.isPending || previa.data?.valida === false;
+  // Gravar antes de ler o resumo seria aprovar às cegas.
+  const invalida = previa.data?.valida === false;
+  const travado = previa.isPending || invalida;
   return (
-    <View className="gap-2 rounded-lg border border-border p-3">
-      <Text className="text-sm font-semibold text-foreground">{acao.title}</Text>
+    <View
+      className={cn(
+        'gap-3 rounded-2xl p-3.5',
+        emLote ? 'bg-secondary' : 'border bg-card',
+        !emLote && (invalida ? 'border-danger/50' : 'border-primary/60'),
+      )}
+    >
+      <Cabecalho
+        icone={
+          invalida ? (
+            <AlertCircle size={18} color={colors.danger} />
+          ) : (
+            <PencilLine size={18} color={colors.primaryText} />
+          )
+        }
+        acima={acao.title}
+        titulo={invalida ? 'Não dá para gravar assim' : 'Confere antes de gravar'}
+        perigo={invalida}
+      />
       {previa.isPending ? (
         <Text className="text-xs text-muted-foreground">Preparando o resumo…</Text>
       ) : previa.isError ? (
         <Text className="text-xs text-muted-foreground">
-          Não consegui mostrar os detalhes. Se tiver dúvida, recuse e peça de novo.
+          Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.
         </Text>
-      ) : (
-        <View className="gap-1">
+      ) : previa.data.valida === false ? (
+        <Text accessibilityRole="alert" className="text-sm text-foreground">
+          {previa.data.problema}
+        </Text>
+      ) : previa.data.linhas.length ? (
+        <View className="rounded-xl bg-secondary px-3">
           {previa.data.linhas.map((l, i) => (
-            <View key={`${l.rotulo}-${i}`} className="flex-row gap-2">
-              <Text className="text-xs text-muted-foreground">{l.rotulo}</Text>
-              <Text className="flex-1 text-xs text-foreground">{l.valor}</Text>
+            <View
+              key={`${l.rotulo}-${i}`}
+              className={cn('flex-row gap-3 py-2', i > 0 && 'border-t border-border')}
+            >
+              <Text className="text-sm text-muted-foreground">{l.rotulo}</Text>
+              <Text className="flex-1 text-right text-sm font-semibold text-foreground">
+                {l.valor}
+              </Text>
             </View>
           ))}
-          {previa.data.valida === false ? (
-            <Text accessibilityRole="alert" className="text-xs text-destructive">
-              {previa.data.problema}
-            </Text>
-          ) : null}
         </View>
-      )}
+      ) : null}
       <View className="flex-row gap-2">
+        {invalida ? null : (
+          <Button
+            disabled={ocupado || travado}
+            onPress={() => onDecidir(true)}
+            className={cn('flex-1', decisao === false && 'opacity-40')}
+            accessibilityState={{ selected: decisao === true, disabled: ocupado || travado }}
+          >
+            <Text className="text-sm font-bold text-primary-foreground">Gravar</Text>
+          </Button>
+        )}
         <Button
-          size="sm"
-          disabled={ocupado || travado}
-          onPress={() => onDecidir(true)}
-          className={cn(decisao === false && 'opacity-40')}
-          accessibilityState={{ selected: decisao === true, disabled: ocupado || travado }}
-        >
-          <Text className="text-xs font-bold text-primary-foreground">Confirmar</Text>
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={ocupado}
           onPress={() => onDecidir(false)}
-          className={cn(decisao === true && 'opacity-40')}
+          className={cn(invalida && 'flex-1', decisao === true && 'opacity-40')}
+          accessibilityHint="Não grava. Diga no campo o que mudar."
           accessibilityState={{ selected: decisao === false, disabled: ocupado }}
         >
-          <Text className="text-xs text-foreground">Recusar</Text>
+          <Text className="text-sm text-secondary-foreground">Ajustar</Text>
         </Button>
       </View>
+    </View>
+  );
+}
+
+/** O aceite da busca na web com a pergunta à vista; concordar grava o aceite e busca. */
+function AceiteDaBusca({
+  acao,
+  ocupado,
+  onDecidir,
+}: {
+  acao: ChatWebConsentAction;
+  ocupado: boolean;
+  onDecidir: (aprovada: boolean) => void;
+}) {
+  const textos = AI_CONSENT_TEXTS.webSearch;
+  const aceites = useAiConsent().data;
+  const aceitar = useAcceptAiConsent();
+  const [falhou, setFalhou] = useState(false);
+  return (
+    <View
+      accessibilityLabel={textos.title}
+      className="gap-3 rounded-2xl border border-primary/60 bg-card p-3.5"
+    >
+      <Cabecalho
+        icone={<Globe size={18} color={colors.primaryText} />}
+        acima="Buscar na web"
+        titulo={textos.title}
+      />
+      {acao.query ? (
+        <Text className="rounded-xl bg-secondary px-3 py-2 text-sm text-foreground">
+          Vou buscar: “{acao.query}”
+        </Text>
+      ) : null}
+      <Text className="text-xs leading-5 text-muted-foreground">{textos.body}</Text>
+      {falhou ? (
+        <Text accessibilityRole="alert" className="text-xs text-danger">
+          Não consegui gravar o aceite. Tente de novo.
+        </Text>
+      ) : null}
+      <Button
+        disabled={ocupado || aceitar.isPending}
+        onPress={async () => {
+          setFalhou(false);
+          if (!aceites?.webSearch.accepted) {
+            try {
+              await aceitar.mutateAsync('web_search');
+            } catch {
+              setFalhou(true);
+              return;
+            }
+          }
+          onDecidir(true);
+        }}
+      >
+        <Text className="text-sm font-bold text-primary-foreground">{textos.accept}</Text>
+      </Button>
+      <Button variant="secondary" disabled={ocupado} onPress={() => onDecidir(false)}>
+        <Text className="text-sm text-secondary-foreground">{textos.decline}</Text>
+      </Button>
+      <Text className="text-[11px] text-muted-foreground">{textos.footnote}</Text>
     </View>
   );
 }
