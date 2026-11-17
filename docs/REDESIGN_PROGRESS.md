@@ -241,6 +241,14 @@ Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_
   - O "Pagar com Pix" do M13b/c é o link da cobrança no Asaas, que mostra o Pix (o Fatia não gera QR). Só aparece na web.
   - Os preços do M2 no app são os da loja, não os da web.
   - O selo do Você mostra "Teste · n dias".
+  - O cabeçalho do Meu plano é o da tela ("‹ Meu plano"), não o "X" com o selo Free do M2: a mesma tela mostra todos os estados.
+  - No app, o cartão de uma assinatura vencida (Expirada, IA pausada) vem sem botão: a oferta da loja ou da comunidade logo abaixo já tem a ação. A IA pausada pela carência "terminou" no fim da carência.
+  - O M5 mantém, abaixo do cartão laranja, o cartão do estado ("PRO · Comunidade", "Abrir a IA") e a lista "Seu PRO inclui"; o programa mostra a data e os dias que faltam, sem a barra de progresso.
+  - O M13 não tem as abas de estado (são o tweak da prancha) nem o push de exemplo do M13b/c.
+  - Os botões das pranchas sem ícone no app ("Tenho código", "Pagar com Pix"): o `Button` do app não tem ícone.
+  - Si-04 no site: o CPF é pedido na tela seguinte (o Meu plano da web), porque o site é estático e não tem sessão; a mesma página empilha em uma coluna no celular.
+  - Ex-03: sem a imagem do logo (nenhum e-mail do Fatia carrega imagem remota) e com o texto da regra do teste (nada é cobrado sozinho): "Abrir pagamento" no lugar de "Continuar no PRO", sem a contagem de refeições, e "Não conseguimos confirmar o pagamento" no atraso, porque nem sempre é cartão.
+- **Passada visual** (prints em `~/.cache/fatia-vis/386/cmp-<prancha>.png`, prancha | web | app; site e e-mail contra Si-04 e Ex-03) feita, com o demo em cada estado pelo banco de dev. A oferta da loja (M2 com compra, M3) só foi conferida por código e testes: o Expo Go não tem a RevenueCat nem pacotes da loja.
 - **Fora do escopo:**
   - E-mail de checkout pendente.
   - Aviso no app quando o teste da loja converte.
@@ -248,7 +256,6 @@ Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_
 - **Ainda não conferido:**
   - Compra real na loja (exige build de desenvolvimento e contas de teste).
   - Checkout no sandbox do Asaas.
-  - Capturas contra as pranchas (o dono faz a passada visual).
 
 Pendências da #388 (branch `redesign/388-conectar-ia`, migration `20261117000000_mcp_oauth_connections`):
 
