@@ -16,6 +16,7 @@ import {
 } from 'lucide-react-native';
 import {
   AGENT_LOCAL_TOOLS,
+  CHAT_FEEDBACK_REASON_LABELS,
   FATIA_AGENT_NAME,
   chatCardTitle,
   chatMarkdownPlainText,
@@ -29,6 +30,7 @@ import {
   textoDeErroDoChat,
   type ChatAssistantMessage,
   type ChatPlanStep,
+  type ChatReviewReason,
   type ChatStreamError,
   type ChatThreadState,
 } from '@fatia/api-client';
@@ -55,42 +57,45 @@ export function UserBubble({
   // desenha à parte — inclusive depois de reabrir a conversa.
   const { quote, text: fala } = splitQuote(text);
   return (
-    <View className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5">
-      {images?.length ? (
-        <View className="mb-2 flex-row flex-wrap justify-end gap-2">
-          {images.map((uri, i) => (
-            <Image
-              key={uri}
-              source={{ uri }}
-              accessibilityLabel={images.length > 1 ? `Foto enviada ${i + 1}` : 'Foto enviada'}
-              className="size-24 rounded-lg"
-              resizeMode="cover"
-            />
-          ))}
-        </View>
-      ) : null}
-      {photos > 0 ? (
-        <View className="mb-1 flex-row items-center gap-1">
-          <ImageIcon size={12} color={colors.mutedForeground} />
-          <Text className="text-xs text-muted-foreground">
-            {photos === 1 ? 'Foto enviada' : `${photos} fotos enviadas`} — não fica guardada
+    <View className="max-w-[85%] gap-1 self-end">
+      <Text className="self-end pr-1 text-xs font-semibold text-muted-foreground">Você</Text>
+      <View className="rounded-3xl rounded-br-md bg-secondary px-4 py-2.5">
+        {images?.length ? (
+          <View className="mb-2 flex-row flex-wrap justify-end gap-2">
+            {images.map((uri, i) => (
+              <Image
+                key={uri}
+                source={{ uri }}
+                accessibilityLabel={images.length > 1 ? `Foto enviada ${i + 1}` : 'Foto enviada'}
+                className="size-24 rounded-lg"
+                resizeMode="cover"
+              />
+            ))}
+          </View>
+        ) : null}
+        {photos > 0 ? (
+          <View className="mb-1 flex-row items-center gap-1">
+            <ImageIcon size={12} color={colors.mutedForeground} />
+            <Text className="text-xs text-muted-foreground">
+              {photos === 1 ? 'Foto enviada' : `${photos} fotos enviadas`} — não fica guardada
+            </Text>
+          </View>
+        ) : null}
+        {quote ? (
+          <Text
+            numberOfLines={4}
+            accessibilityLabel={`Citação: ${quote}`}
+            className="mb-1.5 border-l-2 border-primary pl-2.5 text-xs text-muted-foreground"
+          >
+            {quote}
           </Text>
-        </View>
-      ) : null}
-      {quote ? (
-        <Text
-          numberOfLines={4}
-          accessibilityLabel={`Citação: ${quote}`}
-          className="mb-1.5 border-l-2 border-primary pl-2.5 text-xs text-muted-foreground"
-        >
-          {quote}
-        </Text>
-      ) : null}
-      {fala ? (
-        <Text selectable className="text-[15px] leading-6 text-foreground">
-          {fala}
-        </Text>
-      ) : null}
+        ) : null}
+        {fala ? (
+          <Text selectable className="text-[15px] leading-6 text-foreground">
+            {fala}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -102,6 +107,7 @@ export function AssistantBlock({
   showName,
   onVote,
   onQuote,
+  onExplain,
   last = false,
 }: {
   message: ChatAssistantMessage;
@@ -117,9 +123,12 @@ export function AssistantBlock({
    * (`CHAT_QUOTE_MAX`) corta o excesso.
    */
   onQuote?: (text: string) => void;
+  /** O motivo do 👎, opcional e depois do voto. */
+  onExplain?: (rowId: string, reasons: ChatReviewReason[]) => void;
 }) {
   const [pensamentoAberto, setPensamentoAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [motivo, setMotivo] = useState<'fechado' | 'aberto' | 'enviado'>('fechado');
   return (
     <View className="gap-2">
       {showName ? (
@@ -196,7 +205,10 @@ export function AssistantBlock({
                 accessibilityRole="button"
                 accessibilityLabel="Resposta ruim"
                 accessibilityState={{ selected: message.review === 'dislike' }}
-                onPress={() => onVote(message.rowId!, 'dislike')}
+                onPress={() => {
+                  onVote(message.rowId!, 'dislike');
+                  setMotivo('aberto');
+                }}
                 className="h-11 w-11 items-center justify-center"
               >
                 <ThumbsDown
@@ -212,6 +224,16 @@ export function AssistantBlock({
             </Text>
           ) : null}
         </View>
+      ) : null}
+      {motivo !== 'fechado' && message.rowId && onExplain ? (
+        <VoteReasons
+          sent={motivo === 'enviado'}
+          onSend={(reasons) => {
+            onExplain(message.rowId!, reasons);
+            setMotivo('enviado');
+          }}
+          onClose={() => setMotivo('fechado')}
+        />
       ) : null}
     </View>
   );
@@ -233,7 +255,12 @@ export function Thinking() {
 export function PlanCard({ steps }: { steps: ChatPlanStep[] }) {
   return (
     <View className="gap-1.5 rounded-xl border border-border bg-card p-3">
-      <Text className="text-xs font-semibold uppercase text-muted-foreground">Plano</Text>
+      <View className="flex-row items-baseline justify-between">
+        <Text className="text-xs font-semibold uppercase text-muted-foreground">Plano</Text>
+        <Text className="text-xs text-muted-foreground">
+          {steps.filter((p) => p.status === 'done').length} de {steps.length} passos
+        </Text>
+      </View>
       {steps.map((p) => (
         <View key={p.id} className="flex-row items-center gap-2">
           {p.status === 'done' ? (
@@ -410,6 +437,69 @@ function ToolLine({
         </Text>
       ) : null}
       {cartao && aberto ? <ArtifactCard artifact={cartao} tool={titulo} /> : null}
+    </View>
+  );
+}
+
+const MOTIVOS: ChatReviewReason[] = [
+  'incorrect',
+  'wrong_data',
+  'incomplete',
+  'did_not_follow',
+  'slow',
+  'other',
+];
+
+/** O "por quê" de um 👎 (prancha IA-Estados): a lista fechada, com os rótulos do PWA. */
+function VoteReasons({
+  sent,
+  onSend,
+  onClose,
+}: {
+  sent: boolean;
+  onSend: (reasons: ChatReviewReason[]) => void;
+  onClose: () => void;
+}) {
+  const [escolhidos, setEscolhidos] = useState<ChatReviewReason[]>([]);
+  if (sent) {
+    return <Text className="text-xs text-muted-foreground">Obrigado, isso ajuda a melhorar.</Text>;
+  }
+  return (
+    <View className="gap-3 rounded-2xl border border-border bg-card p-3.5">
+      <Text accessibilityRole="header" className="text-sm font-semibold text-foreground">
+        O que faltou nesta resposta?
+      </Text>
+      <View className="flex-row flex-wrap gap-2">
+        {MOTIVOS.map((m) => {
+          const ativo = escolhidos.includes(m);
+          return (
+            <Pressable
+              key={m}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: ativo }}
+              onPress={() => setEscolhidos((e) => (ativo ? e.filter((x) => x !== m) : [...e, m]))}
+              className={cn(
+                'min-h-[36px] justify-center rounded-full border px-3.5',
+                ativo ? 'border-primary bg-primary' : 'border-border',
+              )}
+            >
+              <Text
+                className={cn('text-sm', ativo ? 'text-primary-foreground' : 'text-foreground')}
+              >
+                {CHAT_FEEDBACK_REASON_LABELS[m]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View className="flex-row gap-2">
+        <Button className="flex-1" disabled={!escolhidos.length} onPress={() => onSend(escolhidos)}>
+          Enviar
+        </Button>
+        <Button variant="secondary" onPress={onClose}>
+          Agora não
+        </Button>
+      </View>
     </View>
   );
 }

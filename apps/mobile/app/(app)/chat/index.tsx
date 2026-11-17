@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, SquarePen } from 'lucide-react-native';
 import {
   deleteConversation,
+  groupConversationsByDay,
   getChatAvailability,
   listConversations,
   renameConversation,
@@ -21,6 +22,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   EmptyState,
+  Input,
   ErrorState,
   LoadingState,
   useActionSheet,
@@ -49,9 +51,11 @@ export default function ConversationsScreen() {
   const sessao = useChatSession();
   const confirm = useConfirm();
   const actionSheet = useActionSheet();
+  const [busca, setBusca] = useState('');
+  const termo = busca.trim();
   const conversas = useQuery({
-    queryKey: CHAT_KEYS.conversations,
-    queryFn: () => listConversations(),
+    queryKey: [...CHAT_KEYS.conversations, termo],
+    queryFn: () => listConversations(termo || undefined),
   });
   const disponivel = useQuery({ queryKey: CHAT_KEYS.availability, queryFn: getChatAvailability });
   const [renomeando, setRenomeando] = useState<ChatConversationSummary | null>(null);
@@ -137,7 +141,19 @@ export default function ConversationsScreen() {
           {conversas.isError ? (
             <ErrorState error={conversas.error} onRetry={() => conversas.refetch()} />
           ) : null}
-          {conversas.data?.length === 0 ? (
+          <Input
+            accessibilityLabel="Buscar conversa"
+            placeholder="Buscar pelo nome"
+            value={busca}
+            onChangeText={setBusca}
+            returnKeyType="search"
+          />
+          {conversas.data?.length === 0 && termo ? (
+            <Text className="py-4 text-center text-sm text-muted-foreground">
+              Nenhuma conversa com esse nome.
+            </Text>
+          ) : null}
+          {conversas.data?.length === 0 && !termo ? (
             <EmptyState
               title="Nenhuma conversa ainda"
               description="Pergunte o que comeu ontem, peça para registrar o almoço ou veja sua evolução."
@@ -150,25 +166,47 @@ export default function ConversationsScreen() {
               }
             />
           ) : null}
-          {conversas.data?.map((c) => (
-            <Pressable
-              key={c.id}
-              accessibilityRole="link"
-              accessibilityHint="Segure para renomear ou apagar"
-              onPress={() => router.push(`/chat/${c.id}`)}
-              onLongPress={() => showOptions(c)}
-              className="min-h-[56px] flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 active:opacity-80"
-            >
-              <MessageCircle size={18} color={colors.mutedForeground} />
-              <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
-                {c.title ?? 'Conversa sem título'}
+          {/* Hoje, Esta semana e Antes, como no PWA (`groupConversationsByDay`). */}
+          {groupConversationsByDay(conversas.data ?? []).map(({ label, items }) => (
+            <View key={label} className="gap-2">
+              <Text
+                accessibilityRole="header"
+                className="px-1 pt-3 text-xs font-semibold uppercase text-muted-foreground"
+              >
+                {label}
               </Text>
-              <Text className="text-xs text-muted-foreground">{quando(c.updatedAt)}</Text>
-            </Pressable>
+              {items.map((c) => (
+                <Pressable
+                  key={c.id}
+                  accessibilityRole="link"
+                  accessibilityHint="Segure para renomear ou apagar"
+                  onPress={() => router.push(`/chat/${c.id}`)}
+                  onLongPress={() => showOptions(c)}
+                  className="min-h-[56px] flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 active:opacity-80"
+                >
+                  <MessageCircle size={18} color={colors.mutedForeground} />
+                  <View className="flex-1">
+                    <Text numberOfLines={1} className="text-sm font-semibold text-foreground">
+                      {c.title ?? 'Conversa sem título'}
+                    </Text>
+                    {c.preview ? (
+                      <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                        {c.preview}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text className="text-xs text-muted-foreground">{quando(c.updatedAt)}</Text>
+                </Pressable>
+              ))}
+            </View>
           ))}
         </View>
       </Screen>
-      <Drawer open={renomeando !== null} onOpenChange={(v) => !v && setRenomeando(null)}>
+      <Drawer
+        open={renomeando !== null}
+        onOpenChange={(v) => !v && setRenomeando(null)}
+        snapPoints={['85%']}
+      >
         <DrawerHeader>
           <DrawerTitle>Renomear conversa</DrawerTitle>
         </DrawerHeader>
@@ -181,7 +219,7 @@ export default function ConversationsScreen() {
             autoFocus
           />
         </DrawerContent>
-        <DrawerFooter>
+        <DrawerFooter className="pb-8">
           <Button
             disabled={!titulo.trim() || renomear.isPending}
             onPress={() =>

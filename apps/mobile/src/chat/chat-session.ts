@@ -16,6 +16,7 @@ import {
   type ChatHistoryPhoto,
   type ChatPhoto,
   type ChatResumeValue,
+  type ChatReviewReason,
   type ChatStreamFrame,
   type ChatThreadState,
 } from '@fatia/api-client';
@@ -325,6 +326,20 @@ export class ChatSession {
       ),
     }));
     await sendChatFeedback(conversationId, rowId, { review });
+  }
+
+  /**
+   * O "por quê" de um 👎, depois do voto e opcional (como o `motivo-do-voto.tsx` do PWA): a
+   * lista fechada soma, o texto livre vai à parte.
+   */
+  async explainVote(rowId: string, reasons: ChatReviewReason[], note?: string): Promise<void> {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
+    await sendChatFeedback(conversationId, rowId, {
+      review: 'dislike',
+      reasons,
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    });
   }
 
   private signal(): { signal: AbortSignal } {

@@ -23,6 +23,12 @@ import {
 } from '@/components/chat/message-list';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
+import {
+  ChatConsentSheet,
+  QuickReplies,
+  WebSearchSwitch,
+  useChatUnlocked,
+} from '@/components/chat/consent';
 import { CHAT_KEYS, useChatSession, useChatSnapshot } from '@/chat/chat-provider';
 import { colors } from '@/theme/colors';
 
@@ -66,6 +72,7 @@ export default function ConversationScreen() {
   const nomeDoAgente = isNew ? (agenteDaNova?.name ?? null) : (agent?.name ?? null);
 
   const aberta = conversationId === id;
+  const liberado = useChatUnlocked();
   const ultima = thread.messages.at(-1);
   const pensando =
     thread.running &&
@@ -88,6 +95,7 @@ export default function ConversationScreen() {
       scroll={false}
       actions={
         <>
+          <WebSearchSwitch />
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Memórias do assistente"
@@ -185,6 +193,9 @@ export default function ConversationScreen() {
                   last={!thread.messages.slice(index + 1).some((m) => m.role === 'user')}
                   onVote={(rowId, review) => void sessao.vote(rowId, review).catch(() => undefined)}
                   onQuote={(text) => sessao.setQuote(text)}
+                  onExplain={(rowId, reasons) =>
+                    void sessao.explainVote(rowId, reasons).catch(() => undefined)
+                  }
                 />
               )
             }
@@ -218,21 +229,27 @@ export default function ConversationScreen() {
             }
           />
         )}
-        <Composer
-          running={thread.running}
-          disabled={!aberta || loading}
-          photosEnabled={disponibilidade.data?.photos ?? false}
-          dictationEnabled={disponibilidade.data?.dictation ?? false}
-          onSend={(text, photos) =>
-            void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
-          }
-          queue={queue}
-          quote={quote}
-          onDismissQuote={() => sessao.setQuote(null)}
-          onQueue={(text) => sessao.enqueue(text)}
-          onDequeue={(id) => sessao.dequeue(id)}
-          onStop={() => void sessao.stop()}
-        />
+        {liberado ? (
+          <>
+            <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
+            <Composer
+              running={thread.running}
+              disabled={!aberta || loading}
+              photosEnabled={disponibilidade.data?.photos ?? false}
+              dictationEnabled={disponibilidade.data?.dictation ?? false}
+              onSend={(text, photos) =>
+                void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
+              }
+              queue={queue}
+              quote={quote}
+              onDismissQuote={() => sessao.setQuote(null)}
+              onQueue={(text) => sessao.enqueue(text)}
+              onDequeue={(id) => sessao.dequeue(id)}
+              onStop={() => void sessao.stop()}
+            />
+          </>
+        ) : null}
+        <ChatConsentSheet error={thread.error} />
       </KeyboardAvoidingView>
     </Screen>
   );

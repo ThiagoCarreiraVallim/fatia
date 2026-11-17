@@ -388,3 +388,28 @@ describe('ChatSession', () => {
     expect(s.getSnapshot().thread.messages).toHaveLength(0);
   });
 });
+
+describe('ChatSession — motivo do 👎 (#384)', () => {
+  it('o motivo vai junto do voto, e a resposta guarda que já foi explicada', async () => {
+    voteMock.mockClear();
+    const s = sessao();
+    const id = s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    fontes[0].emitir(
+      fragmento('ai-1', 'Olá'),
+      { event: 'persisted', data: { messageId: 'row-1' } } as unknown as ChatStreamFrame,
+      { event: 'done', data: { status: 'completed' } },
+    );
+    fontes[0].fechar();
+    await respirar();
+
+    await s.explainVote('row-1', ['slow'], 'demorou um minuto');
+
+    expect(voteMock).toHaveBeenLastCalledWith(id, 'row-1', {
+      review: 'dislike',
+      reasons: ['slow'],
+      note: 'demorou um minuto',
+    });
+  });
+});

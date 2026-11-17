@@ -110,6 +110,17 @@ export function Composer({
 
   return (
     <View className="gap-2 border-t border-border bg-background px-3 pt-2 pb-2">
+      {ditado.state === 'recording' ? (
+        // Prancha Al-M17: quem fala precisa saber que a voz não fica guardada.
+        <Text
+          accessibilityRole="text"
+          accessibilityLiveRegion="polite"
+          className="text-xs text-muted-foreground"
+        >
+          <Text className="text-xs font-semibold text-danger">Ouvindo…</Text> O áudio vira texto e é
+          descartado.
+        </Text>
+      ) : null}
       {ditado.error ? (
         <Pressable accessibilityRole="alert" onPress={ditado.dismissError}>
           <Text className="text-xs text-muted-foreground">{ditado.error}</Text>
