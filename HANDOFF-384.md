@@ -10,9 +10,9 @@ Worktree `.claude/worktrees/384-chat`, branch `redesign/384-chat`. Não fazer pu
 - [x] 2 (falta texto: aceite, /privacy, DATA_RETENTION) pergunta da busca gerada numa chamada separada que só vê a última fala; regex depois; teste com modelo falso vazando perfil/memória; aceite, /privacy, DATA_RETENTION
 - [x] 3 aceite em toda chamada do HostedAiService (ditado, foto, rótulo); 403 abre o aceite; loading/erro = sem aceite; `useChatLiberado` → inglês
 - [ ] 4 fotos do chat no export LGPD com link assinado e a mensagem
-- [ ] 5 fila pausa depois de erro (Enviar/Descartar), retry reenvia a que falhou, web espera `stopChatRun`, 409 `CHAT_RUN_IN_PROGRESS` com backoff (web e app)
-- [ ] 6 app: `dispatch` depois do upload confere parada e conversa
-- [ ] 7 lote com busca: aceite só no Enviar e se a escolha final for concordar; estado selecionado; contagem inclui busca
+- [x] 5 fila pausa depois de erro (Enviar/Descartar), retry reenvia a que falhou, web espera `stopChatRun`, 409 `CHAT_RUN_IN_PROGRESS` com backoff (web e app)
+- [x] 6 app: `dispatch` depois do upload confere parada e conversa
+- [x] 7 lote com busca: aceite só no Enviar e se a escolha final for concordar; estado selecionado; contagem inclui busca
 - [x] 8 busca sem `usage` ou parada no meio cobra 1 unidade
 - [~] 9 (feito: kind desconhecido, prévia, aceite da config+hash, 403 legível; falta nada) kind desconhecido não quebra (web e app); prévia sem a citação; aceite com modelo/provedor da config e hash do texto amarrado à versão; app antigo com 403
 - [ ] fim: lint, typecheck, testes (API em fatia_t384, agente pytest/ruff/mypy), números do MCP, REDESIGN_PROGRESS, ADR 046, /privacy, DATA_RETENTION, apagar este arquivo
@@ -24,4 +24,4 @@ Worktree `.claude/worktrees/384-chat`, branch `redesign/384-chat`. Não fazer pu
 
 ## Próximo passo
 
-Itens 7, 6, 5, 1, 4; depois docs (aceite/privacy/DATA_RETENTION/ADR 046/REDESIGN_PROGRESS).
+Itens 1 e 4 (fotos do chat); depois docs (aceite/privacy/DATA_RETENTION/ADR 046/REDESIGN_PROGRESS) e a rodada final.
