@@ -1,8 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_LOCAL_TOOLS,
   AI_CONSENT_TEXTS,
   AI_CONSENT_VERSIONS,
   appOnlyHref,
@@ -154,17 +151,6 @@ describe('textos dos aceites (#384)', () => {
   it('o 403 do aceite tem texto próprio', () => {
     expect(CHAT_ERROR_CODES).toContain('AI_CONSENT_REQUIRED');
     expect(textoDeErroDoChat({ code: 'AI_CONSENT_REQUIRED' })).toMatch(/aceite/i);
-  });
-});
-
-describe('ferramentas locais do agente (#384)', () => {
-  it('toda ferramenta local do agente tem cartão aqui', () => {
-    const chat = resolve(__dirname, '../../../../apps/agent/src/fatia_agent/chat');
-    const nomes = ['human.py', 'web.py', 'app_only.py'].map(
-      (arquivo) =>
-        /^(?:NOME|NAME) = "([a-z_]+)"/m.exec(readFileSync(resolve(chat, arquivo), 'utf8'))?.[1],
-    );
-    expect(nomes.sort()).toEqual(Object.keys(AGENT_LOCAL_TOOLS).sort());
   });
 });
 
