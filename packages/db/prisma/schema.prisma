@@ -1838,24 +1838,38 @@ model AiWriteModeSetting {
 /// saúde, e por isso vive só enquanto a conversa vive (cascata) e o Desfazer vale por pouco tempo
 /// (`AUTO_WRITE_UNDO_MS`); o retrato sai da linha quando ela é desfeita.
 model AiAutoWrite {
-  id             String    @id @default(uuid())
+  id             String           @id @default(uuid())
   userId         String
   conversationId String
-  /// A volta do agente: o teto de gravações por resposta conta por ela.
+  /// O turno do chat que pediu (o token do `ChatRun` da API, mandado ao agente).
   runId          String
+  /// A resposta à mesma mensagem da pessoa, atravessando retomadas e "Continuar": o teto de
+  /// gravações por resposta conta por ela (ADR 039, item 4).
+  answerKey      String
   toolCallId     String
   tool           String
-  input          Json
+  /// Fica depois da limpeza: é metadado, não dado de saúde.
+  category       AiWriteCategory?
+  /// Argumentos, resultado, retrato de antes, estado logo depois e as linhas do cartão. Cópias de
+  /// dado de saúde: somem no Desfazer, quando o registro some e quando o prazo do Desfazer acaba.
+  input          Json?
   result         Json?
   before         Json?
-  createdAt      DateTime  @default(now())
+  after          Json?
+  card           Json?
+  createdAt      DateTime         @default(now())
+  /// `null` = gravação em andamento (a linha nasce antes da escrita, como trava e prova).
+  doneAt         DateTime?
   undoneAt       DateTime?
+  /// Quando as cópias acima foram apagadas.
+  clearedAt      DateTime?
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, toolCallId])
-  @@index([conversationId, runId])
+  @@index([conversationId, answerKey])
+  @@index([createdAt])
 }
 
 /// O que a pessoa aceitou antes de a IA hospedada mandar algo a terceiros (#384, Apple 5.1.2).

@@ -1,3 +1,4 @@
+import { ChatRunRegistry } from '../../chat/chat-run.registry';
 import { AutoWriteService } from '../../chat/auto-write/auto-write.service';
 import { PreviaDaAcaoService } from '../../chat/previa/previa-da-acao.service';
 import type { McpToolRegistry } from '../../mcp/mcp-tool.registry';
@@ -3220,6 +3221,7 @@ describe('isolamento entre usuários', () => {
       prisma,
       registry,
       new PreviaDaAcaoService(registry, prisma),
+      new ChatRunRegistry(),
     );
 
     it('o modo de uma pessoa não muda o da outra', async () => {
@@ -3241,6 +3243,8 @@ describe('isolamento entre usuários', () => {
           userId: owned.userA,
           conversationId: conversa.id,
           runId: 'r',
+          answerKey: 'r',
+          doneAt: new Date(),
           toolCallId: `iso-${conversa.id}`,
           tool: 'log_water',
           input: { ml: 300 },
