@@ -52,7 +52,7 @@ export class BillingController {
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   async revenueCatSync(@CurrentUser() user: CurrentUserPayload) {
-    await this.revenueCat.sincronizar(user.id);
+    await this.revenueCat.sync(user.id);
     return this.assinaturas.plan(user.id);
   }
 

@@ -23,7 +23,41 @@ describe('storeSubscriptionFromSubscriber', () => {
       currentPeriodEnd: new Date('2026-11-15T12:00:00Z'),
       graceEndsAt: null,
       cancelAtPeriodEnd: false,
+      trialEndsAt: null,
     });
+  });
+
+  it('teste grátis da loja (period_type TRIAL) vira TRIALING até a expiração (#386)', () => {
+    expect(
+      storeSubscriptionFromSubscriber(assinante({ period_type: 'TRIAL' }), U, 'pro', AGORA),
+    ).toMatchObject({
+      status: 'TRIALING',
+      trialEndsAt: new Date('2026-11-15T12:00:00Z'),
+      currentPeriodEnd: new Date('2026-11-15T12:00:00Z'),
+    });
+    // Convertido: a loja passa a NORMAL, e o teste acabou.
+    expect(
+      storeSubscriptionFromSubscriber(assinante({ period_type: 'NORMAL' }), U, 'pro', AGORA),
+    ).toMatchObject({ status: 'ACTIVE', trialEndsAt: null });
+  });
+
+  it('teste cancelado na loja vale até o fim do teste, e depois expira', () => {
+    expect(
+      storeSubscriptionFromSubscriber(
+        assinante({ period_type: 'TRIAL', unsubscribe_detected_at: '2026-10-14T00:00:00Z' }),
+        U,
+        'pro',
+        AGORA,
+      ),
+    ).toMatchObject({ status: 'TRIALING', cancelAtPeriodEnd: true });
+    expect(
+      storeSubscriptionFromSubscriber(
+        assinante({ period_type: 'TRIAL' }),
+        U,
+        'pro',
+        new Date('2026-11-20T00:00:00Z'),
+      ),
+    ).toMatchObject({ status: 'EXPIRED' });
   });
 
   it('Google Play vira GOOGLE; cancelamento detectado vale até o fim', () => {
