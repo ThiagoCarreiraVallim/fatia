@@ -10,7 +10,7 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 
 ## Checklist
 
-- [ ] 1. Apagar conta cancela no Asaas também o TRIALING; `encerrarAntesDeApagar` → inglês
+- [x] 1. Apagar conta cancela no Asaas também o TRIALING; `encerrarAntesDeApagar` → inglês
 - [ ] 2. Teste sem pagamento: cancela no provedor e EXPIRED (idempotente); checkout cancela toda assinatura viva no provedor; webhook antigo não mexe na nova
 - [ ] 3. cancel() limpa paymentUrl; vivaNaWeb sem link velho; EXPIRED / teste cancelado vencido oferecem checkout de novo; ACTIVE cancelada depois do PAYMENT_CREATED
 - [ ] 4. Teste na web (qualquer forma): paga a 1ª fatura até o fim do teste; cartão recebe DUE_SOON/DUE_TODAY; página de pagamento acessível no teste
@@ -25,4 +25,4 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 
 ## Próximo passo
 
-Item 1.
+Item 2.

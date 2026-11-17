@@ -251,9 +251,27 @@ describe('UserSubscriptionService (banco real)', () => {
       data: { userId: userB, source: 'ASAAS', status: 'ACTIVE', providerRef: `sub_${stamp}_b` },
     });
 
-    await service.encerrarAntesDeApagar(userB);
+    await service.cancelBeforeAccountDeletion(userB);
 
     expect(provedor.cancelSubscription).toHaveBeenCalledWith(`sub_${stamp}_b`);
+  });
+
+  it('apagar a conta no meio do teste grátis também encerra a recorrência (#386)', async () => {
+    const { service, provedor } = montar();
+    await prisma.userSubscription.create({
+      data: {
+        userId: userB,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        providerRef: `sub_${stamp}_b_teste`,
+        trialEndsAt: new Date(Date.now() + 5 * 86_400_000),
+        currentPeriodEnd: new Date(Date.now() + 5 * 86_400_000),
+      },
+    });
+
+    await service.cancelBeforeAccountDeletion(userB);
+
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`sub_${stamp}_b_teste`);
   });
 });
 

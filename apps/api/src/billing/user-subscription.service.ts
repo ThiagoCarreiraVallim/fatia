@@ -421,12 +421,13 @@ export class UserSubscriptionService {
    * cobrado depois de sair. Lança se não conseguir — a conta fica inteira e a
    * pessoa tenta de novo.
    */
-  async encerrarAntesDeApagar(userId: string): Promise<void> {
+  async cancelBeforeAccountDeletion(userId: string): Promise<void> {
     const vivas = await this.prisma.userSubscription.findMany({
       where: {
         userId,
         source: 'ASAAS',
-        status: { in: ['PENDING', 'ACTIVE', 'PAST_DUE'] },
+        // O teste também: a primeira cobrança já está agendada no Asaas.
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
         providerRef: { not: null },
       },
     });
