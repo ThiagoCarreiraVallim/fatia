@@ -38,6 +38,16 @@ export const SUBSCRIPTION_PROVIDER = Symbol('SUBSCRIPTION_PROVIDER');
 /** Link de pagamento ainda vale para reabrir o mesmo checkout. */
 const CHECKOUT_REUSAVEL_MS = 24 * 60 * 60 * 1000;
 
+/** A assinatura nasceu no provedor, mas não chegou ao banco: precisa de compensação. */
+class CheckoutNotRecorded extends Error {
+  constructor(
+    readonly providerSubscriptionId: string,
+    readonly original: unknown,
+  ) {
+    super('checkout não gravado');
+  }
+}
+
 /** Onde a pessoa gerencia uma assinatura de loja. */
 export const GESTAO_NA_LOJA = {
   APPLE: 'https://apps.apple.com/account/subscriptions',
@@ -263,6 +273,47 @@ export class UserSubscriptionService {
       );
     }
 
+    // Uma pessoa, um checkout por vez (revisão da #386): duas abas enviando
+    // juntas abririam duas assinaturas no Asaas (TRIALING + PENDING). A trava
+    // é do Postgres, presa à transação: solta sozinha no commit ou no rollback.
+    let criada = null as string | null;
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`checkout:${userId}`}))`;
+          criada = await this.openCheckout(tx, provedor, userId, entrada);
+        },
+        { maxWait: 10_000, timeout: 30_000 },
+      );
+    } catch (err) {
+      // A assinatura nasceu no Asaas mas não ficou no banco (link, insert ou
+      // commit falhou): cancela lá, senão ela cobraria sem ninguém ver.
+      const ref = err instanceof CheckoutNotRecorded ? err.providerSubscriptionId : criada;
+      if (ref) {
+        await provedor.cancelSubscription(ref).then(
+          () => this.logger.warn({ event: 'checkout_compensado', userId, ref }),
+          (e: Error) =>
+            this.logger.error({ event: 'checkout_compensacao_falhou', userId, ref, err: e.name }),
+        );
+      }
+      throw err instanceof CheckoutNotRecorded ? err.original : err;
+    }
+    return this.plan(userId);
+  }
+
+  /**
+   * O miolo do checkout, dentro da trava da pessoa. Devolve o id da
+   * assinatura criada no provedor (ou `null` quando reaproveitou a aberta).
+   * O teste grátis é reservado na transação: se o Asaas falhar, o rollback
+   * devolve o teste.
+   */
+  private async openCheckout(
+    tx: Prisma.TransactionClient,
+    provedor: SubscriptionProvider,
+    userId: string,
+    entrada: { interval: BillingInterval; cpf: string; paymentMethod?: PaymentMethod },
+  ): Promise<string | null> {
+    // Relido dentro da trava: a outra aba pode ter acabado de abrir o PRO.
     const direito = await this.direitos.aiTierForUser(userId);
     if (direito.tier === 'PRO') {
       throw new ConflictException(
@@ -285,13 +336,14 @@ export class UserSubscriptionService {
         p.paymentUrl &&
         agora - p.createdAt.getTime() < CHECKOUT_REUSAVEL_MS,
     );
-    if (reusavel) return this.plan(userId);
+    if (reusavel) return null;
 
     // Tudo o que ainda está vivo no Asaas sai do caminho antes da assinatura
     // nova: checkouts antigos (outro intervalo, outra forma, link vencido), o
     // teste que acabou sem pagamento e o PRO vencido além da carência. Quem
     // chega aqui é Free, então nenhuma delas dá direito — e duas vivas no
-    // provedor seriam duas cobranças.
+    // provedor seriam duas cobranças. Grava fora da transação: o cancelamento
+    // no provedor não volta atrás.
     const vivas = await this.prisma.userSubscription.findMany({
       where: {
         userId,
@@ -337,14 +389,14 @@ export class UserSubscriptionService {
       });
     }
 
-    // Teste grátis (#386): a primeira cobrança vence no fim do teste, e o
-    // teste é marcado na conta antes de falar com o provedor — dois cliques ao
-    // mesmo tempo não ganham dois testes.
+    // Teste grátis (#386): a primeira cobrança vence no fim do teste. A
+    // reserva é da transação: só vale se a assinatura nascer no Asaas e no
+    // banco; qualquer falha daqui para baixo devolve o teste.
     const dias = this.trialDays();
     const comTeste =
       (await this.trialEligible(user.id)) &&
       (
-        await this.prisma.user.updateMany({
+        await tx.user.updateMany({
           where: { id: user.id, proTrialStartedAt: null },
           data: { proTrialStartedAt: new Date() },
         })
@@ -362,28 +414,55 @@ export class UserSubscriptionService {
         entrada.interval === 'YEARLY' ? 'Fatia PRO — plano anual' : 'Fatia PRO — plano mensal',
       externalReference: `user:${user.id}`,
     });
-    const paymentUrl = await provedor.firstPaymentUrl(providerSubscriptionId);
-
-    await this.prisma.userSubscription.create({
-      data: {
-        userId: user.id,
-        source: 'ASAAS',
-        status: comTeste ? 'TRIALING' : 'PENDING',
-        interval: entrada.interval,
-        providerRef: providerSubscriptionId,
-        paymentUrl,
-        paymentMethod: metodo,
-        trialEndsAt: fimDoTeste,
-        currentPeriodEnd: fimDoTeste,
-      },
-    });
-    this.logger.log({
-      event: comTeste ? 'teste_iniciado' : 'checkout_aberto',
+    return this.recordCheckout(tx, provedor, providerSubscriptionId, {
       userId: user.id,
+      status: comTeste ? 'TRIALING' : 'PENDING',
       interval: entrada.interval,
+      paymentMethod: metodo,
+      fimDoTeste,
     });
+  }
 
-    return this.plan(user.id);
+  /**
+   * Busca o link e grava a assinatura recém-criada. Se algo falhar aqui, o
+   * erro leva o id junto para o `checkout` cancelar no provedor.
+   */
+  private async recordCheckout(
+    tx: Prisma.TransactionClient,
+    provedor: SubscriptionProvider,
+    providerSubscriptionId: string,
+    d: {
+      userId: string;
+      status: 'TRIALING' | 'PENDING';
+      interval: BillingInterval;
+      paymentMethod: PaymentMethod | null;
+      fimDoTeste: Date | null;
+    },
+  ): Promise<string> {
+    try {
+      const paymentUrl = await provedor.firstPaymentUrl(providerSubscriptionId);
+      await tx.userSubscription.create({
+        data: {
+          userId: d.userId,
+          source: 'ASAAS',
+          status: d.status,
+          interval: d.interval,
+          providerRef: providerSubscriptionId,
+          paymentUrl,
+          paymentMethod: d.paymentMethod,
+          trialEndsAt: d.fimDoTeste,
+          currentPeriodEnd: d.fimDoTeste,
+        },
+      });
+    } catch (err) {
+      throw new CheckoutNotRecorded(providerSubscriptionId, err);
+    }
+    this.logger.log({
+      event: d.status === 'TRIALING' ? 'teste_iniciado' : 'checkout_aberto',
+      userId: d.userId,
+      interval: d.interval,
+    });
+    return providerSubscriptionId;
   }
 
   /**

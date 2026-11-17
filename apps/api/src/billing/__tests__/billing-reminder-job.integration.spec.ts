@@ -17,16 +17,24 @@ describe('BillingReminderJob (banco real)', () => {
       (({ WEB_ORIGIN: 'https://app.fat.ia.br' }) as Record<string, unknown>)[k] ?? padrao,
   } as unknown as ConfigService;
   const notify = jest.fn();
-  const send = jest.fn(async () => true);
+  const send = jest.fn(async (_m: unknown) => true);
   const expireUnpaidTrials = jest.fn(async () => 0);
+  const stamp = `lembrete-${Date.now()}`;
+  // A rodada varre o banco inteiro numa data fixa; as outras suítes, em
+  // paralelo, criam assinaturas perto da data real. Só contam as daqui.
   const job = new BillingReminderJob(
     prisma,
     config,
-    { notify } as unknown as NotificationService,
-    { send } as unknown as EmailService,
+    {
+      notify: (quem: string[], p: unknown) => {
+        if (Object.values(ids).includes(quem[0])) notify(quem, p);
+      },
+    } as unknown as NotificationService,
+    {
+      send: async (m: { to: string }) => (m.to.startsWith(stamp) ? send(m) : true),
+    } as unknown as EmailService,
     { expireUnpaidTrials } as unknown as UserSubscriptionService,
   );
-  const stamp = `lembrete-${Date.now()}`;
   // 09:00 em São Paulo.
   const HOJE = new Date('2026-11-10T12:00:00Z');
   const sp = (ymd: string) => new Date(`${ymd}T03:00:00Z`);

@@ -722,3 +722,122 @@ describe('UserSubscriptionService — assinaturas vivas no provedor (banco real)
     expect((await service.plan(u)).paymentUrl).toBeNull();
   });
 });
+
+/**
+ * Revisão da #386, item 9: o teste grátis só fica reservado quando a
+ * assinatura nasce no Asaas, e duas abas não abrem duas assinaturas.
+ */
+describe('UserSubscriptionService — checkout amarrado ao provedor (banco real)', () => {
+  const stamp = `trava-${Date.now()}`;
+  const comTeste = configCom({ BILLING_PRO_TRIAL_DAYS: 7 });
+  const ids: string[] = [];
+
+  async function pessoa(nome: string) {
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-${nome}`,
+        email: `${stamp}-${nome}@test.local`,
+        name: nome,
+        asaasCustomerId: `${stamp}-cus-${nome}`,
+      },
+    });
+    ids.push(u.id);
+    return u.id;
+  }
+
+  const reserva = async (id: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { id }, select: { proTrialStartedAt: true } }))
+      .proTrialStartedAt;
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+  });
+
+  it('o Asaas falhou: o teste não fica gasto e nenhuma assinatura nasce', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('asaas-fora');
+    provedor.createSubscription.mockRejectedValueOnce(new Error('Asaas fora do ar'));
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow(
+      'Asaas fora do ar',
+    );
+    expect(await reserva(id)).toBeNull();
+    expect(await prisma.userSubscription.count({ where: { userId: id } })).toBe(0);
+    expect(await service.trialEligible(id)).toBe(true);
+  });
+
+  it('o banco falhou depois do Asaas: cancela a assinatura criada e devolve o teste', async () => {
+    const { service, provedor } = montar(comTeste);
+    const outra = await pessoa('dona-do-ref');
+    const id = await pessoa('banco-falhou');
+    // O providerRef já existe em outra linha: o insert estoura na unicidade.
+    await prisma.userSubscription.create({
+      data: { userId: outra, source: 'ASAAS', status: 'EXPIRED', providerRef: `${stamp}-dup` },
+    });
+    provedor.createSubscription.mockResolvedValueOnce({ providerSubscriptionId: `${stamp}-dup` });
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow();
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-dup`);
+    expect(await reserva(id)).toBeNull();
+    expect(await prisma.userSubscription.count({ where: { userId: id } })).toBe(0);
+  });
+
+  it('o link de pagamento falhou depois do Asaas: também cancela a assinatura criada', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('link-falhou');
+    provedor.createSubscription.mockResolvedValueOnce({ providerSubscriptionId: `${stamp}-link` });
+    provedor.firstPaymentUrl.mockRejectedValueOnce(new Error('timeout'));
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow(
+      'timeout',
+    );
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-link`);
+    expect(await reserva(id)).toBeNull();
+  });
+
+  it('duas abas ao mesmo tempo: uma assinatura só no Asaas e no banco', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('duas-abas');
+    // O Asaas demora: é a janela em que a segunda aba entrava.
+    const criar = provedor.createSubscription.getMockImplementation()!;
+    provedor.createSubscription.mockImplementation(async (...a) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return criar(...a);
+    });
+
+    const resultados = await Promise.allSettled([
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+    ]);
+
+    expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const recusa = resultados.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(recusa.reason).toBeInstanceOf(ConflictException);
+    expect(provedor.createSubscription).toHaveBeenCalledTimes(1);
+    const vivas = await prisma.userSubscription.findMany({
+      where: { userId: id, status: { in: ['PENDING', 'TRIALING', 'ACTIVE'] } },
+    });
+    expect(vivas.map((v) => v.status)).toEqual(['TRIALING']);
+  });
+
+  it('duas abas sem teste: a segunda reaproveita o checkout da primeira', async () => {
+    const { service, provedor } = montar(config);
+    const id = await pessoa('duas-abas-sem-teste');
+    const criar = provedor.createSubscription.getMockImplementation()!;
+    provedor.createSubscription.mockImplementation(async (...a) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return criar(...a);
+    });
+
+    const [a, b] = await Promise.all([
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+    ]);
+
+    expect(provedor.createSubscription).toHaveBeenCalledTimes(1);
+    expect(b.paymentUrl).toBe(a.paymentUrl);
+    expect(await prisma.userSubscription.count({ where: { userId: id, status: 'PENDING' } })).toBe(
+      1,
+    );
+  });
+});
