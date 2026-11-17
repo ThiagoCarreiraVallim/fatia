@@ -4,15 +4,15 @@
 
 - Passos 1-4: merge commitado em ab6d887a (conflitos, SHA_ENTIDADE 2af00531..., 153 tools, 138,6 k / 115,6 k,
   83 de escrita com exemplo; lint, typecheck, api 3004 testes em fatia_t382, api-client 827, web 918, mobile 488).
-- API dev estava velha (nest watch perdeu os arquivos trocados pelo git): rm+recria dos .ts do merge acordou o watch.
-- Pranchas copiadas para .canvas/project (Al-G*), renderizadas em ~/.cache/fatia-vis/382/board/.
+- Passe visual G1, G5, G6, G7, G9, G10, G11, G12 em 3452963c, a875ec19, 0dbe8569.
+- Prints finais e cmp-<prancha>.png prontos em ~/.cache/fatia-vis/382/.
+- Metro 8081 está com o diretório `apps/mobile/src/components/goals/` morto no watcher (serve a folha
+  Nova meta velha). Não matei: subi um Metro extra na 8082 (background) só para os prints do app.
 
-## Em andamento: passe visual
+## Próximo passo exato
 
-- G1: diferenças achadas — título "Progresso" sobrando no header (web corta "Progre..."), peso com área (prancha é só linha),
-  Força -78% por causa da semana corrente parcial (trocar por média por sessão, helper no api-client com teste),
-  passos com 12 barras (prancha 7), badge do peso minúsculo (prancha .bdg é caixa alta).
-- Próximas: G6, G7, G5, G11, G12, G9, G10.
+1. Lint, typecheck e todos os testes (api em fatia_t382).
+2. Commit final apagando este HANDOFF; parar o Metro 8082; reabrir o Expo Go na 8081.
 
 ## Prints
 

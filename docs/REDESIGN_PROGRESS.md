@@ -168,6 +168,10 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 - **Gráficos (G6):**
   - Cardio usa `GET /progress/cardio` sem `exerciseId`, que soma todo o cardio da sessão. O ritmo somado divide só o tempo das séries com distância (a bike sem distância não puxa o ritmo); as kcal somam tudo.
   - Força usa o exercício de maior 1RM até a pessoa escolher outro.
+- **Passe visual (prints em `~/.cache/fatia-vis/382/cmp-<prancha>.png`, prancha | web | app):**
+  - O Progresso (G1) não repete o título no topo (`untitled` em `navigation.ts`); a tendência de Força é o volume médio por sessão (`strengthTrend`), para a semana corrente incompleta não puxar para baixo.
+  - Desvios de propósito: o G7 abre com o último peso como dica (placeholder), não preenchido, para não gravar um registro repetido sem querer; o G1 mostra "—" em gordura até a #383; o G6 mantém o botão "Registrar peso"; as conquistas são 10 (a prancha desenha 9); as folhas do app abrem em 85%.
+  - Treinos na constância pode passar do total (17/16): o denominador é a meta semanal × semanas cheias, e treinar a mais conta. A barra para em 100%.
   - Ganhou "Registrar peso" e "Registrar passos", que não estão no canvas.
 - **Registrar peso (G7):** uma folha com Peso e Passos (`body-log-sheet`), aberta pelo menu da IA, pelo Hoje (passos) e pelo "Peso atual" de Você. O miolo é o das gavetas de antes, com `embedded`.
   - O valor é digitável e tem − e +.
