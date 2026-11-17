@@ -93,6 +93,7 @@ from .errors import (
     McpToolRejected,
     McpUnreachable,
 )
+from .mcp_client import AUTO_WRITE_NEEDS_OK, McpToolResult
 from .planejador import com_status, planejar
 from .qualidade import (
     MAX_REFLEXOES,
@@ -652,6 +653,19 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
 
             if nome in confirmaveis:
                 decisao = decisoes.get(identificador)
+                if decisao is None and nome in contexto.auto_write:
+                    gravada = await _auto_write(contexto, chamada)
+                    if gravada is not None:
+                        novas.append(
+                            resultado(
+                                gravada.text,
+                                erro=gravada.is_error,
+                                artefato={"structured": gravada.structured}
+                                if gravada.structured
+                                else None,
+                            )
+                        )
+                    continue
                 if decisao is None:
                     continue
                 if decisao is False:
@@ -1013,6 +1027,35 @@ def _pending_stops(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[d
                 }
             )
     return itens
+
+
+async def _auto_write(contexto: ContextoDoTurno, chamada: dict[str, Any]) -> McpToolResult | None:
+    """Grava sem cartão a escrita do modo "Automático" (ADR 039), ou `None` para pedir o OK.
+
+    `None` deixa a chamada sem resultado, e o portão a mostra como qualquer confirmável: é o
+    caminho da recusa `AUTO_WRITE_NEEDS_OK` do `/mcp` (teto de 5 por resposta, 10 itens, modo
+    trocado), de argumentos acima do teto e de falha de transporte — na dúvida, pergunta.
+    """
+    if contexto.conversation_id is None:
+        return None
+    nome = chamada["name"]
+    try:
+        exigir_permitida(nome, contexto.permitidas)
+        _exigir_argumentos_no_teto(nome, chamada["args"])
+        saida = await contexto.client.call_tool(
+            nome,
+            chamada["args"],
+            auto_write={
+                "conversationId": contexto.conversation_id,
+                "runId": contexto.run_id,
+                "toolCallId": chamada["id"],
+            },
+        )
+    except (McpToolRejected, *FALHAS_TEMPORARIAS):
+        return None
+    if saida.is_error and AUTO_WRITE_NEEDS_OK in saida.text:
+        return None
+    return saida
 
 
 def _offered_tools(contexto: ContextoDoTurno) -> list[dict[str, Any]]:

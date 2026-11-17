@@ -161,10 +161,17 @@ class McpDoEval(McpClient):
         self.falhas_de_infra: list[str] = []
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        read_only: bool = False,
+        auto_write: Mapping[str, str] | None = None,
     ) -> McpToolResult:
         try:
-            return await super().call_tool(name, arguments, read_only=read_only)
+            return await super().call_tool(
+                name, arguments, read_only=read_only, auto_write=auto_write
+            )
         except McpError as exc:
             self.falhas_de_infra.append(f"{exc.code}: {exc.message}")
             raise
@@ -197,12 +204,17 @@ class McpSemDestrutivas(McpDoEval):
         )
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        read_only: bool = False,
+        auto_write: Mapping[str, str] | None = None,
     ) -> McpToolResult:
         if name in self.destrutivas:
             self.interceptadas.append(name)
             return McpToolResult(text=INTERCEPTADA, is_error=False)
-        return await super().call_tool(name, arguments, read_only=read_only)
+        return await super().call_tool(name, arguments, read_only=read_only, auto_write=auto_write)
 
 
 class ProvedorDoEval(OpenAICompatProvider):

@@ -5,6 +5,8 @@ casos afirmam sobre o **texto do fluxo**, e não sobre objetos internos: é o te
 que atravessa três camadas, e é onde a divergência entre elas apareceria.
 """
 
+import json
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -591,3 +593,66 @@ def test_a_pausa_por_consultas_vem_da_env(settings_factory, monkeypatch):
         if n == "updates" and "__interrupt__" in d
     )
     assert pausa["prompt"] == "Já consultei 2 coisas. Continuo?"
+
+
+# ------------------------------------------------------------------ #385
+
+
+def test_desligada_no_tool_modes_sai_do_catalogo(settings_factory, monkeypatch):
+    client, provider_transport, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
+    )
+
+    resposta = client.post(
+        "/chat",
+        json=corpo(message="oi", toolModes={"auto": [], "off": ["log_meal"]}),
+        headers=BEARER,
+    )
+
+    assert resposta.status_code == 200
+    assert "log_meal" not in _oferecidas(provider_transport)
+    assert "list_meals" in _oferecidas(provider_transport)
+
+
+def test_tool_modes_e_validado_no_corpo(settings_factory, monkeypatch):
+    client, _, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
+    )
+
+    for modos in ({"auto": "log_meal", "off": []}, {"auto": [], "off": [], "x": []}):
+        resposta = client.post("/chat", json=corpo(message="oi", toolModes=modos), headers=BEARER)
+        assert resposta.status_code == 422, modos
+
+
+def test_automatica_no_tool_modes_grava_com_a_conversa_no_header(settings_factory, monkeypatch):
+    transporte = mcp()
+    client, _, _ = app_com(
+        settings_factory,
+        turnos=[
+            [
+                fragmento_de_tool(0, id="c1", name="log_meal", arguments='{"mealType":"lunch"}'),
+                fim("tool_calls"),
+            ],
+            [fragmento_de_texto("Anotei.")],
+        ],
+        mcp_transport=transporte,
+        monkeypatch=monkeypatch,
+    )
+
+    resposta = client.post(
+        "/chat",
+        json=corpo(message="almocei", toolModes={"auto": ["log_meal"], "off": []}),
+        headers=BEARER,
+    )
+
+    assert resposta.status_code == 200
+    (chamada,) = [
+        r
+        for r in transporte.requests
+        if json.loads(r.content).get("method") == "tools/call"
+        and json.loads(r.content)["params"]["name"] == "log_meal"
+    ]
+    cabecalho = json.loads(chamada.headers["x-fatia-auto-write"])
+    assert cabecalho["conversationId"] == CONVERSA
+    assert cabecalho["toolCallId"] == "c1"
+    assert cabecalho["runId"]

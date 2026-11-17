@@ -44,7 +44,7 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 2. API: `GET/PATCH /chat/settings` (modos), webSearch reaproveita `PATCH /chat/preferences`
 - [x] 3. API: `aiCategory` nas tools + regras no `tool-catalog.spec.ts`
 - [x] 4. API → agente: `toolModes` no corpo do turno
-- [ ] 5. Agente: filtro do Desligado, execução automática com limites, header, artefato `saved`
+- [x] 5. Agente: filtro do Desligado, execução automática com limites, header, artefato `saved`
 - [x] 6. API: `AutoWriteService` (retrato, inversa, limites) + `POST /chat/auto-writes/:id/undo`
 - [x] 7. Testes obrigatórios da ADR 039
 - [x] 8. Memórias: categoria, data, `DELETE /chat/memories`, teto 50 com pedido de apagar, renomes
@@ -72,8 +72,13 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   deixa 2 vermelhos no `tool-catalog.spec.ts`. Testes de memória vistos vermelhos antes do código.
 - API inteira: 200 suítes, 3151+ testes verdes.
 
+- Agente: `ChatToolModes` (`toolModes`) no `ChatRequest`; `sem_desligadas`/`automaticas` em
+  `tool_policy.py`; `ContextoDoTurno.conversation_id/auto_write`; `_auto_write` no `run_tools`
+  (header `x-fatia-auto-write`, `AUTO_WRITE_NEEDS_OK` → volta ao cartão); `saved` em `artefatos.py`;
+  `McpClient.call_tool(auto_write=)`. Testes: `tests/chat/test_gravacao_automatica.py` (7) e 3 na rota.
+  Vermelho visto: sem a checagem do NEEDS_OK, sem o filtro de apagar, sem `saved` → 1 falha cada.
+  Agente: 577 passed, ruff e mypy limpos.
+
 ## Próximo passo exato
 
-Item 5: agente (`apps/agent`): `toolModes` no `ChatRequest`, filtro do Desligado em `permitidas`,
-execução automática em `run_tools` (header `x-fatia-auto-write` com `{conversationId, runId, toolCallId}`,
-teto 5 por turno e 10 itens, recusa `AUTO_WRITE_NEEDS_OK` volta à confirmação), `saved` em `artefatos.py`.
+Item 9 (api-client): settings, modos, memórias (categoria, apagar todas), undo, `autoWriteId`.
