@@ -3,7 +3,7 @@ import { OAuthFacadeService } from '../oauth-facade.service';
 import { OAuthError } from '../oauth-error';
 import type { PrismaService } from '../../common/prisma.service';
 import type { ConfigService } from '@nestjs/config';
-import type { McpConnectionService } from '../mcp-connection.service';
+import type { McpConnectionRecorder } from '../mcp-connection.service';
 
 type MockPrisma = {
   mcpOAuthClient: {
@@ -58,7 +58,7 @@ describe('OAuthFacadeService', () => {
     service = new OAuthFacadeService(
       prisma as unknown as PrismaService,
       makeConfig(),
-      connections as unknown as McpConnectionService,
+      connections as unknown as McpConnectionRecorder,
     );
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;

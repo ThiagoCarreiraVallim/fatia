@@ -17,6 +17,9 @@ Pranchas Al-V6..V6e copiadas para `.canvas/project/` do checkout principal (fora
 
 - Vínculo usuário × cliente: tabela nova `McpOAuthConnection` (userId, clientId, accessTokenHash, lastUsedAt).
   A `McpOAuthAuthorization` é podada 10 min depois (expiresAt), não serve de vínculo durável.
+- Serviço dividido: `McpConnectionService` (só banco: link/touch/list/overview, no `McpConnectionsModule`, importado por Auth, Mcp e Users) e `McpConnectionRecorder` (no AuthModule, resolve o dono pelo JWT). Importar o AuthModule no McpModule quebrava os specs do chat (JWKS/guard global).
+- Export LGPD ganhou `mcpConnections` (meta-teste do account.service exige).
+- Banco de teste precisa de `pnpm seed:taco` e `seed:exercises` (feito no fatia_t388).
 - Gravado no `/oauth/token` (code e refresh, com `client_id`), best-effort: falha no vínculo nunca derruba o token.
 - "Último acesso": o `/mcp` toca a conexão pelo hash do Bearer (no máximo 1 escrita/min por conexão).
 - Endereço: `API_PUBLIC_URL` + `/mcp`, servido pela API em `GET /users/me/mcp-connections` (`serverUrl`). Sem env nova.
@@ -34,4 +37,4 @@ Pranchas Al-V6..V6e copiadas para `.canvas/project/` do checkout principal (fora
 
 ## Próximo passo
 
-Rodar a suíte inteira da API; depois api-client `connect-ai.ts` (testes primeiro).
+api-client `connect-ai.ts`: o teste `packages/api-client/src/__tests__/connect-ai.test.ts` já está escrito (vermelho); implementar `src/connect-ai.ts` e `tutorialById`/`CONNECT_AI_TUTORIAL_ID` em `tutorials.ts`.

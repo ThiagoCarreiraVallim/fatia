@@ -5,6 +5,7 @@ import type { JwtValidationService, LogtoJwtPayload } from '../jwt-validation.se
 import { UserProvisioningService } from '../user-provisioning.service';
 import {
   hashAccessToken,
+  McpConnectionRecorder,
   McpConnectionService,
   TOUCH_INTERVAL_MS,
 } from '../mcp-connection.service';
@@ -41,7 +42,13 @@ const validation = {
 
 describe('McpConnectionService', () => {
   const prisma = new PrismaService();
-  const service = new McpConnectionService(prisma, validation, new UserProvisioningService(prisma));
+  const service = new McpConnectionService(prisma);
+  const recorder = new McpConnectionRecorder(
+    prisma,
+    validation,
+    new UserProvisioningService(prisma),
+    service,
+  );
   const clients: string[] = [];
   let userA = '';
   let userB = '';
@@ -77,7 +84,7 @@ describe('McpConnectionService', () => {
   it('liga o cliente a quem é dono do token entregue, e só a ele', async () => {
     const clientId = await newClient('Claude');
 
-    await service.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
+    await recorder.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
 
     const deA = await service.list(userA);
     expect(deA).toHaveLength(1);
@@ -90,8 +97,8 @@ describe('McpConnectionService', () => {
     const clientId = await newClient('ChatGPT');
 
     const renewed = tokenOf(SUB_A);
-    await service.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
-    await service.recordIssuedToken(clientId, { access_token: renewed });
+    await recorder.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
+    await recorder.recordIssuedToken(clientId, { access_token: renewed });
 
     const rows = await prisma.mcpOAuthConnection.findMany({ where: { clientId } });
     expect(rows).toHaveLength(1);
@@ -102,8 +109,8 @@ describe('McpConnectionService', () => {
   it('o mesmo cliente autorizado por duas pessoas vira duas conexões', async () => {
     const clientId = await newClient('Outro app');
 
-    await service.recordIssuedToken(clientId, { access_token: tokenOf(SUB_B) });
-    await service.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
+    await recorder.recordIssuedToken(clientId, { access_token: tokenOf(SUB_B) });
+    await recorder.recordIssuedToken(clientId, { access_token: tokenOf(SUB_A) });
 
     const rows = await prisma.mcpOAuthConnection.findMany({ where: { clientId } });
     expect(rows.map((r) => r.userId).sort()).toEqual([userA, userB].sort());
@@ -113,15 +120,15 @@ describe('McpConnectionService', () => {
     const before = await prisma.mcpOAuthConnection.count();
 
     await expect(
-      service.recordIssuedToken(await newClient(), { access_token: 'token-falso' }),
+      recorder.recordIssuedToken(await newClient(), { access_token: 'token-falso' }),
     ).resolves.toBeUndefined();
     await expect(
-      service.recordIssuedToken('mcp_nao_existe', { access_token: tokenOf(SUB_A) }),
+      recorder.recordIssuedToken('mcp_nao_existe', { access_token: tokenOf(SUB_A) }),
     ).resolves.toBeUndefined();
     await expect(
-      service.recordIssuedToken(undefined, { access_token: tokenOf(SUB_A) }),
+      recorder.recordIssuedToken(undefined, { access_token: tokenOf(SUB_A) }),
     ).resolves.toBeUndefined();
-    await expect(service.recordIssuedToken(await newClient(), {})).resolves.toBeUndefined();
+    await expect(recorder.recordIssuedToken(await newClient(), {})).resolves.toBeUndefined();
 
     expect(await prisma.mcpOAuthConnection.count()).toBe(before);
   });
@@ -131,8 +138,8 @@ describe('McpConnectionService', () => {
       const claude = await newClient('Claude');
       const chatgpt = await newClient('ChatGPT');
       const tokenB = tokenOf(SUB_B);
-      await service.recordIssuedToken(claude, { access_token: tokenOf(SUB_A) });
-      await service.recordIssuedToken(chatgpt, { access_token: tokenB });
+      await recorder.recordIssuedToken(claude, { access_token: tokenOf(SUB_A) });
+      await recorder.recordIssuedToken(chatgpt, { access_token: tokenB });
       const old = new Date(Date.now() - 2 * TOUCH_INTERVAL_MS);
       await prisma.mcpOAuthConnection.updateMany({
         where: { clientId: { in: [claude, chatgpt] } },
@@ -150,7 +157,7 @@ describe('McpConnectionService', () => {
     it('não grava de novo dentro do intervalo', async () => {
       const clientId = await newClient('Claude');
       const token = tokenOf(SUB_A);
-      await service.recordIssuedToken(clientId, { access_token: token });
+      await recorder.recordIssuedToken(clientId, { access_token: token });
       const recent = new Date(Date.now() - 1_000);
       await prisma.mcpOAuthConnection.updateMany({
         where: { clientId },
@@ -172,8 +179,8 @@ describe('McpConnectionService', () => {
   it('lista da mais recente para a mais antiga', async () => {
     const velho = await newClient('Velho');
     const novo = await newClient('Novo');
-    await service.recordIssuedToken(velho, { access_token: tokenOf(SUB_B) });
-    await service.recordIssuedToken(novo, { access_token: tokenOf(SUB_B) });
+    await recorder.recordIssuedToken(velho, { access_token: tokenOf(SUB_B) });
+    await recorder.recordIssuedToken(novo, { access_token: tokenOf(SUB_B) });
     await prisma.mcpOAuthConnection.updateMany({
       where: { clientId: velho },
       data: { lastUsedAt: new Date('2026-01-01') },

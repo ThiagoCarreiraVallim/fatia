@@ -4,7 +4,7 @@ import { PrismaService } from '../../common/prisma.service';
 import { OAuthFacadeService } from '../oauth-facade.service';
 import { OAuthError } from '../oauth-error';
 import type { JwtValidationService } from '../jwt-validation.service';
-import { McpConnectionService } from '../mcp-connection.service';
+import { McpConnectionRecorder, McpConnectionService } from '../mcp-connection.service';
 import { UserProvisioningService } from '../user-provisioning.service';
 
 /**
@@ -57,7 +57,12 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
   const service = new OAuthFacadeService(
     prisma,
     config,
-    new McpConnectionService(prisma, validation, new UserProvisioningService(prisma)),
+    new McpConnectionRecorder(
+      prisma,
+      validation,
+      new UserProvisioningService(prisma),
+      new McpConnectionService(prisma),
+    ),
   );
 
   const fetchMock = jest.fn();

@@ -3,7 +3,7 @@ import { OAuthError, type OAuthErrorCode } from './oauth-error';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import { PrismaService } from '../common/prisma.service';
-import { McpConnectionService } from './mcp-connection.service';
+import { McpConnectionRecorder } from './mcp-connection.service';
 
 interface AuthorizeParams {
   clientId: string;
@@ -42,7 +42,7 @@ export class OAuthFacadeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly connections: McpConnectionService,
+    private readonly connections: McpConnectionRecorder,
   ) {}
 
   private logtoEndpoint(): string {

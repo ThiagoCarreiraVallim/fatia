@@ -67,7 +67,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { JwtValidationService } from '../../auth/jwt-validation.service';
-import { McpConnectionService } from '../../auth/mcp-connection.service';
+import { McpConnectionRecorder, McpConnectionService } from '../../auth/mcp-connection.service';
 import { OAuthFacadeService } from '../../auth/oauth-facade.service';
 import { UserProvisioningService } from '../../auth/user-provisioning.service';
 import { UsersController } from '../../users/users.controller';
@@ -3284,8 +3284,12 @@ describe('isolamento entre usuários', () => {
       },
     } as unknown as JwtValidationService;
     const provisioning = new UserProvisioningService(prisma);
-    const connections = new McpConnectionService(prisma, validation, provisioning);
-    const facade = new OAuthFacadeService(prisma, config, connections);
+    const connections = new McpConnectionService(prisma);
+    const facade = new OAuthFacadeService(
+      prisma,
+      config,
+      new McpConnectionRecorder(prisma, validation, provisioning, connections),
+    );
     const users = new UsersController(
       {} as AccountService,
       {} as ProfileService,

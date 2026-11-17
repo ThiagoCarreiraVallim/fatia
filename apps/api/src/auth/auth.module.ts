@@ -7,9 +7,11 @@ import { OAuthDiscoveryController } from './oauth-discovery.controller';
 import { OAuthFacadeController } from './oauth-facade.controller';
 import { OAuthFacadeService } from './oauth-facade.service';
 import { LogtoManagementService } from './logto-management.service';
-import { McpConnectionService } from './mcp-connection.service';
+import { McpConnectionRecorder } from './mcp-connection.service';
+import { McpConnectionsModule } from './mcp-connections.module';
 
 @Module({
+  imports: [McpConnectionsModule],
   controllers: [OAuthDiscoveryController, OAuthFacadeController],
   providers: [
     JwtValidationService,
@@ -17,18 +19,12 @@ import { McpConnectionService } from './mcp-connection.service';
     JwtAuthGuard,
     OAuthFacadeService,
     LogtoManagementService,
-    McpConnectionService,
+    McpConnectionRecorder,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [
-    JwtValidationService,
-    UserProvisioningService,
-    JwtAuthGuard,
-    LogtoManagementService,
-    McpConnectionService,
-  ],
+  exports: [JwtValidationService, UserProvisioningService, JwtAuthGuard, LogtoManagementService],
 })
 export class AuthModule {}
