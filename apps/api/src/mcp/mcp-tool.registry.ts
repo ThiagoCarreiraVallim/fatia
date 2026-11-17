@@ -30,7 +30,7 @@ const ok = (data: unknown, artefato?: Record<string, unknown> | null): ToolResul
  * O artefato é enfeite de tela: um defeito nele não pode derrubar a tool, cujo
  * texto é o que o modelo lê para responder.
  */
-function artefatoDe(
+export function artifactFor(
   tool: McpToolDef,
   data: unknown,
   input: unknown,
@@ -168,7 +168,7 @@ export class McpToolRegistry implements OnModuleInit {
             // A métrica repete o log de propósito, sem o `userId`: ela é o que sobrevive semanas
             // agregada, e rótulo por usuário explodiria a cardinalidade do Prometheus.
             this.metrics.record({ tool: tool.name, durationMs, success: true });
-            return ok(data, artefatoDe(tool, data, input));
+            return ok(data, artifactFor(tool, data, input));
           } catch (err) {
             const { category, text } = formatToolError(err);
             const durationMs = Date.now() - start;
