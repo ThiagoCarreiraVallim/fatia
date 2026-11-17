@@ -117,12 +117,17 @@ export function PlanScreen() {
 
   return (
     <div className="space-y-5 p-4">
+      {/* Free com a oferta: a prancha Al-M2 não tem cartão de estado nem a lista; os
+          três jeitos estão nos quadros da oferta. */}
       {p.state === 'FREE' && view.offer === 'web' ? null : (
-        <StatusCard plan={p} view={view} onChange={atualizar} />
+        <>
+          <StatusCard plan={p} view={view} onChange={atualizar} />
+          <Beneficios view={view} destaque={recurso} />
+        </>
       )}
-      <Beneficios view={view} destaque={recurso} />
       {view.offer === 'web' || (p.state === 'PENDING' && p.webCheckout) ? (
         <Assinar
+          highlight={recurso}
           plan={p}
           onChange={atualizar}
           collapsed={p.state === 'PENDING'}
@@ -165,22 +170,18 @@ function StatusCard({
   return (
     <div className="space-y-4">
       {view.community && (
-        <section className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-field bg-brand text-brand-foreground">
-              <Users size={20} aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-lg font-bold">{view.community.title}</h2>
-              <p className="text-xs text-muted-foreground">{view.community.until}</p>
-            </div>
-          </div>
+        <section className="space-y-3 rounded-2xl bg-brand p-5 text-brand-foreground">
+          <span className="flex h-10 w-10 items-center justify-center rounded-field bg-brand-foreground/15">
+            <Users size={20} aria-hidden />
+          </span>
+          <h2 className="text-2xl font-bold leading-tight">{view.community.title}</h2>
+          <p className="text-[13px] font-semibold opacity-80">{view.community.until}</p>
           {view.community.program && (
-            <div className="flex items-center gap-3 rounded-field bg-muted px-4 py-3">
+            <div className="flex items-center gap-3 rounded-field bg-brand-foreground/15 px-4 py-3">
               <CalendarDays size={18} aria-hidden />
               <div>
                 <p className="text-sm font-semibold">PRO até {view.community.program.until}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs opacity-80">
                   {view.community.program.name} · faltam {view.community.program.daysLeft}{' '}
                   {view.community.program.daysLeft === 1 ? 'dia' : 'dias'}
                 </p>
@@ -198,7 +199,11 @@ function StatusCard({
         )}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={BADGE[view.tone]}>{view.badge}</Badge>
+          <Badge
+            variant={view.community && view.tone === 'pro' ? 'pro-community' : BADGE[view.tone]}
+          >
+            {view.badge}
+          </Badge>
           {view.via && <span className="text-xs text-muted-foreground">{view.via}</span>}
         </div>
         <h2 id="plano-atual" className="text-lg font-bold">
@@ -210,11 +215,16 @@ function StatusCard({
         >
           {view.body}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2">
           {view.actions.map((a, i) => {
             if (a.kind === 'pay' || a.kind === 'store') {
               return (
-                <Button key={a.kind} asChild variant={i === 0 ? 'default' : 'outline'} size="sm">
+                <Button
+                  key={a.kind}
+                  asChild
+                  variant={i === 0 ? 'default' : 'outline'}
+                  className="w-full"
+                >
                   <a href={a.url} target="_blank" rel="noopener noreferrer">
                     {a.label}
                     <ExternalLink size={14} aria-hidden />
@@ -227,8 +237,7 @@ function StatusCard({
                 <Button
                   key={a.kind}
                   variant="ghost"
-                  size="sm"
-                  className="text-danger"
+                  className="w-full text-danger"
                   onClick={() => setConfirmar(true)}
                 >
                   {a.label}
@@ -237,14 +246,24 @@ function StatusCard({
             }
             if (a.kind === 'open-ai') {
               return (
-                <Button key={a.kind} asChild size="sm">
+                <Button
+                  key={a.kind}
+                  asChild
+                  variant={view.community ? 'brand' : 'default'}
+                  className="w-full"
+                >
                   <Link href="/chat">{a.label}</Link>
                 </Button>
               );
             }
             if (a.kind === 'subscribe') {
               return (
-                <Button key={a.kind} asChild size="sm">
+                <Button
+                  key={a.kind}
+                  asChild
+                  variant={i === 0 ? 'default' : 'outline'}
+                  className="w-full"
+                >
                   <a href="#assinar">{a.label}</a>
                 </Button>
               );
@@ -252,7 +271,7 @@ function StatusCard({
             return null;
           })}
         </div>
-        {view.note && <p className="text-xs text-muted-foreground">{view.note}</p>}
+        {view.note && <p className="text-center text-xs text-muted-foreground">{view.note}</p>}
         {view.why && (
           <div className="rounded-field bg-muted p-3">
             <p className="text-sm font-semibold">{view.why.title}</p>
@@ -319,19 +338,22 @@ function Beneficios({ view, destaque }: { view: PlanStatusView; destaque: string
 }
 
 const TILES = [
-  { icon: MessageCircle, label: 'Chat que registra e consulta tudo' },
-  { icon: Camera, label: 'Foto do prato com revisão' },
-  { icon: Mic, label: 'Ditado' },
+  { key: 'chat', icon: MessageCircle, label: 'Chat que registra e consulta tudo' },
+  { key: 'foto', icon: Camera, label: 'Foto do prato com revisão' },
+  { key: 'ditado', icon: Mic, label: 'Ditado' },
 ];
 
 /** Si-04 / Al-M2 na web: período, CPF, forma de pagamento e o teste. */
 function Assinar({
+  highlight,
   plan,
   onChange,
   collapsed,
   initialInterval,
   initialMethod,
 }: {
+  /** O recurso que trouxe a pessoa (`?recurso=foto`): o quadro dele fica marcado. */
+  highlight: string | null;
   plan: MyPlan;
   onChange: (p: MyPlan) => void;
   /** Pendente: o formulário fica atrás de "Trocar a forma de pagamento". */
@@ -376,16 +398,24 @@ function Assinar({
   return (
     <section aria-labelledby="assinar-pro" id="assinar" className="space-y-4">
       <div className="space-y-3">
-        <h2 id="assinar-pro" className="text-2xl font-extrabold">
+        <h2
+          id="assinar-pro"
+          className="font-display text-[34px] font-bold leading-[1.05] tracking-tight"
+        >
           Deixe a IA registrar por você
         </h2>
         <ul className="grid grid-cols-3 gap-2">
           {TILES.map((t) => (
             <li
-              key={t.label}
-              className="flex flex-col items-center gap-2 rounded-2xl bg-card px-2 py-3 text-center text-xs"
+              key={t.key}
+              className={cn(
+                'flex flex-col items-center gap-2 rounded-2xl bg-card px-2 py-3 text-center text-[13px] font-semibold',
+                highlight === t.key && 'ring-2 ring-primary',
+              )}
             >
-              <t.icon size={20} className="text-primary" aria-hidden />
+              <span className="flex h-10 w-10 items-center justify-center rounded-field bg-primary/15">
+                <t.icon size={20} className="text-primary" aria-hidden />
+              </span>
               {t.label}
             </li>
           ))}

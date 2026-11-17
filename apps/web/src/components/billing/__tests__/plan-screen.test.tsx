@@ -104,11 +104,15 @@ describe('PlanScreen', () => {
     busca = new URLSearchParams();
   });
 
-  it('Free: o que o PRO acrescenta, os dois períodos com preço e o teste de 7 dias', async () => {
+  it('Free: a oferta do Al-M2 (sem a lista repetida), os dois períodos com preço e o teste de 7 dias', async () => {
     plan.mockResolvedValue(FREE);
     renderScreen();
 
-    expect(await screen.findByRole('heading', { name: /o pro acrescenta/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Deixe a IA registrar por você' }),
+    ).toBeInTheDocument();
+    // Os três jeitos já estão nos quadros da oferta, como na prancha.
+    expect(screen.queryByRole('heading', { name: /o pro acrescenta/i })).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /anual/i })).toBeChecked();
     expect(screen.getByText(/R\$\s179,00\/ano/)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s19,90\/mês/)).toBeInTheDocument();
@@ -140,8 +144,8 @@ describe('PlanScreen', () => {
     plan.mockResolvedValue(FREE);
     renderScreen();
 
-    const item = (await screen.findByText('Chat com a IA')).closest('li');
-    expect(item?.className).toMatch(/bg-primary/);
+    const item = (await screen.findByText('Chat que registra e consulta tudo')).closest('li');
+    expect(item?.className).toMatch(/ring-primary/);
   });
 
   it('CPF inválido não chama o checkout', async () => {
