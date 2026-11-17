@@ -4,6 +4,7 @@ import {
   benefitValidity,
   emptyBenefitDraft,
   benefitDraftToInput,
+  benefitValidUntilOptions,
 } from '../community-benefits';
 
 describe('benefícios (Cm-22)', () => {
@@ -74,6 +75,24 @@ describe('formulário do painel (Pn-28)', () => {
         url: 'O link precisa começar com https://',
         validUntil: 'A validade não pode estar no passado',
       },
+    });
+  });
+});
+
+describe('validade em escolhas prontas (app)', () => {
+  it('fim do mês que vem, de 3, 6 e 12 meses; o último dia certo de cada mês', () => {
+    expect(benefitValidUntilOptions('2026-11-17')).toEqual([
+      { value: '2026-12-31', label: 'até 31 dez' },
+      { value: '2027-02-28', label: 'até 28 fev' },
+      { value: '2027-05-31', label: 'até 31 mai' },
+      { value: '2027-11-30', label: 'até 30 nov' },
+    ]);
+  });
+
+  it('em janeiro, fevereiro bissexto', () => {
+    expect(benefitValidUntilOptions('2028-01-10')[0]).toEqual({
+      value: '2028-02-29',
+      label: 'até 29 fev',
     });
   });
 });

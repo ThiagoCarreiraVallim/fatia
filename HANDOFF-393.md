@@ -35,4 +35,4 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Próximo passo
 
-web: tudo feito (Cm-01, Cm-02, Cm-04, Cm-22, Pn-28, código em Convites). Próximo: app (mobile) — drawer (previewBySlug→previewByCode, aba QR), lista Cm-01, Sobre Cm-04, Benefícios Cm-22, fixtures MyGroup; depois REDESIGN_PROGRESS e checagens finais.
+web e app feitos (Cm-01, Cm-02 com QR, Cm-04, Cm-22, Pn-28 web e app, código em Convites web). Falta: código em Convites no app (opcional), REDESIGN_PROGRESS, lint/typecheck/testes finais, apagar HANDOFF.

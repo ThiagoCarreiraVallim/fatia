@@ -86,6 +86,25 @@ export function benefitInitials(name: string): string {
   return (palavras[0] ?? '?').slice(0, 2).toUpperCase();
 }
 
+/** Último dia do mês `meses` à frente de `ymd`, em `YYYY-MM-DD`. */
+function endOfMonthAhead(ymd: string, meses: number): string {
+  const [y, m] = ymd.split('-').map(Number);
+  // Dia 0 do mês seguinte = último dia do mês alvo (UTC, sem fuso no meio).
+  const d = new Date(Date.UTC(y, m - 1 + meses + 1, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A validade em escolhas prontas no app (o painel da web tem o calendário):
+ * fim do mês que vem e fim do mês daqui a 3, 6 e 12 meses.
+ */
+export function benefitValidUntilOptions(today: string): { value: string; label: string }[] {
+  return [1, 3, 6, 12].map((n) => {
+    const value = endOfMonthAhead(today, n);
+    return { value, label: `até ${benefitDay(value)}` };
+  });
+}
+
 export const BENEFITS_PRIVACY_NOTE =
   'Abre fora do app. O Fatia não recebe dado da compra e não passa seus dados ao parceiro.';
 
