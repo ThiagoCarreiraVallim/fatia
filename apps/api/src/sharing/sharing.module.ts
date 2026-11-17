@@ -21,6 +21,11 @@ import { PostService } from './post.service';
 import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
 import { CreateGroupPostTool } from './mcp/create-group-post.tool';
 import { ListGroupPostsTool } from './mcp/list-group-posts.tool';
+import { GetGroupPollTool } from './mcp/get-group-poll.tool';
+import { VoteGroupPollTool } from './mcp/vote-group-poll.tool';
+import { ListBlockedUsersTool } from './mcp/list-blocked-users.tool';
+import { BlockUserTool } from './mcp/block-user.tool';
+import { UnblockUserTool } from './mcp/unblock-user.tool';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { GroupExerciseController } from './group-exercise.controller';
@@ -166,6 +171,11 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GetChallengeLeaderboardTool,
     JoinGroupChallengeTool,
     ListGroupPostsTool,
+    GetGroupPollTool,
+    VoteGroupPollTool,
+    ListBlockedUsersTool,
+    BlockUserTool,
+    UnblockUserTool,
     CreateGroupPostTool,
     CommentOnGroupPostTool,
     ListPlanOffersTool,
