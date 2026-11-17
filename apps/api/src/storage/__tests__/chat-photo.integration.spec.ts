@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../common/prisma.service';
 import { ConversationService } from '../../chat/conversation.service';
-import { MediaService, ORPHAN_AFTER_MS } from '../media.service';
+import { CHAT_PHOTO_TTL_MS, MediaService, ORPHAN_AFTER_MS } from '../media.service';
 import { MemoryObjectStore } from '../memory-object-store';
 
 /**
@@ -58,6 +58,7 @@ describe('foto do chat (integração)', () => {
 
   afterAll(async () => {
     await prisma.conversation.deleteMany({ where: { userId: { in: criados } } });
+    await prisma.meal.deleteMany({ where: { userId: { in: criados } } });
     await prisma.mediaFile.deleteMany({ where: { uploaderId: { in: criados } } });
     await prisma.user.deleteMany({ where: { id: { in: criados } } });
     await prisma.$disconnect();
@@ -157,21 +158,91 @@ describe('foto do chat (integração)', () => {
     expect(await prisma.mediaFile.findUnique({ where: { id } })).not.toBeNull();
   });
 
-  it('a faxina leva a foto que nunca foi mandada e deixa a que está numa mensagem', async () => {
+  it('a faxina leva a foto que nunca foi mandada', async () => {
     const dono = await pessoa();
     const solta = await fotoPronta(dono);
-    const usada = await fotoPronta(dono);
-    await conversas.iniciarTurno(dono, randomUUID(), 'com foto', 0, null, [usada]);
-    const antigo = new Date(Date.now() - ORPHAN_AFTER_MS - 60_000);
-    await prisma.mediaFile.updateMany({
-      where: { id: { in: [solta, usada] } },
-      data: { createdAt: antigo },
+    await prisma.mediaFile.update({
+      where: { id: solta },
+      data: { createdAt: new Date(Date.now() - ORPHAN_AFTER_MS - 60_000) },
     });
 
     await media.purgeOrphans(new Date());
 
     expect(await prisma.mediaFile.findUnique({ where: { id: solta } })).toBeNull();
-    expect(await prisma.mediaFile.findUnique({ where: { id: usada } })).not.toBeNull();
+  });
+
+  it('a foto do chat é passageira: some em 24 h mesmo presa à mensagem, se não virou refeição', async () => {
+    const dono = await pessoa();
+    const velha = await fotoPronta(dono);
+    const nova = await fotoPronta(dono);
+    await conversas.iniciarTurno(dono, randomUUID(), 'com foto', 0, null, [velha, nova]);
+    await prisma.mediaFile.update({
+      where: { id: velha },
+      data: { createdAt: new Date(Date.now() - CHAT_PHOTO_TTL_MS - 60_000) },
+    });
+    const chave = (await prisma.mediaFile.findUniqueOrThrow({ where: { id: velha } })).key;
+
+    await media.purgeOrphans(new Date());
+
+    expect(await prisma.mediaFile.findUnique({ where: { id: velha } })).toBeNull();
+    expect(store.objects.has(chave)).toBe(false);
+    expect(await prisma.mediaFile.findUnique({ where: { id: nova } })).not.toBeNull();
+  });
+
+  describe('promoteChatPhotoToMeal (o gancho da #385)', () => {
+    async function refeicao(userId: string) {
+      return (
+        await prisma.meal.create({ data: { userId, mealType: 'LUNCH', eatenAt: new Date() } })
+      ).id;
+    }
+    async function guardaFotos(userId: string, guarda: boolean | null) {
+      await prisma.user.update({ where: { id: userId }, data: { keepMealPhotos: guarda } });
+    }
+
+    it('a foto que virou refeição fica: a faxina e apagar a conversa não a levam', async () => {
+      const dono = await pessoa();
+      await guardaFotos(dono, true);
+      const id = await fotoPronta(dono);
+      const conversa = randomUUID();
+      await conversas.iniciarTurno(dono, conversa, 'almocei isto', 0, null, [id]);
+      const meal = await refeicao(dono);
+
+      await expect(media.promoteChatPhotoToMeal(dono, id, meal)).resolves.toBe(true);
+      expect((await prisma.meal.findUniqueOrThrow({ where: { id: meal } })).photoFileId).toBe(id);
+
+      await prisma.mediaFile.update({
+        where: { id },
+        data: { createdAt: new Date(Date.now() - CHAT_PHOTO_TTL_MS - 60_000) },
+      });
+      await media.purgeOrphans(new Date());
+      await media.discardChatPhotosOf(dono, conversa);
+      await conversas.apagar(dono, conversa);
+
+      expect(await prisma.mediaFile.findUnique({ where: { id } })).toMatchObject({
+        purpose: 'meal_photo',
+      });
+    });
+
+    it('não promove a foto de outra pessoa, para a refeição de outra, nem sem "guardar as fotos"', async () => {
+      const dona = await pessoa();
+      const outra = await pessoa();
+      await guardaFotos(dona, true);
+      await guardaFotos(outra, true);
+      const foto = await fotoPronta(dona);
+      const daOutra = await refeicao(outra);
+      const minha = await refeicao(dona);
+
+      await expect(media.promoteChatPhotoToMeal(outra, foto, daOutra)).resolves.toBe(false);
+      await expect(media.promoteChatPhotoToMeal(dona, foto, daOutra)).resolves.toBe(false);
+      await guardaFotos(dona, false);
+      await expect(media.promoteChatPhotoToMeal(dona, foto, minha)).resolves.toBe(false);
+      expect(
+        (await prisma.meal.findUniqueOrThrow({ where: { id: minha } })).photoFileId,
+      ).toBeNull();
+      expect((await prisma.mediaFile.findUniqueOrThrow({ where: { id: foto } })).purpose).toBe(
+        'chat_photo',
+      );
+    });
   });
 
   it('apagar a conta leva as fotos do chat', async () => {

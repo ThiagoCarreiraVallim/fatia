@@ -75,6 +75,12 @@ const isPersonal = (purpose: string): purpose is PersonalMediaPurpose =>
  * pela rota própria.
  */
 export const CHAT_PHOTO_PURPOSE = 'chat_photo';
+/**
+ * A foto do chat é **passageira** (ADR 046, que cede à 038): some 24 h depois de enviada, mesmo
+ * presa à mensagem — no histórico, a mensagem fica sem a foto. Só fica a que virou refeição
+ * (`promoteChatPhotoToMeal`), e aí ela vale o que vale a foto do prato.
+ */
+export const CHAT_PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
 /** As mesmas três do turno do chat (`MAX_FOTOS_POR_MENSAGEM`). */
 export const MAX_CHAT_PHOTOS_PER_MESSAGE = 3;
 /**
@@ -498,10 +504,51 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
    */
   async discardChatPhotosOf(userId: string, conversationId: string): Promise<void> {
     const files = await this.prisma.mediaFile.findMany({
-      where: { chatMessage: { conversation: { id: conversationId, userId } } },
+      // A que virou refeição é da refeição agora: fica (o `SetNull` a solta da mensagem).
+      where: {
+        chatMessage: { conversation: { id: conversationId, userId } },
+        mealPhotoOf: { is: null },
+      },
       select: { id: true, key: true },
     });
     await this.discard(files);
+  }
+
+  /**
+   * O gancho da #385: a foto mandada no chat vira a foto da refeição que a IA registrou. Só a
+   * foto do chat **desta pessoa**, pronta e sem refeição, só para a refeição **dela** ainda sem
+   * foto, e só se ela escolheu guardar as fotos das refeições (ADR 038). Promovida, a foto deixa
+   * de ser passageira e vale o que vale a foto do prato. `false` em qualquer outro caso, sem
+   * dizer qual — um id do corpo nunca liga o arquivo de outra pessoa.
+   */
+  async promoteChatPhotoToMeal(userId: string, fileId: string, mealId: string): Promise<boolean> {
+    const [user, file, meal] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { keepMealPhotos: true } }),
+      this.prisma.mediaFile.findFirst({
+        where: {
+          id: fileId,
+          uploaderId: userId,
+          groupId: null,
+          purpose: CHAT_PHOTO_PURPOSE,
+          status: MediaStatus.READY,
+          mealPhotoOf: { is: null },
+        },
+        select: { id: true },
+      }),
+      this.prisma.meal.findFirst({
+        where: { id: mealId, userId, photoFileId: null },
+        select: { id: true },
+      }),
+    ]);
+    if (user?.keepMealPhotos !== true || !file || !meal) return false;
+    await this.prisma.$transaction([
+      this.prisma.mediaFile.update({
+        where: { id: file.id },
+        data: { purpose: MEAL_PHOTO_PURPOSE },
+      }),
+      this.prisma.meal.update({ where: { id: meal.id }, data: { photoFileId: file.id } }),
+    ]);
+    return true;
   }
 
   /** URL assinada para quem a rota já autorizou a ver o conteúdo. */
@@ -580,8 +627,19 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, key: true },
       take: 500,
     });
-    await this.discard([...lixo, ...fotosSoltas]);
-    return lixo.length + fotosSoltas.length;
+    // A foto do chat é passageira: presa à mensagem ou não, sai em 24 h se não virou refeição.
+    const fotosDoChat = await this.prisma.mediaFile.findMany({
+      where: {
+        purpose: CHAT_PHOTO_PURPOSE,
+        createdAt: { lt: new Date(now.getTime() - CHAT_PHOTO_TTL_MS) },
+        mealPhotoOf: { is: null },
+        id: { notIn: [...lixo, ...fotosSoltas].map((f) => f.id) },
+      },
+      select: { id: true, key: true },
+      take: 500,
+    });
+    await this.discard([...lixo, ...fotosSoltas, ...fotosDoChat]);
+    return lixo.length + fotosSoltas.length + fotosDoChat.length;
   }
 
   /**
