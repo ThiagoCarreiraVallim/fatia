@@ -81,6 +81,7 @@ describe('historyItemOf', () => {
       volumeKg: 1505,
       cardioExercises: 0,
       cardio: null,
+      circuit: null,
     });
   });
 
