@@ -6,6 +6,9 @@ import {
   chatCardTitle,
   collapsedLabel,
   isEmptyChatArtifact,
+  lastToolName,
+  toolCallStatusOf,
+  toolLineLabel,
   groupConversationsByDay,
   groupToolCalls,
   quickReplies,
@@ -251,5 +254,55 @@ describe('chatCardTitle e isEmptyChatArtifact — o título do cartão e o "nada
     expect(
       isEmptyChatArtifact({ toolCallId: t, kind: 'file', url: 'u', filename: 'f', expiresAt: '' }),
     ).toBe(false);
+  });
+});
+
+describe('toolCallStatusOf, toolLineLabel e lastToolName — a linha da tool no app (#384)', () => {
+  const metrica = { toolCallId: 'c1', kind: 'metric' as const, value: 934, unit: 'kcal' };
+  const vazia = { toolCallId: 'c1', kind: 'report' as const, columns: ['a'], rows: [] };
+
+  it('o desfecho gravado vira o estado da linha, e consulta vazia é "empty"', () => {
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'running' })).toBe('running');
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'success' }, metrica)).toBe('done');
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'success' }, vazia)).toBe('empty');
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'error' })).toBe('error');
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'refused' })).toBe('declined');
+    expect(toolCallStatusOf({ id: 'c1', name: 'x', status: 'not_run' })).toBe('not_run');
+    expect(toolLineLabel('Salvar refeição', 'not_run')).toBe(
+      'Salvar refeição · não chegou a rodar',
+    );
+  });
+
+  it('o texto da linha segue a prancha IA-Estados', () => {
+    expect(toolLineLabel('Resumo de hoje', 'running')).toBe('Consultando Resumo de hoje…');
+    expect(toolLineLabel('Registrar água', 'running', { write: true })).toBe('Registrar água…');
+    expect(toolLineLabel('Última série', 'empty')).toBe('Última série · nada encontrado');
+    expect(toolLineLabel('Atualizar exercício', 'error')).toBe(
+      'Atualizar exercício · não deu certo',
+    );
+    expect(toolLineLabel('Salvar refeição', 'declined')).toBe('Salvar refeição · você recusou');
+    expect(toolLineLabel('Resumo de hoje', 'done', { cardTitle: '934 kcal' })).toBe(
+      'Resumo de hoje · 934 kcal',
+    );
+    expect(toolLineLabel('Registrar água', 'done', { write: true, savedAt: '15:02' })).toBe(
+      'Registrar água · gravado às 15:02',
+    );
+    expect(toolLineLabel('Resumo de hoje', 'done')).toBe('Resumo de hoje');
+  });
+
+  it('a última tool é a da última resposta, e nada quando a pessoa falou por último', () => {
+    const resposta = {
+      role: 'assistant' as const,
+      id: 'a',
+      text: 'ok',
+      reasoning: '',
+      tools: [
+        { id: '1', name: 'list_meals', status: 'success' as const },
+        { id: '2', name: 'get_today_summary', status: 'success' as const },
+      ],
+    };
+    expect(lastToolName([resposta])).toBe('get_today_summary');
+    expect(lastToolName([resposta, { role: 'user', id: 'u', text: 'oi', photos: 0 }])).toBeNull();
+    expect(lastToolName([])).toBeNull();
   });
 });

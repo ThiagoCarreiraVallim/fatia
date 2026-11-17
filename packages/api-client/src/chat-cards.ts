@@ -1,6 +1,7 @@
 import { apiFetch } from './http';
 import { ROUTES } from './navigation';
 import type { ChatArtifact, ChatInterruptValue } from './chat';
+import type { ChatThreadMessage, ChatToolPart } from './chat-thread';
 
 /**
  * O que a tela do chat precisa para desenhar as ferramentas (#384): o contrato de cartão de
@@ -177,7 +178,8 @@ export function isEmptyChatArtifact(a: ChatArtifact): boolean {
 
 // ---------------------------------------------------------------- linhas das ferramentas
 
-export type ToolCallStatus = 'running' | 'done' | 'empty' | 'error' | 'declined' | 'pending';
+export type ToolCallStatus =
+  'running' | 'done' | 'empty' | 'error' | 'declined' | 'not_run' | 'pending';
 
 export type ToolCallSegment<T> = { type: 'single'; item: T } | { type: 'group'; items: T[] };
 
@@ -210,6 +212,58 @@ export function groupToolCalls<T extends { status: ToolCallStatus }>(
   }
   fechar();
   return segmentos;
+}
+
+/** O desfecho gravado de uma chamada, no estado da linha (o app; o PWA lê do runtime). */
+export function toolCallStatusOf(tool: ChatToolPart, artifact?: ChatArtifact): ToolCallStatus {
+  switch (tool.status) {
+    case 'running':
+      return 'running';
+    case 'success':
+      return artifact && isEmptyChatArtifact(artifact) ? 'empty' : 'done';
+    case 'error':
+      return 'error';
+    case 'refused':
+      return 'declined';
+    case 'not_run':
+      return 'not_run';
+  }
+}
+
+/**
+ * O texto da linha de uma tool (prancha IA-Estados): o desfecho depois de um "·". `write` é a
+ * tool que grava (não diz "Consultando"); `cardTitle`, o resultado da consulta recolhida;
+ * `savedAt`, a hora da escrita feita.
+ */
+export function toolLineLabel(
+  title: string,
+  status: ToolCallStatus,
+  opts: { write?: boolean; cardTitle?: string; savedAt?: string } = {},
+): string {
+  switch (status) {
+    case 'running':
+      return opts.write ? `${title}…` : `Consultando ${title}…`;
+    case 'pending':
+      return `${title} · aguardando sua confirmação`;
+    case 'empty':
+      return `${title} · nada encontrado`;
+    case 'error':
+      return `${title} · não deu certo`;
+    case 'declined':
+      return `${title} · você recusou`;
+    case 'not_run':
+      return `${title} · não chegou a rodar`;
+    case 'done':
+      if (opts.savedAt) return `${title} · gravado às ${opts.savedAt}`;
+      return opts.cardTitle ? `${title} · ${opts.cardTitle}` : title;
+  }
+}
+
+/** A última tool da última resposta, para as respostas rápidas; nada se a pessoa falou por último. */
+export function lastToolName(messages: readonly ChatThreadMessage[]): string | null {
+  const ultima = messages.at(-1);
+  if (ultima?.role !== 'assistant') return null;
+  return ultima.tools.at(-1)?.name ?? null;
 }
 
 export function collapsedLabel(n: number): string {
