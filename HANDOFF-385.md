@@ -40,16 +40,16 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 
 ## Checklist
 
-- [ ] 1. Migration: modos por categoria, categoria da memória, `AiAutoWrite`
-- [ ] 2. API: `GET/PATCH /chat/settings` (modos), webSearch reaproveita `PATCH /chat/preferences`
-- [ ] 3. API: `aiCategory` nas tools + regras no `tool-catalog.spec.ts`
-- [ ] 4. API → agente: `toolModes` no corpo do turno
+- [x] 1. Migration: modos por categoria, categoria da memória, `AiAutoWrite`
+- [x] 2. API: `GET/PATCH /chat/settings` (modos), webSearch reaproveita `PATCH /chat/preferences`
+- [x] 3. API: `aiCategory` nas tools + regras no `tool-catalog.spec.ts`
+- [x] 4. API → agente: `toolModes` no corpo do turno
 - [ ] 5. Agente: filtro do Desligado, execução automática com limites, header, artefato `saved`
-- [ ] 6. API: `AutoWriteService` (retrato, inversa, limites) + `POST /chat/auto-writes/:id/undo`
-- [ ] 7. Testes obrigatórios da ADR 039
-- [ ] 8. Memórias: categoria, data, `DELETE /chat/memories`, teto 50 com pedido de apagar, renomes
+- [x] 6. API: `AutoWriteService` (retrato, inversa, limites) + `POST /chat/auto-writes/:id/undo`
+- [x] 7. Testes obrigatórios da ADR 039
+- [x] 8. Memórias: categoria, data, `DELETE /chat/memories`, teto 50 com pedido de apagar, renomes
 - [ ] 9. Foto: chat descarta no fim do turno; MCP de refeição informa foto; export/exclusão
-- [ ] 10. Isolamento (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
+- [x] 10. Isolamento (foto já coberta pela #374) (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
 - [ ] 11. api-client: settings, memórias, desfazer, foto da refeição
 - [ ] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
 - [ ] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
@@ -58,8 +58,22 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 
 ## Arquivos tocados
 
-(nada ainda)
+- Migration `20261117100000_ai_write_modes_and_memory_category`: `AiWriteModeSetting`, `AiAutoWrite`,
+  `UserMemory.category`.
+- API: `chat/auto-write/{auto-write.service,undo-specs}.ts` (+ spec de integração com 18 casos da ADR 039);
+  `mcp/auto-write-header.ts`; registry (`useAutoWriter`, `entidades`, execução com `ctx.autoWrite`);
+  controller do MCP lê `x-fatia-auto-write`; `aiCategory` em 39 tools; `GET /chat/settings`,
+  `PATCH /chat/settings/modes`, `POST /chat/auto-writes/:id/undo`, `DELETE /chat/memories`;
+  `toolModes` no corpo do agente; memória: `list/remember/forget/forgetAll/count` (renomes) e
+  `save_memory.category`; export LGPD com `aiWriteModes`, `aiAutoWrites` e a categoria da memória;
+  docs/MCP.md e MCP_TOOL_SURFACE.md com números regerados pelo spec; SHA_ENTIDADE regerado.
+- Prova de vermelho: mutações no serviço (sem o teto por resposta, sem checar o modo, sem o teto de
+  itens, Desfazer sem `nutrients`) deixam 1 teste vermelho cada; `aiCategory` em `set_group_sharing`
+  deixa 2 vermelhos no `tool-catalog.spec.ts`. Testes de memória vistos vermelhos antes do código.
+- API inteira: 200 suítes, 3151+ testes verdes.
 
 ## Próximo passo exato
 
-Item 1: migration em `packages/db/prisma/schema.prisma`.
+Item 5: agente (`apps/agent`): `toolModes` no `ChatRequest`, filtro do Desligado em `permitidas`,
+execução automática em `run_tools` (header `x-fatia-auto-write` com `{conversationId, runId, toolCallId}`,
+teto 5 por turno e 10 itens, recusa `AUTO_WRITE_NEEDS_OK` volta à confirmação), `saved` em `artefatos.py`.
