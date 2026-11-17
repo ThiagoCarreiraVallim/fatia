@@ -108,6 +108,8 @@ export const TUTORIAL_AREAS: readonly TutorialArea[] = [
         body: [
           'Em Você › Conectar sua IA, copie o endereço do Fatia e adicione como conector no Claude ou no ChatGPT. Depois é só pedir: "registra meu almoço".',
           'Funciona no plano Free: a IA é sua, e o Fatia só guarda o que ela registrar.',
+          'Se não funcionar: cole o endereço inteiro, com o botão copiar; entre com o mesmo e-mail da sua conta do Fatia; e, no ChatGPT, ative o conector na conversa antes de perguntar.',
+          'Para desconectar, remova o conector no app da sua IA.',
         ],
         videoUrl: null,
         videoSeconds: null,
@@ -117,6 +119,14 @@ export const TUTORIAL_AREAS: readonly TutorialArea[] = [
 ];
 
 export const TUTORIALS: readonly Tutorial[] = TUTORIAL_AREAS.flatMap((a) => a.items);
+
+/** O tutorial que o "Ver o tutorial" de Conectar sua IA abre (#388). */
+export const CONNECT_AI_TUTORIAL_ID = 'conectar-sua-ia';
+
+/** O tutorial pelo `id` (o `?tutorial=` da Ajuda), ou nada. */
+export function tutorialById(id: string | null | undefined): Tutorial | null {
+  return TUTORIALS.find((t) => t.id === id) ?? null;
+}
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
