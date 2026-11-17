@@ -6,7 +6,7 @@ import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { NotificationService } from '../notifications/notification.service';
 import { localClock } from '../notifications/reminders/reminder-rules';
-import { billingReminderFor, billingReminderTexts } from './billing-reminders';
+import { billingReminderFor, billingReminderTexts, safeTimeZone } from './billing-reminders';
 import { UserSubscriptionService } from './user-subscription.service';
 
 /** Roda de hora em hora; cada aviso sai uma vez por dia de vencimento. */
@@ -67,7 +67,27 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
           `Testes vencidos não encerrados: ${err instanceof Error ? err.message : String(err)}`,
         ),
       );
-    const subs = await this.prisma.userSubscription.findMany({
+    const subs = await this.dueSubscriptions(now);
+
+    const web = this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030';
+    let enviados = 0;
+    for (const sub of subs) {
+      // Um registro ruim (fuso inválido, e-mail que falha) não para a rodada.
+      try {
+        if (await this.remind(sub, now, web)) enviados += 1;
+      } catch (err) {
+        this.logger.warn({
+          event: 'aviso_de_cobranca_falhou',
+          subscriptionId: sub.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return enviados;
+  }
+
+  private dueSubscriptions(now: Date) {
+    return this.prisma.userSubscription.findMany({
       where: {
         source: { in: ['ASAAS', 'APPLE', 'GOOGLE'] },
         status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
@@ -83,36 +103,39 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
       },
       include: { user: { select: { email: true, timezone: true } } },
     });
+  }
 
-    const web = this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030';
-    let enviados = 0;
-    for (const sub of subs) {
-      const aviso = billingReminderFor(sub, now);
-      if (!aviso) continue;
-      if (localClock(now, sub.user.timezone).minute < HORA_DO_AVISO * 60) continue;
+  private async remind(
+    sub: Awaited<ReturnType<BillingReminderJob['dueSubscriptions']>>[number],
+    now: Date,
+    web: string,
+  ): Promise<boolean> {
+    // O dia e a hora são os da pessoa; fuso gravado errado vira São Paulo.
+    const fuso = safeTimeZone(sub.user.timezone);
+    const aviso = billingReminderFor(sub, now, fuso);
+    if (!aviso) return false;
+    if (localClock(now, fuso).minute < HORA_DO_AVISO * 60) return false;
 
-      try {
-        await this.prisma.billingReminder.create({
-          data: { subscriptionId: sub.id, kind: aviso.kind, dueDate: aviso.dueDate },
-        });
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
-        throw err;
-      }
-
-      const textos = billingReminderTexts(aviso.kind, sub, {
-        priceCents:
-          sub.interval === 'YEARLY'
-            ? this.config.get<number>('BILLING_PRO_YEARLY_CENTS', 17900)
-            : this.config.get<number>('BILLING_PRO_MONTHLY_CENTS', 1990),
-        interval: sub.interval,
-        webUrl: web,
+    try {
+      await this.prisma.billingReminder.create({
+        data: { subscriptionId: sub.id, kind: aviso.kind, dueDate: aviso.dueDate },
       });
-      this.notifications.notify([sub.userId], { kind: NotificationKind.BILLING, ...textos.push });
-      await this.email.send({ to: sub.user.email, ...textos.email });
-      this.logger.log({ event: 'aviso_de_cobranca', kind: aviso.kind, subscriptionId: sub.id });
-      enviados += 1;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false;
+      throw err;
     }
-    return enviados;
+
+    const textos = billingReminderTexts(aviso.kind, sub, {
+      priceCents:
+        sub.interval === 'YEARLY'
+          ? this.config.get<number>('BILLING_PRO_YEARLY_CENTS', 17900)
+          : this.config.get<number>('BILLING_PRO_MONTHLY_CENTS', 1990),
+      interval: sub.interval,
+      webUrl: web,
+    });
+    this.notifications.notify([sub.userId], { kind: NotificationKind.BILLING, ...textos.push });
+    await this.email.send({ to: sub.user.email, ...textos.email });
+    this.logger.log({ event: 'aviso_de_cobranca', kind: aviso.kind, subscriptionId: sub.id });
+    return true;
   }
 }

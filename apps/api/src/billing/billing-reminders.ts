@@ -48,6 +48,20 @@ export interface DueReminder {
   dueDate: string;
 }
 
+/**
+ * O fuso da pessoa, ou São Paulo quando o gravado não é um fuso IANA válido:
+ * um `User.timezone` ruim não pode derrubar a rodada dos avisos.
+ */
+export function safeTimeZone(tz: string | null | undefined): string {
+  if (!tz) return FUSO;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return FUSO;
+  }
+}
+
 /** Dias de `de` até `ate`, as duas datas `YYYY-MM-DD`. */
 function diasEntre(de: string, ate: string): number {
   const [a, b] = [de, ate].map((d) => {
@@ -58,13 +72,21 @@ function diasEntre(de: string, ate: string): number {
 }
 
 /** O aviso que vale hoje para esta assinatura, ou `null`. */
-export function billingReminderFor(sub: ReminderSubscription, now: Date): DueReminder | null {
-  const hoje = dateInTz(now, FUSO);
+export function billingReminderFor(
+  sub: ReminderSubscription,
+  now: Date,
+  timeZone: string = FUSO,
+): DueReminder | null {
+  // "Hoje" é o dia da pessoa, no fuso dela: a oeste de São Paulo, o dia de lá
+  // vira depois. O vencimento continua sendo a data do Asaas (São Paulo).
+  const fuso = safeTimeZone(timeZone);
+  const hoje = dateInTz(now, fuso);
 
   if (sub.status === 'TRIALING') {
     const fim = sub.trialEndsAt ?? sub.currentPeriodEnd;
     if (!fim || sub.cancelAtPeriodEnd || sub.source === 'MANUAL') return null;
-    const dia = dateInTz(fim, FUSO);
+    // O fim do teste é um instante: o dia dele é o da pessoa.
+    const dia = dateInTz(fim, fuso);
     const faltam = diasEntre(hoje, dia);
     if (faltam === AVISO_DO_TESTE_DIAS) return { kind: 'TRIAL_ENDING', dueDate: dia };
     // Na web, a primeira fatura vence no fim do teste e ninguém a paga sozinho

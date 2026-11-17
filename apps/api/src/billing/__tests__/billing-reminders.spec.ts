@@ -1,6 +1,7 @@
 import {
   billingReminderFor,
   billingReminderTexts,
+  safeTimeZone,
   type ReminderSubscription,
 } from '../billing-reminders';
 
@@ -148,6 +149,45 @@ describe('billingReminderFor', () => {
         HOJE,
       ),
     ).toBeNull();
+  });
+});
+
+describe('billingReminderFor: o "hoje" é o da pessoa, no fuso dela (revisão #386)', () => {
+  // Vence em 13/11 (data do Asaas, em São Paulo).
+  const venc13 = sub({ currentPeriodEnd: sp('2026-11-13') });
+
+  it.each([
+    ['America/Cuiaba', '2026-11-10T03:30:00Z'], // 23:30 de 09/11 em Cuiabá; já 00:30 de 10/11 em SP
+    ['America/Rio_Branco', '2026-11-10T04:00:00Z'], // 23:00 de 09/11 em Rio Branco
+    ['America/Los_Angeles', '2026-11-10T07:00:00Z'], // 23:00 de 09/11 em Los Angeles
+  ])('%s: ainda é dia 9 lá, então o "vence em 3 dias" não sai', (tz, iso) => {
+    expect(billingReminderFor(venc13, new Date(iso), tz)).toBeNull();
+  });
+
+  it.each([
+    ['America/Cuiaba', '2026-11-10T13:00:00Z'],
+    ['America/Rio_Branco', '2026-11-10T14:00:00Z'],
+    ['America/Los_Angeles', '2026-11-10T17:00:00Z'],
+  ])('%s: no dia 10 de lá, sai, com a chave do vencimento do Asaas', (tz, iso) => {
+    expect(billingReminderFor(venc13, new Date(iso), tz)).toEqual({
+      kind: 'DUE_SOON',
+      dueDate: '2026-11-13',
+    });
+  });
+
+  it('fuso inválido cai em São Paulo, sem lançar', () => {
+    expect(billingReminderFor(venc13, HOJE, 'Marte/Olympus')).toEqual({
+      kind: 'DUE_SOON',
+      dueDate: '2026-11-13',
+    });
+  });
+});
+
+describe('safeTimeZone', () => {
+  it('aceita fuso IANA e troca o inválido por São Paulo', () => {
+    expect(safeTimeZone('America/Rio_Branco')).toBe('America/Rio_Branco');
+    expect(safeTimeZone('Marte/Olympus')).toBe('America/Sao_Paulo');
+    expect(safeTimeZone('')).toBe('America/Sao_Paulo');
   });
 });
 
