@@ -137,7 +137,9 @@ export function ConnectAiScreen() {
                   aria-hidden="true"
                   className={cn(
                     'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold',
-                    i <= openStep ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                    i <= openStep
+                      ? 'bg-primary/15 text-primary-text'
+                      : 'bg-muted text-muted-foreground',
                   )}
                 >
                   {i + 1}
@@ -160,7 +162,7 @@ export function ConnectAiScreen() {
         <div className="flex items-center gap-2 rounded-[14px] bg-card py-1.5 pl-4 pr-1.5 shadow-[inset_0_0_0_1px_hsl(var(--border))]">
           <code
             className={cn(
-              'min-w-0 flex-1 text-[13px] text-primary',
+              'min-w-0 flex-1 text-[13px] text-primary-text',
               copy === 'failed' ? 'break-all' : 'truncate',
             )}
           >
@@ -202,7 +204,7 @@ export function ConnectAiScreen() {
           <div
             className={cn(
               'flex items-center gap-2',
-              status.recent ? 'text-primary' : 'text-muted-foreground',
+              status.recent ? 'text-primary-text' : 'text-muted-foreground',
             )}
           >
             <Icon name={status.recent ? 'check' : 'info'} size={16} />
@@ -231,7 +233,7 @@ export function ConnectAiScreen() {
           <button
             type="button"
             onClick={() => setPanel('fail')}
-            className="self-start text-[14px] font-bold text-primary underline-offset-4 hover:underline"
+            className="self-start text-[14px] font-bold text-primary-text underline-offset-4 hover:underline"
           >
             Não funcionou?
           </button>
@@ -250,7 +252,13 @@ export function ConnectAiScreen() {
               </li>
             ))}
           </ul>
-          <Button asChild variant="secondary" size="lg" full className="bg-muted hover:bg-surface-3">
+          <Button
+            asChild
+            variant="secondary"
+            size="lg"
+            full
+            className="bg-muted hover:bg-surface-3"
+          >
             <Link href={`/you/help?tutorial=${CONNECT_AI_TUTORIAL_ID}`}>Ver o tutorial</Link>
           </Button>
           <button

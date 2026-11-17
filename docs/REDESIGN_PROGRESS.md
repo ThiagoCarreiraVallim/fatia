@@ -235,10 +235,11 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - O aviso de privacidade (a IA de fora só lê o que é seu, e passa pela política dela) não está na prancha; a issue pede.
   - O primeiro passo vem aberto ao entrar e ao trocar de IA; copiar o endereço abre o "Entre e autorize".
   - Se não deu para copiar (navegador na web; recusa ou `false` do `expo-clipboard` no app), a tela diz para copiar à mão.
+  - O selo "grátis" é o `done` do DS (contorno, minúsculo), não o `bdg ok` cheio em caixa-alta da prancha: no claro o verde sobre véu não passa 4,5:1. O cartão de conectado usa o verde a 10% (a prancha usa 16%), pelo mesmo motivo.
+  - Passada visual (prints de web e app contra Al-V6 a Al-V6e) feita: textos de apoio em 12/13 px como `b3`/`b2`, título em 700, cartões com o respiro da prancha, teste em `s2`, botões dos cartões visíveis sobre o cartão na web, endereço em monoespaçada no app e verde de texto (`primary-text`) no claro.
 - **Falta:**
   - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
   - Domínio de produção do endereço (a história de Produção).
-  - Passada visual contra as pranchas (prints de web e app).
 
 ## Etapas seguintes
 

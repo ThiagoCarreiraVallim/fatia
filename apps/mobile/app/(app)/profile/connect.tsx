@@ -109,10 +109,7 @@ export default function ConnectAiScreen() {
           </Text>
         </View>
 
-        <Text
-          accessibilityRole="header"
-          className="font-display text-h2 text-foreground"
-        >
+        <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
           Registre e consulte conversando com a sua IA
         </Text>
 
@@ -249,9 +246,7 @@ export default function ConnectAiScreen() {
               hitSlop={10}
               className="self-start"
             >
-              <Text className="font-sans-bold text-[14px] text-primary-text">
-                Não funcionou?
-              </Text>
+              <Text className="font-sans-bold text-[14px] text-primary-text">Não funcionou?</Text>
             </Pressable>
           </>
         ) : panel === 'fail' ? (
@@ -272,6 +267,7 @@ export default function ConnectAiScreen() {
             </View>
             <Button
               variant="secondary"
+              textClassName="font-bold"
               onPress={() =>
                 router.push({
                   pathname: '/you/help',
@@ -302,12 +298,18 @@ export default function ConnectAiScreen() {
             />
             <Text className="text-[13px] text-muted-foreground">{NO_MCP_BODY}</Text>
             <View className="flex-row gap-2">
-              <Button variant="secondary" className="flex-1" onPress={ai.open}>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                textClassName="font-bold"
+                onPress={ai.open}
+              >
                 Usar a IA do Fatia
               </Button>
               <Button
                 variant="outline"
                 className="flex-1"
+                textClassName="font-bold"
                 loading={exportData.isPending}
                 onPress={() => exportData.mutate()}
               >
