@@ -23,18 +23,44 @@ const TILES = [
   { icon: 'mic', label: 'Voz' },
 ] as const;
 
+/** O ícone num quadrado verde-claro, o `chipic lime` das pranchas. */
+function IconChip({ name }: { name: 'chat' | 'camera' | 'mic' | 'users' }) {
+  return (
+    <View className="h-10 w-10 items-center justify-center rounded-field bg-primary/15">
+      <Icon name={name} size={20} color={colors.primaryText} />
+    </View>
+  );
+}
+
+/** "Registro manual, metas e MCP seguem grátis", com o check da prancha. */
+function FreeStaysLine() {
+  return (
+    <View className="flex-row items-center gap-2">
+      <Icon name="check" size={16} color={colors.primaryText} />
+      <Text className="flex-1 text-xs text-muted-foreground">
+        Registro manual, metas e MCP seguem grátis
+      </Text>
+    </View>
+  );
+}
+
 /** "Deixe a IA registrar por você" e os três jeitos (Al-M2, Al-M1). */
 export function ProHero() {
   return (
     <View className="gap-4">
-      <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
+      <Text
+        accessibilityRole="header"
+        className="font-display text-[32px] leading-[36px] text-foreground"
+      >
         Deixe a IA registrar por você
       </Text>
       <View className="flex-row gap-2">
         {TILES.map((t) => (
           <View key={t.label} className="flex-1 items-center gap-2 rounded-card bg-card px-2 py-4">
-            <Icon name={t.icon} size={22} color={colors.primaryText} />
-            <Text className="text-center text-xs text-foreground">{t.label}</Text>
+            <IconChip name={t.icon} />
+            <Text className="text-center font-sans-semibold text-[13px] text-foreground">
+              {t.label}
+            </Text>
           </View>
         ))}
       </View>
@@ -148,9 +174,7 @@ export function StoreOffer<P extends StorePackageLike>({
         ))}
       </View>
 
-      <Text className="text-center text-xs text-muted-foreground">
-        Registro manual, metas e MCP seguem grátis
-      </Text>
+      <FreeStaysLine />
 
       <View className="gap-2">
         <Button
@@ -279,17 +303,13 @@ export function CommunityOffer({
   return (
     <View className="gap-3">
       <View className="gap-3 rounded-card bg-card p-5">
-        <View className="h-10 w-10 items-center justify-center rounded-field bg-brand">
-          <Icon name="users" size={20} color={colors.brandForeground} />
-        </View>
+        <IconChip name="users" />
         <Text accessibilityRole="header" className="font-display text-lg text-foreground">
           O PRO vem pela sua comunidade
         </Text>
         <Text className="text-sm text-muted-foreground">{text}</Text>
       </View>
-      <Text className="text-center text-xs text-muted-foreground">
-        Registro manual, metas e MCP seguem grátis
-      </Text>
+      <FreeStaysLine />
       <Button size="xl" onPress={onCode}>
         Tenho código
       </Button>

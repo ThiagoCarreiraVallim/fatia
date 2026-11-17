@@ -48,7 +48,11 @@ export function PlanStatusCard({
         )}
       >
         <View className="flex-row items-center gap-2">
-          <Badge variant={BADGE[view.tone]}>{view.badge}</Badge>
+          <Badge
+            variant={view.community && view.tone === 'pro' ? 'pro-community' : BADGE[view.tone]}
+          >
+            {view.badge}
+          </Badge>
           {view.via ? (
             <Text numberOfLines={1} className="flex-1 text-xs text-muted-foreground">
               {view.via}
@@ -64,7 +68,7 @@ export function PlanStatusCard({
         {view.actions.map((a, i) => (
           <Button
             key={a.kind}
-            variant={i === 0 ? 'default' : 'outline'}
+            variant={i === 0 ? (view.community ? 'brand' : 'default') : 'outline'}
             onPress={() => (a.kind === 'store' ? void Linking.openURL(a.url) : onAction(a))}
           >
             {a.label}
@@ -113,30 +117,26 @@ export function PlanStatusCard({
   );
 }
 
-/** Al-M5: quem paga, até quando e o programa. */
+/** Al-M5: o cartão laranja da comunidade, com quem paga, até quando e o programa. */
 function CommunityCard({ view }: { view: PlanStatusView }) {
   const c = view.community!;
   return (
-    <View className="gap-3 rounded-card bg-card p-5">
-      <View className="flex-row items-center gap-3">
-        <View className="h-10 w-10 items-center justify-center rounded-field bg-brand">
-          <Icon name="users" size={20} color={colors.brandForeground} />
-        </View>
-        <View className="flex-1">
-          <Text accessibilityRole="header" className="font-display text-lg text-foreground">
-            {c.title}
-          </Text>
-          <Text className="text-xs text-muted-foreground">{c.until}</Text>
-        </View>
+    <View className="gap-3 rounded-card bg-brand p-5">
+      <View className="h-10 w-10 items-center justify-center rounded-field bg-brand-foreground/15">
+        <Icon name="users" size={20} color={colors.brandForeground} />
       </View>
+      <Text accessibilityRole="header" className="font-display text-2xl text-brand-foreground">
+        {c.title}
+      </Text>
+      <Text className="font-sans-semibold text-[13px] text-brand-foreground/80">{c.until}</Text>
       {c.program ? (
-        <View className="flex-row items-center gap-3 rounded-field bg-muted px-4 py-3">
-          <Icon name="cal" size={18} color={colors.foreground} />
+        <View className="flex-row items-center gap-3 rounded-field bg-brand-foreground/15 px-4 py-3">
+          <Icon name="cal" size={18} color={colors.brandForeground} />
           <View className="flex-1">
-            <Text className="font-sans-semibold text-sm text-foreground">
+            <Text className="font-sans-semibold text-sm text-brand-foreground">
               PRO até {c.program.until}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-xs text-brand-foreground/80">
               {c.program.name} · faltam {c.program.daysLeft}{' '}
               {c.program.daysLeft === 1 ? 'dia' : 'dias'}
             </Text>

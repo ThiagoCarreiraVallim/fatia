@@ -130,9 +130,8 @@ export default function PlanScreen() {
     <>
       <Screen onRefresh={() => void plano.refetch()} refreshing={plano.isRefetching}>
         <View className="gap-5 px-5 pb-8 pt-2">
-          {free ? <ProHero /> : null}
-
-          {/* Free: a oferta já explica; o cartão de estado é para quem tem ou teve PRO. */}
+          {/* Free: a oferta já explica; o cartão de estado é para quem tem ou teve PRO
+              e vem primeiro, como no Al-M13. A oferta (Al-M2) fica abaixo dele. */}
           {free && p.state === 'FREE' ? null : (
             <PlanStatusCard
               view={view}
@@ -140,6 +139,8 @@ export default function PlanScreen() {
               onAction={(a) => (a.kind === 'subscribe' ? undefined : onAction(a))}
             />
           )}
+
+          {free ? <ProHero /> : null}
 
           {view.offer === 'store' ? (
             pacotes.isPending ? (
