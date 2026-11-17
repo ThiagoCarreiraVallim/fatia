@@ -94,7 +94,11 @@ export class CircuitResultDto {
 
 /** "Encerrar circuito": os toques, o resultado contado pelo relógio e a sensação. */
 export class FinishCircuitDto extends CircuitProgressDto {
-  @ValidateNested() @Type(() => CircuitResultDto) result!: CircuitResultDto;
+  /**
+   * O que o relógio do cliente contou: só uma dica. O servidor conta de novo
+   * pelos toques (`CircuitSessionService.finish`). Opcional.
+   */
+  @IsOptional() @ValidateNested() @Type(() => CircuitResultDto) result?: CircuitResultDto;
   @IsOptional() @IsInt() @Min(1) @Max(5) feeling?: number;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }

@@ -66,6 +66,13 @@ describe('circuitos (banco real)', () => {
     ],
   });
 
+  /** Toques de N rounds completos do AMRAP 12 (4 exercícios), um por 10 s, desde `t`. */
+  const roundsOfMarks = (t: number, rounds: number, extra = 0) =>
+    Array.from({ length: rounds * 4 + extra }, (_, i) => ({
+      type: 'mark' as const,
+      at: t + (i + 1) * 10_000,
+    }));
+
   it('cria o circuito como plano CIRCUIT, com a configuração só do formato', async () => {
     const plan = await plans.createCircuit(userId, amrap());
     expect(plan.kind).toBe('CIRCUIT');
@@ -114,32 +121,33 @@ describe('circuitos (banco real)', () => {
   it('AMRAP de ponta a ponta: começar, toques, encerrar, Treino feito e a comparação', async () => {
     const plan = await plans.createCircuit(userId, amrap());
 
-    // Primeira vez: 3 rounds.
-    const first = await sessions.start(userId, { planId: plan.id });
+    // Primeira vez: 3 rounds de 40 s, e o tempo (12 min) acabou há tempo.
+    const firstStart = new Date(Date.now() - 30 * 60_000);
+    const first = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: firstStart.toISOString(),
+    });
     const json = first.circuit as { definition: { exercises: unknown[] }; events: unknown[] };
     expect(json.definition.exercises).toHaveLength(4);
-    await circuits.finish(userId, first.id, {
-      events: [],
-      result: {
-        roundsCompleted: 3,
-        partialExercises: 0,
-        roundSeconds: [200, 220, 240],
-        partialRoundSeconds: 60,
-        elapsedSeconds: 720,
-        completed: true,
-      },
+    const firstDone = await circuits.finish(userId, first.id, {
+      events: roundsOfMarks(firstStart.getTime(), 3),
     });
+    expect(firstDone.result).toMatchObject({ roundsCompleted: 3, completed: true });
 
     // Segunda vez: 4 rounds e 2 exercícios. A sessão já nasce com a última
     // vez, para a tela comparar no fim (Al-T4e) antes de salvar.
-    const second = await sessions.start(userId, { planId: plan.id });
+    const secondStart = new Date(Date.now() - 15 * 60_000);
+    const second = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: secondStart.toISOString(),
+    });
     expect((second.circuit as { previous: unknown }).previous).toMatchObject({
       roundsCompleted: 3,
       partialExercises: 0,
       finalTimeSeconds: null,
     });
     expect((first.circuit as { previous: unknown }).previous).toBeNull();
-    const t = new Date(second.startedAt).getTime();
+    const t = secondStart.getTime();
     await circuits.saveProgress(userId, second.id, [
       { type: 'mark', at: t + 30_000 },
       { type: 'pause', at: t + 40_000 },
@@ -148,15 +156,7 @@ describe('circuitos (banco real)', () => {
     expect((reread.circuit as { events: unknown[] }).events).toHaveLength(2);
 
     const finished = await circuits.finish(userId, second.id, {
-      events: [{ type: 'mark', at: t + 30_000 }],
-      result: {
-        roundsCompleted: 4,
-        partialExercises: 2,
-        roundSeconds: [138, 144, 151, 160],
-        partialRoundSeconds: 127,
-        elapsedSeconds: 720,
-        completed: true,
-      },
+      events: roundsOfMarks(t, 4, 2),
       feeling: 5,
     });
     expect(finished.result.totalReps).toBe(4 * 33 + 15 + 10);
@@ -178,9 +178,9 @@ describe('circuitos (banco real)', () => {
       format: 'AMRAP',
       roundsCompleted: 4,
       partialExercises: 2,
-      roundSeconds: [138, 144, 151, 160],
-      partialRoundSeconds: 127,
-      averageRoundSeconds: 148,
+      roundSeconds: [40, 40, 40, 40],
+      partialRoundSeconds: 720 - 160,
+      averageRoundSeconds: 40,
       previous: { sessionId: first.id, roundsCompleted: 3 },
       comparison: { verdict: 'better', roundsDelta: 1 },
     });
@@ -193,15 +193,9 @@ describe('circuitos (banco real)', () => {
     );
   });
 
-  it('confere o resultado contra o circuito', async () => {
+  it('recusa toque fora da janela do circuito', async () => {
     const plan = await plans.createCircuit(userId, amrap());
     const s = await sessions.start(userId, { planId: plan.id });
-    await expect(
-      circuits.finish(userId, s.id, {
-        events: [],
-        result: { ...finishedResult(), partialExercises: 4 },
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       circuits.saveProgress(userId, s.id, [{ type: 'mark', at: Date.now() + 3_600_000 }]),
     ).rejects.toThrow(/fora do circuito/);
@@ -275,6 +269,110 @@ describe('circuitos (banco real)', () => {
     expect(await prisma.workoutPlan.count({ where: { userId } })).toBe(before);
   });
 
+  it('o fim conta pelos toques, não pelo resultado que o cliente manda (revisão C1)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const startedAt = new Date(Date.now() - 5 * 60_000);
+    const s = await sessions.start(userId, { planId: plan.id, startedAt: startedAt.toISOString() });
+    const t = startedAt.getTime();
+    // 2 rounds e 1 exercício pelos toques; o corpo diz 10.000 rounds.
+    const finished = await circuits.finish(userId, s.id, {
+      events: roundsOfMarks(t, 2, 1),
+      result: { ...finishedResult(), roundsCompleted: 10_000, roundSeconds: [] },
+    });
+    expect(finished.result).toMatchObject({
+      roundsCompleted: 2,
+      partialExercises: 1,
+      roundSeconds: [40, 40],
+      completed: false,
+    });
+    expect(await prisma.sessionSet.count({ where: { sessionId: s.id } })).toBe(9);
+    // O "Encerrar" que faltava entra no fim, na hora do servidor.
+    const json = (await prisma.workoutSession.findUniqueOrThrow({ where: { id: s.id } }))
+      .circuit as { events: { type: string }[] };
+    expect(json.events.at(-1)?.type).toBe('end');
+  });
+
+  it('toques forjados ("+1 round" em rajada) além do que cabe no tempo são 400, sem séries', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const startedAt = new Date(Date.now() - 60_000);
+    const s = await sessions.start(userId, { planId: plan.id, startedAt: startedAt.toISOString() });
+    const t = startedAt.getTime();
+    const burst = Array.from({ length: 500 }, (_, i) => ({ type: 'round' as const, at: t + i }));
+    await expect(
+      circuits.finish(userId, s.id, { events: burst, result: finishedResult() }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(await prisma.sessionSet.count({ where: { sessionId: s.id } })).toBe(0);
+    await sessions.delete(userId, s.id);
+  });
+
+  it('registrar sem relógio confere as faixas (o repro de 10.000 rounds)', async () => {
+    const plan = await plans.createCircuit(userId, {
+      name: 'AMRAP de reps',
+      format: 'AMRAP',
+      durationSeconds: 720,
+      exercises: exerciseIds.map((exerciseId) => ({
+        exerciseId,
+        unit: 'REPS' as const,
+        target: 10,
+      })),
+    });
+    const before = await prisma.workoutSession.count({ where: { userId } });
+    await expect(
+      circuits.log(userId, { planId: plan.id, roundsCompleted: 10_000 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      circuits.log(userId, { planId: plan.id, roundsCompleted: 3, elapsedSeconds: 9_000 }),
+    ).rejects.toThrow(/tempo/);
+    await expect(
+      circuits.log(userId, { planId: plan.id, roundsCompleted: 3, roundSeconds: [100] }),
+    ).rejects.toThrow(/tempo de round/);
+    expect(await prisma.workoutSession.count({ where: { userId } })).toBe(before);
+
+    const forTime = await plans.createCircuit(userId, {
+      name: 'For Time 3',
+      format: 'FOR_TIME',
+      rounds: 3,
+      exercises: [{ exerciseId: exerciseIds[0], unit: 'REPS', target: 10 }],
+    });
+    // Tempo final sem terminar os rounds, zero, ou menor que a soma dos rounds.
+    await expect(
+      circuits.log(userId, { planId: forTime.id, roundsCompleted: 2, finalTimeSeconds: 600 }),
+    ).rejects.toThrow(/tempo final/);
+    await expect(circuits.log(userId, { planId: forTime.id, finalTimeSeconds: 0 })).rejects.toThrow(
+      /tempo final/,
+    );
+    await expect(
+      circuits.log(userId, {
+        planId: forTime.id,
+        finalTimeSeconds: 100,
+        roundSeconds: [100, 100, 100],
+      }),
+    ).rejects.toThrow(/tempo final/);
+    const ok = await circuits.log(userId, {
+      planId: forTime.id,
+      finalTimeSeconds: 330,
+      roundSeconds: [100, 110, 120],
+    });
+    expect(ok.result).toMatchObject({ roundsCompleted: 3, finalTimeSeconds: 330, completed: true });
+  });
+
+  it('registrar numa sessão aberta não passa do tempo desde o começo dela', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const s = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    await expect(
+      circuits.log(userId, {
+        planId: plan.id,
+        sessionId: s.id,
+        roundsCompleted: 2,
+        elapsedSeconds: 700,
+      }),
+    ).rejects.toThrow(/tempo/);
+    await sessions.delete(userId, s.id);
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',
@@ -329,9 +427,7 @@ describe('circuitos (banco real)', () => {
       data.workoutPlans.some((p) => p.kind === 'CIRCUIT' && p.circuit?.format === 'AMRAP'),
     ).toBe(true);
     expect(
-      data.workoutSessions.some(
-        (s) => s.circuit?.result?.roundSeconds.join() === '138,144,151,160',
-      ),
+      data.workoutSessions.some((s) => s.circuit?.result?.roundSeconds.join() === '40,40,40,40'),
     ).toBe(true);
   });
 

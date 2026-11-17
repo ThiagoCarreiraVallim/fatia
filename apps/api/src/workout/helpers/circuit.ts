@@ -5,10 +5,11 @@ import { z } from 'zod';
  * Circuitos (#380): a configuração por formato, o retrato que a sessão
  * guarda, as séries que o fim grava e a comparação com a última vez.
  *
- * O relógio (fases, rounds, tempo final) é do `@fatia/api-client`
- * (`workout/circuit-timer.ts`), o mesmo na web e no app: o servidor recebe o
- * resultado já contado e só confere faixas. As séries saem daqui, pelas
- * mesmas contas de `circuitTotals` de lá.
+ * O relógio (fases, rounds, tempo final) é do `@fatia/design`
+ * (`circuit-timer.ts`), o mesmo da web e do app: o fim com toques é contado de
+ * novo aqui por ele, e o resultado do cliente é só uma dica. Sem toques
+ * (registro pelo MCP), o resultado passa por `checkCircuitResultBounds`. As
+ * séries saem daqui, pelas mesmas contas de `circuitTotals` de lá.
  */
 
 export const CIRCUIT_FORMATS = ['AMRAP', 'EMOM', 'TABATA', 'FOR_TIME'] as const;
@@ -27,6 +28,17 @@ export const CIRCUIT_EVENT_TYPES = [
 /** Teto de toques guardados (o mesmo `MAX_CIRCUIT_EVENTS` do api-client). */
 export const MAX_CIRCUIT_EVENTS = 2000;
 export const MAX_CIRCUIT_EXERCISES = 20;
+/**
+ * Menor tempo plausível de um exercício de reps num round (s). O de segundos
+ * leva o próprio alvo. Com isso o AMRAP tem teto de rounds pelo tempo.
+ */
+export const MIN_SECONDS_PER_EXERCISE = 3;
+/**
+ * Teto de séries que um fim de circuito grava. O maior circuito legítimo é o
+ * For Time de 100 rounds × 20 exercícios (2.000); o AMRAP de 2 h com 20
+ * exercícios de reps cabe em 2.400.
+ */
+export const MAX_CIRCUIT_SETS = 2400;
 /** Reps ou segundos de um exercício por round. */
 export const MAX_CIRCUIT_TARGET = 600;
 
@@ -498,4 +510,95 @@ export function circuitSummaryView(
       : null,
     comparison: compareCircuitResults(def.format, def.exercises.length, r, prev?.result ?? null),
   };
+}
+
+/** Os números de um resultado que as faixas conferem. */
+export interface CircuitResultCounts extends CircuitCounts {
+  roundSeconds: number[];
+  elapsedSeconds: number;
+  finalTimeSeconds: number | null;
+}
+
+/** Duração total do circuito em segundos; nulo no For Time, que não tem. */
+export function circuitTotalSeconds(def: CircuitDefinitionV1): number | null {
+  const c = def.config;
+  if (def.format === 'AMRAP' || def.format === 'EMOM') return c.durationSeconds ?? null;
+  if (def.format === 'TABATA') {
+    return ((c.workSeconds ?? 0) + (c.restSeconds ?? 0)) * (c.intervals ?? 0);
+  }
+  return null;
+}
+
+/** O menor tempo plausível de um round: 3 s por exercício de reps, o alvo nos de segundos. */
+function minRoundSeconds(def: CircuitDefinitionV1): number {
+  const sum = def.exercises.reduce(
+    (acc, e) => acc + (e.unit === 'SECONDS' ? e.target : MIN_SECONDS_PER_EXERCISE),
+    0,
+  );
+  return Math.max(1, sum);
+}
+
+/**
+ * As faixas de um resultado (revisão da #380): o que o relógio do cliente ou o
+ * MCP mandam não pode gravar séries que o circuito não comporta. 400 com o
+ * motivo em português.
+ *
+ * `roundTimesOptional`: no registro sem relógio (MCP) a pessoa pode não saber o
+ * tempo de cada round; aí a lista pode vir vazia, mas nunca pela metade.
+ */
+export function checkCircuitResultBounds(
+  def: CircuitDefinitionV1,
+  r: CircuitResultCounts,
+  opts: { roundTimesOptional?: boolean } = {},
+): void {
+  const n = def.exercises.length;
+  const hasRounds = def.format === 'AMRAP' || def.format === 'FOR_TIME';
+  const total = circuitTotalSeconds(def);
+  if (hasRounds && r.partialExercises >= Math.max(1, n)) {
+    throw new BadRequestException('O round parcial tem menos exercícios que o circuito.');
+  }
+  if (def.format === 'FOR_TIME' && r.roundsCompleted > (def.config.rounds ?? 0)) {
+    throw new BadRequestException('Mais rounds do que o circuito tem.');
+  }
+  if (def.format === 'AMRAP' && total !== null) {
+    const max = Math.floor(total / minRoundSeconds(def));
+    if (r.roundsCompleted > max) {
+      throw new BadRequestException(`Mais rounds do que cabem no tempo do circuito (até ${max}).`);
+    }
+  }
+  if (def.format === 'TABATA' || def.format === 'EMOM') {
+    const intervals =
+      def.format === 'TABATA'
+        ? (def.config.intervals ?? 0)
+        : Math.floor((def.config.durationSeconds ?? 0) / 60);
+    if ((r.intervalsCompleted ?? 0) > intervals) {
+      throw new BadRequestException('Mais intervalos do que o circuito tem.');
+    }
+  }
+  if (total !== null && r.elapsedSeconds > total + 1) {
+    throw new BadRequestException('O tempo passa da duração do circuito.');
+  }
+  if (hasRounds) {
+    const times = r.roundSeconds.length;
+    const missingAll = times === 0 && opts.roundTimesOptional;
+    if (times !== r.roundsCompleted && !missingAll) {
+      throw new BadRequestException('Mande um tempo de round para cada round completo.');
+    }
+  }
+  if (def.format === 'FOR_TIME' && r.finalTimeSeconds !== null) {
+    const allRounds = r.roundsCompleted === (def.config.rounds ?? 0) && r.partialExercises === 0;
+    // Cada tempo de round é arredondado: tolera meio segundo por round.
+    const sum = r.roundSeconds.reduce((a, b) => a + b, 0);
+    if (!allRounds || r.finalTimeSeconds <= 0 || r.finalTimeSeconds < sum - r.roundSeconds.length) {
+      throw new BadRequestException(
+        'O tempo final só vale com todos os rounds feitos, e não é menor que a soma dos rounds.',
+      );
+    }
+  }
+  const sets = hasRounds
+    ? r.roundsCompleted * n + Math.min(n, r.partialExercises)
+    : (r.intervalsCompleted ?? 0);
+  if (sets > MAX_CIRCUIT_SETS) {
+    throw new BadRequestException(`Um circuito grava até ${MAX_CIRCUIT_SETS} séries.`);
+  }
 }

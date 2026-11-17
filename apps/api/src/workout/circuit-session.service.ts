@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { circuitResult, circuitState, type CircuitEvent } from '@fatia/design';
 import { PrismaService } from '../common/prisma.service';
 import type {
   CircuitEventDto,
@@ -13,6 +14,7 @@ import type {
   LogCircuitDto,
 } from './dto/circuit.dto';
 import {
+  checkCircuitResultBounds,
   circuitDefinitionFromPlan,
   circuitIntervalsTotal,
   circuitSetRows,
@@ -54,10 +56,12 @@ export class CircuitSessionService {
   }
 
   /**
-   * "Encerrar circuito": grava o resultado, uma série por exercício por round
-   * ou intervalo, e fecha a sessão. O resultado vem contado pelo relógio do
-   * cliente (`@fatia/api-client`); aqui ele é conferido contra o circuito, e
-   * reps e totais são contados de novo pelas séries.
+   * "Encerrar circuito": conta o resultado pelos toques, com o mesmo relógio
+   * da tela (`@fatia/design`), grava uma série por exercício por round ou
+   * intervalo e fecha a sessão. O `result` do corpo é só uma dica: um corpo
+   * forjado não escolhe quantos rounds valem. Sem o toque de "Encerrar", o fim
+   * entra na hora do servidor (ou do último toque, se o aparelho estiver
+   * adiantado).
    *
    * Repetir o "Encerrar" (duplo toque, rede que cai) devolve o mesmo fim: a
    * escrita só acontece com a sessão aberta, e as séries têm `clientKey`.
@@ -70,17 +74,26 @@ export class CircuitSessionService {
       if (json.result) return { sessionId, result: json.result, alreadyFinished: true };
       throw new ConflictException('Esta sessão já foi encerrada.');
     }
-    const events = this.checkEvents(dto.events, session.startedAt);
-    const { result, rows } = this.buildResult(json.definition, dto.result);
-    const next: CircuitJsonV1 = { ...json, events, result };
+    const counted = this.countFromEvents(json, this.checkEvents(dto.events, session.startedAt));
+    const { result, rows } = this.buildResult(json.definition, counted.result);
+    return this.close(userId, session.id, { ...json, events: counted.events, result }, rows, dto);
+  }
 
+  /** Fecha a sessão aberta com o resultado e as séries. */
+  private async close(
+    userId: string,
+    sessionId: string,
+    next: CircuitJsonV1,
+    rows: ReturnType<typeof circuitSetRows>,
+    extra: { feeling?: number; notes?: string },
+  ) {
     const { count } = await this.prisma.workoutSession.updateMany({
       where: { id: sessionId, userId, completedAt: null },
       data: {
         completedAt: new Date(),
         circuit: next as unknown as Prisma.InputJsonValue,
-        ...(dto.feeling !== undefined ? { feeling: dto.feeling } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(extra.feeling !== undefined ? { feeling: extra.feeling } : {}),
+        ...(extra.notes !== undefined ? { notes: extra.notes } : {}),
       },
     });
     if (count === 0) {
@@ -90,7 +103,22 @@ export class CircuitSessionService {
       throw new ConflictException('Esta sessão já foi encerrada.');
     }
     await this.createSets(sessionId, rows);
-    return { sessionId, result, alreadyFinished: false };
+    return { sessionId, result: next.result!, alreadyFinished: false };
+  }
+
+  /**
+   * O resultado pelos toques, no relógio compartilhado. O "agora" é o maior
+   * entre o servidor e o último toque: com o aparelho adiantado, o fim que ele
+   * marcou não fica de fora.
+   */
+  private countFromEvents(json: CircuitJsonV1, events: CircuitEvent[]) {
+    const startedAt = Date.parse(json.startedAt);
+    const now = events.reduce((max, e) => Math.max(max, e.at), Date.now());
+    let run = { startedAt, events };
+    if (circuitState(json.definition, run, now).status !== 'done') {
+      run = { startedAt, events: [...events, { type: 'end', at: now }] };
+    }
+    return { events: run.events, result: circuitResult(json.definition, run, now) };
   }
 
   /**
@@ -118,12 +146,23 @@ export class CircuitSessionService {
       if (session.planId !== plan.id) {
         throw new BadRequestException('Esta sessão não é deste circuito.');
       }
-      return this.finish(userId, dto.sessionId, {
-        events: parseCircuitJson(session.circuit)?.events ?? [],
-        result: resultDto,
-        feeling: dto.feeling,
-        notes: dto.notes,
+      const json = parseCircuitJson(session.circuit);
+      if (!json) throw new BadRequestException('Esta sessão não é de circuito.');
+      if (session.completedAt) {
+        if (json.result)
+          return { sessionId: session.id, result: json.result, alreadyFinished: true };
+        throw new ConflictException('Esta sessão já foi encerrada.');
+      }
+      // Sem toques, o tempo contado não passa do que correu desde o começo.
+      const sinceStart = (Date.now() - session.startedAt.getTime() + CLOCK_SLACK_MS) / 1000;
+      if (resultDto.elapsedSeconds > sinceStart) {
+        throw new BadRequestException('O tempo passa do que correu desde o começo da sessão.');
+      }
+      // O circuito da sessão é o congelado no começo, não o plano de agora.
+      const { result, rows } = this.buildResult(json.definition, resultDto, {
+        roundTimesOptional: true,
       });
+      return this.close(userId, session.id, { ...json, result }, rows, dto);
     }
 
     const completedAt = dto.completedAt ? new Date(dto.completedAt) : new Date();
@@ -134,7 +173,7 @@ export class CircuitSessionService {
       throw new BadRequestException('completedAt está no futuro.');
     }
     const startedAt = new Date(completedAt.getTime() - resultDto.elapsedSeconds * 1000);
-    const { result, rows } = this.buildResult(definition, resultDto);
+    const { result, rows } = this.buildResult(definition, resultDto, { roundTimesOptional: true });
     const json: CircuitJsonV1 = { ...newCircuitJson(definition, startedAt), result };
     const session = await this.prisma.workoutSession.create({
       data: {
@@ -163,41 +202,35 @@ export class CircuitSessionService {
     });
   }
 
-  /** O resultado conferido contra o circuito, com reps e totais contados pelas séries. */
+  /** O resultado conferido pelas faixas, com reps e totais contados pelas séries. */
   private buildResult(
     def: CircuitDefinitionV1,
     dto: CircuitResultDto,
+    opts: { roundTimesOptional?: boolean } = {},
   ): { result: CircuitResultV1; rows: ReturnType<typeof circuitSetRows> } {
-    const n = def.exercises.length;
     const hasRounds = def.format === 'AMRAP' || def.format === 'FOR_TIME';
-    const intervalsTotal = circuitIntervalsTotal(def);
-    if (hasRounds && dto.partialExercises >= Math.max(1, n)) {
-      throw new BadRequestException('O round parcial tem menos exercícios que o circuito.');
-    }
-    if (def.format === 'FOR_TIME' && dto.roundsCompleted > (def.config.rounds ?? 0)) {
-      throw new BadRequestException('Mais rounds do que o circuito tem.');
-    }
-    if (intervalsTotal !== null && (dto.intervalsCompleted ?? 0) > intervalsTotal) {
-      throw new BadRequestException('Mais intervalos do que o circuito tem.');
-    }
-    if (dto.roundSeconds.length > dto.roundsCompleted) {
-      throw new BadRequestException('Há mais tempos de round do que rounds.');
-    }
     const counts = {
       roundsCompleted: hasRounds ? dto.roundsCompleted : 0,
       partialExercises: hasRounds ? dto.partialExercises : 0,
       intervalsCompleted: hasRounds ? null : (dto.intervalsCompleted ?? 0),
     };
+    const roundSeconds = hasRounds ? dto.roundSeconds : [];
+    const finalTimeSeconds = def.format === 'FOR_TIME' ? (dto.finalTimeSeconds ?? null) : null;
+    checkCircuitResultBounds(
+      def,
+      { ...counts, roundSeconds, elapsedSeconds: dto.elapsedSeconds, finalTimeSeconds },
+      opts,
+    );
     const rows = circuitSetRows(def, counts);
     const exercises = circuitTotalsFromRows(rows);
     return {
       rows,
       result: {
         ...counts,
-        roundSeconds: hasRounds ? dto.roundSeconds : [],
+        roundSeconds,
         partialRoundSeconds: hasRounds ? (dto.partialRoundSeconds ?? null) : null,
         elapsedSeconds: dto.elapsedSeconds,
-        finalTimeSeconds: def.format === 'FOR_TIME' ? (dto.finalTimeSeconds ?? null) : null,
+        finalTimeSeconds,
         completed: dto.completed,
         totalReps: exercises.reduce((sum, e) => sum + e.reps, 0),
         exercises,
