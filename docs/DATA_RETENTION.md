@@ -141,8 +141,8 @@ papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a
   leva os metadados da foto e, pelo link de baixar, uma URL assinada que vale 24 h.
 - **Áudio do chat.** O áudio do ditado vai ao provedor naquele turno e some com a requisição; do
   banco, só sai quanto ele durou. A **foto** do chat deixou de estar nesta lista: desde a
-  [ADR 046](./ADR/046-foto-do-chat-guardada.md) ela é guardada com a conversa (ver a tabela acima
-  e "Foto no chat", abaixo).
+  [ADR 046](./ADR/046-foto-do-chat-guardada.md) ela é guardada por 24 h, ou com a refeição que
+  virou (ver a tabela acima e "Foto no chat", abaixo).
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
   `20260510190000_logto_auth_adr008` dropou a coluna `passwordHash`. A credencial vive no Logto.
 - **Meios de pagamento.** A instância pública é gratuita.
