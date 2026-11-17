@@ -18,7 +18,6 @@ import { useTurnError } from './chat-runtime-provider';
  */
 export function ChatConsentSheet() {
   const { data, isPending } = useAceitesDaIa();
-  const aceitar = useAceitar();
   const router = useRouter();
   const queryClient = useQueryClient();
   const erro = useTurnError();
@@ -30,12 +29,30 @@ export function ChatConsentSheet() {
   // Sem saber (erro ao ler), o aceite aparece: aceitar de novo é inofensivo, e escrever
   // sem aceite só daria num 403.
   if (isPending || data?.chat.accepted) return null;
+  return <AiConsentCard onDecline={() => router.push('/')} />;
+}
+
+/**
+ * O cartão do aceite da IA, também fora do chat: o ditado, a foto do prato e o rótulo passam
+ * pelo mesmo aceite (o servidor recusa com 403 `AI_CONSENT_REQUIRED` sem ele). Quem mostra
+ * decide o que "Agora não" faz; `onAccepted` avisa depois de gravado.
+ */
+export function AiConsentCard({
+  onDecline,
+  onAccepted,
+  className,
+}: {
+  onDecline: () => void;
+  onAccepted?: () => void;
+  className?: string;
+}) {
+  const aceitar = useAceitar();
   const textos = AI_CONSENT_TEXTS.chat;
   return (
     <section
       role="dialog"
       aria-labelledby="aceite-do-chat"
-      className={cn(floating, 'mx-3 mb-3 flex shrink-0 flex-col gap-3 rounded-3xl p-5')}
+      className={cn(floating, 'mx-3 mb-3 flex shrink-0 flex-col gap-3 rounded-3xl p-5', className)}
     >
       <span
         aria-hidden
@@ -59,14 +76,14 @@ export function ChatConsentSheet() {
         <button
           type="button"
           disabled={aceitar.isPending}
-          onClick={() => aceitar.mutate('chat')}
+          onClick={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
           className={cn(inkButton, 'flex-1 rounded-full px-4 py-2.5 text-sm font-bold')}
         >
           {textos.accept}
         </button>
         <button
           type="button"
-          onClick={() => router.push('/')}
+          onClick={onDecline}
           className={cn(ghostButton, 'flex-1 rounded-full px-4 py-2.5 text-sm')}
         >
           {textos.decline}
