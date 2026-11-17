@@ -438,17 +438,23 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
           offer,
         });
       }
+      // Pausada pela carência: o PRO valeu até o fim dela, não até o vencimento.
+      const ended =
+        plan.status === 'PAST_DUE' && plan.graceEndsAt ? plan.graceEndsAt : plan.currentPeriodEnd;
       return view({
         badge: 'Expirada',
         tone: 'free',
-        via: plan.currentPeriodEnd ? `Terminou em ${day(plan.currentPeriodEnd)}` : null,
+        via: ended ? `Terminou em ${day(ended)}` : null,
         title: 'Seu PRO acabou',
         body: 'Tudo que você registrou continua aqui.',
         featuresTitle: 'Voltam com o PRO',
         featuresOn: false,
         offer,
-        actions:
-          offer === 'store' || offer === 'web'
+        // No app, a oferta (loja ou comunidade) vem logo abaixo do cartão, com a
+        // ação; repetir o botão aqui deixava dois "Tenho código" na tela.
+        actions: !web
+          ? []
+          : offer === 'web'
             ? [{ kind: 'subscribe', label: 'Voltar ao PRO' }]
             : noPurchaseActions(offer),
       });

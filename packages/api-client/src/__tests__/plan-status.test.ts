@@ -665,3 +665,40 @@ describe('planBadge (o selo do Você)', () => {
     });
   });
 });
+
+describe('planStatusView: expirada no app (passada visual da #386)', () => {
+  const expirada = plan({
+    reason: 'expirada',
+    state: 'EXPIRED',
+    degraded: true,
+    source: 'ASAAS',
+    status: 'EXPIRED',
+    interval: 'YEARLY',
+    currentPeriodEnd: '2026-11-01T15:00:00Z',
+    trialEligible: false,
+  });
+
+  it.each([true, false])(
+    'sem botão no cartão: a oferta logo abaixo já tem a ação (compra no app: %s)',
+    (iap) => {
+      const v = planStatusView(expirada, app(iap));
+      expect(v.offer).toBe(iap ? 'store' : 'community');
+      expect(v.actions).toEqual([]);
+    },
+  );
+
+  it('a web segue com "Voltar ao PRO", que leva ao formulário', () => {
+    expect(planStatusView(expirada, web).actions.map((a) => a.kind)).toEqual(['subscribe']);
+  });
+
+  it('a IA pausada pela carência termina no fim da carência, não no vencimento', () => {
+    const pausada = plan({
+      ...expirada,
+      status: 'PAST_DUE',
+      currentPeriodEnd: '2026-10-28T15:00:00Z',
+      graceEndsAt: '2026-11-04T15:00:00Z',
+      paymentUrl: null,
+    });
+    expect(planStatusView(pausada, app(false)).via).toBe('Terminou em 4 nov');
+  });
+});
