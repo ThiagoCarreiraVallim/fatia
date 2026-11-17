@@ -62,7 +62,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] B3 log() com fromPlan/planName
 - [x] B4 Salvar como plano recusa circuito (400) + esconder botão
 - [x] C1 resultado recalculado no servidor / limites sem eventos
-- [ ] C2 eventos limitados por startedAt
+- [x] C2 eventos limitados por startedAt
 - [ ] C3 finish atômico + exercício pessoal apagado
 - [ ] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
 - [ ] C5 numeração dos avisos e done sempre

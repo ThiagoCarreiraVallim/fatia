@@ -193,11 +193,23 @@ describe('circuitos (banco real)', () => {
     );
   });
 
-  it('recusa toque fora da janela do circuito', async () => {
+  it('a janela dos toques conta do começo da sessão, não do relógio do servidor (revisão C2)', async () => {
     const plan = await plans.createCircuit(userId, amrap());
-    const s = await sessions.start(userId, { planId: plan.id });
+    // Aparelho 10 min adiantado: o começo e os toques vêm no relógio dele.
+    const ahead = Date.now() + 10 * 60_000;
+    const s = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: new Date(ahead).toISOString(),
+    });
     await expect(
-      circuits.saveProgress(userId, s.id, [{ type: 'mark', at: Date.now() + 3_600_000 }]),
+      circuits.saveProgress(userId, s.id, [{ type: 'mark', at: ahead + 30_000 }]),
+    ).resolves.toEqual({ events: 1 });
+    // Fora de [começo − 1 min, começo + 6 h] é relógio errado ou corpo forjado.
+    await expect(
+      circuits.saveProgress(userId, s.id, [{ type: 'mark', at: ahead - 2 * 60_000 }]),
+    ).rejects.toThrow(/fora do circuito/);
+    await expect(
+      circuits.saveProgress(userId, s.id, [{ type: 'mark', at: ahead + 7 * 3_600_000 }]),
     ).rejects.toThrow(/fora do circuito/);
     await sessions.delete(userId, s.id);
   });

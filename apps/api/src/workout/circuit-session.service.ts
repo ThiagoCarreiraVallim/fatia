@@ -28,6 +28,9 @@ import {
 
 /** Folga para relógio de aparelho adiantado; a mesma do `finish` da sessão. */
 const CLOCK_SLACK_MS = 5 * 60 * 1000;
+/** A janela dos toques, contada do começo da sessão (revisão da #380). */
+const EVENTS_BEFORE_START_MS = 60 * 1000;
+const EVENTS_AFTER_START_MS = 6 * 60 * 60 * 1000;
 
 /**
  * A sessão de circuito (#380): o progresso (toques com horário, para retomar
@@ -274,13 +277,14 @@ export class CircuitSessionService {
   }
 
   /**
-   * Os toques em ordem, dentro de uma janela plausível: nada antes do começo
-   * da sessão (com folga) nem no futuro. Fora dela é relógio errado ou
-   * corpo forjado, e o relógio do circuito sairia de qualquer jeito.
+   * Os toques em ordem, dentro de uma janela plausível contada do começo da
+   * sessão: de 1 min antes a 6 h depois. O começo e os toques vêm do mesmo
+   * relógio (o do aparelho); comparar com a hora do servidor recusava o
+   * aparelho adiantado. Fora dela é relógio trocado no meio ou corpo forjado.
    */
   private checkEvents(events: CircuitEventDto[], startedAt: Date) {
-    const min = startedAt.getTime() - CLOCK_SLACK_MS;
-    const max = Date.now() + CLOCK_SLACK_MS;
+    const min = startedAt.getTime() - EVENTS_BEFORE_START_MS;
+    const max = startedAt.getTime() + EVENTS_AFTER_START_MS;
     if (events.some((e) => e.at < min || e.at > max)) {
       throw new BadRequestException('Horário de toque fora do circuito.');
     }
