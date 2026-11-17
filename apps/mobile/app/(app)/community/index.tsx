@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, KeyRound, Plus } from 'lucide-react-native';
 import { groupsApi, membershipBadge, teamRoleLabel } from '@fatia/api-client';
@@ -15,7 +15,9 @@ import { colors } from '@/theme/colors';
 /** Equivalente de `apps/web/src/app/(app)/community/page.tsx`. */
 export default function CommunityScreen() {
   const router = useRouter();
-  const [joining, setJoining] = useState(false);
+  // `?join=1`: o "Tenho código" do plano e do chat bloqueado abre direto a folha (#386).
+  const { join } = useLocalSearchParams<{ join?: string }>();
+  const [joining, setJoining] = useState(join === '1');
   const groups = useQuery({ queryKey: ['community', 'mine'], queryFn: () => groupsApi.mine() });
 
   return (

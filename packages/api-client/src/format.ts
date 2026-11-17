@@ -66,7 +66,7 @@ export function parseClock(input: string): number | null {
   return null;
 }
 
-const MONTHS_SHORT = [
+export const MONTHS_SHORT = [
   'jan',
   'fev',
   'mar',

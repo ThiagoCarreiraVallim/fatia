@@ -9,7 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
-import { assinaturaDoAssinante, type RcSubscriber, type RcWebhook } from './revenuecat';
+import { storeSubscriptionFromSubscriber, type RcSubscriber, type RcWebhook } from './revenuecat';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMEOUT_MS = 10_000;
@@ -101,7 +101,7 @@ export class RevenueCatService {
     // o evento já gravado não impede o `sync` da próxima tentativa — por isso
     // ele é apagado aqui, para a reentrega não virar "duplicado".
     try {
-      await this.sincronizar(user.id);
+      await this.sync(user.id);
     } catch (err) {
       await this.prisma.billingWebhookEvent.delete({
         where: { provider_eventId: { provider: 'revenuecat', eventId: ev.id } },
@@ -116,7 +116,7 @@ export class RevenueCatService {
    * Lê o assinante na RevenueCat e deixa `UserSubscription` igual a ele. Só
    * mexe nas linhas de loja (APPLE/GOOGLE) desta pessoa.
    */
-  async sincronizar(userId: string, agora: Date = new Date()): Promise<void> {
+  async sync(userId: string, agora: Date = new Date()): Promise<void> {
     const chave = this.segredoDaRest();
     if (!chave)
       throw new ServiceUnavailableException('Compra no app indisponível nesta instância.');
@@ -141,7 +141,12 @@ export class RevenueCatService {
     }
     const corpo = (await resposta.json().catch(() => null)) as { subscriber?: RcSubscriber } | null;
     const entitlement = this.config.get<string>('REVENUECAT_ENTITLEMENT_ID', 'pro');
-    const desejada = assinaturaDoAssinante(corpo?.subscriber ?? {}, userId, entitlement, agora);
+    const desejada = storeSubscriptionFromSubscriber(
+      corpo?.subscriber ?? {},
+      userId,
+      entitlement,
+      agora,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       // Troca de produto (mensal → anual) ou fim do entitlement: as outras
@@ -150,12 +155,19 @@ export class RevenueCatService {
         where: {
           userId,
           source: { in: ['APPLE', 'GOOGLE'] },
-          status: { in: ['ACTIVE', 'PAST_DUE', 'PENDING'] },
+          status: { in: ['ACTIVE', 'PAST_DUE', 'PENDING', 'TRIALING'] },
           ...(desejada ? { NOT: { providerRef: desejada.providerRef } } : {}),
         },
         data: { status: 'EXPIRED', canceledAt: agora },
       });
       if (!desejada) return;
+      // Teste da loja conta como o teste da pessoa: a web não dá outro.
+      if (desejada.status === 'TRIALING') {
+        await tx.user.updateMany({
+          where: { id: userId, proTrialStartedAt: null },
+          data: { proTrialStartedAt: agora },
+        });
+      }
       const { source, providerRef, ...campos } = desejada;
       await tx.userSubscription.upsert({
         where: { source_providerRef: { source, providerRef } },

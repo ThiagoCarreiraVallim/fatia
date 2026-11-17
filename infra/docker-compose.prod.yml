@@ -67,6 +67,7 @@ services:
       AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
       BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
       BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      BILLING_PRO_TRIAL_DAYS: ${BILLING_PRO_TRIAL_DAYS:-7}
       BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
       # Asaas (PRO pela web e assentos). Vazio = checkout responde 503.
       ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
@@ -268,6 +269,9 @@ services:
       args:
         # Estático: o domínio entra no HTML durante o build.
         PUBLIC_DOMAIN: ${DOMAIN}
+        # Os preços da página /pro (Si-04, #386): os mesmos que a API cobra.
+        PUBLIC_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+        PUBLIC_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
     restart: unless-stopped
     expose:
       - "80"

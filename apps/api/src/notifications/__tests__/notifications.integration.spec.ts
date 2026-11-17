@@ -376,6 +376,7 @@ describe('avisos no celular (integração)', () => {
         SCHEDULE_REMINDER: true,
         BIRTHDAY: false,
         REMINDERS: true,
+        BILLING: true,
       });
       await notifications.setPreferences(c.membro, { FEED: false });
       const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
@@ -785,6 +786,7 @@ describe('avisos no celular (integração)', () => {
       'SCHEDULE_REMINDER',
       'BIRTHDAY',
       'REMINDERS',
+      'BILLING',
     ]);
   });
 });

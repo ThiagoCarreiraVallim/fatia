@@ -4,7 +4,15 @@ export type PlanTier = 'FREE' | 'PRO';
 export type BillingInterval = 'MONTHLY' | 'YEARLY';
 /** `GROUP` = um assento que a comunidade paga (ADR 025). */
 export type SubscriptionSource = 'ASAAS' | 'APPLE' | 'GOOGLE' | 'MANUAL' | 'INSTANCE' | 'GROUP';
-export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+export type SubscriptionStatus =
+  'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+/** Forma de pagamento da assinatura da web (Asaas). O Fatia não guarda cartão. */
+export type PaymentMethod = 'PIX' | 'BOLETO' | 'CREDIT_CARD';
+/** Estado da tela "Meu plano" (prancha Al-M13), espelho de `planState` da API. */
+export type PlanState =
+  'FREE' | 'TRIAL' | 'ACTIVE' | 'PENDING' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+/** Quem paga o PRO: a pessoa, um assento, a comunidade inteira ou um programa. */
+export type PlanPayer = 'PERSONAL' | 'SEAT' | 'COMMUNITY' | 'PROGRAM';
 /** Espelha `MotivoDoDireito` da API (`billing/ai-entitlement.ts`). */
 export type PlanReason =
   | 'ativa'
@@ -14,7 +22,9 @@ export type PlanReason =
   | 'cancelada'
   | 'instancia'
   | 'pendente'
-  | 'expirada';
+  | 'expirada'
+  | 'teste'
+  | 'teste_acabou';
 
 /** `GET /billing/plan`: o plano como a tela "Meu plano" mostra (ADR 024). */
 export interface MyPlan {
@@ -22,17 +32,31 @@ export interface MyPlan {
   source: SubscriptionSource | null;
   reason: PlanReason;
   degraded: boolean;
+  state: PlanState;
   status: SubscriptionStatus | null;
   interval: BillingInterval | null;
   currentPeriodEnd: string | null;
   graceEndsAt: string | null;
   cancelAtPeriodEnd: boolean;
-  /** Link do checkout aberto (Asaas), enquanto pendente. */
+  /** Fim do teste grátis, enquanto `state` é `TRIAL`. */
+  trialEndsAt: string | null;
+  /** Pode começar o teste grátis (uma vez por pessoa). */
+  trialEligible: boolean;
+  /** Dias do teste grátis nesta instância; 0 = sem teste. */
+  trialDays: number;
+  paymentMethod: PaymentMethod | null;
+  /**
+   * Página da cobrança em aberto no Asaas. **Só a web mostra**: o app nunca
+   * leva a pagamento fora da loja (`planStatusView`).
+   */
   paymentUrl: string | null;
   /** Onde gerenciar quando a assinatura é da loja. */
   manageUrl: string | null;
   /** A comunidade que paga, quando o PRO é um assento (`source: 'GROUP'`). */
   groupName: string | null;
+  paidBy: PlanPayer | null;
+  /** Nome do programa, quando `paidBy` é `PROGRAM`. */
+  programName: string | null;
   /** A instância exige plano para a IA? Sem exigência, não há o que vender. */
   requiresPlan: boolean;
   /** Assinatura pela web (Asaas) disponível nesta instância. */
@@ -43,7 +67,7 @@ export interface MyPlan {
 export const billingApi = {
   plan: () => apiFetch<MyPlan>('/api/billing/plan'),
   /** Abre (ou reabre) o checkout do Asaas; o link vem em `paymentUrl`. */
-  checkout: (input: { interval: BillingInterval; cpf: string }) =>
+  checkout: (input: { interval: BillingInterval; cpf: string; paymentMethod?: PaymentMethod }) =>
     apiFetch<MyPlan>('/api/billing/checkout', { method: 'POST', body: JSON.stringify(input) }),
   cancel: () => apiFetch<MyPlan>('/api/billing/cancel', { method: 'POST' }),
   /** Depois de comprar na loja: confirma na hora, sem esperar o webhook. */
@@ -73,8 +97,6 @@ export interface ProBlockContext {
    * liberar pela comunidade ou "Tenho um código", nunca um preço.
    */
   canPurchase: boolean;
-  /** Teste grátis em andamento (a API ainda não o expõe no `MyPlan`). */
-  trial?: { endsAt: string; totalDays: number };
   /** Cota da IA Lite do dia (derivada de AiUsage). */
   lite?: { used: number; limit: number };
 }
@@ -102,9 +124,9 @@ export function proBlockState(plan: MyPlan, ctx: ProBlockContext): ProBlockState
 
   if (plan.tier === 'PRO') {
     if (plan.source === 'GROUP') return { kind: 'pro-community', groupName: plan.groupName };
-    if (ctx.trial) {
-      const daysLeft = daysUntil(ctx.trial.endsAt, ctx.now);
-      const totalDays = ctx.trial.totalDays;
+    if (plan.state === 'TRIAL' && plan.trialEndsAt) {
+      const daysLeft = daysUntil(plan.trialEndsAt, ctx.now);
+      const totalDays = plan.trialDays || TRIAL_DAYS;
       // "4 de 7 · 3 dias restantes": o dia corrente é o total menos o que falta.
       const day = Math.max(1, totalDays - daysLeft);
       return { kind: 'trial', day, totalDays, daysLeft };
@@ -129,5 +151,5 @@ export function proBlockState(plan: MyPlan, ctx: ProBlockContext): ProBlockState
     }
   }
   if (!ctx.canPurchase) return { kind: 'free-no-purchase' };
-  return { kind: 'free', trialDays: TRIAL_DAYS };
+  return { kind: 'free', trialDays: plan.trialEligible ? plan.trialDays : 0 };
 }

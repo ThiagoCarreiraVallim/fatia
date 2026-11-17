@@ -18,8 +18,11 @@ import {
   youHeaderLine,
   type MenuItem,
   type MeUser,
+  planBadge,
+  type PlanTone,
 } from '@fatia/api-client';
 import { PlanBadge } from '@/components/billing/plan-badge';
+import { Badge } from '@/components/ui/badge';
 import { PLAN_QUERY_KEY } from '@/components/billing/plan-screen';
 import { REMINDERS_KEY } from '@/components/reminders/keys';
 import { useNavMenu } from '@/components/layout/use-nav-menu';
@@ -33,6 +36,14 @@ import { NEWS_QUERY_KEY } from './news-cache';
 import { useExportData } from './use-export-data';
 import { UserAvatar } from './user-avatar';
 import { YouActionRow, YouLinkRow, YouSection, YouToggleRow } from './you-list';
+
+const BADGE_VARIANT: Record<PlanTone, 'pro' | 'trial' | 'lite' | 'pending' | 'free'> = {
+  pro: 'pro',
+  trial: 'trial',
+  warn: 'lite',
+  mute: 'pending',
+  free: 'free',
+};
 
 /** `70,2` — o peso do cartão, com vírgula. */
 function weightText(kg: number | null | undefined): string {
@@ -69,13 +80,15 @@ export function YouScreen() {
   const user: MeUser | undefined = me.data;
   const units = unitPrefsOf(user);
   const showPlan = plan.data?.requiresPlan === true;
+  // "Teste · 3 dias" durante o teste grátis (#386).
+  const badge = plan.data ? planBadge(plan.data, new Date()) : null;
   const keep = user?.keepMealPhotos === true;
   const unread = news.data?.unreadCount ?? 0;
 
   const detailOf = (item: MenuItem): React.ReactNode => {
     if (item.key === 'units') return unitsSummary(units);
     if (item.key === 'reminders' && reminders.data) return activeRemindersLabel(reminders.data);
-    if (item.key === 'plan' && plan.data) return plan.data.tier === 'PRO' ? 'PRO' : 'Free';
+    if (item.key === 'plan' && badge) return badge.label;
     if (item.key === 'news' && unread > 0) {
       return (
         <span
@@ -163,9 +176,9 @@ export function YouScreen() {
           <h1 className="truncate font-display text-h2 text-foreground">{user?.name ?? ''}</h1>
           {user && <p className="truncate text-xs text-faint">{youHeaderLine(user)}</p>}
           <div className="flex items-center gap-2">
-            {showPlan && plan.data && (
-              <Link href="/plan" aria-label={`Meu plano: ${plan.data.tier}`}>
-                <PlanBadge tier={plan.data.tier} />
+            {showPlan && badge && (
+              <Link href="/plan" aria-label={`Meu plano: ${badge.label}`}>
+                <Badge variant={BADGE_VARIANT[badge.tone]}>{badge.label}</Badge>
               </Link>
             )}
             <Link

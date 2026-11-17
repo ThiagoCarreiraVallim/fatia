@@ -63,6 +63,9 @@ import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { AgendaService } from '../../workout/agenda.service';
+import { SubscriptionEntitlementsService } from '../../billing/subscription-entitlements.service';
+import { UserSubscriptionService } from '../../billing/user-subscription.service';
+import type { SubscriptionProvider } from '../../billing/billing-provider.port';
 import type { ConfigService } from '@nestjs/config';
 import type { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -4083,6 +4086,108 @@ describe('isolamento entre usuários', () => {
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain(o.offerId);
       expect(JSON.stringify(deB)).not.toContain(o.sessionId);
+    });
+  });
+
+  describe('plano e cobrança (#386)', () => {
+    const cfg = {
+      get: (k: string, padrao?: unknown) =>
+        (({ AI_REQUIRES_PLAN: true, BILLING_PRO_TRIAL_DAYS: 7 }) as Record<string, unknown>)[k] ??
+        padrao,
+    } as never;
+    const provedor = {
+      ensurePersonCustomer: jest.fn(),
+      createSubscription: jest.fn(),
+      firstPaymentUrl: jest.fn(),
+      cancelSubscription: jest.fn(async () => undefined),
+      verifySubscriptionWebhook: jest.fn(),
+    } as unknown as SubscriptionProvider;
+    const direitos = new SubscriptionEntitlementsService(prisma, cfg);
+    const assinaturas = new UserSubscriptionService(prisma, cfg, direitos, provedor);
+    let subA: string;
+
+    beforeAll(async () => {
+      const sub = await prisma.userSubscription.create({
+        data: {
+          userId: owned.userA,
+          source: 'ASAAS',
+          status: 'PAST_DUE',
+          interval: 'MONTHLY',
+          paymentMethod: 'PIX',
+          providerRef: `iso-386-${owned.userA}`,
+          paymentUrl: 'https://www.asaas.com/i/pay_do_A',
+          currentPeriodEnd: new Date(Date.now() - 2 * 86_400_000),
+          graceEndsAt: new Date(Date.now() + 5 * 86_400_000),
+        },
+      });
+      subA = sub.id;
+      await prisma.billingReminder.create({
+        data: { subscriptionId: subA, kind: 'GRACE_5_LEFT', dueDate: '2026-11-08' },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.userSubscription.deleteMany({ where: { id: subA } });
+    });
+
+    it('o plano, a forma de pagamento e o link de pagamento são só do dono', async () => {
+      expect(await assinaturas.plan(owned.userA)).toMatchObject({
+        state: 'PAST_DUE',
+        paymentUrl: 'https://www.asaas.com/i/pay_do_A',
+        paymentMethod: 'PIX',
+      });
+      const deB = await assinaturas.plan(owned.userB);
+      expect(deB).toMatchObject({
+        tier: 'FREE',
+        state: 'FREE',
+        paymentUrl: null,
+        paymentMethod: null,
+      });
+      expect(JSON.stringify(deB)).not.toContain('pay_do_A');
+    });
+
+    it('o B não cancela a assinatura do A', async () => {
+      await expect(assinaturas.cancel(owned.userB)).rejects.toBeInstanceOf(NotFoundException);
+      expect(provedor.cancelSubscription).not.toHaveBeenCalled();
+      expect(
+        (await prisma.userSubscription.findUniqueOrThrow({ where: { id: subA } }))
+          .cancelAtPeriodEnd,
+      ).toBe(false);
+    });
+
+    it('o teste do A não tira o teste do B', async () => {
+      await prisma.user.update({
+        where: { id: owned.userA },
+        data: { proTrialStartedAt: new Date() },
+      });
+      expect(await assinaturas.trialEligible(owned.userA)).toBe(false);
+      expect(await assinaturas.trialEligible(owned.userB)).toBe(true);
+    });
+
+    it('o painel da comunidade vê só se o membro tem PRO pela comunidade, não como ele paga', async () => {
+      // O user-B é dono da academia em que o A é membro; o A paga o próprio PRO.
+      const lista = await memberships.listMembers(owned.userB, owned.groupId);
+      const a = lista.find((m) => m.membershipId === owned.membershipA)!;
+      expect(a.hasAiSeat).toBe(false);
+      const texto = JSON.stringify(lista);
+      for (const campo of ['paymentUrl', 'paymentMethod', 'source', 'interval', 'graceEndsAt']) {
+        expect(texto).not.toContain(campo);
+      }
+      expect(texto).not.toContain('pay_do_A');
+    });
+
+    it('o export do A leva a assinatura e os avisos; o do B, nada disso', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      const sub = deA.subscriptions.find((x) => x.paymentMethod === 'PIX');
+      expect(sub?.reminders).toEqual([expect.objectContaining({ kind: 'GRACE_5_LEFT' })]);
+      expect(JSON.stringify(deA)).not.toContain('pay_do_A'); // link de cobrança não sai
+      const deB = await conta.exportData(owned.userB);
+      expect(JSON.stringify(deB)).not.toContain('GRACE_5_LEFT');
     });
   });
 

@@ -67,7 +67,7 @@ function montar() {
 }
 
 const webhook = (s: UserSubscriptionService, corpo: object) =>
-  s.processarWebhookAsaas({ 'asaas-access-token': TOKEN }, JSON.stringify(corpo));
+  s.handleAsaasWebhook({ 'asaas-access-token': TOKEN }, JSON.stringify(corpo));
 
 let ev = 0;
 const pagamento = (
@@ -404,14 +404,14 @@ describe('assentos de comunidade (banco real)', () => {
     it('a comunidade paga o uso de quem usa o assento', async () => {
       const { dona, groupId, membros, assentos, assinaturas } = await comunidadePaga(1);
       await assentos.assign(dona, groupId, membros[0].membershipId);
-      expect(await assinaturas.plano(membros[0].userId)).toMatchObject({
+      expect(await assinaturas.plan(membros[0].userId)).toMatchObject({
         tier: 'PRO',
         source: 'GROUP',
         groupName: expect.stringMatching(/^Academia /),
         paymentUrl: null,
         manageUrl: null,
       });
-      await expect(assinaturas.cancelar(membros[0].userId)).rejects.toThrow(ConflictException);
+      await expect(assinaturas.cancel(membros[0].userId)).rejects.toThrow(ConflictException);
     });
   });
 

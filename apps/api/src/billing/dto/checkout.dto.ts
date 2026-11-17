@@ -1,4 +1,4 @@
-import { IsIn, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CheckoutDto {
   @IsIn(['MONTHLY', 'YEARLY'])
@@ -8,4 +8,9 @@ export class CheckoutDto {
   @IsString()
   @MaxLength(20)
   cpf!: string;
+
+  /** Pix, boleto ou cartão. Sem ela, a pessoa escolhe na página do Asaas. */
+  @IsOptional()
+  @IsIn(['PIX', 'BOLETO', 'CREDIT_CARD'])
+  paymentMethod?: 'PIX' | 'BOLETO' | 'CREDIT_CARD';
 }

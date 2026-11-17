@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AsaasProvider } from './asaas/asaas.provider';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { BillingReminderJob } from './billing-reminder-job.service';
 import { GroupRoleGuard } from '../sharing/guards/group-role.guard';
 import { BillingController } from './billing.controller';
 import { RevenueCatService } from './revenuecat/revenuecat.service';
@@ -26,6 +28,8 @@ import {
  * do lado do aluno importa este (`no-billing-in-student-surface.spec.ts`).
  */
 @Module({
+  // Os avisos de cobrança e de fim do teste (#386) saem por push e e-mail.
+  imports: [NotificationsModule],
   controllers: [BillingController, SeatController],
   providers: [
     { provide: BillingEntitlements, useClass: StaticEntitlementsService },
@@ -50,6 +54,7 @@ import {
     UserSubscriptionService,
     SeatPoolService,
     RevenueCatService,
+    BillingReminderJob,
     GroupRoleGuard,
   ],
   exports: [BillingEntitlements, AiEntitlements, UserSubscriptionService, SeatPoolService],

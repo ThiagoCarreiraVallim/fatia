@@ -67,6 +67,8 @@ export class AccountService {
         activityLevel: true,
         objective: true,
         onboardedAt: true,
+        // Quando começou o teste grátis do PRO (#386): um por pessoa.
+        proTrialStartedAt: true,
         // Retomada do onboarding (#371): a etapa, o rascunho (peso e metas ainda
         // não confirmados) e o cartão "Primeiros passos".
         onboardingStep: true,
@@ -336,8 +338,9 @@ export class AccountService {
         select: { content: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
-      // temporário, e sem nada do provedor além do id.
+      // Histórico do plano (ADR 024) e da cobrança (#386): teste, forma de
+      // pagamento, carência e os avisos que mandamos. Sem `paymentUrl`, que é
+      // link de cobrança temporário, e sem nada do provedor além do id.
       this.prisma.userSubscription.findMany({
         where: { userId },
         select: {
@@ -346,11 +349,18 @@ export class AccountService {
           status: true,
           interval: true,
           productId: true,
+          paymentMethod: true,
+          trialEndsAt: true,
           currentPeriodEnd: true,
+          graceEndsAt: true,
           cancelAtPeriodEnd: true,
           canceledAt: true,
           createdAt: true,
           updatedAt: true,
+          reminders: {
+            select: { kind: true, dueDate: true, sentAt: true },
+            orderBy: { sentAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),

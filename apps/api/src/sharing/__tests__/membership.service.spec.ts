@@ -16,6 +16,7 @@ type MockPrisma = {
     upsert: jest.Mock;
   };
   professionalLink: { findMany: jest.Mock };
+  groupSeatPool: { findMany: jest.Mock };
   groupSeatAssignment: { updateMany: jest.Mock; findMany: jest.Mock };
   $transaction: jest.Mock;
 };
@@ -35,6 +36,7 @@ const makePrisma = (): MockPrisma => ({
     upsert: jest.fn(),
   },
   professionalLink: { findMany: jest.fn() },
+  groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
   groupSeatAssignment: {
     updateMany: jest.fn().mockReturnValue({ count: 0 }),
     findMany: jest.fn().mockResolvedValue([]),
