@@ -2,7 +2,17 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Brain, Trash2 } from 'lucide-react';
+import {
+  Apple,
+  BookOpen,
+  Brain,
+  Clock,
+  Info,
+  ShieldCheck,
+  Sun,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   MEMORIES_COPY,
   MEMORY_LIMIT,
@@ -12,6 +22,7 @@ import {
   memoryCountLabel,
   memoryMeta,
   type ChatMemory,
+  type MemoryCategory,
 } from '@fatia/api-client';
 import {
   Drawer,
@@ -34,6 +45,15 @@ import { CHAVE_DA_CONFIG_DA_IA } from './config-da-ia';
  * toque duplo já é a confirmação, como na gaveta de conversas.
  */
 
+/** O ícone e a cor de cada categoria, como na prancha Al-M9. Sem categoria (antigas): livro. */
+const CATEGORY_CHIP: Record<MemoryCategory, { icon: LucideIcon; className: string }> = {
+  PREFERENCE: { icon: Apple, className: 'bg-primary/15 text-success' },
+  ROUTINE: { icon: Clock, className: 'bg-info/15 text-info' },
+  TRAINING: { icon: Info, className: 'bg-warning/15 text-warning' },
+  HABIT: { icon: Sun, className: 'bg-primary/15 text-success' },
+};
+const NO_CATEGORY_CHIP = { icon: BookOpen, className: 'bg-foreground/[0.08] text-foreground/70' };
+
 function Item({ memoria }: { memoria: ChatMemory }) {
   const queryClient = useQueryClient();
   const [confirmando, setConfirmando] = useState(false);
@@ -46,7 +66,8 @@ function Item({ memoria }: { memoria: ChatMemory }) {
   });
 
   return (
-    <li className="flex items-start gap-2 rounded-lg px-2 py-2">
+    <li className="flex items-center gap-3 px-3 py-3 [&+&]:border-t [&+&]:border-border">
+      <CategoryChip category={memoria.category} />
       <div className="min-w-0 flex-1">
         <p className="text-sm text-foreground">{memoria.content}</p>
         <p className="text-xs text-muted-foreground">{memoryMeta(memoria)}</p>
@@ -73,6 +94,18 @@ function Item({ memoria }: { memoria: ChatMemory }) {
   );
 }
 
+function CategoryChip({ category }: { category: MemoryCategory | null }) {
+  const { icon: Icone, className } = category ? CATEGORY_CHIP[category] : NO_CATEGORY_CHIP;
+  return (
+    <span
+      aria-hidden
+      className={cn('grid size-9 shrink-0 place-items-center rounded-xl', className)}
+    >
+      <Icone size={16} />
+    </span>
+  );
+}
+
 function ApagarTodas() {
   const queryClient = useQueryClient();
   const [confirmando, setConfirmando] = useState(false);
@@ -89,7 +122,10 @@ function ApagarTodas() {
       <button
         type="button"
         onClick={() => setConfirmando(true)}
-        className={cn(ghostButton, 'self-start rounded-full px-4 py-2 text-sm text-danger')}
+        className={cn(
+          ghostButton,
+          'min-h-12 w-full rounded-full border border-border px-4 text-sm font-semibold text-danger',
+        )}
       >
         {MEMORIES_COPY.deleteAll}
       </button>
@@ -199,13 +235,16 @@ export function GavetaDeMemorias({
                   <p className="text-xs text-muted-foreground">{MEMORIES_COPY.emptyBody}</p>
                 </div>
               ) : (
-                <ul aria-label="Memórias" className="-mx-2">
+                <ul aria-label="Memórias" className="rounded-2xl bg-foreground/[0.04]">
                   {memorias.map((memoria) => (
                     <Item key={memoria.id} memoria={memoria} />
                   ))}
                 </ul>
               )}
-              <p className="text-xs text-muted-foreground">{MEMORIES_COPY.teamNote}</p>
+              <p className="flex items-center gap-3 rounded-2xl bg-foreground/[0.04] p-3 text-xs text-muted-foreground">
+                <ShieldCheck size={16} aria-hidden className="shrink-0 text-foreground/60" />
+                {MEMORIES_COPY.teamNote}
+              </p>
               {memorias.length > 0 ? <ApagarTodas /> : null}
             </>
           )}

@@ -20,3 +20,4 @@
 - Consultas no banco: node <scratchpad>/q.cjs "SQL" (Prisma raw; psql não existe).
 - Feito: print web da Config da IA (~/.cache/fatia-vis/385/web). Diferenças web Al-M24: linhas sem ícones (categorias, busca, Mais), categorias e Mais fora de cartão, cadeados por item no "Nunca". Próximo: print do app (/chat/settings), depois corrigir.
 - Al-M24 feito: ícones, cartões, cadeados e título "Configurações da IA" (web e app). cmp em ~/.cache/fatia-vis/385/cmp-Al-M24-Config-IA.png. Comparador: node <scratchpad>/cmp.mjs <saída> <prancha> <web> <app>. Próximo: Al-M9 Memórias.
+- Al-M9 feito: chip de categoria, lista num cartão, aviso com escudo, "Apagar todas" contornado (web e app). cmp em ~/.cache/fatia-vis/385/cmp-Al-M9-Memorias.png. Memórias vis385-mem1..4 com createdAt +16h (meio-dia local). Próximo: Al-M11 Estados.
