@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, MessagesSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, LoaderCircle, MessagesSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import {
   deleteConversation,
   listConversations,
@@ -100,6 +100,13 @@ function Item({
     );
   }
 
+  const esperando = conversa.state === 'waiting';
+  const pensando = conversa.state === 'thinking';
+  const linha = esperando
+    ? `Esperando você${conversa.preview ? ` · ${conversa.preview}` : ''}`
+    : pensando
+      ? 'Fatia está pensando…'
+      : conversa.preview;
   return (
     <div
       className={cn(
@@ -111,14 +118,31 @@ function Item({
         type="button"
         onClick={onAbrir}
         aria-current={aberta ? 'page' : undefined}
-        className="min-w-0 flex-1 py-2.5 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5 text-left"
       >
-        <span className="block truncate text-sm font-semibold text-foreground">
-          {conversa.title ?? 'Nova conversa'}
+        {/* O estado da conversa (prancha Al-M6): o ponto verde espera a pessoa; o giro, o
+            assistente ainda respondendo. */}
+        <span aria-hidden className="grid w-2.5 shrink-0 place-items-center">
+          {esperando ? <span className="size-2.5 rounded-full bg-primary" /> : null}
+          {pensando ? (
+            <LoaderCircle className="size-3.5 animate-spin text-success motion-reduce:animate-none" />
+          ) : null}
         </span>
-        {conversa.preview ? (
-          <span className="block truncate text-xs text-muted-foreground">{conversa.preview}</span>
-        ) : null}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {conversa.title ?? 'Nova conversa'}
+          </span>
+          {linha ? (
+            <span
+              className={cn(
+                'block truncate text-xs',
+                esperando ? 'text-success' : 'text-muted-foreground',
+              )}
+            >
+              {linha}
+            </span>
+          ) : null}
+        </span>
       </button>
       <button
         type="button"
@@ -219,9 +243,7 @@ export function GavetaDeConversas({ aberta }: { aberta: string | undefined }) {
           ) : (
             groupConversationsByDay(conversas).map(({ label, items }) => (
               <section key={label} className="mb-2">
-                <h3 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-foreground/40">
-                  {label}
-                </h3>
+                <h3 className="px-2 pb-1 pt-3 text-sm text-foreground/50">{label}</h3>
                 {items.map((conversa) => (
                   <Item
                     key={conversa.id}

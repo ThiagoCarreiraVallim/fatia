@@ -1,5 +1,6 @@
 // apps/api/src/mcp/tools/meta/update-timezone.tool.ts
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { isTimeZone } from 'class-validator';
 import { z } from 'zod';
 import { PrismaService } from '../../../common/prisma.service';
 import {
@@ -27,7 +28,11 @@ export class UpdateTimezoneTool implements McpToolDef {
       .max(60)
       .describe('Fuso horário IANA (ex.: "America/Sao_Paulo") — define o corte dos dias'),
   } as const;
-  execute({ timezone }: { timezone: string }, { userId }: McpToolContext) {
+  async execute({ timezone }: { timezone: string }, { userId }: McpToolContext) {
+    // Fuso que não existe quebraria o corte dos dias e os avisos de cobrança.
+    if (!isTimeZone(timezone)) {
+      throw new BadRequestException(`timezone "${timezone}" não é um fuso IANA`);
+    }
     return this.prisma.user.update({
       where: { id: userId },
       data: { timezone },

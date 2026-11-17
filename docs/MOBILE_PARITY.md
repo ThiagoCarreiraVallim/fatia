@@ -60,7 +60,7 @@ Nenhum placeholder restante no código.
 | `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                                                                                                                       |
 | `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | prancha Al-V4 nos dois (#389)                                                                                                                                         |
 | `(app)/you/reminders`                | `app/(app)/you/reminders.tsx`                            | ✅  | "Liberar": Web Push no PWA, permissão do sistema no app (#389)                                                                                                        |
-| `(app)/profile/connect`              | `app/(app)/profile/tokens.tsx`                           | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo                                                                                           |
+| `(app)/profile/connect`              | `app/(app)/profile/connect.tsx`                          | ✅  | Conectar sua IA (#388, Al-V6..V6e): mesma tela, endereço vindo da API (`/users/me/mcp-connections`), "Conectado" só com acesso nos últimos 30 dias                    |
 | `(app)/progress`                     | `app/(app)/progress/index.tsx`                           | ✅  |                                                                                                                                                                       |
 | `(app)/progress/records`             | `app/(app)/progress/records.tsx`                         | ✅  |                                                                                                                                                                       |
 | `(app)/workout`                      | `app/(app)/workout/index.tsx`                            | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela                                                                                               |
@@ -82,138 +82,25 @@ Nenhum placeholder restante no código.
 
 ---
 
-## Pendência aberta — conectar a IA no app nativo
+## Conectar a IA no app nativo — resolvido na #388
 
-A #164 reescreveu o fluxo do PWA: `(app)/profile/tokens` virou `(app)/profile/connect`, com passo
-a passo sem jargão, endereço montado de `NEXT_PUBLIC_API_URL` e diagnóstico dos três erros comuns.
-
-O nativo continua em `app/(app)/profile/tokens.tsx`, com o texto antigo — "Adicionar servidor MCP",
-"login Logto". Ele **não** tem o defeito que motivou a issue (usa `env.mcpUrl`, não um domínio de
-exemplo), então é divergência de linguagem, não instrução quebrada. `src/components/profile/mcp-section.tsx`
-está no mesmo caso.
-
-Alinhar os dois textos é trabalho de paridade e sai em issue própria: manter aqui uma linha ✅ que
-esconde a diferença é exatamente o que este documento existe para impedir.
-
----
-
-## Componentes
-
-### Dashboard — 5 de 5
-
-| PWA                    | App nativo                       |     | Observação                                                   |
-| ---------------------- | -------------------------------- | :-: | ------------------------------------------------------------ |
-| `next-workout-card`    | `dashboard/next-workout-card`    | ✅  |                                                              |
-| `nutrition-macro-card` | `dashboard/nutrition-macro-card` | ✅  | gradiente vira véu chapado (sem `expo-linear-gradient`)      |
-| `steps-card`           | `dashboard/steps-card`           | ✅  |                                                              |
-| `streak-card`          | `dashboard/streak-card`          | ✅  | textos vêm do `@fatia/api-client` para os dois dizerem igual |
-| `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                        |
-| —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição      |
-
-### Hoje do redesign (#373) — 10 de 10
-
-A tela Hoje dos dois clientes usa `components/today/*` (pranchas Al-H1, Al-H3, Al-H4 e Al-H5). Os
-cartões antigos de `dashboard/*` acima ficaram fora da tela; a sequência com conquistas volta na
-Semana (S1).
-
-| PWA                                              | App nativo                            |     | Observação                                                                                                |
-| ------------------------------------------------ | ------------------------------------- | :-: | --------------------------------------------------------------------------------------------------------- |
-| `today/today-cards` (`KcalCard`)                 | `today/today-cards` (`KcalCard`)      | ✅  | anel "restam" e barras de macro pelo ponto médio da faixa                                                 |
-| `today/today-cards` (próximo treino)             | `today/today-cards` (próximo treino)  | ✅  | "6 exercícios" (`nextWorkoutDetail`)                                                                      |
-| `today/today-cards` (água, passos)               | `today/today-cards` (água, passos)    | ✅  | "+" soma um copo e avisa "+250 mL · N mL hoje"                                                            |
-| `today/today-cards` (peso, sequência)            | `today/today-cards` (peso, sequência) | ✅  | "−2,5 em 30 dias"                                                                                         |
-| `today/today-cards` (metas pessoais)             | `today/today-cards` (metas pessoais)  | ✅  | `personalGoalProgress`                                                                                    |
-| `today/today-cards` (banner, para fazer, evento) | idem                                  | ✅  | só aparecem com dado (#379, #383, #397)                                                                   |
-| `today/goals-sheet`                              | `today/goals-sheet`                   | ✅  | Al-H5; água e passos abrem a folha por cima, o resto é rota                                               |
-| `today/water-sheet`                              | `today/water-sheet`                   | ✅  | Al-H3; no app o copo é chapado no token água (sem gradiente)                                              |
-| `today/weight-sheet`                             | `today/weight-sheet`                  | ✅  | Al-H4; `weightSheetBase` decide criar ou corrigir; no app o traço mede o próprio comprimento (`spark.ts`) |
-| `today/inbox-sheet`                              | `today/inbox-sheet`                   | ✅  | sino: sem aviso novo só o toast "Sem novos avisos"                                                        |
-
-### Nutrição — 17 de 17, mais 1 do scanner
-
-| PWA                     | App nativo                           |     | Observação                                                                                                                                                                                                                                                                                                                           |
-| ----------------------- | ------------------------------------ | :-: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `copy-day-drawer`       | `nutrition/copiar-dia-drawer`        | ✅  | copiar o dia inteiro; mesmo texto de resultado (`copyDayText`)                                                                                                                                                                                                                                                                       |
-| `copy-to-day`           | `nutrition/copiar-para-dia`          | ✅  | dia de destino nas setas ◀ ▶ em vez de `<input type="date">`: o app não carrega date picker                                                                                                                                                                                                                                          |
-| `custom-food-drawer`    | `nutrition/custom-food-drawer`       | ✅  | novo e edição (`customFoodPatch` limpa micronutrientes e código); apagar confirma por `Alert` em vez do `ConfirmDialog`; no app também abre preenchido pelo leitor                                                                                                                                                                   |
-| `custom-food-form`      | `nutrition/custom-food-form`         | ✅  | Al-N11: por porção ou por 100 g (porção opcional), micronutrientes com as metas da pessoa primeiro, "Vincular a um código de barras", "Só salvar"/"Salvar e registrar"; a conta e os limites são os de `@fatia/api-client/custom-food`                                                                                               |
-| `custom-foods-card`     | `nutrition/meus-alimentos-card`      | ✅  |                                                                                                                                                                                                                                                                                                                                      |
-| `date-navigator`        | `nutrition/date-navigator`           | ✅  | data em estado, não na URL — senão o voltar do Android percorreria o calendário                                                                                                                                                                                                                                                      |
-| `edit-meal-item-drawer` | `nutrition/edit-meal-item-drawer`    | ✅  | gramas ou medida caseira (`amount-picker`: quantidade digitável no teclado decimal), contas refeitas e remover com confirmação (Al-N14); item livre só em gramas                                                                                                                                                                     |
-| `food-search-drawer`    | `nutrition/food-search-drawer`       | ✅  | Al-N15/Al-N3: abas Recentes/Favoritos/Salvas/Meus, selo de origem (TACO/seu), contagem, "Criar “X” como meu alimento", fibra e sódio na quantidade, "Adicionar ao jantar"; a lógica comum está em `@fatia/api-client/food-entry`, `food-shortcuts` e `portions`. No app, abre com `initialFood` quando o código é de um alimento seu |
-| `macro-bar`             | `nutrition/macro-bar`                | ✅  |                                                                                                                                                                                                                                                                                                                                      |
-| `day-nutrients-card`    | `nutrition/day-nutrients-card`       | ✅  | Al-N1: chips de nutriente e a faixa do dia (#374)                                                                                                                                                                                                                                                                                    |
-| `day-meal-sources`      | `nutrition/day-meal-sources`         | ✅  | "De onde veio": foto/IA, % do dia; o cartão do plano (#376) não desenha nada sem plano                                                                                                                                                                                                                                               |
-| `copy-meal-sheet`       | `nutrition/copy-meal-sheet`          | ✅  | Al-N9: só a refeição ou o dia todo                                                                                                                                                                                                                                                                                                   |
-| `meal-detail-screen`    | `app/(app)/nutrition/meals/[id].tsx` | ✅  | Al-N8/N8b: foto guardada, Apagar só a foto e Excluir com confirmação; no PWA a rota é `/nutrition/meals/[id]`                                                                                                                                                                                                                        |
-| `weekly-trend-chart`    | `nutrition/weekly-trend-chart`       | ✅  | barras em `react-native-svg`                                                                                                                                                                                                                                                                                                         |
-| `barcode-scanner`       | `nutrition/barcode-camera`           | ✅  | `expo-camera` no app; no PWA, `BarcodeDetector` nativo ou `@zxing/browser` (Safari, Firefox, Chrome desktop), com o campo "Digitar o código" sempre à mão                                                                                                                                                                            |
-| `scanned-product-panel` | `nutrition/scanned-product-drawer`   | ✅  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017) e "Guardar em Meus alimentos"; checkbox no PWA, `Pressable` com papel de checkbox no app                                                                                                                                                                      |
-| `barcode-flow`          | `app/(app)/nutrition/scan.tsx`       | ✅  | abas Código/Rótulo nos dois; o rótulo usa upload com `capture` no PWA (`label-reader`) e `PhotoCapture` (câmera e galeria, Expo Go) no app; Free vê "Ver o plano PRO"; sem IA no servidor a aba some. No PWA é um modo do drawer de busca; no app é tela                                                                             |
-| —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta, guardar) é comum em `@fatia/api-client` (`barcode.ts`)                                                                                                                                                                                              |
-
-### Treino — 20 de 20 (redesign #377 e #378)
-
-| PWA                      | App nativo                             |     | Observação                                                                                    |
-| ------------------------ | -------------------------------------- | :-: | --------------------------------------------------------------------------------------------- |
-| `add-exercise-drawer`    | `workout/add-exercise-drawer`          | ✅  | seleção múltipla com Favoritos e grupos (#378)                                                |
-| `plan-exercise-sheet`    | `workout/plan-exercise-sheet`          | ✅  | Configurar exercício (#378): A, série por série (B) e cardio (D)                              |
-| `plan-exercise-row`      | `workout/plan-exercise-row`            | ✅  | linha do plano; no app o Como fazer abre pelo `ExerciseDetailHost`                            |
-| `plan-muscle-bar`        | `workout/plan-muscle-bar`              | ✅  | séries por grupo; a cor vem de `muscleGroupTone` no api-client                                |
-| `block-timeline`         | `workout/block-timeline`               | ✅  | bloco de periodização (#145); a frase explicativa vem pronta da API                           |
-| `exercise-detail-card`   | `workout/exercise-detail-card`         | ✅  | aceita `renderSet` para receber a linha editável da sessão                                    |
-| `exercise-detail-drawer` | `workout/exercise-detail-drawer`       | ✅  | T9: vídeo, Como fazer, Músculos (`MuscleDiagram`) e Seu histórico; estrela de favorito (#378) |
-| `exercise-media`         | `workout/exercise-media`               | ✅  | web toca o vídeo na página; o app mostra a capa e abre no navegador do app (Expo Go)          |
-| `exercise-edit-drawer`   | `workout/exercise-edit-drawer`         | ✅  |                                                                                               |
-| `exercise-search-drawer` | `workout/exercise-search-drawer`       | ✅  | aceita o grupo muscular inicial                                                               |
-| `muscle-diagram`         | `workout/muscle-diagram`               | ✅  | 206 traços com `id` e `data-muscle`; cores por músculo; substitui a silhueta simplificada     |
-| `workout-home`           | `app/(app)/workout/index.tsx`          | ✅  | T1: semana, músculos de hoje e planos; a lógica do app fica em `workout/workout-home.ts`      |
-| `active-exercise-card`   | `workout/session/active-exercise-card` | ✅  | carga e repetições digitáveis além do −/+; sensação por série                                 |
-| `active-cardio-card`     | `workout/session/active-cardio-card`   | ✅  |                                                                                               |
-| `set-chips`              | `workout/session/set-chips`            | ✅  | séries feitas em chips; tocar edita                                                           |
-| `rest-timer`             | `workout/session/rest-panel`           | ✅  | descanso com avanço automático (preferência no aparelho)                                      |
-| `finish-session-modal`   | `workout/session/use-finish-session`   | ✅  | no app, a sensação do treino em drawer (`feeling-picker`)                                     |
-| `current-workout-sheet`  | `workout/session/[id]/edit`            | ✅  | T17 "Treino atual": no app é rota própria                                                     |
-| `session/[id]` (T5)      | `workout/session/completed-session`    | ✅  | T5/T5b: resumo, recordes, músculos, observação e perguntas da equipe                          |
-| `cancel-session-modal`   | `workout/session/use-cancel-session`   | ✅  | virou `Alert` do sistema: pergunta sim/não destrutiva                                         |
-| —                        | `workout/exercise-detail-host`         | ➕  | hospeda o drawer de detalhe fora do card (ver "O que o React Native impôs")                   |
-| —                        | `workout/session/session-header`       | ➕  | header fixo com o progresso dos exercícios                                                    |
-
-Saíram na #377: `community-guide` e `cards/body-silhouette`, nos dois. No app saíram também
-`set-row`, `rpe-badge`, `rpe-drawer`, `finish-session-drawer`, `exercise-title` e `rest-timer`. O
-reordenar exercícios foi para o Treino atual (setas), no app e no PWA. No PWA, `set-row` e `rpe-modal` seguem fora da sessão (cartão de exercício do
-plano e tela de treino).
-
-### Progresso — 13 de 13
-
-| PWA                              | App nativo                        |     | Observação                                         |
-| -------------------------------- | --------------------------------- | :-: | -------------------------------------------------- |
-| `cardio-chart`                   | `progress/cardio-chart`           | ✅  |                                                    |
-| `consistency-card`               | `progress/consistency-card`       | ✅  |                                                    |
-| `exercise-picker-drawer`         | `progress/exercise-picker-drawer` | ✅  |                                                    |
-| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116); dia do registro   |
-| `log-water-drawer`               | `progress/log-water-drawer`       | ✅  | idem                                               |
-| `log-weight-drawer`              | `progress/log-weight-drawer`      | ✅  | idem                                               |
-| `personal-records`               | `progress/personal-records`       | ✅  |                                                    |
-| `steps-chart`                    | `progress/steps-chart`            | ✅  |                                                    |
-| `strength-chart`                 | `progress/strength-chart`         | ✅  |                                                    |
-| `training-intensity`             | `progress/training-intensity`     | ✅  |                                                    |
-| `weight-chart`                   | `progress/weight-chart`           | ✅  |                                                    |
-| `WeightBarMini` (dentro da page) | `progress/weight-mini-bars`       | ✅  | extraído para arquivo próprio                      |
-| `log-history`                    | `progress/log-history`            | ✅  | lista de registros recentes, base do editar/apagar |
-| `log-day-field`                  | `progress/seletor-de-dia`         | ✅  | só setas ◀ ▶ no app; o PWA tem também o calendário |
+A #164 reescreveu o fluxo do PWA e o nativo ficou em `app/(app)/profile/tokens.tsx`, com o texto
+antigo. A #388 trocou as duas pelas pranchas Al-V6..V6e: `app/(app)/profile/connect.tsx` replica
+`apps/web/src/components/profile/connect-ai-screen.tsx`, os textos saem de `@fatia/api-client`
+(`connect-ai.ts`) e o endereço vem da API, não de `env.mcpUrl` (removido). `profile/tokens.tsx` e
+`profile/copy-mcp-url.tsx` foram apagados; na web, `/profile/tokens` só redireciona.
 
 ### Metas e perfil — 4 de 4
 
-| PWA                                  | App nativo                                                       |     | Observação                                                               |
-| ------------------------------------ | ---------------------------------------------------------------- | :-: | ------------------------------------------------------------------------ |
-| `goals/new-goal-drawer`              | `goals/new-goal-drawer`                                          | ✅  | prazo é campo de texto `AAAA-MM-DD` — não há `<input type="date">` no RN |
-| `profile/copy-mcp-url`               | `profile/copy-mcp-url`                                           | ✅  | `expo-clipboard`                                                         |
-| `profile/edit-height-drawer`         | `profile/edit-height-drawer`                                     | ✅  |                                                                          |
-| `profile/profile-metrics`            | `profile/profile-metrics`                                        | ✅  |                                                                          |
-| `MainGoalCard` etc. (dentro da page) | `goals/main-goal-card`, `secondary-goal-card`, `recent-goal-row` | ✅  | extraídos                                                                |
-| —                                    | `profile/export-data-button`                                     | ➕  | LGPD art. 18, V — ver abaixo                                             |
-| —                                    | `profile/delete-account-drawer`                                  | ➕  | LGPD art. 18, VI + exigência das lojas                                   |
+| PWA                                  | App nativo                                                       |     | Observação                                                                                          |
+| ------------------------------------ | ---------------------------------------------------------------- | :-: | --------------------------------------------------------------------------------------------------- |
+| `goals/new-goal-drawer`              | `goals/new-goal-drawer`                                          | ✅  | prazo é campo de texto `AAAA-MM-DD` — não há `<input type="date">` no RN                            |
+| `profile/connect-ai-screen`          | `app/(app)/profile/connect.tsx`                                  | ✅  | `expo-clipboard`; recusa ou `false` vira aviso para copiar à mão (`profile/copy-text`), como na web |
+| `profile/edit-height-drawer`         | `profile/edit-height-drawer`                                     | ✅  |                                                                                                     |
+| `profile/profile-metrics`            | `profile/profile-metrics`                                        | ✅  |                                                                                                     |
+| `MainGoalCard` etc. (dentro da page) | `goals/main-goal-card`, `secondary-goal-card`, `recent-goal-row` | ✅  | extraídos                                                                                           |
+| —                                    | `profile/export-data-button`                                     | ➕  | LGPD art. 18, V — ver abaixo                                                                        |
+| —                                    | `profile/delete-account-drawer`                                  | ➕  | LGPD art. 18, VI + exigência das lojas                                                              |
 
 ### Comunidade — 6 de 6
 
@@ -231,7 +118,7 @@ plano e tela de treino).
 | PWA                         | App nativo                  |     | Observação                                                                                                                                                                                                                                                  |
 | --------------------------- | --------------------------- | :-: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `layout/bottom-nav`         | `layout/bottom-nav`         | ✅  | Hoje · Nutrição · Treino · Comunidade · Você, só ícone com nome acessível, e o botão da IA à direita (`layout/ai-fab`), de `navigation.ts`; some nas tarefas de foco (`navBarMode`); acima dela, a barra do treino em andamento e o cartão "esperando você" |
-| `app/(app)/you`             | `app/(app)/you`             | ✅  | a aba Você: as seções de `menuSections` (com a linha Notificações); "Conectar sua IA" leva a `/profile/tokens` no app                                                                                                                                       |
+| `app/(app)/you`             | `app/(app)/you`             | ✅  | a aba Você: as seções de `menuSections` (com a linha Notificações); "Conectar sua IA" leva a `/profile/connect` nas duas plataformas                                                                                                                        |
 | `layout/side-nav`           | —                           | ⛔  | só o desktop do PWA                                                                                                                                                                                                                                         |
 | `layout/ai-drawer`          | `layout/ai-drawer`          | ✅  | "O que vamos registrar?": registro manual primeiro, conversas, Free com "Com a IA Pro", sugestões, foto, ditado, enviar; regras de `ai-drawer.ts` do api-client. O treino retoma em `/workout/session/:id` aqui e em `/workout` no PWA                      |
 | `layout/ai-pending-card`    | `layout/ai-pending-card`    | ✅  | aprova a pausa fora da conversa (ADR 039 §6); toast sem "Desfazer" por ora, nos dois                                                                                                                                                                        |

@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { searchTutorials, tutorialsApi, tutorialSubtitle, type Tutorial } from '@fatia/api-client';
+import {
+  searchTutorials,
+  tutorialById,
+  tutorialsApi,
+  tutorialSubtitle,
+  type Tutorial,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import {
   Button,
@@ -24,13 +30,18 @@ const SEEN_KEY = ['you', 'tutorials', 'seen'] as const;
  * `apps/web/src/components/you/help-screen.tsx`. O texto vem no pacote, então
  * funciona sem internet. O app não tem leitor de rede no Expo Go; "sem
  * conexão" é a lista de assistidos que não chegou — o mesmo pedido que o
- * vídeo faria.
+ * vídeo faria. `?tutorial=` abre um tutorial direto, como o "Ver o tutorial"
+ * de Conectar sua IA (#388), marcado como assistido pelo mesmo caminho do toque
+ * na lista; fechar tira o parâmetro da rota.
  */
 export default function HelpScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { tutorial } = useLocalSearchParams<{ tutorial?: string }>();
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState<Tutorial | null>(null);
+  const [open, setOpen] = useState<Tutorial | null>(() => tutorialById(tutorial));
+  /** O tutorial aberto veio do `?tutorial=` e o parâmetro ainda está na rota. */
+  const fromParam = useRef(open !== null);
 
   const seen = useQuery({ queryKey: SEEN_KEY, queryFn: () => tutorialsApi.seen(), retry: false });
   const online = !seen.isError;
@@ -41,10 +52,31 @@ export default function HelpScreen() {
   const seenIds = new Set(seen.data?.seen ?? []);
   const areas = searchTutorials(query);
 
-  const openTutorial = (t: Tutorial) => {
-    setOpen(t);
+  /** O mesmo para o toque na lista e para o `?tutorial=`. */
+  const markSeenIfNew = (t: Tutorial) => {
     if (online && !seenIds.has(t.id)) markSeen.mutate(t.id);
   };
+  const openTutorial = (t: Tutorial) => {
+    setOpen(t);
+    markSeenIfNew(t);
+  };
+  const closeTutorial = () => {
+    setOpen(null);
+    if (fromParam.current) {
+      fromParam.current = false;
+      router.setParams({ tutorial: undefined });
+    }
+  };
+
+  // Só na montagem: o tutorial do `?tutorial=` já abriu no estado inicial.
+  const markedInitial = useRef(false);
+  useEffect(() => {
+    if (markedInitial.current) return;
+    markedInitial.current = true;
+    const initial = tutorialById(tutorial);
+    if (initial) markSeenIfNew(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -152,7 +184,7 @@ export default function HelpScreen() {
         </View>
       </Screen>
 
-      <Drawer open={open !== null} onOpenChange={(o) => (o ? undefined : setOpen(null))}>
+      <Drawer open={open !== null} onOpenChange={(o) => (o ? undefined : closeTutorial())}>
         <DrawerContent className="px-6 pb-8">
           {open ? (
             <>

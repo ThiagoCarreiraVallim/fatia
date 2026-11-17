@@ -243,9 +243,12 @@ export const MEAL_PHOTO_COPY = {
   framing: 'Enquadre o prato inteiro, de cima',
   goesTo: 'Vai para:',
   firstTitle: 'Antes da primeira foto',
-  /** O nome é o do provedor de verdade (o mesmo do aceite do chat, #384). */
-  firstBody:
-    'A foto vai para o OpenRouter, que reconhece os alimentos e devolve os itens para você ' +
+  /**
+   * O nome é o do provedor de verdade, o mesmo do aceite do chat: vem da API
+   * (`AiConsentStatus.processor.provider`, #384), não do texto.
+   */
+  firstBody: (provider: string) =>
+    `A foto vai para o ${provider}, que reconhece os alimentos e devolve os itens para você ` +
     'revisar. Ele não usa a foto para treinar modelos.',
   keepNote: 'A foto só fica guardada com a refeição se você permitir.',
   dataLink: 'Como tratamos seus dados',
@@ -348,9 +351,7 @@ export function reviewMealItems(items: readonly ReviewItem[]): Array<
  * versão atual. A tela mostra o aceite e tenta de novo, em vez de um erro genérico.
  */
 export function isAiConsentRequired(err: unknown): boolean {
-  if (!(err instanceof ApiError) || err.status !== 403) return false;
-  const body = err.body as { code?: unknown } | null | undefined;
-  return body?.code === 'AI_CONSENT_REQUIRED';
+  return err instanceof ApiError && err.isAiConsentRequired;
 }
 
 /** Qual estado da Al-M11 um erro de turno vira. `other` fica no cartão de erro de sempre. */

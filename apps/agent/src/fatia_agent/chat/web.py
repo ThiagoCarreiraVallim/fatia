@@ -4,8 +4,12 @@ Ferramenta local, como `ask_user`: não passa pelo `/mcp`, porque não lê dado 
 contrário de toda outra ferramenta, a pergunta **sai** para um terceiro (o motor de busca do
 OpenRouter, Exa), e a retenção zero do roteamento não cobre esse motor. Daí as três travas:
 
-- **Só a pergunta sai.** `clean_query` tira e-mail, telefone e documento antes; nome, histórico
-  e sistema nunca entram no corpo (`OpenAICompatProvider.web_search`).
+- **Só a pergunta sai, e quem a escreve não vê nada além dela.** O modelo da conversa só
+  *pede* a busca (a tool não tem argumento). A pergunta é escrita numa chamada à parte
+  (`write_search_query`) que recebe só a última fala da pessoa, sem a citação — nada de
+  memória, perfil, histórico, resultado de tool ou conteúdo de terceiro. Depois, `clean_query`
+  tira e-mail, telefone e documento. Nome, histórico e sistema nunca entram no corpo da busca
+  (`OpenAICompatProvider.web_search`).
 - **Aceite antes da primeira.** O `apps/api` manda o modo (`off | ask | on`) a cada turno. Em
   `ask`, a chamada para no portão como `web_consent`; o sim da tela só busca se a API, na
   retomada, já tiver o aceite gravado (`on`).
@@ -23,6 +27,8 @@ NAME = "web_search"
 
 WebSearchMode = Literal["off", "ask", "on"]
 WebSearcher = Callable[[str], Awaitable[WebSearchResult]]
+# O modelo que escreve a pergunta da busca a partir da última fala da pessoa, e de nada mais.
+QueryWriter = Callable[[str], Awaitable[str]]
 
 MAX_QUERY = 200
 MAX_SNIPPET = 600
@@ -39,7 +45,20 @@ UNAVAILABLE = (
     "o que já sabe."
 )
 OFF = "A busca na web está desligada. Responda sem ela."
-EMPTY_QUERY = "Faltou a pergunta da busca. Mande só a pergunta, em poucas palavras."
+EMPTY_QUERY = (
+    "Não deu para montar a busca a partir da mensagem da pessoa. Responda sem ela, com o que "
+    "já sabe."
+)
+
+# O sistema da chamada que escreve a pergunta. Ela só recebe a fala da pessoa.
+QUERY_SYSTEM = (
+    "Transforme a mensagem em uma consulta curta para um buscador na web, em português, com no "
+    "máximo 12 palavras. Só o assunto público: nunca nome, idade, peso, endereço, contato, "
+    "documento ou saúde de alguém. Responda só com a consulta, sem aspas."
+)
+
+# O modelo de mentira do lançamento da busca na cota: a unidade é a busca, não o token.
+CHARGE_MODEL = "openrouter-web-search"
 
 DEFINITION: dict[str, Any] = {
     "type": "function",
@@ -48,20 +67,10 @@ DEFINITION: dict[str, Any] = {
         "description": (
             "Busca na web informação pública e atual que NÃO está nos dados da pessoa: o valor "
             "nutricional de um produto ou prato, uma recomendação oficial, como fazer um "
-            "exercício. Mande só a pergunta, curta — nunca nome, idade, peso, e-mail ou "
-            "qualquer dado da pessoa. Não use para os dados dela: para isso há as outras "
-            "ferramentas."
+            "exercício. Sem argumento: a pergunta é montada a partir da última mensagem da "
+            "pessoa. Não use para os dados dela: para isso há as outras ferramentas."
         ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "A pergunta, sem dado pessoal. Ex.: 'calorias do açaí'.",
-                }
-            },
-            "required": ["query"],
-        },
+        "parameters": {"type": "object", "properties": {}},
     },
 }
 
@@ -123,3 +132,23 @@ __all__ = [
     "sources_artifact",
     "text_for_model",
 ]
+
+
+def latest_user_text(texto: str) -> str:
+    """A fala da pessoa sem a citação (`> …` no começo, ver `withQuote` no api-client).
+
+    A citação é um trecho de resposta do assistente, que pode trazer dado da pessoa ou de tool.
+    """
+    linhas = texto.split("\n")
+    i = 0
+    while i < len(linhas) and linhas[i].startswith(">"):
+        i += 1
+    return "\n".join(linhas[i:]).strip()
+
+
+async def build_query(write_query: QueryWriter | None, user_text: str) -> str:
+    """A pergunta da busca: escrita por quem só vê a fala da pessoa, e limpa depois."""
+    fala = latest_user_text(user_text)
+    if write_query is None or not fala:
+        return ""
+    return clean_query(await write_query(fala[: MAX_QUERY * 4]))

@@ -153,6 +153,7 @@ export default function PhotoScreen() {
   };
 
   const planoNecessario = reconhecer.error instanceof ApiError && reconhecer.error.isPlanRequired;
+  // 403 `AI_CONSENT_REQUIRED`: a foto nem saiu; o `onError` reabre o aviso com a mesma foto.
   const falha =
     reconhecer.error && !isAiConsentRequired(reconhecer.error)
       ? mensagemDeErro(reconhecer.error, {
@@ -190,7 +191,11 @@ export default function PhotoScreen() {
                 <Text className="text-base font-bold text-foreground">
                   {MEAL_PHOTO_COPY.firstTitle}
                 </Text>
-                <Text className="text-sm text-muted-foreground">{MEAL_PHOTO_COPY.firstBody}</Text>
+                {aceites.data ? (
+                  <Text className="text-sm text-muted-foreground">
+                    {MEAL_PHOTO_COPY.firstBody(aceites.data.processor.provider)}
+                  </Text>
+                ) : null}
                 <Text className="text-xs text-muted-foreground">{MEAL_PHOTO_COPY.keepNote}</Text>
                 <Pressable accessibilityRole="link" onPress={() => openLegal('/privacy')}>
                   <Text className="text-sm font-semibold text-primary-text underline">

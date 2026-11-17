@@ -1,4 +1,4 @@
-import { CARENCIA_DIAS, resolverDireitoIa, type AssinaturaLida } from '../ai-entitlement';
+import { CARENCIA_DIAS, resolveAiEntitlement, type AssinaturaLida } from '../ai-entitlement';
 
 /**
  * A matriz do direito à IA (ADR 024). Cada linha é um estado que o webhook (ou
@@ -22,9 +22,9 @@ function assinatura(parcial: Partial<AssinaturaLida>): AssinaturaLida {
   };
 }
 
-describe('resolverDireitoIa', () => {
+describe('resolveAiEntitlement', () => {
   it('sem assinatura é Free, e não degradado', () => {
-    expect(resolverDireitoIa([], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([], AGORA)).toMatchObject({
       tier: 'FREE',
       motivo: 'sem_assinatura',
       degraded: false,
@@ -34,12 +34,12 @@ describe('resolverDireitoIa', () => {
 
   it('checkout aberto (PENDING) não dá direito, mas aparece como pendente', () => {
     expect(
-      resolverDireitoIa([assinatura({ status: 'PENDING', currentPeriodEnd: null })], AGORA),
+      resolveAiEntitlement([assinatura({ status: 'PENDING', currentPeriodEnd: null })], AGORA),
     ).toMatchObject({ tier: 'FREE', motivo: 'pendente', degraded: false, source: 'ASAAS' });
   });
 
   it('ACTIVE dentro do período é PRO', () => {
-    expect(resolverDireitoIa([assinatura({})], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assinatura({})], AGORA)).toMatchObject({
       tier: 'PRO',
       motivo: 'ativa',
       source: 'ASAAS',
@@ -48,7 +48,7 @@ describe('resolverDireitoIa', () => {
 
   it('cancelada pelo app continua PRO até o fim do período', () => {
     expect(
-      resolverDireitoIa(
+      resolveAiEntitlement(
         [assinatura({ cancelAtPeriodEnd: true, currentPeriodEnd: dias(3) })],
         AGORA,
       ),
@@ -57,7 +57,7 @@ describe('resolverDireitoIa', () => {
 
   it('cancelada pelo app e com o período vencido vira Free degradado', () => {
     expect(
-      resolverDireitoIa(
+      resolveAiEntitlement(
         [assinatura({ cancelAtPeriodEnd: true, currentPeriodEnd: dias(-1) })],
         AGORA,
       ),
@@ -66,34 +66,36 @@ describe('resolverDireitoIa', () => {
 
   it('renovação a caminho (vencida há horas) não derruba o PRO', () => {
     const fim = new Date(AGORA.getTime() - 3 * 60 * 60 * 1000);
-    expect(resolverDireitoIa([assinatura({ currentPeriodEnd: fim })], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assinatura({ currentPeriodEnd: fim })], AGORA)).toMatchObject({
       tier: 'PRO',
       motivo: 'ativa',
     });
   });
 
   it('renovação que não chegou vira carência, e depois Free — webhook perdido não dá PRO eterno', () => {
-    expect(resolverDireitoIa([assinatura({ currentPeriodEnd: dias(-3) })], AGORA)).toMatchObject({
-      tier: 'PRO',
-      motivo: 'carencia',
-    });
+    expect(resolveAiEntitlement([assinatura({ currentPeriodEnd: dias(-3) })], AGORA)).toMatchObject(
+      {
+        tier: 'PRO',
+        motivo: 'carencia',
+      },
+    );
     expect(
-      resolverDireitoIa([assinatura({ currentPeriodEnd: dias(-(CARENCIA_DIAS + 1)) })], AGORA),
+      resolveAiEntitlement([assinatura({ currentPeriodEnd: dias(-(CARENCIA_DIAS + 1)) })], AGORA),
     ).toMatchObject({ tier: 'FREE', motivo: 'inadimplente', degraded: true });
   });
 
   it('PAST_DUE dentro da carência ainda é PRO; fora dela, Free degradado', () => {
     expect(
-      resolverDireitoIa([assinatura({ status: 'PAST_DUE', graceEndsAt: dias(2) })], AGORA),
+      resolveAiEntitlement([assinatura({ status: 'PAST_DUE', graceEndsAt: dias(2) })], AGORA),
     ).toMatchObject({ tier: 'PRO', motivo: 'carencia' });
     expect(
-      resolverDireitoIa([assinatura({ status: 'PAST_DUE', graceEndsAt: dias(-1) })], AGORA),
+      resolveAiEntitlement([assinatura({ status: 'PAST_DUE', graceEndsAt: dias(-1) })], AGORA),
     ).toMatchObject({ tier: 'FREE', motivo: 'inadimplente', degraded: true });
   });
 
   it('PAST_DUE sem data de carência usa o fim do período + a carência padrão', () => {
     expect(
-      resolverDireitoIa(
+      resolveAiEntitlement(
         [assinatura({ status: 'PAST_DUE', graceEndsAt: null, currentPeriodEnd: dias(-2) })],
         AGORA,
       ),
@@ -101,12 +103,12 @@ describe('resolverDireitoIa', () => {
   });
 
   it('EXPIRED e CANCELED são Free degradado, e a tela sabe dizer qual', () => {
-    expect(resolverDireitoIa([assinatura({ status: 'EXPIRED' })], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assinatura({ status: 'EXPIRED' })], AGORA)).toMatchObject({
       tier: 'FREE',
       motivo: 'expirada',
       degraded: true,
     });
-    expect(resolverDireitoIa([assinatura({ status: 'CANCELED' })], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assinatura({ status: 'CANCELED' })], AGORA)).toMatchObject({
       tier: 'FREE',
       motivo: 'cancelada',
       degraded: true,
@@ -115,7 +117,7 @@ describe('resolverDireitoIa', () => {
 
   it('cortesia MANUAL sem prazo é PRO', () => {
     expect(
-      resolverDireitoIa(
+      resolveAiEntitlement(
         [assinatura({ source: 'MANUAL', interval: null, currentPeriodEnd: null })],
         AGORA,
       ),
@@ -125,7 +127,7 @@ describe('resolverDireitoIa', () => {
   it('com duas assinaturas vale a ativa, e não a mais recente', () => {
     const vencida = assinatura({ id: 'velha', status: 'EXPIRED', createdAt: dias(-1) });
     const ativa = assinatura({ id: 'loja', source: 'APPLE', createdAt: dias(-30) });
-    expect(resolverDireitoIa([vencida, ativa], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([vencida, ativa], AGORA)).toMatchObject({
       tier: 'PRO',
       source: 'APPLE',
       subscription: { id: 'loja' },
@@ -135,12 +137,12 @@ describe('resolverDireitoIa', () => {
   it('ativa vence carência, mesmo com a carência mais longa', () => {
     const carencia = assinatura({ id: 'atraso', status: 'PAST_DUE', graceEndsAt: dias(6) });
     const ativa = assinatura({ id: 'ok', currentPeriodEnd: dias(1) });
-    expect(resolverDireitoIa([carencia, ativa], AGORA).subscription?.id).toBe('ok');
+    expect(resolveAiEntitlement([carencia, ativa], AGORA).subscription?.id).toBe('ok');
   });
 
   it('um PENDING ao lado de um PRO ativo não esconde o PRO', () => {
     expect(
-      resolverDireitoIa(
+      resolveAiEntitlement(
         [assinatura({ id: 'p', status: 'PENDING', interval: 'YEARLY' }), assinatura({ id: 'a' })],
         AGORA,
       ),
@@ -148,7 +150,7 @@ describe('resolverDireitoIa', () => {
   });
 });
 
-describe('resolverDireitoIa — assento de comunidade (ADR 025)', () => {
+describe('resolveAiEntitlement — assento de comunidade (ADR 025)', () => {
   const assento = (parcial: Partial<AssinaturaLida> = {}) =>
     assinatura({
       id: 'pool',
@@ -159,7 +161,7 @@ describe('resolverDireitoIa — assento de comunidade (ADR 025)', () => {
     });
 
   it('assento ativo dá PRO pela comunidade', () => {
-    expect(resolverDireitoIa([assento()], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assento()], AGORA)).toMatchObject({
       tier: 'PRO',
       source: 'GROUP',
       subscription: { group: { name: 'Academia X' } },
@@ -168,34 +170,126 @@ describe('resolverDireitoIa — assento de comunidade (ADR 025)', () => {
 
   it('PRO próprio ativo vence o assento, mesmo terminando antes', () => {
     expect(
-      resolverDireitoIa([assento(), assinatura({ id: 'meu', currentPeriodEnd: dias(2) })], AGORA),
+      resolveAiEntitlement(
+        [assento(), assinatura({ id: 'meu', currentPeriodEnd: dias(2) })],
+        AGORA,
+      ),
     ).toMatchObject({ tier: 'PRO', source: 'ASAAS', subscription: { id: 'meu' } });
   });
 
   it('assento ativo vence o PRO próprio em carência', () => {
     const atraso = assinatura({ id: 'meu', status: 'PAST_DUE', graceEndsAt: dias(3) });
-    expect(resolverDireitoIa([atraso, assento()], AGORA)).toMatchObject({ source: 'GROUP' });
+    expect(resolveAiEntitlement([atraso, assento()], AGORA)).toMatchObject({ source: 'GROUP' });
   });
 
   it('comunidade inadimplente: carência vale, depois volta ao Free', () => {
     expect(
-      resolverDireitoIa([assento({ status: 'PAST_DUE', graceEndsAt: dias(2) })], AGORA),
+      resolveAiEntitlement([assento({ status: 'PAST_DUE', graceEndsAt: dias(2) })], AGORA),
     ).toMatchObject({ tier: 'PRO', motivo: 'carencia' });
     expect(
-      resolverDireitoIa([assento({ status: 'PAST_DUE', graceEndsAt: dias(-1) })], AGORA),
+      resolveAiEntitlement([assento({ status: 'PAST_DUE', graceEndsAt: dias(-1) })], AGORA),
     ).toMatchObject({ tier: 'FREE', degraded: true, source: 'GROUP' });
   });
 
   it('pool da comunidade ainda não pago não aparece como checkout da pessoa', () => {
     expect(
-      resolverDireitoIa([assento({ status: 'PENDING', currentPeriodEnd: null })], AGORA),
+      resolveAiEntitlement([assento({ status: 'PENDING', currentPeriodEnd: null })], AGORA),
     ).toMatchObject({ tier: 'FREE', motivo: 'sem_assinatura', subscription: null });
   });
 
   it('cortesia de comunidade sem prazo (pool manual) dá PRO', () => {
-    expect(resolverDireitoIa([assento({ currentPeriodEnd: null })], AGORA)).toMatchObject({
+    expect(resolveAiEntitlement([assento({ currentPeriodEnd: null })], AGORA)).toMatchObject({
       tier: 'PRO',
       source: 'GROUP',
     });
+  });
+});
+
+describe('teste grátis (TRIALING, #386)', () => {
+  it('dentro do teste é PRO, com o motivo "teste"', () => {
+    expect(
+      resolveAiEntitlement(
+        [assinatura({ status: 'TRIALING', trialEndsAt: dias(3), currentPeriodEnd: dias(3) })],
+        AGORA,
+      ),
+    ).toMatchObject({ tier: 'PRO', motivo: 'teste', degraded: false });
+  });
+
+  it('teste acabado há horas ainda é PRO: a conversão está a caminho', () => {
+    const fim = new Date(AGORA.getTime() - 3 * 60 * 60 * 1000);
+    expect(
+      resolveAiEntitlement(
+        [assinatura({ status: 'TRIALING', trialEndsAt: fim, currentPeriodEnd: fim })],
+        AGORA,
+      ),
+    ).toMatchObject({ tier: 'PRO', motivo: 'teste' });
+  });
+
+  it('teste acabado sem pagamento volta ao Free, sem carência', () => {
+    expect(
+      resolveAiEntitlement(
+        [assinatura({ status: 'TRIALING', trialEndsAt: dias(-2), currentPeriodEnd: dias(-2) })],
+        AGORA,
+      ),
+    ).toMatchObject({ tier: 'FREE', motivo: 'teste_acabou', degraded: true });
+  });
+
+  it('teste ao lado de um PENDING antigo: vale o teste', () => {
+    expect(
+      resolveAiEntitlement(
+        [
+          assinatura({ id: 'p', status: 'PENDING', currentPeriodEnd: null, createdAt: AGORA }),
+          assinatura({
+            id: 't',
+            status: 'TRIALING',
+            trialEndsAt: dias(4),
+            currentPeriodEnd: dias(4),
+          }),
+        ],
+        AGORA,
+      ),
+    ).toMatchObject({ tier: 'PRO', subscription: { id: 't' } });
+  });
+});
+
+describe('PRO pela comunidade e por programa (#288, #386)', () => {
+  const comunidade = (p: Partial<AssinaturaLida> = {}) =>
+    assinatura({
+      id: 'pool',
+      source: 'GROUP',
+      interval: 'MONTHLY',
+      currentPeriodEnd: null,
+      group: { id: 'g1', name: 'Academia Demo' },
+      paidBy: 'COMMUNITY',
+      ...p,
+    });
+
+  it('membro de comunidade ALL_MEMBERS tem PRO pago pela comunidade', () => {
+    expect(resolveAiEntitlement([comunidade()], AGORA)).toMatchObject({
+      tier: 'PRO',
+      source: 'GROUP',
+      subscription: { paidBy: 'COMMUNITY' },
+    });
+  });
+
+  it('PRO próprio continua valendo sobre o da comunidade (ADR 025)', () => {
+    expect(resolveAiEntitlement([comunidade(), assinatura({})], AGORA)).toMatchObject({
+      source: 'ASAAS',
+    });
+  });
+
+  it('programa vale até a data final e depois volta ao Free', () => {
+    const programa = (fim: Date) =>
+      comunidade({
+        paidBy: 'PROGRAM',
+        programName: 'Verão 21',
+        currentPeriodEnd: fim,
+        cancelAtPeriodEnd: true,
+      });
+    expect(resolveAiEntitlement([programa(dias(6))], AGORA)).toMatchObject({
+      tier: 'PRO',
+      subscription: { paidBy: 'PROGRAM', programName: 'Verão 21' },
+    });
+    expect(resolveAiEntitlement([programa(dias(-1))], AGORA)).toMatchObject({ tier: 'FREE' });
   });
 });

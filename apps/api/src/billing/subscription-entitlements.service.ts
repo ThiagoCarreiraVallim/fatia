@@ -3,12 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import {
   INSTANCIA_LIBERADA,
-  resolverDireitoIa,
+  resolveAiEntitlement,
   type AiEntitlement,
   type AssinaturaLida,
 } from './ai-entitlement';
 
-/** Colunas que `resolverDireitoIa` lê. */
+/** Colunas que `resolveAiEntitlement` lê. */
 export const ASSINATURA_LIDA = {
   id: true,
   source: true,
@@ -18,32 +18,41 @@ export const ASSINATURA_LIDA = {
   graceEndsAt: true,
   cancelAtPeriodEnd: true,
   createdAt: true,
+  trialEndsAt: true,
+} as const;
+
+/** O que se lê de um pool para tratá-lo como assinatura. */
+const POOL_AS_SUBSCRIPTION = {
+  id: true,
+  status: true,
+  currentPeriodEnd: true,
+  graceEndsAt: true,
+  cancelAtPeriodEnd: true,
+  programName: true,
+  group: { select: { id: true, name: true } },
 } as const;
 
 /** O que se lê de uma atribuição de assento para tratá-la como assinatura. */
 const SEAT_AS_SUBSCRIPTION = {
   membershipId: true,
   assignedAt: true,
-  pool: {
-    select: {
-      id: true,
-      status: true,
-      currentPeriodEnd: true,
-      graceEndsAt: true,
-      cancelAtPeriodEnd: true,
-      group: { select: { id: true, name: true } },
-    },
-  },
+  pool: { select: POOL_AS_SUBSCRIPTION },
 } as const;
 
-type SeatRow = {
-  assignedAt: Date;
-  pool: Omit<AssinaturaLida, 'source' | 'interval' | 'createdAt'> & {
-    group: { id: string; name: string };
-  };
+type PoolRow = Omit<AssinaturaLida, 'source' | 'interval' | 'createdAt' | 'group'> & {
+  programName: string | null;
+  group: { id: string; name: string };
 };
 
-function seatAsSubscription({ assignedAt, pool }: SeatRow): AssinaturaLida {
+/**
+ * Um pool da comunidade lido como assinatura. Programa (nome e data final) é
+ * pago pelo programa; o resto, pelo assento ou pela comunidade inteira.
+ */
+function poolAsSubscription(
+  pool: PoolRow,
+  since: Date,
+  payer: 'SEAT' | 'COMMUNITY',
+): AssinaturaLida {
   return {
     id: pool.id,
     source: 'GROUP',
@@ -52,55 +61,104 @@ function seatAsSubscription({ assignedAt, pool }: SeatRow): AssinaturaLida {
     currentPeriodEnd: pool.currentPeriodEnd,
     graceEndsAt: pool.graceEndsAt,
     cancelAtPeriodEnd: pool.cancelAtPeriodEnd,
-    createdAt: assignedAt,
+    createdAt: since,
     group: pool.group,
+    paidBy: pool.programName ? 'PROGRAM' : payer,
+    programName: pool.programName,
   };
 }
 
 /**
- * Assentos ativos da pessoa, lidos como assinatura (ADR 025): atribuição não
- * revogada, numa membership ACTIVE. Quem sai da comunidade perde o assento
- * na mesma transação, mas o filtro por status protege contra o resto.
+ * O PRO que a comunidade dá à pessoa, lido como assinatura (ADR 025, #288):
+ *
+ * - assento atribuído, não revogado, numa membership ACTIVE;
+ * - comunidade em `ALL_MEMBERS`, em que a pessoa é membro (papel MEMBER) ativo.
+ *
+ * Quem sai da comunidade perde os dois na hora: o filtro é pelo status da
+ * membership, lido a cada chamada.
  */
-export async function assentosComoAssinatura(
-  prisma: Pick<PrismaService, 'groupSeatAssignment'>,
+export async function seatsAsSubscriptions(
+  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupSeatPool'>,
   userId: string,
 ): Promise<AssinaturaLida[]> {
-  const assentos = await prisma.groupSeatAssignment.findMany({
-    where: { revokedAt: null, membership: { userId, status: 'ACTIVE' } },
-    select: SEAT_AS_SUBSCRIPTION,
-  });
-  return assentos.map(seatAsSubscription);
+  const [assentos, comunidades] = await Promise.all([
+    prisma.groupSeatAssignment.findMany({
+      where: { revokedAt: null, membership: { userId, status: 'ACTIVE' } },
+      select: SEAT_AS_SUBSCRIPTION,
+    }),
+    allMembersPools(prisma, { userId }),
+  ]);
+  return [
+    ...assentos.map((a) => poolAsSubscription(a.pool, a.assignedAt, 'SEAT')),
+    ...comunidades.flatMap((pool) =>
+      pool.group.memberships.map((m) =>
+        poolAsSubscription(pool, m.joinedAt ?? m.createdAt, 'COMMUNITY'),
+      ),
+    ),
+  ];
 }
 
 /**
- * Das memberships pedidas, as que têm assento de IA **valendo agora**.
+ * Pools em `ALL_MEMBERS` com as memberships pedidas que contam: ativas e de
+ * papel MEMBER (a equipe não é aluna). Lido pelo pool para uma consulta só.
+ */
+function allMembersPools(
+  prisma: Pick<PrismaService, 'groupSeatPool'>,
+  membership: { userId: string } | { id: { in: string[] } },
+) {
+  const where = { ...membership, status: 'ACTIVE' as const, role: 'MEMBER' as const };
+  return prisma.groupSeatPool.findMany({
+    where: { mode: 'ALL_MEMBERS', group: { memberships: { some: where } } },
+    select: {
+      ...POOL_AS_SUBSCRIPTION,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          memberships: { where, select: { id: true, joinedAt: true, createdAt: true } },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Das memberships pedidas, as que têm o PRO pago pela comunidade **valendo
+ * agora**: assento atribuído, ou membro de comunidade em `ALL_MEMBERS`.
  *
- * É a consulta que a comunidade usa para mostrar "tem assento" (`hasAiSeat`), e
- * a regra é a do portão (`resolverDireitoIa`): atribuição não revogada **e** pool
- * que ainda vale. Cancelar o pool ou deixá-lo vencer não revoga as atribuições —
- * o dono pode reativar e elas voltam —, então contar só a atribuição dizia que a
- * pessoa tinha IA paga pela comunidade quando o portão já respondia FREE.
+ * É a consulta que a comunidade usa para mostrar "tem PRO" (`hasAiSeat`), e a
+ * regra é a do portão (`resolveAiEntitlement`). Cancelar o pool ou deixá-lo
+ * vencer não revoga as atribuições — o dono pode reativar e elas voltam —,
+ * então contar só a atribuição dizia que a pessoa tinha IA paga pela comunidade
+ * quando o portão já respondia FREE. O painel vê só isso: nunca se a pessoa
+ * paga o próprio PRO, nem como.
  */
 export async function membershipsWithEffectiveSeat(
-  prisma: Pick<PrismaService, 'groupSeatAssignment'>,
+  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupSeatPool'>,
   membershipIds: string[],
   now: Date = new Date(),
 ): Promise<Set<string>> {
   if (membershipIds.length === 0) return new Set();
-  const seats = await prisma.groupSeatAssignment.findMany({
-    where: {
-      revokedAt: null,
-      membershipId: { in: membershipIds },
-      membership: { status: 'ACTIVE' },
-    },
-    select: SEAT_AS_SUBSCRIPTION,
-  });
-  return new Set(
-    seats
-      .filter((seat) => resolverDireitoIa([seatAsSubscription(seat)], now).tier === 'PRO')
+  const [seats, comunidades] = await Promise.all([
+    prisma.groupSeatAssignment.findMany({
+      where: {
+        revokedAt: null,
+        membershipId: { in: membershipIds },
+        membership: { status: 'ACTIVE' },
+      },
+      select: SEAT_AS_SUBSCRIPTION,
+    }),
+    allMembersPools(prisma, { id: { in: membershipIds } }),
+  ]);
+  const valendo = (a: AssinaturaLida) => resolveAiEntitlement([a], now).tier === 'PRO';
+  return new Set([
+    ...seats
+      .filter((seat) => valendo(poolAsSubscription(seat.pool, seat.assignedAt, 'SEAT')))
       .map((seat) => seat.membershipId),
-  );
+    ...comunidades
+      .filter((pool) => valendo(poolAsSubscription(pool, now, 'COMMUNITY')))
+      .flatMap((pool) => pool.group.memberships.map((m) => m.id)),
+  ]);
 }
 
 /**
@@ -141,10 +199,10 @@ export class SubscriptionEntitlementsService extends AiEntitlements {
     try {
       const [proprias, assentos] = await Promise.all([
         this.prisma.userSubscription.findMany({ where: { userId }, select: ASSINATURA_LIDA }),
-        assentosComoAssinatura(this.prisma, userId),
+        seatsAsSubscriptions(this.prisma, userId),
       ]);
       const assinaturas: AssinaturaLida[] = [...proprias, ...assentos];
-      const direito = resolverDireitoIa(assinaturas, agora);
+      const direito = resolveAiEntitlement(assinaturas, agora);
       // Sem exigência de plano, todo mundo usa a IA; quem assinou mesmo assim
       // continua vendo a própria assinatura.
       if (!this.exigePlano() && direito.tier === 'FREE') return INSTANCIA_LIBERADA;

@@ -3,7 +3,6 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 import type { TimingStat } from '@/components/chat/turn-timing';
-import { mono } from './surfaces';
 
 /**
  * `elements-message-timing` do assistant-ui, sem desvio de forma.
@@ -29,8 +28,8 @@ export function MessageTiming({
     >
       {stats.map((stat) => (
         <span key={stat.label} className="flex items-baseline gap-1">
-          <span className={cn(mono, 'text-foreground/35')}>{stat.label}</span>
-          <span className={cn(mono, 'tabular-nums text-foreground/50')}>{stat.value}</span>
+          <span className="text-xs text-foreground/35">{stat.label}</span>
+          <span className="text-xs tabular-nums text-foreground/50">{stat.value}</span>
         </span>
       ))}
     </div>

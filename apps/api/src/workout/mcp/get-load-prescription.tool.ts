@@ -33,4 +33,22 @@ export class GetLoadPrescriptionTool implements McpToolDef {
   execute(input: { exerciseId: number; targetReps?: string }, { userId }: McpToolContext) {
     return this.prescriptions.forExercise(userId, input.exerciseId, input.targetReps);
   }
+
+  /**
+   * A carga, as repetições e o descanso sugeridos para a próxima sessão (prancha IA-Cartoes,
+   * #384). Sem histórico suficiente, ou no cardio, não há sugestão nem cartão.
+   */
+  artifact(result: unknown) {
+    const sugestao = result as Awaited<ReturnType<PrescriptionService['forExercise']>>;
+    if (sugestao.status !== 'ok') return null;
+    return {
+      kind: 'comparison',
+      label: 'Próxima sessão',
+      items: [
+        { label: 'Carga', value: sugestao.weightKg, unit: 'kg' },
+        { label: 'Repetições', value: sugestao.reps },
+        { label: 'Descanso', value: sugestao.restSeconds, unit: 's' },
+      ],
+    };
+  }
 }

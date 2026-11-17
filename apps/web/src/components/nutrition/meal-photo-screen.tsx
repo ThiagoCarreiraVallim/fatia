@@ -232,9 +232,11 @@ export function MealPhotoScreen() {
                 <ShieldCheck size={20} />
               </span>
               <h2 className="text-lg font-bold text-foreground">{MEAL_PHOTO_COPY.firstTitle}</h2>
-              <p className="text-sm leading-relaxed text-foreground/75">
-                {MEAL_PHOTO_COPY.firstBody}
-              </p>
+              {aceites.data ? (
+                <p className="text-sm leading-relaxed text-foreground/75">
+                  {MEAL_PHOTO_COPY.firstBody(aceites.data.processor.provider)}
+                </p>
+              ) : null}
             </>
           ) : null}
           <p className="text-xs text-muted-foreground">{MEAL_PHOTO_COPY.keepNote}</p>

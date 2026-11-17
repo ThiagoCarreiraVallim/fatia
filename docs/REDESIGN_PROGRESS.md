@@ -213,14 +213,19 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
 | #384  | Chat com IA: conversas, cartões, estados e ferramentas | pronto na branch | api, db, agente, MCP (contrato de cartão), api-client, web, app |
 | #385  | IA: foto do prato, configurações, memórias e limites   | pronto na branch | api, db, agente, MCP (`save_memory`), api-client, web, app      |
+| #386  | Plano e assinatura                                     | pronto na branch | api, db, api-client, web, app, site, e-mail e push              |
+| #388  | Conectar sua IA                                        | pronto na branch | api, db, api-client, web, app, docs                             |
 
-Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_consent_and_web_search` e `20261117030000_chat_photos_in_media_file`; env nova `AGENT_CHAT_PAUSE_AFTER_TOOLS`, padrão 14):
+Pendências da #384 (branch `redesign/384-chat`, migrations `20261117110000_ai_consent_and_web_search` e `20261117110100_chat_photos_in_media_file`; envs novas `AGENT_CHAT_PAUSE_AFTER_TOOLS`, padrão 14, e `AI_CONSENT_PROVIDER`/`AI_CONSENT_MODEL`/`AI_CONSENT_SEARCH_ENGINE`, vazias = o destino de hoje):
 
 - **Contrato de cartão:** toda tool declara o formato do cartão (`card` no `McpToolDef`), sem Tabela padrão para quem não mapeou (decisão do dono durante a issue). Leitura → um dos 12 formatos de consulta; confirmável → `confirm` (o cartão Gravar/Ajustar; `refresh_achievements` → `badges`); restrita → `appOnly { screen, path }`. As tools do agente também: `web_search` → fontes, `ask_user` → pergunta, `open_in_app` → só no app (`AGENT_LOCAL_TOOLS`). `tool-catalog.spec.ts` reprova tool sem formato; o agente descarta `kind` desconhecido em vez de virar Tabela. Servido em `GET /chat/tool-catalog`. Não vai no fio do MCP: `SHA_ENTIDADE`, contagem e docs do MCP não mudaram (specs rodados depois do merge e do contrato).
-- **Produtores:** passos e água (barras), metas (progresso), conquistas (selos), explicar execução (instruções), exportar dados (arquivo), sequência (métrica), treino em andamento (lista rica); lista e tabela têm o genérico. Faixa e placar ainda não têm produtor, nem parte das barras, métricas e linhas do tempo: essas tools mostram só a linha até ganharem `artifact()`.
+- **Produtores:** toda tool de leitura desenha o cartão que declara. As 22 que não tinham produtor (métricas, barras, linhas do tempo, faixas, progresso, comparações, placar) e `refresh_achievements` ganharam `artifact()`; Tabela e Lista genéricas desenham qualquer resultado com o que mostrar (objeto único vira rótulo/valor, nome aninhado resolvido, coluna sem número). `chat-card-coverage.spec.ts` roda toda tool com `card` contra uma amostra realista e reprova formato sem produtor (44 de 70 casos estavam vermelhos antes). Cliente: formato desconhecido (ou sem o campo principal) vira o aviso "Este cartão precisa de uma versão mais nova do Fatia.", no PWA e no app.
 - **Só no app:** a IA nunca apaga, sai ou autoriza; chama `open_in_app`, que emite o cartão "… é pelo app" com "Abrir <tela>" (link montado por `appOnlyHref` sobre `ROUTES`; sem o parâmetro, a tela-mãe).
-- **Busca na web (só OpenRouter):** tool local `web_search(query)`, chamada separada ao OpenRouter com o plugin `web` (engine `exa`), só com o texto da pergunta (sem histórico, sem sistema, sem id; e-mail, telefone e documentos são removidos). Modo `off | ask | on` vem da API a cada turno; `ask` pausa com `web_consent` ("Buscar na web?", com a pergunta à vista). O aceite diz que a retenção zero não cobre a busca. Fontes num cartão. Cada busca cobra na cota (`AiUsage` `web_search`, modelo `openrouter-web-search`).
-- **Aceites:** `AiConsent` (chat e busca, com versão) e `User.webSearchEnabled`. Sem o aceite do chat, `POST /chat` é 403 `AI_CONSENT_REQUIRED` e a tela mostra o aceite no lugar do campo. Textos com nomes reais: OpenRouter → GLM 5.3 Flash (Z.ai); busca Exa pelo OpenRouter. Entram no export de dados. A chave do globo no topo liga e desliga a busca. A `/privacy` descreve a busca nova.
+- **Busca na web (só OpenRouter):** tool local `web_search` **sem argumento**: o modelo principal só decide buscar. A pergunta é escrita numa chamada à parte que vê só a última fala da pessoa (sem citação, perfil, memórias nem histórico), depois passa pelo filtro de e-mail, telefone e documento; a mesma pergunta aparece no aceite e é buscada. Chamada separada ao OpenRouter com o plugin `web` (engine `exa`), só com esse texto. Cobra 1 busca antes de sair, mesmo sem `usage` ou parada no meio. Modo `off | ask | on` vem da API a cada turno; `ask` pausa com `web_consent` ("Buscar na web?", com a pergunta à vista). O aceite diz que a retenção zero não cobre a busca. Fontes num cartão. Cada busca cobra na cota (`AiUsage` `web_search`, modelo `openrouter-web-search`).
+- **Aceites:** `AiConsent` (chat e busca, com versão) e `User.webSearchEnabled`. Toda chamada do `HostedAiService` (turno, ditado, foto do prato, rótulo) exige o aceite do chat: sem ele, 403 `AI_CONSENT_REQUIRED`, e o PWA e o app abrem o aceite (no chat, no ditado, na foto, no rótulo e no onboarding); carregando ou sem conseguir ler, o campo não aparece. O 403 diz "atualize o app" para o app antigo, que só mostra a mensagem. Os nomes (provedor, modelo, busca) vêm das envs `AI_CONSENT_*` pela API, e o aceite gravado leva os nomes: trocar um pede o aceite de novo. O texto tem hash amarrado à versão (`2026-11-17`) num teste. No lote, a busca conta como decisão e o aceite dela só é gravado no Enviar, se a escolha final for concordar. Entram no export de dados. A chave do globo no topo liga e desliga a busca. A `/privacy` descreve a busca nova.
+- **Fila e parada:** depois de uma resposta com erro, a fila para e cada item ganha Enviar/Descartar (nada sai sozinho); "Tentar de novo" reenvia a pergunta que falhou. `POST …/stop` responde só depois de o turno fechar (teto de 10 s), a fila espera essa resposta, e o turno que esbarra no 409 `CHAT_RUN_IN_PROGRESS` tenta de novo com espera crescente. No app, o envio confere parada e conversa depois de subir a foto.
+- **Foto do chat passageira:** some em 24 h, presa à mensagem ou não; só fica a que virou refeição (`promoteChatPhotoToMeal`, gancho para a #385, com "guardar as fotos" ligado). A ADR 046 foi emendada para ceder à 038. As fotos entram no export LGPD, na mensagem, com link assinado.
+- **Lista de conversas:** a prévia tira a citação (`> …`) da frente.
 - **Pausa "Continuo?":** depois de `AGENT_CHAT_PAUSE_AFTER_TOOLS` consultas no turno ("Já consultei N coisas. Continuo?"), com Continuar e Parar aqui; 0 desliga.
 - **Merge de `feat/chat-fotos-busca-fila-cartoes`:** ficaram a fila de mensagens, citar trecho, o retry do `/mcp` em falha temporária e a foto do chat no R2 (ADR renumerada para **046**, migration renomeada para ordenar depois das da main). A busca da branch (tool de servidor dentro da chamada do modelo, sem aceite, com a conversa inteira no contexto) saiu; ficou a cobrança por busca dela.
 - **Conversas antigas:** o dono liberou apagar mensagens e conversas antigas se o schema limpo pedisse. Não foi preciso: os formatos novos moram no mesmo `metadata.artifacts`, e as conversas antigas abrem como antes. **Nada foi apagado.**
@@ -232,10 +237,99 @@ Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_c
   - No app a escrita feita recolhe como "· gravado", sem a hora (o app não guarda a hora de cada fala); no PWA, "· gravado às HH:MM".
   - "Agora não" do aceite sai do chat (web volta ao início, app volta uma tela).
   - O anel do progresso no app é um círculo cheio com o número, sem o arco parcial.
+  - O topo da conversa mantém globo, memórias, conversas e nova conversa, em vez de um botão só.
+  - Campo numérico de pergunta é digitável, sem stepper.
+  - O cartão da resposta antiga fica como foi decidido; só o da última resposta fica aberto.
+  - Ficam o tempo da resposta e a barra de ações (copiar, citar, 👍/👎) embaixo de cada resposta.
+  - O cartão de confirmação não ganha respostas rápidas embaixo: a decisão é no cartão.
+  - Sem o selo de iniciais do treinador ("TD") na lista: o resumo da conversa não traz a comunidade.
+  - A conversa nova se chama "Nova conversa" até ser aberta de novo (o título vem do servidor depois do primeiro turno).
+  - No PWA, o Gravar abre com o foco (anel), para dar para confirmar pelo teclado.
+  - O placar usa a inicial como avatar.
+  - O ditado (Al-M17) só aparece com `dictation` ligado na disponibilidade do chat; no banco dev está desligado, e a gravação não foi capturada (só o campo da conversa nova).
 - **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
-- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+- **Passada visual (2026-11-17):** IA-Estados, IA-Cartoes, IA-Conversas, Al-M6, Al-M16, Al-M17, Al-M20 a Al-M23 comparadas lado a lado (prancha, web, app), escuro e uma amostra no claro.
+  - Web e app: linha da tool em pílula cinza da largura da conversa, com selo e o desfecho em negrito; a escrita à espera do sim não ganha linha; a busca diz "Pesquisei na web · N sites" e o aviso "Só a pergunta vai…"; a resposta interrompida virou pílula com pausa.
+  - Cartões: Gravar/Continuar/Responder em pílula clara e Ajustar/Parar aqui cinza; pergunta em azul com "Responder"; pausa "Está mais longo que o previsto"; aceites lado a lado (verde e cinza), sem ícone.
+  - A primeira fala é o título da conversa (grande, à direita, com linha embaixo); as seguintes, balão.
+  - Campo com a câmera dentro e borda verde, "Responda ou peça outra coisa".
+  - Linha do tempo sem eixos, com três datas e "em N dias"; meta com ponto de milhar; "Só no app" no cartão só do app.
+  - Lista (Al-M6): no app, "Conversas", linhas sem cartão, seção em caixa normal, busca com lupa, ponto verde "Esperando você" e giro "pensando", botão de opções e o atalho "Nova conversa…" embaixo; o PWA ganhou o mesmo ponto e giro na gaveta.
+  - O topo da conversa no app mostra o título dela; o nome "Fatia" só aparece para agente de comunidade.
+  - A prévia da lista sai sem a marcação do markdown.
 
-Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `20261117100000_ai_write_modes_and_memory_category` e `20261118090000_ai_auto_write_hardening`; nenhuma env nova, a credencial é a `AGENT_API_KEY` que já existe):
+Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
+
+- **Regra das lojas (o app nunca vende fora da loja):** a tela sai de `planStatusView(plan, { surface, canPurchase, now })` no api-client. Com `surface: 'app'` ela nunca devolve pagar, cancelar, preço da web, Pix, boleto nem link (teste com mutação vista falhar). Sem compra no app (`EXPO_PUBLIC_IAP_ENABLED`), a oferta é "O PRO vem pela sua comunidade" + "Tenho código", sem preço. O `webManageNote` ("entre pelo navegador") saiu.
+- **Assinatura da web vista no app:** mostra o estado e as datas, com "Fora do app" e "mandamos por e-mail como resolver", **sem botão** (o texto da prancha Al-M13). Quem resolve é o e-mail Ex-03, que leva ao Meu plano da web. O push de cobrança não leva preço, Pix nem link.
+- **Loja:** quem assina pela loja resolve na loja nas duas superfícies (Al-M13d), e nunca recebe cobrança nem lembrete de pagamento do Fatia. Só recebe o "a loja não conseguiu cobrar" e o "o teste está acabando".
+- **Decisão: o aviso de fim do teste da loja fica** (a prancha Al-M3 promete), mas diz só "se não quiser continuar, cancele nas assinaturas da loja", com o link da tela de assinaturas da loja. Nunca leva preço, link nem instrução de pagamento do Fatia (teste em `billing-reminders.spec.ts`).
+- **Teste de 7 dias, uma vez por pessoa** (`User.proTrialStartedAt`):
+  - Na web, o primeiro checkout de quem é elegível já é o teste: `TRIALING`, a primeira cobrança vence no fim e nada é cobrado hoje. Nada é cobrado sozinho, nem no cartão: a pessoa paga a primeira cobrança até o fim do teste (Pix, boleto ou cartão), na página de pagamento, que a tela mostra durante o teste.
+  - A reserva do teste é da mesma transação que grava a linha, sob uma trava por pessoa (`pg_advisory_xact_lock`): Asaas fora do ar não gasta o teste, assinatura criada no Asaas que não chega ao banco é cancelada lá, e duas abas não abrem duas assinaturas.
+  - Teste vencido há 4 dias sem pagamento: a rodada dos avisos cancela no Asaas e grava `EXPIRED`. O checkout cancela no Asaas toda assinatura viva da pessoa antes de criar a nova; webhook da antiga não mexe na nova. Teste cancelado ou vencido volta a ver o formulário ("Voltar ao PRO"; com cobrança aberta, "Pagar" e "Assinar de novo").
+  - Na loja, vem do `period_type: TRIAL` da RevenueCat.
+  - O app só promete o teste quando o pacote da loja tem oferta introdutória grátis **e** a pessoa é elegível. Quem decide e cobra é a loja.
+  - Teste sem pagamento volta ao Free sem carência.
+  - Limites (documentados em BILLING.md, sem código): a elegibilidade da oferta da loja é por conta da loja, não do Fatia; quem apaga e recria a conta volta a ser elegível na web.
+- **Forma de pagamento:** Pix, boleto ou cartão escolhidos antes (Si-04), gravados em `paymentMethod`. Trocar período ou forma cancela o pendente. O cartão recebe "vence em breve" e "vence hoje" como Pix e boleto.
+- **Avisos (Ex-03):** `BillingReminderJob` de hora em hora, a partir das 9h no fuso da pessoa; o "hoje" e o fim do teste também são do fuso dela (Cuiabá, Rio Branco e EUA testados). Fuso inválido cai em São Paulo e uma assinatura que falha não para a rodada; `PATCH /me` e o `update_timezone` do MCP recusam fuso que não existe. `BillingReminder` é gravado antes do envio, com unique por assinatura, tipo e vencimento. Push com `NotificationKind.BILLING`, sem chave na tela de Notificações.
+- **PRO pela comunidade:** `GroupSeatPool.mode = ALL_MEMBERS` (só papel MEMBER). O programa é o pool com `programName` e data final. Para dev e E2E: `pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"] [--revoke]`; o `--until` vale até 23:59:59.999 desse dia em São Paulo. `grant-group`, `grant-pro` e `grant-seat` mostram antes o que mudam e recusam produção sem `--i-know-this-is-production`. O painel vê só se o membro tem PRO pela comunidade, nunca como uma assinatura pessoal foi paga (`user-isolation.spec.ts`).
+- **Site (Si-04):** `fat.ia.br/pro` não tem sessão. Ele escolhe período e forma de pagamento e manda para `app/assinar`, que passa pelo login quando preciso e chega ao Meu plano com a escolha (`?periodo=&pagamento=`). O CPF é digitado na web e vai direto ao Asaas. Os preços do site saem do mesmo `BILLING_PRO_*_CENTS` (build args).
+- **Renomeados ao tocar:** `plano` → `plan`, `precos` → `prices`, `processarWebhookAsaas` → `handleAsaasWebhook`, `cancelar` → `cancel`, `sincronizar` → `sync`, `encerrarAntesDeApagar` → `cancelBeforeAccountDeletion` (agora também no meio do teste).
+- **Desvios do canvas:**
+  - O M3 (início do teste) é uma folha de 85% sobre o M2, não uma tela.
+  - "Tenho código" no chat leva à Comunidade com a folha do código aberta (`/community?join=1`). No Meu plano, a folha abre ali mesmo.
+  - O M2 ganhou "Restaurar compras" (exigência da loja).
+  - Na web, o Si-04 fica dentro do Meu plano: período, CPF, forma de pagamento e teste. O pendente ganhou "Trocar a forma de pagamento".
+  - O "Pagar com Pix" do M13b/c é o link da cobrança no Asaas, que mostra o Pix (o Fatia não gera QR). Só aparece na web.
+  - Os preços do M2 no app são os da loja, não os da web.
+  - O selo do Você mostra "Teste · n dias".
+  - O cabeçalho do Meu plano é o da tela ("‹ Meu plano"), não o "X" com o selo Free do M2: a mesma tela mostra todos os estados.
+  - No app, o cartão de uma assinatura vencida (Expirada, IA pausada) vem sem botão: a oferta da loja ou da comunidade logo abaixo já tem a ação. A IA pausada pela carência "terminou" no fim da carência.
+  - O M5 mantém, abaixo do cartão laranja, o cartão do estado ("PRO · Comunidade", "Abrir a IA") e a lista "Seu PRO inclui"; o programa mostra a data e os dias que faltam, sem a barra de progresso.
+  - O M13 não tem as abas de estado (são o tweak da prancha) nem o push de exemplo do M13b/c.
+  - Os botões das pranchas sem ícone no app ("Tenho código", "Pagar com Pix"): o `Button` do app não tem ícone.
+  - Si-04 no site: o CPF é pedido na tela seguinte (o Meu plano da web), porque o site é estático e não tem sessão; a mesma página empilha em uma coluna no celular.
+  - Ex-03: sem a imagem do logo (nenhum e-mail do Fatia carrega imagem remota) e com o texto da regra do teste (nada é cobrado sozinho): "Abrir pagamento" no lugar de "Continuar no PRO", sem a contagem de refeições, e "Não conseguimos confirmar o pagamento" no atraso, porque nem sempre é cartão.
+- **Passada visual** (prints em `~/.cache/fatia-vis/386/cmp-<prancha>.png`, prancha | web | app; site e e-mail contra Si-04 e Ex-03) feita, com o demo em cada estado pelo banco de dev. A oferta da loja (M2 com compra, M3) só foi conferida por código e testes: o Expo Go não tem a RevenueCat nem pacotes da loja.
+- **Fora do escopo:**
+  - E-mail de checkout pendente.
+  - Aviso no app quando o teste da loja converte.
+  - O "Regularizado" do M13b como estado próprio: depois do pagamento a tela volta ao "Ativa".
+- **Ainda não conferido:**
+  - Compra real na loja (exige build de desenvolvimento e contas de teste).
+  - Checkout no sandbox do Asaas.
+
+Pendências da #388 (branch `redesign/388-conectar-ia`, migration `20261117000000_mcp_oauth_connections`):
+
+- **Decisões:**
+  - Vínculo pessoa × app de IA: tabelas novas `McpOAuthConnection` (pessoa, cliente DCR, `lastUsedAt`) e `McpOAuthConnectionToken` (SHA-256 dos access e refresh tokens de cada conexão, com validade, podados ao vencer). A `McpOAuthAuthorization` não serve: é apagada minutos depois do login. A conexão nasce só na troca do code (cliente da autorização, dono pelo `sub` do token que o Logto emitiu). O refresh acha a conexão pelo hash do refresh token apresentado e nunca cria linha; o `client_id` do corpo não decide nada. Gravar a conexão roda depois da resposta (sem `await`) e nunca derruba nem atrasa o login da IA.
+  - "Último acesso": cada chamada ao `/mcp` acha a conexão pelo hash do Bearer entre os access tokens válidos dela e atualiza `lastUsedAt` (no máximo uma escrita por minuto). Vários aparelhos no mesmo cliente contam. Quem conectou antes da tabela só aparece depois de conectar de novo.
+  - "Conectado" só com último acesso nos últimos 30 dias (`CONNECTED_WINDOW_DAYS`); mais velha, "<IA> conectado antes", com o teste à mão. Sem revogação, o Fatia não sabe quando a pessoa removeu o conector.
+  - `GET /users/me/mcp-connections` devolve `serverUrl` e as conexões da própria pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`, inclusive o fluxo OAuth inteiro (DCR → token → guard → toque), o refresh com o `client_id` do app de outra pessoa (não cria linha) e o refresh sem `client_id`.
+  - Endereço do servidor: `API_PUBLIC_URL` + `/mcp`, servido pela API. É o `resource` do metadata para quem chega pelo endereço público (`public-url.spec.ts`). Sem env nova; nenhuma tela escreve o endereço.
+  - Sem revogação no Fatia: a tela diz "para desconectar, remova o conector no app da sua IA".
+  - Erros do Logto no `/oauth/token` passam a sair no formato da RFC 6749 (`OAuthError`); antes, um refresh vencido voltava como 401 do Nest. `invalid_grant` só quando o Logto disse isso: Logto fora do ar vira `temporarily_unavailable` (503) e configuração errada do facade (`invalid_client`, `invalid_target`…) vira `server_error` (500), para o Claude não jogar fora o refresh token.
+  - O `?tutorial=` da Ajuda marca o tutorial como assistido, como o toque na lista, e sai da URL ao fechar.
+  - O export de dados (LGPD) leva as conexões, sem os hashes.
+  - Entrada: Você › IA › Conectar sua IA, rota `/profile/connect` no app e na web (o app usava `/profile/tokens`, apagada). "Minha IA (MCP)" do menu da IA também leva para lá.
+  - Qual IA é qual: pelo `client_name` do registro (`claude` → Claude, `chatgpt`/`openai` → ChatGPT, o resto → Outro app). A tela abre na IA da conexão mais recente.
+- **Diferenças de propósito em relação às pranchas:**
+  - O endereço é o da configuração (`https://api.<domínio>/mcp`), não o `https://fatia.app/mcp` da prancha.
+  - Al-V6c: "você pode desconectar em Configurações da IA" virou "para desconectar, remova o conector no app da sua IA". A prancha troca o teste pelo cartão de conectado; aqui o cartão fica acima, e o teste (com "Ele responde algo como:") e o "Não funcionou?" continuam embaixo, porque o "Conectado" pode estar velho. O exemplo de resposta vem sem "3 de 5 hábitos" (Hábitos é a #390).
+  - Al-V6d: "Ver o tutorial com imagens" virou "Ver o tutorial" (a Ajuda ainda é só texto, #415); ele abre o tutorial "Conectar ao Claude ou ChatGPT" direto (`/you/help?tutorial=conectar-sua-ia`), que ganhou o que fazer quando não funciona. A terceira verificação muda com a IA escolhida.
+  - Al-V6e: a prancha só chega lá pelo tweak; na tela, o "Não funcionou" tem "Meu app não aceita MCP". "Exportar dados" já exporta (o mesmo link de 24 h de Você). Os dois cartões têm um X para voltar ao teste.
+  - O aviso de privacidade (a IA de fora só lê o que é seu, e passa pela política dela) não está na prancha; a issue pede.
+  - O primeiro passo vem aberto ao entrar e ao trocar de IA; copiar o endereço abre o "Entre e autorize".
+  - Se não deu para copiar (navegador na web; recusa ou `false` do `expo-clipboard` no app), a tela diz para copiar à mão.
+  - O selo "grátis" é o `done` do DS (contorno, minúsculo), não o `bdg ok` cheio em caixa-alta da prancha: no claro o verde sobre véu não passa 4,5:1. O cartão de conectado usa o verde a 10% (a prancha usa 16%), pelo mesmo motivo.
+  - Passada visual (prints de web e app contra Al-V6 a Al-V6e) feita: textos de apoio em 12/13 px como `b3`/`b2`, título em 700, cartões com o respiro da prancha, teste em `s2`, botões dos cartões visíveis sobre o cartão na web, endereço em monoespaçada no app e verde de texto (`primary-text`) no claro.
+- **Falta:**
+  - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
+  - Domínio de produção do endereço (a história de Produção).
+
+Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `20261117120000_ai_write_modes_and_memory_category` e `20261118090000_ai_auto_write_hardening`; nenhuma env nova, a credencial é a `AGENT_API_KEY` que já existe):
 
 - **Modo por categoria (ADR 039):** Registros do dia, Treino, Metas e Memórias, padrão Perguntar antes. A API decide (`toolModes` a cada turno) e confere de novo no `/mcp` com o header `x-fatia-auto-write`: modo, até 5 gravações por resposta, até 10 itens, nunca apagar; fora disso volta ao cartão de confirmação. Cada gravação automática guarda o "antes" (`AiAutoWrite`) e tem inversa por tool; "Gravado" com Desfazer (`POST /chat/auto-writes/:id/undo`, dono, uma vez, 24 h). Desligado tira as escritas da categoria do catálogo. Cobrança, equipe e mural não têm categoria: sempre pedem OK.
 - **Endurecimento da revisão (ADR 039, nota de 2026-11-18):**
@@ -250,7 +344,7 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
 - **Config da IA (Al-M24):** engrenagem no topo do chat (web e app), com as categorias (toque gira o modo), "Nunca é automático", busca na web (a mesma preferência do globo) e Mais (memórias com "n de 50", Usar sua própria IA, Meu plano).
 - **Memórias (Al-M9):** `category` (preferência, rotina, treino, hábito) e data; "n de 50"; com 50 a IA pede para apagar uma; "Apagar todas" com confirmação (`DELETE /chat/memories`, sem tool no MCP); a equipe nunca lê.
 - **Estados (Al-M11):** cota com "volta amanhã às 00:00", "Registrar à mão" e campo "Volta amanhã"; fora do ar com "Sua mensagem ficou salva" e Tentar de novo; interrompida com Continuar; "Pode sair da tela" enquanto pensa (o aviso de pronto já existia).
-- **Foto do prato (Al-M12, Al-M10):** PWA por arquivo em `/nutrition/photo` (o menu da IA já apontava para lá); aviso do provedor (OpenRouter) com "Como tratamos seus dados" antes da primeira foto, que é o aceite do chat (o 403 `AI_CONSENT_REQUIRED` traz o aviso de volta); revisão com desmarcar, ±10 g, total, aviso de 20–30% e "Gravar no almoço"; "Vai para:" troca a refeição. Permissão da câmera e da galeria reescritas (a foto só fica com permissão).
+- **Foto do prato (Al-M12, Al-M10):** PWA por arquivo em `/nutrition/photo` (o menu da IA já apontava para lá); aviso do provedor (o nome vem de `AiConsentStatus.processor`, como no aceite do chat) com "Como tratamos seus dados" antes da primeira foto, que é o aceite do chat (o 403 `AI_CONSENT_REQUIRED` traz o aviso de volta); revisão com desmarcar, ±10 g, total, aviso de 20–30% e "Gravar no almoço"; "Vai para:" troca a refeição. Permissão da câmera e da galeria reescritas (a foto só fica com permissão).
 - **MCP:** `save_memory` ganhou `category` (opcional); números e `SHA_ENTIDADE` regerados pelos specs. Nenhuma tool lê ou muda o modo.
 - **Desvios de propósito:**
   - Só grava sozinha a tool com inversa exata; as outras de uma categoria em Automático continuam pedindo OK (criar plano, bloco, exercício próprio, copiar dia, entre outras).
@@ -259,7 +353,7 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
   - A câmera do app não ganhou as abas Prato/Rótulo nem o "Tirar outra" depois do disparo: o rótulo continua no alimento próprio; o "Tirar outra" está no aviso do provedor.
   - O texto da permissão da câmera inclui os códigos de barras, que a prancha não cita.
   - O botão da IA no menu não gira com a resposta em segundo plano; fica o "Respondendo…" que já existia no PWA.
-- **Fica com a #384:** o descarte da foto do chat no fim do turno (heads-up do coordenador).
+- **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
 
 ## Etapas seguintes
@@ -325,6 +419,12 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
 - **Etapa 5 (#382):**
   - Sequência = dia ativo em todo lugar. Um dia é ativo com ao menos uma área cumprida: refeição, treino, água na meta ou passos na meta. Um cálculo só, sem dois números de sequência.
   - Conquistas: catálogo fechado em 10, com "100 treinos". O contador é N/10, e quem já tem 100 treinos ganha a conquista pela migration.
+- **Etapa 6 (#388):**
+  - Sem revogação no Fatia: o texto manda remover o conector no app da IA.
+  - O endereço do servidor vem da configuração (o `resource` do metadata, com path), nunca escrito no código.
+  - Os passos do ChatGPT seguem a prancha; falta o teste com conta real antes do lançamento.
+  - "Último acesso" com a autorização ligada à pessoa; a rota lista só as conexões de quem pede.
+  - Entrada por Você › IA › Conectar sua IA, no app e na web.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).

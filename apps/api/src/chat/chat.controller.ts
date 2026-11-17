@@ -230,12 +230,15 @@ export class ChatController {
     destino.aoFechar(sair);
   }
 
-  /** Para a resposta em andamento. 204 mesmo sem resposta rodando: o efeito pedido já vale. */
+  /**
+   * Para a resposta em andamento e responde depois que ela fechou (com teto), para a próxima
+   * mensagem não esbarrar no 409. 204 mesmo sem resposta rodando: o efeito pedido já vale.
+   */
   @Post('conversations/:id/stop')
   @HttpCode(204)
   async stop(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
     await this.conversas.assertOwned(user.id, id);
-    this.chat.stop(user.id, id);
+    await this.chat.stop(user.id, id);
   }
 
   @Patch('conversations/:id')

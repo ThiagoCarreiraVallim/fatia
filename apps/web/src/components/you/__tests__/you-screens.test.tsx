@@ -21,11 +21,12 @@ const api = vi.hoisted(() => ({
   reminders: vi.fn(),
   toast: vi.fn(),
   push: vi.fn(),
+  replace: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({ toast: api.toast }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: api.push, replace: vi.fn() }),
+  useRouter: () => ({ push: api.push, replace: api.replace }),
   usePathname: () => '/you',
 }));
 vi.mock('@fatia/api-client', async () => {
@@ -294,6 +295,49 @@ describe('Ajuda (Al-V12/V12b)', () => {
     await user.type(screen.getByLabelText('Buscar ajuda'), 'libras');
     expect(screen.getByRole('button', { name: /Ver a carga em libras/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Registrar uma refeição/ })).toBeNull();
+  });
+
+  it('abre direto no tutorial pedido (o "Ver o tutorial" de Conectar sua IA, #388)', async () => {
+    renderWith(<HelpScreen initialTutorialId="conectar-sua-ia" />);
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText('Conectar ao Claude ou ChatGPT')).toBeInTheDocument();
+    expect(within(sheet).getByText(/remova o conector no app da sua IA/)).toBeInTheDocument();
+  });
+
+  // Revisão da #388: o `?tutorial=` passa pelo mesmo caminho do toque na lista.
+  it('o tutorial aberto pela rota também fica marcado como assistido', async () => {
+    renderWith(<HelpScreen initialTutorialId="conectar-sua-ia" />);
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(api.markSeen).toHaveBeenCalledWith('conectar-sua-ia'));
+    expect(api.markSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it('fechar o tutorial aberto pela rota tira o ?tutorial= da URL', async () => {
+    const user = userEvent.setup();
+    renderWith(<HelpScreen initialTutorialId="conectar-sua-ia" />);
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.replace).toHaveBeenCalledWith('/you/help', { scroll: false });
+  });
+
+  it('fechar um tutorial aberto pela lista não mexe na URL', async () => {
+    const user = userEvent.setup();
+    renderWith(<HelpScreen />);
+    await user.click(screen.getByRole('button', { name: /Escanear o código de barras/ }));
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.replace).not.toHaveBeenCalled();
+  });
+
+  it('tutorial que não existe não abre nada', () => {
+    renderWith(<HelpScreen initialTutorialId="nao-existe" />);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

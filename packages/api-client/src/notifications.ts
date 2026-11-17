@@ -20,7 +20,8 @@ export type NotificationKind =
   | 'SCHEDULE'
   | 'SCHEDULE_REMINDER'
   | 'BIRTHDAY'
-  | 'REMINDERS';
+  | 'REMINDERS'
+  | 'BILLING';
 export type DevicePlatform = 'IOS' | 'ANDROID';
 export type NotificationPreferences = Record<NotificationKind, boolean>;
 
@@ -46,7 +47,15 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'SCHEDULE_REMINDER',
   'BIRTHDAY',
   'REMINDERS',
+  'BILLING',
 ];
+
+/**
+ * Tipos sem chave na tela: cada lembrete tem a sua (`REMINDERS`), e os avisos
+ * de cobrança e de fim do teste (`BILLING`, #386) não se desligam — perder um
+ * deles é perder a IA sem saber.
+ */
+type WithoutToggle = 'REMINDERS' | 'BILLING';
 
 /** Tom do ícone, no vocabulário do `chipic` da prancha. */
 export type IconTone = 'lime' | 'blue' | 'water' | 'amber' | 'brand' | 'pink' | 'neutral';
@@ -61,10 +70,10 @@ export interface NotificationKindInfo {
 
 /**
  * Cada chave da tela de Notificações (prancha Al-V4, #389), com o texto, o
- * ícone e o tom da prancha. `REMINDERS` não tem chave: cada lembrete tem a sua.
+ * ícone e o tom da prancha. `REMINDERS` e `BILLING` não têm chave.
  */
 export const NOTIFICATION_KIND_INFO: Record<
-  Exclude<NotificationKind, 'REMINDERS'>,
+  Exclude<NotificationKind, WithoutToggle>,
   NotificationKindInfo
 > = {
   PLAN_RECEIVED: {
@@ -142,7 +151,7 @@ export const NOTIFICATION_KIND_INFO: Record<
 };
 
 export interface NotificationGroupItem extends NotificationKindInfo {
-  kind: Exclude<NotificationKind, 'REMINDERS'>;
+  kind: Exclude<NotificationKind, WithoutToggle>;
 }
 
 export interface NotificationGroup {

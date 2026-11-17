@@ -1,6 +1,6 @@
 # ADR 046 — A foto do chat é guardada, enquanto a conversa existir
 
-**Status:** Accepted
+**Status:** Accepted — emendada em 2026-11-17 (#384): a foto do chat é passageira e cede à [ADR 038](./038-foto-da-refeicao-guardada.md); ver "Emenda" no fim
 **Data:** 2026-11-05
 
 ## Contexto
@@ -80,3 +80,27 @@ decisão é só do chat.
   da conta, que o `MediaFile` já resolve.
 - **Prazo fixo de retenção (ex.: 90 dias).** Rejeitada pela pessoa que decide o produto: a foto
   sumir de uma conversa aberta seria tão confuso quanto ela nunca ter sido guardada.
+
+## Emenda (2026-11-17, #384) — a foto do chat é passageira e cede à ADR 038
+
+A revisão da #384 achou o conflito: a [ADR 038](./038-foto-da-refeicao-guardada.md) decidiu que foto
+de prato só fica guardada quando a pessoa escolheu guardar as fotos **e** a foto virou uma refeição.
+Guardada "enquanto a conversa existir", a foto do chat era um segundo caminho, sem essa escolha, para
+o mesmo tipo de imagem — e com o chat registrando refeições (#385), o mesmo prato ficaria guardado
+por uma regra e apagado pela outra.
+
+**Decisão:** onde as duas se cruzam, vale a 038.
+
+1. **A foto do chat é passageira: 24 horas** (`CHAT_PHOTO_TTL_MS`) depois de enviada, presa à
+   mensagem ou não. A faxina (`MediaService.purgeOrphans`) apaga objeto e linha; o histórico mostra
+   a mensagem sem a foto. As 24 h cobrem a conversa em que ela foi mandada, que é para o que ela
+   existe.
+2. **Só fica a que virou refeição.** `MediaService.promoteChatPhotoToMeal(userId, fileId, mealId)` é
+   o gancho que a #385 chama quando a IA registra a refeição da foto: confere que a foto é do chat
+   desta pessoa e ainda solta, que a refeição é dela e sem foto, e que ela ligou "guardar as fotos
+   das refeições". Promovida, a foto passa a `meal_photo`, presa à refeição, e segue a 038 (apagar a
+   refeição ou a conta a apaga). Apagar a conversa não leva a foto promovida.
+3. **Entra no export (LGPD)**, na mensagem dela, com link assinado; pelo MCP, sem o link.
+
+O resto desta ADR (envio direto, reprocessamento sem EXIF, ids conferidos, instância sem bucket)
+continua valendo.

@@ -1,4 +1,10 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { AiConsentKind } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
 
@@ -7,7 +13,30 @@ import { PrismaService } from '../../common/prisma.service';
  * (`ai-consent.ts`), igual no PWA e no app, com a mesma versão: mudar o texto é mudar a versão
  * dos dois lados, e todo mundo aceita de novo — quem leu o texto antigo não aceitou o novo.
  */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-16', webSearch: '2026-11-16' } as const;
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
+
+/**
+ * Os nomes que o texto do aceite mostra (#384): quem recebe as mensagens, o modelo e a busca.
+ * Vêm do ambiente (`AI_CONSENT_*`, listadas no `docker-compose.prod.yml`), não do texto: trocar
+ * de modelo é mudar a env **e** a lista revisada do agente (`allowed_models.py`). O aceite
+ * gravado leva os nomes junto, então trocar qualquer um pede o aceite de novo.
+ */
+export interface AiProcessor {
+  provider: string;
+  model: string;
+  searchEngine: string;
+}
+
+export const AI_PROCESSOR = Symbol('AI_PROCESSOR');
+
+export function aiProcessorFromEnv(env: Record<string, string | undefined>): AiProcessor {
+  const nome = (valor: string | undefined, padrao: string) => valor?.trim() || padrao;
+  return {
+    provider: nome(env.AI_CONSENT_PROVIDER, 'OpenRouter'),
+    model: nome(env.AI_CONSENT_MODEL, 'GLM 5.3 Flash, da Z.ai'),
+    searchEngine: nome(env.AI_CONSENT_SEARCH_ENGINE, 'Exa'),
+  };
+}
 
 export type AiConsentTopic = 'chat' | 'web_search';
 
@@ -19,6 +48,7 @@ const KIND: Record<AiConsentTopic, AiConsentKind> = {
   web_search: AiConsentKind.WEB_SEARCH,
 };
 
+/** A versão do texto, a que o cliente lê e manda de volta no aceite. */
 const VERSION: Record<AiConsentTopic, string> = {
   chat: AI_CONSENT_VERSIONS.chat,
   web_search: AI_CONSENT_VERSIONS.webSearch,
@@ -35,6 +65,8 @@ export interface AiConsentStatus {
   chat: AiConsentState;
   webSearch: AiConsentState;
   webSearchEnabled: boolean;
+  /** Os nomes que o texto do aceite mostra. */
+  processor: AiProcessor;
 }
 
 /**
@@ -44,11 +76,30 @@ export interface AiConsentStatus {
  */
 @Injectable()
 export class AiConsentService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly processor: AiProcessor;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(AI_PROCESSOR) processor?: AiProcessor,
+  ) {
+    this.processor = processor ?? aiProcessorFromEnv(process.env);
+  }
+
+  /**
+   * O que fica gravado: a versão do texto e os nomes que ele mostrou. Mudar o texto (versão) ou
+   * um nome (env) cai fora da linha antiga — e o aceite volta a aparecer.
+   */
+  private storedVersion(topic: AiConsentTopic): string {
+    const { provider, model, searchEngine } = this.processor;
+    const nomes = topic === 'chat' ? `${provider}|${model}` : `${provider}|${searchEngine}`;
+    return `${VERSION[topic]}|${nomes}`;
+  }
 
   private async accepted(userId: string, topic: AiConsentTopic) {
     return this.prisma.aiConsent.findUnique({
-      where: { userId_kind_version: { userId, kind: KIND[topic], version: VERSION[topic] } },
+      where: {
+        userId_kind_version: { userId, kind: KIND[topic], version: this.storedVersion(topic) },
+      },
       select: { acceptedAt: true },
     });
   }
@@ -67,6 +118,7 @@ export class AiConsentService {
         acceptedAt: web?.acceptedAt ?? null,
       },
       webSearchEnabled: user?.webSearchEnabled ?? true,
+      processor: this.processor,
     };
   }
 
@@ -78,9 +130,10 @@ export class AiConsentService {
         message: 'O texto do aceite mudou. Leia de novo antes de aceitar.',
       });
     }
+    const gravada = this.storedVersion(topic);
     await this.prisma.aiConsent.upsert({
-      where: { userId_kind_version: { userId, kind: KIND[topic], version } },
-      create: { userId, kind: KIND[topic], version },
+      where: { userId_kind_version: { userId, kind: KIND[topic], version: gravada } },
+      create: { userId, kind: KIND[topic], version: gravada },
       update: {},
     });
     return this.status(userId);
@@ -105,7 +158,10 @@ export class AiConsentService {
     if (await this.accepted(userId, 'chat')) return;
     throw new ForbiddenException({
       code: 'AI_CONSENT_REQUIRED',
-      message: 'Antes de conversar, leia e aceite para onde vão as mensagens.',
+      // O app novo mostra o próprio aceite; o antigo, sem esse código, só mostra a mensagem.
+      message:
+        'Antes de usar a IA, leia e aceite para onde vão as mensagens, no chat. ' +
+        'Se o aviso não aparecer, atualize o app para continuar.',
       version: VERSION.chat,
     });
   }

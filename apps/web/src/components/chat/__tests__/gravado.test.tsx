@@ -10,7 +10,7 @@ vi.mock('@fatia/api-client', async () => {
   return { ...actual, undoAutoWrite, getAutoWriteStatus };
 });
 
-const { Artefato } = await import('../artefato');
+const { ChatArtifactCard } = await import('../artefato');
 const { ApiError } = await import('@fatia/api-client');
 
 const gravado = (extra: {
@@ -34,7 +34,7 @@ afterEach(() => {
 function desenhar(artefato: ChatArtifact) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <Artefato artefato={artefato} ferramenta="Registrar água" />
+      <ChatArtifactCard artifact={artefato} toolTitle="Registrar água" />
     </QueryClientProvider>,
   );
 }

@@ -103,7 +103,7 @@ describe('RevenueCatService (banco real)', () => {
   it('troca para o anual expira a mensal e cria a anual', async () => {
     responder(assinanteComPro('fatia_pro_anual', '2027-10-15T00:00:00Z'));
 
-    await service.sincronizar(userId);
+    await service.sync(userId);
 
     const todas = await linhas(userId);
     expect(todas.map((l) => [l.productId, l.status])).toEqual([
@@ -145,7 +145,17 @@ describe('RevenueCatService (banco real)', () => {
 
   it('isolamento: sincronizar uma pessoa não toca as linhas da outra', async () => {
     responder({ subscriber: { entitlements: {}, subscriptions: {} } });
-    await service.sincronizar(userId);
+    await service.sync(userId);
     expect(await linhas(outro)).toEqual([expect.objectContaining({ status: 'ACTIVE' })]);
+  });
+
+  it('teste grátis da loja marca o teste da pessoa: a web não dá outro (#386)', async () => {
+    responder(assinanteComPro('fatia_pro_anual', EXPIRA_NO_FUTURO, { period_type: 'TRIAL' }));
+    await service.sync(outro);
+    expect(await linhas(outro)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: 'TRIALING' })]),
+    );
+    const conta = await prisma.user.findUniqueOrThrow({ where: { id: outro } });
+    expect(conta.proTrialStartedAt).not.toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import {
   type CustomFoodForm,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { AiConsentCard } from '@/components/chat/aceite';
 
 /** Foto → JPEG em base64, no máximo 1600 px no lado maior: o rótulo tem letra miúda. */
 async function labelPhotoToBase64(file: File): Promise<string> {
@@ -54,12 +55,14 @@ interface Props {
 export function LabelReader({ barcode = '', locked, onRead }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [planRequired, setPlanRequired] = useState(false);
+  const [consentRequired, setConsentRequired] = useState(false);
 
   const read = useMutation({
     mutationFn: async (file: File) => nutritionApi.readLabel(await labelPhotoToBase64(file)),
     onSuccess: (reading) => onRead(customFoodFormFromLabel(reading, barcode)),
     onError: (error) => {
       if (error instanceof ApiError && error.isPlanRequired) setPlanRequired(true);
+      if (error instanceof ApiError && error.isAiConsentRequired) setConsentRequired(true);
     },
   });
 
@@ -78,8 +81,29 @@ export function LabelReader({ barcode = '', locked, onRead }: Props) {
     );
   }
 
+  if (consentRequired) {
+    // Sem o aceite da IA a foto nem sai (403): aceitar e fotografar de novo.
+    return (
+      <AiConsentCard
+        className="mx-0 my-3"
+        onDecline={() => {
+          setConsentRequired(false);
+          read.reset();
+        }}
+        onAccepted={() => {
+          setConsentRequired(false);
+          read.reset();
+        }}
+      />
+    );
+  }
+
   const failure =
-    read.error && !(read.error instanceof ApiError && read.error.isPlanRequired)
+    read.error &&
+    !(
+      read.error instanceof ApiError &&
+      (read.error.isPlanRequired || read.error.isAiConsentRequired)
+    )
       ? read.error instanceof ApiError && read.error.status !== 500
         ? read.error.message
         : 'Não deu para ler o rótulo. Tente outra foto, com a tabela inteira e sem reflexo.'

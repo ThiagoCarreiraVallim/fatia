@@ -6,6 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { dayMonth } from '../../mcp/card-format';
 
 @Injectable()
 @McpTool()
@@ -28,5 +29,20 @@ export class GetNutritionHistoryTool implements McpToolDef {
   } as const;
   execute({ days }: { days: number }, { userId, timezone }: McpToolContext) {
     return this.summary.getHistory(userId, days, timezone);
+  }
+
+  /** As calorias de cada dia, com a média do período (prancha IA-Cartoes, #384). */
+  artifact(result: unknown, input: { days: number }) {
+    const historico = result as Awaited<ReturnType<NutritionSummaryService['getHistory']>>;
+    return {
+      kind: 'bars',
+      label: `Calorias nos últimos ${input.days ?? historico.days} dias`,
+      unit: 'kcal',
+      average: Math.round(historico.averages.kcal),
+      bars: historico.series.map((dia) => ({
+        label: dayMonth(dia.date),
+        value: Math.round(dia.kcal),
+      })),
+    };
   }
 }

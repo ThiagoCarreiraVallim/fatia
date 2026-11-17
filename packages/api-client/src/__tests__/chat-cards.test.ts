@@ -2,19 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_CONSENT_TEXTS,
   AI_CONSENT_VERSIONS,
+  aiConsentBody,
   appOnlyHref,
   chatCardTitle,
   collapsedLabel,
   isEmptyChatArtifact,
+  isRenderableChatArtifact,
+  pauseDecisionCount,
+  webConsentToSaveOnSend,
   lastToolName,
   toolCallStatusOf,
   toolLineLabel,
+  webSearchLineLabel,
+  cardEyebrow,
+  timelineAxisLabels,
+  timelinePeriodLabel,
   groupConversationsByDay,
   groupToolCalls,
   quickReplies,
   type ChatToolCatalogEntry,
 } from '../chat-cards';
-import { CHAT_ERROR_CODES, textoDeErroDoChat } from '../chat';
+import { CHAT_ERROR_CODES, textoDeErroDoChat, type ChatArtifact } from '../chat';
 
 const apagarRefeicao: ChatToolCatalogEntry = {
   title: 'Apagar refeição',
@@ -140,15 +148,60 @@ describe('groupConversationsByDay — Hoje, Esta semana e Antes (#384)', () => {
   });
 });
 
+const HASH_CHAT = '4e35b2fd';
+const HASH_BUSCA = '48166ae7';
+
 describe('textos dos aceites (#384)', () => {
-  it('a versão é a mesma da API, e o texto nomeia o provedor e a busca de verdade', () => {
-    expect(AI_CONSENT_VERSIONS).toEqual({ chat: '2026-11-16', webSearch: '2026-11-16' });
-    expect(AI_CONSENT_TEXTS.chat.body).toContain('OpenRouter');
-    expect(AI_CONSENT_TEXTS.chat.body).toContain('GLM 5.3 Flash');
-    expect(AI_CONSENT_TEXTS.chat.body).not.toContain('[');
-    expect(AI_CONSENT_TEXTS.webSearch.body).toContain('Exa');
-    // A retenção zero não cobre a busca: o texto diz isso, sem prometer o que não vale.
-    expect(AI_CONSENT_TEXTS.webSearch.body).toMatch(/não vale para a busca/);
+  // FNV-1a de 32 bits do texto: basta para notar que ele mudou.
+  const sha = (valor: unknown) => {
+    let h = 0x811c9dc5;
+    for (const c of JSON.stringify(valor)) {
+      h ^= c.codePointAt(0)!;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16);
+  };
+
+  it('mudar o texto sem subir a versão falha: quem leu o texto antigo não aceitou o novo', () => {
+    // Mudou o texto? Suba a versão aqui e em `AI_CONSENT_VERSIONS` da API, e só então troque
+    // o hash. Todo mundo verá o aceite de novo.
+    expect({ versao: AI_CONSENT_VERSIONS.chat, texto: sha(AI_CONSENT_TEXTS.chat) }).toEqual({
+      versao: '2026-11-17',
+      texto: HASH_CHAT,
+    });
+    expect({
+      versao: AI_CONSENT_VERSIONS.webSearch,
+      texto: sha(AI_CONSENT_TEXTS.webSearch),
+    }).toEqual({ versao: '2026-11-17', texto: HASH_BUSCA });
+  });
+
+  it('os nomes do provedor, do modelo e da busca vêm da API, não do texto', () => {
+    const nomes = { provider: 'Prov', model: 'Mod X', searchEngine: 'Busca Y' };
+    const chat = aiConsentBody('chat', nomes);
+    expect(chat).toContain('Prov');
+    expect(chat).toContain('Mod X');
+    expect(chat).not.toMatch(/[{}]/);
+    const busca = aiConsentBody('web_search', nomes);
+    expect(busca).toContain('Busca Y');
+    expect(busca).toContain('Prov');
+    expect(busca).not.toMatch(/[{}]/);
+    for (const corpo of [AI_CONSENT_TEXTS.chat.body, AI_CONSENT_TEXTS.webSearch.body]) {
+      expect(corpo).not.toMatch(/OpenRouter|GLM|Z\.ai|Exa/);
+    }
+  });
+
+  it('a busca diz de onde sai a pergunta e que a retenção zero não vale para ela', () => {
+    const busca = aiConsentBody('web_search', {
+      provider: 'P',
+      model: 'M',
+      searchEngine: 'S',
+    });
+    expect(busca).toMatch(/última mensagem/);
+    expect(busca).toMatch(/não vale para a busca/);
+    // Não promete o que não dá para garantir.
+    expect(aiConsentBody('chat', { provider: 'P', model: 'M', searchEngine: 'S' })).not.toMatch(
+      /Só usamos servidores que não guardam/,
+    );
   });
 
   it('o 403 do aceite tem texto próprio', () => {
@@ -304,5 +357,95 @@ describe('toolCallStatusOf, toolLineLabel e lastToolName — a linha da tool no 
     expect(lastToolName([resposta])).toBe('get_today_summary');
     expect(lastToolName([resposta, { role: 'user', id: 'u', text: 'oi', photos: 0 }])).toBeNull();
     expect(lastToolName([])).toBeNull();
+  });
+});
+
+/** Um app antigo recebe um formato que ainda não conhece: cai no aviso, não quebra a conversa. */
+describe('isRenderableChatArtifact', () => {
+  it('aceita os formatos conhecidos com o campo de que o desenho depende', () => {
+    expect(isRenderableChatArtifact({ kind: 'metric', value: 3 })).toBe(true);
+    expect(isRenderableChatArtifact({ kind: 'bars', bars: [] })).toBe(true);
+    expect(
+      isRenderableChatArtifact({ kind: 'file', url: 'https://x', filename: 'a', expiresAt: '' }),
+    ).toBe(true);
+  });
+
+  it('recusa formato novo, sem kind ou com o campo principal faltando', () => {
+    expect(isRenderableChatArtifact({ kind: 'mapa', pontos: [] })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'bars' })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'metric', value: 'x' })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'badges', badges: 'x' })).toBe(false);
+    expect(isRenderableChatArtifact(null)).toBe(false);
+    expect(isRenderableChatArtifact('metric')).toBe(false);
+  });
+
+  it('título e "vazio" não quebram com a carga que não dá para desenhar', () => {
+    const quebrado = { kind: 'bars' } as unknown as ChatArtifact;
+    const novo = { kind: 'mapa' } as unknown as ChatArtifact;
+    for (const a of [quebrado, novo]) {
+      expect(isEmptyChatArtifact(a)).toBe(false);
+      expect(chatCardTitle(a)).toBe('Cartão');
+    }
+  });
+});
+
+/** O lote da pausa (#384): a busca conta como decisão, e o aceite só sai no "Enviar". */
+describe('lote da pausa com a busca', () => {
+  const acoes = [
+    { kind: 'confirm', toolCallId: 'c1', tool: 'log_meal', title: 't', prompt: 'p', arguments: {} },
+    { kind: 'web_consent', toolCallId: 'w1', tool: 'web_search', prompt: 'p', query: 'q' },
+    { kind: 'question', toolCallId: 'q1', prompt: 'p', fields: [] },
+  ] as unknown as Parameters<typeof pauseDecisionCount>[0];
+
+  it('conta escritas e buscas, não perguntas', () => {
+    expect(pauseDecisionCount(acoes)).toBe(2);
+  });
+
+  it('grava o aceite só se a escolha final da busca for concordar e ainda não houver', () => {
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: true }, false)).toBe(true);
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: false }, false)).toBe(false);
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: true }, true)).toBe(false);
+    expect(webConsentToSaveOnSend(acoes, { c1: true }, false)).toBe(false);
+  });
+});
+
+describe('webSearchLineLabel — a linha da busca na web (prancha IA-Estados e Al-M16)', () => {
+  it('fala da busca, não da ferramenta', () => {
+    expect(webSearchLineLabel('running')).toBe('Pesquisando na web…');
+    expect(webSearchLineLabel('done', 3)).toBe('Pesquisei na web · 3 sites');
+    expect(webSearchLineLabel('done', 1)).toBe('Pesquisei na web · 1 site');
+    expect(webSearchLineLabel('empty')).toBe('Pesquisei na web · nada confiável');
+    expect(webSearchLineLabel('error')).toBe('Busca na web indisponível agora');
+    expect(webSearchLineLabel('declined')).toBe('Busca na web · você recusou');
+    expect(webSearchLineLabel('pending')).toBe('Buscar na web · aguardando sua confirmação');
+  });
+});
+
+describe('cardEyebrow — o texto pequeno acima do título do cartão', () => {
+  it('é o nome da ferramenta, e "Só no app" no cartão do só no app', () => {
+    expect(cardEyebrow('get_today_summary', 'Resumo de hoje')).toBe('Resumo de hoje');
+    expect(cardEyebrow('app_only', 'Abrir no app')).toBe('Só no app');
+  });
+});
+
+describe('timelineAxisLabels — as datas embaixo da curva', () => {
+  it('primeira, do meio e última, em "6 out"', () => {
+    const events = ['2026-10-06', '2026-10-13', '2026-10-20', '2026-10-27', '2026-11-04'].map(
+      (date, i) => ({ date, value: i }),
+    );
+    expect(timelineAxisLabels(events)).toEqual(['6 out', '20 out', '4 nov']);
+  });
+  it('com um ou dois pontos, só os que existem', () => {
+    expect(timelineAxisLabels([{ date: '2026-11-04T10:00:00Z' }])).toEqual(['4 nov']);
+    expect(timelineAxisLabels([])).toEqual([]);
+  });
+});
+
+describe('timelinePeriodLabel — o período da variação', () => {
+  it('conta os dias entre o primeiro e o último ponto', () => {
+    const e = (date: string) => ({ date, value: 1 });
+    expect(timelinePeriodLabel([e('2026-10-06'), e('2026-11-05')])).toBe('em 30 dias');
+    expect(timelinePeriodLabel([e('2026-11-04'), e('2026-11-05')])).toBe('em 1 dia');
+    expect(timelinePeriodLabel([e('2026-11-05')])).toBe('no período');
   });
 });

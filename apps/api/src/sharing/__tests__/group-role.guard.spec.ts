@@ -18,6 +18,7 @@ const makeContext = (request: Record<string, unknown>): ExecutionContext =>
 describe('GroupRoleGuard', () => {
   const prisma = {
     groupMembership: { findUnique: jest.fn() },
+    groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
     groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const reflector = { get: jest.fn() };

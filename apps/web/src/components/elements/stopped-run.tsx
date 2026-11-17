@@ -1,9 +1,9 @@
 'use client';
 
 import type { ComponentProps } from 'react';
-import { SquareIcon } from 'lucide-react';
+import { PauseIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { field, mono } from './surfaces';
+import { field } from './surfaces';
 
 /**
  * `elements-stopped-run` do assistant-ui, reduzido à etiqueta.
@@ -32,13 +32,18 @@ export function StoppedRun({
       data-slot="stopped-run"
       className={cn(
         field,
-        mono,
-        'fade-in animate-in inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-foreground/45 duration-300 motion-reduce:animate-none',
+        // A linha da prancha IA-Estados ("Pausa e interrompida"): pílula cinza da largura toda.
+        'fade-in animate-in flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13.5px] text-foreground/65 duration-300 motion-reduce:animate-none',
         className,
       )}
       {...props}
     >
-      <SquareIcon aria-hidden className="size-2.5 fill-current" />
+      <span
+        aria-hidden
+        className="grid size-6 shrink-0 place-items-center rounded-full bg-foreground/[0.08] text-foreground/55"
+      >
+        <PauseIcon className="size-3.5" />
+      </span>
       {reason}
     </span>
   );

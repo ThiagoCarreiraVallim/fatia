@@ -1,4 +1,5 @@
 import { PrismaClient } from '@fatia/db';
+import { runGuarded } from './production-guard';
 
 /**
  * `pnpm billing:grant-seat` — assento de IA de cortesia numa comunidade
@@ -14,6 +15,8 @@ import { PrismaClient } from '@fatia/db';
  * pnpm billing:grant-seat <email> <slug> [--seats 5]
  * pnpm billing:grant-seat <email> <slug> --purge
  * ```
+ *
+ * Em produção recusa sem `--i-know-this-is-production` (`production-guard.ts`).
  */
 
 export interface ArgumentosDoAssento {
@@ -38,6 +41,17 @@ export function leArgumentosDoAssento(argv: string[]): ArgumentosDoAssento {
     }
   }
   return { email: email.toLowerCase(), slug, assentos, apagar: argv.includes('--purge') };
+}
+
+/** O que o script vai mudar, mostrado antes de aplicar. */
+export function describeGrantSeat(args: ArgumentosDoAssento): string {
+  if (args.apagar) {
+    return `Apagar os assentos de cortesia de ${args.email} na comunidade ${args.slug}`;
+  }
+  return (
+    `Dar um assento de cortesia a ${args.email} na comunidade ${args.slug} ` +
+    `(pool de cortesia com pelo menos ${args.assentos} assentos)`
+  );
 }
 
 type Prisma = Pick<
@@ -116,9 +130,10 @@ export async function concederAssento(
 }
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
   let args: ArgumentosDoAssento;
   try {
-    args = leArgumentosDoAssento(process.argv.slice(2));
+    args = leArgumentosDoAssento(argv);
   } catch (err) {
     console.error((err as Error).message);
     process.exit(1);
@@ -126,10 +141,12 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
   try {
     const preco = Number(process.env.BILLING_SEAT_MONTHLY_CENTS ?? 1490);
-    console.log(await concederAssento(prisma, args, preco));
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exitCode = 1;
+    process.exitCode = await runGuarded({
+      argv,
+      env: process.env,
+      plan: describeGrantSeat(args),
+      apply: () => concederAssento(prisma, args, preco),
+    });
   } finally {
     await prisma.$disconnect();
   }

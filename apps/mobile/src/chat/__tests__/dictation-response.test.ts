@@ -24,6 +24,15 @@ describe('readDictationResponse', () => {
     }
   });
 
+  it('403 sem o aceite da IA avisa para abrir o aceite', async () => {
+    const body = JSON.stringify({ code: 'AI_CONSENT_REQUIRED', message: 'interno' });
+    const resultado = await readDictationResponse(403, body, {});
+    expect(resultado.consentRequired).toBe(true);
+    expect(resultado.text).toBeNull();
+    const outro = await readDictationResponse(402, '{}', {});
+    expect(outro.consentRequired).toBeUndefined();
+  });
+
   it('cota estourada diz quando volta', async () => {
     const body = JSON.stringify({ code: 'AI_QUOTA_EXCEEDED', resetsAt: 'não é data' });
     const { error } = await readDictationResponse(429, body, {});

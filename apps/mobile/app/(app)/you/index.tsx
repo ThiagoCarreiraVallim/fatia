@@ -6,6 +6,8 @@ import type { IconName } from '@fatia/design';
 import {
   activeRemindersLabel,
   billingApi,
+  planBadge,
+  type PlanTone,
   keepPhotosText,
   menuSections,
   newsApi,
@@ -20,6 +22,7 @@ import {
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
 import { openLegal } from '@/components/profile/legal';
+import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { useChatAvailability } from '@/components/layout/use-ai-state';
 import { Button, useConfirm, useToast } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
@@ -33,6 +36,14 @@ import { UserAvatar } from '@/components/you/user-avatar';
 import { YouRow, YouSection } from '@/components/you/you-list';
 import { disablePush } from '@/notifications/push';
 import { colors } from '@/theme/colors';
+
+const BADGE_VARIANT: Record<PlanTone, BadgeVariant> = {
+  pro: 'pro',
+  trial: 'trial',
+  warn: 'lite',
+  mute: 'pending',
+  free: 'free',
+};
 
 /** `70,2` — o peso do cartão, com vírgula. */
 function weightText(kg: number | null | undefined): string {
@@ -104,6 +115,8 @@ export default function YouScreen() {
   const user = me.data;
   const units = unitPrefsOf(user);
   const showPlan = plan.data?.requiresPlan === true;
+  // "Teste · 3 dias" durante o teste grátis (#386).
+  const badge = plan.data ? planBadge(plan.data, new Date()) : null;
   const keep = user?.keepMealPhotos === true;
   const unread = news.data?.unreadCount ?? 0;
 
@@ -117,7 +130,7 @@ export default function YouScreen() {
     }
     if (item.key === 'units') return unitsSummary(units);
     if (item.key === 'reminders' && reminders.data) return activeRemindersLabel(reminders.data);
-    if (item.key === 'plan' && plan.data) return plan.data.tier === 'PRO' ? 'PRO' : 'Free';
+    if (item.key === 'plan' && badge) return badge.label;
     if (item.key === 'news' && unread > 0) {
       return (
         <View className="h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5">
@@ -212,26 +225,13 @@ export default function YouScreen() {
                 </Text>
               ) : null}
               <View className="flex-row items-center gap-2">
-                {showPlan && plan.data ? (
+                {showPlan && badge ? (
                   <Pressable
                     accessibilityRole="link"
-                    accessibilityLabel={`Meu plano: ${plan.data.tier}`}
+                    accessibilityLabel={`Meu plano: ${badge.label}`}
                     onPress={() => router.push('/plan')}
-                    className={
-                      plan.data.tier === 'PRO'
-                        ? 'rounded-full bg-primary px-2.5 py-0.5'
-                        : 'rounded-full bg-muted px-2.5 py-0.5'
-                    }
                   >
-                    <Text
-                      className={
-                        plan.data.tier === 'PRO'
-                          ? 'font-sans-bold text-xs text-primary-foreground'
-                          : 'font-sans-bold text-xs text-foreground'
-                      }
-                    >
-                      {plan.data.tier}
-                    </Text>
+                    <Badge variant={BADGE_VARIANT[badge.tone]}>{badge.label}</Badge>
                   </Pressable>
                 ) : null}
                 <Pressable

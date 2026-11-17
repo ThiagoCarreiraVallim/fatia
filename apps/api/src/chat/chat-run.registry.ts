@@ -47,6 +47,11 @@ export class ChatRun {
   private stopped = false;
   private cancelUpstream: (() => void) | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
+  private markClosed!: () => void;
+  /** Resolve quando o turno fecha (gravado no banco e fora do caminho do próximo). */
+  readonly closed = new Promise<void>((resolve) => {
+    this.markClosed = resolve;
+  });
 
   /**
    * O token deste turno, que vai ao agente e volta no header da gravação automática (ADR 039):
@@ -130,6 +135,7 @@ export class ChatRun {
   finish(): void {
     if (this.finished) return;
     this.finished = true;
+    this.markClosed();
     if (this.heartbeat) clearInterval(this.heartbeat);
     for (const sink of this.sinks) sink.end();
     this.sinks.clear();

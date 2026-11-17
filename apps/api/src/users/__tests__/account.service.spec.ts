@@ -47,6 +47,7 @@ const makePrisma = () => ({
   userTutorialSeen: { findMany: jest.fn().mockResolvedValue([]) },
   feedbackIdea: { findMany: jest.fn().mockResolvedValue([]) },
   dataExport: { findMany: jest.fn().mockResolvedValue([]) },
+  mcpOAuthConnection: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
   reminder: { findMany: jest.fn().mockResolvedValue([]) },
   aiConsent: { findMany: jest.fn().mockResolvedValue([]) },
@@ -129,6 +130,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // retrato do Desfazer — dado de saúde da pessoa, então dela no export.
   aiWriteModes: 'aiWriteModes',
   aiAutoWrites: 'aiAutoWrites',
+  // Conectar sua IA (#388): qual app de IA a pessoa ligou e quando. Sem o hash do token.
+  mcpConnections: 'mcpConnections',
 };
 
 /**
@@ -231,6 +234,7 @@ describe('AccountService', () => {
         'nutritionPlan',
         'planOffer',
         'plannedSession',
+        'mcpOAuthConnection',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),

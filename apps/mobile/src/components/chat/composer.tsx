@@ -5,7 +5,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, ListPlus, Mic, Square, X } from 'lucide-react-native';
 import type { LocalChatPhoto, QueuedChatMessage } from '@/chat/chat-session';
 import { cn, useActionSheet, useToast } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDictation } from '@/chat/dictation';
+import { AI_CONSENT_KEY } from '@/chat/ai-consent';
 import { colors } from '@/theme/colors';
 
 /** O teto do agente por mensagem (`MAX_FOTOS_POR_MENSAGEM`). */
@@ -29,6 +31,8 @@ export function Composer({
   photosEnabled,
   dictationEnabled,
   queue,
+  queuePaused = false,
+  onSendQueued,
   quote,
   onDismissQuote,
   onSend,
@@ -44,6 +48,9 @@ export function Composer({
   photosEnabled: boolean;
   dictationEnabled: boolean;
   queue: QueuedChatMessage[];
+  /** A última resposta falhou: nada sai sozinho; cada item tem "Enviar" e "Descartar". */
+  queuePaused?: boolean;
+  onSendQueued?: (id: string) => void;
   /** O trecho citado, que vai na frente da próxima mensagem (`ChatSession.setQuote`). */
   quote: string | null;
   onDismissQuote: () => void;
@@ -60,7 +67,13 @@ export function Composer({
     (ditado: string) => setTexto((t) => (t.trim() ? `${t.trimEnd()} ${ditado}` : ditado)),
     [],
   );
-  const ditado = useDictation(aoDitar);
+  const queryClient = useQueryClient();
+  // O aceite caiu (403): relê os aceites e o cartão do aceite volta no lugar do campo.
+  const semAceite = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: AI_CONSENT_KEY }),
+    [queryClient],
+  );
+  const ditado = useDictation(aoDitar, semAceite);
 
   const podeEnviar = !disabled && !running && (texto.trim().length > 0 || fotos.length > 0);
 
@@ -131,6 +144,11 @@ export function Composer({
       ) : null}
       {queue.length ? (
         <View className="gap-1" accessibilityLabel="Mensagens na fila">
+          {queuePaused ? (
+            <Text className="text-xs text-muted-foreground">
+              A resposta anterior falhou. Estas ficaram esperando você:
+            </Text>
+          ) : null}
           {queue.map((item, i) => (
             <View
               key={item.id}
@@ -139,14 +157,36 @@ export function Composer({
               <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
                 {item.text}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Tirar da fila a mensagem ${i + 1}`}
-                hitSlop={8}
-                onPress={() => onDequeue(item.id)}
-              >
-                <X size={14} color={colors.mutedForeground} />
-              </Pressable>
+              {queuePaused ? (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Enviar a mensagem ${i + 1}`}
+                    disabled={running}
+                    hitSlop={8}
+                    onPress={() => onSendQueued?.(item.id)}
+                  >
+                    <Text className="text-xs font-semibold text-primary-text">Enviar</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Descartar a mensagem ${i + 1}`}
+                    hitSlop={8}
+                    onPress={() => onDequeue(item.id)}
+                  >
+                    <Text className="text-xs text-muted-foreground">Descartar</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Tirar da fila a mensagem ${i + 1}`}
+                  hitSlop={8}
+                  onPress={() => onDequeue(item.id)}
+                >
+                  <X size={14} color={colors.mutedForeground} />
+                </Pressable>
+              )}
             </View>
           ))}
         </View>
@@ -192,41 +232,47 @@ export function Composer({
         </View>
       ) : null}
       <View className="flex-row items-end gap-2">
-        {photosEnabled ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Anexar foto"
-            disabled={disabled || running || fotos.length >= MAX_FOTOS}
-            onPress={attachPhoto}
+        {/* A câmera fica dentro do campo, com a borda verde (prancha Al-M20). */}
+        <View className="min-h-11 flex-1 flex-row items-end rounded-3xl border border-primary/35 bg-card">
+          {photosEnabled ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Anexar foto"
+              disabled={disabled || running || fotos.length >= MAX_FOTOS}
+              onPress={attachPhoto}
+              className={cn(
+                'h-11 w-10 items-center justify-center pl-1',
+                (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
+              )}
+            >
+              <Camera size={20} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+          <TextInput
+            accessibilityLabel="Mensagem para o Fatia"
+            value={texto}
+            onChangeText={setTexto}
+            editable={!disabled && ditado.state === 'idle'}
+            multiline
+            maxLength={MAX_CARACTERES}
+            placeholder={
+              ditado.state === 'recording'
+                ? 'Ouvindo… toque no quadrado para parar'
+                : ditado.state === 'transcribing'
+                  ? 'Transcrevendo…'
+                  : blockedPlaceholder
+                    ? blockedPlaceholder
+                    : disabled
+                      ? 'Abrindo a conversa…'
+                      : 'Responda ou peça outra coisa'
+            }
+            placeholderTextColor={colors.mutedForeground}
             className={cn(
-              'h-11 w-11 items-center justify-center',
-              (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
+              'max-h-32 min-h-[44px] flex-1 py-2.5 pr-4 text-[15px] text-foreground',
+              !photosEnabled && 'pl-4',
             )}
-          >
-            <Camera size={20} color={colors.mutedForeground} />
-          </Pressable>
-        ) : null}
-        <TextInput
-          accessibilityLabel="Mensagem para o Fatia"
-          value={texto}
-          onChangeText={setTexto}
-          editable={!disabled && ditado.state === 'idle'}
-          multiline
-          maxLength={MAX_CARACTERES}
-          placeholder={
-            ditado.state === 'recording'
-              ? 'Ouvindo… toque no quadrado para parar'
-              : ditado.state === 'transcribing'
-                ? 'Transcrevendo…'
-                : blockedPlaceholder
-                  ? blockedPlaceholder
-                  : disabled
-                    ? 'Abrindo a conversa…'
-                    : 'Escreva sua mensagem'
-          }
-          placeholderTextColor={colors.mutedForeground}
-          className="max-h-32 min-h-[44px] flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-[15px] text-foreground"
-        />
+          />
+        </View>
         {dictationEnabled && !running && !texto.trim() ? (
           <Pressable
             accessibilityRole="button"

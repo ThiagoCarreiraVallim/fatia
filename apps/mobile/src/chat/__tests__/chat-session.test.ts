@@ -129,6 +129,50 @@ describe('ChatSession — fotos (ADR 046)', () => {
     });
   });
 
+  it('parar durante o envio da foto não manda o turno depois', async () => {
+    let terminar!: () => void;
+    const subir = vi.fn(
+      () =>
+        new Promise<{ id: string; url: string; width: number; height: number }>((resolve) => {
+          terminar = () => resolve({ id: 'foto-1', url: 'u', width: 1, height: 1 });
+        }),
+    );
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    s.startNew();
+    void s.send({ text: 'o que tem aqui?', photos: [foto] });
+    await respirar();
+
+    await s.stop();
+    terminar();
+    await respirar();
+    await respirar();
+
+    expect(turnos).toHaveLength(0);
+    expect(s.getSnapshot().thread.running).toBe(false);
+  });
+
+  it('trocar de conversa durante o envio da foto não manda o turno na conversa velha nem na nova', async () => {
+    let terminar!: () => void;
+    const subir = vi.fn(
+      () =>
+        new Promise<{ id: string; url: string; width: number; height: number }>((resolve) => {
+          terminar = () => resolve({ id: 'foto-1', url: 'u', width: 1, height: 1 });
+        }),
+    );
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    s.startNew();
+    void s.send({ text: 'o que tem aqui?', photos: [foto] });
+    await respirar();
+
+    s.startNew();
+    terminar();
+    await respirar();
+    await respirar();
+
+    expect(turnos).toHaveLength(0);
+    expect(s.getSnapshot().thread.messages).toEqual([]);
+  });
+
   it('outra falha do envio para o turno e mostra o erro', async () => {
     const subir = vi.fn(async () => {
       throw new ApiError('cheio', 413, { code: 'AI_UNKNOWN_ERROR' });
@@ -342,6 +386,70 @@ describe('ChatSession', () => {
     expect(s.getSnapshot().queue).toEqual([]);
   });
 
+  it('fila: depois de uma resposta com erro ela para; Enviar manda o item, Descartar tira', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'quanto comi?' });
+    await respirar();
+    s.enqueue('e o jantar?');
+    s.enqueue('e amanhã?');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+
+    expect(turnos).toHaveLength(1);
+    expect(s.getSnapshot().queuePaused).toBe(true);
+
+    s.dequeue(s.getSnapshot().queue[1].id);
+    void s.sendQueued(s.getSnapshot().queue[0].id);
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['quanto comi?', 'e o jantar?']);
+    expect(s.getSnapshot().queue).toEqual([]);
+    expect(s.getSnapshot().queuePaused).toBe(false);
+  });
+
+  it('tentar de novo reenvia a mensagem que falhou, sem a citação que estiver no campo', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'quanto comi?' });
+    await respirar();
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_NETWORK_ERROR' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+    await respirar();
+    s.setQuote('um trecho');
+
+    void s.retry();
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['quanto comi?', 'quanto comi?']);
+    expect(s.getSnapshot().quote).toBe('um trecho');
+  });
+
+  it('parar: a fila só anda depois que o servidor confirma a parada', async () => {
+    let liberar!: () => void;
+    stopMock.mockImplementationOnce(
+      () => new Promise<undefined>((resolve) => (liberar = () => resolve(undefined))),
+    );
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    s.enqueue('depois');
+    const parando = s.stop();
+    await respirar();
+    expect(turnos).toHaveLength(1);
+    liberar();
+    await parando;
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['oi', 'depois']);
+  });
+
   it('citar: o trecho vai na frente da próxima mensagem e sai do campo', async () => {
     const s = sessao();
     s.startNew();
@@ -411,5 +519,23 @@ describe('ChatSession — motivo do 👎 (#384)', () => {
       reasons: ['slow'],
       note: 'demorou um minuto',
     });
+  });
+});
+
+describe('ChatSession — título no topo (prancha IA-Estados, "Título e topo")', () => {
+  it('abrir guarda o título da conversa; a nova não tem', async () => {
+    conversa = {
+      id: 'c-titulo',
+      title: 'Registro do almoço',
+      createdAt: '2026-11-17T12:00:00.000Z',
+      updatedAt: '2026-11-17T12:00:00.000Z',
+      messages: [],
+    };
+    const s = sessao();
+    await s.open('c-titulo');
+    expect(s.getSnapshot().title).toBe('Registro do almoço');
+
+    s.startNew();
+    expect(s.getSnapshot().title).toBeNull();
   });
 });

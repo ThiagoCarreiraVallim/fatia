@@ -53,6 +53,8 @@ export interface AssinaturaDaLoja {
   currentPeriodEnd: Date | null;
   graceEndsAt: Date | null;
   cancelAtPeriodEnd: boolean;
+  /** Fim do teste grátis da loja (oferta introdutória gratuita), enquanto `TRIALING`. */
+  trialEndsAt: Date | null;
 }
 
 const LOJAS: Record<string, AssinaturaDaLoja['source']> = {
@@ -73,7 +75,7 @@ export function intervaloDoProduto(produto: string): BillingInterval {
  * de uma loja (cupom promocional da RevenueCat, por exemplo, fica de fora: o
  * PRO de cortesia do Fatia é o `MANUAL`).
  */
-export function assinaturaDoAssinante(
+export function storeSubscriptionFromSubscriber(
   assinante: RcSubscriber,
   userId: string,
   entitlementId: string,
@@ -88,9 +90,12 @@ export function assinaturaDoAssinante(
 
   const fim = data(ent.expires_date ?? sub.expires_date);
   const carencia = data(ent.grace_period_expires_date ?? sub.grace_period_expires_date);
+  // `TRIAL` é o teste grátis da oferta introdutória (#386); `INTRO` é preço
+  // promocional pago, que conta como assinatura normal.
+  const emTeste = sub.period_type === 'TRIAL';
   let status: SubscriptionStatus;
   if (sub.refunded_at) status = 'EXPIRED';
-  else if (!fim || fim > agora) status = 'ACTIVE';
+  else if (!fim || fim > agora) status = emTeste ? 'TRIALING' : 'ACTIVE';
   else if ((carencia && carencia > agora) || sub.billing_issues_detected_at) status = 'PAST_DUE';
   else status = 'EXPIRED';
 
@@ -103,5 +108,6 @@ export function assinaturaDoAssinante(
     currentPeriodEnd: fim,
     graceEndsAt: status === 'PAST_DUE' ? carencia : null,
     cancelAtPeriodEnd: Boolean(sub.unsubscribe_detected_at),
+    trialEndsAt: status === 'TRIALING' ? fim : null,
   };
 }

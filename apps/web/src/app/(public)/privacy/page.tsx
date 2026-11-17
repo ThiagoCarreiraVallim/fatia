@@ -78,11 +78,13 @@ export default function PrivacyPage() {
             intervalo e as datas da assinatura. A base legal é a execução do contrato.
           </li>
           <li>
-            <strong>Fotos que você manda no chat:</strong> ficam guardadas junto da conversa, para
-            que ela continue mostrando a foto de que fala. Antes de guardar, a imagem é reduzida e
-            regravada sem metadado nenhum (sem localização, aparelho ou horário). Só você vê, por um
-            link que vence em minutos. Apagar a conversa apaga as fotos dela; apagar a conta apaga
-            todas.
+            <strong>Fotos que você manda no chat:</strong> são passageiras. Ficam guardadas por até
+            24 horas, para a conversa mostrar a foto de que fala, e depois são apagadas — a mensagem
+            continua, sem a foto. A exceção é a foto que vira a foto de uma refeição registrada,
+            quando você escolheu guardar as fotos das refeições: aí ela vale o que vale a foto do
+            prato. Antes de guardar, a imagem é reduzida e regravada sem metadado nenhum (sem
+            localização, aparelho ou horário). Só você vê, por um link que vence em minutos, e ela
+            entra no seu export. Apagar a conversa apaga as fotos dela; apagar a conta apaga todas.
           </li>
         </ul>
         <p>
@@ -142,8 +144,8 @@ export default function PrivacyPage() {
             <em>transita</em> pelo servidor do Fatia e segue para um provedor de visão, sem os
             metadados (veja abaixo); ela não é gravada em lugar nenhum e não fica vinculada a você.
             Se você fotografa uma refeição no seu próprio Claude, a imagem não passa pelo Fatia em
-            momento algum. A exceção é a foto que você manda <em>no chat</em>, que fica guardada com
-            a conversa (veja acima).
+            momento algum. A exceção é a foto que você manda <em>no chat</em>, que fica guardada por
+            até 24 horas (veja acima).
           </li>
           <li>
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
@@ -229,8 +231,8 @@ export default function PrivacyPage() {
             <strong>O Fatia não guarda nada no caminho.</strong> No reconhecimento por foto e no
             ditado, a imagem e o áudio existem em memória durante a requisição e somem com ela: não
             há bucket, não há disco, não há coluna. Isso vale para o que <em>nós</em> operamos, e é
-            verificável no código aberto. A foto mandada no chat é a exceção: ela fica guardada com
-            a conversa, até você apagá-la.
+            verificável no código aberto. A foto mandada no chat é a exceção: ela fica guardada por
+            até 24 horas, ou com a refeição que ela virou.
           </li>
           <li>
             <strong>Cada chamada exige retenção zero.</strong> O OpenRouter é um roteador: o mesmo
@@ -305,11 +307,13 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Exa, pelo OpenRouter</strong> — quando o assistente do chat busca algo na web, o
-            buscador recebe só o texto da pergunta que vai ser buscada, sem e-mail, telefone ou
-            documento que tenha escapado nela. Não recebe seu nome, nem nada da sua conta ou do
-            resto da conversa. A primeira busca só acontece depois que você concorda, num cartão que
-            mostra a pergunta; dá para desligar a busca no topo do chat. A busca fica fora da
-            retenção zero: o buscador segue a política dele para a consulta.
+            buscador recebe só o texto da pergunta que vai ser buscada. Essa pergunta é escrita numa
+            chamada à parte ao modelo, que vê só a partir da sua última mensagem — não o seu perfil,
+            as memórias, os dados da conta nem o resto da conversa —, e passa por um filtro que tira
+            e-mail, telefone e documento. Se você puser seu nome na própria mensagem, ele pode ir
+            junto. A primeira busca só acontece depois que você concorda, num cartão que mostra a
+            pergunta; dá para desligar a busca no topo do chat. A busca fica fora da retenção zero:
+            o buscador segue a política dele para a consulta.
           </li>
           <li>
             <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,

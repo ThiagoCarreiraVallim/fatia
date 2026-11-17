@@ -21,7 +21,7 @@ from fatia_agent.chat.tool_policy import (
     sem_desligadas,
     todas_permitidas,
 )
-from fatia_agent.chat.web import WebSearcher, WebSearchMode
+from fatia_agent.chat.web import QueryWriter, WebSearcher, WebSearchMode
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
 from fatia_agent.tracing import NOOP_TRACE, TracedProvider, TurnTrace
@@ -118,6 +118,10 @@ class Resultado:
         )
 
 
+async def _eco(texto: str) -> str:
+    return texto
+
+
 async def turno(
     settings_factory: Callable[..., AgentSettings],
     turnos_do_provedor: Sequence[list[dict[str, object]]],
@@ -138,6 +142,7 @@ async def turno(
     trace: TurnTrace = NOOP_TRACE,
     web_search: WebSearchMode = "off",
     search_web: WebSearcher | None = None,
+    write_search_query: QueryWriter | None = None,
     pause_after_tools: int = 14,
     auto_write: Sequence[str] = (),
     off: Sequence[str] = (),
@@ -173,6 +178,8 @@ async def turno(
         restricted=tuple(camada_restrita(anunciadas)),
         web_search=web_search,
         search_web=search_web,
+        # Por padrão, o redator devolve a própria fala: os testes leem a pergunta direto.
+        write_search_query=write_search_query or _eco,
         pause_after_tools=pause_after_tools,
         conversation_id=CONVERSA,
         auto_write=automaticas(permitidas, auto_write),

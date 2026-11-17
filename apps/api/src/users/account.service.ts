@@ -67,6 +67,8 @@ export class AccountService {
         activityLevel: true,
         objective: true,
         onboardedAt: true,
+        // Quando começou o teste grátis do PRO (#386): um por pessoa.
+        proTrialStartedAt: true,
         // Retomada do onboarding (#371): a etapa, o rascunho (peso e metas ainda
         // não confirmados) e o cartão "Primeiros passos".
         onboardingStep: true,
@@ -137,6 +139,7 @@ export class AccountService {
       aiConsents,
       aiWriteModes,
       aiAutoWrites,
+      mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -327,6 +330,19 @@ export class AccountService {
               reviewReasons: true,
               reviewNote: true,
               createdAt: true,
+              // As fotos do chat (ADR 046): passageiras, então só as que ainda existem.
+              photos: {
+                where: { status: 'READY' },
+                select: {
+                  mime: true,
+                  bytes: true,
+                  width: true,
+                  height: true,
+                  key: true,
+                  status: true,
+                },
+                orderBy: { chatPosition: 'asc' },
+              },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -340,8 +356,9 @@ export class AccountService {
         select: { content: true, category: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
-      // temporário, e sem nada do provedor além do id.
+      // Histórico do plano (ADR 024) e da cobrança (#386): teste, forma de
+      // pagamento, carência e os avisos que mandamos. Sem `paymentUrl`, que é
+      // link de cobrança temporário, e sem nada do provedor além do id.
       this.prisma.userSubscription.findMany({
         where: { userId },
         select: {
@@ -350,11 +367,18 @@ export class AccountService {
           status: true,
           interval: true,
           productId: true,
+          paymentMethod: true,
+          trialEndsAt: true,
           currentPeriodEnd: true,
+          graceEndsAt: true,
           cancelAtPeriodEnd: true,
           canceledAt: true,
           createdAt: true,
           updatedAt: true,
+          reminders: {
+            select: { kind: true, dueDate: true, sentAt: true },
+            orderBy: { sentAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -599,6 +623,12 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // Conectar sua IA (#388): o app e as datas. O hash do token fica de fora.
+      this.prisma.mcpOAuthConnection.findMany({
+        where: { userId },
+        select: { createdAt: true, lastUsedAt: true, client: { select: { clientName: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -645,7 +675,9 @@ export class AccountService {
       achievements,
       trainingBlocks,
       professionalLinks,
-      conversations,
+      conversations: await Promise.all(
+        conversations.map((c) => this.exportConversation(c, opts.photoLinks === true)),
+      ),
       memories,
       subscriptions,
       communityMemberships,
@@ -664,6 +696,11 @@ export class AccountService {
       aiConsents,
       aiWriteModes,
       aiAutoWrites,
+      mcpConnections: mcpConnections.map((c) => ({
+        clientName: c.client.clientName,
+        connectedAt: c.createdAt,
+        lastUsedAt: c.lastUsedAt,
+      })),
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -693,6 +730,7 @@ export class AccountService {
         reminders: reminders.length,
         aiConsents: aiConsents.length,
         aiAutoWrites: aiAutoWrites.length,
+        mcpConnections: mcpConnections.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,
@@ -733,6 +771,35 @@ export class AccountService {
    * baixado pelo link de exportação, um link assinado para baixá-la (ADR 038,
    * item 5). Pelo MCP vai só o `hasPhoto`: nenhuma tool leva a foto à IA.
    */
+  /**
+   * A conversa no export: cada foto na mensagem dela, com o link assinado no arquivo baixado
+   * (`photoLinks`) — o mesmo prazo das fotos das refeições. Sem a chave do bucket nem o id.
+   */
+  private async exportConversation<
+    C extends {
+      messages: {
+        photos: Pick<MediaFile, 'mime' | 'bytes' | 'width' | 'height' | 'key' | 'status'>[];
+      }[];
+    },
+  >(conversation: C, photoLinks: boolean) {
+    return {
+      ...conversation,
+      messages: await Promise.all(
+        conversation.messages.map(async (message) => ({
+          ...message,
+          photos: await Promise.all(
+            message.photos.map(async ({ key, status, ...foto }) => ({
+              ...foto,
+              ...(photoLinks && this.media
+                ? { url: await this.media.exportUrl({ key, status }) }
+                : {}),
+            })),
+          ),
+        })),
+      ),
+    };
+  }
+
   private async exportMeal<
     M extends Parameters<typeof presentMeal>[0] & {
       photoFile: MediaFile | null;

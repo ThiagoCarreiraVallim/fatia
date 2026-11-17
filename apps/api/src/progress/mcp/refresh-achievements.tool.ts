@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AchievementService } from '../achievement.service';
+import { AchievementService, type AchievementEntry } from '../achievement.service';
 import {
   McpTool,
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { achievementBadges } from './achievement-badges';
 
 @Injectable()
 @McpTool()
@@ -26,5 +27,10 @@ export class RefreshAchievementsTool implements McpToolDef {
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {
     return this.achievements.evaluate({ userId, timezone });
+  }
+
+  /** As conquistas depois de recalculadas, como em `list_achievements` (#384). */
+  artifact(result: unknown) {
+    return achievementBadges(result as AchievementEntry[]);
   }
 }

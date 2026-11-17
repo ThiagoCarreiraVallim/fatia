@@ -6,6 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { dayMonth } from '../../mcp/card-format';
 
 @Injectable()
 @McpTool()
@@ -22,5 +23,17 @@ export class GetWaterForDateTool implements McpToolDef {
   } as const;
   execute(input: { date?: string }, { userId, timezone }: McpToolContext) {
     return this.waters.getForDateWithGoal(input.date, userId, timezone);
+  }
+
+  /** A água do dia contra a meta (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const dia = result as Awaited<ReturnType<WaterLogService['getForDateWithGoal']>>;
+    return {
+      kind: 'metric',
+      label: `Água em ${dayMonth(dia.date)}`,
+      value: dia.totalMl,
+      unit: 'ml',
+      ...(dia.goalTargetMl == null ? {} : { target: { min: dia.goalTargetMl } }),
+    };
   }
 }

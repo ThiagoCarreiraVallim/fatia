@@ -7,12 +7,14 @@ import type { PrismaService } from '../../common/prisma.service';
 type MockPrisma = {
   group: { create: jest.Mock; findUnique: jest.Mock };
   groupMembership: { findMany: jest.Mock; findUnique: jest.Mock; count: jest.Mock };
+  groupSeatPool: { findMany: jest.Mock };
   groupSeatAssignment: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   group: { create: jest.fn(), findUnique: jest.fn() },
   groupMembership: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
+  groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
   groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
 });
 

@@ -6,12 +6,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ChatActionPreview, ChatConfirmAction, ChatInterruptValue } from '@fatia/api-client';
 
 const previewChatAction = vi.fn<(tool: string, args: unknown) => Promise<ChatActionPreview>>();
+const acceptAiConsent = vi.fn();
+const getAiConsent = vi.fn();
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
     previewChatAction: (tool: string, args: unknown) => previewChatAction(tool, args),
+    acceptAiConsent: (topic: string) => acceptAiConsent(topic),
+    getAiConsent: () => getAiConsent(),
   };
 });
 
@@ -23,7 +27,16 @@ function render(elemento: ReactElement) {
   return renderBase(<QueryClientProvider client={client}>{elemento}</QueryClientProvider>);
 }
 
+const status = (buscaAceita: boolean) => ({
+  chat: { accepted: true, version: 'v', acceptedAt: null },
+  webSearch: { accepted: buscaAceita, version: 'v', acceptedAt: null },
+  webSearchEnabled: true,
+  processor: { provider: 'OpenRouter', model: 'GLM', searchEngine: 'Exa' },
+});
+
 beforeEach(() => {
+  acceptAiConsent.mockReset().mockResolvedValue(status(true));
+  getAiConsent.mockReset().mockResolvedValue(status(false));
   previewChatAction.mockReset();
   previewChatAction.mockResolvedValue({
     valida: true,
@@ -154,7 +167,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText(/Gramas/), '150');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: { Gramas: '150' } } });
   });
@@ -177,7 +190,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText('Sua resposta'), 'o jantar');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: 'o jantar' } });
   });
@@ -191,5 +204,72 @@ describe('normalizeAskFields', () => {
       { name: 'campo_0', label: 'Gramas', type: 'text' },
       { name: 'x', label: 'x', type: 'text', required: false },
     ]);
+  });
+});
+
+describe('AskUser — lote com a busca na web (#384)', () => {
+  const pausa: ChatInterruptValue = {
+    kind: 'confirm',
+    prompt: 'x',
+    actions: [
+      escrita('c1'),
+      { kind: 'web_consent', toolCallId: 'w1', tool: 'web_search', prompt: 'x', query: 'q' },
+    ],
+  };
+
+  it('a busca conta nas decisões e mostra a escolha; mudar de ideia não grava o aceite', async () => {
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    const enviar = screen.getByRole('button', { name: 'Enviar 2 decisões' });
+
+    const concordo = screen.getByRole('button', { name: 'Concordo e buscar' });
+    await userEvent.click(concordo);
+    expect(concordo).toHaveAttribute('aria-pressed', 'true');
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+    const semWeb = screen.getByRole('button', { name: 'Responder sem a web' });
+    await userEvent.click(semWeb);
+    expect(semWeb).toHaveAttribute('aria-pressed', 'true');
+    expect(concordo).toHaveAttribute('aria-pressed', 'false');
+
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Gravar' }));
+    await userEvent.click(enviar);
+
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+    expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: true, w1: false }, answers: {} });
+  });
+
+  it('concordar no lote grava o aceite só no Enviar, antes de responder', async () => {
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    await userEvent.click(screen.getByRole('button', { name: 'Concordo e buscar' }));
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Ajustar' }));
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar 2 decisões' }));
+
+    await waitFor(() =>
+      expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: false, w1: true }, answers: {} }),
+    );
+    expect(acceptAiConsent).toHaveBeenCalledWith('web_search');
+    expect(acceptAiConsent.mock.invocationCallOrder[0]).toBeLessThan(
+      onResponder.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('se o aceite não grava, o lote não sai', async () => {
+    acceptAiConsent.mockRejectedValue(new Error('fora'));
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    await userEvent.click(screen.getByRole('button', { name: 'Concordo e buscar' }));
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Gravar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar 2 decisões' }));
+    expect(await screen.findByText(/Não consegui gravar o aceite/)).toBeInTheDocument();
+    expect(onResponder).not.toHaveBeenCalled();
   });
 });

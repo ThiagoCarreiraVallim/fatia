@@ -24,10 +24,13 @@ const TOKEN = 'segredo-do-webhook';
 const CPF = '529.982.247-25';
 
 const prisma = new PrismaService();
-const config = {
-  get: (k: string, padrao?: unknown) =>
-    (({ AI_REQUIRES_PLAN: true }) as Record<string, unknown>)[k] ?? padrao,
-} as unknown as ConfigService;
+// Os casos antigos são sem teste grátis; o teste tem o seu bloco no fim.
+const configCom = (env: Record<string, unknown>) =>
+  ({
+    get: (k: string, padrao?: unknown) =>
+      ({ AI_REQUIRES_PLAN: true, BILLING_PRO_TRIAL_DAYS: 0, ...env })[k] ?? padrao,
+  }) as unknown as ConfigService;
+const config = configCom({});
 
 function provedorFalso() {
   const real = new AsaasProvider({
@@ -47,10 +50,10 @@ function provedorFalso() {
   } satisfies SubscriptionProvider;
 }
 
-function montar() {
+function montar(cfg: ConfigService = config) {
   const provedor = provedorFalso();
-  const direitos = new SubscriptionEntitlementsService(prisma, config);
-  const service = new UserSubscriptionService(prisma, config, direitos, provedor);
+  const direitos = new SubscriptionEntitlementsService(prisma, cfg);
+  const service = new UserSubscriptionService(prisma, cfg, direitos, provedor);
   return { service, provedor };
 }
 
@@ -144,7 +147,7 @@ describe('UserSubscriptionService (banco real)', () => {
   it('webhook com token errado é 401 e não grava nada', async () => {
     const { service } = montar();
     await expect(
-      service.processarWebhookAsaas({ 'asaas-access-token': 'errado' }, '{}'),
+      service.handleAsaasWebhook({ 'asaas-access-token': 'errado' }, '{}'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -155,10 +158,10 @@ describe('UserSubscriptionService (banco real)', () => {
     });
     const corpo = evento(`${stamp}-1`, 'PAYMENT_CONFIRMED', sub.providerRef!, '2026-10-15');
 
-    expect(await service.processarWebhookAsaas({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
+    expect(await service.handleAsaasWebhook({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
       received: true,
     });
-    const plano = await service.plano(userA);
+    const plano = await service.plan(userA);
     expect(plano).toMatchObject({
       tier: 'PRO',
       source: 'ASAAS',
@@ -167,7 +170,7 @@ describe('UserSubscriptionService (banco real)', () => {
     });
     expect(plano.currentPeriodEnd).toBe(fimDoPeriodo('2026-10-15', 'YEARLY').toISOString());
 
-    expect(await service.processarWebhookAsaas({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
+    expect(await service.handleAsaasWebhook({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
       received: true,
       duplicate: true,
     });
@@ -180,9 +183,9 @@ describe('UserSubscriptionService (banco real)', () => {
     });
     const corpo = evento(`${stamp}-2`, 'PAYMENT_OVERDUE', sub.providerRef!, '2026-10-15');
 
-    await service.processarWebhookAsaas({ 'asaas-access-token': TOKEN }, corpo);
+    await service.handleAsaasWebhook({ 'asaas-access-token': TOKEN }, corpo);
 
-    expect(await service.plano(userA)).toMatchObject({ tier: 'PRO', status: 'ACTIVE' });
+    expect(await service.plan(userA)).toMatchObject({ tier: 'PRO', status: 'ACTIVE' });
     const ev = await prisma.billingWebhookEvent.findFirstOrThrow({
       where: { eventId: `${stamp}-2` },
     });
@@ -199,7 +202,7 @@ describe('UserSubscriptionService (banco real)', () => {
   it('evento de assinatura que não é nossa é registrado e responde 200', async () => {
     const { service } = montar();
     const corpo = evento(`${stamp}-3`, 'PAYMENT_CONFIRMED', 'sub_de_outra_coisa', '2026-10-15');
-    expect(await service.processarWebhookAsaas({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
+    expect(await service.handleAsaasWebhook({ 'asaas-access-token': TOKEN }, corpo)).toEqual({
       received: true,
       ignored: 'assinatura_desconhecida',
     });
@@ -214,8 +217,8 @@ describe('UserSubscriptionService (banco real)', () => {
 
   it('isolamento: a outra pessoa não vê nem cancela a assinatura de A', async () => {
     const { service, provedor } = montar();
-    expect(await service.plano(userB)).toMatchObject({ tier: 'FREE', status: null });
-    await expect(service.cancelar(userB)).rejects.toBeInstanceOf(NotFoundException);
+    expect(await service.plan(userB)).toMatchObject({ tier: 'FREE', status: null });
+    await expect(service.cancel(userB)).rejects.toBeInstanceOf(NotFoundException);
     expect(provedor.cancelSubscription).not.toHaveBeenCalled();
   });
 
@@ -225,13 +228,13 @@ describe('UserSubscriptionService (banco real)', () => {
       where: { userId: userA, status: 'ACTIVE' },
     });
 
-    const plano = await service.cancelar(userA);
+    const plano = await service.cancel(userA);
 
     expect(provedor.cancelSubscription).toHaveBeenCalledWith(sub.providerRef);
     expect(plano).toMatchObject({ tier: 'PRO', cancelAtPeriodEnd: true });
 
     // O Asaas confirma a exclusão com SUBSCRIPTION_DELETED: continua PRO.
-    await service.processarWebhookAsaas(
+    await service.handleAsaasWebhook(
       { 'asaas-access-token': TOKEN },
       JSON.stringify({
         id: `${stamp}-4`,
@@ -239,7 +242,7 @@ describe('UserSubscriptionService (banco real)', () => {
         subscription: { id: sub.providerRef },
       }),
     );
-    expect(await service.plano(userA)).toMatchObject({ tier: 'PRO', cancelAtPeriodEnd: true });
+    expect(await service.plan(userA)).toMatchObject({ tier: 'PRO', cancelAtPeriodEnd: true });
   });
 
   it('apagar a conta encerra a recorrência viva no provedor', async () => {
@@ -248,8 +251,593 @@ describe('UserSubscriptionService (banco real)', () => {
       data: { userId: userB, source: 'ASAAS', status: 'ACTIVE', providerRef: `sub_${stamp}_b` },
     });
 
-    await service.encerrarAntesDeApagar(userB);
+    await service.cancelBeforeAccountDeletion(userB);
 
     expect(provedor.cancelSubscription).toHaveBeenCalledWith(`sub_${stamp}_b`);
+  });
+
+  it('apagar a conta no meio do teste grátis também encerra a recorrência (#386)', async () => {
+    const { service, provedor } = montar();
+    await prisma.userSubscription.create({
+      data: {
+        userId: userB,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        providerRef: `sub_${stamp}_b_teste`,
+        trialEndsAt: new Date(Date.now() + 5 * 86_400_000),
+        currentPeriodEnd: new Date(Date.now() + 5 * 86_400_000),
+      },
+    });
+
+    await service.cancelBeforeAccountDeletion(userB);
+
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`sub_${stamp}_b_teste`);
+  });
+});
+
+/**
+ * Teste grátis e forma de pagamento na web (#386): a primeira cobrança vence no
+ * fim do teste, o teste é lido como PRO, e cada pessoa tem um só.
+ */
+describe('UserSubscriptionService — teste grátis e forma de pagamento (banco real)', () => {
+  const stamp = `teste-gratis-${Date.now()}`;
+  const comTeste = configCom({ BILLING_PRO_TRIAL_DAYS: 7 });
+  let nova: string;
+  let jaFoiPro: string;
+  let pagante: string;
+
+  beforeAll(async () => {
+    const [a, b, c] = await Promise.all(
+      ['nova', 'ja-foi-pro', 'pagante'].map((s) =>
+        prisma.user.create({
+          // Cliente do Asaas já criado: o dublê devolve sempre o mesmo id.
+          data: {
+            logtoSub: `${stamp}-${s}`,
+            email: `${stamp}-${s}@test.local`,
+            name: s,
+            asaasCustomerId: `${stamp}-cus-${s}`,
+          },
+        }),
+      ),
+    );
+    nova = a.id;
+    jaFoiPro = b.id;
+    pagante = c.id;
+    // Teve PRO pela loja, que já expirou.
+    await prisma.userSubscription.create({
+      data: {
+        userId: jaFoiPro,
+        source: 'APPLE',
+        status: 'EXPIRED',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-loja`,
+        currentPeriodEnd: new Date(Date.now() - 40 * 86_400_000),
+      },
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: [nova, jaFoiPro, pagante] } } });
+    await prisma.billingWebhookEvent.deleteMany({ where: { eventId: { startsWith: stamp } } });
+  });
+
+  it('quem nunca teve PRO vê o teste disponível no plano', async () => {
+    const { service } = montar(comTeste);
+    expect(await service.plan(nova)).toMatchObject({
+      tier: 'FREE',
+      state: 'FREE',
+      trialEligible: true,
+      trialDays: 7,
+      paidBy: null,
+    });
+  });
+
+  it('checkout de quem pode ter teste: PRO na hora, primeira cobrança no fim do teste', async () => {
+    const { service, provedor } = montar(comTeste);
+    const antes = Date.now();
+    const plano = await service.checkout(nova, {
+      interval: 'YEARLY',
+      cpf: CPF,
+      paymentMethod: 'PIX',
+    });
+
+    expect(plano).toMatchObject({
+      tier: 'PRO',
+      state: 'TRIAL',
+      reason: 'teste',
+      paymentMethod: 'PIX',
+      paidBy: 'PERSONAL',
+      trialEligible: false,
+    });
+    expect(plano.paymentUrl).toMatch(/^https:\/\//);
+    const fim = new Date(plano.trialEndsAt!).getTime();
+    expect(fim - antes).toBeGreaterThanOrEqual(7 * 86_400_000 - 60_000);
+    expect(fim - antes).toBeLessThan(8 * 86_400_000);
+
+    const [chamada] = provedor.createSubscription.mock.calls[0] as unknown as [
+      { nextDueAt: Date; billingType: string },
+    ];
+    expect(chamada.billingType).toBe('PIX');
+    expect(chamada.nextDueAt.getTime() - antes).toBeGreaterThanOrEqual(7 * 86_400_000 - 60_000);
+
+    const conta = await prisma.user.findUniqueOrThrow({ where: { id: nova } });
+    expect(conta.proTrialStartedAt).not.toBeNull();
+  });
+
+  it('o pagamento no fim do teste vira PRO anual', async () => {
+    const { service } = montar(comTeste);
+    const sub = await prisma.userSubscription.findFirstOrThrow({
+      where: { userId: nova, status: 'TRIALING' },
+    });
+    const due = sub.trialEndsAt!.toISOString().slice(0, 10);
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      evento(`${stamp}-1`, 'PAYMENT_RECEIVED', sub.providerRef!, due),
+    );
+    expect(await service.plan(nova)).toMatchObject({
+      tier: 'PRO',
+      state: 'ACTIVE',
+      paymentUrl: null,
+    });
+  });
+
+  it('quem já teve teste ou já foi PRO assina sem teste: checkout pendente', async () => {
+    const { service, provedor } = montar(comTeste);
+    expect(await service.plan(jaFoiPro)).toMatchObject({ trialEligible: false });
+    const plano = await service.checkout(jaFoiPro, {
+      interval: 'MONTHLY',
+      cpf: CPF,
+      paymentMethod: 'BOLETO',
+    });
+    expect(plano).toMatchObject({ tier: 'FREE', state: 'PENDING', paymentMethod: 'BOLETO' });
+    const [chamada] = provedor.createSubscription.mock.calls[0] as unknown as [
+      { nextDueAt: Date; billingType: string },
+    ];
+    expect(chamada.billingType).toBe('BOLETO');
+    expect(Math.abs(chamada.nextDueAt.getTime() - Date.now())).toBeLessThan(60_000);
+  });
+
+  it('cancelar no teste encerra a recorrência: nada é cobrado e o PRO vai até o fim do teste', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-cancela-teste`,
+        email: `${stamp}-cancela-teste@test.local`,
+        name: 'cancela',
+        asaasCustomerId: `${stamp}-cus-cancela`,
+      },
+    });
+    try {
+      const teste = await service.checkout(u.id, { interval: 'MONTHLY', cpf: CPF });
+      expect(teste.state).toBe('TRIAL');
+      const plano = await service.cancel(u.id);
+      expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+      expect(plano).toMatchObject({
+        tier: 'PRO',
+        state: 'CANCELED',
+        cancelAtPeriodEnd: true,
+        trialEndsAt: teste.trialEndsAt,
+      });
+    } finally {
+      await prisma.user.delete({ where: { id: u.id } });
+    }
+  });
+
+  it('trocar a forma de pagamento antes de pagar abre outro checkout', async () => {
+    const { service, provedor } = montar(comTeste);
+    const plano = await service.checkout(jaFoiPro, {
+      interval: 'MONTHLY',
+      cpf: CPF,
+      paymentMethod: 'PIX',
+    });
+    expect(plano).toMatchObject({ state: 'PENDING', paymentMethod: 'PIX' });
+    expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('a renovação em aberto guarda o link, e o atraso mostra carência com o link (web)', async () => {
+    const { service } = montar(comTeste);
+    const ref = `${stamp}-renova`;
+    const fim = new Date(Date.now() + 2 * 86_400_000);
+    await prisma.userSubscription.create({
+      data: {
+        userId: pagante,
+        source: 'ASAAS',
+        status: 'ACTIVE',
+        interval: 'MONTHLY',
+        providerRef: ref,
+        paymentMethod: 'PIX',
+        currentPeriodEnd: fim,
+      },
+    });
+    const due = fim.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      JSON.stringify({
+        id: `${stamp}-2`,
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_r',
+          status: 'PENDING',
+          dueDate: due,
+          subscription: ref,
+          invoiceUrl: 'https://www.asaas.com/i/pay_r',
+        },
+      }),
+    );
+    expect(await service.plan(pagante)).toMatchObject({
+      state: 'ACTIVE',
+      paymentUrl: 'https://www.asaas.com/i/pay_r',
+      paymentMethod: 'PIX',
+    });
+  });
+});
+
+/**
+ * Teste que acaba sem pagamento e assinatura que fica viva no Asaas (revisão da
+ * #386): ninguém pode terminar com duas recorrências vivas no provedor.
+ */
+describe('UserSubscriptionService — assinaturas vivas no provedor (banco real)', () => {
+  const stamp = `vivas-${Date.now()}`;
+  const comTeste = configCom({ BILLING_PRO_TRIAL_DAYS: 7 });
+  const DIA = 86_400_000;
+  const ids: string[] = [];
+
+  async function pessoa(nome: string, testou = true) {
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-${nome}`,
+        email: `${stamp}-${nome}@test.local`,
+        name: nome,
+        asaasCustomerId: `${stamp}-cus-${nome}`,
+        proTrialStartedAt: testou ? new Date(Date.now() - 10 * DIA) : null,
+      },
+    });
+    ids.push(u.id);
+    return u.id;
+  }
+
+  function testeVencido(userId: string, ref: string, diasAtras: number) {
+    const fim = new Date(Date.now() - diasAtras * DIA);
+    return prisma.userSubscription.create({
+      data: {
+        userId,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        interval: 'MONTHLY',
+        paymentMethod: 'PIX',
+        providerRef: ref,
+        paymentUrl: `https://www.asaas.com/i/${ref}`,
+        trialEndsAt: fim,
+        currentPeriodEnd: fim,
+      },
+    });
+  }
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+    await prisma.billingWebhookEvent.deleteMany({ where: { eventId: { startsWith: stamp } } });
+  });
+
+  it('teste que acabou sem pagamento: cancela no provedor e expira, uma vez só', async () => {
+    const { service, provedor } = montar(comTeste);
+    const vencido = await pessoa('vencido');
+    const emCurso = await pessoa('em-curso');
+    const recente = await pessoa('recente');
+    await testeVencido(vencido, `${stamp}-vencido`, 5);
+    await testeVencido(recente, `${stamp}-recente`, 1); // boleto ainda pode compensar
+    await prisma.userSubscription.create({
+      data: {
+        userId: emCurso,
+        source: 'ASAAS',
+        status: 'TRIALING',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-em-curso`,
+        trialEndsAt: new Date(Date.now() + 3 * DIA),
+        currentPeriodEnd: new Date(Date.now() + 3 * DIA),
+      },
+    });
+
+    expect(await service.expireUnpaidTrials(new Date())).toBe(1);
+    expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-vencido`);
+    expect(
+      await prisma.userSubscription.findFirstOrThrow({ where: { userId: vencido } }),
+    ).toMatchObject({ status: 'EXPIRED', paymentUrl: null });
+    expect(
+      (await prisma.userSubscription.findFirstOrThrow({ where: { userId: emCurso } })).status,
+    ).toBe('TRIALING');
+
+    // De novo: nada a fazer.
+    expect(await service.expireUnpaidTrials(new Date())).toBe(0);
+    expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('provedor fora do ar: o teste continua para a próxima rodada tentar', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await pessoa('provedor-fora');
+    await testeVencido(u, `${stamp}-provedor-fora`, 5);
+    provedor.cancelSubscription.mockRejectedValueOnce(new Error('503'));
+
+    expect(await service.expireUnpaidTrials(new Date())).toBe(0);
+    expect((await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } })).status).toBe(
+      'TRIALING',
+    );
+  });
+
+  it('assinar de novo encerra no provedor toda assinatura ainda viva, não só a pendente', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await pessoa('reassina');
+    await testeVencido(u, `${stamp}-reassina-teste`, 2);
+    // PRO antigo vencido além da carência, com a recorrência ainda viva.
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'PAST_DUE',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-reassina-atraso`,
+        currentPeriodEnd: new Date(Date.now() - 30 * DIA),
+        graceEndsAt: new Date(Date.now() - 23 * DIA),
+      },
+    });
+
+    const plano = await service.checkout(u, { interval: 'MONTHLY', cpf: CPF });
+
+    expect(plano.state).toBe('PENDING');
+    const canceladas = provedor.cancelSubscription.mock.calls.map(([id]) => id);
+    expect(canceladas).toEqual(
+      expect.arrayContaining([`${stamp}-reassina-teste`, `${stamp}-reassina-atraso`]),
+    );
+    const vivas = await prisma.userSubscription.findMany({
+      where: { userId: u, status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] } },
+    });
+    expect(vivas).toHaveLength(1);
+    expect(vivas[0]!.status).toBe('PENDING');
+  });
+
+  it('evento da assinatura antiga nunca mexe na nova', async () => {
+    const { service } = montar(comTeste);
+    const u = ids[ids.length - 1]!; // "reassina"
+    const nova = await prisma.userSubscription.findFirstOrThrow({
+      where: { userId: u, status: 'PENDING' },
+    });
+    for (const [n, event] of ['PAYMENT_CREATED', 'PAYMENT_OVERDUE'].entries()) {
+      await service.handleAsaasWebhook(
+        { 'asaas-access-token': TOKEN },
+        JSON.stringify({
+          id: `${stamp}-velho-${n}`,
+          event,
+          payment: {
+            id: `pay_velho_${n}`,
+            status: 'PENDING',
+            dueDate: '2026-11-01',
+            subscription: `${stamp}-reassina-teste`,
+            invoiceUrl: 'https://www.asaas.com/i/velho',
+          },
+        }),
+      );
+    }
+    expect(await prisma.userSubscription.findUniqueOrThrow({ where: { id: nova.id } })).toEqual(
+      nova,
+    );
+    expect(
+      await prisma.userSubscription.findFirstOrThrow({
+        where: { providerRef: `${stamp}-reassina-teste` },
+      }),
+    ).toMatchObject({ status: 'EXPIRED', paymentUrl: null });
+  });
+
+  it('cancelar o teste apaga o link: não sobra "pagar" de uma assinatura cancelada', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('cancela-link', false);
+    await service.checkout(u, { interval: 'MONTHLY', cpf: CPF });
+    const plano = await service.cancel(u);
+    expect(plano).toMatchObject({ state: 'CANCELED', paymentUrl: null });
+    expect(
+      (await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } })).paymentUrl,
+    ).toBeNull();
+  });
+
+  it('PRO ativo com a renovação criada e depois cancelado: o link da renovação some', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('ativa-cancela');
+    const ref = `${stamp}-ativa-cancela`;
+    const fim = new Date(Date.now() + 2 * DIA);
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'ACTIVE',
+        interval: 'MONTHLY',
+        providerRef: ref,
+        currentPeriodEnd: fim,
+      },
+    });
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      JSON.stringify({
+        id: `${stamp}-renova`,
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_ativa',
+          status: 'PENDING',
+          dueDate: fim.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+          subscription: ref,
+          invoiceUrl: 'https://www.asaas.com/i/renova',
+        },
+      }),
+    );
+    expect((await service.plan(u)).paymentUrl).toBe('https://www.asaas.com/i/renova');
+
+    const plano = await service.cancel(u);
+    expect(plano).toMatchObject({ state: 'CANCELED', paymentUrl: null });
+  });
+
+  it('no teste, a página da primeira fatura chega pelo PAYMENT_CREATED e fica acessível', async () => {
+    const { service, provedor } = montar(comTeste);
+    provedor.firstPaymentUrl.mockResolvedValueOnce(null as unknown as string);
+    const u = await pessoa('fatura-do-teste', false);
+    const teste = await service.checkout(u, {
+      interval: 'MONTHLY',
+      cpf: CPF,
+      paymentMethod: 'CREDIT_CARD',
+    });
+    expect(teste).toMatchObject({ state: 'TRIAL', paymentUrl: null });
+    const sub = await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } });
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      JSON.stringify({
+        id: `${stamp}-fatura-teste`,
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_teste',
+          status: 'PENDING',
+          dueDate: sub.trialEndsAt!.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+          subscription: sub.providerRef,
+          invoiceUrl: 'https://www.asaas.com/i/primeira',
+        },
+      }),
+    );
+    expect(await service.plan(u)).toMatchObject({
+      state: 'TRIAL',
+      paymentUrl: 'https://www.asaas.com/i/primeira',
+    });
+  });
+
+  it('linha cancelada até o fim do período com link velho no banco: o plano não mostra o link', async () => {
+    const { service } = montar(comTeste);
+    const u = await pessoa('link-velho');
+    await prisma.userSubscription.create({
+      data: {
+        userId: u,
+        source: 'ASAAS',
+        status: 'ACTIVE',
+        interval: 'MONTHLY',
+        providerRef: `${stamp}-link-velho`,
+        currentPeriodEnd: new Date(Date.now() + 5 * DIA),
+        cancelAtPeriodEnd: true,
+        paymentUrl: 'https://www.asaas.com/i/velho',
+      },
+    });
+    expect((await service.plan(u)).paymentUrl).toBeNull();
+  });
+});
+
+/**
+ * Revisão da #386, item 9: o teste grátis só fica reservado quando a
+ * assinatura nasce no Asaas, e duas abas não abrem duas assinaturas.
+ */
+describe('UserSubscriptionService — checkout amarrado ao provedor (banco real)', () => {
+  const stamp = `trava-${Date.now()}`;
+  const comTeste = configCom({ BILLING_PRO_TRIAL_DAYS: 7 });
+  const ids: string[] = [];
+
+  async function pessoa(nome: string) {
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-${nome}`,
+        email: `${stamp}-${nome}@test.local`,
+        name: nome,
+        asaasCustomerId: `${stamp}-cus-${nome}`,
+      },
+    });
+    ids.push(u.id);
+    return u.id;
+  }
+
+  const reserva = async (id: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { id }, select: { proTrialStartedAt: true } }))
+      .proTrialStartedAt;
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+  });
+
+  it('o Asaas falhou: o teste não fica gasto e nenhuma assinatura nasce', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('asaas-fora');
+    provedor.createSubscription.mockRejectedValueOnce(new Error('Asaas fora do ar'));
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow(
+      'Asaas fora do ar',
+    );
+    expect(await reserva(id)).toBeNull();
+    expect(await prisma.userSubscription.count({ where: { userId: id } })).toBe(0);
+    expect(await service.trialEligible(id)).toBe(true);
+  });
+
+  it('o banco falhou depois do Asaas: cancela a assinatura criada e devolve o teste', async () => {
+    const { service, provedor } = montar(comTeste);
+    const outra = await pessoa('dona-do-ref');
+    const id = await pessoa('banco-falhou');
+    // O providerRef já existe em outra linha: o insert estoura na unicidade.
+    await prisma.userSubscription.create({
+      data: { userId: outra, source: 'ASAAS', status: 'EXPIRED', providerRef: `${stamp}-dup` },
+    });
+    provedor.createSubscription.mockResolvedValueOnce({ providerSubscriptionId: `${stamp}-dup` });
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow();
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-dup`);
+    expect(await reserva(id)).toBeNull();
+    expect(await prisma.userSubscription.count({ where: { userId: id } })).toBe(0);
+  });
+
+  it('o link de pagamento falhou depois do Asaas: também cancela a assinatura criada', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('link-falhou');
+    provedor.createSubscription.mockResolvedValueOnce({ providerSubscriptionId: `${stamp}-link` });
+    provedor.firstPaymentUrl.mockRejectedValueOnce(new Error('timeout'));
+
+    await expect(service.checkout(id, { interval: 'MONTHLY', cpf: CPF })).rejects.toThrow(
+      'timeout',
+    );
+    expect(provedor.cancelSubscription).toHaveBeenCalledWith(`${stamp}-link`);
+    expect(await reserva(id)).toBeNull();
+  });
+
+  it('duas abas ao mesmo tempo: uma assinatura só no Asaas e no banco', async () => {
+    const { service, provedor } = montar(comTeste);
+    const id = await pessoa('duas-abas');
+    // O Asaas demora: é a janela em que a segunda aba entrava.
+    const criar = provedor.createSubscription.getMockImplementation()!;
+    provedor.createSubscription.mockImplementation(async (...a) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return criar(...a);
+    });
+
+    const resultados = await Promise.allSettled([
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+    ]);
+
+    expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const recusa = resultados.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(recusa.reason).toBeInstanceOf(ConflictException);
+    expect(provedor.createSubscription).toHaveBeenCalledTimes(1);
+    const vivas = await prisma.userSubscription.findMany({
+      where: { userId: id, status: { in: ['PENDING', 'TRIALING', 'ACTIVE'] } },
+    });
+    expect(vivas.map((v) => v.status)).toEqual(['TRIALING']);
+  });
+
+  it('duas abas sem teste: a segunda reaproveita o checkout da primeira', async () => {
+    const { service, provedor } = montar(config);
+    const id = await pessoa('duas-abas-sem-teste');
+    const criar = provedor.createSubscription.getMockImplementation()!;
+    provedor.createSubscription.mockImplementation(async (...a) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return criar(...a);
+    });
+
+    const [a, b] = await Promise.all([
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+      service.checkout(id, { interval: 'MONTHLY', cpf: CPF, paymentMethod: 'PIX' }),
+    ]);
+
+    expect(provedor.createSubscription).toHaveBeenCalledTimes(1);
+    expect(b.paymentUrl).toBe(a.paymentUrl);
+    expect(await prisma.userSubscription.count({ where: { userId: id, status: 'PENDING' } })).toBe(
+      1,
+    );
   });
 });

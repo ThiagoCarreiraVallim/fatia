@@ -104,6 +104,7 @@ const naFaixa = (r: { value: number; min?: number | null; max?: number | null })
  * cartão recolhe: "Resumo de hoje · 934 kcal".
  */
 export function chatCardTitle(a: ChatArtifact): string {
+  if (!isRenderableChatArtifact(a)) return 'Cartão';
   switch (a.kind) {
     case 'metric':
       return a.label ?? comUnidade(a.value, a.unit);
@@ -149,8 +150,53 @@ export function chatCardTitle(a: ChatArtifact): string {
   }
 }
 
+/**
+ * O campo de que o desenho de cada formato depende (o mesmo `CAMPO_OBRIGATORIO` do agente).
+ * Lista em vez de `switch` para que um formato novo, vindo de uma API mais nova, caia fora.
+ */
+const CAMPO_DO_FORMATO: Record<
+  ChatArtifact['kind'],
+  { campo: string; tipo: 'array' | 'number' | 'string' | 'object' }
+> = {
+  metric: { campo: 'value', tipo: 'number' },
+  bars: { campo: 'bars', tipo: 'array' },
+  timeline: { campo: 'events', tipo: 'array' },
+  list: { campo: 'items', tipo: 'array' },
+  report: { campo: 'rows', tipo: 'array' },
+  range: { campo: 'rows', tipo: 'array' },
+  progress: { campo: 'items', tipo: 'array' },
+  comparison: { campo: 'items', tipo: 'array' },
+  scoreboard: { campo: 'entries', tipo: 'array' },
+  badges: { campo: 'badges', tipo: 'array' },
+  instructions: { campo: 'steps', tipo: 'array' },
+  file: { campo: 'url', tipo: 'string' },
+  sources: { campo: 'sources', tipo: 'array' },
+  app_only: { campo: 'params', tipo: 'object' },
+  saved: { campo: 'lines', tipo: 'array' },
+};
+
+/**
+ * Se o cartão sabe desenhar esta carga. Um formato que este cliente não conhece (app antigo,
+ * API nova) ou sem o campo principal vira o aviso neutro em vez de derrubar a conversa.
+ */
+export function isRenderableChatArtifact(a: unknown): a is ChatArtifact {
+  if (!a || typeof a !== 'object') return false;
+  const kind = (a as { kind?: unknown }).kind;
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CAMPO_DO_FORMATO, kind))
+    return false;
+  const { campo, tipo } = CAMPO_DO_FORMATO[kind as ChatArtifact['kind']];
+  const valor = (a as Record<string, unknown>)[campo];
+  if (tipo === 'array') return Array.isArray(valor);
+  if (tipo === 'object') return !!valor && typeof valor === 'object';
+  return typeof valor === tipo;
+}
+
+/** O aviso no lugar de um cartão que este cliente não sabe desenhar. */
+export const UNKNOWN_CHAT_ARTIFACT_TEXT = 'Este cartão precisa de uma versão mais nova do Fatia.';
+
 /** "Nada encontrado": a consulta rodou e voltou sem linha nenhuma (fica neutra, não vermelha). */
 export function isEmptyChatArtifact(a: ChatArtifact): boolean {
+  if (!isRenderableChatArtifact(a)) return false;
   switch (a.kind) {
     case 'timeline':
       return a.events.length === 0;
@@ -259,6 +305,63 @@ export function toolLineLabel(
   }
 }
 
+/**
+ * A linha da busca na web fala da busca, não da ferramenta (pranchas IA-Estados e Al-M16):
+ * "Pesquisei na web · 3 sites", "nada confiável" quando não achou fonte boa, e "indisponível"
+ * quando o serviço falhou — a resposta segue sem a web nos dois casos.
+ */
+export function webSearchLineLabel(status: ToolCallStatus, sites?: number): string {
+  switch (status) {
+    case 'running':
+      return 'Pesquisando na web…';
+    case 'pending':
+      return 'Buscar na web · aguardando sua confirmação';
+    case 'empty':
+      return 'Pesquisei na web · nada confiável';
+    case 'error':
+      return 'Busca na web indisponível agora';
+    case 'declined':
+      return 'Busca na web · você recusou';
+    case 'not_run':
+      return 'Busca na web · não chegou a rodar';
+    case 'done':
+      return sites === undefined
+        ? 'Pesquisei na web'
+        : `Pesquisei na web · ${plural(sites, 'site', 'sites')}`;
+  }
+}
+
+/** O texto pequeno acima do título do cartão: o nome da ferramenta; no só no app, "Só no app". */
+export function cardEyebrow(kind: string, toolTitle: string | undefined): string | undefined {
+  return kind === 'app_only' ? 'Só no app' : toolTitle;
+}
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** "2026-10-06" → "6 out". Lê só a data, sem fuso: o dia é o que a tool gravou. */
+function diaCurto(iso: string): string {
+  const [, mes, dia] = iso.slice(0, 10).split('-').map(Number);
+  return mes && dia ? `${dia} ${MESES[mes - 1]}` : iso;
+}
+
+/** O período da variação da linha do tempo: "em 30 dias", do primeiro ao último ponto. */
+export function timelinePeriodLabel(events: readonly { date: string }[]): string {
+  const dia = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  const primeiro = events[0];
+  const ultimo = events.at(-1);
+  const dias =
+    primeiro && ultimo ? Math.round((dia(ultimo.date) - dia(primeiro.date)) / 86_400_000) : 0;
+  if (!Number.isFinite(dias) || dias <= 0) return 'no período';
+  return `em ${plural(dias, 'dia', 'dias')}`;
+}
+
+/** As datas embaixo da curva da linha do tempo: a primeira, a do meio e a última. */
+export function timelineAxisLabels(events: readonly { date: string }[]): string[] {
+  if (events.length === 0) return [];
+  const indices = [...new Set([0, Math.floor((events.length - 1) / 2), events.length - 1])];
+  return indices.map((i) => diaCurto(events[i]!.date));
+}
+
 /** A última tool da última resposta, para as respostas rápidas; nada se a pessoa falou por último. */
 export function lastToolName(messages: readonly ChatThreadMessage[]): string | null {
   const ultima = messages.at(-1);
@@ -343,16 +446,24 @@ export function groupConversationsByDay<T extends { updatedAt: string }>(
 
 // ---------------------------------------------------------------- aceites
 
-/** As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar aqui. */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-16', webSearch: '2026-11-16' } as const;
+/**
+ * As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar a
+ * versão aqui e lá — o teste amarra um hash do texto à versão, para não esquecer.
+ */
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
 
+/**
+ * Os textos dos aceites. Os nomes (`{provider}`, `{model}`, `{searchEngine}`) não moram aqui:
+ * vêm da API (`AiConsentStatus.processor`, das envs `AI_CONSENT_*`) por `aiConsentBody`.
+ */
 export const AI_CONSENT_TEXTS = {
   chat: {
     title: 'Antes de conversar',
     body:
       'Suas mensagens e os dados que a IA consulta (refeições, treinos, metas) vão para o ' +
-      'OpenRouter, que encaminha ao modelo GLM 5.3 Flash, da Z.ai, para gerar as respostas. ' +
-      'Só usamos servidores que não guardam o que recebem e não treinam modelos com isso.',
+      '{provider}, que encaminha ao modelo {model}, para gerar as respostas. O Fatia pede ao ' +
+      '{provider} só servidores de retenção zero, que declaram não guardar o que recebem nem ' +
+      'treinar modelos com isso.',
     link: 'Como tratamos seus dados',
     accept: 'Concordo',
     decline: 'Agora não',
@@ -360,14 +471,32 @@ export const AI_CONSENT_TEXTS = {
   webSearch: {
     title: 'Buscar na web?',
     body:
-      'Só o texto da pergunta vai para a Exa, o serviço de busca, pelo OpenRouter, sem seu ' +
-      'nome nem seus dados. A regra de não guardar o que recebem, das conversas, não vale para ' +
-      'a busca: a Exa pode guardar a pergunta. As fontes aparecem num cartão no fim.',
+      'Só a pergunta da busca vai para a {searchEngine}, o serviço de busca, pelo {provider}. ' +
+      'Ela é escrita a partir da sua última mensagem, sem o seu perfil, as memórias ou o resto ' +
+      'da conversa, e sem e-mail, telefone nem documento. A retenção zero das conversas não ' +
+      'vale para a busca: a {searchEngine} pode guardar a pergunta. As fontes aparecem num ' +
+      'cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
     footnote: 'Dá para desligar no globo, no topo do chat.',
   },
 } as const;
+
+/** Quem recebe: o provedor, o modelo e a busca, como a API os nomeia (`AI_CONSENT_*`). */
+export interface AiProcessor {
+  provider: string;
+  model: string;
+  searchEngine: string;
+}
+
+/** O texto do aceite com os nomes de verdade, vindos da API. */
+export function aiConsentBody(topic: AiConsentTopic, processor: AiProcessor): string {
+  const corpo = topic === 'chat' ? AI_CONSENT_TEXTS.chat.body : AI_CONSENT_TEXTS.webSearch.body;
+  return corpo
+    .replaceAll('{provider}', processor.provider)
+    .replaceAll('{model}', processor.model)
+    .replaceAll('{searchEngine}', processor.searchEngine);
+}
 
 export type AiConsentTopic = 'chat' | 'web_search';
 
@@ -381,6 +510,8 @@ export interface AiConsentStatus {
   chat: AiConsentState;
   webSearch: AiConsentState;
   webSearchEnabled: boolean;
+  /** Os nomes que o texto do aceite mostra (`aiConsentBody`). */
+  processor: AiProcessor;
 }
 
 export function getAiConsent(): Promise<AiConsentStatus> {
@@ -411,3 +542,23 @@ export const CHAT_FEEDBACK_REASON_LABELS = {
   slow: 'Demorou',
   other: 'Outro',
 } as const;
+
+// ---------------------------------------------------------------- lote da pausa
+
+/** Quantas decisões o lote pede: escritas e buscas (as perguntas têm campo, não botão). */
+export function pauseDecisionCount(actions: ChatInterruptValue['actions']): number {
+  return actions.filter((a) => a.kind === 'confirm' || a.kind === 'web_consent').length;
+}
+
+/**
+ * No lote, tocar "Concordo e buscar" só escolhe; o aceite da busca é gravado no "Enviar", e só
+ * se a escolha final for concordar e ainda não houver aceite. Mudar de ideia não grava nada.
+ */
+export function webConsentToSaveOnSend(
+  actions: ChatInterruptValue['actions'],
+  approvals: Record<string, boolean>,
+  alreadyAccepted: boolean,
+): boolean {
+  if (alreadyAccepted) return false;
+  return actions.some((a) => a.kind === 'web_consent' && approvals[a.toolCallId] === true);
+}

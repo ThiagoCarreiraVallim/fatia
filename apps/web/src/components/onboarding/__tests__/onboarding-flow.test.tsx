@@ -25,13 +25,19 @@ vi.mock('@fatia/api-client', async () => {
       previewBySlug: vi.fn(),
       join: vi.fn(),
     },
-    nutritionApi: { suggestGoals: vi.fn() },
+    nutritionApi: { suggestGoals: vi.fn(), recognizeMealPhoto: vi.fn() },
     remindersApi: { list: vi.fn(), create: vi.fn() },
+    acceptAiConsent: vi.fn(),
+    getAiConsent: vi.fn(),
   };
 });
 
 import {
+  AI_CONSENT_TEXTS,
+  ApiError,
+  acceptAiConsent,
   billingApi,
+  getAiConsent,
   groupsApi,
   nutritionApi,
   onboardingApi,
@@ -180,6 +186,49 @@ describe('OnboardingFlow (#371)', () => {
     // Já está numa comunidade e a compra está desligada: não sobra etapa.
     await waitFor(() => expect(onboardingApi.finish).toHaveBeenCalled());
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('a foto do prato sem o aceite da IA abre o aceite em vez do erro', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 10, height: 10 }));
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,A');
+    vi.mocked(onboardingApi.progress).mockResolvedValue(
+      progress({ step: 'ai', profile: FULL_PROFILE, onboardedAt: '2026-11-04' }),
+    );
+    vi.mocked(billingApi.plan).mockResolvedValue({
+      tier: 'PRO',
+      source: 'GROUP',
+      requiresPlan: true,
+      webCheckout: false,
+      groupName: 'Academia',
+      prices: null,
+    } as never);
+    vi.mocked(nutritionApi.recognizeMealPhoto).mockRejectedValue(
+      new ApiError('Aceite pendente', 403, { code: 'AI_CONSENT_REQUIRED' }),
+    );
+    vi.mocked(getAiConsent).mockResolvedValue({
+      chat: { accepted: false, version: 'v', acceptedAt: null },
+      webSearch: { accepted: false, version: 'v', acceptedAt: null },
+      webSearchEnabled: false,
+      processor: { provider: 'OpenRouter', model: 'GLM 5.3 Flash, da Z.ai', searchEngine: 'Exa' },
+    });
+    vi.mocked(acceptAiConsent).mockResolvedValue({
+      chat: { accepted: true },
+      webSearch: { accepted: false },
+      webSearchEnabled: false,
+    } as never);
+    const user = userEvent.setup();
+    renderFlow();
+    await user.upload(
+      await screen.findByLabelText('Foto do prato'),
+      new File(['x'], 'p.jpg', { type: 'image/jpeg' }),
+    );
+    expect(await screen.findByRole('dialog', { name: AI_CONSENT_TEXTS.chat.title })).toBeTruthy();
+    expect(screen.queryByText('Aceite pendente')).toBeNull();
+    expect(await screen.findByText(/GLM 5\.3 Flash/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: AI_CONSENT_TEXTS.chat.accept }));
+    expect(acceptAiConsent).toHaveBeenCalledWith('chat');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('com convite: boas-vindas, e "não aceito" segue sem a comunidade', async () => {

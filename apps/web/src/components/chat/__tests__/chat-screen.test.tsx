@@ -78,7 +78,13 @@ const aceito: { accepted: boolean; version: string; acceptedAt: string | null } 
   version: '2026-11-16',
   acceptedAt: '2026-11-16T10:00:00.000Z',
 };
-let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+const PROCESSADOR = {
+  provider: 'OpenRouter',
+  model: 'GLM 5.3 Flash, da Z.ai',
+  searchEngine: 'Exa',
+};
+let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true, processor: PROCESSADOR };
+let aceiteFalha = false;
 const acceptAiConsentMock = vi.fn(async (topico: 'chat' | 'web_search') => {
   aceites = { ...aceites, [topico === 'chat' ? 'chat' : 'webSearch']: aceito };
   return aceites;
@@ -133,7 +139,10 @@ vi.mock('@fatia/api-client', async () => {
         appOnly: { screen: 'Ações da refeição', path: '/nutrition/meals/:id' },
       },
     })),
-    getAiConsent: vi.fn(async () => aceites),
+    getAiConsent: vi.fn(async () => {
+      if (aceiteFalha) throw new actual.ApiError('fora do ar', 503);
+      return aceites;
+    }),
     acceptAiConsent: acceptAiConsentMock,
     setWebSearchEnabled: setWebSearchEnabledMock,
     previewChatAction: vi.fn(async () => ({
@@ -224,7 +233,8 @@ beforeEach(() => {
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
   transcribeAudioMock.mockClear();
-  aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+  aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true, processor: PROCESSADOR };
+  aceiteFalha = false;
   acceptAiConsentMock.mockClear();
   setWebSearchEnabledMock.mockClear();
 });
@@ -559,18 +569,16 @@ describe('ChatScreen', () => {
     expect(screen.queryByText(/Bearer recusado/)).not.toBeInTheDocument();
   });
 
-  it('no Free, o chat mostra o que o PRO acrescenta e os dois caminhos, sem caixa de mensagem', async () => {
+  it('no Free, o chat mostra o Al-M1 (#386) e os caminhos, sem caixa de mensagem', async () => {
     acesso = { allowed: false, reason: 'plan_required' };
     montar();
 
-    expect(
-      await screen.findByRole('heading', { name: /o chat com a ia faz parte do pro/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /assinar pro/i })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { name: 'Fotografe o prato' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver o PRO' })).toHaveAttribute(
       'href',
       '/plan?recurso=chat',
     );
-    expect(screen.getByRole('link', { name: /sua própria ia pelo mcp/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /usar minha ia pelo mcp/i })).toHaveAttribute(
       'href',
       '/profile/connect',
     );
@@ -735,6 +743,76 @@ describe('ChatScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
 
     expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+  });
+
+  async function enfileirar(user: ReturnType<typeof userEvent.setup>, texto: string) {
+    await user.type(screen.getByRole('textbox', { name: 'Mensagem para o Fatia' }), texto);
+    await user.click(screen.getByRole('button', { name: 'Enviar depois desta resposta' }));
+  }
+
+  it('resposta que falha para a fila: nada sai sozinho, e cada item tem Enviar e Descartar', async () => {
+    montar();
+    const user = await enviar('quanto comi hoje?');
+    await enfileirar(user, 'e o jantar?');
+    await enfileirar(user, 'e amanhã?');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_PROVIDER_ERROR', message: 'x' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText(/A resposta anterior falhou/)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fontes).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Descartar: e amanhã?' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar: e o jantar?' }));
+    await waitFor(() => expect(fontes).toHaveLength(2));
+    expect(corpos[1]).toMatchObject({ message: 'e o jantar?' });
+  });
+
+  it('"Tentar de novo" reenvia a pergunta que falhou, e não a última da conversa', async () => {
+    montar();
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir(
+      fragmento('ai-1', 'Você'),
+      { event: 'error', data: { code: 'AI_PROVIDER_ERROR', message: 'x' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+    expect(await screen.findByText('A IA está fora do ar')).toBeInTheDocument();
+    const user = await enviar('e de proteína?');
+    fontes[1].emitir(fragmento('ai-2', 'Bastante.'), {
+      event: 'done',
+      data: { status: 'completed' },
+    });
+    fontes[1].fechar();
+    expect(await screen.findByText('Bastante.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    await waitFor(() => expect(fontes).toHaveLength(3));
+    expect(corpos[2]).toMatchObject({ message: 'quanto comi hoje?' });
+  });
+
+  it('depois de parar, a fila espera o servidor fechar o turno', async () => {
+    let liberar!: () => void;
+    stopChatRunMock.mockImplementationOnce(
+      () => new Promise<undefined>((resolve) => (liberar = () => resolve(undefined))),
+    );
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve'));
+    expect(await screen.findByText('Seu almoço teve')).toBeInTheDocument();
+    await enfileirar(user, 'e o jantar?');
+
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+    await waitFor(() => expect(stopChatRunMock).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fontes).toHaveLength(1);
+
+    liberar();
+    await waitFor(() => expect(fontes).toHaveLength(2));
+    expect(corpos[1]).toMatchObject({ message: 'e o jantar?' });
   });
 
   it('parar vai ao servidor, e não só fecha a conexão (ADR 035)', async () => {
@@ -1637,6 +1715,51 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
           screen.queryByRole('dialog', { name: 'Antes de conversar' }),
         ).not.toBeInTheDocument(),
       );
+    });
+
+    it('sem saber do aceite (erro ao ler), o campo não aparece e o aceite sim', async () => {
+      aceiteFalha = true;
+      montar();
+      expect(await screen.findByRole('dialog', { name: 'Antes de conversar' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('textbox', { name: 'Mensagem para o Fatia' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('o ditado recusado por falta de aceite mostra o aceite', async () => {
+      recursos = { photos: false, dictation: true };
+      class GravadorFalso {
+        static isTypeSupported = () => true;
+        mimeType = 'audio/webm';
+        onstop: (() => void) | null = null;
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        start() {}
+        stop() {
+          this.ondataavailable?.({ data: new Blob(['a'], { type: this.mimeType }) });
+          this.onstop?.();
+        }
+      }
+      vi.stubGlobal('MediaRecorder', GravadorFalso);
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })) },
+      });
+      const { ApiError } =
+        await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
+      transcribeAudioMock.mockImplementationOnce(async () => {
+        // A versão do aceite mudou enquanto a tela estava aberta.
+        aceites = {
+          ...aceites,
+          chat: { accepted: false, version: '2026-11-16', acceptedAt: null },
+        };
+        throw new ApiError('sem aceite', 403, { code: 'AI_CONSENT_REQUIRED' });
+      });
+      const user = userEvent.setup();
+      montar();
+      await user.click(await screen.findByRole('button', { name: 'Ditar mensagem' }));
+      await user.click(await screen.findByRole('button', { name: 'Parar de gravar' }));
+      expect(await screen.findByRole('dialog', { name: 'Antes de conversar' })).toBeInTheDocument();
+      vi.unstubAllGlobals();
     });
 
     it('a chave da busca no cabeçalho liga e desliga a web', async () => {

@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, ShieldCheck } from 'lucide-react-native';
+import { Globe } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
+  aiConsentBody,
   lastToolName,
   quickReplies,
   type ChatStreamError,
@@ -19,6 +20,7 @@ import {
   useAiConsent,
   useWebSearchSwitch,
 } from '@/chat/ai-consent';
+import { chatUnlocked, showChatConsent } from '@/chat/ai-consent-state';
 import { openLegal } from '@/components/profile/legal';
 import { colors } from '@/theme/colors';
 
@@ -28,46 +30,81 @@ import { colors } from '@/theme/colors';
  * Devolve `null` quando já há aceite.
  */
 export function ChatConsentSheet({ error }: { error: ChatStreamError | null }) {
-  const { data } = useAiConsent();
-  const aceitar = useAcceptAiConsent();
+  const { data, isPending } = useAiConsent();
   const router = useRouter();
   const queryClient = useQueryClient();
   const recusado = error?.code === 'AI_CONSENT_REQUIRED';
   useEffect(() => {
     if (recusado) void queryClient.invalidateQueries({ queryKey: AI_CONSENT_KEY });
   }, [recusado, queryClient]);
-  if (!data || data.chat.accepted) return null;
+  if (!showChatConsent({ data, isPending })) return null;
+  return <AiConsentCard onDecline={() => router.back()} />;
+}
+
+/**
+ * O cartão do aceite da IA, também fora do chat: o ditado, a foto do prato e o rótulo passam
+ * pelo mesmo aceite (403 `AI_CONSENT_REQUIRED` sem ele). `onAccepted` avisa depois de gravado.
+ */
+export function AiConsentCard({
+  onDecline,
+  onAccepted,
+}: {
+  onDecline: () => void;
+  onAccepted?: () => void;
+}) {
+  const aceitar = useAcceptAiConsent();
+  const { data, isError, refetch } = useAiConsent();
   const textos = AI_CONSENT_TEXTS.chat;
+  // Os nomes do provedor e do modelo vêm da API: sem eles, não há o que aceitar ainda.
+  const corpo = data?.processor ? aiConsentBody('chat', data.processor) : null;
   return (
     <View className="m-3 gap-3 rounded-3xl border border-border bg-card p-5 pb-8">
-      <View className="size-10 items-center justify-center rounded-2xl bg-primary/15">
-        <ShieldCheck size={20} color={colors.primaryText} />
-      </View>
-      <Text accessibilityRole="header" className="text-lg font-bold text-foreground">
+      <Text accessibilityRole="header" className="text-base font-bold text-foreground">
         {textos.title}
       </Text>
-      <Text className="text-sm leading-5 text-muted-foreground">{textos.body}</Text>
+      {corpo ? (
+        <Text className="text-sm leading-5 text-muted-foreground">{corpo}</Text>
+      ) : isError ? (
+        <Pressable accessibilityRole="button" onPress={() => void refetch()}>
+          <Text className="text-sm text-muted-foreground">
+            Não consegui carregar o aviso.{' '}
+            <Text className="font-semibold text-primary-text underline">Tentar de novo</Text>
+          </Text>
+        </Pressable>
+      ) : (
+        <Text className="text-sm text-muted-foreground">Carregando o aviso…</Text>
+      )}
       <Pressable accessibilityRole="link" onPress={() => openLegal('/privacy')}>
-        <Text className="text-sm font-semibold text-primary-text underline">{textos.link}</Text>
+        <Text className="text-xs text-muted-foreground underline">{textos.link}</Text>
       </Pressable>
       {aceitar.isError ? (
         <Text accessibilityRole="alert" className="text-xs text-danger">
           Não consegui gravar o aceite. Tente de novo.
         </Text>
       ) : null}
-      <Button disabled={aceitar.isPending} onPress={() => aceitar.mutate('chat')}>
-        {textos.accept}
-      </Button>
-      <Button variant="secondary" onPress={() => router.back()}>
-        {textos.decline}
-      </Button>
+      {/* Concordo e Agora não lado a lado (prancha IA-Estados, "Aceite"). */}
+      <View className="flex-row gap-2">
+        <Button
+          className="flex-1"
+          disabled={!corpo || aceitar.isPending}
+          onPress={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
+        >
+          {textos.accept}
+        </Button>
+        <Button variant="secondary" className="flex-1" onPress={onDecline}>
+          {textos.decline}
+        </Button>
+      </View>
     </View>
   );
 }
 
-/** Sem o aceite do chat, o campo não aparece: escrever só para ouvir um 403 seria pior. */
+/**
+ * O campo só aparece com o aceite confirmado: carregando ou sem conseguir ler, não. Escrever
+ * só para ouvir um 403 seria pior que esperar o aceite.
+ */
 export function useChatUnlocked(): boolean {
-  return useAiConsent().data?.chat.accepted !== false;
+  return chatUnlocked(useAiConsent().data);
 }
 
 /** A chave da busca na web no topo (prancha Al-M16): o globo verde com ponto quando ligada. */

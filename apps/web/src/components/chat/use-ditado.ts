@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { transcribeAudio } from '@fatia/api-client';
+import { ApiError, transcribeAudio } from '@fatia/api-client';
 
 /**
  * O ditado do composer (#141): grava, transcreve e devolve o texto.
@@ -26,14 +26,18 @@ export function formatoDeGravacao(
   return FORMATOS.find((tipo) => suporta(tipo));
 }
 
-export function useDitado(onTexto: (texto: string) => void, onErro: (mensagem: string) => void) {
+export function useDitado(
+  onTexto: (texto: string) => void,
+  onErro: (mensagem: string) => void,
+  onSemAceite?: () => void,
+) {
   const [estado, setEstado] = useState<EstadoDoDitado>('parado');
   const gravador = useRef<MediaRecorder | null>(null);
   const descartar = useRef(false);
-  const callbacks = useRef({ onTexto, onErro });
+  const callbacks = useRef({ onTexto, onErro, onSemAceite });
   useEffect(() => {
-    callbacks.current = { onTexto, onErro };
-  }, [onTexto, onErro]);
+    callbacks.current = { onTexto, onErro, onSemAceite };
+  }, [onTexto, onErro, onSemAceite]);
 
   useEffect(
     () => () => {
@@ -72,7 +76,12 @@ export function useDitado(onTexto: (texto: string) => void, onErro: (mensagem: s
         const { text } = await transcribeAudio(audio);
         if (text.trim()) callbacks.current.onTexto(text.trim());
         else callbacks.current.onErro('Não deu para entender o áudio. Tente de novo.');
-      } catch {
+      } catch (erro) {
+        // O áudio não saiu: falta o aceite da IA (#384). Quem chama mostra o aceite.
+        if (erro instanceof ApiError && erro.isAiConsentRequired && callbacks.current.onSemAceite) {
+          callbacks.current.onSemAceite();
+          return;
+        }
         callbacks.current.onErro('A transcrição falhou. Tente de novo ou escreva.');
       } finally {
         setEstado('parado');

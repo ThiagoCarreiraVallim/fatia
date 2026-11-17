@@ -36,7 +36,12 @@ const rec: MealRecognition = {
 };
 
 const h = vi.hoisted(() => ({
-  consent: { chat: { accepted: true }, webSearch: { accepted: false }, webSearchEnabled: false },
+  consent: {
+    chat: { accepted: true },
+    webSearch: { accepted: false },
+    webSearchEnabled: false,
+    processor: { provider: 'OpenRouter', model: 'GLM', searchEngine: 'Exa' },
+  },
   keep: true as boolean | null,
   getAiConsent: vi.fn(),
   acceptAiConsent: vi.fn(),

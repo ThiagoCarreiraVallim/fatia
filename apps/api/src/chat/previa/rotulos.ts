@@ -180,6 +180,7 @@ const TIPO_DE_AVISO: Record<string, string> = {
   QUESTIONNAIRE: 'Questionário',
   BIRTHDAY: 'Aniversário',
   REMINDERS: 'Lembretes',
+  BILLING: 'Plano e cobrança',
 };
 const NIVEL: Record<string, string> = {
   beginner: 'Iniciante',

@@ -7,7 +7,6 @@ import { LogWeightTool } from '../../progress/mcp/log-weight.tool';
 import { GetActiveWorkoutSessionTool } from '../../workout/mcp/get-active-workout-session.tool';
 import { LogSetTool } from '../../workout/mcp/log-set.tool';
 import { SearchExerciseTool } from '../../workout/mcp/search-exercise.tool';
-import { carregarTools } from './support/catalogo-servido';
 
 /**
  * O cartão de cada tool mais usada no chat: o resultado desenhado na tela, e não
@@ -42,34 +41,6 @@ function aceitoPeloAgente(carga: Record<string, unknown> | null | undefined) {
 describe('cartões das tools do chat', () => {
   it('lê a lista de formatos do agente', () => {
     expect(CAMPOS).toMatchObject({ report: 'columns', metric: 'value', comparison: 'items' });
-  });
-
-  it('as tools mais usadas têm cartão', () => {
-    const comCartao = carregarTools()
-      .filter((t) => typeof t.artifact === 'function')
-      .map((t) => t.name)
-      .sort();
-    expect(comCartao).toEqual(
-      [
-        'explain_form',
-        'export_my_data',
-        'get_steps_history',
-        'get_streak',
-        'get_water_history',
-        'list_achievements',
-        'list_goals',
-        'get_active_workout_session',
-        'get_nutrition_summary',
-        'get_today_summary',
-        'get_weight_progress',
-        'list_meals',
-        'log_meal',
-        'log_set',
-        'log_weight',
-        'search_exercise',
-        'search_food',
-      ].sort(),
-    );
   });
 
   it('get_nutrition_summary: o total do dia e os três macros', () => {

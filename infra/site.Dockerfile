@@ -34,6 +34,11 @@ COPY packages/design ./packages/design
 # build. Vem do ${DOMAIN} do compose.
 ARG PUBLIC_DOMAIN=fat.ia.br
 ENV PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
+# Preços do PRO na página /pro: vêm do BILLING_PRO_*_CENTS do compose, o mesmo da API.
+ARG PUBLIC_PRO_MONTHLY_CENTS=1990
+ARG PUBLIC_PRO_YEARLY_CENTS=17900
+ENV PUBLIC_PRO_MONTHLY_CENTS=${PUBLIC_PRO_MONTHLY_CENTS}
+ENV PUBLIC_PRO_YEARLY_CENTS=${PUBLIC_PRO_YEARLY_CENTS}
 
 RUN pnpm --filter @fatia/site build
 

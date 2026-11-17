@@ -1,8 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { OAuthError } from './oauth-error';
+import { Injectable, Logger } from '@nestjs/common';
+import { OAuthError, type OAuthErrorCode } from './oauth-error';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import { PrismaService } from '../common/prisma.service';
+import { McpConnectionRecorder } from './mcp-connection.service';
 
 interface AuthorizeParams {
   clientId: string;
@@ -22,6 +23,36 @@ interface ExchangeCodeParams {
 
 const AUTH_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Códigos da RFC 6749 §5.2 do Logto que falam do pedido do cliente MCP e por
+ * isso repassamos como vieram. `invalid_grant` só sai quando o Logto disse isso:
+ * com ele o Claude descarta o refresh token e refaz o login.
+ */
+const PASS_THROUGH_TOKEN_ERRORS: ReadonlySet<string> = new Set<OAuthErrorCode>([
+  'invalid_request',
+  'invalid_grant',
+  'unsupported_grant_type',
+  'invalid_scope',
+]);
+
+/**
+ * Traduz a resposta de erro do Logto para o cliente MCP (revisão da #388).
+ *
+ * - Logto fora do ar (5xx, corpo que não é JSON, `temporarily_unavailable`):
+ *   `temporarily_unavailable` com 503, para o cliente tentar de novo depois.
+ * - `invalid_client`, `invalid_target`, `unauthorized_client` e códigos que não
+ *   conhecemos falam do app do facade no Logto (segredo, resource, grant): é
+ *   configuração nossa, `server_error` com 500. O cliente não tem o que corrigir
+ *   e não deve jogar o refresh token fora por isso.
+ */
+export function mapLogtoTokenError(status: number, json: Record<string, unknown>): OAuthErrorCode {
+  const error = typeof json.error === 'string' ? json.error : undefined;
+  if (error && PASS_THROUGH_TOKEN_ERRORS.has(error)) return error as OAuthErrorCode;
+  if (error === 'temporarily_unavailable') return 'temporarily_unavailable';
+  if (error === undefined && status >= 500) return 'temporarily_unavailable';
+  return 'server_error';
+}
+
 @Injectable()
 export class OAuthFacadeService {
   private readonly logger = new Logger(OAuthFacadeService.name);
@@ -29,6 +60,7 @@ export class OAuthFacadeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly connections: McpConnectionRecorder,
   ) {}
 
   private logtoEndpoint(): string {
@@ -244,38 +276,65 @@ export class OAuthFacadeService {
       where: { clientId: row.clientId },
       data: { lastUsedAt: new Date() },
     });
+    // Sem await: gravar a conexão nunca segura a entrega dos tokens (#388).
+    this.connections.recordExchange(row.clientId, tokenResp);
 
     return tokenResp;
   }
 
-  async refreshToken(params: { refreshToken: string; resource?: string; scope?: string }) {
-    return this.callLogtoToken({
+  /**
+   * O `clientId` é o `client_id` que o cliente público manda no refresh (RFC
+   * 6749 §3.2.1). Não decide qual conexão renovou: quem decide é o refresh token
+   * apresentado. Um `client_id` que não bate só vai para o log.
+   */
+  async refreshToken(params: {
+    refreshToken: string;
+    resource?: string;
+    scope?: string;
+    clientId?: string;
+  }) {
+    const tokenResp = await this.callLogtoToken({
       grant_type: 'refresh_token',
       refresh_token: params.refreshToken,
       resource: this.resolveResource(params.resource),
       ...(params.scope ? { scope: params.scope } : {}),
     });
+    // Sem await: o Logto já girou o refresh token; atrasar a resposta pode
+    // fazer o cliente perder o único válido (#388).
+    this.connections.recordRefresh(params.refreshToken, tokenResp, params.clientId);
+    return tokenResp;
   }
 
   private async callLogtoToken(body: Record<string, string>): Promise<Record<string, unknown>> {
     const basic = Buffer.from(`${this.logtoAppId()}:${this.logtoAppSecret()}`).toString('base64');
-    const res = await fetch(`${this.logtoEndpoint()}/oidc/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${basic}`,
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams(body).toString(),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${this.logtoEndpoint()}/oidc/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${basic}`,
+          Accept: 'application/json',
+        },
+        body: new URLSearchParams(body).toString(),
+      });
+    } catch (err) {
+      this.logger.error(`Logto token endpoint unreachable: ${(err as Error).message}`);
+      throw new OAuthError('temporarily_unavailable', 'Authorization server unavailable');
+    }
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       this.logger.warn(`Logto token error: ${res.status} ${JSON.stringify(json)}`);
-      throw new UnauthorizedException(
-        typeof json.error_description === 'string'
-          ? json.error_description
-          : 'Token exchange failed',
-      );
+      // Formato da RFC 6749 também aqui: com o 401 genérico do Nest, o Claude não
+      // reconhecia o refresh vencido e repetia a chamada em vez de refazer o login.
+      const code = mapLogtoTokenError(res.status, json);
+      const description =
+        code === 'server_error' || code === 'temporarily_unavailable'
+          ? 'Authorization server unavailable'
+          : typeof json.error_description === 'string'
+            ? json.error_description
+            : 'Token exchange failed';
+      throw new OAuthError(code, description);
     }
     return json;
   }

@@ -7,7 +7,7 @@ import { SquarePen } from 'lucide-react';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
 import { ghostButton } from '@/components/elements/surfaces';
 import { TopBarActions, useTopBarTitle } from '@/components/layout/app-top-bar';
-import { ChaveDaBusca } from './aceite';
+import { WebSearchSwitch } from './aceite';
 import {
   useCabecalhoDaConversa,
   useConversaAberta,
@@ -55,7 +55,7 @@ export function ChatScreen() {
       className="flex h-[calc(100dvh-6.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
     >
       <TopBarActions>
-        <ChaveDaBusca />
+        <WebSearchSwitch />
         <GavetaDeMemorias aberta={memoriasAbertas} onAberta={setMemoriasAbertas} />
         <ConfigDaIa onAbrirMemorias={() => setMemoriasAbertas(true)} />
         <GavetaDeConversas aberta={openId} />

@@ -25,9 +25,12 @@ export class GetStreakTool implements McpToolDef {
     return this.consistency.streak({ userId, timezone });
   }
 
-  /** A sequência como métrica (prancha IA-Cartoes, #384). */
+  /**
+   * A sequência como métrica (prancha IA-Cartoes, #384). `activeDays` é a sequência inteira,
+   * com o orçamento de faltas; o número da tela é `periodos`.
+   */
   artifact(result: unknown) {
-    const { activeDays } = result as { activeDays: number };
-    return { kind: 'metric', label: 'Dias seguidos', value: activeDays, unit: 'dias' };
+    const { activeDays } = result as Awaited<ReturnType<ConsistencyService['streak']>>;
+    return { kind: 'metric', label: 'Dias seguidos', value: activeDays.periodos, unit: 'dias' };
   }
 }

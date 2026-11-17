@@ -29,7 +29,7 @@ import { WorkoutModule } from './workout/workout.module';
         media: MediaService,
         exercicios: ExerciseService,
       ): AccountDeletionHook[] => [
-        { beforeDelete: (userId) => assinaturas.encerrarAntesDeApagar(userId) },
+        { beforeDelete: (userId) => assinaturas.cancelBeforeAccountDeletion(userId) },
         // As comunidades de que a pessoa é dona caem em cascata com a conta:
         // a cobrança dos assentos delas acaba antes (ADR 025).
         { beforeDelete: (userId) => assentos.encerrarAntesDeApagarConta(userId) },

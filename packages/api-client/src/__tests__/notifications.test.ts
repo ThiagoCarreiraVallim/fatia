@@ -94,6 +94,14 @@ describe('tela de Notificações (prancha Al-V4, #389)', () => {
     ]);
   });
 
+  it('os avisos de cobrança (#386) existem, mas não têm chave na tela', () => {
+    expect(NOTIFICATION_KINDS).toContain('BILLING');
+    const naTela = notificationGroups({ team: { name: 'Helena' } }).flatMap((g) =>
+      g.items.map((i) => i.kind as string),
+    );
+    expect(naTela).not.toContain('BILLING');
+  });
+
   it('a prévia segue o que está ligado, com a equipe e a comunidade de verdade', () => {
     const ctx = { team: { name: 'Helena' }, community: { name: 'Academia Demo' } };
     expect(notificationPreview(tudo, ctx)).toBe(

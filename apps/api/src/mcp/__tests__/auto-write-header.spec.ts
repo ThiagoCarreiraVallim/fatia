@@ -73,7 +73,11 @@ describe('McpController com o header da gravação automática', () => {
   it('cliente OAuth ou de token de API, sem a credencial do agente, leva 403 antes do servidor MCP', async () => {
     const bindAll = jest.fn();
     const registry = { intencaoHabilitada: () => false, bindAll } as unknown as McpToolRegistry;
-    const controller = new McpController(registry, new ConfigService({ AGENT_API_KEY: CHAVE }));
+    const controller = new McpController(
+      registry,
+      { touch: async () => undefined } as never,
+      new ConfigService({ AGENT_API_KEY: CHAVE }),
+    );
     const req = { headers: headers() } as unknown as Request;
     await expect(
       controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),

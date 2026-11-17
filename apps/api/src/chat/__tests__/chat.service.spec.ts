@@ -29,6 +29,9 @@ import type {
   TurnOutcome,
 } from '../conversation.service';
 
+/** A pessoa já aceitou a IA: o portão do aceite tem teste próprio (`hosted-ai.service.spec`). */
+const COM_ACEITE = { assertChatConsent: async () => undefined } as unknown as AiConsentService;
+
 /**
  * O turno de chat (#249).
  *
@@ -299,7 +302,7 @@ function montar(
 
   const runs = new ChatRunRegistry();
   const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
-  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent, COM_ACEITE);
   const service = new ChatService(
     conversas as unknown as ConversationService,
     hostedAi,
@@ -504,7 +507,7 @@ describe('ChatService — repasse do SSE', () => {
     await respirar();
     canal.emitir(fragmento('ai-1', 'Você comeu '));
     await respirar();
-    expect(service.stop(USUARIO.id, CONVERSA)).toBe(true);
+    await expect(service.stop(USUARIO.id, CONVERSA)).resolves.toBe(true);
     await turno;
 
     expect(canal.foiCancelado()).toBe(true);
@@ -512,6 +515,22 @@ describe('ChatService — repasse do SSE', () => {
     expect(resposta.status).toBe('stopped');
     expect(resposta.texto).toBe('Você comeu ');
     expect(saida.tudo()).toContain(fim('stopped'));
+  });
+
+  it('parar só volta depois de o turno fechar: a próxima mensagem não esbarra no 409', async () => {
+    const { service, canal, agent } = montar();
+
+    void service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    await expect(service.stop(USUARIO.id, CONVERSA)).resolves.toBe(true);
+
+    void service
+      .converse(USUARIO, turnoNovo('de novo'), 'tok', destinoDeTeste().destino)
+      .catch(() => undefined);
+    await respirar();
+    expect(agent.openTurn).toHaveBeenCalledTimes(2);
   });
 
   it('parar ANTES de o agente responder corta assim que ele abre', async () => {
@@ -1252,6 +1271,26 @@ describe('ChatService — o que vai para o livro-caixa', () => {
         units: { inputUnits: 1500, outputUnits: 70 },
       }),
     );
+  });
+
+  it('a busca lançada antes de sair (só `webSearches`) conta, e não vira linha de chat', async () => {
+    const { service, canal, uso: livro } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    // O agente lança a busca antes de mandá-la (#384): sem unidade de token, só a busca.
+    canal.emitir(uso({ model: 'openrouter-web-search', webSearches: 1 }));
+    canal.emitir(uso({ model: 'm', inputUnits: 10, outputUnits: 1 }));
+    canal.encerrar();
+    await turno;
+
+    const lancamentos = livro.record.mock.calls.map(([, entrada]) => entrada);
+    expect(lancamentos).toContainEqual(
+      expect.objectContaining({ feature: 'web_search', units: { inputUnits: 1, outputUnits: 0 } }),
+    );
+    expect(lancamentos.filter((l) => l.feature === 'chat')).toEqual([
+      expect.objectContaining({ model: 'm' }),
+    ]);
   });
 
   it('turno sem busca não ganha lançamento de busca', async () => {

@@ -84,7 +84,7 @@ A conferência do redesign confirma onde cada parte desta decisão aparece, sem 
 
 - **Onde mora:** `AiWriteModeSetting` (sem linha = Perguntar antes) e `AiAutoWrite` (o "antes", o
   resultado e o `undoneAt` de cada gravação automática), migration
-  `20261117100000_ai_write_modes_and_memory_category`. A tela é a engrenagem no topo do chat (web e
+  `20261117120000_ai_write_modes_and_memory_category`. A tela é a engrenagem no topo do chat (web e
   app), não Você → IA.
 - **Quem decide é a API.** Cada tool confirmável declara `aiCategory` (39 tools). A cada turno a API
   manda ao agente `toolModes { auto, off }`. O agente chama a tool automática com o header

@@ -25,7 +25,7 @@ export class BillingController {
   /** O plano como a tela "Meu plano" mostra. */
   @Get('plan')
   plan(@CurrentUser() user: CurrentUserPayload) {
-    return this.assinaturas.plano(user.id);
+    return this.assinaturas.plan(user.id);
   }
 
   /** Abre o checkout do Asaas (Pix, boleto ou cartão) e devolve o link. */
@@ -40,7 +40,7 @@ export class BillingController {
   @Post('cancel')
   @HttpCode(200)
   cancel(@CurrentUser() user: CurrentUserPayload) {
-    return this.assinaturas.cancelar(user.id);
+    return this.assinaturas.cancel(user.id);
   }
 
   /**
@@ -52,8 +52,8 @@ export class BillingController {
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   async revenueCatSync(@CurrentUser() user: CurrentUserPayload) {
-    await this.revenueCat.sincronizar(user.id);
-    return this.assinaturas.plano(user.id);
+    await this.revenueCat.sync(user.id);
+    return this.assinaturas.plan(user.id);
   }
 
   /** Webhook da RevenueCat. Autenticado pelo header `Authorization` do painel. */
@@ -73,7 +73,7 @@ export class BillingController {
   @Post('webhooks/asaas')
   @HttpCode(200)
   asaas(@Headers() headers: Record<string, string | undefined>, @Req() req: Request) {
-    return this.assinaturas.processarWebhookAsaas(headers, corpoCru(req));
+    return this.assinaturas.handleAsaasWebhook(headers, corpoCru(req));
   }
 }
 

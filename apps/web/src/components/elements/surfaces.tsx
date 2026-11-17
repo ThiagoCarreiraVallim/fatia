@@ -23,6 +23,14 @@ export const ghostButton =
 export const inkButton =
   'bg-foreground text-background transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:opacity-90 active:scale-[0.96] motion-reduce:transition-none';
 
+/** A ação principal em lime (aceites da IA, prancha IA-Estados). */
+export const limeButton =
+  'bg-primary text-primary-foreground transition-[filter,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:brightness-105 active:scale-[0.96] motion-reduce:transition-none';
+
+/** A ação secundária dos cartões: pílula cinza (prancha IA-Cartoes, "Um botão principal"). */
+export const grayButton =
+  'bg-foreground/[0.08] text-foreground transition-[background-color,scale] duration-150 hover:bg-foreground/[0.12] active:scale-[0.96] motion-reduce:transition-none';
+
 export const iconSwap =
   '[grid-area:1/1] transition-[opacity,scale,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none';
 

@@ -73,8 +73,10 @@ import {
   type StepNav,
 } from '@/components/onboarding/onboarding-steps';
 import { QrScanModal } from '@/components/onboarding/qr-scan';
+import { needsAiConsent } from '@/chat/ai-consent-state';
+import { AiConsentCard } from '@/components/chat/consent';
 import { openLegal } from '@/components/profile/legal';
-import { LoadingState, useToast } from '@/components/ui';
+import { Drawer, LoadingState, useToast } from '@/components/ui';
 import { healthStepsSource } from '@/health/health-steps';
 import { enablePush } from '@/notifications/push';
 
@@ -463,6 +465,7 @@ export default function OnboardingScreen() {
 
   const [photoPhase, setPhotoPhase] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [recognition, setRecognition] = useState<MealRecognition | null>(null);
+  const [consentRequired, setConsentRequired] = useState(false);
 
   async function testPhoto() {
     setError(null);
@@ -486,7 +489,9 @@ export default function OnboardingScreen() {
       setPhotoPhase(rec.itens.length > 0 ? 'done' : 'idle');
       if (rec.itens.length === 0) setError('Nenhum alimento reconhecido. Tente outra foto.');
     } catch (err) {
-      setError(errorText(err));
+      // Sem o aceite da IA a foto nem sai (403): o aceite abre e a pessoa tenta de novo.
+      if (needsAiConsent(err)) setConsentRequired(true);
+      else setError(errorText(err));
       setPhotoPhase('idle');
     }
   }
@@ -728,6 +733,17 @@ export default function OnboardingScreen() {
             onLater={() => void advance({})}
             onOtherCode={() => setStep('code')}
           />
+        );
+        screen = (
+          <>
+            {screen}
+            <Drawer open={consentRequired} onOpenChange={setConsentRequired} snapPoints={['85%']}>
+              <AiConsentCard
+                onDecline={() => setConsentRequired(false)}
+                onAccepted={() => setConsentRequired(false)}
+              />
+            </Drawer>
+          </>
         );
       } else {
         screen = (

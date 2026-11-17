@@ -35,6 +35,8 @@ import {
 
 export interface ChatSessionSnapshot {
   conversationId: string | null;
+  /** O nome da conversa, para o topo. `null` na nova, que ganha nome depois da 1ª resposta. */
+  title: string | null;
   thread: ChatThreadState;
   /** O agente da conversa (cabeçalho). `null` é o assistente da Fatia. */
   agent: ChatAgentHeader | null;
@@ -48,6 +50,11 @@ export interface ChatSessionSnapshot {
    * abandonaria (ADR 022). Trocar de conversa descarta; parar a resposta não.
    */
   queue: QueuedChatMessage[];
+  /**
+   * A última resposta falhou (403, 402, cota, rede): a fila **para** e nada sai sozinho. Cada
+   * item espera a pessoa: "Enviar" (`sendQueued`) ou "Descartar" (`dequeue`).
+   */
+  queuePaused: boolean;
   /**
    * O trecho de uma resposta que a pessoa escolheu citar. Vai na frente da
    * próxima mensagem como bloco `> ` (`withQuote`) — no texto, para chegar ao
@@ -82,12 +89,14 @@ export type ChatPhotoUploader = (photo: LocalChatPhoto) => Promise<ChatHistoryPh
 
 const VAZIO: ChatSessionSnapshot = {
   conversationId: null,
+  title: null,
   thread: EMPTY_CHAT_THREAD,
   agent: null,
   isNew: true,
   loading: false,
   loadError: null,
   queue: [],
+  queuePaused: false,
   quote: null,
 };
 
@@ -97,6 +106,13 @@ export class ChatSession {
   private controller: AbortController | null = null;
   /** Ao fim de cada turno: a lista, a cota e as memórias mudam juntas. */
   private onTurnEnd: (() => void) | null = null;
+  /**
+   * Muda a cada envio, parada e troca de conversa: o envio que esperava a foto subir confere
+   * se ainda é o turno da vez antes de abrir o stream.
+   */
+  private turn = 0;
+  /** O texto da última mensagem enviada, já com a citação: o que "Tentar de novo" reenvia. */
+  private lastText: string | null = null;
 
   constructor(
     private readonly newId: () => string,
@@ -131,12 +147,15 @@ export class ChatSession {
   async open(conversationId: string): Promise<void> {
     if (this.snapshot.conversationId === conversationId) return;
     this.detach();
+    this.turn++;
+    this.lastText = null;
     this.set({ ...VAZIO, conversationId, loading: true });
     try {
       const conversa = await getConversation(conversationId);
       if (this.snapshot.conversationId !== conversationId) return;
       this.set({
         thread: threadFromHistory(conversa.messages),
+        title: conversa.title ?? null,
         agent: conversa.agent ?? null,
         isNew: false,
         loading: false,
@@ -154,6 +173,8 @@ export class ChatSession {
   startNew(): string {
     this.detach();
     const id = this.newId();
+    this.turn++;
+    this.lastText = null;
     this.set({ ...VAZIO, conversationId: id });
     return id;
   }
@@ -191,6 +212,10 @@ export class ChatSession {
     const fotos = input.photos ?? [];
     const texto = input.text.trim() || (fotos.length ? PHOTO_ONLY_QUESTION : '');
     if (!texto) return;
+    const turno = ++this.turn;
+    this.lastText = texto;
+    // Mandar é decidir: a fila parada pelo erro volta a andar depois desta resposta.
+    if (this.snapshot.queuePaused) this.set({ queuePaused: false });
     this.setThread((t) =>
       appendUserMessage(t, {
         id: `local-${this.newId()}`,
@@ -204,9 +229,13 @@ export class ChatSession {
     } catch (erro) {
       // O corpo da recusa, se houver; o texto do servidor nunca vai à tela.
       const recusa = erroDoChat(erro instanceof ApiError ? erro.body : null);
-      this.setThread((t) => ({ ...t, running: false, error: recusa }));
+      if (this.turn === turno && this.snapshot.conversationId === conversationId) {
+        this.setThread((t) => ({ ...t, running: false, error: recusa }));
+      }
       return;
     }
+    // A foto levou tempo para subir: a pessoa pode ter parado ou trocado de conversa.
+    if (this.turn !== turno || this.snapshot.conversationId !== conversationId) return;
     const novo = this.snapshot.isNew;
     this.set({ isNew: false });
     await this.follow(
@@ -260,13 +289,39 @@ export class ChatSession {
   }
 
   dequeue(id: string): void {
-    this.set({ queue: this.snapshot.queue.filter((item) => item.id !== id) });
+    const queue = this.snapshot.queue.filter((item) => item.id !== id);
+    this.set({ queue, queuePaused: this.snapshot.queuePaused && queue.length > 0 });
   }
 
-  /** A próxima da fila, se a conversa está livre: sem resposta e sem pausa. */
+  /** "Enviar" de um item da fila parada: manda este, e só ele. */
+  async sendQueued(id: string): Promise<void> {
+    const item = this.snapshot.queue.find((q) => q.id === id);
+    if (!item || this.snapshot.thread.running) return;
+    this.set({ queue: this.snapshot.queue.filter((q) => q.id !== id) });
+    return this.dispatch({ text: item.text });
+  }
+
+  /** "Tentar de novo": reenvia a mensagem que falhou, como foi (a citação já vai nela). */
+  async retry(): Promise<void> {
+    if (this.snapshot.thread.running) return;
+    // Sem envio nesta sessão (o erro veio de uma resposta acompanhada ao reabrir): a última fala.
+    const ultima = [...this.snapshot.thread.messages].reverse().find((m) => m.role === 'user');
+    const texto = this.lastText ?? (ultima?.role === 'user' ? ultima.text : null);
+    if (!texto) return;
+    return this.dispatch({ text: texto });
+  }
+
+  /**
+   * A próxima da fila, se a conversa está livre: sem resposta e sem pausa. Depois de um erro,
+   * não: a fila para e espera a pessoa (`queuePaused`).
+   */
   private drain(): void {
     const { thread, queue } = this.snapshot;
     if (thread.running || thread.interrupt || queue.length === 0) return;
+    if (thread.error) {
+      this.set({ queuePaused: true });
+      return;
+    }
     const [proxima, ...resto] = queue;
     this.set({ queue: resto });
     // `dispatch`, e não `send`: a citação do item já foi junto com ele, e a que
@@ -289,6 +344,7 @@ export class ChatSession {
   async stop(): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId || !this.snapshot.thread.running) return;
+    this.turn++;
     this.detach();
     this.setThread((t) => applyChatFrame(t, { event: 'done', data: { status: 'stopped' } }));
     try {

@@ -45,8 +45,18 @@ export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const sessao = useChatSession();
-  const { thread, agent, isNew, loading, loadError, conversationId, queue, quote } =
-    useChatSnapshot();
+  const {
+    thread,
+    title,
+    agent,
+    isNew,
+    loading,
+    loadError,
+    conversationId,
+    queue,
+    queuePaused,
+    quote,
+  } = useChatSnapshot();
   const lista = useRef<FlatList<ChatThreadMessage>>(null);
 
   useEffect(() => {
@@ -80,7 +90,6 @@ export default function ConversationScreen() {
   const pensando =
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
-  const ultimaPergunta = [...thread.messages].reverse().find((m) => m.role === 'user');
   const continuar = () => void sessao.send({ text: CHAT_CONTINUE_MESSAGE });
 
   useEffect(() => {
@@ -95,7 +104,7 @@ export default function ConversationScreen() {
 
   return (
     <Screen
-      title={nomeDoAgente ?? 'Chat'}
+      title={nomeDoAgente ?? title ?? (isNew ? 'Nova conversa' : 'Conversa')}
       scroll={false}
       actions={
         <>
@@ -185,7 +194,12 @@ export default function ConversationScreen() {
             }
             renderItem={({ item, index }) =>
               item.role === 'user' ? (
-                <UserBubble text={item.text} photos={item.photos} images={item.images} />
+                <UserBubble
+                  text={item.text}
+                  photos={item.photos}
+                  images={item.images}
+                  headline={index === 0}
+                />
               ) : (
                 <AssistantBlock
                   message={item}
@@ -218,9 +232,8 @@ export default function ConversationScreen() {
                 {thread.error ? (
                   <TurnError
                     error={thread.error}
-                    onRetry={() => {
-                      if (ultimaPergunta) void sessao.send({ text: ultimaPergunta.text });
-                    }}
+                    // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
+                    onRetry={() => void sessao.retry()}
                     onContinue={continuar}
                   />
                 ) : null}
@@ -261,6 +274,8 @@ export default function ConversationScreen() {
                 void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
               }
               queue={queue}
+              queuePaused={queuePaused}
+              onSendQueued={(id) => void sessao.sendQueued(id)}
               quote={quote}
               onDismissQuote={() => sessao.setQuote(null)}
               onQueue={(text) => sessao.enqueue(text)}

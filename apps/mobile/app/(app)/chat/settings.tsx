@@ -148,7 +148,7 @@ export default function AiSettingsScreen() {
                   detalhe={memoryCountLabel(dados.memories.count, dados.memories.limit)}
                   onPress={() => router.push('/chat/memories')}
                 />
-                <Linha label={textos.ownAi} onPress={() => router.push('/profile/tokens')} borda />
+                <Linha label={textos.ownAi} onPress={() => router.push('/profile/connect')} borda />
                 <Linha label={textos.plan} onPress={() => router.push('/plan')} borda />
               </View>
             </View>

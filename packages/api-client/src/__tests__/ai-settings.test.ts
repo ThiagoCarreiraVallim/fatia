@@ -22,6 +22,7 @@ import {
   savedStateFromStatus,
   undoFailureState,
   SAVED_CARD_COPY,
+  MEAL_PHOTO_COPY,
 } from '../ai-settings';
 import { ApiError } from '../http';
 import { CHAT_CONTINUE_MESSAGE } from '../chat';
@@ -281,5 +282,12 @@ describe('os estados do Desfazer (#385)', () => {
 
   it('o "Continuar" manda o mesmo texto que a API reconhece', () => {
     expect(CHAT_CONTINUE_MESSAGE).toBe('Continue de onde parou.');
+  });
+});
+
+describe('aviso antes da primeira foto (#385)', () => {
+  it('nomeia o provedor que a API informa, não um nome fixo no texto', () => {
+    expect(MEAL_PHOTO_COPY.firstBody('Provedor X')).toMatch(/^A foto vai para o Provedor X,/);
+    expect(MEAL_PHOTO_COPY.firstBody('Provedor X')).not.toMatch(/OpenRouter/);
   });
 });

@@ -21,7 +21,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { can } from '../sharing/permissions';
 import { addDaysIso, dayBoundsInTz } from '../progress/helpers/date-tz';
-import { CARENCIA_DIAS, resolverDireitoIa } from './ai-entitlement';
+import { CARENCIA_DIAS, resolveAiEntitlement } from './ai-entitlement';
 import type { ResultadoDeWebhookDeAssinatura, SeatProvider } from './billing-provider.port';
 import { documentoValido, somenteDigitos } from './cpf';
 import {
@@ -32,7 +32,7 @@ import {
   vencimentoAvulso,
 } from './seat-pricing';
 import { ASSINATURA_LIDA } from './subscription-entitlements.service';
-import { mudancaDoEvento } from './subscription-events';
+import { subscriptionEventChange } from './subscription-events';
 
 /** Token do provedor de assentos. `null` = instância sem Asaas configurado. */
 export const SEAT_PROVIDER = Symbol('SEAT_PROVIDER');
@@ -147,7 +147,7 @@ export class SeatPoolService {
         })
       : [];
     const temProProprio = (userId: string) =>
-      resolverDireitoIa(
+      resolveAiEntitlement(
         proprias.filter((s) => s.userId === userId),
         agora,
       ).tier === 'PRO';
@@ -638,7 +638,7 @@ export class SeatPoolService {
     pool: GroupSeatPool,
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
   ): Promise<null | 'sem_efeito'> {
-    const mudanca = mudancaDoEvento({ ...pool, interval: 'MONTHLY' }, r.event, r.dueDate);
+    const mudanca = subscriptionEventChange({ ...pool, interval: 'MONTHLY' }, r.event, r.dueDate);
     if (!mudanca) return 'sem_efeito';
 
     // Renovação paga: a redução pedida passa a valer agora.

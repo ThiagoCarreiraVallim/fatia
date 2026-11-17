@@ -63,10 +63,15 @@ services:
       AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
       AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
       AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Os nomes que o aceite da IA mostra (#384); trocar qualquer um pede o aceite de novo.
+      AI_CONSENT_PROVIDER: ${AI_CONSENT_PROVIDER:-}
+      AI_CONSENT_MODEL: ${AI_CONSENT_MODEL:-}
+      AI_CONSENT_SEARCH_ENGINE: ${AI_CONSENT_SEARCH_ENGINE:-}
       # Plano Free/PRO e assentos (ADR 024/025). A instância pública usa true.
       AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
       BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
       BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      BILLING_PRO_TRIAL_DAYS: ${BILLING_PRO_TRIAL_DAYS:-7}
       BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
       # Asaas (PRO pela web e assentos). Vazio = checkout responde 503.
       ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
@@ -270,6 +275,9 @@ services:
       args:
         # Estático: o domínio entra no HTML durante o build.
         PUBLIC_DOMAIN: ${DOMAIN}
+        # Os preços da página /pro (Si-04, #386): os mesmos que a API cobra.
+        PUBLIC_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+        PUBLIC_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
     restart: unless-stopped
     expose:
       - "80"

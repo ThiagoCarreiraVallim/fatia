@@ -25,8 +25,17 @@ export function useCatalogoDasTools() {
 export const CHAVE_DOS_ACEITES = ['chat', 'consent'] as const;
 
 /** Os aceites da IA e a chave da busca na web, da pessoa logada. */
+/**
+ * `retryOnMount: false`: o cartão do aceite também lê os aceites; montar de novo depois de um
+ * erro zeraria o erro, o aviso sumiria e voltaria em laço. Quem tenta de novo é o botão.
+ */
 export function useAceitesDaIa() {
-  return useQuery({ queryKey: CHAVE_DOS_ACEITES, queryFn: getAiConsent, staleTime: 5 * 60_000 });
+  return useQuery({
+    queryKey: CHAVE_DOS_ACEITES,
+    queryFn: getAiConsent,
+    staleTime: 5 * 60_000,
+    retryOnMount: false,
+  });
 }
 
 export function useAceitar() {

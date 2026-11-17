@@ -120,7 +120,52 @@ Os tokens do Logto são repassados ao cliente **sem serem armazenados**.
 
 ### Refresh
 
-`grant_type=refresh_token` é repassado ao Logto. O facade não guarda refresh tokens.
+`grant_type=refresh_token` é repassado ao Logto. O facade não guarda refresh tokens, só o hash
+deles (ver "Quem conectou o quê").
+
+Erro do Logto no `/oauth/token` (code ou refresh) sai como `OAuthError`, no formato da RFC 6749
+(`mapLogtoTokenError`). O que importa é não mandar `invalid_grant` à toa: com ele o Claude
+descarta o refresh token e pede o login de novo.
+
+| O Logto respondeu                                                                | O cliente recebe                                                                |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `invalid_grant`, `invalid_request`, `invalid_scope`, `unsupported_grant_type`    | o mesmo código, 400                                                             |
+| 5xx sem código, corpo que não é JSON, `temporarily_unavailable`, ou fetch falhou | `temporarily_unavailable`, 503                                                  |
+| `invalid_client`, `invalid_target`, `unauthorized_client`, `server_error`, outro | `server_error`, 500 (configuração do facade no Logto: segredo, resource, grant) |
+
+### Quem conectou o quê (#388)
+
+A tela "Conectar sua IA" mostra "Conectado ao Claude · último acesso agora". Para isso existem
+as tabelas `McpOAuthConnection` (pessoa × cliente DCR) e `McpOAuthConnectionToken` (hashes dos
+tokens de cada conexão), porque a `McpOAuthAuthorization` some minutos depois do login e não serve
+de vínculo.
+
+- **Nasce só na troca do code.** O cliente é o da autorização verificada (PKCE, `redirect_uri`) e
+  o dono é o `sub` do access token que o Logto acabou de emitir, verificado pelo JWKS
+  (`McpConnectionRecorder`). Um segundo login no mesmo cliente (outro aparelho) soma tokens à
+  mesma conexão.
+- **Refresh renova, nunca cria.** A conexão é achada pelo SHA-256 do refresh token apresentado.
+  O `client_id` do corpo é público e não decide nada (diferente do da conexão, só vai para o
+  log): mandar o `client_id` do app de outra pessoa não cria linha nem mexe na dela. Se o token
+  novo for de outro `sub`, nada muda. Com rotação, o hash do refresh velho sai na hora. Refresh
+  sem `client_id` funciona igual.
+- **Tokens com validade.** Cada conexão guarda os hashes de vários access tokens (validade =
+  `expires_in`) e do refresh token (até a rotação, ou 90 dias). Os vencidos são apagados na
+  gravação seguinte. Nunca o token em si.
+- **Nunca atrasa a resposta.** A gravação roda depois de devolver os tokens, sem `await`: o Logto
+  já girou o refresh token, e um cliente que desiste por demora perde o único válido. Erro aqui
+  só vira aviso no log.
+- **Último acesso:** cada chamada ao `/mcp` procura o hash do Bearer entre os access tokens ainda
+  válidos e atualiza `lastUsedAt` (no máximo uma escrita por minuto). O token do PWA e do app não
+  casa com nenhuma linha.
+- **Leitura:** `GET /users/me/mcp-connections` devolve `serverUrl` (`API_PUBLIC_URL` + `/mcp`, o
+  mesmo `resource` do metadata para quem chega pelo endereço público) e as conexões da própria
+  pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`.
+- **"Conectado" vence:** a tela só diz "Conectado" com último acesso nos últimos 30 dias
+  (`CONNECTED_WINDOW_DAYS`); depois, "conectado antes", com o teste à mão. O Fatia não sabe
+  quando a pessoa remove o conector na IA.
+- Quem conectou antes destas tabelas só aparece depois de conectar de novo: o refresh não cria
+  conexão.
 
 ## Exigências do diretório de conectores
 
@@ -186,6 +231,9 @@ O que existe hoje para cortar acesso:
 - **No Fatia:** apagar a conta (`delete_my_account`) remove o `User`, e o token vira inútil — o
   `sub` deixa de resolver.
 
+Por isso a tela "Conectar sua IA" (#388) diz "para desconectar, remova o conector no app da sua
+IA", e não oferece um botão de desconectar.
+
 O que **falta**, e está registrado como limitação em
 [`docs/THREAT_MODEL.md`](./THREAT_MODEL.md): não há como o usuário revogar uma sessão específica
 pela interface do Fatia sem apagar a conta.
@@ -202,4 +250,5 @@ Automatizado não cobre — precisa ser feito à mão uma vez, contra a instânc
 3. Concluir o login no Logto e aceitar o consentimento.
 4. Pedir ao Claude "quais tools do Fatia você tem?" — deve listar as 87.
 5. Pedir "registre uma refeição de teste" e "inicie um treino" — o critério de pronto da épica #38.
-6. Conferir no banco que há um `McpOAuthClient` com `lastUsedAt` preenchido.
+6. Conferir no banco que há um `McpOAuthClient` com `lastUsedAt` preenchido e, em Você › Conectar
+   sua IA, que a tela mostra "Conectado ao Claude" com o último acesso.
