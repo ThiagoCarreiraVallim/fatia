@@ -82,6 +82,13 @@ describe('McpToolRegistry — artefato', () => {
     });
   });
 
+  it('tool de Lista sem artefato próprio ganha a lista genérica (#384)', async () => {
+    const resultado = await registrar(
+      tool({ card: 'list', execute: async () => [{ id: 'g', name: 'Corrida' }] }),
+    )({});
+    expect(resultado.structuredContent).toEqual({ kind: 'list', items: [{ title: 'Corrida' }] });
+  });
+
   it('a tabela genérica só vale para a Tabela: outro formato sem artefato fica sem cartão', async () => {
     const resultado = await registrar(
       tool({ card: 'metric', execute: async () => [{ name: 'Arroz', kcal: 130 }] }),

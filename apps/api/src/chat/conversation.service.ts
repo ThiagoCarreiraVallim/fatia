@@ -62,6 +62,16 @@ export interface ConversationListItem {
   createdAt: Date;
   updatedAt: Date;
   state: ConversationState;
+  /** A última fala, em uma linha e com teto: a segunda linha do item na lista (#384). */
+  preview: string | null;
+}
+
+const TETO_DO_PREVIEW = 120;
+
+function previewDe(texto: string | undefined): string | null {
+  const linha = (texto ?? '').replace(/\s+/g, ' ').trim();
+  if (!linha) return null;
+  return linha.length > TETO_DO_PREVIEW ? `${linha.slice(0, TETO_DO_PREVIEW).trimEnd()}…` : linha;
 }
 
 /**
@@ -118,13 +128,26 @@ export class ConversationService {
         ...(termo ? { title: { contains: termo, mode: Prisma.QueryMode.insensitive } } : {}),
       },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, title: true, agentGroupId: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        title: true,
+        agentGroupId: true,
+        createdAt: true,
+        updatedAt: true,
+        messages: {
+          where: { content: { not: '' } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true },
+        },
+      },
     });
     const waiting = await this.waitingIds(userId);
     const isRunning = opts.isRunning ?? (() => false);
-    const comEstado = conversas.map((c) => ({
+    const comEstado = conversas.map(({ messages, ...c }) => ({
       ...c,
       state: conversationState(isRunning(c.id), waiting.has(c.id)),
+      preview: previewDe(messages[0]?.content),
     }));
     const filtradas = opts.state ? comEstado.filter((c) => c.state === opts.state) : comEstado;
     return opts.limit !== undefined ? filtradas.slice(0, opts.limit) : filtradas;

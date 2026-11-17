@@ -32,4 +32,11 @@ export class ExplainFormTool implements McpToolDef {
   execute(input: { exerciseName: string }, { userId }: McpToolContext) {
     return this.exercises.explainForm(userId, input.exerciseName);
   }
+
+  /** Os passos do exercício achado (prancha IA-Cartoes, #384). Sem passos, sem cartão. */
+  artifact(result: unknown) {
+    const [exercicio] = result as { name: string; instructions: string[] }[];
+    if (!exercicio?.instructions?.length) return null;
+    return { kind: 'instructions', label: exercicio.name, steps: exercicio.instructions };
+  }
 }

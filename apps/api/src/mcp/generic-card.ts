@@ -59,3 +59,25 @@ export function genericTable(dados: unknown): GenericTable | null {
     rows: linhas.slice(0, MAX_LINHAS).map((l) => colunas.map((c) => celula(l[c]) ?? null)),
   };
 }
+
+export interface GenericList {
+  kind: 'list';
+  items: { title: string; detail?: string }[];
+}
+
+const CAMPOS_DE_TITULO = ['name', 'title', 'nickname', 'content', 'body'] as const;
+
+/**
+ * A Lista de quem declara `list` e não tem produtor próprio (#384): um item por objeto, com o
+ * primeiro campo de título que houver. Sem título em nenhum, não há cartão — um item "sem nome"
+ * diria menos que a linha da tool.
+ */
+export function genericList(dados: unknown): GenericList | null {
+  const linhas = lista(dados);
+  if (!linhas?.length) return null;
+  const itens = linhas.slice(0, MAX_LINHAS).flatMap((linha) => {
+    const campo = CAMPOS_DE_TITULO.find((c) => typeof linha[c] === 'string' && linha[c]);
+    return campo ? [{ title: String(linha[campo]).slice(0, 120) }] : [];
+  });
+  return itens.length ? { kind: 'list', items: itens } : null;
+}

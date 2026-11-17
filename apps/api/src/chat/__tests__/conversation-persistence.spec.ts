@@ -320,6 +320,26 @@ describe('ConversationService — o que sobra do turno', () => {
     );
   });
 
+  it('a lista traz a última fala, numa linha só e com teto, para o preview (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'quanto comi?');
+    const longa = `Você comeu\n\n${'arroz '.repeat(60)}`;
+    await conversas.completeTurn(userId, conversationId, resposta({ texto: longa }));
+
+    const item = (await conversas.list(userId)).find((c) => c.id === conversationId);
+    expect(item?.preview?.startsWith('Você comeu arroz arroz')).toBe(true);
+    expect(item?.preview).not.toContain('\n');
+    expect(item!.preview!.length).toBeLessThanOrEqual(121);
+
+    const { conversationId: soPergunta } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      'e de proteína?',
+    );
+    expect((await conversas.list(userId)).find((c) => c.id === soPergunta)?.preview).toBe(
+      'e de proteína?',
+    );
+  });
+
   describe('o estado da conversa para o botão da IA (#369)', () => {
     const pausa = { id: 'int-1', value: { kind: 'confirm', prompt: 'Gravo?', actions: [] } };
 

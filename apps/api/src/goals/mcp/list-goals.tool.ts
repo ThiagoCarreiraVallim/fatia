@@ -35,4 +35,29 @@ export class ListGoalsTool implements McpToolDef {
   ) {
     return this.goals.list(input, userId, timezone);
   }
+
+  /** Uma barra de progresso por meta (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const metas = result as {
+      title: string;
+      unit: string;
+      currentValue: number | null;
+      targetValue: number;
+      progressPercent: number | null;
+      status: string;
+    }[];
+    return {
+      kind: 'progress',
+      label: 'Metas',
+      items: metas.map((meta) => ({
+        title: meta.title,
+        percent: meta.progressPercent ?? 0,
+        detail:
+          meta.currentValue === null
+            ? `alvo ${meta.targetValue} ${meta.unit}`
+            : `${meta.currentValue} de ${meta.targetValue} ${meta.unit}`,
+        status: meta.status,
+      })),
+    };
+  }
 }

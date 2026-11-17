@@ -12,7 +12,7 @@ import {
 } from '../common/decorators/tool.decorator';
 import { servidaNa, SuperficieDeIntencao } from './intent/superficie';
 import { formatToolError } from './mcp-error';
-import { genericTable } from './generic-card';
+import { genericList, genericTable } from './generic-card';
 import { McpMetricsService } from '../observability/mcp-metrics.service';
 
 type ToolResult = {
@@ -38,8 +38,11 @@ function artefatoDe(
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (tool.artifact) return tool.artifact(data, input as any);
-    // A Tabela é o formato padrão (#384): quem não monta o próprio cartão ganha o genérico.
-    return tool.card === 'report' ? (genericTable(data) as Record<string, unknown> | null) : null;
+    // A Tabela é o formato padrão (#384): quem não monta o próprio cartão ganha o genérico. A
+    // Lista também tem genérico; os outros formatos só existem com produtor próprio.
+    if (tool.card === 'report') return genericTable(data) as Record<string, unknown> | null;
+    if (tool.card === 'list') return genericList(data) as Record<string, unknown> | null;
+    return null;
   } catch {
     return null;
   }

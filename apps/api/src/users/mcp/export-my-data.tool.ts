@@ -29,4 +29,16 @@ export class ExportMyDataTool implements McpToolDef {
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
     return this.exports.createLink(userId);
   }
+
+  /** O arquivo com o link de 24 h (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const link = result as { url: string; expiresAt: Date };
+    return {
+      kind: 'file',
+      label: 'Seus dados',
+      url: link.url,
+      filename: 'fatia-dados.json',
+      expiresAt: new Date(link.expiresAt).toISOString(),
+    };
+  }
 }

@@ -28,4 +28,17 @@ export class ListAchievementsTool implements McpToolDef {
     // leitura que grava seria uma surpresa desagradável para quem lê `readOnlyHint`.
     return this.achievements.list({ userId, timezone }, { withProgress: true });
   }
+
+  /** Os selos, desbloqueados ou não (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const conquistas = result as { title: string; unlockedAt: string | null }[];
+    const badges = conquistas.map((c) => ({ title: c.title, unlocked: c.unlockedAt !== null }));
+    return {
+      kind: 'badges',
+      label: 'Conquistas',
+      unlocked: badges.filter((b) => b.unlocked).length,
+      total: badges.length,
+      badges,
+    };
+  }
 }

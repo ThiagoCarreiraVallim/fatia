@@ -35,7 +35,7 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - [x] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`
 - [x] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
 - [x] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
-- [ ] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
+- [x] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
 - [ ] 5. api-client: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
 - [ ] 6. Web: mensagens, linhas, cartões, confirmação/lote/só no app, composer, busca/aceite, lista, pausa, motivos
 - [ ] 7. App: o mesmo
@@ -61,6 +61,12 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
   prompt (`open_in_app`, `web_search`). Testes: `tests/chat/test_ferramentas_do_chat.py`,
   `tests/providers/test_web_search.py`, `test_chat_route.py`.
 
+- Item 4: produtores em `get_steps_history`, `get_water_history` (bars), `list_goals` (progress),
+  `list_achievements` (badges), `explain_form` (instructions), `export_my_data` (file),
+  `get_streak` (metric); `genericList` para quem declara `list`; os demais formatos sem
+  produtor ficam só com a linha da tool (diferença registrada). `preview` em
+  `ConversationService.list`. Specs: `mcp/__tests__/chat-cards.spec.ts`, persistência.
+
 ## Comandos
 
 - DB de teste: `export DATABASE_URL=$(grep '^DATABASE_URL=' /home/thiago/Documentos/pessoal/fatia/.env | cut -d= -f2- | tr -d '"' | sed -E 's#/fatia(\?|$)#/fatia_t384\1#')`
@@ -70,5 +76,6 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 ## Próximo passo
 
-Item 4: produtores dos formatos novos nas tools da API (bars, list, range, progress, scoreboard,
-badges, instructions, file; comparison com `before`) e `preview` na lista de conversas.
+Item 5: api-client — tipos dos cartões (`ChatArtifact` união), `getChatToolCatalog`,
+`appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceite
+(`ai-consent.ts` com textos e versões 2026-11-16), `AI_CONSENT_REQUIRED` em TEXTOS, `preview`.

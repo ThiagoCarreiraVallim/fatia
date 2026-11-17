@@ -25,4 +25,23 @@ export class GetStepsHistoryTool implements McpToolDef {
   execute(input: { days: number }, { userId, timezone }: McpToolContext) {
     return this.steps.getHistoryWithGoal(input.days, userId, timezone);
   }
+
+  /** Barras por dia (prancha IA-Cartoes, #384), com a meta batida marcada. */
+  artifact(result: unknown, input: { days: number }) {
+    const historico = result as {
+      days: { date: string; steps: number; goalReached: boolean | null }[];
+      averageDaily: number;
+    };
+    return {
+      kind: 'bars',
+      label: `Passos nos últimos ${input.days} dias`,
+      unit: 'passos',
+      average: Math.round(historico.averageDaily),
+      bars: historico.days.map((dia) => ({
+        label: dia.date,
+        value: dia.steps,
+        ...(dia.goalReached === null ? {} : { reached: dia.goalReached }),
+      })),
+    };
+  }
 }

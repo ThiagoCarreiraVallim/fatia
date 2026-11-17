@@ -24,4 +24,10 @@ export class GetStreakTool implements McpToolDef {
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {
     return this.consistency.streak({ userId, timezone });
   }
+
+  /** A sequência como métrica (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const { activeDays } = result as { activeDays: number };
+    return { kind: 'metric', label: 'Dias seguidos', value: activeDays, unit: 'dias' };
+  }
 }
