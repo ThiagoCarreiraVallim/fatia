@@ -216,23 +216,25 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 Pendências da #388 (branch `redesign/388-conectar-ia`, migration `20261117000000_mcp_oauth_connections`):
 
 - **Decisões:**
-  - Vínculo pessoa × app de IA: tabela nova `McpOAuthConnection` (pessoa, cliente DCR, SHA-256 do último access token, `lastUsedAt`). A `McpOAuthAuthorization` não serve: é apagada minutos depois do login. A linha nasce no `/oauth/token` (code e refresh); o dono é o `sub` do token que o Logto emitiu, nunca o `client_id` do corpo. Falhar no vínculo nunca derruba o login da IA.
-  - "Último acesso": cada chamada ao `/mcp` acha a conexão pelo hash do Bearer e atualiza `lastUsedAt` (no máximo uma escrita por minuto). Conexões de antes da tabela aparecem no primeiro refresh.
-  - `GET /users/me/mcp-connections` devolve `serverUrl` e as conexões da própria pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`, inclusive o fluxo OAuth inteiro (DCR → token → guard → toque) e o refresh com o `client_id` de outra pessoa.
+  - Vínculo pessoa × app de IA: tabelas novas `McpOAuthConnection` (pessoa, cliente DCR, `lastUsedAt`) e `McpOAuthConnectionToken` (SHA-256 dos access e refresh tokens de cada conexão, com validade, podados ao vencer). A `McpOAuthAuthorization` não serve: é apagada minutos depois do login. A conexão nasce só na troca do code (cliente da autorização, dono pelo `sub` do token que o Logto emitiu). O refresh acha a conexão pelo hash do refresh token apresentado e nunca cria linha; o `client_id` do corpo não decide nada. Gravar a conexão roda depois da resposta (sem `await`) e nunca derruba nem atrasa o login da IA.
+  - "Último acesso": cada chamada ao `/mcp` acha a conexão pelo hash do Bearer entre os access tokens válidos dela e atualiza `lastUsedAt` (no máximo uma escrita por minuto). Vários aparelhos no mesmo cliente contam. Quem conectou antes da tabela só aparece depois de conectar de novo.
+  - "Conectado" só com último acesso nos últimos 30 dias (`CONNECTED_WINDOW_DAYS`); mais velha, "<IA> conectado antes", com o teste à mão. Sem revogação, o Fatia não sabe quando a pessoa removeu o conector.
+  - `GET /users/me/mcp-connections` devolve `serverUrl` e as conexões da própria pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`, inclusive o fluxo OAuth inteiro (DCR → token → guard → toque), o refresh com o `client_id` do app de outra pessoa (não cria linha) e o refresh sem `client_id`.
   - Endereço do servidor: `API_PUBLIC_URL` + `/mcp`, servido pela API. É o `resource` do metadata para quem chega pelo endereço público (`public-url.spec.ts`). Sem env nova; nenhuma tela escreve o endereço.
   - Sem revogação no Fatia: a tela diz "para desconectar, remova o conector no app da sua IA".
-  - Erros do Logto no `/oauth/token` passam a sair no formato da RFC 6749 (`OAuthError`); antes, um refresh vencido voltava como 401 do Nest.
-  - O export de dados (LGPD) leva as conexões, sem o hash.
+  - Erros do Logto no `/oauth/token` passam a sair no formato da RFC 6749 (`OAuthError`); antes, um refresh vencido voltava como 401 do Nest. `invalid_grant` só quando o Logto disse isso: Logto fora do ar vira `temporarily_unavailable` (503) e configuração errada do facade (`invalid_client`, `invalid_target`…) vira `server_error` (500), para o Claude não jogar fora o refresh token.
+  - O `?tutorial=` da Ajuda marca o tutorial como assistido, como o toque na lista, e sai da URL ao fechar.
+  - O export de dados (LGPD) leva as conexões, sem os hashes.
   - Entrada: Você › IA › Conectar sua IA, rota `/profile/connect` no app e na web (o app usava `/profile/tokens`, apagada). "Minha IA (MCP)" do menu da IA também leva para lá.
   - Qual IA é qual: pelo `client_name` do registro (`claude` → Claude, `chatgpt`/`openai` → ChatGPT, o resto → Outro app). A tela abre na IA da conexão mais recente.
 - **Diferenças de propósito em relação às pranchas:**
   - O endereço é o da configuração (`https://api.<domínio>/mcp`), não o `https://fatia.app/mcp` da prancha.
-  - Al-V6c: "você pode desconectar em Configurações da IA" virou "para desconectar, remova o conector no app da sua IA". O exemplo de resposta vem com "Pergunte … e ele responde algo como:" e sem "3 de 5 hábitos" (Hábitos é a #390).
+  - Al-V6c: "você pode desconectar em Configurações da IA" virou "para desconectar, remova o conector no app da sua IA". A prancha troca o teste pelo cartão de conectado; aqui o cartão fica acima, e o teste (com "Ele responde algo como:") e o "Não funcionou?" continuam embaixo, porque o "Conectado" pode estar velho. O exemplo de resposta vem sem "3 de 5 hábitos" (Hábitos é a #390).
   - Al-V6d: "Ver o tutorial com imagens" virou "Ver o tutorial" (a Ajuda ainda é só texto, #415); ele abre o tutorial "Conectar ao Claude ou ChatGPT" direto (`/you/help?tutorial=conectar-sua-ia`), que ganhou o que fazer quando não funciona. A terceira verificação muda com a IA escolhida.
   - Al-V6e: a prancha só chega lá pelo tweak; na tela, o "Não funcionou" tem "Meu app não aceita MCP". "Exportar dados" já exporta (o mesmo link de 24 h de Você). Os dois cartões têm um X para voltar ao teste.
   - O aviso de privacidade (a IA de fora só lê o que é seu, e passa pela política dela) não está na prancha; a issue pede.
   - O primeiro passo vem aberto ao entrar e ao trocar de IA; copiar o endereço abre o "Entre e autorize".
-  - Na web, se o navegador não deixa copiar, a tela diz para copiar à mão.
+  - Se não deu para copiar (navegador na web; recusa ou `false` do `expo-clipboard` no app), a tela diz para copiar à mão.
 - **Falta:**
   - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
   - Domínio de produção do endereço (a história de Produção).
