@@ -1,5 +1,6 @@
 import { PrismaClient } from '@fatia/db';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
+import { runGuarded } from './production-guard';
 
 /**
  * `pnpm billing:grant-group` — PRO para todos os membros ativos de uma
@@ -18,6 +19,8 @@ import { dayBoundsInTz } from '../progress/helpers/date-tz';
  * pnpm billing:grant-group <slug> [--until 2026-11-30] [--program "Verão 21"]
  * pnpm billing:grant-group <slug> --revoke
  * ```
+ *
+ * Em produção recusa sem `--i-know-this-is-production` (`production-guard.ts`).
  */
 
 export interface GrantGroupArgs {
@@ -49,6 +52,14 @@ export function parseGrantGroupArgs(argv: string[]): GrantGroupArgs {
   const program = valueOf('--program') || null;
   if (program && !until) throw new Error('Programa precisa de data final (--until)');
   return { slug: slug.trim(), until, program, revoke: argv.includes('--revoke') };
+}
+
+/** O que o script vai mudar, mostrado antes de aplicar. */
+export function describeGrantGroup(args: GrantGroupArgs): string {
+  if (args.revoke) return `Encerrar agora o PRO de todos os membros da comunidade ${args.slug}`;
+  const quando = args.until ? ` até ${args.until} (fim do dia em São Paulo)` : ', sem data final';
+  const programa = args.program ? `, programa "${args.program}"` : '';
+  return `Dar PRO a todos os membros ativos da comunidade ${args.slug}${quando}${programa}`;
 }
 
 type Db = Pick<PrismaClient, 'group' | 'groupSeatPool'>;
@@ -98,19 +109,22 @@ export async function grantGroup(prisma: Db, args: GrantGroupArgs): Promise<stri
 }
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
   let args: GrantGroupArgs;
   try {
-    args = parseGrantGroupArgs(process.argv.slice(2));
+    args = parseGrantGroupArgs(argv);
   } catch (err) {
     console.error((err as Error).message);
     process.exit(1);
   }
   const prisma = new PrismaClient();
   try {
-    console.log(await grantGroup(prisma, args));
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exitCode = 1;
+    process.exitCode = await runGuarded({
+      argv,
+      env: process.env,
+      plan: describeGrantGroup(args),
+      apply: () => grantGroup(prisma, args),
+    });
   } finally {
     await prisma.$disconnect();
   }

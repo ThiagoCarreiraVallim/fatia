@@ -17,7 +17,7 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 - [x] 5. Fim do programa um dia depois (grant-group) + fixture
 - [x] 6. "Hoje" do aviso no fuso da pessoa (Cuiabá, Rio Branco, EUA)
 - [x] 7. Aviso de fim do teste da loja: manter, sem preço/link/pagamento do Fatia, só "cancele na loja" com deep link; registrar decisão nos docs
-- [ ] 8. grant-group/grant-pro/grant-seat recusam produção sem `--i-know-this-is-production`, imprimem o que muda
+- [x] 8. grant-group/grant-pro/grant-seat recusam produção sem `--i-know-this-is-production`, imprimem o que muda
 - [ ] 9. Reserva do teste amarrada ao Asaas (libera se falhar, compensa se o banco falhar), trava por pessoa contra duplo envio
 - [x] 10. Fuso inválido não derruba a rodada (try/catch + fallback); validar fuso no update-me.dto
 - [ ] 11. Docs: limites do "um teste por pessoa"
@@ -25,4 +25,4 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 
 ## Próximo passo
 
-Item 8 (trava de produção nos grant-*), depois 9, 11, docs (inclusive a decisão do item 7) e passada final.
+Item 9 (trava por pessoa no checkout, reserva do teste amarrada ao Asaas, compensação), depois 11, docs (inclusive a decisão do item 7) e passada final.
