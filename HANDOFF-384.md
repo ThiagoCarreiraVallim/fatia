@@ -30,13 +30,27 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - **D8–D10:** cartão recolhe numa linha ✓ quando não é a última resposta; 2+ consultas seguidas
   agrupam ("Consultei N coisas"), nunca com falha; plano "n de m passos".
 
+## Decisões do dono (mudaram durante a issue)
+
+- **D11 Todo tool tem formato explícito** (sem Tabela padrão para quem não mapeou): leitura →
+  um dos formatos de consulta; confirmável → `confirm` (Cartão de confirmação; `refresh_achievements`
+  → `badges`, como na prancha); restrita → `appOnly`; locais do agente: `web_search` → fontes,
+  `ask_user` → pergunta, `open_in_app` → só no app. Spec que reprova tool sem formato.
+  O `artefatos.py` deixa de transformar `kind` desconhecido em `report`: descarta.
+- **D12 Conversas antigas podem ser apagadas** se um layout mais limpo pedir; preferir o schema
+  limpo a calço de compatibilidade. Registrar no REDESIGN_PROGRESS o que for apagado.
+- **D13 Merge de `feat/chat-fotos-busca-fila-cartoes`** (base planejada da etapa 6): fila de
+  mensagens, citar trecho, retry do `/mcp`, foto no R2 (fica para a #385 construir em cima),
+  busca na web — manter só UMA implementação (a melhor), com cobrança na cota se fizer sentido.
+  Migrations da branch precisam ordenar depois das da main. Regenerar números do MCP depois.
+
 ## Checklist
 
 - [x] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`
 - [x] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
 - [x] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
 - [x] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
-- [ ] 5. api-client: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
+- [~] 5. api-client (feito: `chat-cards.ts` com catálogo, `appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceites; tipos novos em `chat.ts`; falta: D11 e `chat-thread.ts`): tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
 - [ ] 6. Web: mensagens, linhas, cartões, confirmação/lote/só no app, composer, busca/aceite, lista, pausa, motivos
 - [ ] 7. App: o mesmo
 - [ ] 8. Docs (MCP_TOOL_SURFACE, REDESIGN_PROGRESS), lint, typecheck, testes; apagar este arquivo
@@ -76,6 +90,7 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 ## Próximo passo
 
-Item 5: api-client — tipos dos cartões (`ChatArtifact` união), `getChatToolCatalog`,
-`appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceite
-(`ai-consent.ts` com textos e versões 2026-11-16), `AI_CONSENT_REQUIRED` em TEXTOS, `preview`.
+1. `git merge feat/chat-fotos-busca-fila-cartoes` (D13), resolvendo a favor dos contratos da #384.
+2. D11: `card` obrigatório em toda tool de entidade (confirmáveis `confirm`), spec em
+   `tool-catalog.spec.ts`, tirar `?? 'report'` do `catalogoDoChat`, `artefatos.py` sem fallback.
+3. Seguir para o item 6 (web).

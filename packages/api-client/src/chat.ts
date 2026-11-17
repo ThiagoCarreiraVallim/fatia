@@ -50,6 +50,7 @@ export type ChatErrorCode =
   | 'AGENT_INTERNAL_ERROR'
   // NestJS.
   | 'AI_PLAN_REQUIRED'
+  | 'AI_CONSENT_REQUIRED'
   | 'AI_QUOTA_EXCEEDED'
   | 'AGENT_STREAM_INTERRUPTED'
   | 'CHAT_INTERNAL_ERROR'
@@ -131,13 +132,24 @@ export interface ChatQuestionAction {
   fields: ChatAskField[];
 }
 
+/** A primeira busca na web, esperando o aceite (#384). Só a `query` sai, se a pessoa aceitar. */
+export interface ChatWebConsentAction {
+  kind: 'web_consent';
+  toolCallId: string;
+  tool: 'web_search';
+  prompt: string;
+  query: string;
+}
+
 /** O `value` de uma pausa do grafo (`__interrupt__`). */
 export interface ChatInterruptValue {
-  kind: 'confirm' | 'question' | 'continue';
+  kind: 'confirm' | 'question' | 'continue' | 'web_consent';
   prompt: string;
-  actions: (ChatConfirmAction | ChatQuestionAction)[];
+  actions: (ChatConfirmAction | ChatQuestionAction | ChatWebConsentAction)[];
   /** Só em `continue`: o que já foi feito, para decidir sem adivinhar. */
   summary?: string;
+  /** Só em `continue`: quantas consultas o turno já fez ("Já consultei N coisas"). */
+  count?: number;
 }
 
 /** A resposta a uma pausa, no formato que o `portao` do agente lê. */
@@ -192,6 +204,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   AI_UNAUTHORIZED: SESSAO,
   AI_PLAN_REQUIRED:
     'O chat com a IA do Fatia faz parte do plano PRO. O registro manual e a sua própria IA pelo MCP continuam livres.',
+  AI_CONSENT_REQUIRED:
+    'Antes da primeira conversa, leia para onde vão as mensagens e dê o aceite para continuar.',
   AI_QUOTA_EXCEEDED: 'Você chegou ao limite de uso do assistente por hoje. Ele volta amanhã.',
   AGENT_STREAM_INTERRUPTED: 'A resposta foi interrompida antes de terminar. Tente enviar de novo.',
   AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
@@ -509,6 +523,8 @@ export interface ChatConversationSummary {
   state?: ChatConversationState;
   /** A comunidade cujo agente conduz a conversa; `null` é o assistente da Fatia. */
   agentGroupId?: string | null;
+  /** A última fala, em uma linha (#384). Ausente em API antiga. */
+  preview?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -734,7 +750,65 @@ export type ChatArtifact =
     })
   | (ChatArtifactBase & {
       kind: 'comparison';
-      items: { label: string; value: number | string; unit?: string }[];
+      items: { label: string; value: number | string; before?: number | string; unit?: string }[];
+    })
+  // Os formatos da prancha IA-Cartoes (#384).
+  | (ChatArtifactBase & {
+      kind: 'bars';
+      unit?: string;
+      average?: number;
+      goal?: number;
+      bars: { label: string; value: number; reached?: boolean }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'list';
+      items: { title: string; detail?: string; value?: number | string; unit?: string }[];
+      total?: string;
+    })
+  | (ChatArtifactBase & {
+      kind: 'range';
+      rows: {
+        label: string;
+        value: number;
+        min?: number | null;
+        max?: number | null;
+        unit?: string;
+      }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'progress';
+      items: { title: string; percent: number; detail?: string; status?: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'scoreboard';
+      entries: { position: number; name: string; value: number; unit?: string; you?: boolean }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'badges';
+      badges: { title: string; unlocked: boolean }[];
+      unlocked: number;
+      total: number;
+    })
+  | (ChatArtifactBase & { kind: 'instructions'; steps: string[]; videoUrl?: string })
+  | (ChatArtifactBase & { kind: 'file'; url: string; filename: string; expiresAt: string })
+  // Os que nascem no agente: as fontes da busca e o botão das ações só do app.
+  | (ChatArtifactBase & {
+      kind: 'sources';
+      query?: string;
+      sources: { title: string; url: string; domain: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'app_only';
+      tool: string;
+      title?: string;
+      params: Record<string, string>;
+    })
+  // "Gravado", com Desfazer: só o componente nesta issue — quem emite é a #385.
+  | (ChatArtifactBase & {
+      kind: 'saved';
+      at: string;
+      lines: { label: string; before?: string; after: string }[];
+      undoable?: boolean;
     });
 
 // ---------------------------------------------------------------- memória e cota

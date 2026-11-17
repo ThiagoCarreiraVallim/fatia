@@ -22,6 +22,7 @@ export * from './billing';
 export * from './pro-block-copy';
 export * from './chat';
 export * from './chat-thread';
+export * from './chat-cards';
 export * from './chat-markdown';
 export * from './plan';
 export * from './food-shortcuts';
