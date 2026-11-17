@@ -340,6 +340,17 @@ describe('ConversationService — o que sobra do turno', () => {
     );
   });
 
+  it('o preview mostra o texto sem a marcação do markdown (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'e a semana?');
+    const texto =
+      '## Resumo\n\nSemana **boa**! Ficou na meta em *5 de 7 dias*, com `+12%` de [proteína](https://x.y).\n- quinta escapou';
+    await conversas.completeTurn(userId, conversationId, resposta({ texto }));
+
+    expect((await conversas.list(userId)).find((c) => c.id === conversationId)?.preview).toBe(
+      'Resumo Semana boa! Ficou na meta em 5 de 7 dias, com +12% de proteína. quinta escapou',
+    );
+  });
+
   it('o preview tira a citação (`> …`) da frente da fala (#384)', async () => {
     const { conversationId } = await conversas.iniciarTurno(
       userId,

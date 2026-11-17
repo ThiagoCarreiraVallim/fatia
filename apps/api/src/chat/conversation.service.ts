@@ -72,8 +72,19 @@ const TETO_DO_PREVIEW = 120;
  * A última fala numa linha, para a lista. A citação (`> …`, o trecho respondido) sai da frente:
  * o que importa é o que a pessoa escreveu; sobra a citação só quando não há mais nada.
  */
+/** A linha do preview é texto puro: a lista não desenha markdown, então a marcação some. */
+function withoutMarkdown(linha: string): string {
+  return linha
+    .replace(/^\s{0,3}#{1,6}\s+/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/\*([^*\s][^*]*)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+}
+
 function conversationPreview(texto: string | undefined): string | null {
-  const linhas = (texto ?? '').split('\n');
+  const linhas = (texto ?? '').split('\n').map(withoutMarkdown);
   let i = 0;
   while (i < linhas.length && linhas[i].startsWith('>')) i++;
   const resto = linhas.slice(i).join(' ').trim();
