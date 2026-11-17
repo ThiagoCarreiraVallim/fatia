@@ -166,7 +166,15 @@ Pendências da #380 (branch `redesign/380-circuitos`, migration `20261116053800_
   - O For Time tem "Pular descanso" no descanso entre rounds (a prancha não desenha esse estado).
   - O AMRAP terminado pelo tempo mostra o fim no desenho do Al-T4e ("rounds + exercícios").
 - **Contas escolhidas:** o Tabata conta o último descanso no total (8 × 20/10 = 4 min, como a prancha); pular fase conta a fase como feita; a série do Tabata grava os segundos de trabalho; `targetReps` em faixa vira o maior número.
-- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual); som e avisos no aparelho (no Expo Go do Android não há avisos do sistema: o relógio só apita com a tela acesa).
+- **Passe visual (prints em `~/.cache/fatia-vis/380/cmp-<prancha>.png`, prancha | web | app):**
+  - Corrigido: o card da aba Circuitos mostra todos os exercícios com o nome inteiro (`circuitExerciseChips`), como no `C()` da prancha; o corte em três e em duas palavras ("Thruster com") era o do plano.
+  - Corrigido: no app, o brilho dos intervalos é um gradiente radial em SVG (era um bloco de borda dura) e os pontos ficam no pé da tela, como no Al-T4b/T4d.
+  - Corrigido: na web, os cartões do resultado (Al-T11c e Treino feito) têm uma coluna por cartão; na primeira vez, sem comparação, a linha não fica com buraco. Os rótulos "Exercícios" e "Tempo de cada round" usam a fonte do corpo, não a dos títulos.
+  - Desvios de propósito: "Encerrar circuito" no AMRAP e no For Time (o Al-T4c diz "Encerrar"), com confirmação; "Salvar treino" verde e sem o botão de pausa morto no fim de todos os formatos (o Al-T4e desenha claro, o T4b/T4d verde); o selo do formato usa a cor do formato também no relógio (o Al-T4d desenha o EMOM azul, o Al-T6 laranja); o selo do relógio mostra o nome do circuito; a linha do exercício da vez no app é tinta lisa (sem `expo-linear-gradient`); o subtítulo do exercício no Al-T11c usa a linha de grupo do resto do treino.
+  - Os relógios de AMRAP, EMOM e Tabata foram conferidos com uma sessão falsa (rota interceptada na web, dado em memória no app), sem gravar nada; o For Time rodou de ponta a ponta.
+  - Pendência: o relógio aberto no app não acompanha toques feitos em outro aparelho enquanto fica aberto; retoma certo ao abrir de novo.
+  - Depois de trocar para esta branch, rode `pnpm install` (o api-client passou a depender do `@fatia/design`) e reinicie o `next dev`: o cache do webpack guarda o `circuitState` como ausente.
+- **Ainda não conferido:** som e avisos no aparelho (no Expo Go do Android não há avisos do sistema: o relógio só apita com a tela acesa).
 
 Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_achievement_workouts_100`, só dados):
 
