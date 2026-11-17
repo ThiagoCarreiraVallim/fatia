@@ -153,4 +153,61 @@ describe('minhas comunidades (integração)', () => {
       rank: 2,
     });
   });
+
+  describe('quem da equipe vê (Cm-04)', () => {
+    it('lista a equipe com o que cada um vê de mim e quando olhou por último', async () => {
+      const { dono, grupo } = await comunidade();
+      const pro = await pessoa('Helena');
+      await prisma.groupMembership.create({
+        data: { groupId: grupo.id, userId: pro, role: 'PROFESSIONAL', status: 'ACTIVE' },
+      });
+      const ana = await pessoa('Ana');
+      await memberships.requestJoin(ana, grupo.slug, { scopes: ['WORKOUT'], statsOptIn: false });
+      const bia = await pessoa('Bia');
+      await memberships.requestJoin(bia, grupo.slug, { scopes: ['WORKOUT'], statsOptIn: false });
+
+      const link = await prisma.professionalLink.findFirstOrThrow({
+        where: { groupId: grupo.id, subjectUserId: ana, professionalId: pro, revokedAt: null },
+      });
+      const viu = new Date();
+      await prisma.professionalAccessLog.createMany({
+        data: [
+          {
+            linkId: link.id,
+            professionalId: pro,
+            subjectUserId: ana,
+            scope: 'WORKOUT',
+            action: 'x',
+            at: viu,
+          },
+          // Negado não é "viu".
+          {
+            professionalId: dono,
+            subjectUserId: ana,
+            scope: 'NUTRITION',
+            action: 'x',
+            denied: true,
+          },
+          // O que olharam da Bia não aparece para a Ana.
+          { professionalId: dono, subjectUserId: bia, scope: 'WORKOUT', action: 'x' },
+        ],
+      });
+
+      const equipe = await memberships.teamForMember(ana, grupo.id);
+      expect(equipe).toEqual([
+        { name: 'Dona', role: 'OWNER', sees: ['WORKOUT'], lastViewedAt: null },
+        { name: 'Helena', role: 'PROFESSIONAL', sees: ['WORKOUT'], lastViewedAt: viu },
+      ]);
+      // Outros alunos nunca aparecem.
+      expect(JSON.stringify(equipe)).not.toMatch(/Bia|Aluna/);
+    });
+
+    it('quem não é da comunidade não vê a equipe', async () => {
+      const { grupo } = await comunidade();
+      const estranha = await pessoa('Estranha');
+      await expect(memberships.teamForMember(estranha, grupo.id)).rejects.toThrow(
+        'Group not found',
+      );
+    });
+  });
 });

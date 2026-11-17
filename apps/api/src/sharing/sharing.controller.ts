@@ -144,6 +144,16 @@ export class SharingController {
     return this.memberships.listMembers(user.id, groupId);
   }
 
+  /**
+   * A equipe vista por quem pergunta (#393, Cm-04): o que cada um vê dele e
+   * quando olhou por último. Nunca outros alunos, nunca o dado de outra pessoa.
+   */
+  @Get(':groupId/team')
+  @RequireGroupAction('group.read')
+  team(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
+    return this.memberships.teamForMember(user.id, groupId);
+  }
+
   /** Pedido de entrada do próprio usuário. Quem entra é sempre quem chamou. */
   @Post('join')
   @SelfOnly()

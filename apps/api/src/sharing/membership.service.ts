@@ -94,6 +94,16 @@ function codigoEsgotado(err: unknown): never {
   throw err;
 }
 
+/** Uma pessoa da equipe, como o membro a vê no Cm-04. */
+export interface TeamMemberView {
+  name: string;
+  role: GroupRole;
+  /** O que ela vê de quem pergunta (vazio = nada). */
+  sees: ShareScope[];
+  /** A última vez que ela abriu algo de quem pergunta (acesso não negado). */
+  lastViewedAt: Date | null;
+}
+
 @Injectable()
 export class MembershipService {
   constructor(
@@ -324,6 +334,56 @@ export class MembershipService {
       );
     }
     return ops;
+  }
+
+  /**
+   * A equipe vista pelo membro (#393, Cm-04 "Equipe da academia"): quem da
+   * equipe ativa existe, o que cada um vê **de quem pergunta** (os vínculos
+   * vivos dele neste grupo) e quando olhou por último (acesso não negado, na
+   * trilha dele). Outros alunos nunca aparecem, e o dado de outra pessoa
+   * também não: tudo parte de `subjectUserId = userId`.
+   */
+  async teamForMember(userId: string, groupId: string): Promise<TeamMemberView[]> {
+    const eu = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { status: true },
+    });
+    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+
+    const [equipe, vinculos] = await Promise.all([
+      this.prisma.groupMembership.findMany({
+        where: {
+          groupId,
+          status: MembershipStatus.ACTIVE,
+          role: { in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR] },
+          userId: { not: userId },
+        },
+        select: { userId: true, role: true, user: { select: { name: true } } },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.professionalLink.findMany({
+        where: { groupId, subjectUserId: userId, revokedAt: null },
+        select: { professionalId: true, scopes: true },
+      }),
+    ]);
+    const vistos = await this.prisma.professionalAccessLog.groupBy({
+      by: ['professionalId'],
+      where: {
+        subjectUserId: userId,
+        denied: false,
+        professionalId: { in: equipe.map((m) => m.userId) },
+        link: { groupId },
+      },
+      _max: { at: true },
+    });
+    const escopos = new Map(vinculos.map((v) => [v.professionalId, v.scopes]));
+    const ultimo = new Map(vistos.map((v) => [v.professionalId, v._max.at]));
+    return equipe.map((m) => ({
+      name: m.user.name,
+      role: m.role,
+      sees: normalizarEscopos(escopos.get(m.userId) ?? []),
+      lastViewedAt: ultimo.get(m.userId) ?? null,
+    }));
   }
 
   /**

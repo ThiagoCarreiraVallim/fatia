@@ -17,7 +17,7 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 - [x] API: código de entrada revogável (convite com `code`) no painel de convites
 - [x] API: resumo da lista (memberCount, newPosts, forYou, challengeRank, visibility, timezone)
 - [x] API: feed marca visto na 1ª página
-- [ ] API: `GET /groups/:id/team-view` (quem da equipe vê, "viu hoje")
+- [x] API: `GET /groups/:id/team` (quem da equipe vê, "viu hoje")
 - [x] API: benefícios (membro + CRUD equipe), isolamento
 - [ ] MCP: `list_group_benefits` + produtor de cartão + números regenerados
 - [ ] api-client: tipos, `parseCommunityEntry`, textos
@@ -35,4 +35,4 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Próximo passo
 
-API: `GET /groups/:id/team-view` (Cm-04), depois isolamento em user-isolation.spec, MCP `list_group_benefits`, api-client, web, app.
+MCP `list_group_benefits`, api-client, web, app.

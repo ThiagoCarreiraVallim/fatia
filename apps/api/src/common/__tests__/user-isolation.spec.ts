@@ -13,6 +13,7 @@ import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@p
 import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
 import { ConsentService } from '../../sharing/consent.service';
+import { BenefitService } from '../../sharing/benefit.service';
 import { GroupService } from '../../sharing/group.service';
 import { MembershipService } from '../../sharing/membership.service';
 import { PlanMaterializerService } from '../../sharing/plan-materializer.service';
@@ -4222,6 +4223,82 @@ describe('isolamento entre usuários', () => {
       expect(JSON.stringify(deA)).not.toContain('pay_do_A'); // link de cobrança não sai
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain('GRACE_5_LEFT');
+    });
+  });
+
+  describe('comunidade: benefícios e a equipe vista pelo membro (#393)', () => {
+    const benefits = new BenefitService(prisma, new MediaService(prisma, new MemoryObjectStore()));
+    let benefitId: string;
+
+    beforeAll(async () => {
+      const b = await benefits.create(owned.userB, owned.groupId, {
+        partnerName: 'Suplementa',
+        discountText: '15% em suplementos',
+        kind: 'COUPON',
+        couponCode: 'ISO393',
+        validUntil: '2099-12-31',
+      });
+      benefitId = b.id;
+      // O pro olhou o treino da colega (com vínculo nesta academia).
+      const link = await prisma.professionalLink.create({
+        data: {
+          subjectUserId: owned.colega,
+          professionalId: owned.pro,
+          groupId: owned.groupId,
+          scopes: [ShareScope.WORKOUT],
+        },
+      });
+      await prisma.professionalAccessLog.create({
+        data: {
+          linkId: link.id,
+          professionalId: owned.pro,
+          subjectUserId: owned.colega,
+          scope: ShareScope.WORKOUT,
+          action: 'iso_393',
+        },
+      });
+    });
+
+    it('o membro lê os benefícios da própria comunidade; quem é de fora, 404', async () => {
+      expect(await benefits.listForMember(owned.userA, owned.groupId)).toEqual([
+        expect.objectContaining({ id: benefitId, couponCode: 'ISO393' }),
+      ]);
+      // O user-A não está no grupo do pro.
+      await expect(benefits.listForMember(owned.userA, owned.grupoDoProId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('o dono de outra comunidade não mexe no benefício pela URL da dele', async () => {
+      await expect(
+        benefits.update(owned.pro, owned.grupoDoProId, benefitId, { couponCode: 'ROUBO' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        benefits.remove(owned.pro, owned.grupoDoProId, benefitId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // Membro e profissional da própria academia também não administram.
+      await expect(
+        benefits.update(owned.userA, owned.groupId, benefitId, { couponCode: 'ROUBO' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(benefits.remove(owned.pro, owned.groupId, benefitId)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      const intacto = await prisma.groupPartnerBenefit.findUniqueOrThrow({
+        where: { id: benefitId },
+      });
+      expect(intacto.couponCode).toBe('ISO393');
+    });
+
+    it('a equipe vista pelo user-A não traz colega nem o que olharam da colega', async () => {
+      const equipe = await memberships.teamForMember(owned.userA, owned.groupId);
+      const nomes = equipe.map((m) => m.role);
+      expect(nomes).not.toContain('MEMBER');
+      const pro = equipe.find((m) => m.role === 'PROFESSIONAL' && m.lastViewedAt !== null);
+      expect(pro).toBeUndefined();
+      // E o user-A não vê a equipe de uma comunidade em que não está.
+      await expect(
+        memberships.teamForMember(owned.userA, owned.grupoDoProId),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
