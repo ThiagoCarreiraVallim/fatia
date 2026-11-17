@@ -50,11 +50,12 @@ describe('OAuthFacadeService', () => {
   let prisma: MockPrisma;
   let service: OAuthFacadeService;
   const fetchMock = jest.fn();
-  const connections = { recordIssuedToken: jest.fn().mockResolvedValue(undefined) };
+  const connections = { recordExchange: jest.fn(), recordRefresh: jest.fn() };
 
   beforeEach(() => {
     prisma = makePrisma();
-    connections.recordIssuedToken.mockReset().mockResolvedValue(undefined);
+    connections.recordExchange.mockReset();
+    connections.recordRefresh.mockReset();
     service = new OAuthFacadeService(
       prisma as unknown as PrismaService,
       makeConfig(),
@@ -365,7 +366,7 @@ describe('OAuthFacadeService', () => {
       );
       expect(prisma.mcpOAuthClient.update).toHaveBeenCalled();
       // #388: a conexão nasce aqui, ligada ao dono do token que o Logto emitiu.
-      expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_xxx', tokenResponse);
+      expect(connections.recordExchange).toHaveBeenCalledWith('mcp_xxx', tokenResponse);
     });
 
     // Revisão da #388: o Logto já girou o refresh token quando responde. Se a
@@ -375,7 +376,7 @@ describe('OAuthFacadeService', () => {
       prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
       const tokenResponse = { access_token: 'acc', refresh_token: 'ref', expires_in: 3600 };
       fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => tokenResponse });
-      connections.recordIssuedToken.mockImplementation(() => new Promise(() => undefined));
+      connections.recordExchange.mockImplementation(() => new Promise(() => undefined));
 
       const result = await Promise.race([
         service.exchangeCode(validParams, 'https://api.example.com/oauth/callback'),
@@ -399,7 +400,7 @@ describe('OAuthFacadeService', () => {
       // faria o Claude repetir a chamada em laço em vez de refazer o login.
       await expect(call).rejects.toBeInstanceOf(OAuthError);
       await expect(call).rejects.toMatchObject({ code: 'invalid_grant' });
-      expect(connections.recordIssuedToken).not.toHaveBeenCalled();
+      expect(connections.recordExchange).not.toHaveBeenCalled();
     });
 
     // Revisão da #388: `invalid_grant` faz o Claude jogar fora o refresh token e
@@ -511,7 +512,7 @@ describe('OAuthFacadeService', () => {
       expect(body.get('resource')).toBe('https://api.example.com');
     });
 
-    it('renova a conexão do cliente que pediu (#388)', async () => {
+    it('renova a conexão pelo refresh token apresentado, não pelo client_id (#388)', async () => {
       fetchMock.mockResolvedValue({
         ok: true,
         status: 200,
@@ -520,9 +521,28 @@ describe('OAuthFacadeService', () => {
 
       await service.refreshToken({ refreshToken: 'old-refresh', clientId: 'mcp_yyy' });
 
-      expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_yyy', {
+      expect(connections.recordRefresh).toHaveBeenCalledWith(
+        'old-refresh',
+        { access_token: 'new-access' },
+        'mcp_yyy',
+      );
+    });
+
+    it('refresh sem client_id funciona e também renova a conexão', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'new-access' }),
+      });
+
+      await expect(service.refreshToken({ refreshToken: 'old-refresh' })).resolves.toEqual({
         access_token: 'new-access',
       });
+      expect(connections.recordRefresh).toHaveBeenCalledWith(
+        'old-refresh',
+        { access_token: 'new-access' },
+        undefined,
+      );
     });
 
     it('gravar a conexão nunca segura a resposta do refresh', async () => {
@@ -531,7 +551,7 @@ describe('OAuthFacadeService', () => {
         status: 200,
         json: async () => ({ access_token: 'new-access' }),
       });
-      connections.recordIssuedToken.mockImplementation(() => new Promise(() => undefined));
+      connections.recordRefresh.mockImplementation(() => new Promise(() => undefined));
 
       const result = await Promise.race([
         service.refreshToken({ refreshToken: 'old-refresh', clientId: 'mcp_yyy' }),

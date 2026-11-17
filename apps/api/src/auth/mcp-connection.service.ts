@@ -8,8 +8,53 @@ import { UserProvisioningService } from './user-provisioning.service';
 /** Uma escrita de "último acesso" por conexão a cada minuto, no máximo. */
 export const TOUCH_INTERVAL_MS = 60_000;
 
-export const hashAccessToken = (token: string): string =>
+/** Validade do access token quando o Logto não manda `expires_in`. */
+const DEFAULT_ACCESS_TTL_S = 3600;
+/**
+ * Por quanto tempo um refresh token ainda acha a conexão. O Logto não diz a
+ * validade dele na resposta; 90 dias cobre o TTL do Logto (14 dias por padrão,
+ * renovável) com folga. Na rotação o velho sai na hora; este prazo só limpa o
+ * que ficou para trás (cliente que parou de renovar).
+ */
+const REFRESH_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+export const hashToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex');
+
+/** A parte da resposta do `/oidc/token` do Logto que importa aqui. */
+export interface IssuedTokens {
+  access_token?: unknown;
+  refresh_token?: unknown;
+  expires_in?: unknown;
+}
+
+const asToken = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.length > 0 ? v : undefined;
+
+function tokenRows(tokens: IssuedTokens, now: Date) {
+  const rows: { kind: 'access' | 'refresh'; hash: string; expiresAt: Date }[] = [];
+  const access = asToken(tokens.access_token);
+  if (access) {
+    const ttl =
+      typeof tokens.expires_in === 'number' && tokens.expires_in > 0
+        ? tokens.expires_in
+        : DEFAULT_ACCESS_TTL_S;
+    rows.push({
+      kind: 'access',
+      hash: hashToken(access),
+      expiresAt: new Date(now.getTime() + ttl * 1000),
+    });
+  }
+  const refresh = asToken(tokens.refresh_token);
+  if (refresh) {
+    rows.push({
+      kind: 'refresh',
+      hash: hashToken(refresh),
+      expiresAt: new Date(now.getTime() + REFRESH_RETENTION_MS),
+    });
+  }
+  return rows;
+}
 
 export interface McpConnectionView {
   id: string;
@@ -39,14 +84,74 @@ export class McpConnectionService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Liga (ou renova) o cliente à pessoa, com o hash do token que ele acabou de receber. */
-  async link(userId: string, clientId: string, accessToken: string): Promise<void> {
-    const accessTokenHash = hashAccessToken(accessToken);
-    await this.prisma.mcpOAuthConnection.upsert({
+  /**
+   * Troca do code: liga o cliente da autorização à pessoa e guarda os hashes dos
+   * tokens entregues. Um segundo login no mesmo cliente (outro aparelho) só
+   * soma tokens à mesma conexão.
+   */
+  async link(
+    userId: string,
+    clientId: string,
+    tokens: IssuedTokens,
+    now: Date = new Date(),
+  ): Promise<void> {
+    const connection = await this.prisma.mcpOAuthConnection.upsert({
       where: { userId_clientId: { userId, clientId } },
-      create: { userId, clientId, accessTokenHash },
-      update: { accessTokenHash, lastUsedAt: new Date() },
+      create: { userId, clientId, lastUsedAt: now },
+      update: { lastUsedAt: now },
+      select: { id: true },
     });
+    await this.saveTokens(connection.id, tokens, now);
+  }
+
+  /** A conexão dona do refresh token apresentado, se ele ainda vale. */
+  async findByRefreshToken(refreshToken: string, now: Date = new Date()) {
+    const row = await this.prisma.mcpOAuthConnectionToken.findFirst({
+      where: { hash: hashToken(refreshToken), kind: 'refresh', expiresAt: { gt: now } },
+      select: {
+        connection: {
+          select: { id: true, clientId: true, user: { select: { logtoSub: true } } },
+        },
+      },
+    });
+    return row?.connection ?? null;
+  }
+
+  /**
+   * Refresh: a conexão já foi achada pelo refresh token apresentado. Soma os
+   * tokens novos e, se o Logto girou o refresh token, apaga o velho.
+   */
+  async renew(
+    connectionId: string,
+    presentedRefreshToken: string,
+    tokens: IssuedTokens,
+    now: Date = new Date(),
+  ): Promise<void> {
+    await this.prisma.mcpOAuthConnection.update({
+      where: { id: connectionId },
+      data: { lastUsedAt: now },
+    });
+    await this.saveTokens(connectionId, tokens, now);
+    const rotated = asToken(tokens.refresh_token);
+    if (rotated && rotated !== presentedRefreshToken) {
+      await this.prisma.mcpOAuthConnectionToken.deleteMany({
+        where: { connectionId, hash: hashToken(presentedRefreshToken) },
+      });
+    }
+  }
+
+  private async saveTokens(connectionId: string, tokens: IssuedTokens, now: Date) {
+    const rows = tokenRows(tokens, now);
+    for (const row of rows) {
+      // upsert: sem rotação o Logto devolve o mesmo refresh token, que só ganha prazo.
+      await this.prisma.mcpOAuthConnectionToken.upsert({
+        where: { hash: row.hash },
+        create: { connectionId, ...row },
+        update: { expiresAt: row.expiresAt },
+      });
+    }
+    // Poda: tokens vencidos de qualquer conexão. O índice em `expiresAt` deixa barato.
+    await this.prisma.mcpOAuthConnectionToken.deleteMany({ where: { expiresAt: { lt: now } } });
   }
 
   /**
@@ -59,8 +164,10 @@ export class McpConnectionService {
     try {
       await this.prisma.mcpOAuthConnection.updateMany({
         where: {
-          accessTokenHash: hashAccessToken(accessToken),
           lastUsedAt: { lt: new Date(now.getTime() - TOUCH_INTERVAL_MS) },
+          tokens: {
+            some: { hash: hashToken(accessToken), kind: 'access', expiresAt: { gt: now } },
+          },
         },
         data: { lastUsedAt: now },
       });
@@ -96,21 +203,24 @@ export class McpConnectionService {
 }
 
 /**
- * Depois de cada `/oauth/token` que deu certo (code ou refresh), liga o cliente
- * ao dono do token.
+ * Depois de cada `/oauth/token` que deu certo, liga a conexão aos tokens
+ * entregues (revisão da #388).
  *
- * O dono sai **só** do access token que o Logto emitiu (o `sub` verificado pelo
- * JWKS), nunca de algo que o cliente manda: o `client_id` diz qual app, o token
- * diz de quem. Assim, renovar com o `client_id` de outra pessoa só cria uma
- * linha para quem renovou.
+ * - Troca do code: o cliente vem da autorização verificada (PKCE, redirect) e o
+ *   dono, **só** do access token que o Logto emitiu (`sub` verificado no JWKS).
+ * - Refresh: a conexão é a dona do refresh token apresentado. O `client_id` do
+ *   corpo não decide nada (é público e qualquer um pode mandar o de outro app) e
+ *   o refresh nunca cria conexão; se o token novo for de outra pessoa, nada muda.
  *
- * Nada aqui pode derrubar o login de um app de IA: o vínculo é contabilidade da
- * tela, e falhar nele (token opaco, banco lento) só deixa o "último acesso"
- * desatualizado.
+ * Nada aqui segura a resposta: o Logto já girou o refresh token quando
+ * respondeu, e um cliente que desiste por demora perde o único válido. Por isso
+ * os métodos públicos não devolvem promessa; o trabalho roda solto, com erro só
+ * no log. `flush()` existe para os testes esperarem.
  */
 @Injectable()
 export class McpConnectionRecorder {
   private readonly logger = new Logger(McpConnectionRecorder.name);
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -119,24 +229,66 @@ export class McpConnectionRecorder {
     private readonly connections: McpConnectionService,
   ) {}
 
-  async recordIssuedToken(
-    clientId: string | undefined,
-    tokens: Record<string, unknown>,
+  recordExchange(clientId: string, tokens: IssuedTokens): void {
+    this.run(`troca do code do cliente ${clientId}`, () => this.linkExchange(clientId, tokens));
+  }
+
+  recordRefresh(presentedRefreshToken: string, tokens: IssuedTokens, bodyClientId?: string): void {
+    this.run('refresh', () =>
+      this.renewByRefreshToken(presentedRefreshToken, tokens, bodyClientId),
+    );
+  }
+
+  /** Espera o que estiver gravando. Só para testes. */
+  async flush(): Promise<void> {
+    while (this.pending.size > 0) await Promise.all([...this.pending]);
+  }
+
+  private run(what: string, work: () => Promise<void>): void {
+    const task = Promise.resolve()
+      .then(work)
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `Não gravou a conexão MCP (${what}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      })
+      .finally(() => this.pending.delete(task));
+    this.pending.add(task);
+  }
+
+  private async linkExchange(clientId: string, tokens: IssuedTokens): Promise<void> {
+    const accessToken = asToken(tokens.access_token);
+    if (!accessToken) return;
+    const client = await this.prisma.mcpOAuthClient.findUnique({
+      where: { clientId },
+      select: { clientId: true },
+    });
+    if (!client) return;
+    const user = await this.provisioning.provision(await this.validation.verify(accessToken));
+    await this.connections.link(user.id, clientId, tokens);
+  }
+
+  private async renewByRefreshToken(
+    presented: string,
+    tokens: IssuedTokens,
+    bodyClientId: string | undefined,
   ): Promise<void> {
-    const accessToken = tokens.access_token;
-    if (!clientId || typeof accessToken !== 'string' || !accessToken) return;
-    try {
-      const client = await this.prisma.mcpOAuthClient.findUnique({
-        where: { clientId },
-        select: { clientId: true },
-      });
-      if (!client) return;
-      const user = await this.provisioning.provision(await this.validation.verify(accessToken));
-      await this.connections.link(user.id, clientId, accessToken);
-    } catch (err) {
+    const accessToken = asToken(tokens.access_token);
+    if (!presented || !accessToken) return;
+    // Sem linha: refresh token de antes desta tabela, vencido ou de ninguém.
+    // A conexão volta a aparecer quando a pessoa conectar de novo.
+    const connection = await this.connections.findByRefreshToken(presented);
+    if (!connection) return;
+    if (bodyClientId && bodyClientId !== connection.clientId) {
       this.logger.warn(
-        `Não ligou o cliente MCP ${clientId} a uma pessoa: ${err instanceof Error ? err.message : String(err)}`,
+        `Refresh com client_id ${bodyClientId} diferente do da conexão (${connection.clientId}); ignorado.`,
       );
     }
+    const { sub } = await this.validation.verify(accessToken);
+    if (sub !== connection.user.logtoSub) {
+      this.logger.warn(`Refresh devolveu token de outra pessoa para a conexão ${connection.id}.`);
+      return;
+    }
+    await this.connections.renew(connection.id, presented, tokens);
   }
 }

@@ -274,23 +274,41 @@ model McpOAuthClient {
 
 /// Quem autorizou cada cliente MCP (#388). A `McpOAuthAuthorization` não serve
 /// de vínculo: ela é apagada minutos depois do login (`expiresAt`). Esta linha
-/// nasce no `/oauth/token` (code e refresh), com o dono lido do token que o
-/// Logto emitiu, e é o que a tela "Conectar sua IA" lista.
+/// nasce só na troca do code no `/oauth/token` (cliente da autorização, dono lido
+/// do token que o Logto emitiu); o refresh só a renova, achada pelo refresh token.
+/// É o que a tela "Conectar sua IA" lista.
 model McpOAuthConnection {
-  id              String   @id @default(uuid())
-  userId          String
-  clientId        String
-  /// SHA-256 do último access token entregue a este cliente. É como o `/mcp`
-  /// sabe qual conexão chamou: o token é do app do facade no Logto, não do
-  /// cliente DCR. Só o hash fica; o token nunca é guardado.
-  accessTokenHash String?  @unique
-  createdAt       DateTime @default(now())
-  lastUsedAt      DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  clientId   String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
 
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client McpOAuthClient            @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  tokens McpOAuthConnectionToken[]
 
   @@unique([userId, clientId])
+}
+
+/// Hashes (sha256) dos tokens que o facade entregou a uma conexão (#388). O
+/// refresh token apresentado no /oauth/token diz qual conexão renovou; os access
+/// tokens dizem qual conexão o /mcp está usando. Vários por conexão (aparelhos,
+/// token antigo ainda válido); cada um vence no `expiresAt` e é apagado na
+/// gravação seguinte. Nunca guarda o token em si.
+model McpOAuthConnectionToken {
+  id           String   @id @default(uuid())
+  connectionId String
+  /// 'access' | 'refresh'
+  kind         String
+  hash         String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  connection McpOAuthConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([expiresAt])
 }
 
 model McpOAuthAuthorization {
@@ -840,10 +858,10 @@ model WorkoutPlan {
   fromOffer       PlanOffer?            @relation("PlanFromOffer", fields: [fromOfferId], references: [id], onDelete: SetNull)
   plannedSessions PlannedSession[]
 
+  @@unique([userId, fromSessionId])
   @@index([userId])
   @@index([userId, fromTemplateId])
   @@index([fromOfferId])
-  @@unique([userId, fromSessionId])
 }
 
 enum WorkoutPlanKind {
@@ -1029,7 +1047,7 @@ model WorkoutSession {
   /// cada exercício continuam em `SessionSet`, para estatística e "previous".
   circuit Json?
 
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan       WorkoutPlan?    @relation("SessionPlan", fields: [planId], references: [id])
   sets       SessionSet[]
   checkin    WorkoutCheckin?

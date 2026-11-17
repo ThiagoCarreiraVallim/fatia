@@ -54,16 +54,13 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
       return { sub: SUB };
     },
   } as unknown as JwtValidationService;
-  const service = new OAuthFacadeService(
+  const recorder = new McpConnectionRecorder(
     prisma,
-    config,
-    new McpConnectionRecorder(
-      prisma,
-      validation,
-      new UserProvisioningService(prisma),
-      new McpConnectionService(prisma),
-    ),
+    validation,
+    new UserProvisioningService(prisma),
+    new McpConnectionService(prisma),
   );
+  const service = new OAuthFacadeService(prisma, config, recorder);
 
   const fetchMock = jest.fn();
   const realFetch = global.fetch;
@@ -267,6 +264,8 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
     expect(client?.lastUsedAt).toBeTruthy();
 
     // #388: o cliente fica ligado a quem autorizou, e é isso que a tela lista.
+    // A gravação roda depois da resposta; o teste espera por ela.
+    await recorder.flush();
     const connection = await prisma.mcpOAuthConnection.findFirst({
       where: { clientId: registration.client_id },
       include: { user: true },

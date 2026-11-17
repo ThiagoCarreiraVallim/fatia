@@ -16,12 +16,19 @@ linha dela em `_prisma_migrations` e as tabelas antes do `migrate deploy`.
 ## Checklist
 
 - [x] 1. Logto fora do ar não vira `invalid_grant` (server_error / temporarily_unavailable)
-- [ ] 3. Gravar a conexão não atrasa o `/oauth/token` (fire-and-forget, `flush()` para testes)
-- [ ] 4/5. Conexão presa aos tokens: hash do refresh, vários access tokens com validade, `client_id` do corpo não manda
+- [x] 3. Gravar a conexão não atrasa o `/oauth/token` (fire-and-forget, `flush()` para testes)
+- [x] 4/5. Conexão presa aos tokens: hash do refresh, vários access tokens com validade, `client_id` do corpo não manda
 - [ ] 2. "Conectado" só nos últimos 30 dias; teste e "Não funcionou?" sempre acessíveis
 - [ ] 6. `?tutorial=` marca visto e some da URL ao fechar; clipboard do app com falha; MOBILE_PARITY.md
 - [ ] Docs (REDESIGN_PROGRESS, MCP_OAUTH), lint, typecheck, testes; HANDOFF apagado
 
 ## Próximo passo
 
-Item 3: teste com gravador que nunca resolve (vermelho), depois `record()` sem await no facade.
+Item 2: `connectionFor` com janela de 30 dias no api-client (vermelho), depois web e app.
+
+## Decisões (itens 3 e 4/5)
+
+- `McpOAuthConnectionToken` (kind access|refresh, hash único, expiresAt). Migration própria editada; `accessTokenHash` saiu.
+- Conexão só nasce na troca do code (cliente da autorização). Refresh acha a conexão pelo hash do refresh apresentado, confere o `sub` do token novo, soma tokens e apaga o refresh velho na rotação. `client_id` do corpo só vai para o log.
+- Recorder: `recordExchange`/`recordRefresh` devolvem void (sem await no facade); `flush()` para testes.
+- Conexões antigas (sem tokens na tabela) voltam a renovar só depois de reconectar.

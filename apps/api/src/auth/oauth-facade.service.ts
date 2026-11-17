@@ -276,15 +276,16 @@ export class OAuthFacadeService {
       where: { clientId: row.clientId },
       data: { lastUsedAt: new Date() },
     });
-    await this.connections.recordIssuedToken(row.clientId, tokenResp);
+    // Sem await: gravar a conexão nunca segura a entrega dos tokens (#388).
+    this.connections.recordExchange(row.clientId, tokenResp);
 
     return tokenResp;
   }
 
   /**
    * O `clientId` é o `client_id` que o cliente público manda no refresh (RFC
-   * 6749 §3.2.1). Só serve para dizer qual conexão renovou; o dono continua
-   * sendo o do token que o Logto devolve.
+   * 6749 §3.2.1). Não decide qual conexão renovou: quem decide é o refresh token
+   * apresentado. Um `client_id` que não bate só vai para o log.
    */
   async refreshToken(params: {
     refreshToken: string;
@@ -298,7 +299,9 @@ export class OAuthFacadeService {
       resource: this.resolveResource(params.resource),
       ...(params.scope ? { scope: params.scope } : {}),
     });
-    await this.connections.recordIssuedToken(params.clientId, tokenResp);
+    // Sem await: o Logto já girou o refresh token; atrasar a resposta pode
+    // fazer o cliente perder o único válido (#388).
+    this.connections.recordRefresh(params.refreshToken, tokenResp, params.clientId);
     return tokenResp;
   }
 

@@ -3285,11 +3285,8 @@ describe('isolamento entre usuários', () => {
     } as unknown as JwtValidationService;
     const provisioning = new UserProvisioningService(prisma);
     const connections = new McpConnectionService(prisma);
-    const facade = new OAuthFacadeService(
-      prisma,
-      config,
-      new McpConnectionRecorder(prisma, validation, provisioning, connections),
-    );
+    const recorder = new McpConnectionRecorder(prisma, validation, provisioning, connections);
+    const facade = new OAuthFacadeService(prisma, config, recorder);
     const users = new UsersController(
       {} as AccountService,
       {} as ProfileService,
@@ -3301,7 +3298,33 @@ describe('isolamento entre usuários', () => {
     let subA = '';
     let subB = '';
 
-    /** Conecta um app de IA como a pessoa do `sub`, pelo facade, e devolve o token. */
+    /** O Logto responde ao /oidc/token com estes tokens. */
+    function logtoIssues(sub: string) {
+      const accessToken = `at-${randomUUID()}`;
+      const refreshToken = `rt-${randomUUID()}`;
+      issued[accessToken] = sub;
+      global.fetch = (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      })) as unknown as typeof fetch;
+      return { accessToken, refreshToken };
+    }
+
+    /** Renova pelo facade e espera a gravação da conexão, que roda depois da resposta. */
+    async function refreshAs(sub: string, presented: string, clientId?: string) {
+      const tokens = logtoIssues(sub);
+      await facade.refreshToken({ refreshToken: presented, clientId });
+      await recorder.flush();
+      return tokens;
+    }
+
+    /** Conecta um app de IA como a pessoa do `sub`, pelo facade, e devolve os tokens. */
     async function connectAs(sub: string, clientName: string) {
       const reg = await facade.registerClient({ redirectUris: [REDIRECT], clientName });
       clientIds.push(reg.client_id);
@@ -3319,13 +3342,7 @@ describe('isolamento entre usuários', () => {
       );
       const state = new URL(logtoAuthorizeUrl).searchParams.get('state')!;
       const { redirectUrl } = await facade.handleCallback(state, `logto-${randomUUID()}`);
-      const accessToken = `at-${randomUUID()}`;
-      issued[accessToken] = sub;
-      global.fetch = (async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ access_token: accessToken, token_type: 'Bearer' }),
-      })) as unknown as typeof fetch;
+      const tokens = logtoIssues(sub);
       await facade.exchangeCode(
         {
           code: new URL(redirectUrl).searchParams.get('code')!,
@@ -3335,7 +3352,8 @@ describe('isolamento entre usuários', () => {
         },
         CALLBACK,
       );
-      return { clientId: reg.client_id, accessToken };
+      await recorder.flush();
+      return { clientId: reg.client_id, ...tokens };
     }
 
     /** O guard de toda rota, com o token no cabeçalho, como o /mcp recebe. */
@@ -3358,7 +3376,8 @@ describe('isolamento entre usuários', () => {
       return req.user!.id;
     }
 
-    let claudeA = { clientId: '', accessToken: '' };
+    let claudeA = { clientId: '', accessToken: '', refreshToken: '' };
+    let claudeB = { clientId: '', accessToken: '', refreshToken: '' };
 
     beforeAll(async () => {
       subA = (await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } })).logtoSub;
@@ -3387,7 +3406,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('o user-B conectando o mesmo tipo de app ganha a própria conexão, sem herdar a do user-A', async () => {
-      const claudeB = await connectAs(subB, 'Claude');
+      claudeB = await connectAs(subB, 'Claude');
       expect(await guardUser(claudeB.accessToken)).toBe(owned.userB);
 
       const deB = await users.mcpConnections({ id: owned.userB } as never);
@@ -3403,26 +3422,46 @@ describe('isolamento entre usuários', () => {
       );
     });
 
-    it('refresh com o client_id do user-A e o token do user-B não liga o cliente do A ao B', async () => {
-      // O dono vem do token que o Logto emitiu, nunca do client_id do corpo:
-      // quem renova com o cliente do vizinho só cria a própria linha.
-      const tokenB = `at-${randomUUID()}`;
-      issued[tokenB] = subB;
-      global.fetch = (async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ access_token: tokenB }),
-      })) as unknown as typeof fetch;
-      await facade.refreshToken({ refreshToken: 'rt', clientId: claudeA.clientId });
+    // Revisão da #388: o client_id do corpo é público. B mandando o do app da A
+    // não pode criar linha de B no cliente da A nem renovar a conexão da A.
+    it('refresh do user-B com o client_id do app do user-A não cria linha do B no cliente da A', async () => {
+      const novo = await refreshAs(subB, claudeB.refreshToken, claudeA.clientId);
+      claudeB = { ...claudeB, ...novo };
 
-      const doA = await prisma.mcpOAuthConnection.findUniqueOrThrow({
-        where: { userId_clientId: { userId: owned.userA, clientId: claudeA.clientId } },
+      const noClienteDaA = await prisma.mcpOAuthConnection.findMany({
+        where: { clientId: claudeA.clientId },
       });
-      expect(doA.accessTokenHash).toBe(
-        createHash('sha256').update(claudeA.accessToken).digest('hex'),
+      expect(noClienteDaA.map((c) => c.userId)).toEqual([owned.userA]);
+      // O token novo do B não ficou preso à conexão da A.
+      const daA = await prisma.mcpOAuthConnectionToken.findMany({
+        where: { connection: { userId: owned.userA, clientId: claudeA.clientId } },
+      });
+      expect(daA.map((t) => t.hash)).not.toContain(
+        createHash('sha256').update(novo.accessToken).digest('hex'),
       );
-      const deA = await users.mcpConnections({ id: owned.userA } as never);
-      expect(deA.connections).toHaveLength(1);
+      expect((await users.mcpConnections({ id: owned.userB } as never)).connections).toHaveLength(
+        1,
+      );
+    });
+
+    it('refresh do user-A sem client_id renova a conexão da A e só ela', async () => {
+      const novo = await refreshAs(subA, claudeA.refreshToken);
+      claudeA = { ...claudeA, ...novo };
+
+      const antigo = new Date('2026-01-01T00:00:00Z');
+      await prisma.mcpOAuthConnection.updateMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+        data: { lastUsedAt: antigo },
+      });
+      await connections.touch(novo.accessToken);
+
+      const linhas = await prisma.mcpOAuthConnection.findMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+      });
+      for (const linha of linhas) {
+        const daA = linha.userId === owned.userA && linha.clientId === claudeA.clientId;
+        expect(linha.lastUsedAt.getTime() > antigo.getTime()).toBe(daA);
+      }
     });
 
     it('o toque do /mcp com o token do user-A não mexe no último acesso do user-B', async () => {
