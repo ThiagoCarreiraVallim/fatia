@@ -144,6 +144,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
     'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
+  benefitsCreated:
+    'Benefícios de parceiros que o dono cadastrou para a comunidade (#393): texto, cupom e ' +
+    'link do parceiro, conteúdo B2B do grupo, nada do titular. Apagar a conta só zera o autor.',
   pendingNotices:
     'Contagem de avisos esperando o fim de uma janela de 10 minutos (Fase 9g): estado de ' +
     'entrega que some sozinho, sem nada do conteúdo — e apaga com a conta.',
