@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiAccessService, type Pagador } from './ai-access.service';
 import { AiUsageService } from './ai-usage.service';
+import { AiConsentService } from '../chat/consent/ai-consent.service';
 import type { AiCallUnits } from './ai-pricing';
 import {
   AgentAdapter,
@@ -48,6 +49,7 @@ export class HostedAiService {
     private readonly access: AiAccessService,
     private readonly usage: AiUsageService,
     private readonly agent: AgentAdapter,
+    private readonly consent: AiConsentService,
   ) {}
 
   /** `true` quando esta instância tem agente configurado. */
@@ -142,8 +144,13 @@ export class HostedAiService {
     return generated.title;
   }
 
-  /** Plano antes de cota (ADR 024), e quem paga (ADR 025). */
+  /**
+   * Aceite, plano e cota (ADR 024), e quem paga (ADR 025). O aceite vem primeiro e mora aqui,
+   * na fronteira, e não em cada rota (#384): turno, ditado, foto do prato e rótulo passam todos
+   * por este portão, e nada sai para o provedor sem o "Concordo" da pessoa.
+   */
   private async gate(userId: string): Promise<Pagador> {
+    await this.consent.assertChatConsent(userId);
     return AiAccessService.pagoPor(await this.access.assertPodeUsar(userId));
   }
 

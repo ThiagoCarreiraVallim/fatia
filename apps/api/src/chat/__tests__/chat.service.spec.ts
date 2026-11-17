@@ -27,6 +27,9 @@ import type {
   TurnOutcome,
 } from '../conversation.service';
 
+/** A pessoa já aceitou a IA: o portão do aceite tem teste próprio (`hosted-ai.service.spec`). */
+const COM_ACEITE = { assertChatConsent: async () => undefined } as unknown as AiConsentService;
+
 /**
  * O turno de chat (#249).
  *
@@ -293,7 +296,7 @@ function montar(
 
   const runs = new ChatRunRegistry();
   const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
-  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent, COM_ACEITE);
   const service = new ChatService(
     conversas as unknown as ConversationService,
     hostedAi,

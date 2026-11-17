@@ -11,6 +11,10 @@ import { HostedAiService } from '../../ai/hosted-ai.service';
 import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
 import { removerMetadadosDoJpeg } from '../helpers/strip-exif';
 import { JPEG_COM_EXIF_GPS } from '../helpers/jpeg-com-exif.fixture';
+import type { AiConsentService } from '../../chat/consent/ai-consent.service';
+
+/** A pessoa já aceitou a IA: o portão do aceite tem teste próprio (`hosted-ai.service.spec`). */
+const COM_ACEITE = { assertChatConsent: async () => undefined } as unknown as AiConsentService;
 
 /**
  * Leitura do rótulo (#375, #333): foto da tabela nutricional → valores para a
@@ -63,7 +67,7 @@ function build(entitlement: AiEntitlement = PRO) {
     { aiTierForUser: async () => entitlement, exigePlano: () => true },
     usage as unknown as AiUsageService,
   );
-  const hosted = new HostedAiService(access, usage as unknown as AiUsageService, agent);
+  const hosted = new HostedAiService(access, usage as unknown as AiUsageService, agent, COM_ACEITE);
   return { service: new LabelReadingService(hosted), agent, usage };
 }
 

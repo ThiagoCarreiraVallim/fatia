@@ -1,4 +1,5 @@
-import { Logger } from '@nestjs/common';
+import { ForbiddenException, Logger } from '@nestjs/common';
+import { AiConsentService } from '../../chat/consent/ai-consent.service';
 import type { AiPaidBy } from '@prisma/client';
 import { AiAccessService, AiPlanRequiredException } from '../ai-access.service';
 import { AiQuotaExceededException } from '../ai-quota';
@@ -49,7 +50,7 @@ const SEAT: AiEntitlement = {
   },
 };
 
-function build(entitlement: AiEntitlement = SEAT) {
+function build(entitlement: AiEntitlement = SEAT, consented = true) {
   const agent = new FakeAgentAdapter();
   const usage = {
     assertDentroDaCota: jest.fn(async (_userId: string, _now?: Date): Promise<void> => undefined),
@@ -70,8 +71,20 @@ function build(entitlement: AiEntitlement = SEAT) {
     { aiTierForUser: async () => entitlement, exigePlano: () => true },
     usage as unknown as AiUsageService,
   );
-  const service = new HostedAiService(access, usage as unknown as AiUsageService, agent);
-  return { service, agent, usage };
+  const consent = {
+    assertChatConsent: jest.fn(async (_userId: string) => {
+      if (!consented) {
+        throw new ForbiddenException({ code: 'AI_CONSENT_REQUIRED', message: 'sem aceite' });
+      }
+    }),
+  };
+  const service = new HostedAiService(
+    access,
+    usage as unknown as AiUsageService,
+    agent,
+    consent as unknown as AiConsentService,
+  );
+  return { service, agent, usage, consent };
 }
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
@@ -353,5 +366,33 @@ describe('HostedAiService — falha ao gravar não derruba a resposta', () => {
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       expect.stringMatching(/Uso de IA não gravado \(meal_photo\)/),
     );
+  });
+});
+
+describe('HostedAiService — aceite da IA em toda chamada (#384)', () => {
+  it('sem o aceite, nada sai para o agente: turno, ditado, foto do prato e rótulo', async () => {
+    const { service, agent, usage } = build(SEAT, false);
+    const chamadas: [string, () => Promise<unknown>][] = [
+      ['turno', () => service.openTurn(USER, turnInput)],
+      ['ditado', () => service.transcribe(USER, Buffer.from('a'), 'audio/webm')],
+      ['foto do prato', () => service.recognizeMeal(USER, JPEG)],
+      ['rótulo', () => service.readLabel(USER, JPEG)],
+    ];
+    for (const [, chamar] of chamadas) {
+      await expect(chamar()).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'AI_CONSENT_REQUIRED' }),
+      });
+    }
+    for (const metodo of ['openTurn', 'transcribe', 'recognizeMeal', 'readLabel'] as const) {
+      expect([metodo, agent[metodo].mock.calls.length]).toEqual([metodo, 0]);
+    }
+    expect(usage.record).not.toHaveBeenCalled();
+  });
+
+  it('com o aceite, confere a cada chamada', async () => {
+    const { service, consent } = build(SEAT, true);
+    await service.recognizeMeal(USER, JPEG);
+    await service.transcribe(USER, Buffer.from('a'), 'audio/webm');
+    expect(consent.assertChatConsent).toHaveBeenCalledTimes(2);
   });
 });

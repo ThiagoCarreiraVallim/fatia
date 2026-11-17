@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { ChatController } from './chat.controller';
-import { AiConsentService } from './consent/ai-consent.service';
 import { ChatService } from './chat.service';
 import { StorageModule } from '../storage/storage.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -43,7 +42,6 @@ import { SharingModule } from '../sharing/sharing.module';
     ForgetMemoryTool,
     ListMemoriesTool,
     PreviaDaAcaoService,
-    AiConsentService,
   ],
   exports: [ConversationService, CheckpointPurgeService],
 })

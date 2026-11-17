@@ -12,6 +12,10 @@ import type { AiUsageService } from '../../ai/ai-usage.service';
 import type { AgentMealRecognition, AgentRecognizedItem } from '../../ai/agent.adapter';
 import { HostedAiService } from '../../ai/hosted-ai.service';
 import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
+import type { AiConsentService } from '../../chat/consent/ai-consent.service';
+
+/** A pessoa já aceitou a IA: o portão do aceite tem teste próprio (`hosted-ai.service.spec`). */
+const COM_ACEITE = { assertChatConsent: async () => undefined } as unknown as AiConsentService;
 
 /**
  * O agente é um adapter falso (`FakeAgentAdapter`): o HTTP — corpo sem
@@ -159,7 +163,7 @@ function montar(opcoes: CenarioOpcoes = {}) {
   );
   const agent = new FakeAgentAdapter();
   agent.configured.mockReturnValue(opcoes.configured ?? true);
-  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent, COM_ACEITE);
   const service = new MealRecognitionService(foods, hostedAi);
 
   return { service, search, uso, agent };
