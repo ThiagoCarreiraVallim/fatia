@@ -12,6 +12,7 @@ import {
   historyTotals,
   repeatPlanOf,
   sessionDetailTitle,
+  sessionDetailBody,
   sessionPlanAction,
   sessionHero,
   sessionKindLabel,
@@ -286,6 +287,28 @@ describe('detalhe da sessão (Al-T11, Al-T11b)', () => {
         KM,
       ),
     ).toEqual({ title: 'Maior distância na esteira', before: 'antes 4,6 km' });
+  });
+
+  it('o corpo do detalhe: circuito (Al-T11c), só cardio (Al-T11b) ou força (Al-T11)', () => {
+    const circuit = { format: 'AMRAP' } as unknown as NonNullable<WorkoutSessionSummary['circuit']>;
+    expect(sessionDetailBody({ ...summary(), kind: 'circuit', circuit })).toEqual({
+      kind: 'circuit',
+      circuit,
+      repeatPlanId: summary().planId,
+    });
+    // Circuito apagado: o resultado fica, o "Repetir circuito" some.
+    expect(sessionDetailBody({ ...summary(), planId: null, circuit })).toMatchObject({
+      kind: 'circuit',
+      repeatPlanId: null,
+    });
+    expect(sessionDetailBody(runSummary())).toEqual({ kind: 'cardio' });
+    expect(sessionDetailBody(summary())).toEqual({ kind: 'strength' });
+  });
+
+  it('circuito não vira plano, nem com o resumo sem `kind` (#380)', () => {
+    const circuit = { format: 'AMRAP' } as unknown as NonNullable<WorkoutSessionSummary['circuit']>;
+    expect(sessionPlanAction({ ...runSummary(), kind: undefined, circuit })).toBeNull();
+    expect(sessionPlanAction({ ...runSummary(), kind: 'circuit', circuit })).toBeNull();
   });
 
   it('livre oferece salvar como plano; já salvo, ver o plano', () => {

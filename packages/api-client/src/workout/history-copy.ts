@@ -127,9 +127,8 @@ export interface SessionHero {
 }
 
 /**
- * O cartão de cima do detalhe. **Ponto de extensão (#380):** a sessão de
- * circuito (Al-T11c: rounds, duração, média por round, cartão amarelo) entra
- * aqui como um terceiro `tone`, quando o resumo trouxer o resultado do circuito.
+ * O cartão de cima do detalhe de força ou cardio. O circuito (Al-T11c) tem o
+ * cartão dele (`CircuitResultBlocks`): veja `sessionDetailBody`.
  */
 export function sessionHero(summary: WorkoutSessionSummary, units: Units): SessionHero {
   const name = (summary.planName ?? 'Treino livre').toUpperCase();
@@ -195,6 +194,26 @@ export function cardioRecordLine(
  * "Repetir" (#381): a sessão com plano repete o plano; a livre começa outra
  * livre com os mesmos exercícios, que entram como escolhidos e ainda sem série.
  */
+/**
+ * O corpo do detalhe do histórico: o circuito (Al-T11c, com "Repetir circuito"
+ * quando o circuito ainda existe), só cardio (Al-T11b) ou força (Al-T11).
+ */
+export type SessionDetailBody =
+  | {
+      kind: 'circuit';
+      circuit: NonNullable<WorkoutSessionSummary['circuit']>;
+      repeatPlanId: string | null;
+    }
+  | { kind: 'cardio' }
+  | { kind: 'strength' };
+
+export function sessionDetailBody(summary: WorkoutSessionSummary): SessionDetailBody {
+  if (summary.circuit) {
+    return { kind: 'circuit', circuit: summary.circuit, repeatPlanId: summary.planId };
+  }
+  return cardioOnly(summary) ? { kind: 'cardio' } : { kind: 'strength' };
+}
+
 /** O que o detalhe oferece ao lado do "Repetir": salvar como plano, ou ver o plano salvo. */
 export type SessionPlanAction = { kind: 'save' } | { kind: 'view'; planId: string } | null;
 
@@ -204,6 +223,8 @@ export type SessionPlanAction = { kind: 'save' } | { kind: 'view'; planId: strin
  * salva, a sessão leva ao plano que virou ("Ver plano"), em vez de criar outro.
  */
 export function sessionPlanAction(summary: WorkoutSessionSummary): SessionPlanAction {
+  // Circuito não vira plano de força (#380), nem num resumo antigo sem `kind`.
+  if (summary.circuit) return null;
   const kind = summary.kind ?? (summary.planId ? 'plan' : 'free');
   if (kind !== 'free') return null;
   return summary.savedPlanId ? { kind: 'view', planId: summary.savedPlanId } : { kind: 'save' };

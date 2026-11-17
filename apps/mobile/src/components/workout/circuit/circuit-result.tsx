@@ -6,6 +6,7 @@ import {
   circuitHeader,
   circuitResultFacts,
   circuitRoundRows,
+  feelingOf,
   type CircuitSummary,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
@@ -14,10 +15,17 @@ import { ExerciseGroupLine } from '@/components/workout/plan-exercise-row';
 
 /**
  * O circuito no "Treino feito" (Al-T5) com o desenho do Al-T11c. Réplica de
- * `apps/web/src/components/workout/circuit/circuit-result.tsx`; a #381
- * reaproveita no histórico.
+ * `apps/web/src/components/workout/circuit/circuit-result.tsx`. O detalhe do
+ * histórico passa `feeling` e ganha o terceiro cartão, "como foi".
  */
-export function CircuitResultBlocks({ circuit }: { circuit: CircuitSummary }) {
+export function CircuitResultBlocks({
+  circuit,
+  feeling,
+}: {
+  circuit: CircuitSummary;
+  /** "Como foi o treino" (1 a 5). Sem a prop, o cartão não aparece. */
+  feeling?: number | null;
+}) {
   const facts = circuitResultFacts(circuit);
   const comparison = circuitComparisonLabel(circuit);
   const rows = circuitRoundRows(circuit);
@@ -67,6 +75,16 @@ export function CircuitResultBlocks({ circuit }: { circuit: CircuitSummary }) {
           <Text className="font-sans-bold text-[22px] text-foreground">{circuit.totalReps}</Text>
           <Text className="text-xs text-faint">reps no total</Text>
         </View>
+        {feeling !== undefined ? (
+          <View
+            accessible
+            accessibilityLabel={`como foi: ${feelingOf(feeling)?.label ?? 'sem marca'}`}
+            className="flex-1 gap-0.5 rounded-[18px] bg-card p-3.5"
+          >
+            <Text className="text-[22px]">{feelingOf(feeling)?.emoji ?? '—'}</Text>
+            <Text className="text-xs text-faint">como foi</Text>
+          </View>
+        ) : null}
       </View>
 
       {rows.length > 0 ? (

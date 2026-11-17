@@ -5,6 +5,7 @@ import {
   circuitHeader,
   circuitResultFacts,
   circuitRoundRows,
+  feelingOf,
   type CircuitSummary,
 } from '@fatia/api-client';
 import { ExerciseGroupLine } from '@/components/workout/plan-exercise-row';
@@ -13,10 +14,17 @@ import { cn } from '@/lib/utils';
 /**
  * O circuito no "Treino feito" (Al-T5) com o desenho do detalhe da sessão de
  * circuito (Al-T11c): a faixa com os números, a comparação com a última vez, o
- * tempo de cada round e o total de cada exercício. A #381 reaproveita no
- * histórico.
+ * tempo de cada round e o total de cada exercício. O detalhe do histórico
+ * (`history/[id]`) passa `feeling` e ganha o terceiro cartão, "como foi".
  */
-export function CircuitResultBlocks({ circuit }: { circuit: CircuitSummary }) {
+export function CircuitResultBlocks({
+  circuit,
+  feeling,
+}: {
+  circuit: CircuitSummary;
+  /** "Como foi o treino" (1 a 5). Sem a prop, o cartão não aparece (o Al-T5 pergunta embaixo). */
+  feeling?: number | null;
+}) {
   const facts = circuitResultFacts(circuit);
   const comparison = circuitComparisonLabel(circuit);
   const rows = circuitRoundRows(circuit);
@@ -42,7 +50,7 @@ export function CircuitResultBlocks({ circuit }: { circuit: CircuitSummary }) {
         </dl>
       </section>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className={cn('grid gap-2', feeling === undefined ? 'grid-cols-2' : 'grid-cols-3')}>
         {comparison && (
           <p
             className={cn(
@@ -57,6 +65,17 @@ export function CircuitResultBlocks({ circuit }: { circuit: CircuitSummary }) {
           <span className="text-[22px] font-bold tabular-nums">{circuit.totalReps}</span>
           <span className="text-xs text-faint">reps no total</span>
         </p>
+        {feeling !== undefined && (
+          <p className="flex flex-col gap-0.5 rounded-[18px] bg-card p-3.5">
+            <span
+              className="text-[22px] font-bold"
+              aria-label={feelingOf(feeling)?.label ?? 'sem marca'}
+            >
+              {feelingOf(feeling)?.emoji ?? '—'}
+            </span>
+            <span className="text-xs text-faint">como foi</span>
+          </p>
+        )}
       </div>
 
       {rows.length > 0 && (

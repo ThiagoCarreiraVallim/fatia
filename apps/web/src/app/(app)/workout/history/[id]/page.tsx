@@ -14,6 +14,7 @@ import {
   muscleGroupName,
   repeatPlanOf,
   sessionPlanAction,
+  sessionDetailBody,
   sessionDetailTitle,
   sessionHero,
   setLine,
@@ -27,6 +28,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/elements/error-state';
 import { ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { useStartWithExercises } from '@/components/workout/use-start-with-exercises';
+import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
+import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { cn } from '@/lib/utils';
 
@@ -43,10 +46,9 @@ const HERO_TONE = {
  * treino novo com os mesmos exercícios. Sessão de treino livre ainda pode
  * virar plano ("Salvar como plano").
  *
- * **Ponto de extensão (#380):** a sessão de circuito (`kind === 'circuit'`,
- * Al-T11c: rounds, média e tempo de cada round, "Repetir circuito") ganha o
- * próprio corpo aqui e o terceiro tom em `sessionHero`, quando o resumo trouxer
- * o resultado do circuito. Até lá nenhuma sessão é circuito.
+ * A sessão de circuito (#380, prancha `Al-T11c`) tem o corpo dela
+ * (`CircuitDetail`): rounds, média, comparação, tempo de cada round, os
+ * exercícios e "Repetir circuito". Não vira plano nem corrige séries.
  */
 export default function HistorySessionPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +98,76 @@ export default function HistorySessionPage() {
       />
     );
   }
+  const body = sessionDetailBody(summary.data);
+  if (body.kind === 'circuit') {
+    return (
+      <CircuitDetail
+        summary={summary.data}
+        circuit={body.circuit}
+        repeatPlanId={body.repeatPlanId}
+      />
+    );
+  }
   return <Detail summary={summary.data} />;
+}
+
+/** Al-T11c: o circuito feito, com "Repetir circuito" (some se o circuito foi apagado). */
+function CircuitDetail({
+  summary,
+  circuit,
+  repeatPlanId: planId,
+}: {
+  summary: WorkoutSessionSummary;
+  circuit: NonNullable<WorkoutSessionSummary['circuit']>;
+  repeatPlanId: string | null;
+}) {
+  const start = useStartCircuit();
+  const repeatNow = () => {
+    if (planId) start.mutate(planId);
+  };
+  return (
+    <DockedPage className="space-y-4 px-4 pt-2">
+      {planId && (
+        <TopBarActions>
+          <button
+            type="button"
+            aria-label="Repetir este circuito hoje"
+            disabled={start.isPending}
+            onClick={repeatNow}
+            className={topBarActionClass}
+          >
+            <Repeat size={18} aria-hidden />
+          </button>
+        </TopBarActions>
+      )}
+
+      <CircuitResultBlocks circuit={circuit} feeling={summary.feeling ?? summary.overallFeeling} />
+
+      {summary.notes && (
+        <p className="rounded-card bg-card px-4 py-3.5 text-xs text-faint">“{summary.notes}”</p>
+      )}
+
+      {start.isError && (
+        <p role="alert" className="text-sm text-danger">
+          Não foi possível começar o circuito. Tente de novo.
+        </p>
+      )}
+
+      {planId && (
+        <DockedAction>
+          <button
+            type="button"
+            disabled={start.isPending}
+            onClick={repeatNow}
+            className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-foreground text-[15px] font-bold text-background disabled:opacity-60"
+          >
+            <Repeat size={16} aria-hidden />
+            Repetir circuito
+          </button>
+        </DockedAction>
+      )}
+    </DockedPage>
+  );
 }
 
 function Detail({ summary }: { summary: WorkoutSessionSummary }) {

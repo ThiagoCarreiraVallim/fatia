@@ -58,7 +58,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 
 - [x] A merge origin/main (5fff5d31): 153 tools, 84 de escrita, SHA novo, payload regerado
 - [x] B1 session-kind circuito + filtro Circuitos
-- [ ] B2 detalhe do histórico com CircuitResultBlocks (web/app) + Repetir circuito
+- [x] B2 detalhe do histórico com CircuitResultBlocks (web/app) + Repetir circuito
 - [ ] B3 log() com fromPlan/planName
 - [ ] B4 Salvar como plano recusa circuito (400) + esconder botão
 - [ ] C1 resultado recalculado no servidor / limites sem eventos

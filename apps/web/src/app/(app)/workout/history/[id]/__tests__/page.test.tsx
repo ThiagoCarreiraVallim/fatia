@@ -166,6 +166,57 @@ const cardio: WorkoutSessionSummary = {
   ],
 };
 
+const circuitSession: WorkoutSessionSummary = {
+  ...base,
+  kind: 'circuit',
+  planId: 'circuito-1',
+  planName: 'AMRAP 12',
+  durationMinutes: 12,
+  sets: 18,
+  volumeKg: 0,
+  feeling: 5,
+  notes: null,
+  exercises: [],
+  circuit: {
+    format: 'AMRAP',
+    name: 'AMRAP 12',
+    config: { durationSeconds: 720 },
+    roundsCompleted: 4,
+    partialExercises: 2,
+    stoppedAt: { exerciseId: 3, name: 'Box jump' },
+    roundSeconds: [138, 144, 151, 160],
+    partialRoundSeconds: 127,
+    averageRoundSeconds: 148,
+    elapsedSeconds: 720,
+    finalTimeSeconds: null,
+    intervalsCompleted: null,
+    intervalsTotal: null,
+    completed: true,
+    totalReps: 148,
+    exercises: [
+      {
+        exerciseId: 1,
+        name: 'Kettlebell swing',
+        muscleGroup: 'pernas',
+        unit: 'REPS',
+        target: 15,
+        sets: 5,
+        reps: 67,
+        seconds: 0,
+      },
+    ],
+    previous: null,
+    comparison: {
+      verdict: 'better',
+      roundsDelta: 1,
+      finalTimeDeltaSeconds: null,
+      intervalsDelta: null,
+      repsDelta: 12,
+      previousFinalTimeSeconds: null,
+    },
+  },
+};
+
 function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -213,6 +264,40 @@ describe('Sessão do histórico', () => {
     );
     // Sessão de plano: repete o plano, não vira plano de novo.
     expect(screen.queryByRole('button', { name: 'Salvar como plano' })).toBeNull();
+  });
+
+  it('circuito (Al-T11c): rounds, média, comparação, tempo de cada round, exercícios e "Repetir circuito"', async () => {
+    getSummary.mockResolvedValue(circuitSession);
+    startSession.mockResolvedValue({ id: 'nova' } as never);
+    const user = userEvent.setup();
+    renderPage();
+    const band = await screen.findByRole('region', { name: 'Resultado do circuito' });
+    expect(within(band).getByText('Concluído · AMRAP 12')).toBeInTheDocument();
+    expect(within(band).getByText('4 + 2')).toBeInTheDocument();
+    expect(within(band).getByText('2:28')).toBeInTheDocument();
+    expect(screen.getByText('+1 round vs. a última vez')).toBeInTheDocument();
+    expect(screen.getByText('148')).toBeInTheDocument();
+    expect(screen.getByLabelText('No limite')).toBeInTheDocument();
+    const rounds = screen.getByRole('region', { name: 'Tempo de cada round' });
+    expect(within(rounds).getByText('2:07*')).toBeInTheDocument();
+    const exercises = screen.getByRole('region', { name: 'Exercícios' });
+    expect(within(exercises).getByText('67 reps')).toBeInTheDocument();
+    // Sem o cartão de força, sem corrigir séries e sem virar plano.
+    expect(screen.queryByRole('region', { name: 'Resumo do treino' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Corrigir séries deste treino' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salvar como plano' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Repetir circuito' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/workout/circuit/nova'));
+    expect(startSession.mock.calls[0]![0].planId).toBe('circuito-1');
+  });
+
+  it('circuito com o plano apagado não oferece repetir', async () => {
+    getSummary.mockResolvedValue({ ...circuitSession, planId: null });
+    renderPage();
+    await screen.findByRole('region', { name: 'Resultado do circuito' });
+    expect(screen.queryByRole('button', { name: 'Repetir circuito' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Repetir/ })).toBeNull();
   });
 
   it('a seta de voltar leva ao histórico', async () => {
