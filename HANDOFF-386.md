@@ -26,7 +26,7 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - [x] API: isolamento (user-isolation.spec.ts) + export (proTrialStartedAt, paymentMethod, trialEndsAt, reminders)
 - [x] api-client: tipos e visão pura das telas (regra das lojas) + testes (`plan-status.ts`)
 - [x] App: Al-M1 (`chat-locked.tsx`), Al-M2/M3 (`store-offer.tsx`), M5/M13/M13d (`plan-status-card.tsx`), selo do Você (`planBadge`)
-- [ ] Web: idem, com Asaas
+- [x] Web: `plan-screen.tsx` (Si-04 dentro do Meu plano: período, CPF, Pix/Boleto/Cartão, teste; `?periodo=&pagamento=`), `upsell-ia.tsx` (Al-M1), selo do Você
 - [ ] Site: Si-04
 - [x] Envs em docker-compose.prod.yml e .env.example
 - [ ] Docs: BILLING.md, REDESIGN_PROGRESS.md
@@ -54,6 +54,8 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
   "Tenho código" no chat vai a `/community?join=1` (a folha precisa da camada da tela); no plano abre o `JoinByCodeDrawer` direto.
   `planOffer`/`webManageNote` removidos ("entre pelo navegador" apontava para fora do app).
 
+- Web: com teste, o checkout não abre aba (nada a pagar hoje); sem teste, abre a aba no clique. Pendente: "Trocar a forma de pagamento" reabre o formulário (a API cancela o pendente de outra forma).
+
 ## Próximo passo
 
-Web: `plan-screen.tsx` com `planStatusView` (surface web) + Si-04 (forma de pagamento Pix/Boleto/Cartão, CPF, teste), lê `?periodo=&pagamento=` do site; `upsell-ia.tsx` como Al-M1; selo do Você com `planBadge`. Depois site Si-04 (`apps/site/src/pages/pro.astro`).
+Site Si-04: `apps/site/src/pages/pro.astro` (sem sessão: escolhe período e forma de pagamento e manda para `${appUrl}/plan?periodo=&pagamento=#assinar`; CPF é digitado na web). Depois docs (BILLING.md, REDESIGN_PROGRESS.md), lint/typecheck/testes, commit final sem este arquivo.

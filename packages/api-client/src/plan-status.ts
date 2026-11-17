@@ -210,7 +210,7 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
       body: atrasada
         ? `O pagamento da comunidade está em atraso. A IA segue até ${day(plan.graceEndsAt)}; quem resolve é a equipe.`
         : 'Se sair, volta ao Free sem perder nada.',
-      featuresTitle: program ? `PRO até ${program.until}` : 'Seu PRO inclui',
+      featuresTitle: 'Seu PRO inclui',
       actions: [{ kind: 'open-ai', label: 'Abrir a IA' }],
       community: {
         title: `Seu PRO é pago pela ${quem}`,

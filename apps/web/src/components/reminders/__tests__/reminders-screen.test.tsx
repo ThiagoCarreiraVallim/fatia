@@ -97,6 +97,7 @@ const ALL = {
   SCHEDULE_REMINDER: true,
   BIRTHDAY: false,
   REMINDERS: true,
+  BILLING: true,
 };
 
 const SETTINGS: NotificationSettings = {
