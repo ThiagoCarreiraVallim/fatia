@@ -14,6 +14,8 @@ export type GroupType = 'SPONSORED' | 'SOCIAL';
 export type GroupRole = 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
 export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'LEFT' | 'REMOVED' | 'BANNED';
 export type JoinPolicy = 'OPEN' | 'APPROVAL' | 'INVITE_ONLY';
+/** Igual a `GroupVisibility` do painel (`community-admin.ts`). */
+type Visibility = 'PUBLIC' | 'PRIVATE';
 
 /** O que a pessoa escolhe ao entrar: nada vem marcado, e recusar tudo ainda entra. */
 export interface JoinConsent {
@@ -46,6 +48,25 @@ export interface MyGroup {
   postPolicy: PostPolicy;
   /** O que a comunidade exige que membros compartilhem (vale para quem entra como membro). */
   requiredSharingScopes: ShareScope[];
+  visibility: Visibility;
+  /** Fuso da comunidade (IANA). */
+  timezone: string;
+  /** Pessoas ativas. */
+  memberCount: number;
+  /** Posts dos outros desde a última visita ao mural. */
+  newPostCount: number;
+  /** O que a equipe mandou e espera resposta ("3 para você"). */
+  forYouCount: number;
+  /** A posição no desafio em andamento em que a pessoa entrou. */
+  challenge: { id: string; title: string; rank: number } | null;
+}
+
+/** Uma pessoa da equipe vista pelo membro (Cm-04): o que vê dele e quando olhou. */
+export interface TeamMemberView {
+  name: string;
+  role: GroupRole;
+  sees: ShareScope[];
+  lastViewedAt: string | null;
 }
 
 /** Quem da equipe recebe o que a pessoa compartilhar. Só nome e papel. */
@@ -54,18 +75,23 @@ export interface TeamMember {
   role: GroupRole;
 }
 
-/** `GET /groups/preview?slug=`: a comunidade antes de entrar pelo código. */
+/** `GET /groups/preview?code=`: a comunidade antes de entrar pelo código (ou slug). */
 export interface GroupPreview {
   id: string;
   type: GroupType;
   name: string;
   slug: string;
+  /** O que mandar de volta em `join`: o código normalizado ou o slug. */
+  code: string;
   memberCount: number;
   description: string | null;
   joinPolicy: JoinPolicy;
+  visibility: Visibility;
   team: TeamMember[];
   /** O que é obrigatório compartilhar para entrar pelo código. */
   requiredSharingScopes: ShareScope[];
+  /** A comunidade tem assento livre (ou dá a todos): "A academia libera o PRO". */
+  proOffer: boolean;
 }
 
 /** `GET /groups/invites/:token`, sem login: o cartão do convite. */
@@ -126,13 +152,17 @@ export const groupsApi = {
   mine: () => apiFetch<MyGroup[]>(base),
   get: (groupId: string) => apiFetch<MyGroup>(`${base}/${groupId}`),
   members: (groupId: string) => apiFetch<GroupMember[]>(`${base}/${groupId}/members`),
-  previewBySlug: (slug: string) =>
-    apiFetch<GroupPreview>(`${base}/preview?slug=${encodeURIComponent(slug)}`),
-  join: (slug: string, consent: JoinConsent) =>
+  /** Pelo código legível da equipe ou pelo slug (#393). Inválido e só por convite: 404. */
+  previewByCode: (code: string) =>
+    apiFetch<GroupPreview>(`${base}/preview?code=${encodeURIComponent(code)}`),
+  /** `code` é o `GroupPreview.code`. Segue a forma de entrada: aprovação vira pedido. */
+  join: (code: string, consent: JoinConsent) =>
     apiFetch<MembershipChange>(`${base}/join`, {
       method: 'POST',
-      body: JSON.stringify({ slug, ...consent }),
+      body: JSON.stringify({ code, ...consent }),
     }),
+  /** A equipe vista por quem pergunta (Cm-04): o que cada um vê e quando olhou. */
+  team: (groupId: string) => apiFetch<TeamMemberView[]>(`${base}/${groupId}/team`),
   leave: (groupId: string) =>
     apiFetch<MembershipChange>(`${base}/${groupId}/members/me`, { method: 'DELETE' }),
   /** Reescreve o que compartilho com a equipe desta comunidade; `[]` tira o acesso de todos. */

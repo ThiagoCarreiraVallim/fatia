@@ -32,7 +32,7 @@ describe('groupsApi', () => {
     expect(pedido()).toEqual({
       method: 'POST',
       url: '/api/groups/join',
-      body: { slug: 'academia-x', scopes: ['WORKOUT'], statsOptIn: true },
+      body: { code: 'academia-x', scopes: ['WORKOUT'], statsOptIn: true },
     });
   });
 
@@ -70,7 +70,7 @@ describe('groupsApi', () => {
   });
 
   it('procura a comunidade pelo código com o código codificado', async () => {
-    await groupsApi.previewBySlug('a b');
-    expect(pedido().url).toBe('/api/groups/preview?slug=a%20b');
+    await groupsApi.previewByCode('a b');
+    expect(pedido().url).toBe('/api/groups/preview?code=a%20b');
   });
 });

@@ -18,6 +18,8 @@ export type MediaPurpose =
   | 'exercise_photo'
   | 'agent_avatar'
   | 'post_image'
+  /** Logo do parceiro num benefício (#393). */
+  | 'benefit_logo'
   /** Foto de perfil (#387): pessoal, sem comunidade. */
   | 'user_avatar';
 

@@ -120,6 +120,7 @@ describe('parseInviteEmails', () => {
 describe('convites e assentos', () => {
   const convite = (extra: Partial<InviteView>): InviteView => ({
     id: 'i1',
+    code: null,
     role: 'MEMBER',
     email: null,
     maxUses: null,
