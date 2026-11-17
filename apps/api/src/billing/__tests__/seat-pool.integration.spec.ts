@@ -411,7 +411,7 @@ describe('assentos de comunidade (banco real)', () => {
         paymentUrl: null,
         manageUrl: null,
       });
-      await expect(assinaturas.cancelar(membros[0].userId)).rejects.toThrow(ConflictException);
+      await expect(assinaturas.cancel(membros[0].userId)).rejects.toThrow(ConflictException);
     });
   });
 

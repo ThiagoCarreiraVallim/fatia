@@ -365,7 +365,7 @@ export class UserSubscriptionService {
    * Cancela a recorrência. Quem já pagou continua PRO até o fim do período;
    * checkout ainda não pago é simplesmente fechado.
    */
-  async cancelar(userId: string): Promise<PlanoDaPessoa> {
+  async cancel(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
     if (direito.source === 'GROUP') {
       throw new ConflictException(

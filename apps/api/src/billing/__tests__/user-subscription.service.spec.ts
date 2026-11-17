@@ -218,7 +218,7 @@ describe('UserSubscriptionService (banco real)', () => {
   it('isolamento: a outra pessoa não vê nem cancela a assinatura de A', async () => {
     const { service, provedor } = montar();
     expect(await service.plan(userB)).toMatchObject({ tier: 'FREE', status: null });
-    await expect(service.cancelar(userB)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.cancel(userB)).rejects.toBeInstanceOf(NotFoundException);
     expect(provedor.cancelSubscription).not.toHaveBeenCalled();
   });
 
@@ -228,7 +228,7 @@ describe('UserSubscriptionService (banco real)', () => {
       where: { userId: userA, status: 'ACTIVE' },
     });
 
-    const plano = await service.cancelar(userA);
+    const plano = await service.cancel(userA);
 
     expect(provedor.cancelSubscription).toHaveBeenCalledWith(sub.providerRef);
     expect(plano).toMatchObject({ tier: 'PRO', cancelAtPeriodEnd: true });

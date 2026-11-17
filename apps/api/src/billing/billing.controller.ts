@@ -40,7 +40,7 @@ export class BillingController {
   @Post('cancel')
   @HttpCode(200)
   cancel(@CurrentUser() user: CurrentUserPayload) {
-    return this.assinaturas.cancelar(user.id);
+    return this.assinaturas.cancel(user.id);
   }
 
   /**
