@@ -140,16 +140,32 @@ describe('genericList — a Lista de quem não tem produtor próprio (#384)', ()
       ]),
     ).toEqual({
       kind: 'list',
-      items: [{ title: 'Corrida de domingo' }, { title: 'Dica de proteína' }],
+      items: [
+        { title: 'Corrida de domingo', detail: 'Papel: Membro' },
+        { title: 'Dica de proteína' },
+      ],
     });
   });
 
-  it('acha a lista dentro do objeto, e sem título não há cartão', () => {
+  it('acha a lista dentro do objeto; só com id não há cartão', () => {
     expect(genericList({ groups: [{ name: 'A' }] })).toEqual({
       kind: 'list',
       items: [{ title: 'A' }],
     });
     expect(genericList([{ id: 'x' }])).toBeNull();
-    expect(genericList({ name: 'um só' })).toBeNull();
+    expect(genericList([])).toBeNull();
+  });
+
+  it('um objeto solto vira um item por campo', () => {
+    expect(genericList({ id: 'x', name: 'um só' })).toEqual({
+      kind: 'list',
+      items: [{ title: 'Nome', detail: 'um só' }],
+    });
+  });
+
+  it('linha sem campo com rótulo usa o nome do campo legível, sem instante em ISO', () => {
+    expect(
+      genericList([{ id: 'a', actionName: 'leu', at2: '2026-11-16T10:00:00.000Z', count: 2 }]),
+    ).toEqual({ kind: 'list', items: [{ title: 'Action name: leu', detail: 'Count: 2' }] });
   });
 });

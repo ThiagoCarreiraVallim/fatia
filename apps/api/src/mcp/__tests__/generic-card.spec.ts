@@ -1,4 +1,4 @@
-import { genericTable } from '../generic-card';
+import { genericTable, readableKey } from '../generic-card';
 
 describe('genericTable — a Tabela de quem não tem cartão próprio (#384)', () => {
   it('monta colunas em português a partir de uma lista de objetos', () => {
@@ -21,18 +21,74 @@ describe('genericTable — a Tabela de quem não tem cartão próprio (#384)', (
     expect(card?.rows).toEqual([['Supino', 8]]);
   });
 
-  it('não desenha cartão sem número: o cartão só aparece quando há número', () => {
-    expect(genericTable([{ name: 'Lembrete', title: 'Beber água' }])).toBeNull();
+  it('desenha a Tabela sem coluna numérica: texto também é cartão', () => {
+    expect(genericTable([{ name: 'Lembrete', description: 'Beber água' }])).toEqual({
+      kind: 'report',
+      columns: ['Nome', 'Descrição'],
+      rows: [['Lembrete', 'Beber água']],
+    });
   });
 
-  it('deixa de fora campo sem rótulo conhecido, id e objeto aninhado', () => {
-    const card = genericTable([{ id: 'x', fooBar: 3, kcal: 10, nested: { a: 1 } }]);
+  it('deixa de fora campo sem rótulo, id, campo técnico e objeto aninhado sem nome', () => {
+    const card = genericTable([
+      { id: 'x', foodId: 3, searchName: 'x', fooBar: 3, kcal: 10, nested: { a: 1 } },
+    ]);
     expect(card?.columns).toEqual(['Calorias']);
   });
 
-  it('não inventa tabela de lista vazia nem de valor solto', () => {
+  it('objeto aninhado com nome vira o nome', () => {
+    const card = genericTable([{ id: 's1', exercise: { id: 7, name: 'Supino reto' }, reps: 8 }]);
+    expect(card).toEqual({
+      kind: 'report',
+      columns: ['Exercício', 'Repetições'],
+      rows: [['Supino reto', 8]],
+    });
+  });
+
+  it('um objeto solto vira Campo e Valor', () => {
+    expect(genericTable({ id: 'u1', name: 'Pessoa', heightCm: 168 })).toEqual({
+      kind: 'report',
+      columns: ['Campo', 'Valor'],
+      rows: [
+        ['Nome', 'Pessoa'],
+        ['Altura', expect.stringContaining('168')],
+      ],
+    });
+  });
+
+  it('sem nenhum campo com rótulo, o nome do campo legível', () => {
+    expect(genericTable([{ id: 'a', actionName: 'leu', resourceCount: 2 }])).toEqual({
+      kind: 'report',
+      columns: ['Resource count', 'Action name'],
+      rows: [[2, 'leu']],
+    });
+    expect(readableKey('loggedAt')).toBe('Logged at');
+  });
+
+  it('a lista de dentro do objeto leva o nome dele, e acha a lista um nível abaixo', () => {
+    expect(genericTable({ name: 'Treino A', exercises: [{ name: 'Supino', reps: 8 }] })).toEqual({
+      kind: 'report',
+      label: 'Treino A',
+      columns: ['Nome', 'Repetições'],
+      rows: [['Supino', 8]],
+    });
+    expect(
+      genericTable({ date: '2026-11-16', active: { meals: [{ name: 'Almoço' }] } })?.rows,
+    ).toEqual([['Almoço']]);
+  });
+
+  it('uma lista de textos soltos vira uma coluna', () => {
+    expect(genericTable({ groups: ['cereais', 'frutas'] })).toEqual({
+      kind: 'report',
+      columns: ['Valor'],
+      rows: [['cereais'], ['frutas']],
+    });
+  });
+
+  it('não inventa tabela de lista vazia, de nada, nem de objeto só com id', () => {
     expect(genericTable([])).toBeNull();
-    expect(genericTable({ kcal: 3 })).toBeNull();
+    expect(genericTable({ items: [], nextCursor: null })).toBeNull();
+    expect(genericTable({ id: 'x', userId: 'u' })).toBeNull();
     expect(genericTable(null)).toBeNull();
   });
 
