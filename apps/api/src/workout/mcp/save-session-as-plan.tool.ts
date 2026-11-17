@@ -24,6 +24,8 @@ export class SaveSessionAsPlanTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   readonly description =
     'Cria um plano de treino novo a partir de uma sessão já feita (treino livre, inclusive o só ' +
     'de cardio): os exercícios na ordem da sessão, com as séries, a faixa de repetições e a carga ' +

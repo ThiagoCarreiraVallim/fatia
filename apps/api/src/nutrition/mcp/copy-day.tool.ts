@@ -16,6 +16,7 @@ export class CopyDayTool implements McpToolDef {
   readonly title = 'Copiar dia de refeições';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Copia todas as refeições de um dia para outro. As que já estão no destino são puladas e contadas em skipped. ' +
     'Exemplo: {"fromDate":"2026-09-22","toDate":"2026-09-23"}';

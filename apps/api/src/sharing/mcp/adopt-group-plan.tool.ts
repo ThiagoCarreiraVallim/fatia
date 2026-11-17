@@ -15,6 +15,7 @@ export class AdoptGroupPlanTool implements McpToolDef {
   readonly title = 'Adotar um plano pronto da comunidade';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Copia para a conta do usuário um plano pronto publicado por uma comunidade de que ele faz ' +
     'parte. Treino vira um plano de treino dele (uma vez só; se já adotou, responde com o plano ' +

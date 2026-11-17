@@ -16,6 +16,7 @@ export class UpdateReminderTool implements McpToolDef {
   readonly title = 'Alterar lembrete';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Muda um lembrete (de list_reminders): só os campos enviados. enabled false desliga sem apagar. ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","enabled":false}';

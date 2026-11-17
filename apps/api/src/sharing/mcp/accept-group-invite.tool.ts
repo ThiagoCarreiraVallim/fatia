@@ -17,6 +17,7 @@ export class AcceptGroupInviteTool implements McpToolDef {
   readonly title = 'Aceitar um convite de comunidade';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Aceita um convite e entra na comunidade na hora, com o papel do convite. Quem entra é ' +
     'sempre o próprio usuário; convite enviado a um e-mail só vale para a conta desse e-mail. ' +

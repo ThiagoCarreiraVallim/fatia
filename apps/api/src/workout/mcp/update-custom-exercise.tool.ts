@@ -20,6 +20,8 @@ export class UpdateCustomExerciseTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   readonly description =
     "Updates/enriches an exercise (the user's custom one OR a catalog exercise). " +
     'Use it to translate content to Portuguese (name, equipment, instructions) and to add ' +

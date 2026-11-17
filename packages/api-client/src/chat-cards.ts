@@ -23,7 +23,9 @@ export type ChatCardFormat =
   | 'scoreboard'
   | 'badges'
   | 'instructions'
-  | 'file';
+  | 'file'
+  // O cartão de confirmação de toda escrita confirmável (Gravar / Ajustar).
+  | 'confirm';
 
 /** Uma tool como o chat a vê (`GET /api/chat/tool-catalog`). */
 export interface ChatToolCatalogEntry {
@@ -35,6 +37,16 @@ export interface ChatToolCatalogEntry {
 }
 
 export type ChatToolCatalog = Record<string, ChatToolCatalogEntry>;
+
+/**
+ * As ferramentas que moram no agente, fora do `/mcp` — e por isso fora do catálogo da API —,
+ * com o cartão de cada uma. Toda ferramenta tem formato explícito (#384), estas inclusive.
+ */
+export const AGENT_LOCAL_TOOLS = {
+  ask_user: { title: 'Perguntar', card: 'question' },
+  web_search: { title: 'Pesquisar na web', card: 'sources' },
+  open_in_app: { title: 'Abrir no app', card: 'app_only' },
+} as const;
 
 export function getChatToolCatalog(): Promise<ChatToolCatalog> {
   return apiFetch('/api/chat/tool-catalog');

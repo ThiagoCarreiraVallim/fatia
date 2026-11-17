@@ -22,6 +22,7 @@ export class RevokeDataSharingTool implements McpToolDef {
    */
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Corta o acesso de um profissional aos dados do usuário, em todas as categorias de uma vez. ' +
     'Vale a partir da próxima requisição dele. O registro de que o acesso existiu permanece, ' +

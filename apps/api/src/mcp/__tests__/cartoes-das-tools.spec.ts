@@ -16,8 +16,7 @@ import { carregarTools } from './support/catalogo-servido';
  * tem de nascer aqui, do `structuredContent`.
  *
  * A lista de formatos é lida do **agente**, do disco: um `kind` que o agente não
- * conhece é trocado por `report` lá, e um sem o campo obrigatório é descartado em
- * silêncio. Copiar a lista para cá deixaria os dois lados verdes e divergentes.
+ * conhece, ou sem o campo obrigatório, é descartado lá em silêncio (sem formato padrão, #384). Copiar a lista para cá deixaria os dois lados verdes e divergentes.
  */
 const ARTEFATOS_PY = resolve(__dirname, '../../../../agent/src/fatia_agent/chat/artefatos.py');
 

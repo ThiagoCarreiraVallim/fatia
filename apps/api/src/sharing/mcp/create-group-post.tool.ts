@@ -15,6 +15,7 @@ export class CreateGroupPostTool implements McpToolDef {
   readonly title = 'Publicar no mural da comunidade';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Publica um post de texto no mural de uma comunidade de que o usuário faz parte. Todos os ' +
     'membros passam a ver o texto com o apelido dele. Escreva só o que o usuário pediu para ' +

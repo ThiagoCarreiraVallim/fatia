@@ -15,6 +15,7 @@ export class DeclinePlanOfferTool implements McpToolDef {
   readonly title = 'Recusar o plano de treino da equipe';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Recusa a versão de um plano de treino que a equipe enviou. Numa atualização de plano já ' +
     'aceito, é manter a versão atual: o plano do usuário não muda. A equipe é avisada; o vínculo ' +

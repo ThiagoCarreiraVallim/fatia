@@ -16,6 +16,7 @@ export class LogMealTemplateTool implements McpToolDef {
   readonly title = 'Registrar refeição salva';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Registra uma refeição salva (list_meal_templates) como refeição nova. ' +
     'Exemplo: {"templateId":"11111111-2222-4333-8444-555555555555","eatenAt":"2026-07-29T08:00:00-03:00"}';

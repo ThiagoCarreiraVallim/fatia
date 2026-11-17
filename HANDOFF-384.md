@@ -65,7 +65,8 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - [x] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
 - [x] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
 - [x] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
-- [~] 5. api-client (feito: `chat-cards.ts` com catálogo, `appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceites; tipos novos em `chat.ts`; falta: D11 e `chat-thread.ts`): tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
+- [x] 5. api-client (`chat-cards.ts`: catálogo, `AGENT_LOCAL_TOOLS`, `appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceites; tipos em `chat.ts`)
+- [x] D11 aplicado: `confirm` em 62 confirmáveis + `badges` em `refresh_achievements`; spec `toda tool do chat declara o cartão…`; `catalogoDoChat` sem `?? 'report'`; `artefatos.py` descarta kind desconhecido. MCP: specs rodados depois do merge e do D11 — `SHA_ENTIDADE`, contagem e docs inalterados (card/appOnly não vão no fio).: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
 - [ ] 6. Web: mensagens, linhas, cartões, confirmação/lote/só no app, composer, busca/aceite, lista, pausa, motivos
 - [ ] 7. App: o mesmo
 - [ ] 8. Docs (MCP_TOOL_SURFACE, REDESIGN_PROGRESS), lint, typecheck, testes; apagar este arquivo
@@ -105,7 +106,9 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 ## Próximo passo
 
-1. `git merge feat/chat-fotos-busca-fila-cartoes` (D13), resolvendo a favor dos contratos da #384.
-2. D11: `card` obrigatório em toda tool de entidade (confirmáveis `confirm`), spec em
-   `tool-catalog.spec.ts`, tirar `?? 'report'` do `catalogoDoChat`, `artefatos.py` sem fallback.
-3. Seguir para o item 6 (web).
+Item 6 (web): reescrever `apps/web/src/components/chat/artefato.tsx` com os 13 formatos +
+sources/app_only/saved (hoje só metric/timeline/comparison/report; o resto cai em null),
+linhas de tool (4 estados, agrupar ≥2 com `groupToolCalls`), confirmação, web_consent,
+aceite da primeira conversa (403 `AI_CONSENT_REQUIRED`), pausa "Continuo?", pílulas, lista.
+Pendente também: a /privacy da branch descreve a busca da branch ("consulta que o modelo
+montou") — reescrever para a busca da #384 (só a pergunta, com aceite).

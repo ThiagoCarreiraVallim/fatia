@@ -19,6 +19,8 @@ export class LogSetTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   readonly description =
     'Registra uma série em uma sessão de treino. Para força: informe weightKg e reps. Para cardio: informe durationSeconds. ' +
     'Exemplo (força): {"sessionId":"11111111-2222-4333-8444-555555555555","exerciseId":42,"weightKg":80,"reps":8,"rpe":8} ' +

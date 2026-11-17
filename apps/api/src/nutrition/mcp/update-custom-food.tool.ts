@@ -16,6 +16,7 @@ export class UpdateCustomFoodTool implements McpToolDef {
   readonly title = 'Atualizar alimento personalizado';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza um alimento custom do usuário. nutrients troca o mapa inteiro (null apaga); ' +
     'barcode null desliga o código. Exemplo: {"id":4217,"kcalPer100g":315,"nutrients":{"fiber_g":3}}';

@@ -71,6 +71,9 @@ export const CHAT_CARD_FORMATS = [
   'badges',
   'instructions',
   'file',
+  // O cartão de confirmação das escritas (Gravar / Ajustar). Não é consulta: é o formato de
+  // toda confirmável, e o resultado depois do sim pode vir num dos formatos acima.
+  'confirm',
 ] as const;
 export type ChatCardFormat = (typeof CHAT_CARD_FORMATS)[number];
 
@@ -129,9 +132,10 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
    */
   artifact?(result: unknown, input: z.infer<z.ZodObject<S>>): Record<string, unknown> | null;
   /**
-   * O formato do cartão desta consulta no chat (#384). Toda tool de leitura declara; as
-   * confirmáveis usam o cartão de confirmação e as restritas, `appOnly`. Não vai no fio do MCP:
-   * é contrato da tela do chat, servido em `GET /chat/tool-catalog`.
+   * O formato do cartão desta tool no chat (#384). **Toda** tool que o chat alcança declara —
+   * leitura, um formato de consulta; confirmável, `confirm` — e a restrita declara `appOnly`.
+   * Não há formato padrão: o `tool-catalog.spec.ts` reprova quem não declara. Não vai no fio do
+   * MCP: é contrato da tela do chat, servido em `GET /chat/tool-catalog`.
    */
   card?: ChatCardFormat;
   /** Só nas restritas (nunca feitas pela IA): a tela que a pessoa abre para fazer. */

@@ -47,6 +47,7 @@ export class LogMealTool implements McpToolDef {
   readonly title = 'Registrar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +
     'Cada item aceita source (origem: AI, MANUAL, BARCODE ou PLAN; padrão AI). A resposta diz hasPhoto, nunca o arquivo. ' +

@@ -17,6 +17,7 @@ export class UpdateMealItemTool implements McpToolDef {
   readonly title = 'Atualizar item da refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza gramas (ou medida caseira), macros ou micronutrientes de um item. ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","grams":180}';

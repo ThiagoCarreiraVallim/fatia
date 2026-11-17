@@ -121,9 +121,11 @@ export class McpToolRegistry implements OnModuleInit {
       .map((tool): [string, ChatToolCatalogEntry] => {
         const a = tool.annotations;
         if (a.readOnlyHint === true) {
-          return [tool.name, { title: tool.title, kind: 'read', card: tool.card ?? 'report' }];
+          return [tool.name, { title: tool.title, kind: 'read', card: tool.card }];
         }
-        if (a.confirmableHint === true) return [tool.name, { title: tool.title, kind: 'confirm' }];
+        if (a.confirmableHint === true) {
+          return [tool.name, { title: tool.title, kind: 'confirm', card: tool.card }];
+        }
         return [
           tool.name,
           {

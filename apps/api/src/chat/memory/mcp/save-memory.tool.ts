@@ -15,6 +15,7 @@ export class SaveMemoryTool implements McpToolDef {
   readonly title = 'Guardar memória';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Guarda algo que o usuário pediu para o assistente lembrar nas próximas conversas ' +
     '(preferência, restrição, rotina). Uma frase curta na terceira pessoa. ' +

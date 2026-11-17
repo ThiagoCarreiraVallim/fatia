@@ -15,6 +15,7 @@ export class CompleteGoalTool implements McpToolDef {
   readonly title = 'Concluir meta';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Marca uma meta como concluída. ' +
     'Exemplo: {"goalId":"11111111-2222-4333-8444-555555555555"}';

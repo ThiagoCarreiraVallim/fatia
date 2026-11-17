@@ -24,6 +24,8 @@ export class UpdatePlanExerciseTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza um exercício dentro do plano: séries, reps, descanso, técnica, carga inicial, ' +
     'meta de cardio ou a série por série. A linha é a do planExerciseId. Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","planExerciseId":"66666666-7777-4888-8999-aaaaaaaaaaaa","targetReps":"6-8","restSeconds":120}';

@@ -194,10 +194,11 @@ describe('McpToolRegistry — catálogo do chat (#384)', () => {
   it('diz a classe, o cartão e a tela de cada tool', () => {
     const r = registry(
       tool({ name: 'get_coisa', title: 'Coisa', card: 'metric' }),
-      tool({ name: 'list_coisas', title: 'Coisas' }),
+      tool({ name: 'list_coisas', title: 'Coisas', card: 'report' }),
       tool({
         name: 'log_coisa',
         title: 'Registrar coisa',
+        card: 'confirm',
         annotations: { readOnlyHint: false, destructiveHint: false, confirmableHint: true },
       }),
       tool({
@@ -210,7 +211,7 @@ describe('McpToolRegistry — catálogo do chat (#384)', () => {
     expect(r.catalogoDoChat()).toEqual({
       get_coisa: { title: 'Coisa', kind: 'read', card: 'metric' },
       list_coisas: { title: 'Coisas', kind: 'read', card: 'report' },
-      log_coisa: { title: 'Registrar coisa', kind: 'confirm' },
+      log_coisa: { title: 'Registrar coisa', kind: 'confirm', card: 'confirm' },
       delete_coisa: {
         title: 'Excluir coisa',
         kind: 'app_only',

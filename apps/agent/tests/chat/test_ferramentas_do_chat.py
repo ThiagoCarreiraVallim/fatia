@@ -71,8 +71,8 @@ def test_os_formatos_novos_passam_e_cada_um_exige_o_proprio_campo():
     for tipo, campo in casos.items():
         assert artefato({"kind": tipo, campo: []})["kind"] == tipo, tipo
         assert artefato({"kind": tipo, "outra": 1}) is None, tipo
-    # O que a tela não conhece continua virando Tabela.
-    assert artefato({"kind": "pizza", "columns": [], "rows": []})["kind"] == "report"
+    # Sem formato padrão: o que a tela não conhece não vira Tabela.
+    assert artefato({"kind": "pizza", "columns": [], "rows": []}) is None
 
 
 # --------------------------------------------------------------------- busca na web

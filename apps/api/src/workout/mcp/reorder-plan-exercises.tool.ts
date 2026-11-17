@@ -19,6 +19,8 @@ export class ReorderPlanExercisesTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   // O contrato ("só os ids enviados") é o mesmo do JSDoc de
   // `workoutApi.reorderPlanExercises` e de `docs/MCP.md`. Antes esta descrição
   // pedia a lista completa, e o efeito era o Claude reescrever o `order` de

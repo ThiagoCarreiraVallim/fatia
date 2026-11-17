@@ -15,6 +15,7 @@ export class SetFoodFavoriteTool implements McpToolDef {
   readonly title = 'Favoritar alimento';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Marca ou desmarca um alimento como favorito; favoritos aparecem primeiro na busca do app. ' +
     'Exemplo: {"id":312,"favorite":true}';

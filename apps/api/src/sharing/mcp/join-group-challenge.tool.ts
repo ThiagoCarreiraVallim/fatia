@@ -15,6 +15,7 @@ export class JoinGroupChallengeTool implements McpToolDef {
   readonly title = 'Entrar num desafio da comunidade';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Inscreve o usuário num desafio marcado ou em andamento de uma comunidade de que ele faz ' +
     'parte. Os outros participantes passam a ver o apelido e a pontuação dele no ranking; nenhum ' +

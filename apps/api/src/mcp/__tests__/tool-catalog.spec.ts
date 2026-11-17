@@ -1096,24 +1096,38 @@ describe('cartão de cada tool no chat (#384)', () => {
     );
   };
 
-  it('toda tool de leitura declara um formato de cartão conhecido', () => {
-    const errados = tools
-      .filter(({ tool }) => tool.annotations.readOnlyHint === true)
-      .filter(
-        ({ tool }) => !tool.card || !(CHAT_CARD_FORMATS as readonly string[]).includes(tool.card),
-      )
-      .map(({ tool }) => `${tool.name}: ${String(tool.card)}`);
-    expect(errados.sort()).toEqual([]);
-  });
+  // Decisão do dono (#384): toda tool tem formato explícito — não existe Tabela "padrão" para
+  // quem esqueceu de declarar. Leitura escolhe um formato de consulta; confirmável usa o cartão
+  // de confirmação (ou o formato da prancha, como "Desbloquear conquistas" → Selos); restrita
+  // leva à tela do app. Tool nova sem nada disso reprova aqui.
+  const CONFIRMAVEIS_COM_OUTRO_CARTAO: Record<string, string> = { refresh_achievements: 'badges' };
 
-  it('só a leitura declara cartão, e só a restrita declara a tela do app', () => {
+  it('toda tool do chat declara o cartão, ou a tela do app, de forma explícita', () => {
     const errados: string[] = [];
-    for (const { tool } of tools) {
+    for (const { tool } of tools.filter(
+      ({ tool }) => (tool.surface ?? 'entidade') === 'entidade',
+    )) {
       const a = tool.annotations;
       const restrita = a.readOnlyHint !== true && a.confirmableHint !== true;
-      if (a.readOnlyHint !== true && tool.card) errados.push(`${tool.name}: card numa escrita`);
-      if (restrita && !tool.appOnly) errados.push(`${tool.name}: restrita sem appOnly`);
-      if (!restrita && tool.appOnly) errados.push(`${tool.name}: appOnly sem ser restrita`);
+      const conhecido = !!tool.card && (CHAT_CARD_FORMATS as readonly string[]).includes(tool.card);
+      if (restrita) {
+        if (!tool.appOnly) errados.push(`${tool.name}: restrita sem appOnly`);
+        if (tool.card) errados.push(`${tool.name}: restrita com card`);
+        continue;
+      }
+      if (tool.appOnly) errados.push(`${tool.name}: appOnly sem ser restrita`);
+      if (!conhecido) {
+        errados.push(`${tool.name}: sem card conhecido (${String(tool.card)})`);
+        continue;
+      }
+      if (a.readOnlyHint === true && tool.card === 'confirm') {
+        errados.push(`${tool.name}: leitura com cartão de confirmação`);
+      }
+      if (a.readOnlyHint !== true) {
+        const esperado = CONFIRMAVEIS_COM_OUTRO_CARTAO[tool.name] ?? 'confirm';
+        if (tool.card !== esperado)
+          errados.push(`${tool.name}: ${tool.card} (esperado ${esperado})`);
+      }
     }
     expect(errados.sort()).toEqual([]);
   });
