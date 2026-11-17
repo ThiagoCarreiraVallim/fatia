@@ -73,6 +73,16 @@ let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
 let acesso: { allowed?: boolean; reason?: string } = {};
 let agentes: ChatAgents = { defaultGroupId: null, agents: [] };
+const aceito = { accepted: true, version: '2026-11-16', acceptedAt: '2026-11-16T10:00:00.000Z' };
+let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+const acceptAiConsentMock = vi.fn(async (topico: 'chat' | 'web_search') => {
+  aceites = { ...aceites, [topico === 'chat' ? 'chat' : 'webSearch']: aceito };
+  return aceites;
+});
+const setWebSearchEnabledMock = vi.fn(async (ligada: boolean) => {
+  aceites = { ...aceites, webSearchEnabled: ligada };
+  return aceites;
+});
 const transcribeAudioMock = vi.fn(async (_audio: Blob) => ({ text: 'registra 200 g de frango' }));
 const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
@@ -110,7 +120,18 @@ vi.mock('@fatia/api-client', async () => {
     listChatToolTitles: vi.fn(async () => ({
       log_meal: 'Registrar refeição',
       list_meals: 'Listar refeições',
+      get_today_summary: 'Resumo de hoje',
     })),
+    getChatToolCatalog: vi.fn(async () => ({
+      delete_meal: {
+        title: 'Excluir refeição',
+        kind: 'app_only',
+        appOnly: { screen: 'Ações da refeição', path: '/nutrition/meals/:id' },
+      },
+    })),
+    getAiConsent: vi.fn(async () => aceites),
+    acceptAiConsent: acceptAiConsentMock,
+    setWebSearchEnabled: setWebSearchEnabledMock,
     previewChatAction: vi.fn(async () => ({
       valida: true,
       linhas: [{ rotulo: 'Item', valor: '200 g de Frango grelhado' }],
@@ -199,6 +220,9 @@ beforeEach(() => {
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
   transcribeAudioMock.mockClear();
+  aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+  acceptAiConsentMock.mockClear();
+  setWebSearchEnabledMock.mockClear();
 });
 
 function montar() {
@@ -503,13 +527,11 @@ describe('ChatScreen', () => {
     fontes[0].fechar();
 
     const cartao = await screen.findByRole('group', { name: 'Ação aguardando confirmação' });
-    expect(
-      within(cartao).getByText('Nada foi salvo ainda. Confira os dados antes de confirmar.'),
-    ).toBeInTheDocument();
+    expect(within(cartao).getByText('Confere antes de gravar')).toBeInTheDocument();
     expect(await within(cartao).findByText('200 g de Frango grelhado')).toBeInTheDocument();
     expect(cartao.textContent).not.toContain('log_meal');
 
-    await user.click(within(cartao).getByRole('button', { name: 'Confirmar' }));
+    await user.click(within(cartao).getByRole('button', { name: 'Gravar' }));
 
     await waitFor(() => expect(corpos).toHaveLength(2));
     expect(corpos[1]).toEqual({
@@ -921,9 +943,7 @@ describe('ChatScreen', () => {
       montar();
 
       // `findAll`: o rótulo tem duas camadas (a da troca animada), como todo passo.
-      expect(
-        await screen.findAllByText('Registrar refeição: você recusou, nada foi gravado'),
-      ).not.toHaveLength(0);
+      expect(await screen.findAllByText('Registrar refeição · você recusou')).not.toHaveLength(0);
       expect(screen.queryByLabelText('Feito')).not.toBeInTheDocument();
     });
 
@@ -943,7 +963,7 @@ describe('ChatScreen', () => {
       montar();
       const user = userEvent.setup();
 
-      expect(await screen.findAllByText('Listar refeições: não deu certo')).not.toHaveLength(0);
+      expect(await screen.findAllByText('Listar refeições · não deu certo')).not.toHaveLength(0);
       expect(screen.queryByText('Serviço fora do ar.')).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Ver detalhe' }));
       expect(screen.getByText('Serviço fora do ar.')).toBeInTheDocument();
@@ -1010,7 +1030,7 @@ describe('ChatScreen', () => {
     expect(await screen.findByText('Uma parte falhou.')).toBeInTheDocument();
     // Só o primeiro turno agrupou: a falha não fica atrás de "Consultei 3 coisas".
     expect(screen.getAllByRole('button', { name: /Consultei/ })).toHaveLength(1);
-    expect(screen.getAllByText('Listar refeições: não deu certo')).not.toHaveLength(0);
+    expect(screen.getAllByText('Listar refeições · não deu certo')).not.toHaveLength(0);
   });
 
   it('o artefato da tool aparece no cartão dela, com o número inteiro', async () => {
@@ -1293,5 +1313,271 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
     const destino = pushMock.mock.calls[0][0] as string;
     expect(destino).toMatch(/^\/chat\/[0-9a-f-]{36}$/);
     expect(destino).not.toBe(`/chat/${CONVERSA}`);
+  });
+
+  describe('cartões, estados e ferramentas (#384)', () => {
+    const pedido = (mensagem: string, chamadas: { id: string; name: string }[]) => ({
+      event: 'updates' as const,
+      data: {
+        agente: {
+          messages: [
+            {
+              type: 'ai',
+              id: mensagem,
+              content: '',
+              tool_calls: chamadas.map((c) => ({ ...c, args: {} })),
+            },
+          ],
+        },
+      },
+    });
+    const feita = (id: string, name: string) => ({
+      event: 'updates' as const,
+      data: {
+        ferramentas: {
+          messages: [{ type: 'tool', id: `t-${id}`, tool_call_id: id, name, content: 'x' }],
+        },
+      },
+    });
+    const pausa = (value: unknown) => ({
+      event: 'updates' as const,
+      data: { __interrupt__: [{ id: 'pausa-1', value }] },
+    });
+    const fim = (status = 'completed') => ({ event: 'done' as const, data: { status } });
+
+    it('duas consultas seguidas já fecham em "Consultei 2 coisas"', async () => {
+      montar();
+      await enviar('como foi meu dia?');
+      fontes[0].emitir(
+        pedido('ai-1', [
+          { id: 'c1', name: 'list_meals' },
+          { id: 'c2', name: 'get_today_summary' },
+        ]),
+        feita('c1', 'list_meals'),
+        feita('c2', 'get_today_summary'),
+        fragmento('ai-2', 'Pronto.'),
+        fim(),
+      );
+      fontes[0].fechar();
+      expect(await screen.findByRole('button', { name: 'Consultei 2 coisas' })).toBeInTheDocument();
+    });
+
+    it('consulta sem nada fica neutra, "nada encontrado"', async () => {
+      montar();
+      await enviar('o que comi?');
+      fontes[0].emitir(
+        pedido('ai-1', [{ id: 'c1', name: 'list_meals' }]),
+        feita('c1', 'list_meals'),
+        {
+          event: 'artifact',
+          data: { toolCallId: 'c1', kind: 'report', columns: ['Refeição'], rows: [] },
+        },
+        fragmento('ai-2', 'Nada hoje.'),
+        fim(),
+      );
+      fontes[0].fechar();
+      expect(await screen.findAllByText('Listar refeições · nada encontrado')).not.toHaveLength(0);
+      expect(screen.queryByRole('figure')).not.toBeInTheDocument();
+    });
+
+    it('o cartão de uma resposta antiga recolhe numa linha, e tocar abre de novo', async () => {
+      montar();
+      await enviar('quanto comi hoje?');
+      fontes[0].emitir(
+        pedido('ai-1', [{ id: 'c1', name: 'get_today_summary' }]),
+        feita('c1', 'get_today_summary'),
+        {
+          event: 'artifact',
+          data: {
+            toolCallId: 'c1',
+            kind: 'metric',
+            label: 'Calorias de hoje',
+            value: 934,
+            unit: 'kcal',
+          },
+        },
+        fragmento('ai-2', 'Você comeu 934 kcal.'),
+        fim(),
+      );
+      fontes[0].fechar();
+      expect(await screen.findByRole('figure', { name: 'Calorias de hoje' })).toBeInTheDocument();
+
+      const user = await enviar('valeu');
+      fontes[1].emitir(fragmento('ai-3', 'De nada!'), fim());
+      fontes[1].fechar();
+      await screen.findByText('De nada!');
+
+      expect(screen.queryByRole('figure', { name: 'Calorias de hoje' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Resumo de hoje · Calorias de hoje/ }));
+      expect(screen.getByRole('figure', { name: 'Calorias de hoje' })).toBeInTheDocument();
+    });
+
+    it('as fontes da busca são links numerados, e o só no app abre a tela certa', async () => {
+      montar();
+      await enviar('quanto de proteína por kg?');
+      fontes[0].emitir(
+        pedido('ai-1', [
+          { id: 'w1', name: 'web_search' },
+          { id: 'a1', name: 'open_in_app' },
+        ]),
+        feita('w1', 'web_search'),
+        {
+          event: 'artifact',
+          data: {
+            toolCallId: 'w1',
+            kind: 'sources',
+            sources: [
+              { title: 'Protein intake', url: 'https://bjsm.bmj.com/x', domain: 'bjsm.bmj.com' },
+            ],
+          },
+        },
+        feita('a1', 'open_in_app'),
+        {
+          event: 'artifact',
+          data: {
+            toolCallId: 'a1',
+            kind: 'app_only',
+            tool: 'delete_meal',
+            title: 'Excluir refeição',
+            params: { id: 'm1' },
+          },
+        },
+      );
+
+      const fontesDaBusca = await screen.findByRole('figure', { name: 'Fontes · 1 site' });
+      expect(within(fontesDaBusca).getByRole('link', { name: /Protein intake/ })).toHaveAttribute(
+        'href',
+        'https://bjsm.bmj.com/x',
+      );
+      const soNoApp = await screen.findByRole('figure', { name: 'Excluir refeição é pelo app' });
+      expect(
+        await within(soNoApp).findByRole('link', { name: 'Abrir Ações da refeição' }),
+      ).toHaveAttribute('href', '/nutrition/meals/m1');
+    });
+
+    it('a busca pede o aceite com a pergunta à vista; concordar grava o aceite e busca', async () => {
+      aceites = {
+        ...aceites,
+        webSearch: { accepted: false, version: '2026-11-16', acceptedAt: null },
+      };
+      montar();
+      const user = await enviar('quanto de proteína por kg?');
+      fontes[0].emitir(
+        pedido('ai-1', [{ id: 'w1', name: 'web_search' }]),
+        pausa({
+          kind: 'web_consent',
+          prompt: 'Posso buscar na web?',
+          actions: [
+            {
+              kind: 'web_consent',
+              toolCallId: 'w1',
+              tool: 'web_search',
+              prompt: 'Posso buscar na web?',
+              query: 'proteína por kg',
+            },
+          ],
+        }),
+        fim('interrupted'),
+      );
+      fontes[0].fechar();
+
+      const cartao = await screen.findByRole('group', { name: 'Buscar na web?' });
+      expect(within(cartao).getByText(/proteína por kg/)).toBeInTheDocument();
+      expect(within(cartao).getByText(/não vale para a busca/)).toBeInTheDocument();
+      await user.click(within(cartao).getByRole('button', { name: 'Concordo e buscar' }));
+
+      await waitFor(() => expect(corpos).toHaveLength(2));
+      expect(acceptAiConsentMock).toHaveBeenCalledWith('web_search');
+      expect(corpos[1]).toEqual({
+        conversationId: CONVERSA,
+        resume: { interruptId: 'pausa-1', value: { approvals: { w1: true }, answers: {} } },
+      });
+    });
+
+    it('responder sem a web não grava aceite e segue sem buscar', async () => {
+      montar();
+      const user = await enviar('quanto de proteína por kg?');
+      fontes[0].emitir(
+        pedido('ai-1', [{ id: 'w1', name: 'web_search' }]),
+        pausa({
+          kind: 'web_consent',
+          prompt: 'Posso buscar na web?',
+          actions: [
+            { kind: 'web_consent', toolCallId: 'w1', tool: 'web_search', prompt: 'x', query: 'q' },
+          ],
+        }),
+        fim('interrupted'),
+      );
+      fontes[0].fechar();
+      const cartao = await screen.findByRole('group', { name: 'Buscar na web?' });
+      await user.click(within(cartao).getByRole('button', { name: 'Responder sem a web' }));
+      await waitFor(() => expect(corpos).toHaveLength(2));
+      expect(acceptAiConsentMock).not.toHaveBeenCalled();
+      expect(corpos[1]).toMatchObject({ resume: { value: { approvals: { w1: false } } } });
+    });
+
+    it('a pausa por consultas pergunta "Continuo?" com Continuar e Parar aqui', async () => {
+      montar();
+      const user = await enviar('analisa meu mês');
+      fontes[0].emitir(
+        pausa({
+          kind: 'continue',
+          prompt: 'Já consultei 14 coisas. Continuo?',
+          actions: [],
+          count: 14,
+        }),
+        fim('interrupted'),
+      );
+      fontes[0].fechar();
+      const cartao = await screen.findByRole('group', {
+        name: 'Já consultei 14 coisas. Continuo?',
+      });
+      await user.click(within(cartao).getByRole('button', { name: 'Parar aqui' }));
+      await waitFor(() => expect(corpos).toHaveLength(2));
+      expect(corpos[1]).toMatchObject({ resume: { value: false } });
+    });
+
+    it('a pílula de resposta rápida manda o texto dela', async () => {
+      montar();
+      const user = await enviar('quanto comi hoje?');
+      fontes[0].emitir(
+        pedido('ai-1', [{ id: 'c1', name: 'get_today_summary' }]),
+        feita('c1', 'get_today_summary'),
+        fragmento('ai-2', '934 kcal.'),
+        fim(),
+      );
+      fontes[0].fechar();
+      await user.click(await screen.findByRole('button', { name: 'E a semana?' }));
+      await waitFor(() => expect(corpos).toHaveLength(2));
+      expect(corpos[1]).toMatchObject({ message: 'E a semana?' });
+    });
+
+    it('sem o aceite do chat, a primeira conversa pede o aceite antes de deixar escrever', async () => {
+      aceites = { ...aceites, chat: { accepted: false, version: '2026-11-16', acceptedAt: null } };
+      montar();
+      const user = userEvent.setup();
+      const aviso = await screen.findByRole('dialog', { name: 'Antes de conversar' });
+      expect(within(aviso).getByText(/OpenRouter/)).toBeInTheDocument();
+      expect(within(aviso).getByRole('link', { name: 'Como tratamos seus dados' })).toHaveAttribute(
+        'href',
+        '/privacy',
+      );
+      await user.click(within(aviso).getByRole('button', { name: 'Concordo' }));
+      expect(acceptAiConsentMock).toHaveBeenCalledWith('chat');
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: 'Antes de conversar' }),
+        ).not.toBeInTheDocument(),
+      );
+    });
+
+    it('a chave da busca no cabeçalho liga e desliga a web', async () => {
+      montar();
+      const user = userEvent.setup();
+      const chave = await screen.findByRole('switch', { name: 'Buscar na web' });
+      await waitFor(() => expect(chave).toBeChecked());
+      await user.click(chave);
+      expect(setWebSearchEnabledMock).toHaveBeenCalledWith(false);
+    });
   });
 });
