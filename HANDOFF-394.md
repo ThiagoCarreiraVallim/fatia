@@ -33,7 +33,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 7. API Para você (for-you.service/controller, GET groups/:id/for-you)
 - [x] 8. LGPD export/exclusão
 - [x] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
-- [ ] 10. api-client
+- [x] 10. api-client (community-feed.ts: tipos, feedApi/moderationApi/announcementsApi/blocksApi/forYouApi, helpers de enquete/horário/repetir; abas Mural/Para você/Desafios/Conteúdo, Agenda escondida até #397; markdown-lite título e citação + renderers web/app)
 - [ ] 11. Web aluno (Cm-03/05/06/07/20/21) + lista de bloqueados em Você > Conta
 - [ ] 12. Web painel (Pn-14, Pn-26)
 - [ ] 13. App (Cm-03/05/06/07/20/21) + bloqueados
@@ -41,6 +41,6 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Próximo passo
 
-Item 10 (api-client: community-feed.ts com pins, poll, blocks, announcements, forYou), depois web 11/12 e app 13.
+Item 11 web aluno. Atualizar apps/web/src/app/(app)/community/[groupId]/**tests**/page.test.tsx (abas novas). Depois 12 e 13.
 
 Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).

@@ -22,7 +22,8 @@ function inline(tokens: InlineToken[], key = ''): ReactNode[] {
 }
 
 /**
- * O markdown restrito das dicas (Fase 7a), desenhado com elementos do React.
+ * O markdown restrito das dicas (Fase 7a) e dos posts (#394: título e
+ * citação), desenhado com elementos do React.
  * Nada vira HTML cru: o parser devolve tokens, e texto é sempre texto.
  */
 export function MarkdownLite({ source, className }: { source: string; className?: string }) {
@@ -31,6 +32,14 @@ export function MarkdownLite({ source, className }: { source: string; className?
       {parseMarkdownLite(source).map((b, i) =>
         b.type === 'paragraph' ? (
           <p key={i}>{inline(b.children)}</p>
+        ) : b.type === 'heading' ? (
+          <h3 key={i} className="text-base font-semibold">
+            {inline(b.children)}
+          </h3>
+        ) : b.type === 'quote' ? (
+          <blockquote key={i} className="border-l-2 border-primary pl-3 text-muted-foreground">
+            {inline(b.children)}
+          </blockquote>
         ) : b.ordered ? (
           <ol key={i} className="list-decimal space-y-1 pl-5">
             {b.items.map((item, j) => (

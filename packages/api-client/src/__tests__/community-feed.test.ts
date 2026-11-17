@@ -58,8 +58,9 @@ describe('mural da comunidade (helpers)', () => {
   it('abas da comunidade: o mural é a raiz, sem aba Início, na web e no app', () => {
     expect(communityTabs('g1').map((t) => [t.tab, t.label, t.href])).toEqual([
       ['feed', 'Mural', '/community/g1'],
+      ['for-you', 'Para você', '/community/g1/for-you'],
       ['challenges', 'Desafios', '/community/g1/challenges'],
-      ['content', 'Planos e dicas', '/community/g1/content'],
+      ['content', 'Conteúdo', '/community/g1/content'],
     ]);
     expect(activeCommunityTab('/community/g1')).toBe('feed');
     // O caminho antigo do mural (avisos, links salvos) ainda conta como mural.
