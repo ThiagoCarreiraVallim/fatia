@@ -137,19 +137,44 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 
 ## Etapa 5: Treino B e Progresso (em andamento)
 
-| Issue | Título                   | Estado           | Superfícies                                  |
-| ----- | ------------------------ | ---------------- | -------------------------------------------- |
-| #381  | Treino livre e histórico | mergeado (#437)  | api, MCP (1 tool nova), api-client, web, app |
-| #382  | Progresso                | pronto na branch | api, MCP (1 tool nova), api-client, web, app |
+| Issue | Título                   | Estado           | Superfícies                                                   |
+| ----- | ------------------------ | ---------------- | ------------------------------------------------------------- |
+| #381  | Treino livre e histórico | mergeado (#437)  | api, MCP (1 tool nova), api-client, web, app                  |
+| #382  | Progresso                | mergeado (#438)  | api, MCP (1 tool nova), api-client, web, app                  |
+| #380  | Circuitos                | pronto na branch | api, db, MCP (1 tool nova e 1 ampliada), api-client, web, app |
 
 Pendências da #381 (branch `redesign/381-treino-livre-historico`, sem migration):
 
-- **Tipo da sessão é derivado, não gravado:** `plan` com `planId`, `free` sem. `circuit` é o ponto de extensão da #380 (`helpers/session-kind.ts`, `HISTORY_FILTERS`, `sessionHero` e o detalhe `history/[id]`): nenhuma sessão é circuito ainda, e a aba "Circuitos" do Al-T10 e a tela Al-T11c entram com a #380. Plano apagado deixa a sessão sem `planId`, e ela passa a aparecer como livre.
+- **Tipo da sessão é derivado, não gravado:** `plan` com `planId`, `free` sem. `circuit` é o ponto de extensão da #380 (`helpers/session-kind.ts`, `HISTORY_FILTERS`, `sessionHero` e o detalhe `history/[id]`): a #380 já ligou a aba "Circuitos" do Al-T10 e a tela Al-T11c. Plano apagado deixa a sessão sem `planId`, e ela passa a aparecer como livre.
 - **Rotas e MCP:** `GET /workout/history` (totais, filtro `kind`, cursor), `GET /workout/sessions?kind=`, `POST /workout/sessions/:id/plan`; o resumo da sessão ganhou `kind`, as séries de cada exercício, kcal e o recorde de antes. MCP `save_session_as_plan` (152 tools; 153 com o `get_consistency` da #382) e `list_workout_sessions` com `kind` e sensação.
 - **Treino livre (Al-T17b):** monta antes de começar; a sessão só nasce no "Iniciar treino". Os escolhidos sem série ficam só no cliente (o cache `pending` da sessão), como na #377: fechar o app antes da primeira série os perde.
 - **Recorde de distância do cardio:** passou a somar as séries da sessão (como o resumo já fazia), em vez da maior série. Pode conflitar com a #382 (progresso), que lê os mesmos recordes.
 - **Desvios do canvas:** o detalhe tem "Corrigir séries deste treino" (leva à sessão), porque a tela antiga de sessão concluída era o único lugar de corrigir; cartão de cardio e selo de recorde usam `text-background` para contrastar nos dois temas.
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+
+Pendências da #380 (branch `redesign/380-circuitos`, migration `20261116053800_workout_circuits`):
+
+- **Modelo:** circuito é um `WorkoutPlan` com `kind = CIRCUIT` e um `CircuitConfig` 1:1 (formato e só os campos dele). Os itens são `WorkoutPlanExercise` com `repUnit` (reps ou segundos) e `targetReps` numérico. A sessão congela o circuito em `WorkoutSession.circuit` (JSON v1: definição, `startedAt`, toques com horário, resultado e a última vez).
+- **Relógio:** funções puras em `packages/design/src/circuit-timer.ts` (o api-client reexporta; a API usa o `dist/`), por horário (nunca por tique). Cada toque vai para `PUT /workout/sessions/:id/circuit`, e outra aba ou o app retomam do mesmo ponto. "Encerrar" (`POST .../circuit/finish`) é idempotente e atômico; o servidor conta o resultado de novo pelos toques (o do cliente é dica) e cria uma `SessionSet` por exercício por round, minuto ou intervalo. Sem toques (`log_circuit_result`), `checkCircuitResultBounds` confere as faixas (rounds do AMRAP no tempo, um tempo por round, tempo final do For Time, até 2.400 séries). Os toques valem de 1 min antes a 6 h depois do começo da sessão; o teto de 2.000 guarda o último lugar para o "end".
+- **MCP:** `create_workout_plan` aceita `circuit` e `exercises` com `reps` ou `seconds`; `log_circuit_result` (nova) registra um circuito feito, fechando a sessão aberta ou criando uma terminada. Não há `update_circuit`: editar é pela tela.
+- **Integração com a #381:** a sessão com circuito é `kind: circuit` (filtro "Circuitos" no Al-T10, linha "4 rounds + 2 · 4 exercícios"), o detalhe `history/[id]` mostra o Al-T11c com "Repetir circuito" (`sessionDetailBody`), "Salvar como plano" recusa circuito (400) e some da tela, e o `log_circuit_result` grava o retrato `fromPlan`/`planName`. `finish_workout_session` numa sessão de circuito sem resultado é 409 apontando `log_circuit_result`; a sessão que fechou assim antes ainda recebe o resultado. Exercício pessoal apagado com um circuito aberto: as séries dele ficam de fora no fim (o resultado guarda o total). A comparação com a última vez só vale para o mesmo formato, configuração e exercícios. O fim do circuito (relógio, `log` e `log_circuit_result`) dispara os `WORKOUT_FINISHED_HOOKS` da #382 depois do commit, como o fim normal: conquistas na hora. A sequência por dia ativo e a constância contam o circuito concluído como qualquer treino (`circuit-achievements.integration.spec.ts`).
+- **Desvios do canvas:**
+  - Números do Novo circuito digitáveis, além do −/+.
+  - "Encerrar" pede confirmação.
+  - O card da aba Circuitos abre o editor (o "Começar" leva ao relógio). O "Circuito" do Treino leva à aba Circuitos quando já há circuito, e ao Novo circuito quando não há.
+  - Tocar num exercício adiante no AMRAP/For Time marca também os anteriores do round.
+  - O For Time tem "Pular descanso" no descanso entre rounds (a prancha não desenha esse estado).
+  - O AMRAP terminado pelo tempo mostra o fim no desenho do Al-T4e ("rounds + exercícios").
+- **Contas escolhidas:** o Tabata conta o último descanso no total (8 × 20/10 = 4 min, como a prancha); pular fase conta a fase como feita; a série do Tabata grava os segundos de trabalho; `targetReps` em faixa vira o maior número.
+- **Passe visual (prints em `~/.cache/fatia-vis/380/cmp-<prancha>.png`, prancha | web | app):**
+  - Corrigido: o card da aba Circuitos mostra todos os exercícios com o nome inteiro (`circuitExerciseChips`), como no `C()` da prancha; o corte em três e em duas palavras ("Thruster com") era o do plano.
+  - Corrigido: no app, o brilho dos intervalos é um gradiente radial em SVG (era um bloco de borda dura) e os pontos ficam no pé da tela, como no Al-T4b/T4d.
+  - Corrigido: na web, os cartões do resultado (Al-T11c e Treino feito) têm uma coluna por cartão; na primeira vez, sem comparação, a linha não fica com buraco. Os rótulos "Exercícios" e "Tempo de cada round" usam a fonte do corpo, não a dos títulos.
+  - Desvios de propósito: "Encerrar circuito" no AMRAP e no For Time (o Al-T4c diz "Encerrar"), com confirmação; "Salvar treino" verde e sem o botão de pausa morto no fim de todos os formatos (o Al-T4e desenha claro, o T4b/T4d verde); o selo do formato usa a cor do formato também no relógio (o Al-T4d desenha o EMOM azul, o Al-T6 laranja); o selo do relógio mostra o nome do circuito; a linha do exercício da vez no app é tinta lisa (sem `expo-linear-gradient`); o subtítulo do exercício no Al-T11c usa a linha de grupo do resto do treino.
+  - Os relógios de AMRAP, EMOM e Tabata foram conferidos com uma sessão falsa (rota interceptada na web, dado em memória no app), sem gravar nada; o For Time rodou de ponta a ponta.
+  - Pendência: o relógio aberto no app não acompanha toques feitos em outro aparelho enquanto fica aberto; retoma certo ao abrir de novo.
+  - Depois de trocar para esta branch, rode `pnpm install` (o api-client passou a depender do `@fatia/design`) e reinicie o `next dev`: o cache do webpack guarda o `circuitState` como ausente.
+- **Ainda não conferido:** som e avisos no aparelho (no Expo Go do Android não há avisos do sistema: o relógio só apita com a tela acesa).
 
 Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_achievement_workouts_100`, só dados):
 
@@ -237,6 +262,11 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
 - **Etapa 5 (#381):**
   - Cardio é o exercício com `muscleGroup` cardio (a regra que já existia), sem campo novo. Cardio é exercício, não tipo de treino.
   - "Salvar como plano" de uma sessão com cardio grava a distância e o tempo feitos como a meta de cardio do exercício do plano (a configuração da #378).
+- **Etapa 5 (#380):**
+  - Só AMRAP, EMOM, Tabata e For Time. Superset e giant set, e carga em % de 1RM, ficam para depois; a faixa de repetições (mín–máx) já existe desde a #378.
+  - EMOM e Tabata dividem a mesma tela de intervalos (Al-T4b e Al-T4d).
+  - O Al-T4e é um estado da tela do For Time (Al-T4c), não uma tela à parte.
+  - Na web, manter a tela acesa não é confiável (Wake Lock negado, iOS antigo, aba no fundo): o relógio segue certo pelos horários, e a tela avisa quando o navegador não tem a API. No app, `expo-keep-awake`, háptico, som por `expo-audio` e avisos do sistema com o app no fundo, tudo com fallback no Expo Go.
 - **Etapa 5 (#382):**
   - Sequência = dia ativo em todo lugar. Um dia é ativo com ao menos uma área cumprida: refeição, treino, água na meta ou passos na meta. Um cálculo só, sem dois números de sequência.
   - Conquistas: catálogo fechado em 10, com "100 treinos". O contador é N/10, e quem já tem 100 treinos ganha a conquista pela migration.

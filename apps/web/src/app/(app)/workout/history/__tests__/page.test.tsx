@@ -106,15 +106,19 @@ describe('Histórico de treinos', () => {
     expect(rows[1]).toHaveTextContent('Esteira · 5,1 km · 146 bpm');
   });
 
-  it('o filtro pede só o tipo escolhido; Circuitos fica de fora até a #380', async () => {
+  it('o filtro pede só o tipo escolhido, inclusive Circuitos (#380)', async () => {
     getHistory.mockResolvedValue(page([item({})]));
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('list', { name: 'Sessões' });
     expect(getHistory).toHaveBeenLastCalledWith({ kind: undefined, cursor: undefined });
-    expect(screen.queryByRole('radio', { name: 'Circuitos' })).toBeNull();
 
     getHistory.mockResolvedValue(page([]));
+    await user.click(screen.getByRole('radio', { name: 'Circuitos' }));
+    await waitFor(() =>
+      expect(getHistory).toHaveBeenLastCalledWith({ kind: 'circuit', cursor: undefined }),
+    );
+
     await user.click(screen.getByRole('radio', { name: 'Livres' }));
     await waitFor(() =>
       expect(getHistory).toHaveBeenLastCalledWith({ kind: 'free', cursor: undefined }),

@@ -15,6 +15,8 @@ import {
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
+import { CircuitSessionService } from './circuit-session.service';
+import { CircuitProgressDto, FinishCircuitDto, SaveCircuitDto } from './dto/circuit.dto';
 import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
@@ -55,7 +57,46 @@ export class WorkoutController {
     private readonly blocks: TrainingBlockService,
     private readonly muscles: MuscleSummaryService,
     private readonly agenda: AgendaService,
+    private readonly circuits: CircuitSessionService,
   ) {}
+
+  // -------- Circuitos (#380, Al-T22 e Al-T4) --------
+
+  /** "Novo circuito": nome, formato e exercícios de uma vez. A lista é a de planos (`kind`). */
+  @Post('circuits')
+  createCircuit(@CurrentUser() user: CurrentUserPayload, @Body() dto: SaveCircuitDto) {
+    return this.plans.createCircuit(user.id, dto);
+  }
+
+  /** Editar o circuito: tudo substituído. */
+  @Put('circuits/:id')
+  replaceCircuit(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveCircuitDto,
+  ) {
+    return this.plans.replaceCircuit(user.id, id, dto);
+  }
+
+  /** Os toques do circuito em andamento, para retomar em outra aba ou aparelho. */
+  @Put('sessions/:id/circuit')
+  saveCircuitProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CircuitProgressDto,
+  ) {
+    return this.circuits.saveProgress(user.id, id, dto.events);
+  }
+
+  /** "Encerrar circuito": resultado, séries e fim da sessão. Leva ao "Treino feito". */
+  @Post('sessions/:id/circuit/finish')
+  finishCircuit(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: FinishCircuitDto,
+  ) {
+    return this.circuits.finish(user.id, id, dto);
+  }
 
   // -------- Agenda de treinos (#379, Al-T24) --------
 

@@ -8,6 +8,7 @@ import { SessionSetService } from './session-set.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
 import { AgendaService } from './agenda.service';
+import { CircuitSessionService } from './circuit-session.service';
 import { ListPlannedSessionsTool } from './mcp/list-planned-sessions.tool';
 import { ReschedulePlannedSessionTool } from './mcp/reschedule-planned-session.tool';
 import { MuscleSummaryService } from './muscle-summary.service';
@@ -39,6 +40,7 @@ import { ListWorkoutPlansTool } from './mcp/list-workout-plans.tool';
 import { ListWorkoutSessionsTool } from './mcp/list-workout-sessions.tool';
 import { SaveSessionAsPlanTool } from './mcp/save-session-as-plan.tool';
 import { LogSetTool } from './mcp/log-set.tool';
+import { LogCircuitResultTool } from './mcp/log-circuit-result.tool';
 import { RemoveExerciseFromPlanTool } from './mcp/remove-exercise-from-plan.tool';
 import { ReorderPlanExercisesTool } from './mcp/reorder-plan-exercises.tool';
 import { SearchExerciseTool } from './mcp/search-exercise.tool';
@@ -62,6 +64,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     PrescriptionService,
     TrainingBlockService,
     AgendaService,
+    CircuitSessionService,
     ListPlannedSessionsTool,
     ReschedulePlannedSessionTool,
     MuscleSummaryService,
@@ -97,6 +100,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     ListWorkoutSessionsTool,
     SaveSessionAsPlanTool,
     LogSetTool,
+    LogCircuitResultTool,
     RemoveExerciseFromPlanTool,
     ReorderPlanExercisesTool,
     SearchExerciseTool,

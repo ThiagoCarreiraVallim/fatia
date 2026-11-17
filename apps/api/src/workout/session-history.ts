@@ -1,5 +1,7 @@
 import { averageFeeling } from './helpers/feeling';
 import { isCardioExercise } from './helpers/is-cardio';
+import type { Prisma } from '@prisma/client';
+import { parseCircuitJson, type CircuitFormatValue } from './helpers/circuit';
 import { sessionKind, type SessionKind } from './helpers/session-kind';
 
 /** A sessão como o histórico lê: as séries com o nome e o grupo do exercício. */
@@ -14,6 +16,8 @@ export interface HistorySessionInput {
   feeling: number | null;
   notes: string | null;
   plan: { name: string } | null;
+  /** O circuito congelado (#380); nulo em treino de séries. */
+  circuit?: Prisma.JsonValue | null;
   sets: Array<{
     exerciseId: number;
     weightKg: number | null;
@@ -57,6 +61,17 @@ export interface HistoryItem {
     durationSeconds: number | null;
     avgHeartRate: number | null;
   } | null;
+  /**
+   * O resultado do circuito (#380) para a linha: "4 rounds + 2 · 4 exercícios"
+   * ou "8 intervalos · 2 exercícios". Nulo fora de circuito ou sem resultado.
+   */
+  circuit: {
+    format: CircuitFormatValue;
+    roundsCompleted: number;
+    partialExercises: number;
+    intervalsCompleted: number | null;
+    exercises: number;
+  } | null;
 }
 
 /** O histórico com os totais do topo (sessões, duração média e volume). */
@@ -65,6 +80,18 @@ export interface WorkoutHistory {
   items: HistoryItem[];
   /** Passe como `cursor` para a próxima página (opaco); nulo no fim. */
   nextCursor: string | null;
+}
+
+function circuitLineOf(raw: Prisma.JsonValue | null | undefined): HistoryItem['circuit'] {
+  const json = raw == null ? null : parseCircuitJson(raw);
+  if (!json?.result) return null;
+  return {
+    format: json.definition.format,
+    roundsCompleted: json.result.roundsCompleted,
+    partialExercises: json.result.partialExercises,
+    intervalsCompleted: json.result.intervalsCompleted,
+    exercises: json.definition.exercises.length,
+  };
 }
 
 export function historyItemOf(session: HistorySessionInput): HistoryItem {
@@ -103,5 +130,6 @@ export function historyItemOf(session: HistorySessionInput): HistoryItem {
     volumeKg: Math.round(volume * 10) / 10,
     cardioExercises: new Set(cardio.map((s) => s.exerciseId)).size,
     cardio: cardioSummary,
+    circuit: circuitLineOf(session.circuit),
   };
 }

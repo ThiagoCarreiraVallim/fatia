@@ -124,4 +124,35 @@ describe('ActiveWorkoutBar', () => {
       screen.getByRole('link', { name: /^Treino em andamento: Descanso/ }),
     ).toHaveAccessibleName(/01:(29|30)/);
   });
+
+  it('circuito (#380): o relógio e os rounds do circuito, e o toque volta ao relógio', () => {
+    const startedAt = new Date(Date.now() - 198_000).toISOString();
+    const circuitSession = {
+      ...SESSION,
+      planId: 'c1',
+      startedAt,
+      circuit: {
+        version: 1,
+        definition: {
+          format: 'AMRAP',
+          name: 'AMRAP 12',
+          config: { durationSeconds: 720 },
+          exercises: [
+            { exerciseId: 1, name: 'Burpee', muscleGroup: 'cardio', unit: 'REPS', target: 10 },
+          ],
+        },
+        startedAt,
+        events: [{ type: 'round', at: Date.now() - 100_000 }],
+        result: null,
+      },
+    } as WorkoutSession;
+    render(
+      <RestTimerProvider>
+        <ActiveWorkoutBar session={circuitSession} bottom={100} />
+      </RestTimerProvider>,
+    );
+    const link = screen.getByRole('link', { name: /^Treino em andamento: AMRAP 12, 1 rounds/ });
+    expect(link).toHaveAttribute('href', '/workout/circuit/s1');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
 });

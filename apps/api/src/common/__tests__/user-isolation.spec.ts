@@ -41,6 +41,7 @@ import { ExerciseService } from '../../workout/exercise.service';
 import { SessionSetService } from '../../workout/session-set.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
+import { CircuitSessionService } from '../../workout/circuit-session.service';
 import { MuscleSummaryService } from '../../workout/muscle-summary.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 import { MediaService } from '../../storage/media.service';
@@ -109,6 +110,7 @@ describe('isolamento entre usuários', () => {
   const exercises = new ExerciseService(prisma);
   const plans = new WorkoutPlanService(prisma);
   const sessions = new WorkoutSessionService(prisma);
+  const circuits = new CircuitSessionService(prisma);
   const sets = new SessionSetService(prisma);
   const muscles = new MuscleSummaryService(prisma);
   const links = new ProfessionalLinkService(prisma);
@@ -940,6 +942,53 @@ describe('isolamento entre usuários', () => {
       await expect(sessions.finish(owned.userB, owned.sessionId, {})).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    describe('circuitos (#380)', () => {
+      const circuitDto = (exerciseId: number) => ({
+        name: 'AMRAP 12',
+        format: 'AMRAP' as const,
+        durationSeconds: 720,
+        exercises: [{ exerciseId, unit: 'REPS' as const, target: 10 }],
+      });
+
+      it('criar circuito com o exercício pessoal do user-A recusa, sem gravar', async () => {
+        const antes = await prisma.workoutPlan.count({ where: { userId: owned.userB } });
+        await expect(
+          plans.createCircuit(owned.userB, circuitDto(owned.customExerciseId)),
+        ).rejects.toThrow(NotFoundException);
+        expect(await prisma.workoutPlan.count({ where: { userId: owned.userB } })).toBe(antes);
+      });
+
+      it('editar o plano do user-A como circuito recusa', async () => {
+        await expect(
+          plans.replaceCircuit(owned.userB, owned.planId, circuitDto(owned.sharedExerciseId)),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('progresso, encerrar e registrar na sessão do user-A recusam', async () => {
+        await expect(circuits.saveProgress(owned.userB, owned.sessionId, [])).rejects.toThrow(
+          NotFoundException,
+        );
+        await expect(
+          circuits.finish(owned.userB, owned.sessionId, {
+            events: [],
+            result: {
+              roundsCompleted: 1,
+              partialExercises: 0,
+              roundSeconds: [],
+              elapsedSeconds: 60,
+              completed: true,
+            },
+          }),
+        ).rejects.toThrow(NotFoundException);
+        await expect(circuits.log(owned.userB, { planId: owned.planId })).rejects.toThrow(
+          NotFoundException,
+        );
+        const sessao = await prisma.workoutSession.findUnique({ where: { id: owned.sessionId } });
+        expect(sessao?.completedAt).toBeNull();
+        expect(sessao?.circuit).toBeNull();
+      });
     });
 
     it('save_session_as_plan (#381) recusa a sessão de outro e não cria plano', async () => {

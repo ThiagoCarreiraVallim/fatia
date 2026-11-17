@@ -10,6 +10,7 @@ import {
   dockedActionReserve,
   routeInfo,
   hasTopBar,
+  circuitRunPath,
 } from '../navigation';
 
 const hrefs = (s: ReturnType<typeof menuSections>) => s.flatMap((x) => x.items.map((i) => i.href));
@@ -195,6 +196,10 @@ describe('navegação', () => {
       '/workout/plans/new',
       // Al-T12: o Bloco de treino fecha no X, com o "Começar bloco" embaixo.
       '/workout/block',
+      // #380: Novo circuito (Al-T22), editar e o relógio (Al-T4…) são foco.
+      '/workout/circuits/new',
+      '/workout/circuits/c1',
+      '/workout/circuit/s1',
       // Al-T17b: o Treino livre fecha no X, com o "Iniciar treino" embaixo.
       '/workout/free',
       '/workout/free?add=cardio',
@@ -251,11 +256,14 @@ describe('navegação', () => {
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
       ['/nutrition/meals/m1?date=2026-11-15', 'Refeição', '/nutrition', 'Nutrição'],
       ['/nutrition/plan', 'Plano alimentar', '/nutrition', 'Nutrição'],
-      ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
-      ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos de treino'],
+      ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos e circuitos'],
       ['/workout/offers/o1', 'Plano recebido', '/workout', 'Treino'],
+      ['/workout/circuits/new', 'Novo circuito', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/circuits/c1', 'Editar circuito', '/workout/plans', 'Planos e circuitos'],
+      ['/workout/circuit/s1', 'Circuito', '/workout', 'Treino'],
       ['/workout/agenda', 'Agenda', '/workout', 'Treino'],
-      ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos de treino'],
+      ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos e circuitos'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico'],
       ['/workout/history/s1', 'Treino', '/workout/history', 'Histórico'],
       ['/workout/free', 'Treino atual', '/workout', 'Treino'],
@@ -324,6 +332,8 @@ describe('abas raiz', () => {
 
   it('a sessão e o "Treino feito" (Al-T3, Al-T5) não têm a barra de topo nem o voltar', () => {
     expect(hasTopBar('/workout/session/s1')).toBe(false);
+    // O relógio do circuito tem o próprio cabeçalho (X, formato e som), como a sessão.
+    expect(hasTopBar('/workout/circuit/s1')).toBe(false);
     expect(hasTopBar('/workout/session/s1?x=1')).toBe(false);
     // O Treino atual (Al-T17) segue com a barra: tem o voltar ao treino.
     expect(hasTopBar('/workout/session/s1/edit')).toBe(true);
@@ -368,5 +378,13 @@ describe('routeInfo.dismiss: tela que fecha no X em vez de voltar', () => {
     expect(routeInfo('/workout/plans/p1').dismiss).toBeUndefined();
     expect(routeInfo('/workout/plans').dismiss).toBeUndefined();
     expect(routeInfo('/rota/que/nao/existe').dismiss).toBeUndefined();
+  });
+});
+
+describe('circuitRunPath (#380)', () => {
+  it('leva ao relógio do circuito da sessão', () => {
+    expect(circuitRunPath('s1')).toBe('/workout/circuit/s1');
+    expect(navBarMode(circuitRunPath('a b'))).toBe('hidden');
+    expect(hasTopBar(circuitRunPath('s1'))).toBe(false);
   });
 });

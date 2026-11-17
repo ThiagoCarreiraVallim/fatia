@@ -8,6 +8,9 @@ import {
   activeWorkoutBarLabel,
   activeWorkoutBarLines,
   activeWorkoutBarView,
+  circuitBarSnapshot,
+  circuitRunPath,
+  circuitState,
   workoutApi,
   type WorkoutSession,
 } from '@fatia/api-client';
@@ -48,7 +51,20 @@ export function ActiveWorkoutBar({
 }) {
   const rest = useSessionRestTimer();
   const now = useNow();
-  const view = activeWorkoutBarView(session, rest, now);
+  // Circuito (#380): a barra mostra o relógio dele, calculado dos toques como na tela.
+  const circuit = session.circuit;
+  const snapshot = circuit
+    ? circuitBarSnapshot(
+        circuit.definition,
+        circuitState(
+          circuit.definition,
+          { startedAt: Date.parse(circuit.startedAt), events: circuit.events },
+          now.getTime(),
+        ),
+      )
+    : null;
+  const view = activeWorkoutBarView(session, rest, now, snapshot);
+  const target = circuit ? circuitRunPath(session.id) : href;
   // A sessão não traz o plano; a lista de planos já está em cache na aba Treino.
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -60,7 +76,10 @@ export function ActiveWorkoutBar({
   const resting = view.mode === 'rest';
   // A linha fina embaixo (#377): séries feitas contra as planejadas. Sem plano,
   // não há contra o que medir e ela some.
-  const planned = (session.plannedExercises ?? []).reduce((acc, e) => acc + (e.targetSets ?? 0), 0);
+  // No circuito as séries só nascem no fim: a linha ficaria parada em zero.
+  const planned = circuit
+    ? 0
+    : (session.plannedExercises ?? []).reduce((acc, e) => acc + (e.targetSets ?? 0), 0);
   const done = session.sets?.length ?? 0;
 
   return (
@@ -69,7 +88,7 @@ export function ActiveWorkoutBar({
       className="fixed inset-x-4 z-40 flex h-14 items-center gap-1 overflow-hidden rounded-[22px] bg-muted/85 pe-2 shadow-[0_0_0_1px_hsl(var(--border-subtle)),0_20px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl md:hidden"
     >
       <Link
-        href={href}
+        href={target}
         aria-label={activeWorkoutBarLabel(view)}
         className="flex h-full min-w-0 flex-1 items-center gap-3 rounded-[22px] ps-4"
       >

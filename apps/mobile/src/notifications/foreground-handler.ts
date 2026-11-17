@@ -1,5 +1,6 @@
 import { Notifications } from './native';
 import { isRestNotification } from '@/components/workout/session/rest-notification';
+import { isCircuitNotification } from '@/components/workout/circuit/circuit-alarms';
 
 /**
  * O que fazer com uma notificação que chega com o app aberto. O handler é
@@ -9,11 +10,13 @@ import { isRestNotification } from '@/components/workout/session/rest-notificati
  *
  * Com a sessão de treino aberta, o aviso do descanso já é o timer na tela, o
  * háptico e o leitor de tela: uma tarja por cima cobriria o campo de carga.
+ * O mesmo vale para as trocas do circuito (#380): a tela do relógio já apita.
  * Todo o resto aparece normalmente.
  */
 Notifications?.setNotificationHandler({
   handleNotification: async (notification) => {
-    const doDescanso = isRestNotification(notification.request.content.data);
+    const data = notification.request.content.data;
+    const doDescanso = isRestNotification(data) || isCircuitNotification(data);
     return {
       shouldShowBanner: !doDescanso,
       shouldShowList: !doDescanso,

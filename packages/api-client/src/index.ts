@@ -63,6 +63,8 @@ export * from './workout/rpe';
 export * from './workout/set-prefill';
 export * from './workout/prescription';
 export * from './workout/quick-templates';
+export * from './workout/circuit-timer';
+export * from './workout/circuit-copy';
 export * from './workout/history-copy';
 export * from './workout/pending-exercises';
 export * from './workout/session-cache';

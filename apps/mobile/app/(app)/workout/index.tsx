@@ -3,7 +3,7 @@ import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, type Href } from 'expo-router';
-import { CalendarDays, ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
+import { CalendarDays, ChevronRight, Heart, History, Plus, Timer, Zap } from 'lucide-react-native';
 import {
   blockRow,
   initialsOf,
@@ -446,9 +446,12 @@ export default function WorkoutScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 10 }}
             >
-              {plans.data.map((plan) => (
-                <PlanCard key={plan.id} plan={plan} width={planWidth} />
-              ))}
+              {/* Os circuitos têm o atalho deles em "Outros jeitos de treinar". */}
+              {plans.data
+                .filter((plan) => plan.kind !== 'CIRCUIT')
+                .map((plan) => (
+                  <PlanCard key={plan.id} plan={plan} width={planWidth} />
+                ))}
               <NewPlanCard width={plans.data.length ? 140 : planWidth} />
             </ScrollView>
           ) : null}
@@ -456,7 +459,7 @@ export default function WorkoutScreen() {
 
         <View className="gap-3">
           <SectionTitle>Outros jeitos de treinar</SectionTitle>
-          {/* Circuito e Modelos entram com a #380 e a #379. */}
+          {/* Modelos entra com a #379. */}
           <View className="flex-row gap-2">
             <WayCard
               title="Livre"
@@ -472,6 +475,23 @@ export default function WorkoutScreen() {
               tone={colors.danger}
               onPress={() => router.push('/workout/free?add=cardio' as Href)}
             />
+          </View>
+          <View className="flex-row gap-2">
+            {/* Quem já tem circuito cai na lista deles (Al-T6); quem não tem, no Novo circuito. */}
+            <WayCard
+              title="Circuito"
+              subtitle="AMRAP, EMOM"
+              icon={Timer}
+              tone={colors.warning}
+              onPress={() =>
+                router.push(
+                  (plans.data?.some((p) => p.kind === 'CIRCUIT')
+                    ? '/workout/plans?tab=circuitos'
+                    : '/workout/circuits/new') as Href,
+                )
+              }
+            />
+            <View className="flex-1" />
           </View>
         </View>
 

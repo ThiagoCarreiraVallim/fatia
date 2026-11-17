@@ -587,6 +587,10 @@ importers:
         version: 5.9.3
 
   packages/api-client:
+    dependencies:
+      '@fatia/design':
+        specifier: workspace:^
+        version: link:../design
     devDependencies:
       typescript:
         specifier: ^5.5.0

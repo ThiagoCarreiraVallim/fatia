@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, type Href } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { ChevronRight, Layers, Play, Plus, Trash2, Users } from 'lucide-react-native';
 import {
+  circuitBadge,
+  circuitExerciseChips,
+  circuitPlanSummary,
   planExerciseChips,
   planSummaryLine,
   workoutApi,
@@ -12,13 +15,18 @@ import {
   type WorkoutPlan,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { cn, EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { cn, EmptyState, ErrorState, LoadingState, Segmented } from '@/components/ui';
+import { CircuitBadge } from '@/components/workout/circuit/circuit-badge';
+import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
 import { colors } from '@/theme/colors';
 
+type PlansTab = 'planos' | 'circuitos';
+
 /**
- * Réplica de `apps/web/src/app/(app)/workout/plans/page.tsx` (Al-T6, #378): os
- * cards dos planos, os atalhos e o "Novo plano" preso embaixo.
+ * Réplica de `apps/web/src/app/(app)/workout/plans/page.tsx` (Al-T6, #378 e
+ * #380): as abas Planos e Circuitos, os cards, os atalhos e o "Novo plano" ou
+ * "Novo circuito" preso embaixo.
  */
 
 export default function PlansScreen() {
@@ -26,6 +34,10 @@ export default function PlansScreen() {
   // Excluir pergunta antes, no próprio card (Al-T6): o histórico continua, mas o plano não volta.
   const [askId, setAskId] = useState<string | null>(null);
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<PlansTab>(params.tab === 'circuitos' ? 'circuitos' : 'planos');
+  const circuitsTab = tab === 'circuitos';
+  const startCircuit = useStartCircuit();
 
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -56,6 +68,9 @@ export default function PlansScreen() {
   });
 
   const activeBlock = block.data ?? null;
+  const shown = plans.data?.filter((p) => (p.kind === 'CIRCUIT') === circuitsTab);
+  const starting = start.isPending || startCircuit.isPending;
+  const startFailed = start.isError || startCircuit.isError;
 
   return (
     <Screen
@@ -64,17 +79,34 @@ export default function PlansScreen() {
       footer={
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Novo plano"
-          onPress={() => router.push('/workout/plans/new')}
+          accessibilityLabel={circuitsTab ? 'Novo circuito' : 'Novo plano'}
+          onPress={() =>
+            router.push((circuitsTab ? '/workout/circuits/new' : '/workout/plans/new') as Href)
+          }
           className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-foreground active:opacity-80"
         >
           <Plus size={16} color={colors.background} />
-          <Text className="font-sans-bold text-[15px] text-background">Novo plano</Text>
+          <Text className="font-sans-bold text-[15px] text-background">
+            {circuitsTab ? 'Novo circuito' : 'Novo plano'}
+          </Text>
         </Pressable>
       }
     >
       <View className="gap-4 px-4 pt-2">
-        {activeBlock ? (
+        <Segmented<PlansTab>
+          label="Planos ou circuitos"
+          value={tab}
+          onChange={(next) => {
+            setTab(next);
+            setAskId(null);
+          }}
+          options={[
+            { value: 'planos', label: 'Planos' },
+            { value: 'circuitos', label: 'Circuitos' },
+          ]}
+        />
+
+        {!circuitsTab && activeBlock ? (
           <BlockCard
             block={activeBlock}
             starting={start.isPending}
@@ -86,28 +118,41 @@ export default function PlansScreen() {
         {plans.isError ? (
           <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : null}
-        {plans.data && plans.data.length === 0 ? (
+        {shown && shown.length === 0 && !circuitsTab ? (
           <EmptyState
             title="Nenhum plano criado ainda."
             description="Monte um treino (ex.: Push, Pull, Pernas) para começar mais rápido na academia."
           />
         ) : null}
-        {start.isError ? (
+        {shown && shown.length === 0 && circuitsTab ? (
+          <EmptyState
+            title="Nenhum circuito ainda."
+            description="Monte um AMRAP, EMOM, Tabata ou For Time e deixe o relógio contar por você."
+          />
+        ) : null}
+        {startFailed ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
             Não foi possível começar o treino.
           </Text>
         ) : null}
 
-        {plans.data?.map((plan) => (
+        {shown?.map((plan) => (
           <PlanCard
             key={plan.id}
             plan={plan}
-            starting={start.isPending}
+            circuit={circuitsTab}
+            starting={starting}
             asking={askId === plan.id}
             removing={remove.isPending}
             removeFailed={remove.isError && askId === plan.id}
-            onOpen={() => router.push(`/workout/plans/${plan.id}`)}
-            onStart={() => start.mutate(plan.id)}
+            onOpen={() =>
+              router.push(
+                (circuitsTab
+                  ? `/workout/circuits/${plan.id}`
+                  : `/workout/plans/${plan.id}`) as Href,
+              )
+            }
+            onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
             onAsk={() => {
               remove.reset();
               setAskId(plan.id);
@@ -117,18 +162,22 @@ export default function PlansScreen() {
           />
         ))}
 
-        <Shortcut
-          icon={<Users size={20} color={colors.primaryText} />}
-          title="Modelos das comunidades"
-          subtitle="planos prontos dos seus grupos"
-          onPress={() => router.push('/workout/templates' as Href)}
-        />
-        <Shortcut
-          icon={<Layers size={20} color={colors.primaryText} />}
-          title="Bloco de semanas"
-          subtitle="organize força, volume e deload"
-          onPress={() => router.push('/workout/block' as Href)}
-        />
+        {!circuitsTab ? (
+          <>
+            <Shortcut
+              icon={<Users size={20} color={colors.primaryText} />}
+              title="Modelos das comunidades"
+              subtitle="planos prontos dos seus grupos"
+              onPress={() => router.push('/workout/templates' as Href)}
+            />
+            <Shortcut
+              icon={<Layers size={20} color={colors.primaryText} />}
+              title="Bloco de semanas"
+              subtitle="organize força, volume e deload"
+              onPress={() => router.push('/workout/block' as Href)}
+            />
+          </>
+        ) : null}
       </View>
     </Screen>
   );
@@ -211,6 +260,7 @@ function BlockCard({
 
 function PlanCard({
   plan,
+  circuit = false,
   starting,
   asking,
   removing,
@@ -222,6 +272,8 @@ function PlanCard({
   onDelete,
 }: {
   plan: WorkoutPlan;
+  /** Card da aba Circuitos: o resumo e o selo do formato; o toque abre o editor. */
+  circuit?: boolean;
   starting: boolean;
   asking: boolean;
   removing: boolean;
@@ -233,8 +285,9 @@ function PlanCard({
   onDelete: () => void;
 }) {
   const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
-  const chips = planExerciseChips(exercises);
-  const summary = planSummaryLine(exercises);
+  const chips = circuit ? circuitExerciseChips(exercises) : planExerciseChips(exercises);
+  const summary = circuit ? circuitPlanSummary(plan) : planSummaryLine(exercises);
+  const format = circuit ? plan.circuit?.format : undefined;
   const template = Boolean(plan.fromTemplateId);
   const cantStart = starting || exercises.length === 0;
   return (
@@ -253,31 +306,43 @@ function PlanCard({
             </Text>
             <Text className="text-xs text-faint">{summary}</Text>
           </View>
-          <View
-            className={cn('h-[22px] justify-center rounded-pill px-[9px]', template && 'bg-brand')}
-            style={template ? undefined : { backgroundColor: `${colors.primary}1f` }}
-          >
-            <Text
+          {format ? (
+            <CircuitBadge format={format} label={circuitBadge(format).label} />
+          ) : (
+            <View
               className={cn(
-                'font-sans-extrabold text-[11px] uppercase tracking-wide',
-                template ? 'text-brand-foreground' : 'text-primary',
+                'h-[22px] justify-center rounded-pill px-[9px]',
+                template && 'bg-brand',
               )}
+              style={template ? undefined : { backgroundColor: `${colors.primary}1f` }}
             >
-              {template ? 'modelo' : 'seu'}
-            </Text>
-          </View>
+              <Text
+                className={cn(
+                  'font-sans-extrabold text-[11px] uppercase tracking-wide',
+                  template ? 'text-brand-foreground' : 'text-primary',
+                )}
+              >
+                {template ? 'modelo' : 'seu'}
+              </Text>
+            </View>
+          )}
         </View>
         {chips.length > 0 ? (
           <View className="flex-row flex-wrap gap-1.5">
             {chips.map((c) => (
               <View
                 key={c.label}
-                className="h-[30px] flex-row items-center gap-1.5 rounded-[15px] bg-muted pl-[3px] pr-2.5"
+                className="h-[30px] max-w-full flex-row items-center gap-1.5 rounded-[15px] bg-muted pl-[3px] pr-2.5"
               >
                 <View className="h-6 w-6 items-center justify-center rounded-full bg-surface-3">
                   <Text className="font-sans-extrabold text-[11px] text-foreground">{c.label}</Text>
                 </View>
-                <Text className="font-sans-semibold text-xs text-foreground">{c.name}</Text>
+                <Text
+                  numberOfLines={1}
+                  className="shrink font-sans-semibold text-xs text-foreground"
+                >
+                  {c.name}
+                </Text>
               </View>
             ))}
           </View>

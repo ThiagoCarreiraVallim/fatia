@@ -787,7 +787,7 @@ model Exercise {
 }
 
 model WorkoutPlan {
-  id             String   @id @default(uuid())
+  id             String          @id @default(uuid())
   userId         String
   name           String // "Push", "Pull", "Leg"
   /// Plano pronto da comunidade de onde este plano veio (Fase 7). Torna a
@@ -796,12 +796,17 @@ model WorkoutPlan {
   /// Oferta da equipe de onde este plano veio (#379). Aceitar a versão nova
   /// troca os exercícios deste mesmo plano; apagar o plano não mexe na oferta.
   fromOfferId    String?
+  /// Plano de séries (STRENGTH) ou circuito com timer (CIRCUIT, #380). O
+  /// circuito leva a configuração em `circuit` e os exercícios em `exercises`,
+  /// cada um com `repUnit` (reps ou segundos) e `targetReps` (o número).
+  kind           WorkoutPlanKind @default(STRENGTH)
   /// Sessão que virou este plano no "Salvar como plano" (#381). Torna o salvar
   /// idempotente (um plano por sessão); apagar a sessão não apaga o plano.
   fromSessionId  String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime        @default(now())
 
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circuit         CircuitConfig?
   exercises       WorkoutPlanExercise[]
   sessions        WorkoutSession[]      @relation("SessionPlan")
   fromSession     WorkoutSession?       @relation("PlanFromSession", fields: [fromSessionId], references: [id], onDelete: SetNull)
@@ -814,6 +819,43 @@ model WorkoutPlan {
   @@index([userId, fromTemplateId])
   @@index([fromOfferId])
   @@unique([userId, fromSessionId])
+}
+
+enum WorkoutPlanKind {
+  STRENGTH
+  CIRCUIT
+}
+
+/// Formatos de circuito do canvas (Al-T22). Superset, giant set e carga em %
+/// de 1RM ficam para depois (#380, decisão do dono).
+enum CircuitFormat {
+  /// Máximo de rounds em `durationSeconds`.
+  AMRAP
+  /// Um exercício por minuto, em rodízio, por `durationSeconds`.
+  EMOM
+  /// `intervals` × (`workSeconds` de trabalho + `restSeconds` de descanso).
+  TABATA
+  /// `rounds` rounds no menor tempo, com `restBetweenRoundsSeconds` entre eles.
+  FOR_TIME
+}
+
+/// A configuração do circuito (#380, Al-T22). Uma por plano `CIRCUIT`; só os
+/// campos do formato ficam preenchidos (a API confere).
+model CircuitConfig {
+  id                       String        @id @default(uuid())
+  planId                   String        @unique
+  format                   CircuitFormat
+  /// AMRAP e EMOM.
+  durationSeconds          Int?
+  /// Tabata.
+  workSeconds              Int?
+  restSeconds              Int?
+  intervals                Int?
+  /// For Time.
+  rounds                   Int?
+  restBetweenRoundsSeconds Int?
+
+  plan WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 }
 
 /// Uma linha do plano. A identidade é o `id` (e a posição é `order`): o mesmo
@@ -953,6 +995,14 @@ model WorkoutSession {
   /// 3 Puxado, 4 Muito puxado, 5 No limite. Nulo = não marcou. A sensação de
   /// cada série continua no `SessionSet.rpe` (6 a 10, a mesma escala).
   feeling Int?
+
+  /// Circuito (#380), em JSON versionado (`version: 1`): o retrato do circuito
+  /// no começo (formato, configuração e exercícios, para o histórico não mudar
+  /// quando o plano mudar), os toques com horário (`events`, para retomar em
+  /// outra aba ou aparelho) e, no fim, o resultado (`result`: rounds, tempo de
+  /// cada round, tempo final, reps). Nulo em sessão de séries. As séries de
+  /// cada exercício continuam em `SessionSet`, para estatística e "previous".
+  circuit Json?
 
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan       WorkoutPlan?    @relation("SessionPlan", fields: [planId], references: [id])

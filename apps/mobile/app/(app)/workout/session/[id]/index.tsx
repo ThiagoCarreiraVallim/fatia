@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { workoutApi } from '@fatia/api-client';
+import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { circuitRunPath, workoutApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { ActiveSession } from '@/components/workout/session/active-session';
@@ -68,6 +68,12 @@ export default function WorkoutSessionScreen() {
     refreshing: session.isRefetching,
     onRefresh: () => void session.refetch(),
   };
+
+  // Circuito aberto (#380): o lugar dele é o relógio. Toda entrada (barra do
+  // treino, semana, "Começar") que aponta para a sessão cai lá.
+  if (!session.data.completedAt && session.data.circuit) {
+    return <Redirect href={circuitRunPath(session.data.id) as Href} />;
+  }
 
   return session.data.completedAt ? (
     <CompletedSession {...props} />

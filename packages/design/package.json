@@ -2,7 +2,7 @@
   "name": "@fatia/design",
   "version": "0.1.0",
   "private": true,
-  "description": "Design system v2 \"Noite\": tokens, contraste, cor de marca, ícones e movimento, compartilhados por app, web, site e API.",
+  "description": "Design system v2 \"Noite\": tokens, contraste, cor de marca, ícones, movimento e o relógio dos circuitos, compartilhados por app, web, site e API.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

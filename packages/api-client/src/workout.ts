@@ -1,6 +1,13 @@
 import { apiFetch } from './http';
 import type { MediaView } from './community-content';
 import type { GymEquipmentState } from './community-exercises';
+import type {
+  CircuitConfigInput,
+  CircuitDefinition,
+  CircuitEvent,
+  CircuitFormat,
+  CircuitResult,
+} from './workout/circuit-timer';
 
 export type MuscleGroup =
   | 'peito'
@@ -184,7 +191,118 @@ export interface WorkoutSession {
   /** Exercícios do plano tirados desta sessão — já fora de `plannedExercises`. */
   removedExerciseIds?: number[];
   /** O plano de onde a sessão veio, quando a listagem o inclui. */
-  plan?: { id: string; name: string } | null;
+  plan?: { id: string; name: string; kind?: WorkoutPlanKind } | null;
+  /** Circuito (#380): o retrato, os toques e, no fim, o resultado. Nulo em treino de séries. */
+  circuit?: CircuitSessionData | null;
+}
+
+/** `WorkoutSession.circuit`, versão 1. */
+export interface CircuitSessionData {
+  version: 1;
+  definition: CircuitDefinition;
+  /** Quando o relógio começou (ISO). */
+  startedAt: string;
+  events: CircuitEvent[];
+  result: (Omit<CircuitResult, 'exercises'> & { exercises: CircuitResult['exercises'] }) | null;
+  /** A última vez do mesmo circuito, congelada no começo (ausente nas sessões antigas). */
+  previous?: CircuitPrevious | null;
+}
+
+export interface CircuitPrevious {
+  sessionId: string;
+  startedAt: string;
+  roundsCompleted: number;
+  partialExercises: number;
+  finalTimeSeconds: number | null;
+  intervalsCompleted: number | null;
+  totalReps: number;
+  elapsedSeconds: number;
+}
+
+export type WorkoutPlanKind = 'STRENGTH' | 'CIRCUIT';
+
+/** A configuração do circuito como a API devolve (só os campos do formato preenchidos). */
+export interface CircuitConfigView {
+  format: CircuitFormat;
+  durationSeconds: number | null;
+  workSeconds: number | null;
+  restSeconds: number | null;
+  intervals: number | null;
+  rounds: number | null;
+  restBetweenRoundsSeconds: number | null;
+}
+
+/** O circuito no "Treino feito" (Al-T5) e no detalhe do histórico (Al-T11c, #381). */
+export interface CircuitSummary {
+  format: CircuitFormat;
+  name: string;
+  config: CircuitConfigInput;
+  roundsCompleted: number;
+  partialExercises: number;
+  /** O exercício da vez quando parou no meio de um round. */
+  stoppedAt: { exerciseId: number; name: string } | null;
+  roundSeconds: number[];
+  partialRoundSeconds: number | null;
+  averageRoundSeconds: number | null;
+  elapsedSeconds: number;
+  finalTimeSeconds: number | null;
+  intervalsCompleted: number | null;
+  intervalsTotal: number | null;
+  completed: boolean;
+  totalReps: number;
+  exercises: Array<{
+    exerciseId: number;
+    name: string;
+    muscleGroup: string;
+    unit: 'REPS' | 'SECONDS';
+    target: number;
+    sets: number;
+    reps: number;
+    seconds: number;
+  }>;
+  previous: {
+    sessionId: string;
+    startedAt: string;
+    roundsCompleted: number;
+    partialExercises: number;
+    finalTimeSeconds: number | null;
+    intervalsCompleted: number | null;
+    totalReps: number;
+    elapsedSeconds: number;
+  } | null;
+  comparison: {
+    verdict: 'better' | 'same' | 'worse';
+    roundsDelta: number | null;
+    finalTimeDeltaSeconds: number | null;
+    intervalsDelta: number | null;
+    repsDelta: number;
+    previousFinalTimeSeconds: number | null;
+  } | null;
+}
+
+/** Corpo de "Salvar" do Novo circuito (Al-T22): também a edição. */
+export interface CircuitInput extends CircuitConfigInput {
+  name: string;
+  format: CircuitFormat;
+  exercises: Array<{ exerciseId: number; unit: 'REPS' | 'SECONDS'; target: number }>;
+}
+
+/** O que "Encerrar circuito" manda: os toques e o resultado contado pelo relógio. */
+export interface CircuitFinishInput {
+  events: CircuitEvent[];
+  result: Pick<
+    CircuitResult,
+    | 'roundsCompleted'
+    | 'partialExercises'
+    | 'roundSeconds'
+    | 'partialRoundSeconds'
+    | 'elapsedSeconds'
+    | 'finalTimeSeconds'
+    | 'intervalsCompleted'
+    | 'completed'
+  >;
+  feeling?: number;
+  notes?: string;
 }
 
 /** Os grupos de força da semana (`GET /workout/muscles/week`). Cardio fica fora. */
@@ -303,6 +421,8 @@ export interface WorkoutSessionSummary {
   checkin: (Omit<WorkoutCheckin, 'sessionId'> & { sessionId?: string }) | null;
   /** Nulo: ninguém da equipe lê Treino, a folha de perguntas não aparece. */
   questions: { askedBy: string[]; items: PostWorkoutQuestion[] } | null;
+  /** Circuito (#380): rounds, tempo por round, tempo final e a comparação. */
+  circuit?: CircuitSummary | null;
   /**
    * O plano que esta sessão virou no "Salvar como plano" (#381): o detalhe
    * mostra "Ver plano" no lugar do botão. Opcional para respostas antigas.
@@ -330,6 +450,14 @@ export interface WorkoutHistoryItem {
     distanceMeters: number | null;
     durationSeconds: number | null;
     avgHeartRate: number | null;
+  } | null;
+  /** Circuito (#380): o resultado para a linha. Opcional para respostas antigas. */
+  circuit?: {
+    format: CircuitFormat;
+    roundsCompleted: number;
+    partialExercises: number;
+    intervalsCompleted: number | null;
+    exercises: number;
   } | null;
 }
 
@@ -377,6 +505,9 @@ export interface WorkoutPlan {
   name: string;
   /** Plano pronto da comunidade de onde veio (adoção). */
   fromTemplateId?: string | null;
+  /** Plano de séries ou circuito (#380). Ausente em resposta antiga = séries. */
+  kind?: WorkoutPlanKind;
+  circuit?: CircuitConfigView | null;
   exercises: WorkoutPlanExercise[];
   /** Sessões encerradas com este plano (#378). */
   timesDone?: number;
@@ -542,6 +673,26 @@ export const workoutApi = {
       body: JSON.stringify(body),
     }),
   deletePlan: (id: string) => apiFetch<void>(`/api/workout/plans/${id}`, { method: 'DELETE' }),
+
+  // Circuitos (#380)
+  createCircuit: (body: CircuitInput) =>
+    apiFetch<WorkoutPlan>('/api/workout/circuits', { method: 'POST', body: JSON.stringify(body) }),
+  updateCircuit: (id: string, body: CircuitInput) =>
+    apiFetch<WorkoutPlan>(`/api/workout/circuits/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  /** Os toques do circuito em andamento: a lista inteira, a cada toque. */
+  saveCircuitProgress: (sessionId: string, events: CircuitEvent[]) =>
+    apiFetch<{ events: number }>(`/api/workout/sessions/${sessionId}/circuit`, {
+      method: 'PUT',
+      body: JSON.stringify({ events }),
+    }),
+  finishCircuit: (sessionId: string, body: CircuitFinishInput) =>
+    apiFetch<{ sessionId: string; alreadyFinished: boolean }>(
+      `/api/workout/sessions/${sessionId}/circuit/finish`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
 
   addPlanExercise: (planId: string, body: { exerciseId: number } & PlanExerciseInput) =>
     apiFetch<WorkoutPlanExercise>(`/api/workout/plans/${planId}/exercises`, {

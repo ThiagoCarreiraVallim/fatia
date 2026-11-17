@@ -23,14 +23,11 @@ function trim(n: number): string {
   return (Math.round(n * 10) / 10).toFixed(1).replace('.', ',').replace(/,0$/, '');
 }
 
-/**
- * Os filtros do topo do histórico. **Ponto de extensão (#380):** "Circuitos"
- * (`kind: 'circuit'`) entra aqui quando a sessão de circuito existir; antes
- * disso a aba ficaria sempre vazia (a mesma escolha do "Planos de treino" da #378).
- */
+/** Os filtros do topo do histórico (Al-T10), com os circuitos da #380. */
 export const HISTORY_FILTERS: ReadonlyArray<{ kind: SessionKind | undefined; label: string }> = [
   { kind: undefined, label: 'Tudo' },
   { kind: 'plan', label: 'Planos' },
+  { kind: 'circuit', label: 'Circuitos' },
   { kind: 'free', label: 'Livres' },
 ];
 
@@ -59,6 +56,7 @@ function cardioBits(
  * 146 bpm" (só cardio) ou "5 exercícios + esteira 10 min" (força com cardio).
  */
 export function historyLine(item: WorkoutHistoryItem, units: Units): string {
+  if (item.circuit) return circuitHistoryLine(item.circuit);
   if (item.strengthExercises === 0 && item.cardio) {
     return [item.cardio.exerciseName, ...cardioBits(item.cardio, units, true)].join(' · ');
   }
@@ -72,6 +70,16 @@ export function historyLine(item: WorkoutHistoryItem, units: Units): string {
   if (!item.cardio) return strength;
   const cardio = [item.cardio.exerciseName.toLowerCase(), ...cardioBits(item.cardio, units, false)];
   return `${strength} + ${cardio.join(' ')}`;
+}
+
+/** Circuito (#380, Al-T10): "4 rounds + 2 · 4 exercícios" ou "8 intervalos · 2 exercícios". */
+function circuitHistoryLine(c: NonNullable<WorkoutHistoryItem['circuit']>): string {
+  const exercises = plural(c.exercises, 'exercício', 'exercícios');
+  if (c.intervalsCompleted != null) {
+    return `${plural(c.intervalsCompleted, 'intervalo', 'intervalos')} · ${exercises}`;
+  }
+  const rounds = plural(c.roundsCompleted, 'round', 'rounds');
+  return `${c.partialExercises > 0 ? `${rounds} + ${c.partialExercises}` : rounds} · ${exercises}`;
 }
 
 /** A coluna do dia: "ter" e "3", no fuso do aparelho. */
@@ -119,9 +127,8 @@ export interface SessionHero {
 }
 
 /**
- * O cartão de cima do detalhe. **Ponto de extensão (#380):** a sessão de
- * circuito (Al-T11c: rounds, duração, média por round, cartão amarelo) entra
- * aqui como um terceiro `tone`, quando o resumo trouxer o resultado do circuito.
+ * O cartão de cima do detalhe de força ou cardio. O circuito (Al-T11c) tem o
+ * cartão dele (`CircuitResultBlocks`): veja `sessionDetailBody`.
  */
 export function sessionHero(summary: WorkoutSessionSummary, units: Units): SessionHero {
   const name = (summary.planName ?? 'Treino livre').toUpperCase();
@@ -187,6 +194,26 @@ export function cardioRecordLine(
  * "Repetir" (#381): a sessão com plano repete o plano; a livre começa outra
  * livre com os mesmos exercícios, que entram como escolhidos e ainda sem série.
  */
+/**
+ * O corpo do detalhe do histórico: o circuito (Al-T11c, com "Repetir circuito"
+ * quando o circuito ainda existe), só cardio (Al-T11b) ou força (Al-T11).
+ */
+export type SessionDetailBody =
+  | {
+      kind: 'circuit';
+      circuit: NonNullable<WorkoutSessionSummary['circuit']>;
+      repeatPlanId: string | null;
+    }
+  | { kind: 'cardio' }
+  | { kind: 'strength' };
+
+export function sessionDetailBody(summary: WorkoutSessionSummary): SessionDetailBody {
+  if (summary.circuit) {
+    return { kind: 'circuit', circuit: summary.circuit, repeatPlanId: summary.planId };
+  }
+  return cardioOnly(summary) ? { kind: 'cardio' } : { kind: 'strength' };
+}
+
 /** O que o detalhe oferece ao lado do "Repetir": salvar como plano, ou ver o plano salvo. */
 export type SessionPlanAction = { kind: 'save' } | { kind: 'view'; planId: string } | null;
 
@@ -196,6 +223,8 @@ export type SessionPlanAction = { kind: 'save' } | { kind: 'view'; planId: strin
  * salva, a sessão leva ao plano que virou ("Ver plano"), em vez de criar outro.
  */
 export function sessionPlanAction(summary: WorkoutSessionSummary): SessionPlanAction {
+  // Circuito não vira plano de força (#380), nem num resumo antigo sem `kind`.
+  if (summary.circuit) return null;
   const kind = summary.kind ?? (summary.planId ? 'plan' : 'free');
   if (kind !== 'free') return null;
   return summary.savedPlanId ? { kind: 'view', planId: summary.savedPlanId } : { kind: 'save' };

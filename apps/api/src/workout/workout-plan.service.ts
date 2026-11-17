@@ -15,6 +15,8 @@ import type {
   UpdatePlanDto,
   UpdatePlanExerciseDto,
 } from './dto/plan.dto';
+import type { SaveCircuitDto } from './dto/circuit.dto';
+import { normalizeCircuitConfig } from './helpers/circuit';
 import type { SaveSessionAsPlanDto } from './dto/session.dto';
 import { planExercisesFromSession } from './helpers/plan-from-session';
 import { orderExercisesLikeSession } from './session-summary';
@@ -36,6 +38,7 @@ const PLAN_EXERCISE_INCLUDE = {
 } as const;
 
 const PLAN_INCLUDE = {
+  circuit: true,
   exercises: {
     include: PLAN_EXERCISE_INCLUDE,
     orderBy: { order: 'asc' as const },
@@ -70,6 +73,74 @@ export class WorkoutPlanService {
   }
 
   /**
+   * "Novo circuito" (Al-T22): plano `CIRCUIT` com a configuração do formato e
+   * os exercícios na ordem, cada um por reps ou por tempo, de uma vez.
+   */
+  async createCircuit(userId: string, dto: SaveCircuitDto): Promise<PlanView> {
+    const { config, exercises } = await this.circuitWrites(userId, dto);
+    const plan = await this.prisma.workoutPlan.create({
+      data: {
+        userId,
+        name: dto.name,
+        kind: 'CIRCUIT',
+        circuit: { create: { format: dto.format, ...config } },
+        exercises: { create: exercises },
+      },
+    });
+    return this.findById(userId, plan.id);
+  }
+
+  /** Editar o circuito: nome, formato e exercícios substituídos inteiros, numa transação. */
+  async replaceCircuit(userId: string, planId: string, dto: SaveCircuitDto): Promise<PlanView> {
+    const plan = await this.assertOwner(userId, planId);
+    if (plan.kind !== 'CIRCUIT') throw new BadRequestException('Este plano não é um circuito.');
+    const { config, exercises } = await this.circuitWrites(userId, dto);
+    await this.prisma.$transaction([
+      this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
+      this.prisma.workoutPlan.update({
+        where: { id: planId },
+        data: {
+          name: dto.name,
+          circuit: {
+            upsert: {
+              create: { format: dto.format, ...config },
+              update: { format: dto.format, ...config },
+            },
+          },
+          exercises: { create: exercises },
+        },
+      }),
+    ]);
+    return this.findById(userId, planId);
+  }
+
+  /**
+   * Configuração conferida pelo formato e as linhas dos exercícios. Os ids vêm
+   * do corpo: exercício que a pessoa não enxerga (custom de outra conta,
+   * comunidade de que não faz parte) recusa tudo antes de qualquer escrita.
+   */
+  private async circuitWrites(userId: string, dto: SaveCircuitDto) {
+    const config = normalizeCircuitConfig(dto.format, dto);
+    const ids = dto.exercises.map((e) => e.exerciseId);
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException('Esse exercício já está no circuito.');
+    }
+    const visible = await this.prisma.exercise.count({
+      where: { id: { in: ids }, ...readableExercises(userId) },
+    });
+    if (visible !== ids.length) throw new NotFoundException('Exercise not found');
+    const exercises = dto.exercises.map((e, i) => ({
+      exerciseId: e.exerciseId,
+      order: i + 1,
+      targetSets: 1,
+      targetReps: String(e.target),
+      repUnit: e.unit,
+      loadMode: 'BODYWEIGHT' as const,
+    }));
+    return { config, exercises };
+  }
+
+  /**
    * "Salvar como plano" (#381, prancha `Al-T11b`): um plano novo com os
    * exercícios da sessão, na ordem dela, e as metas observadas
    * (`planExercisesFromSession`). Cardio vira meta de cardio (#378).
@@ -94,6 +165,7 @@ export class WorkoutPlanService {
         completedAt: true,
         exerciseOrder: true,
         planName: true,
+        circuit: true,
         plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
         sets: {
           select: {
@@ -113,6 +185,11 @@ export class WorkoutPlanService {
       },
     });
     if (!session) throw new NotFoundException('Session not found');
+    // O circuito (#380) tem formato, tempos e rounds que um plano de séries não
+    // guarda: virar plano perderia o circuito em silêncio.
+    if (session.circuit != null) {
+      throw new BadRequestException('Circuito não vira plano de força');
+    }
     if (!session.completedAt) {
       throw new ConflictException('Termine o treino antes de salvar como plano');
     }

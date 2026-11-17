@@ -19,7 +19,20 @@ import type {
   WorkoutCheckinDto,
 } from './dto/session.dto';
 import { summarizeSession, type SessionSummary } from './session-summary';
-import { WORKOUT_FINISHED_HOOKS, type WorkoutFinishedHook } from './workout-finished.hook';
+import {
+  circuitDefinitionFromPlan,
+  circuitSummaryView,
+  newCircuitJson,
+  parseCircuitJson,
+  sameCircuitDefinition,
+  type CircuitJsonV1,
+  type CircuitSummaryView,
+} from './helpers/circuit';
+import {
+  WORKOUT_FINISHED_HOOKS,
+  runWorkoutFinishedHooks,
+  type WorkoutFinishedHook,
+} from './workout-finished.hook';
 import { historyItemOf, type WorkoutHistory } from './session-history';
 import { sessionKind, sessionKindWhere } from './helpers/session-kind';
 import { isCardioExercise } from './helpers/is-cardio';
@@ -61,6 +74,8 @@ export interface PostWorkoutQuestions {
 export type SessionSummaryView = SessionSummary & {
   checkin: Omit<WorkoutCheckin, 'userId'> | null;
   questions: PostWorkoutQuestions | null;
+  /** Circuito (#380): rounds, tempo por round, tempo final e a comparação. Nulo em treino de séries. */
+  circuit: CircuitSummaryView | null;
   /**
    * O plano que esta sessão virou no "Salvar como plano" (#381). A tela troca
    * o botão por "Ver plano"; nulo se não virou (ou se o plano foi apagado).
@@ -156,13 +171,30 @@ export class WorkoutSessionService {
     // O plano vem do corpo: precisa ser da pessoa. Sem isto a sessão de B
     // apontaria para o plano de A, e o `findById` de B mostraria os exercícios
     // de A em `plannedExercises`.
-    let plan: { id: string; name: string } | null = null;
+    let circuit: Prisma.InputJsonValue | undefined;
+    const startedAt = dto.startedAt ? new Date(dto.startedAt) : new Date();
+    let plan: Prisma.WorkoutPlanGetPayload<{
+      include: { circuit: true; exercises: { include: { exercise: true } } };
+    }> | null = null;
     if (dto.planId) {
       plan = await this.prisma.workoutPlan.findFirst({
         where: { id: dto.planId, userId },
-        select: { id: true, name: true },
+        include: {
+          circuit: true,
+          exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
+        },
       });
       if (!plan) throw new NotFoundException('Plan not found');
+      // Circuito (#380): a sessão congela o circuito no começo, e o relógio
+      // conta a partir daqui. Os toques chegam depois, pelo progresso.
+      if (plan.kind === 'CIRCUIT') {
+        if (plan.exercises.length === 0) {
+          throw new BadRequestException('Adicione exercícios ao circuito antes de começar.');
+        }
+        const definition = circuitDefinitionFromPlan(plan);
+        const previous = await this.lastCircuitResult(userId, plan.id, definition, startedAt);
+        circuit = newCircuitJson(definition, startedAt, previous);
+      }
     }
     try {
       return await this.prisma.workoutSession.create({
@@ -173,9 +205,10 @@ export class WorkoutSessionService {
           // "Treino livre" no histórico (`helpers/session-kind.ts`).
           fromPlan: plan !== null,
           planName: plan?.name ?? null,
-          startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
+          startedAt,
           notes: dto.notes,
           exerciseOrder: dto.exerciseOrder ?? [],
+          ...(circuit ? { circuit } : {}),
         },
       });
     } catch (error) {
@@ -292,6 +325,7 @@ export class WorkoutSessionService {
           completedAt: true,
           feeling: true,
           notes: true,
+          circuit: true,
           plan: { select: { name: true } },
           sets: {
             select: {
@@ -351,6 +385,14 @@ export class WorkoutSessionService {
    */
   async finish(userId: string, id: string, dto: FinishSessionDto) {
     const session = await this.assertOwner(userId, id);
+    // Circuito (#380) sem resultado não fecha por aqui: fecharia sem rounds nem
+    // séries, e o "Treino feito" e o histórico ficariam vazios.
+    if (session.circuit != null && !parseCircuitJson(session.circuit)?.result) {
+      throw new ConflictException(
+        `Esta sessão é um circuito (id ${id}): encerre pelo relógio ("Encerrar circuito") ou ` +
+          'registre o resultado com log_circuit_result (planId e sessionId).',
+      );
+    }
 
     let requested: Date | null = null;
     if (dto.completedAt) {
@@ -394,19 +436,9 @@ export class WorkoutSessionService {
       },
     });
     if (dto.checkin) await this.saveCheckin(userId, id, dto.checkin);
-    await this.runFinishedHooks(userId);
+    // Conquistas na hora (#382). Falhar aqui não desfaz o treino: a próxima abertura reavalia.
+    await runWorkoutFinishedHooks(this.finishedHooks, userId, this.logger);
     return updated;
-  }
-
-  /** Conquistas na hora (#382). Falhar aqui não desfaz o treino: a próxima abertura reavalia. */
-  private async runFinishedHooks(userId: string) {
-    for (const hook of this.finishedHooks ?? []) {
-      try {
-        await hook.afterFinish(userId);
-      } catch (err) {
-        this.logger.warn(`gancho do fim do treino falhou: ${(err as Error).message}`);
-      }
-    }
   }
 
   /**
@@ -568,6 +600,7 @@ export class WorkoutSessionService {
         feeling: session.feeling,
         notes: session.notes,
         exerciseOrder: session.exerciseOrder,
+        circuit: session.circuit,
         plan: session.plan,
         sets: session.sets,
       },
@@ -575,13 +608,72 @@ export class WorkoutSessionService {
       priorSets,
       now: new Date(),
     });
+    const circuit = await this.circuitSummary(userId, session);
     let checkin: SessionSummaryView['checkin'] = null;
     if (session.checkin) {
       const { userId: _dono, ...rest } = session.checkin;
       void _dono;
       checkin = rest;
     }
-    return { ...summary, checkin, questions, savedPlanId: savedPlan?.id ?? null };
+    return { ...summary, checkin, questions, circuit, savedPlanId: savedPlan?.id ?? null };
+  }
+
+  /**
+   * O resultado do circuito e a última vez do mesmo circuito, antes deste. As
+   * sessões antigas sem resultado (encerradas sem relógio, JSON de outra
+   * versão) não contam como "última vez".
+   */
+  private async circuitSummary(
+    userId: string,
+    session: { id: string; planId: string | null; startedAt: Date; circuit: Prisma.JsonValue },
+  ): Promise<CircuitSummaryView | null> {
+    const json = parseCircuitJson(session.circuit);
+    if (!json?.result) return null;
+    const previous = session.planId
+      ? await this.lastCircuitResult(
+          userId,
+          session.planId,
+          json.definition,
+          session.startedAt,
+          session.id,
+        )
+      : null;
+    return circuitSummaryView(json, previous);
+  }
+
+  /**
+   * A última sessão terminada do mesmo circuito, com resultado, antes de
+   * `before`. "Mesmo" é o formato, a configuração e os exercícios iguais
+   * (`sameCircuitDefinition`): o plano editado de 4 para 3 exercícios, ou de
+   * 12 para 15 min, não compara rounds com a versão antiga.
+   */
+  private async lastCircuitResult(
+    userId: string,
+    planId: string,
+    definition: CircuitJsonV1['definition'],
+    before: Date,
+    excludeId?: string,
+  ): Promise<{ sessionId: string; startedAt: Date; json: CircuitJsonV1 } | null> {
+    const earlier = await this.prisma.workoutSession.findMany({
+      where: {
+        userId,
+        planId,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        completedAt: { not: null },
+        startedAt: { lt: before },
+        circuit: { not: Prisma.AnyNull },
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 20,
+      select: { id: true, startedAt: true, circuit: true },
+    });
+    for (const e of earlier) {
+      const json = parseCircuitJson(e.circuit);
+      if (json?.result && sameCircuitDefinition(json.definition, definition)) {
+        return { sessionId: e.id, startedAt: e.startedAt, json };
+      }
+    }
+    return null;
   }
 
   private shapeSession(session: SessionWithRelations) {

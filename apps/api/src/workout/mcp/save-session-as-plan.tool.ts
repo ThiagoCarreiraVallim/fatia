@@ -30,7 +30,7 @@ export class SaveSessionAsPlanTool implements McpToolDef {
     'da primeira série; no cardio, a distância e o tempo feitos viram a meta. Sem name, o plano ' +
     'leva o nome do plano da sessão, do único exercício ou "Treino livre". Só sessão terminada ' +
     '(a aberta dá conflito: finalize antes); salvar de novo a mesma sessão devolve o plano que ' +
-    'ela já virou, sem criar outro. ' +
+    'ela já virou, sem criar outro. Sessão de circuito não vira plano (400). ' +
     'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555","name":"Esteira 5 km"}';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão que vira plano'),

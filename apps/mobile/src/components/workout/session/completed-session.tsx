@@ -29,6 +29,7 @@ import { Screen } from '@/components/layout/screen';
 import { Text } from '@/components/ui/text';
 import { Button, Chip, ErrorState, Input, LoadingState, cn } from '@/components/ui';
 import { MuscleDiagram } from '@/components/workout/muscle-diagram';
+import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
 import { checkinBody, groupColorName } from '@/components/workout/workout-home';
 import { FeelingPicker } from './feeling-picker';
 import { SetChips } from './set-chips';
@@ -143,7 +144,10 @@ function Summary({
         <Text className="text-center text-[13px] text-muted-foreground">{headline}</Text>
       </View>
 
-      <View className="flex-row gap-2">
+      {/* Circuito (#380): os números dele no lugar dos de séries e carga. */}
+      {summary.circuit ? <CircuitResultBlocks circuit={summary.circuit} /> : null}
+
+      <View className={cn('flex-row gap-2', summary.circuit && 'hidden')}>
         {facts.map((f) => (
           <View
             key={f.label}
@@ -157,7 +161,7 @@ function Summary({
         ))}
       </View>
 
-      {summary.comparison ? (
+      {summary.comparison && !summary.circuit ? (
         <View className="gap-2 rounded-3xl bg-card p-4">
           <View className="flex-row items-baseline justify-between gap-2">
             <Text className="flex-1 font-sans-semibold text-[15px] text-foreground">
@@ -245,7 +249,7 @@ function Summary({
         </View>
       ) : null}
 
-      <View className="gap-2">
+      <View className={cn('gap-2', summary.circuit && 'hidden')}>
         {summary.exercises.map((e) => {
           const group = groups.find((g) => g.exerciseId === e.exerciseId);
           const open = openExercise === e.exerciseId;

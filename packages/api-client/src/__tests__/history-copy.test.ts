@@ -12,6 +12,7 @@ import {
   historyTotals,
   repeatPlanOf,
   sessionDetailTitle,
+  sessionDetailBody,
   sessionPlanAction,
   sessionHero,
   sessionKindLabel,
@@ -46,9 +47,32 @@ const treadmill = {
 };
 
 describe('histórico (Al-T10)', () => {
-  it('filtros: Tudo, Planos e Livres; Circuitos só com a #380', () => {
-    expect(HISTORY_FILTERS.map((f) => f.label)).toEqual(['Tudo', 'Planos', 'Livres']);
-    expect(HISTORY_FILTERS.map((f) => f.kind)).toEqual([undefined, 'plan', 'free']);
+  it('filtros: Tudo, Planos, Circuitos e Livres (#380)', () => {
+    expect(HISTORY_FILTERS.map((f) => f.label)).toEqual(['Tudo', 'Planos', 'Circuitos', 'Livres']);
+    expect(HISTORY_FILTERS.map((f) => f.kind)).toEqual([undefined, 'plan', 'circuit', 'free']);
+  });
+
+  it('circuito: rounds (+ exercícios do round incompleto) ou intervalos, e os exercícios', () => {
+    const circuit = (over: Partial<NonNullable<WorkoutHistoryItem['circuit']>>) =>
+      item({
+        kind: 'circuit',
+        title: 'AMRAP 12',
+        circuit: {
+          format: 'AMRAP',
+          roundsCompleted: 4,
+          partialExercises: 2,
+          intervalsCompleted: null,
+          exercises: 4,
+          ...over,
+        },
+      });
+    expect(historyLine(circuit({}), KM)).toBe('4 rounds + 2 · 4 exercícios');
+    expect(
+      historyLine(circuit({ format: 'FOR_TIME', roundsCompleted: 1, partialExercises: 0 }), KM),
+    ).toBe('1 round · 4 exercícios');
+    expect(
+      historyLine(circuit({ format: 'TABATA', intervalsCompleted: 8, exercises: 2 }), KM),
+    ).toBe('8 intervalos · 2 exercícios');
   });
 
   it('o selo de tipo', () => {
@@ -263,6 +287,28 @@ describe('detalhe da sessão (Al-T11, Al-T11b)', () => {
         KM,
       ),
     ).toEqual({ title: 'Maior distância na esteira', before: 'antes 4,6 km' });
+  });
+
+  it('o corpo do detalhe: circuito (Al-T11c), só cardio (Al-T11b) ou força (Al-T11)', () => {
+    const circuit = { format: 'AMRAP' } as unknown as NonNullable<WorkoutSessionSummary['circuit']>;
+    expect(sessionDetailBody({ ...summary(), kind: 'circuit', circuit })).toEqual({
+      kind: 'circuit',
+      circuit,
+      repeatPlanId: summary().planId,
+    });
+    // Circuito apagado: o resultado fica, o "Repetir circuito" some.
+    expect(sessionDetailBody({ ...summary(), planId: null, circuit })).toMatchObject({
+      kind: 'circuit',
+      repeatPlanId: null,
+    });
+    expect(sessionDetailBody(runSummary())).toEqual({ kind: 'cardio' });
+    expect(sessionDetailBody(summary())).toEqual({ kind: 'strength' });
+  });
+
+  it('circuito não vira plano, nem com o resumo sem `kind` (#380)', () => {
+    const circuit = { format: 'AMRAP' } as unknown as NonNullable<WorkoutSessionSummary['circuit']>;
+    expect(sessionPlanAction({ ...runSummary(), kind: undefined, circuit })).toBeNull();
+    expect(sessionPlanAction({ ...runSummary(), kind: 'circuit', circuit })).toBeNull();
   });
 
   it('livre oferece salvar como plano; já salvo, ver o plano', () => {

@@ -34,6 +34,8 @@ export interface SummaryInput {
     /** Retrato do plano ao começar; sobrevive à exclusão do plano. */
     fromPlan?: boolean;
     planName?: string | null;
+    /** O circuito congelado (#380): decide o `kind`. */
+    circuit?: unknown;
     startedAt: Date;
     completedAt: Date | null;
     feeling: number | null;

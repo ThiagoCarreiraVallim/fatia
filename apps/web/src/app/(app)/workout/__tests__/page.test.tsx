@@ -37,6 +37,14 @@ vi.mock('@/components/workout/cancel-session-modal', () => ({ CancelSessionModal
 vi.mock('@/components/workout/exercise-detail-card', () => ({
   ExerciseDetailCard: ({ footer }: { footer?: ReactNode }) => <div>{footer}</div>,
 }));
+const routerReplace = vi.fn();
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    ...actual,
+    useRouter: () => ({ push: vi.fn(), replace: routerReplace, back: vi.fn(), prefetch: vi.fn() }),
+  };
+});
 vi.mock('@/components/workout/block-timeline', () => ({ BlockTimeline: () => null }));
 // O embla consulta `matchMedia`, que o jsdom não tem; o carrossel não é o alvo.
 vi.mock('@/components/ui/carousel', () => {
@@ -677,6 +685,31 @@ describe('WorkoutPage — início do Treino (#377)', () => {
     expect(startSession).not.toHaveBeenCalled();
   });
 
+  it('"Circuito" (#380): sem circuito abre o Novo circuito; com circuito, a aba Circuitos, e ele não vira cartão de plano', async () => {
+    const { unmount } = renderPage();
+    const other = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
+    expect(within(other).getByRole('link', { name: /Circuito/ })).toHaveAttribute(
+      'href',
+      '/workout/circuits/new',
+    );
+    unmount();
+
+    listPlans.mockResolvedValue([
+      PUSH,
+      { id: 'c1', name: 'AMRAP 12', kind: 'CIRCUIT', exercises: [] } as unknown as WorkoutPlan,
+    ]);
+    renderPage();
+    const again = await screen.findByRole('region', { name: 'Outros jeitos de treinar' });
+    await waitFor(() =>
+      expect(within(again).getByRole('link', { name: /Circuito/ })).toHaveAttribute(
+        'href',
+        '/workout/plans?tab=circuitos',
+      ),
+    );
+    const plans = screen.getByRole('region', { name: 'Seus planos' });
+    expect(within(plans).queryByText('AMRAP 12')).toBeNull();
+  });
+
   it('o bloco numa linha; o toque abre o detalhe', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -812,5 +845,31 @@ describe('WorkoutPage — escolhidos do Treino livre', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('WorkoutPage — circuito aberto (#380)', () => {
+  it('leva ao relógio do circuito, e não à sessão de séries', async () => {
+    getActiveSession.mockResolvedValue({
+      id: 's1',
+      planId: 'c1',
+      startedAt: STARTED_AT,
+      completedAt: null,
+      sets: [],
+      circuit: {
+        version: 1,
+        definition: { format: 'AMRAP', name: 'AMRAP 12', config: {}, exercises: [] },
+        startedAt: STARTED_AT,
+        events: [],
+        result: null,
+      },
+    } as unknown as WorkoutSession);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkoutPage />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(routerReplace).toHaveBeenCalledWith('/workout/circuit/s1'));
   });
 });

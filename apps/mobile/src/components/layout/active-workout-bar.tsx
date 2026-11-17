@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Play } from 'lucide-react-native';
 import {
@@ -9,6 +9,9 @@ import {
   activeWorkoutBarLines,
   activeWorkoutBarView,
   buildExerciseGroups,
+  circuitBarSnapshot,
+  circuitRunPath,
+  circuitState,
   workoutApi,
   type WorkoutSession,
 } from '@fatia/api-client';
@@ -35,7 +38,19 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
   const router = useRouter();
   const rest = useSessionRestTimer();
   const now = useNow();
-  const view = activeWorkoutBarView(session, rest, now);
+  // Circuito (#380): o relógio dele, calculado dos toques como na tela.
+  const circuit = session.circuit;
+  const snapshot = circuit
+    ? circuitBarSnapshot(
+        circuit.definition,
+        circuitState(
+          circuit.definition,
+          { startedAt: Date.parse(circuit.startedAt), events: circuit.events },
+          now.getTime(),
+        ),
+      )
+    : null;
+  const view = activeWorkoutBarView(session, rest, now, snapshot);
   // A sessão não traz o plano; a lista de planos já está em cache na aba Treino.
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -46,7 +61,10 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
   const lines = activeWorkoutBarLines(view, planName);
   const resting = view.mode === 'rest';
   // A linha fina embaixo (prancha `Al-T1b`): séries feitas sobre a meta do plano.
-  const progress = setProgress(buildExerciseGroups(session.plannedExercises, session.sets, []));
+  // No circuito as séries só nascem no fim: a linha ficaria parada em zero.
+  const progress = circuit
+    ? { target: 0, done: 0, ratio: 0 }
+    : setProgress(buildExerciseGroups(session.plannedExercises, session.sets, []));
 
   return (
     <View
@@ -71,7 +89,11 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
             ? `${activeWorkoutBarLabel(view)}. ${progress.done} de ${progress.target} séries`
             : activeWorkoutBarLabel(view)
         }
-        onPress={() => router.push(`/workout/session/${session.id}`)}
+        onPress={() =>
+          router.push(
+            (circuit ? circuitRunPath(session.id) : `/workout/session/${session.id}`) as Href,
+          )
+        }
         className="h-full min-w-0 flex-1 flex-row items-center gap-3 rounded-[22px] pl-4"
       >
         <View className="w-5 items-center justify-center">

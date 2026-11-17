@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **153 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **154 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 153 tools): **138,6 k caracteres**
-hoje, dos quais **7.895 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 154 tools): **143,1 k caracteres**
+hoje, dos quais **8.297 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (115,6 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (119,9 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -305,6 +305,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `delete_custom_exercise`       | D        |
 |                            | `set_exercise_favorite`        | U        |
 | **Planos de treino**       | `create_workout_plan`          | C        |
+|                            | `log_circuit_result`           | C        |
 |                            | `get_workout_plan`             | R        |
 |                            | `list_workout_plans`           | R        |
 |                            | `update_workout_plan`          | U        |
@@ -398,7 +399,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **153 tools**. Cada uma documentada abaixo.
+Total: **154 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1390,17 +1391,68 @@ Passos de execução e detalhes de técnica de um exercício buscado **por nome*
 
 ### `create_workout_plan`
 
-Cria um plano vazio.
+Cria um plano vazio. Com `circuit`, cria um circuito com timer (#380): AMRAP, EMOM, Tabata ou For
+Time, já com os exercícios na ordem, cada um por reps ou por tempo. O circuito aparece na aba
+Circuitos do Planos e se faz com o relógio do app; o resultado entra por `log_circuit_result`.
 
 **Input:**
 
 ```typescript
 {
-  name: string; // "Push", "Pull A", "Leg Heavy"
+  name: string; // "Push", "Pull A", "Leg Heavy", "AMRAP 12"
+  circuit?: {
+    format: 'AMRAP' | 'EMOM' | 'TABATA' | 'FOR_TIME';
+    durationMinutes?: number; // AMRAP e EMOM (1 a 120)
+    workSeconds?: number; // TABATA: trabalho
+    restSeconds?: number; // TABATA: descanso
+    intervals?: number; // TABATA: intervalos
+    rounds?: number; // FOR_TIME
+    restBetweenRoundsSeconds?: number; // FOR_TIME (padrão 0)
+  };
+  // Só com circuit: na ordem, reps OU seconds por round (por minuto, no EMOM).
+  exercises?: Array<{ exerciseId: number; reps?: number; seconds?: number }>;
 }
 ```
 
-**Output:** `{ planId: string }`
+**Output:** o plano criado, com `kind` (`STRENGTH` ou `CIRCUIT`) e `circuit` (formato e tempos).
+
+### `log_circuit_result`
+
+Registra o resultado de um circuito (#380). Com `sessionId`, encerra a sessão de circuito aberta
+(começada no app); sem ele, cria uma sessão já terminada. Grava uma série (`SessionSet`) por
+exercício por round, minuto ou intervalo, e o resultado em `WorkoutSession.circuit`, que
+`get_workout_session` devolve e o "Treino feito" compara com a última vez.
+
+Os números são conferidos contra o circuito congelado na sessão (revisão da #380), e o que não
+cabe é `BAD_REQUEST` sem gravar nada: rounds do AMRAP até o que cabe na duração (3 s por
+exercício de reps, o alvo nos de segundos), tempo até a duração do circuito (e, numa sessão
+aberta, até o que correu desde o começo dela), `roundSeconds` com um tempo por round completo ou
+vazio, `finalTimeSeconds` só com todos os rounds e sem parcial, maior que zero e não menor que a
+soma dos rounds, e no máximo 2.400 séries. Com `sessionId` de uma sessão de circuito que fechou
+sem resultado (o `finish_workout_session` antes da revisão), o resultado entra nela. O
+"Encerrar circuito" do app não passa por aqui: lá o servidor conta o resultado de novo pelos
+toques, e o resultado que o app manda é só uma dica.
+
+**Input:**
+
+```typescript
+{
+  planId: string; // o circuito
+  sessionId?: string; // sessão de circuito aberta
+  roundsCompleted?: number; // AMRAP e For Time
+  partialExercises?: number; // exercícios feitos no round que não fechou
+  finalTimeSeconds?: number; // For Time terminado
+  roundSeconds?: number[]; // tempo de cada round completo
+  intervalsCompleted?: number; // EMOM (minutos) e Tabata (intervalos); padrão: todos
+  elapsedSeconds?: number; // padrão: a duração do circuito, ou o tempo final
+  completedAt?: string; // ISO 8601, padrão agora; nunca no futuro
+  feeling?: number; // 1 Leve … 5 No limite
+  notes?: string;
+}
+```
+
+**Output:** `{ sessionId, result: { roundsCompleted, partialExercises, roundSeconds, partialRoundSeconds,
+elapsedSeconds, finalTimeSeconds, intervalsCompleted, completed, totalReps, exercises }, alreadyFinished }`
 
 ### `get_workout_plan`
 
@@ -1661,7 +1713,8 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 `kind` (#381): `plan` (com plano), `free` (treino livre, inclusive o só de cardio) ou `circuit`.
 O tipo vem do retrato gravado ao começar (`fromPlan` e `planName` na sessão): apagar o plano não
 faz a sessão virar `free`. Não há tipo "cardio", porque cardio é exercício
-(`muscleGroup === 'cardio'`). Circuito chega com a #380: até lá nenhuma sessão é `circuit`.
+(`muscleGroup === 'cardio'`). `circuit` é a sessão de circuito (#380), mesmo vinda de um plano:
+`plan` não a inclui.
 
 ### `save_session_as_plan`
 
@@ -1670,7 +1723,8 @@ novo com os exercícios da sessão, na ordem dela. Força guarda as séries feit
 repetições (ou de segundos) e a carga da primeira série como carga inicial; cardio guarda a
 distância e o tempo somados como meta de cardio (por distância quando houve distância, senão por
 tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`; sessão ainda
-aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"). Idempotente por sessão: salvar
+aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"); sessão de circuito (#380),
+`BAD_REQUEST` ("Circuito não vira plano de força"). Idempotente por sessão: salvar
 de novo a mesma sessão devolve o plano que ela já virou (`WorkoutPlan.fromSessionId`, único por
 pessoa), sem criar outro nem renomear; o resumo da sessão traz esse id em `savedPlanId`.
 
@@ -1702,6 +1756,9 @@ Atualiza as notas de uma sessão, finalizada ou em andamento. Para corrigir sér
 
 Marca sessão como concluída. Idempotente — chamar de novo não muda o horário do fim (a não
 ser com `completedAt` explícito); só atualiza notes, sensação e respostas.
+
+Sessão de circuito (#380) ainda sem resultado é `CONFLICT`, apontando `log_circuit_result`:
+fechar por aqui deixaria o circuito sem rounds nem séries.
 
 Desde a #377 grava também `feeling` ("Como foi o treino?", 1 Leve a 5 No limite, em
 `WorkoutSession.feeling`) e as respostas rápidas pós-treino (`WorkoutCheckin`, uma por sessão,

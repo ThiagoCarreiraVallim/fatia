@@ -13,6 +13,7 @@ import {
   muscleGroupName,
   repeatPlanOf,
   sessionPlanAction,
+  sessionDetailBody,
   sessionDetailTitle,
   sessionHero,
   setLine,
@@ -25,6 +26,8 @@ import { Text } from '@/components/ui/text';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 import { ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { useStartSession } from '@/components/workout/use-start-session';
+import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
+import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { colors } from '@/theme/colors';
 
@@ -35,8 +38,8 @@ import { colors } from '@/theme/colors';
  * leva ao histórico (o pai no mapa de rotas) e o "Repetir" começa um treino
  * novo com os mesmos exercícios. Sessão de treino livre ainda pode virar plano.
  *
- * **Ponto de extensão (#380):** a sessão de circuito (`kind === 'circuit'`,
- * Al-T11c) ganha o próprio corpo aqui e o terceiro tom em `sessionHero`.
+ * A sessão de circuito (#380, prancha `Al-T11c`) tem o corpo dela
+ * (`CircuitDetail`), com "Repetir circuito"; não vira plano nem corrige séries.
  */
 
 // `text-background`: escuro no rosa do tema escuro, claro no vermelho do claro.
@@ -92,12 +95,97 @@ export default function HistorySessionScreen() {
       </Screen>
     );
   }
+  const body = sessionDetailBody(summary.data);
+  if (body.kind === 'circuit') {
+    return (
+      <CircuitDetail
+        summary={summary.data}
+        circuit={body.circuit}
+        repeatPlanId={body.repeatPlanId}
+        refreshing={summary.isRefetching}
+        onRefresh={() => void summary.refetch()}
+      />
+    );
+  }
   return (
     <Detail
       summary={summary.data}
       refreshing={summary.isRefetching}
       onRefresh={() => void summary.refetch()}
     />
+  );
+}
+
+/** Al-T11c: o circuito feito, com "Repetir circuito" (some se o circuito foi apagado). */
+function CircuitDetail({
+  summary,
+  circuit,
+  repeatPlanId: planId,
+  refreshing,
+  onRefresh,
+}: {
+  summary: WorkoutSessionSummary;
+  circuit: NonNullable<WorkoutSessionSummary['circuit']>;
+  repeatPlanId: string | null;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  const start = useStartCircuit();
+  const repeatNow = () => {
+    if (planId) start.mutate(planId);
+  };
+  const failed = start.isError && !activeSessionIdFromError(start.error);
+  return (
+    <Screen
+      title={sessionDetailTitle(summary.startedAt)}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      actions={
+        planId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Repetir este circuito hoje"
+            accessibilityState={{ disabled: start.isPending }}
+            disabled={start.isPending}
+            onPress={repeatNow}
+            className={TOP_BAR_ACTION}
+          >
+            <Repeat size={18} color={colors.foreground} />
+          </Pressable>
+        ) : undefined
+      }
+      footer={
+        planId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: start.isPending }}
+            disabled={start.isPending}
+            onPress={repeatNow}
+            className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-foreground active:opacity-80"
+          >
+            <Repeat size={16} color={colors.background} />
+            <Text className="font-sans-bold text-[15px] text-background">Repetir circuito</Text>
+          </Pressable>
+        ) : undefined
+      }
+    >
+      <View className="gap-4 px-4 pt-2">
+        <CircuitResultBlocks
+          circuit={circuit}
+          feeling={summary.feeling ?? summary.overallFeeling}
+        />
+        {summary.notes ? (
+          <View className="rounded-card bg-card px-4 py-3.5">
+            <Text className="text-xs text-faint">“{summary.notes}”</Text>
+          </View>
+        ) : null}
+        {failed ? (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            Não foi possível começar o circuito. Tente de novo.
+          </Text>
+        ) : null}
+      </View>
+    </Screen>
   );
 }
 
