@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { PauseIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { field } from './surfaces';
@@ -21,11 +21,14 @@ import { field } from './surfaces';
 
 export function StoppedRun({
   reason,
+  action,
   className,
   ...props
 }: Omit<ComponentProps<'span'>, 'children' | 'reason'> & {
   /** Por que parou, já em português — ex.: "resposta interrompida". */
   reason: string;
+  /** A ação dentro da linha, à direita (o "Continuar" da prancha Al-M11). */
+  action?: ReactNode;
 }) {
   return (
     <span
@@ -44,7 +47,8 @@ export function StoppedRun({
       >
         <PauseIcon className="size-3.5" />
       </span>
-      {reason}
+      <span className="flex-1">{reason}</span>
+      {action}
     </span>
   );
 }

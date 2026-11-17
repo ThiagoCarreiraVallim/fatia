@@ -224,13 +224,24 @@ function Pensando() {
   if (!rodando || (temConteudo && !stalled)) return null;
   // `aria-label` além do rótulo visível: é o nome estável pelo qual o leitor de
   // tela encontra o único retorno entre apertar enviar e o primeiro token.
+  // No meio da resposta (travou): só o indicador, como na prancha IA-Estados.
+  if (temConteudo) return <ThinkingIndicator aria-label="Pensando" label="Pensando" />;
+  // Antes do primeiro token: o cartão da prancha Al-M11, "Segundo plano" — a resposta segue no
+  // servidor (ADR 035), então dá para sair da tela.
   return (
-    <div className="flex flex-col gap-1">
-      <ThinkingIndicator aria-label="Pensando" label="Pensando" />
-      {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
-      {temConteudo ? null : (
-        <p className="text-xs text-muted-foreground">{AI_STATES_COPY.background}</p>
-      )}
+    <div
+      role="status"
+      aria-label="Pensando"
+      className="flex w-full flex-col gap-2 rounded-3xl bg-foreground/[0.04] p-4"
+    >
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden
+          className="size-5 shrink-0 animate-spin rounded-full border-2 border-foreground/15 border-t-primary motion-reduce:animate-none"
+        />
+        <p className="text-[15px] font-bold text-foreground">{AI_STATES_COPY.thinking}</p>
+      </div>
+      <p className="text-sm text-foreground/75">{AI_STATES_COPY.background}</p>
     </div>
   );
 }
@@ -251,18 +262,21 @@ function ContinuarParada() {
   const aui = useAui();
   const rodando = useAuiState((s) => s.thread.isRunning);
   return (
-    <span className="flex items-center gap-2">
-      <StoppedRun reason={AI_STATES_COPY.interrupted} />
-      {rodando ? null : (
-        <button
-          type="button"
-          onClick={() => aui.thread().append(CHAT_CONTINUE_MESSAGE)}
-          className="rounded-full px-3 py-1 text-xs font-semibold text-success hover:bg-foreground/[0.04]"
-        >
-          {AI_STATES_COPY.continue}
-        </button>
-      )}
-    </span>
+    <StoppedRun
+      reason={AI_STATES_COPY.interrupted}
+      action={
+        rodando ? null : (
+          <button
+            type="button"
+            onClick={() => aui.thread().append(CHAT_CONTINUE_MESSAGE)}
+            className="min-h-10 shrink-0 rounded-full bg-foreground/[0.08] px-3.5 text-[13px] font-semibold text-foreground hover:bg-foreground/[0.12]"
+          >
+            {AI_STATES_COPY.continue}
+          </button>
+        )
+      }
+      className="py-1.5 pr-1.5"
+    />
   );
 }
 
