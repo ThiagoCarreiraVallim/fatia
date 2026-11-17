@@ -358,7 +358,7 @@ export class SessionSetService {
         distanceMeters: true,
         durationSeconds: true,
         exercise: { select: { id: true, name: true, muscleGroup: true } },
-        session: { select: { id: true, startedAt: true } },
+        session: { select: { id: true, startedAt: true, completedAt: true } },
       },
     });
 
@@ -412,8 +412,9 @@ export class SessionSetService {
         if (s.reps != null) {
           const e1rm = estimate1RM(s.weightKg, s.reps);
           if (entry.estimated1RM == null || e1rm > entry.estimated1RM) entry.estimated1RM = e1rm;
-          // Carga 0 é peso do corpo (#377): sem 1RM estimado que compare.
-          if (s.weightKg > 0) {
+          // Carga 0 é peso do corpo (#377): sem 1RM estimado que compare. A sessão ainda aberta
+          // fica fora: a evolução do mês compara treinos concluídos, não a série de agora.
+          if (s.weightKg > 0 && s.session.completedAt != null) {
             const points = e1rmPoints.get(ex.id) ?? [];
             points.push({ sessionId: s.session.id, at: s.session.startedAt, e1rm });
             e1rmPoints.set(ex.id, points);

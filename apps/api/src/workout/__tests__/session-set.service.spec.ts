@@ -306,6 +306,7 @@ describe('SessionSetService', () => {
       weightKg: number,
       reps: number,
       ex = strengthExercise,
+      completedAt: Date | null = startedAt,
     ) => ({
       exerciseId: ex.id,
       weightKg,
@@ -313,7 +314,7 @@ describe('SessionSetService', () => {
       distanceMeters: null,
       durationSeconds: null,
       exercise: ex,
-      session: { id, startedAt },
+      session: { id, startedAt, completedAt },
     });
     const diasAtras = (n: number) => new Date(agora.getTime() - n * 86_400_000);
 
@@ -334,6 +335,18 @@ describe('SessionSetService', () => {
       const supino = r.records.find((x) => x.exerciseId === strengthExercise.id)!;
       expect(supino.monthEvolution).toEqual({ startE1RM: 80, endE1RM: 93.33, percent: 16.7 });
       expect(r.highlight?.exerciseId).toBe(strengthExercise.id);
+    });
+
+    it('a sessão ainda aberta não entra na evolução: só treino concluído', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        serie('s1', diasAtras(20), 60, 10),
+        serie('s2', diasAtras(0), 90, 10, strengthExercise, null),
+      ]);
+
+      const r = await service.recordsOverview(userId);
+
+      expect(r.records[0].monthEvolution).toBeNull();
+      expect(r.highlight).toBeNull();
     });
 
     it('sem duas sessões no período, não há destaque', async () => {
