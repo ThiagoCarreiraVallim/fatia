@@ -15,7 +15,7 @@ linha dela em `_prisma_migrations` e as tabelas antes do `migrate deploy`.
 
 ## Checklist
 
-- [ ] 1. Logto fora do ar não vira `invalid_grant` (server_error / temporarily_unavailable)
+- [x] 1. Logto fora do ar não vira `invalid_grant` (server_error / temporarily_unavailable)
 - [ ] 3. Gravar a conexão não atrasa o `/oauth/token` (fire-and-forget, `flush()` para testes)
 - [ ] 4/5. Conexão presa aos tokens: hash do refresh, vários access tokens com validade, `client_id` do corpo não manda
 - [ ] 2. "Conectado" só nos últimos 30 dias; teste e "Não funcionou?" sempre acessíveis
@@ -24,4 +24,4 @@ linha dela em `_prisma_migrations` e as tabelas antes do `migrate deploy`.
 
 ## Próximo passo
 
-Item 1: testes no `oauth-facade.service.spec.ts` (vermelho), depois `callLogtoToken`.
+Item 3: teste com gravador que nunca resolve (vermelho), depois `record()` sem await no facade.

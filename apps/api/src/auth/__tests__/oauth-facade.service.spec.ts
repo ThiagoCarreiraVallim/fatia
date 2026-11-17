@@ -385,17 +385,96 @@ describe('OAuthFacadeService', () => {
       expect(connections.recordIssuedToken).not.toHaveBeenCalled();
     });
 
-    it('devolve invalid_grant no formato da RFC quando o Logto responde sem código conhecido', async () => {
+    // Revisão da #388: `invalid_grant` faz o Claude jogar fora o refresh token e
+    // pedir o login de novo. Só pode sair quando o Logto disse isso mesmo; Logto
+    // fora do ar ou facade mal configurado são falhas nossas, com 5xx.
+    it.each([
+      ['Logto fora do ar (502 sem corpo)', 502, {}, 'temporarily_unavailable', 503],
+      ['Logto devolve 500 com server_error', 500, { error: 'server_error' }, 'server_error', 500],
+      [
+        'Logto devolve temporarily_unavailable',
+        503,
+        { error: 'temporarily_unavailable' },
+        'temporarily_unavailable',
+        503,
+      ],
+      [
+        'segredo do facade errado (invalid_client)',
+        401,
+        { error: 'invalid_client' },
+        'server_error',
+        500,
+      ],
+      [
+        'resource mal configurado (invalid_target)',
+        400,
+        { error: 'invalid_target' },
+        'server_error',
+        500,
+      ],
+      [
+        'app do facade sem o grant (unauthorized_client)',
+        400,
+        { error: 'unauthorized_client' },
+        'server_error',
+        500,
+      ],
+      ['código que não conhecemos', 400, { error: 'algo_novo' }, 'server_error', 500],
+    ])('%s não vira invalid_grant', async (_caso, status, body, code, httpStatus) => {
       prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
-      fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+      fetchMock.mockResolvedValue({ ok: false, status, json: async () => body });
+
+      const err = await service
+        .exchangeCode(validParams, 'https://api.example.com/oauth/callback')
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(OAuthError);
+      expect(err).toMatchObject({ code, response: { error: code } });
+      expect((err as OAuthError).getStatus()).toBe(httpStatus);
+    });
+
+    it('Logto inalcançável (fetch rejeita) sai como temporarily_unavailable', async () => {
+      prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
+      fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+      const err = await service
+        .exchangeCode(validParams, 'https://api.example.com/oauth/callback')
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'temporarily_unavailable' });
+      expect((err as OAuthError).getStatus()).toBe(503);
+    });
+
+    it('página de erro do proxy (corpo que não é JSON) não vira invalid_grant', async () => {
+      prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 504,
+        json: async () => {
+          throw new SyntaxError('Unexpected token <');
+        },
+      });
 
       await expect(
         service.exchangeCode(validParams, 'https://api.example.com/oauth/callback'),
-      ).rejects.toMatchObject({
-        code: 'invalid_grant',
-        response: { error: 'invalid_grant', error_description: 'Token exchange failed' },
-      });
+      ).rejects.toMatchObject({ code: 'temporarily_unavailable' });
     });
+
+    it.each(['invalid_request', 'invalid_scope', 'unsupported_grant_type'])(
+      '%s do Logto é repassado como veio, com 400',
+      async (code) => {
+        prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
+        fetchMock.mockResolvedValue({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: code }),
+        });
+
+        const err = await service
+          .exchangeCode(validParams, 'https://api.example.com/oauth/callback')
+          .catch((e: unknown) => e);
+        expect(err).toMatchObject({ code });
+        expect((err as OAuthError).getStatus()).toBe(400);
+      },
+    );
   });
 
   describe('refreshToken', () => {
@@ -440,6 +519,14 @@ describe('OAuthFacadeService', () => {
         code: 'invalid_grant',
         response: { error: 'invalid_grant', error_description: 'grant expired' },
       });
+    });
+
+    it('refresh com o Logto fora do ar não manda o cliente descartar o refresh token', async () => {
+      fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+
+      const err = await service.refreshToken({ refreshToken: 'bom' }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'temporarily_unavailable' });
+      expect((err as OAuthError).getStatus()).toBe(503);
     });
 
     it('omits scope from the request when not provided', async () => {

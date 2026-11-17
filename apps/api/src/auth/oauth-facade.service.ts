@@ -24,16 +24,34 @@ interface ExchangeCodeParams {
 const AUTH_TTL_MS = 10 * 60 * 1000;
 
 /**
- * Códigos da RFC 6749 §5.2 do Logto que repassamos como vieram. `invalid_client`
- * e `unauthorized_client` ficam de fora: lá eles falam do app do facade no Logto
- * (segredo errado), não do cliente MCP, que não tem o que corrigir.
+ * Códigos da RFC 6749 §5.2 do Logto que falam do pedido do cliente MCP e por
+ * isso repassamos como vieram. `invalid_grant` só sai quando o Logto disse isso:
+ * com ele o Claude descarta o refresh token e refaz o login.
  */
-const TOKEN_ERROR_CODES: ReadonlySet<string> = new Set<OAuthErrorCode>([
+const PASS_THROUGH_TOKEN_ERRORS: ReadonlySet<string> = new Set<OAuthErrorCode>([
   'invalid_request',
   'invalid_grant',
   'unsupported_grant_type',
   'invalid_scope',
 ]);
+
+/**
+ * Traduz a resposta de erro do Logto para o cliente MCP (revisão da #388).
+ *
+ * - Logto fora do ar (5xx, corpo que não é JSON, `temporarily_unavailable`):
+ *   `temporarily_unavailable` com 503, para o cliente tentar de novo depois.
+ * - `invalid_client`, `invalid_target`, `unauthorized_client` e códigos que não
+ *   conhecemos falam do app do facade no Logto (segredo, resource, grant): é
+ *   configuração nossa, `server_error` com 500. O cliente não tem o que corrigir
+ *   e não deve jogar o refresh token fora por isso.
+ */
+export function mapLogtoTokenError(status: number, json: Record<string, unknown>): OAuthErrorCode {
+  const error = typeof json.error === 'string' ? json.error : undefined;
+  if (error && PASS_THROUGH_TOKEN_ERRORS.has(error)) return error as OAuthErrorCode;
+  if (error === 'temporarily_unavailable') return 'temporarily_unavailable';
+  if (error === undefined && status >= 500) return 'temporarily_unavailable';
+  return 'server_error';
+}
 
 @Injectable()
 export class OAuthFacadeService {
@@ -286,30 +304,34 @@ export class OAuthFacadeService {
 
   private async callLogtoToken(body: Record<string, string>): Promise<Record<string, unknown>> {
     const basic = Buffer.from(`${this.logtoAppId()}:${this.logtoAppSecret()}`).toString('base64');
-    const res = await fetch(`${this.logtoEndpoint()}/oidc/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${basic}`,
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams(body).toString(),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${this.logtoEndpoint()}/oidc/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${basic}`,
+          Accept: 'application/json',
+        },
+        body: new URLSearchParams(body).toString(),
+      });
+    } catch (err) {
+      this.logger.error(`Logto token endpoint unreachable: ${(err as Error).message}`);
+      throw new OAuthError('temporarily_unavailable', 'Authorization server unavailable');
+    }
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       this.logger.warn(`Logto token error: ${res.status} ${JSON.stringify(json)}`);
       // Formato da RFC 6749 também aqui: com o 401 genérico do Nest, o Claude não
       // reconhecia o refresh vencido e repetia a chamada em vez de refazer o login.
-      const code =
-        typeof json.error === 'string' && TOKEN_ERROR_CODES.has(json.error)
-          ? (json.error as OAuthErrorCode)
-          : 'invalid_grant';
-      throw new OAuthError(
-        code,
-        typeof json.error_description === 'string'
-          ? json.error_description
-          : 'Token exchange failed',
-      );
+      const code = mapLogtoTokenError(res.status, json);
+      const description =
+        code === 'server_error' || code === 'temporarily_unavailable'
+          ? 'Authorization server unavailable'
+          : typeof json.error_description === 'string'
+            ? json.error_description
+            : 'Token exchange failed';
+      throw new OAuthError(code, description);
     }
     return json;
   }
