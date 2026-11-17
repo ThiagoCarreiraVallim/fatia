@@ -79,6 +79,7 @@ describe('navegação', () => {
       '/profile/appearance',
       '/you/news',
       '/you/help',
+      '/you/blocked',
       null,
       null,
     ]);
@@ -94,6 +95,29 @@ describe('navegação', () => {
     expect(conta.items.find((i) => i.key === 'export')?.detail).toBe('Arquivo com link, vale 24 h');
   });
 
+  it('Para você e Pessoas bloqueadas têm título e voltam ao lugar certo (#394)', () => {
+    expect(routeInfo('/you/blocked')).toMatchObject({
+      title: 'Pessoas bloqueadas',
+      parent: '/you',
+    });
+    expect(routeInfo('/community/g1/for-you')).toMatchObject({
+      title: 'Para você',
+      parent: '/community/g1',
+    });
+    expect(routeInfo('/community/g1/content').title).toBe('Conteúdo');
+  });
+
+  it('Conta lista as pessoas bloqueadas, para desbloquear (#394)', () => {
+    for (const platform of ['web', 'mobile'] as const) {
+      const conta = menuSections({ platform, chatAvailable: false }).at(-1)!;
+      expect(conta.items.find((i) => i.key === 'blocked')).toMatchObject({
+        label: 'Pessoas bloqueadas',
+        icon: 'userx',
+        href: '/you/blocked',
+      });
+    }
+  });
+
   it('toda linha leva ícone do design system', () => {
     for (const s of menuSections({ platform: 'mobile', chatAvailable: true })) {
       for (const i of s.items) expect(i.icon).toMatch(/^[a-zA-Z]+$/);
@@ -101,7 +125,14 @@ describe('navegação', () => {
   });
 
   it('as telas novas de Você voltam para Você', () => {
-    for (const path of ['/you/edit', '/you/units', '/you/news', '/you/help', '/you/delete']) {
+    for (const path of [
+      '/you/edit',
+      '/you/units',
+      '/you/news',
+      '/you/help',
+      '/you/delete',
+      '/you/blocked',
+    ]) {
       expect(routeInfo(path).parent).toBe('/you');
       expect(activeNavKey(path)).toBe('you');
     }

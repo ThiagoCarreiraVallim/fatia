@@ -34,7 +34,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 8. LGPD export/exclusão
 - [x] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
 - [x] 10. api-client (community-feed.ts: tipos, feedApi/moderationApi/announcementsApi/blocksApi/forYouApi, helpers de enquete/horário/repetir; abas Mural/Para você/Desafios/Conteúdo, Agenda escondida até #397; markdown-lite título e citação + renderers web/app)
-- [ ] 11. Web aluno (Cm-03/05/06/07/20/21) + lista de bloqueados em Você > Conta
+- [~] 11. Web aluno: feito composer, poll-block, block-dialog, feed-ui (menu copiar/ocultar/bloquear, fixar com prazo, tipos), page (filtros, carrossel, novos), for-you, /you/blocked. FALTA testes web
 - [ ] 12. Web painel (Pn-14, Pn-26)
 - [ ] 13. App (Cm-03/05/06/07/20/21) + bloqueados
 - [ ] 14. ADR 032, PERMISSIONS, REDESIGN_PROGRESS, lint/typecheck/testes

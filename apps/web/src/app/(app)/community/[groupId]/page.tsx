@@ -1,14 +1,18 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutDashboard, MessagesSquare, Settings } from 'lucide-react';
 import {
   ApiError,
   canOpenPanel,
   consentSummary,
+  FEED_FILTER_LABEL,
+  FEED_FILTERS,
   feedApi,
+  type FeedFilter,
   groupsApi,
   panelHref,
 } from '@fatia/api-client';
@@ -18,13 +22,15 @@ import { Composer } from '@/components/feed/composer';
 import { PostCard } from '@/components/feed/feed-ui';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * A comunidade abre no mural (Fase 8b, ADR 032), como no app: os fixados pela
- * equipe no topo, depois o mais recente. Quem a política deixa publica; todo
- * membro reage, comenta e denuncia.
+ * A comunidade abre no mural (Fase 8b, ADR 032; #394, prancha Cm-03), como no
+ * app: o carrossel de avisos fixados pela equipe no topo, os filtros (Tudo,
+ * Equipe, Conteúdo novo, Membros) e o mais recente. Quem a política deixa
+ * publica; todo membro reage, comenta, vota, oculta, bloqueia e denuncia.
  *
  * O resto do que era a tela principal — sobre, o assento PRO, o que eu
  * compartilho, quem acessou, sair — fica atrás da engrenagem do topo, em
@@ -42,9 +48,11 @@ export default function CommunityFeedPage() {
   // que a pessoa está dentro.
   const active = group.data?.status === 'ACTIVE';
 
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<FeedFilter>('all');
   const feed = useInfiniteQuery({
-    queryKey: communityKeys.feed(groupId),
-    queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam),
+    queryKey: communityKeys.feedList(groupId, filter),
+    queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filter),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: active,
@@ -56,6 +64,22 @@ export default function CommunityFeedPage() {
     ? { displayName: firstPage.displayName, suggested: firstPage.suggestedDisplayName }
     : null;
   const settingsHref = `/community/${groupId}/settings`;
+  const pins = firstPage?.pins ?? [];
+
+  // "N posts novos" é o que chegou desde a última visita; ao abrir o mural, a
+  // visita conta (uma vez por tela aberta).
+  const [novos, setNovos] = useState<number | null>(null);
+  const marcou = useRef(false);
+  const visto = useMutation({
+    mutationFn: () => feedApi.markSeen(groupId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: communityKeys.forYou(groupId) }),
+  });
+  useEffect(() => {
+    if (!firstPage || marcou.current || filter !== 'all') return;
+    marcou.current = true;
+    setNovos(firstPage.unseen ?? 0);
+    visto.mutate();
+  }, [firstPage, filter, visto]);
 
   if (group.isError) {
     const notFound = group.error instanceof ApiError && group.error.isNotFound;
@@ -138,15 +162,59 @@ export default function CommunityFeedPage() {
 
       {firstPage && me && (
         <>
+          {pins.length > 0 && (
+            <section aria-label="Avisos fixados" className="-mx-4 overflow-x-auto px-4">
+              <ul className="flex snap-x snap-mandatory gap-3">
+                {pins.map((p) => (
+                  <li key={p.id} className="w-[85%] max-w-md shrink-0 snap-start">
+                    <PostCard groupId={groupId} post={p} me={me} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {firstPage.canPost ? (
-            <Composer groupId={groupId} me={me} />
+            <Composer
+              groupId={groupId}
+              me={me}
+              team={
+                firstPage.isTeam
+                  ? { groupName: firstPage.groupName ?? group.data?.name ?? '' }
+                  : null
+              }
+            />
           ) : (
             <p className="rounded-2xl border border-subtle bg-card p-4 text-xs text-muted-foreground">
               Nesta comunidade, só a equipe publica no mural. Você pode reagir e comentar.
             </p>
           )}
 
-          {posts.length === 0 ? (
+          <div
+            role="group"
+            aria-label="Filtrar o mural"
+            className="-mx-4 flex gap-2 overflow-x-auto px-4"
+          >
+            {FEED_FILTERS.map((f) => (
+              <Chip key={f} selected={filter === f} onClick={() => setFilter(f)}>
+                {FEED_FILTER_LABEL[f]}
+              </Chip>
+            ))}
+          </div>
+
+          {novos !== null && novos > 0 && filter === 'all' && (
+            <p role="status" className="text-xs font-semibold text-primary">
+              {novos === 1 ? '1 post novo' : `${novos} posts novos`} desde a sua última visita
+            </p>
+          )}
+
+          {posts.length === 0 && filter !== 'all' ? (
+            <EmptyState
+              icon={MessagesSquare}
+              title="Nada por aqui"
+              description="Nenhum post deste tipo ainda."
+            />
+          ) : posts.length === 0 && pins.length === 0 ? (
             <EmptyState
               icon={MessagesSquare}
               title="O mural está vazio"
