@@ -457,6 +457,6 @@ export class WorkoutController {
 
   @Get('records')
   listPersonalRecords(@CurrentUser() user: CurrentUserPayload) {
-    return this.sets.listPersonalRecords(user.id);
+    return this.sets.recordsOverview(user.id);
   }
 }

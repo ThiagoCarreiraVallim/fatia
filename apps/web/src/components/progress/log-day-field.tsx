@@ -1,7 +1,8 @@
 'use client';
 
+import { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { dayLabel, shiftDay } from '@fatia/api-client';
+import { dayLabel, logDayTitle, shiftDay } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -17,12 +18,70 @@ export function LogDayField({
   day,
   today,
   onChange,
+  variant = 'field',
 }: {
   id: string;
   day: string;
   today: string;
   onChange: (day: string) => void;
+  /**
+   * `nav`: a linha da folha Peso/Passos (Al-G7): ‹ "Hoje · 4 nov" ›. Tocar no dia abre o
+   * calendário nativo, para o salto longo continuar a um toque.
+   */
+  variant?: 'field' | 'nav';
 }) {
+  const input = useRef<HTMLInputElement>(null);
+  if (variant === 'nav') {
+    const iconButton =
+      'flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-muted text-foreground disabled:opacity-40';
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Dia anterior"
+          className={iconButton}
+          onClick={() => onChange(shiftDay(day, -1))}
+        >
+          <ChevronLeft size={20} aria-hidden />
+        </button>
+        <div className="relative flex flex-1 justify-center">
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            className="text-[15px] font-bold tabular-nums"
+            onClick={() => input.current?.showPicker?.()}
+          >
+            {logDayTitle(day, today)}
+          </button>
+          <label htmlFor={id} className="sr-only">
+            Dia
+          </label>
+          <input
+            ref={input}
+            id={id}
+            type="date"
+            max={today}
+            value={day}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (next) onChange(next > today ? today : next);
+            }}
+            className="pointer-events-none absolute inset-0 opacity-0"
+          />
+        </div>
+        <button
+          type="button"
+          aria-label="Próximo dia"
+          className={iconButton}
+          disabled={day >= today}
+          onClick={() => onChange(shiftDay(day, 1))}
+        >
+          <ChevronRight size={20} aria-hidden />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">

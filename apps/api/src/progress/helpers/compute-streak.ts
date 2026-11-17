@@ -37,24 +37,16 @@ export const TOLERANCIA_DIARIA: StreakTolerance = {
   faltasMaximas: 2,
 };
 
-/** Semana: falta de semana pesa mais, então o orçamento demora mais a se renovar. */
-export const TOLERANCIA_SEMANAL: StreakTolerance = {
-  faltasIniciais: 1,
-  ganhaACada: 4,
-  faltasMaximas: 2,
-};
-
 /**
  * Teto da janela varrida. Existe porque a consulta precisa de um começo, não porque a sequência
  * deva parar aí — quem encosta no teto recebe `janelaEsgotada: true` e a tela mostra "365+".
  *
- * O valor subiu de 60 dias / 12 semanas junto com a tolerância: com faltas toleradas as
+ * O valor subiu de 60 dias junto com a tolerância: com faltas toleradas as
  * sequências passam a viver muito mais, e o teto viraria o limitador de fato justamente para o
  * usuário mais engajado — que é quem a issue quer premiar. Como a varredura virou **uma** query
  * agregada por domínio, ampliar a janela custa praticamente nada.
  */
 export const JANELA_DIAS = 365;
-export const JANELA_SEMANAS = 53;
 
 export interface StreakResult {
   /** Tamanho da sequência, contando as faltas toleradas que ficaram no meio dela. */

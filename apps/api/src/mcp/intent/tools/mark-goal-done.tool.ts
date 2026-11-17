@@ -18,8 +18,13 @@ export class MarkGoalDoneTool extends IntentTool<'mark_goal_done'> {
   }
 
   async execute(input: IntentInput<'mark_goal_done'>, { userId, timezone }: McpToolContext) {
-    const ativas = await this.goals.list({ status: GoalStatus.active }, userId, timezone); // list_goals
-    const meta = escolherPorNome(input.goal, ativas, (g) => g.title, 'meta ativa');
+    // A vencida (prazo passado, #382) também é meta em aberto: "bati a meta" vale para ela. Só a
+    // concluída e a arquivada ficam de fora. `list_goals` sem status, filtrado aqui.
+    const todas = await this.goals.list({}, userId, timezone); // list_goals
+    const abertas = todas.filter(
+      (g) => g.status === GoalStatus.active || g.status === GoalStatus.expired,
+    );
+    const meta = escolherPorNome(input.goal, abertas, (g) => g.title, 'meta ativa');
     if (input.finalValue !== undefined) {
       await this.goals.update(meta.id, { lastReportedValue: input.finalValue }, userId, timezone); // update_goal
     }

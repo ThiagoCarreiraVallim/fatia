@@ -8,9 +8,9 @@ import type { Prisma } from '@prisma/client';
  * banco de quem desbloqueou ontem e a do deploy de hoje. O banco guarda só o fato: quem, qual
  * chave, quando, e o contexto para a tela contar a história.
  *
- * As sete da issue, mais duas dos desafios da comunidade (Fase 8a): concluir um desafio pontuando
- * e subir ao pódio. Sem pontos, sem níveis, sem medalha por horário: o tom da épica #146 é "útil,
- * não insistente".
+ * As sete da issue, duas dos desafios da comunidade (Fase 8a) e "100 treinos" (#382). O catálogo
+ * é fechado em dez (decisão do dono, #382), na ordem da prancha Al-G11. Sem pontos, sem níveis,
+ * sem medalha por horário: o tom da épica #146 é "útil, não insistente".
  */
 
 export interface AchievementUnlock {
@@ -32,131 +32,173 @@ export interface AchievementUnlock {
  * estável (tudo desbloqueado) a avaliação não faz consulta nenhuma além da lista já carregada.
  */
 export interface AchievementSnapshot {
-  primeiraRefeicao(): Promise<Date | null>;
-  primeiroTreino(): Promise<Date | null>;
-  primeiroPlano(): Promise<Date | null>;
-  primeiroRecorde(): Promise<{
+  firstMeal(): Promise<{ at: Date; mealType: string } | null>;
+  firstWorkout(): Promise<{ at: Date; planName: string | null } | null>;
+  firstPlan(): Promise<{ at: Date; planName: string } | null>;
+  firstRecord(): Promise<{
     at: Date;
     exerciseId: number;
     exerciseName: string;
     weightKg: number;
   } | null>;
-  primeiraSemanaCompleta(): Promise<{ weekStart: string; sessions: number; target: number } | null>;
+  firstFullWeek(): Promise<{ weekStart: string; sessions: number; target: number } | null>;
   /** Tamanho da sequência de dias ativos, já com a tolerância aplicada. */
-  diasAtivosSeguidos(): Promise<number>;
+  activeDayStreak(): Promise<number>;
+  /** Quando o N-ésimo treino foi concluído (`null` se ainda não chegou lá). */
+  nthCompletedWorkout(n: number): Promise<Date | null>;
+  /** Treinos concluídos até agora: o "faltam 58" da conquista bloqueada. */
+  completedWorkoutCount(): Promise<number>;
   /** O primeiro desafio de comunidade encerrado em que a pessoa pontuou. */
-  primeiroDesafioConcluido(): Promise<{ at: Date; challengeTitle: string } | null>;
+  firstChallengeFinished(): Promise<{ at: Date; challengeTitle: string } | null>;
   /** O primeiro desafio encerrado com a pessoa entre as três primeiras posições. */
-  primeiroPodio(): Promise<{ at: Date; challengeTitle: string; rank: number } | null>;
+  firstPodium(): Promise<{ at: Date; challengeTitle: string; rank: number } | null>;
+}
+
+export interface AchievementProgress {
+  current: number;
+  target: number;
 }
 
 export interface AchievementDefinition {
   key: string;
   title: string;
   description: string;
+  /** O que falta, dito para a pessoa, quando ainda está bloqueada ("Conclua 100 treinos"). */
+  condition: string;
   evaluate(snapshot: AchievementSnapshot): Promise<AchievementUnlock | null>;
+  /** Só nas de contagem: quanto já tem, para a tela dizer "faltam 58". */
+  progress?(snapshot: AchievementSnapshot): Promise<AchievementProgress>;
 }
 
 /** Conquista de "primeira vez": desbloqueia na data do próprio evento. */
-function primeiraVez(
-  key: string,
-  title: string,
-  description: string,
-  quando: (s: AchievementSnapshot) => Promise<Date | null>,
+function firstTime<T extends { at: Date }>(
+  def: Pick<AchievementDefinition, 'key' | 'title' | 'description' | 'condition'>,
+  when: (s: AchievementSnapshot) => Promise<T | null>,
+  context?: (event: T) => Prisma.InputJsonObject,
 ): AchievementDefinition {
   return {
-    key,
-    title,
-    description,
+    ...def,
     async evaluate(snapshot) {
-      const at = await quando(snapshot);
-      return at ? { unlockedAt: at } : null;
+      const event = await when(snapshot);
+      if (!event) return null;
+      return { unlockedAt: event.at, ...(context && { context: context(event) }) };
     },
   };
 }
 
-function porStreak(key: string, title: string, minimo: number): AchievementDefinition {
+function byStreak(key: string, title: string, minimum: number): AchievementDefinition {
   return {
     key,
     title,
-    description: `Você manteve ${minimo} dias ativos seguidos.`,
+    description: `Você manteve ${minimum} dias ativos seguidos.`,
+    condition: `${minimum} dias ativos seguidos`,
     async evaluate(snapshot) {
-      const dias = await snapshot.diasAtivosSeguidos();
-      if (dias < minimo) return null;
+      const days = await snapshot.activeDayStreak();
+      if (days < minimum) return null;
       // Sequência não tem data de evento — ela é o estado de agora. Aqui `now()` é a resposta
       // certa, ao contrário das conquistas de "primeira vez".
-      return { unlockedAt: new Date(), context: { days: dias } };
+      return { unlockedAt: new Date(), context: { days } };
+    },
+    async progress(snapshot) {
+      return { current: await snapshot.activeDayStreak(), target: minimum };
     },
   };
 }
 
 export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
-  primeiraVez('first_meal', 'Primeira refeição', 'Você registrou sua primeira refeição.', (s) =>
-    s.primeiraRefeicao(),
-  ),
-  primeiraVez(
-    'first_workout',
-    'Primeiro treino',
-    'Você concluiu sua primeira sessão de treino.',
-    (s) => s.primeiroTreino(),
-  ),
-  primeiraVez('plan_created', 'Primeiro plano', 'Você montou seu primeiro plano de treino.', (s) =>
-    s.primeiroPlano(),
-  ),
-  {
-    key: 'first_pr',
-    title: 'Primeiro recorde',
-    description: 'Você superou sua própria carga máxima num exercício.',
-    async evaluate(snapshot) {
-      const pr = await snapshot.primeiroRecorde();
-      if (!pr) return null;
-      return {
-        unlockedAt: pr.at,
-        context: {
-          exerciseId: pr.exerciseId,
-          exerciseName: pr.exerciseName,
-          weightKg: pr.weightKg,
-        },
-      };
+  firstTime(
+    {
+      key: 'first_meal',
+      title: 'Primeira refeição',
+      description: 'Você registrou sua primeira refeição.',
+      condition: 'Registre uma refeição',
     },
-  },
+    (s) => s.firstMeal(),
+    (e) => ({ mealType: e.mealType }),
+  ),
+  firstTime(
+    {
+      key: 'first_workout',
+      title: 'Primeiro treino',
+      description: 'Você concluiu sua primeira sessão de treino.',
+      condition: 'Conclua um treino',
+    },
+    (s) => s.firstWorkout(),
+    (e) => ({ planName: e.planName }),
+  ),
+  firstTime(
+    {
+      key: 'plan_created',
+      title: 'Primeiro plano',
+      description: 'Você montou seu primeiro plano de treino.',
+      condition: 'Monte um plano de treino',
+    },
+    (s) => s.firstPlan(),
+    (e) => ({ planName: e.planName }),
+  ),
+  firstTime(
+    {
+      key: 'first_pr',
+      title: 'Primeiro recorde',
+      description: 'Você superou sua própria carga máxima num exercício.',
+      condition: 'Supere sua carga máxima num exercício',
+    },
+    (s) => s.firstRecord(),
+    (e) => ({ exerciseId: e.exerciseId, exerciseName: e.exerciseName, weightKg: e.weightKg }),
+  ),
+  byStreak('streak_7', '7 dias seguidos', 7),
+  byStreak('streak_30', '30 dias seguidos', 30),
   {
     key: 'first_full_week',
-    title: 'Primeira semana completa',
+    title: 'Meta da semana',
     description: 'Você bateu sua meta semanal de treinos numa semana inteira.',
+    condition: 'Bata a meta de treinos de uma semana',
     async evaluate(snapshot) {
-      const semana = await snapshot.primeiraSemanaCompleta();
-      if (!semana) return null;
+      const week = await snapshot.firstFullWeek();
+      if (!week) return null;
       return {
         // Segunda-feira ao meio-dia UTC: a conquista é da semana, não de um instante dela, e
         // qualquer hora escolhida seria arbitrária. Meio-dia não vira de dia em nenhum fuso.
-        unlockedAt: new Date(`${semana.weekStart}T12:00:00.000Z`),
-        context: { weekStart: semana.weekStart, sessions: semana.sessions, target: semana.target },
+        unlockedAt: new Date(`${week.weekStart}T12:00:00.000Z`),
+        context: { weekStart: week.weekStart, sessions: week.sessions, target: week.target },
       };
     },
   },
-  porStreak('streak_7', 'Uma semana ativa', 7),
-  porStreak('streak_30', 'Um mês ativo', 30),
   {
-    key: 'challenge_finished',
-    title: 'Primeiro desafio',
-    description: 'Você concluiu um desafio da sua comunidade.',
+    key: 'workouts_100',
+    title: '100 treinos',
+    description: 'Você concluiu 100 treinos.',
+    condition: 'Conclua 100 treinos',
     async evaluate(snapshot) {
-      const d = await snapshot.primeiroDesafioConcluido();
-      return d ? { unlockedAt: d.at, context: { challengeTitle: d.challengeTitle } } : null;
+      // A data é a do 100º treino, não a da avaliação: quem já tinha 130 quando a conquista
+      // chegou (#382) desbloqueia no dia em que de fato passou dos 100.
+      const at = await snapshot.nthCompletedWorkout(100);
+      return at ? { unlockedAt: at, context: { count: 100 } } : null;
+    },
+    async progress(snapshot) {
+      return { current: await snapshot.completedWorkoutCount(), target: 100 };
     },
   },
-  {
-    key: 'challenge_podium',
-    title: 'No pódio',
-    description: 'Você terminou um desafio da sua comunidade entre os três primeiros.',
-    async evaluate(snapshot) {
-      const d = await snapshot.primeiroPodio();
-      return d
-        ? { unlockedAt: d.at, context: { challengeTitle: d.challengeTitle, rank: d.rank } }
-        : null;
+  firstTime(
+    {
+      key: 'challenge_finished',
+      title: 'Primeiro desafio',
+      description: 'Você concluiu um desafio da sua comunidade.',
+      condition: 'Conclua um desafio da comunidade',
     },
-  },
+    (s) => s.firstChallengeFinished(),
+    (e) => ({ challengeTitle: e.challengeTitle }),
+  ),
+  firstTime(
+    {
+      key: 'challenge_podium',
+      title: 'Desafio no pódio',
+      description: 'Você terminou um desafio da sua comunidade entre os três primeiros.',
+      condition: 'Fique entre os 3 primeiros de um desafio',
+    },
+    (s) => s.firstPodium(),
+    (e) => ({ challengeTitle: e.challengeTitle, rank: e.rank }),
+  ),
 ];
 
 export const ACHIEVEMENT_KEYS: readonly string[] = ACHIEVEMENT_CATALOG.map((a) => a.key);

@@ -1,10 +1,5 @@
 import { addDaysIso } from '../helpers/date-tz';
-import {
-  JANELA_DIAS,
-  TOLERANCIA_DIARIA,
-  TOLERANCIA_SEMANAL,
-  computeStreak,
-} from '../helpers/compute-streak';
+import { JANELA_DIAS, TOLERANCIA_DIARIA, computeStreak } from '../helpers/compute-streak';
 
 /**
  * O coração da issue #147: a sequência tolera falha.
@@ -182,7 +177,7 @@ describe('computeStreak', () => {
       corrente: segunda,
       anterior: (s) => addDaysIso(s, -7),
       janela: 53,
-      tolerancia: TOLERANCIA_SEMANAL,
+      tolerancia: { faltasIniciais: 1, ganhaACada: 4, faltasMaximas: 2 },
     });
 
     expect(r.periodos).toBe(4);

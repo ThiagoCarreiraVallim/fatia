@@ -49,7 +49,8 @@ export interface StrengthProgress {
 }
 
 export interface CardioProgress {
-  exercise: { id: number; name: string };
+  /** `null` quando pedido sem exercício: soma todo o cardio da sessão (#382). */
+  exercise: { id: number; name: string } | null;
   metric: string;
   points: Array<{
     sessionDate: string;
@@ -108,23 +109,50 @@ export interface StreakResult {
 }
 
 export interface StreakSummary {
-  /** Dias com refeição OU treino concluído OU meta de passos batida. É o número grande da tela. */
+  /**
+   * Dias ativos seguidos. Um dia é ativo com ao menos uma área cumprida: refeição, treino,
+   * água na meta ou passos na meta (#382). É o número grande da tela.
+   */
   activeDays: StreakResult;
-  nutritionDays: StreakResult;
-  /** Em SEMANAS, não em dias. */
-  workoutWeeks: StreakResult;
-  stepsDays: StreakResult;
-  /** `false` quando não há metas: passos ficam de fora do dia ativo. */
-  stepsTargetSet: boolean;
+}
+
+export type ConsistencyArea = 'meal' | 'workout' | 'water' | 'steps';
+export type ConsistencyRange = 'month' | 'quarter' | 'year';
+
+export interface ConsistencyDay {
+  date: string;
+  meal: boolean;
+  workout: boolean;
+  water: boolean;
+  steps: boolean;
+  /** Áreas cumpridas, de 0 a 4. */
+  count: number;
+}
+
+/** `GET /progress/consistency` (Al-G12, #382). */
+export interface ConsistencyReport {
+  range: ConsistencyRange;
+  from: string;
+  to: string;
+  days: ConsistencyDay[];
+  activeDays: number;
+  totalDays: number;
+  streak: StreakResult;
+  record: number;
+  byArea: Record<ConsistencyArea, { days: number; of: number | null }>;
 }
 
 export interface Achievement {
   key: string;
   title: string;
   description: string;
+  /** O que falta, quando bloqueada ("Conclua 100 treinos"). */
+  condition: string;
   /** ISO quando desbloqueada, `null` quando ainda falta — o catálogo inteiro vem sempre. */
   unlockedAt: string | null;
   context: unknown;
+  /** Bloqueadas de contagem (sequência, 100 treinos): quanto já tem. */
+  progress: { current: number; target: number } | null;
 }
 
 /** Uma meta do dia (Al-H5-Metas, #373). */
@@ -292,10 +320,17 @@ export const progressApi = {
     apiFetch<StrengthProgress>(
       `/api/progress/strength?exerciseId=${exerciseId}&days=${days}&metric=${metric}`,
     ),
-  cardio: (exerciseId: number, days: number, metric: string) =>
+  cardio: (exerciseId: number | null, days: number, metric: string) =>
     apiFetch<CardioProgress>(
-      `/api/progress/cardio?exerciseId=${exerciseId}&days=${days}&metric=${metric}`,
+      `/api/progress/cardio?${exerciseId === null ? '' : `exerciseId=${exerciseId}&`}days=${days}&metric=${metric}`,
     ),
+  volume: (days: number) =>
+    apiFetch<{
+      weeks: Array<{ weekStart: string; totalVolumeKg: number; sessionCount: number }>;
+      averageWeeklyVolumeKg: number;
+    }>(`/api/progress/volume?days=${days}`),
+  consistency: (range: ConsistencyRange) =>
+    apiFetch<ConsistencyReport>(`/api/progress/consistency?range=${range}`),
   steps: (days: number) => apiFetch<StepsProgress>(`/api/progress/steps?days=${days}`),
   water: (days: number) => apiFetch<WaterProgress>(`/api/progress/water?days=${days}`),
 

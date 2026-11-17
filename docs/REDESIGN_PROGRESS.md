@@ -137,22 +137,20 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 
 ## Etapa 5: Treino B e Progresso (em andamento)
 
-| Issue | Título                   | Estado           | Superfícies                                  |
-| ----- | ------------------------ | ---------------- | -------------------------------------------- |
-| #381  | Treino livre e histórico | pronto na branch | api, MCP (1 tool nova), api-client, web, app |
+| Issue | Título                   | Estado           | Superfícies                                                   |
+| ----- | ------------------------ | ---------------- | ------------------------------------------------------------- |
+| #381  | Treino livre e histórico | mergeado (#437)  | api, MCP (1 tool nova), api-client, web, app                  |
+| #382  | Progresso                | mergeado (#438)  | api, MCP (1 tool nova), api-client, web, app                  |
+| #380  | Circuitos                | pronto na branch | api, db, MCP (1 tool nova e 1 ampliada), api-client, web, app |
 
 Pendências da #381 (branch `redesign/381-treino-livre-historico`, sem migration):
 
 - **Tipo da sessão é derivado, não gravado:** `plan` com `planId`, `free` sem. `circuit` é o ponto de extensão da #380 (`helpers/session-kind.ts`, `HISTORY_FILTERS`, `sessionHero` e o detalhe `history/[id]`): a #380 já ligou a aba "Circuitos" do Al-T10 e a tela Al-T11c. Plano apagado deixa a sessão sem `planId`, e ela passa a aparecer como livre.
-- **Rotas e MCP:** `GET /workout/history` (totais, filtro `kind`, cursor), `GET /workout/sessions?kind=`, `POST /workout/sessions/:id/plan`; o resumo da sessão ganhou `kind`, as séries de cada exercício, kcal e o recorde de antes. MCP `save_session_as_plan` (152 tools) e `list_workout_sessions` com `kind` e sensação.
+- **Rotas e MCP:** `GET /workout/history` (totais, filtro `kind`, cursor), `GET /workout/sessions?kind=`, `POST /workout/sessions/:id/plan`; o resumo da sessão ganhou `kind`, as séries de cada exercício, kcal e o recorde de antes. MCP `save_session_as_plan` (152 tools; 153 com o `get_consistency` da #382) e `list_workout_sessions` com `kind` e sensação.
 - **Treino livre (Al-T17b):** monta antes de começar; a sessão só nasce no "Iniciar treino". Os escolhidos sem série ficam só no cliente (o cache `pending` da sessão), como na #377: fechar o app antes da primeira série os perde.
 - **Recorde de distância do cardio:** passou a somar as séries da sessão (como o resumo já fazia), em vez da maior série. Pode conflitar com a #382 (progresso), que lê os mesmos recordes.
 - **Desvios do canvas:** o detalhe tem "Corrigir séries deste treino" (leva à sessão), porque a tela antiga de sessão concluída era o único lugar de corrigir; cartão de cardio e selo de recorde usam `text-background` para contrastar nos dois temas.
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
-
-| Issue | Título    | Estado       | Superfícies                                                   |
-| ----- | --------- | ------------ | ------------------------------------------------------------- |
-| #380  | Circuitos | em andamento | api, db, MCP (1 tool nova e 1 ampliada), api-client, web, app |
 
 Pendências da #380 (branch `redesign/380-circuitos`, migration `20261116053800_workout_circuits`):
 
@@ -169,6 +167,37 @@ Pendências da #380 (branch `redesign/380-circuitos`, migration `20261116053800_
   - O AMRAP terminado pelo tempo mostra o fim no desenho do Al-T4e ("rounds + exercícios").
 - **Contas escolhidas:** o Tabata conta o último descanso no total (8 × 20/10 = 4 min, como a prancha); pular fase conta a fase como feita; a série do Tabata grava os segundos de trabalho; `targetReps` em faixa vira o maior número.
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual); som e avisos no aparelho (no Expo Go do Android não há avisos do sistema: o relógio só apita com a tela acesa).
+
+Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_achievement_workouts_100`, só dados):
+
+- **Sequência:** um cálculo só (`ConsistencyService`) para `GET /streak`, o Hoje, `get_streak`, `get_day_overview` e as conquistas. A tolerância de faltas da #147 continua. As sub-sequências (nutrição, treino em semanas, passos) saíram do `StreakSummary`, junto com os `StreakCard` mortos da web e do app. O desafio `ACTIVE_DAYS` da comunidade não mudou: é comparação entre pessoas, com regra própria.
+- **Constância (G12):** `GET /progress/consistency?range=month|quarter|year` e o MCP `get_consistency`, derivados na leitura, sem tabela. Água conta a soma do dia; passos contam o maior registro (ADR 007). Água e passos sem `UserGoals` ficam "sem meta". O treino conta contra a meta semanal. O recorde é por período (o maior entre o histórico e a janela).
+- **Conquistas (G11):** catálogo de 10 com `condition` e `progress` (o "faltam 58"). A tela reavalia (`POST /achievements/evaluate`) antes de listar, como o Hoje; se a contagem já bateu e ainda não gravou, mostra desbloqueada. A `workouts_100` vale retroativa pela migration e também no fim de cada treino (`WORKOUT_FINISHED_HOOKS`, num módulo global para não criar ciclo de módulos).
+- **Recordes (G5):** `GET /workout/records` virou `{ records, highlight }`. "Maior evolução do mês" usa os últimos 30 dias corridos, não o mês do calendário, em % de 1RM estimado. Só entram séries de treino concluído. O recorde de distância do cardio soma as séries da sessão, como na #381. `listPersonalRecords` do api-client segue devolvendo a lista.
+- **Metas (G9/G10):**
+  - "Vencida" é derivada na leitura (`effectiveStatus`). O PATCH com prazo futuro volta a meta para ativa.
+  - São três abas, como no canvas: Ativas, Concluídas e Arquivadas. A issue fala em quatro; a vencida fica nas ativas, com o selo.
+  - Concluir, arquivar e apagar perguntam antes. "Só a arquivada pode ser apagada" é regra de tela: o servidor (`DELETE /goals/:id`) e o chat (`delete_goal`) continuam apagando qualquer meta.
+  - Prazo: no passado volta 400 ("O prazo não pode estar no passado."), no criar e no editar, pela REST e pelo MCP. Só a data (`"2026-12-31"`) vale até o fim desse dia no fuso da pessoa. A vencida continua achável pelo `mark_goal_done`.
+  - Metas marcadas à mão (% de gordura e "Outra") ganham "Atualizar". "Outra" também ganhou o campo Unidade.
+  - O rodapé não fala de gordura: a % só se atualiza sozinha com a #383.
+- **Metas de água e passos valem para trás:** a constância (G12) e a sequência leem a meta atual de `UserGoals` para todos os dias, inclusive os antigos. Mudar a meta reescreve o passado. É comportamento conhecido; guardar o histórico de metas fica para depois.
+- **Gráficos (G6):**
+  - Cardio usa `GET /progress/cardio` sem `exerciseId`, que soma todo o cardio da sessão. O ritmo somado divide só o tempo das séries com distância (a bike sem distância não puxa o ritmo); as kcal somam tudo.
+  - Força usa o exercício de maior 1RM até a pessoa escolher outro.
+- **Passe visual (prints em `~/.cache/fatia-vis/382/cmp-<prancha>.png`, prancha | web | app):**
+  - O Progresso (G1) não repete o título no topo (`untitled` em `navigation.ts`); a tendência de Força é o volume médio por sessão (`strengthTrend`), para a semana corrente incompleta não puxar para baixo.
+  - Desvios de propósito: o G7 abre com o último peso como dica (placeholder), não preenchido, para não gravar um registro repetido sem querer; o G1 mostra "—" em gordura até a #383; o G6 mantém o botão "Registrar peso"; as conquistas são 10 (a prancha desenha 9); as folhas do app abrem em 85%.
+  - Treinos na constância pode passar do total (17/16): o denominador é a meta semanal × semanas cheias, e treinar a mais conta. A barra para em 100%.
+  - Ganhou "Registrar peso" e "Registrar passos", que não estão no canvas.
+- **Registrar peso (G7):** uma folha com Peso e Passos (`body-log-sheet`), aberta pelo menu da IA, pelo Hoje (passos) e pelo "Peso atual" de Você. O miolo é o das gavetas de antes, com `embedded`.
+  - O valor é digitável e tem − e +.
+  - Apagar continua com "Desfazer", sem pergunta, como nos registros pequenos.
+  - O que veio do celular mostra o selo de origem e não se edita nem apaga dali.
+- **% de gordura no G1:** o cartão fica sem link e com "—" até a #383 (Al-G2). O ponto de extensão está em `progress-screen.tsx`, em `progress/index.tsx` do app e no `case GoalKind.body_fat` de `goals.service.ts`.
+- **App sem calendário nativo:** "Escolher" prazo e "Novo prazo" são datas digitadas (DD/MM/AAAA, `parseDayInput`).
+- **Dica da constância:** é só o lado bom. O "Sábado é o que mais falha" da prancha saiu.
+- **Ainda não conferido:** as capturas contra as pranchas. O dono faz a passada visual.
 
 ## Etapas seguintes
 
@@ -230,6 +259,9 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
   - EMOM e Tabata dividem a mesma tela de intervalos (Al-T4b e Al-T4d).
   - O Al-T4e é um estado da tela do For Time (Al-T4c), não uma tela à parte.
   - Na web, manter a tela acesa não é confiável (Wake Lock negado, iOS antigo, aba no fundo): o relógio segue certo pelos horários, e a tela avisa quando o navegador não tem a API. No app, `expo-keep-awake`, háptico, som por `expo-audio` e avisos do sistema com o app no fundo, tudo com fallback no Expo Go.
+- **Etapa 5 (#382):**
+  - Sequência = dia ativo em todo lugar. Um dia é ativo com ao menos uma área cumprida: refeição, treino, água na meta ou passos na meta. Um cálculo só, sem dois números de sequência.
+  - Conquistas: catálogo fechado em 10, com "100 treinos". O contador é N/10, e quem já tem 100 treinos ganha a conquista pela migration.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).

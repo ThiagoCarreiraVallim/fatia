@@ -38,9 +38,8 @@ import {
 } from '@fatia/api-client';
 import { Icon } from '@/components/ui/icon';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
-import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
-import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
+import { BodyLogSheet } from '@/components/progress/body-log-sheet';
 import { queueFirstMessage } from '@/components/chat/drawer-message';
 import { useDitado } from '@/components/chat/use-ditado';
 import { hojeIso } from '@/lib/dias';
@@ -191,8 +190,12 @@ export function AiMenuProvider({ children }: { children: ReactNode }) {
         />
       )}
       <LogWaterDrawer open={target === 'water'} onClose={closeTarget} />
-      <LogWeightDrawer open={target === 'weight'} onClose={closeTarget} />
-      <LogStepsDrawer open={target === 'steps'} onClose={closeTarget} />
+      {/* Peso e passos são a mesma folha (Al-G7), com o segmentado no topo. */}
+      <BodyLogSheet
+        open={target === 'weight' || target === 'steps'}
+        initialKind={target === 'steps' ? 'steps' : 'weight'}
+        onClose={closeTarget}
+      />
     </AiMenuContext.Provider>
   );
 }

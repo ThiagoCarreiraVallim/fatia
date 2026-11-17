@@ -24,7 +24,7 @@ import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import { LogStepsDrawer } from '@/components/progress';
+import { BodyLogSheet } from '@/components/progress';
 import { ShareSheet } from '@/components/sharing/share-sheet';
 import type { ShareIdentity } from '@/components/sharing/share-card';
 import {
@@ -259,7 +259,7 @@ export default function TodayScreen() {
           </>
         ) : null}
         <WeightSheet open={sheet === 'weight'} onOpenChange={closeOn} />
-        <LogStepsDrawer open={sheet === 'steps'} onClose={() => setSheet(null)} />
+        <BodyLogSheet open={sheet === 'steps'} initialKind="steps" onClose={() => setSheet(null)} />
         <InboxSheet open={sheet === 'inbox'} onOpenChange={closeOn} />
       </DrawerLayer>
     </>

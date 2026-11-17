@@ -61,9 +61,13 @@ import {
  * (nenhuma destrutiva nem de intenção): muda o braço A.
  * A revisão da #380 disse nas descrições de `log_circuit_result`, `finish_workout_session` e
  * `save_session_as_plan` as faixas do resultado e as recusas do circuito: muda o braço A.
+ * A #382 acrescentou `get_consistency` (só leitura) e mudou as descrições de `get_streak`,
+ * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
+ * braço A. As duas chegaram juntas no merge da main na #382.
+ * O merge da main (#382) na #380 juntou os dois braços A acima.
  */
 
-const SHA_ENTIDADE = '9457ff5e20804644cbccd585922ff31aeed726601c0930c9cdabb0d9a9a3f3d9';
+const SHA_ENTIDADE = 'fae2798cb2d5f3b3b4e9848e70fa89e3e52a760e5312cfd2a4829f23be583078';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

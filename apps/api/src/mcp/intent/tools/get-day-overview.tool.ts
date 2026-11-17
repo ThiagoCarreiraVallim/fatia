@@ -3,7 +3,7 @@ import { McpTool, type McpToolContext } from '../../../common/decorators/tool.de
 import { NutritionSummaryService } from '../../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../../nutrition/user-goals.service';
 import { StepLogService } from '../../../progress/step-log.service';
-import { StreakService } from '../../../progress/streak.service';
+import { ConsistencyService } from '../../../progress/consistency.service';
 import { WaterLogService } from '../../../progress/water-log.service';
 import { WorkoutSessionService } from '../../../workout/workout-session.service';
 import { IntentTool, resolverDia } from '../composicao';
@@ -21,7 +21,7 @@ export class GetDayOverviewTool extends IntentTool<'get_day_overview'> {
     private readonly goals: UserGoalsService,
     private readonly waters: WaterLogService,
     private readonly steps: StepLogService,
-    private readonly streaks: StreakService,
+    private readonly consistency: ConsistencyService,
     private readonly sessions: WorkoutSessionService,
   ) {
     super('get_day_overview');
@@ -34,7 +34,7 @@ export class GetDayOverviewTool extends IntentTool<'get_day_overview'> {
       this.goals.get(userId), // get_nutrition_goals
       this.waters.getForDateWithGoal(date, userId, timezone), // get_water_for_date
       this.steps.getStepsForDateWithGoal(date, userId, timezone), // get_steps_for_date
-      this.streaks.compute({ userId, timezone }), // get_streak
+      this.consistency.streak({ userId, timezone }), // get_streak
       this.sessions.list(userId, { date }), // list_workout_sessions
     ]);
     return { date, nutrition, goals, water, steps, streak, workouts };

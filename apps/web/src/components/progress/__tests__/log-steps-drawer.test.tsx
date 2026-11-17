@@ -91,7 +91,7 @@ describe('LogStepsDrawer', () => {
     renderDrawer();
 
     expect(await screen.findByText('9.500 passos')).toBeInTheDocument();
-    expect(screen.getAllByText('19 mai')).toHaveLength(2);
+    expect(screen.getAllByText(/^19 mai · \d{2}:\d{2}$/)).toHaveLength(2);
   });
 
   it('gives the two logs of the same day distinct accessible names', async () => {
@@ -218,5 +218,27 @@ describe('LogStepsDrawer', () => {
     await waitFor(() =>
       expect(createStep).toHaveBeenCalledWith({ steps: 9500, date: '2026-05-19' }),
     );
+  });
+});
+
+describe('LogStepsDrawer: origem do registro (Al-G7)', () => {
+  it('o que veio do celular aparece com o selo, sem editar nem apagar', async () => {
+    listSteps.mockResolvedValue({
+      logs: [
+        {
+          id: 'h1',
+          date: '2026-05-19',
+          steps: 8000,
+          source: 'APPLE_HEALTH',
+          loggedAt: '2026-05-19T22:00:00.000Z',
+          notes: null,
+        },
+      ],
+    });
+    renderDrawer();
+
+    expect(await screen.findByText('Apple Saúde')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Editar registro de 8\.000 passos/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Apagar registro de 8\.000 passos/ })).toBeNull();
   });
 });

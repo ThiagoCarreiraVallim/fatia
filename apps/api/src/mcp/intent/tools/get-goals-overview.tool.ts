@@ -25,7 +25,7 @@ export class GetGoalsOverviewTool extends IntentTool<'get_goals_overview'> {
   async execute(input: IntentInput<'get_goals_overview'>, { userId, timezone }: McpToolContext) {
     const [goals, achievements] = await Promise.all([
       this.goals.list({ status: input.status }, userId, timezone), // list_goals
-      this.achievements.list({ userId, timezone }), // list_achievements
+      this.achievements.list({ userId, timezone }, { withProgress: true }), // list_achievements
     ]);
     const desde = Date.now() - DIAS_RECENTES * 24 * 60 * 60 * 1000;
     const recentAchievements = achievements.filter(

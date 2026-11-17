@@ -161,17 +161,30 @@ export class ProgressService {
     };
   }
 
-  async cardioProgress(exerciseId: number, days: number, metric: CardioMetric, ctx: UserCtx) {
-    const exercise = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
-    if (!exercise) throw new NotFoundException('Exercise not found');
-    if (exercise.muscleGroup !== 'cardio') {
-      throw new BadRequestException('Exercise is not cardio');
+  /**
+   * Sem `exerciseId`, soma todos os exercícios de cardio de cada sessão (Al-G6, #382: "Cardio soma
+   * os exercícios de esteira, bike e corrida dos seus treinos").
+   */
+  async cardioProgress(
+    exerciseId: number | undefined,
+    days: number,
+    metric: CardioMetric,
+    ctx: UserCtx,
+  ) {
+    let exercise: { id: number; name: string } | null = null;
+    if (exerciseId !== undefined) {
+      const found = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
+      if (!found) throw new NotFoundException('Exercise not found');
+      if (found.muscleGroup !== 'cardio') {
+        throw new BadRequestException('Exercise is not cardio');
+      }
+      exercise = { id: found.id, name: found.name };
     }
 
     const fromIso = addDaysIso(todayInTz(ctx.timezone), -(days - 1));
     const sets = await this.prisma.sessionSet.findMany({
       where: {
-        exerciseId,
+        ...(exerciseId !== undefined ? { exerciseId } : { exercise: { muscleGroup: 'cardio' } }),
         durationSeconds: { not: null },
         session: { userId: ctx.userId, startedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
       },
@@ -185,6 +198,8 @@ export class ProgressService {
         sessionId: string;
         sessionDate: string;
         durationSeconds: number;
+        /** Só o tempo das séries com distância: é o que entra no ritmo. */
+        pacedSeconds: number;
         distanceMeters: number | null;
         kcalBurned: number | null;
       }
@@ -195,6 +210,11 @@ export class ProgressService {
         sessionId: s.session.id,
         sessionDate: s.session.startedAt.toISOString().slice(0, 10),
         durationSeconds: (cur?.durationSeconds ?? 0) + (s.durationSeconds ?? 0),
+        // Somado com várias máquinas (#382), a bike sem distância não pode alongar o ritmo da
+        // esteira. As kcal são total da sessão e continuam somando tudo.
+        pacedSeconds:
+          (cur?.pacedSeconds ?? 0) +
+          (s.distanceMeters && s.distanceMeters > 0 ? (s.durationSeconds ?? 0) : 0),
         distanceMeters:
           (cur?.distanceMeters ?? 0) + (s.distanceMeters ?? 0) || cur?.distanceMeters || null,
         kcalBurned: (cur?.kcalBurned ?? 0) + (s.kcalBurned ?? 0) || cur?.kcalBurned || null,
@@ -202,7 +222,7 @@ export class ProgressService {
       bySession.set(s.session.id, candidate);
     }
     const points = [...bySession.values()].map((p) => {
-      const paceSecondsPerKm = calculatePace(p.durationSeconds, p.distanceMeters ?? 0);
+      const paceSecondsPerKm = calculatePace(p.pacedSeconds, p.distanceMeters ?? 0);
       let value: number;
       if (metric === 'duration') value = p.durationSeconds;
       else if (metric === 'distance') value = p.distanceMeters ?? 0;
@@ -224,7 +244,7 @@ export class ProgressService {
       : null;
 
     return {
-      exercise: { id: exercise.id, name: exercise.name },
+      exercise,
       metric,
       points,
       bestSession: bestSession

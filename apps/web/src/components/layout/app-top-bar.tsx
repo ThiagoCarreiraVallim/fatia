@@ -97,6 +97,7 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
   if (!hasTopBar(pathname) && !ctx?.title) return null;
   const parent = info.parent;
   const title = ctx?.title ?? info.title;
+  const hideTitle = info.untitled === true && !ctx?.title;
   // Criar algo em tela cheia (Al-T19) fecha no X; o destino é o mesmo pai.
   const label = info.dismiss ? 'Fechar' : `Voltar para ${info.parentTitle ?? ''}`;
 
@@ -121,11 +122,17 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
             {info.dismiss ? <X size={22} aria-hidden /> : <ChevronLeft size={22} aria-hidden />}
           </Link>
         )}
+        {/* Sem título na prancha (Al-G1): o h1 fica só para o leitor de tela. */}
         <h1
-          className={`min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-foreground ${parent !== null ? 'text-center' : ''}`}
+          className={
+            hideTitle
+              ? 'sr-only'
+              : `min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-foreground ${parent !== null ? 'text-center' : ''}`
+          }
         >
           {title}
         </h1>
+        {hideTitle && <div className="flex-1" />}
         {/* Sem ações, um vazio do tamanho do "voltar" mantém o título no centro. */}
         <div
           ref={ctx?.setSlot}

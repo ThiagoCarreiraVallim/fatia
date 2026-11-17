@@ -186,7 +186,7 @@ describe('LogWeightDrawer', () => {
     await user.click(screen.getByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }));
 
     await waitFor(() => expect(screen.getByLabelText(/Peso \(kg\)/)).toHaveValue(null));
-    expect(screen.getByRole('heading', { name: 'Logar peso' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Registrar peso' })).toBeInTheDocument();
   });
 
   // Sem mutação otimista: se a API recusa, a lista tem que continuar contando a

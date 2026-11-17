@@ -10,6 +10,12 @@ export interface LogHistoryEntry {
   title: string;
   /** Data ou origem do registro. */
   subtitle: string;
+  /** Hora do registro, depois da data ("19 mai · 08:12"). Fora do nome dos botões. */
+  time?: string;
+  /** Selo de origem (Al-G7): "manual" mudo, "Apple Saúde" verde. */
+  badge?: { label: string; tone: 'ok' | 'mute' };
+  /** Veio do celular: aparece, mas não se edita nem apaga daqui. */
+  readOnly?: boolean;
 }
 
 interface Props {
@@ -67,8 +73,8 @@ export function LogHistory({
 }: Props) {
   return (
     <div className="space-y-2">
-      <p className="text-[11px] font-bold tracking-wide text-muted-foreground">
-        REGISTROS RECENTES
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        Recentes
       </p>
 
       {/* Região viva montada sempre: um `aria-live` que nasce preenchido costuma
@@ -110,7 +116,7 @@ export function LogHistory({
         // vaul como arrastar o sheet para baixo, e o drawer fecha na cara de
         // quem só queria ver o registro de ontem. A altura precisa ser limitada
         // ou a lista empurra os botões para fora da tela.
-        <ul data-vaul-no-drag className="max-h-[190px] space-y-1.5 overflow-y-auto">
+        <ul data-vaul-no-drag className="max-h-[240px] overflow-y-auto rounded-card bg-muted">
           {entries.map((entry) => {
             const isEditing = entry.id === editingId;
             const isPending = entry.id === pendingId;
@@ -119,42 +125,62 @@ export function LogHistory({
               <li
                 key={entry.id}
                 className={cn(
-                  'flex items-center gap-2 rounded-xl bg-card px-3 py-2',
-                  isEditing && 'border border-primary',
+                  // O `.list` da prancha: um cartão, linhas separadas por um fio.
+                  'flex items-center gap-2 px-4 py-3 [&+&]:shadow-[inset_0_1px_0_hsl(var(--border))]',
+                  isEditing && 'rounded-card shadow-[inset_0_0_0_1.5px_hsl(var(--primary))]',
                   isPending && 'opacity-50',
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{entry.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
+                  <p className="truncate text-[15px] font-bold">{entry.title}</p>
+                  <p className="truncate text-[13px] text-muted-foreground">
+                    {entry.subtitle}
+                    {entry.time ? ` · ${entry.time}` : ''}
+                  </p>
                 </div>
-                {/* O rótulo carrega o valor, e não só a data. Água tem
+                {entry.badge && (
+                  <span
+                    className={cn(
+                      'shrink-0 text-[11px] font-extrabold uppercase tracking-[0.04em]',
+                      entry.badge.tone === 'ok'
+                        ? 'h-[22px] rounded-pill bg-primary-soft px-[9px] leading-[22px] text-primary-text'
+                        : 'px-1 text-muted-foreground',
+                    )}
+                  >
+                    {entry.badge.label}
+                  </span>
+                )}
+                {!entry.readOnly && (
+                  <>
+                    {/* O rótulo carrega o valor, e não só a data. Água tem
                     vários registros por dia por definição: com a data
                     sozinha saíam N botões "Apagar registro de 17 mai"
                     indistinguíveis no leitor de tela, bem na ação que apaga. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 shrink-0"
-                  aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
-                  aria-pressed={isEditing}
-                  disabled={isDeleting}
-                  onClick={() => onEdit(entry)}
-                >
-                  <Pencil className={cn(isEditing && 'text-primary')} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 shrink-0 text-muted-foreground"
-                  aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
-                  disabled={isDeleting}
-                  onClick={() => onDelete(entry)}
-                >
-                  <Trash2 />
-                </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 rounded-full bg-card"
+                      aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
+                      aria-pressed={isEditing}
+                      disabled={isDeleting}
+                      onClick={() => onEdit(entry)}
+                    >
+                      <Pencil className={cn(isEditing && 'text-primary')} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 rounded-full bg-card text-muted-foreground"
+                      aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                      disabled={isDeleting}
+                      onClick={() => onDelete(entry)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </>
+                )}
               </li>
             );
           })}
