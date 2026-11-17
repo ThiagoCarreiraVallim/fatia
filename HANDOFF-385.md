@@ -48,9 +48,9 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 6. API: `AutoWriteService` (retrato, inversa, limites) + `POST /chat/auto-writes/:id/undo`
 - [x] 7. Testes obrigatórios da ADR 039
 - [x] 8. Memórias: categoria, data, `DELETE /chat/memories`, teto 50 com pedido de apagar, renomes
-- [x] 9. Foto: chat descarta no fim do turno; MCP de refeição informa foto; export/exclusão
+- [x] 9. Foto: descarte da foto do chat fica com a #384 (heads-up); MCP de refeição já informa `hasPhoto` e export/exclusão já vêm da #374
 - [x] 10. Isolamento (foto já coberta pela #374) (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
-- [ ] 11. api-client: settings, memórias, desfazer, foto da refeição
+- [x] 11. api-client: settings, memórias, desfazer, foto da refeição
 - [ ] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
 - [ ] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
 - [ ] 14. Docs: ADRs (notas), DATA_RETENTION, privacy, MCP (se mudou), REDESIGN_PROGRESS
