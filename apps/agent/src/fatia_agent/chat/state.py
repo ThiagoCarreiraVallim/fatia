@@ -23,7 +23,7 @@ from langgraph.graph.message import add_messages
 from ..providers.base import ToolChatCapability
 from ..tracing import NOOP_TRACE, TurnTrace
 from .mcp_client import McpClient, McpToolInfo
-from .web import WebSearcher, WebSearchMode
+from .web import QueryWriter, WebSearcher, WebSearchMode
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,8 @@ class ContextoDoTurno:
     # (o provedor de produção, um duplo no teste). Sem buscador, a tool não é oferecida.
     web_search: WebSearchMode = "off"
     search_web: WebSearcher | None = None
+    # Quem escreve a pergunta da busca: uma chamada à parte que só vê a última fala da pessoa.
+    write_search_query: QueryWriter | None = None
     # Quantas consultas no turno antes de perguntar "Continuo?" (`AGENT_CHAT_PAUSE_AFTER_TOOLS`).
     pause_after_tools: int = 14
 

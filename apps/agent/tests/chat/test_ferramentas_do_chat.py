@@ -98,6 +98,7 @@ async def test_com_aceite_busca_so_a_pergunta_e_mostra_as_fontes(settings_factor
     r = await turno(
         settings_factory,
         [_com_tool(web.NAME, arguments=PERGUNTA_COM_DADO), [fragmento_de_texto("58 kcal.")]],
+        mensagem=PERGUNTA_COM_DADO,
         web_search="on",
         search_web=buscador,
     )
@@ -128,6 +129,7 @@ async def test_sem_aceite_pede_antes_da_primeira_busca(settings_factory):
     r = await turno(
         settings_factory,
         [_com_tool(web.NAME, arguments='{"query":"calorias do açaí"}')],
+        mensagem="calorias do açaí",
         web_search="ask",
         search_web=buscador,
     )
@@ -151,6 +153,7 @@ async def test_aceitou_e_a_api_ligou_a_busca_entao_busca(settings_factory):
     pausado = await turno(
         settings_factory,
         [_com_tool(web.NAME, arguments='{"query":"calorias do açaí"}')],
+        mensagem="calorias do açaí",
         web_search="ask",
         search_web=buscador,
     )
@@ -307,3 +310,139 @@ async def test_pausa_depois_de_n_consultas_e_diz_quantas(settings_factory):
     assert pausa["kind"] == "continue"
     assert pausa["count"] == 4
     assert pausa["prompt"] == "Já consultei 4 coisas. Continuo?"
+
+
+# --------------------------------------------------------------------- a pergunta é estrutural
+
+
+class Redator:
+    """O modelo que escreve a pergunta da busca: grava o que recebeu e devolve o roteiro."""
+
+    def __init__(self, saida: str | None = None) -> None:
+        self.entradas: list[str] = []
+        self._saida = saida
+
+    async def __call__(self, texto: str) -> str:
+        self.entradas.append(texto)
+        return self._saida if self._saida is not None else texto
+
+
+def test_o_modelo_principal_so_pede_a_busca_e_nao_escreve_a_pergunta():
+    assert web.DEFINITION["function"]["parameters"]["properties"] == {}
+
+
+async def test_perfil_e_memoria_que_o_modelo_poe_na_busca_nunca_chegam_ao_buscador(
+    settings_factory,
+):
+    buscador = Buscador(ACHOU)
+    redator = Redator()
+    vazamento = '{"query":"açaí para Ana Souza, 82 kg, diabetes, mora na Rua das Flores 10"}'
+    await turno(
+        settings_factory,
+        [_com_tool(web.NAME, arguments=vazamento), [fragmento_de_texto("58 kcal.")]],
+        mensagem="quantas calorias tem o açaí?",
+        memorias=[{"id": "m1", "content": "Ana Souza tem diabetes e pesa 82 kg"}],
+        historico=[
+            {"role": "user", "content": "moro na Rua das Flores 10"},
+            {"role": "assistant", "content": "Anotado, Ana Souza."},
+        ],
+        web_search="on",
+        search_web=buscador,
+        write_search_query=redator,
+    )
+
+    # O redator só viu a última fala da pessoa — sem memória, perfil, histórico nem tool.
+    assert redator.entradas == ["quantas calorias tem o açaí?"]
+    (pergunta,) = buscador.perguntas
+    for dado in ("Ana", "82 kg", "diabetes", "Rua das Flores"):
+        assert dado not in pergunta
+
+
+async def test_a_citacao_da_resposta_nao_entra_na_pergunta(settings_factory):
+    redator = Redator()
+    await turno(
+        settings_factory,
+        [_com_tool(web.NAME), [fragmento_de_texto("ok")]],
+        mensagem="> Ana Souza, 82 kg, sua meta é 1.800 kcal\n\nisso vale para açaí?",
+        web_search="on",
+        search_web=Buscador(ACHOU),
+        write_search_query=redator,
+    )
+    assert redator.entradas == ["isso vale para açaí?"]
+
+
+async def test_o_que_o_redator_devolve_ainda_passa_pela_limpeza(settings_factory):
+    buscador = Buscador(ACHOU)
+    await turno(
+        settings_factory,
+        [_com_tool(web.NAME), [fragmento_de_texto("ok")]],
+        mensagem="calorias do açaí",
+        web_search="on",
+        search_web=buscador,
+        write_search_query=Redator("calorias do açaí ana@exemplo.com"),
+    )
+    (pergunta,) = buscador.perguntas
+    assert "@" not in pergunta
+
+
+async def test_o_aceite_mostra_a_pergunta_que_vai_sair_e_a_mesma_e_buscada(settings_factory):
+    buscador = Buscador(ACHOU)
+    redator = Redator("calorias açaí polpa")
+    pausado = await turno(
+        settings_factory,
+        [_com_tool(web.NAME)],
+        mensagem="quanto tem de caloria no açaí?",
+        web_search="ask",
+        search_web=buscador,
+        write_search_query=redator,
+    )
+    (acao,) = pausado.interrupcao()["value"]["actions"]
+    assert acao["query"] == "calorias açaí polpa"
+    await turno(
+        settings_factory,
+        [[fragmento_de_texto("58 kcal.")]],
+        mensagem=None,
+        retomada={"approvals": {"c1": True}},
+        grafo=pausado.grafo,
+        web_search="on",
+        search_web=buscador,
+        write_search_query=Redator("outra coisa"),
+    )
+    assert buscador.perguntas == ["calorias açaí polpa"]
+    assert len(redator.entradas) == 1
+
+
+# --------------------------------------------------------------------- cobrança da busca (item 8)
+
+
+async def test_busca_sem_usage_ainda_cobra_uma_unidade(settings_factory):
+    r = await turno(
+        settings_factory,
+        [_com_tool(web.NAME), [fragmento_de_texto("58 kcal.")]],
+        mensagem="calorias do açaí",
+        web_search="on",
+        search_web=Buscador(WebSearchResult(sources=(FONTE,), usage=None)),
+    )
+    assert sum(u.get("webSearches", 0) for u in r.data_of("usage")) == 1
+
+
+async def test_busca_que_falha_no_meio_ainda_cobra_uma_unidade(settings_factory):
+    r = await turno(
+        settings_factory,
+        [_com_tool(web.NAME), [fragmento_de_texto("ok")]],
+        mensagem="calorias do açaí",
+        web_search="on",
+        search_web=Buscador(AIProviderUnreachable("caiu no meio")),
+    )
+    assert sum(u.get("webSearches", 0) for u in r.data_of("usage")) == 1
+
+
+async def test_a_busca_e_cobrada_uma_vez_so_quando_o_provedor_mede(settings_factory):
+    r = await turno(
+        settings_factory,
+        [_com_tool(web.NAME), [fragmento_de_texto("58 kcal.")]],
+        mensagem="calorias do açaí",
+        web_search="on",
+        search_web=Buscador(ACHOU),
+    )
+    assert sum(u.get("webSearches", 0) for u in r.data_of("usage")) == 1

@@ -23,6 +23,8 @@ NAME = "web_search"
 
 WebSearchMode = Literal["off", "ask", "on"]
 WebSearcher = Callable[[str], Awaitable[WebSearchResult]]
+# O modelo que escreve a pergunta da busca a partir da última fala da pessoa, e de nada mais.
+QueryWriter = Callable[[str], Awaitable[str]]
 
 MAX_QUERY = 200
 MAX_SNIPPET = 600
