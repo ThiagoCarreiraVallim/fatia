@@ -87,10 +87,16 @@ function MensagemDaPessoa() {
       data-aui-quote-selectable="false"
       className="flex w-full flex-col items-end gap-2"
     >
+      <span className="pr-1 text-xs font-semibold text-foreground/50">Você</span>
       <AnexosDaMensagem />
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
-      <div className={cn(field, 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm')}>
+      <div
+        className={cn(
+          field,
+          'max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg px-4 py-2.5 text-[15px] leading-relaxed',
+        )}
+      >
         <MessagePrimitive.Parts components={{ Text: TextoDaPessoa, Image: FotoDaFala }} />
       </div>
     </MessagePrimitive.Root>
@@ -327,9 +333,11 @@ function BotaoDeFoto({ disabled }: { disabled: boolean }) {
 function BotaoDeDitado({
   disabled,
   onAviso,
+  onGravando,
 }: {
   disabled: boolean;
   onAviso: (aviso: string | null) => void;
+  onGravando: (gravando: boolean) => void;
 }) {
   const aui = useAui();
   const ditado = useDitado(
@@ -342,6 +350,7 @@ function BotaoDeDitado({
   );
   const gravando = ditado.estado === 'gravando';
   const transcrevendo = ditado.estado === 'transcrevendo';
+  useEffect(() => onGravando(gravando), [gravando, onGravando]);
   return (
     <button
       type="button"
@@ -434,6 +443,7 @@ function Composer() {
   const markStopped = useMarkStopped();
   const [digitando, setDigitando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [gravando, setGravando] = useState(false);
   const podeEnviar = texto.trim() !== '' || temFoto;
   const fila = useFilaDeMensagens({
     conversa: aberta,
@@ -461,7 +471,9 @@ function Composer() {
     recursos?.photos || recursos?.dictation ? (
       <>
         {recursos.photos ? <BotaoDeFoto disabled={abrindo} /> : null}
-        {recursos.dictation ? <BotaoDeDitado disabled={abrindo} onAviso={setAviso} /> : null}
+        {recursos.dictation ? (
+          <BotaoDeDitado disabled={abrindo} onAviso={setAviso} onGravando={setGravando} />
+        ) : null}
       </>
     ) : undefined;
 
@@ -478,6 +490,13 @@ function Composer() {
       {aviso ? (
         <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-danger">
           {aviso}
+        </p>
+      ) : null}
+      {gravando ? (
+        // Prancha Al-M17: quem fala precisa saber que a voz não fica guardada.
+        <p role="status" className="shrink-0 px-5 pb-1 text-xs text-muted-foreground">
+          <span className="font-semibold text-danger">Ouvindo…</span> O áudio vira texto e é
+          descartado.
         </p>
       ) : null}
       <FilaDoComposer itens={fila.itens} onTirar={fila.tirar} pausado={pausado} />

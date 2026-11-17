@@ -7,6 +7,7 @@ import { Check, MessagesSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-r
 import {
   deleteConversation,
   listConversations,
+  groupConversationsByDay,
   renameConversation,
   type ChatConversationSummary,
 } from '@fatia/api-client';
@@ -34,25 +35,6 @@ import { CHAVE_DAS_CONVERSAS } from './chat-runtime-provider';
 
 export function novaConversa(): string {
   return `/chat/${crypto.randomUUID()}`;
-}
-
-function grupoDe(conversa: ChatConversationSummary, agora: Date): 'Hoje' | 'Ontem' | 'Anteriores' {
-  const dia = new Date(conversa.updatedAt);
-  const inicioDeHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  const inicioDeOntem = new Date(inicioDeHoje.getTime() - 86_400_000);
-  if (dia >= inicioDeHoje) return 'Hoje';
-  if (dia >= inicioDeOntem) return 'Ontem';
-  return 'Anteriores';
-}
-
-export function agrupar(
-  conversas: readonly ChatConversationSummary[],
-  agora = new Date(),
-): { grupo: string; itens: ChatConversationSummary[] }[] {
-  const ordem = ['Hoje', 'Ontem', 'Anteriores'] as const;
-  return ordem
-    .map((grupo) => ({ grupo, itens: conversas.filter((c) => grupoDe(c, agora) === grupo) }))
-    .filter((g) => g.itens.length > 0);
 }
 
 function Item({
@@ -129,9 +111,14 @@ function Item({
         type="button"
         onClick={onAbrir}
         aria-current={aberta ? 'page' : undefined}
-        className="min-w-0 flex-1 truncate py-2.5 text-left text-sm text-foreground"
+        className="min-w-0 flex-1 py-2.5 text-left"
       >
-        {conversa.title ?? 'Nova conversa'}
+        <span className="block truncate text-sm font-semibold text-foreground">
+          {conversa.title ?? 'Nova conversa'}
+        </span>
+        {conversa.preview ? (
+          <span className="block truncate text-xs text-muted-foreground">{conversa.preview}</span>
+        ) : null}
       </button>
       <button
         type="button"
@@ -230,12 +217,12 @@ export function GavetaDeConversas({ aberta }: { aberta: string | undefined }) {
               {termo ? 'Nenhuma conversa com esse nome.' : 'Nenhuma conversa ainda.'}
             </p>
           ) : (
-            agrupar(conversas).map(({ grupo, itens }) => (
-              <section key={grupo} className="mb-2">
+            groupConversationsByDay(conversas).map(({ label, items }) => (
+              <section key={label} className="mb-2">
                 <h3 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-foreground/40">
-                  {grupo}
+                  {label}
                 </h3>
-                {itens.map((conversa) => (
+                {items.map((conversa) => (
                   <Item
                     key={conversa.id}
                     conversa={conversa}
