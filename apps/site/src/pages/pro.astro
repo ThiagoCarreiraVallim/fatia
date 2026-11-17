@@ -1,0 +1,127 @@
+---
+import DsIcon from '../components/DsIcon.astro';
+import type { IconName } from '@fatia/design';
+import Base from '../layouts/Base.astro';
+import { site } from '../lib/site';
+
+/**
+ * `fat.ia.br/pro` (#386, prancha Si-04): assinar o PRO na web.
+ *
+ * O site é estático e não tem sessão, então esta página só escolhe o período e a forma de
+ * pagamento (um formulário GET, sem JavaScript) e leva a `/assinar` do app web, que passa pelo
+ * login quando preciso e chega ao "Meu plano", que pede o CPF — que vai direto ao Asaas e não
+ * fica no Fatia — e abre a página de pagamento. O teste de 7 dias também é decidido lá: só quem
+ * nunca teve recebe.
+ *
+ * O app das lojas nunca linka para cá: lá o PRO é vendido só pela App Store e pelo Google Play.
+ */
+const brl = (cents: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+    .format(cents / 100)
+    .replace(/\u00a0/g, ' ');
+const { monthlyCents, yearlyCents } = site.proPrices;
+const desconto = Math.round((1 - yearlyCents / (monthlyCents * 12)) * 100);
+
+const BENEFITS: { icon: IconName; text: string }[] = [
+  { icon: 'chat', text: 'Chat que registra e consulta tudo' },
+  { icon: 'camera', text: 'Foto do prato com revisão' },
+  { icon: 'mic', text: 'Ditado' },
+];
+
+const PLANS = [
+  {
+    value: 'YEARLY',
+    title: 'Anual',
+    sub: `${brl(Math.round(yearlyCents / 12))}/mês${desconto > 0 ? ` · economize ${desconto}%` : ''}`,
+    price: `${brl(yearlyCents)}/ano`,
+  },
+  { value: 'MONTHLY', title: 'Mensal', sub: 'sem fidelidade', price: `${brl(monthlyCents)}/mês` },
+];
+
+const METHODS = [
+  { value: 'PIX', label: 'Pix' },
+  { value: 'BOLETO', label: 'Boleto' },
+  { value: 'CREDIT_CARD', label: 'Cartão' },
+];
+---
+
+<Base
+  title="Assinar o PRO — Fatia"
+  description="A IA do Fatia registra por você: chat, foto do prato e ditado. Pix, boleto ou cartão."
+>
+  <section class="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
+    <span class="self-start rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground">
+      PRO
+    </span>
+    <h1 class="font-display text-4xl font-extrabold tracking-tight">Deixe a IA registrar por você</h1>
+    <ul class="flex flex-col gap-3">
+      {
+        BENEFITS.map((b) => (
+          <li class="flex items-center gap-3">
+            <DsIcon name={b.icon} class="h-5 w-5 text-primary" />
+            {b.text}
+          </li>
+        ))
+      }
+    </ul>
+    <p class="text-sm text-muted-foreground">
+      Registro manual, metas, conquistas e sua própria IA pelo MCP seguem grátis.
+    </p>
+
+    <form method="get" action={site.subscribeUrl} class="flex flex-col gap-5 rounded-card bg-card p-5">
+      <fieldset class="flex flex-col gap-2">
+        <legend class="sr-only">Período</legend>
+        {
+          PLANS.map((p, i) => (
+            <label class="flex cursor-pointer items-center gap-3 rounded-field border border-border/60 p-4 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+              <input type="radio" name="periodo" value={p.value} checked={i === 0} class="accent-[hsl(var(--primary))]" />
+              <span class="flex flex-1 flex-col">
+                <span class="font-display font-bold">{p.title}</span>
+                <span class="text-xs text-muted-foreground">{p.sub}</span>
+              </span>
+              <span class="font-display font-bold">{p.price}</span>
+            </label>
+          ))
+        }
+      </fieldset>
+
+      <p class="text-xs text-muted-foreground">
+        CPF · pedido na próxima tela; vai direto para o Asaas, não fica no Fatia.
+      </p>
+
+      <fieldset class="flex flex-col gap-2">
+        <legend class="text-sm font-semibold">Pagamento</legend>
+        <div class="grid grid-cols-3 gap-2">
+          {
+            METHODS.map((m, i) => (
+              <label class="flex h-11 cursor-pointer items-center justify-center rounded-field border border-border/60 text-sm font-semibold has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+                <input type="radio" name="pagamento" value={m.value} checked={i === 0} class="sr-only" />
+                {m.label}
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+
+      <button
+        type="submit"
+        class="font-display rounded-field bg-primary px-6 py-3.5 font-bold text-primary-foreground transition-opacity hover:opacity-90"
+      >
+        Assinar PRO
+      </button>
+      <p class="text-xs text-muted-foreground">
+        Quem nunca teve o PRO começa com 7 dias grátis. Renova sozinho. Cancele quando quiser: o PRO
+        vale até o fim do período pago.
+      </p>
+      <p class="flex gap-2 text-xs text-muted-foreground">
+        <a href={site.termsUrl} class="underline underline-offset-4">Termos de uso</a>
+        ·
+        <a href={site.privacyUrl} class="underline underline-offset-4">Privacidade</a>
+      </p>
+    </form>
+
+    <p class="text-sm text-muted-foreground">
+      Assinou pelo app da App Store ou do Google Play? A assinatura é gerenciada lá.
+    </p>
+  </section>
+</Base>

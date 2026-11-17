@@ -269,6 +269,9 @@ services:
       args:
         # Estático: o domínio entra no HTML durante o build.
         PUBLIC_DOMAIN: ${DOMAIN}
+        # Os preços da página /pro (Si-04, #386): os mesmos que a API cobra.
+        PUBLIC_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+        PUBLIC_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
     restart: unless-stopped
     expose:
       - "80"

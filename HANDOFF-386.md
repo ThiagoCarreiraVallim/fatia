@@ -27,7 +27,7 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - [x] api-client: tipos e visão pura das telas (regra das lojas) + testes (`plan-status.ts`)
 - [x] App: Al-M1 (`chat-locked.tsx`), Al-M2/M3 (`store-offer.tsx`), M5/M13/M13d (`plan-status-card.tsx`), selo do Você (`planBadge`)
 - [x] Web: `plan-screen.tsx` (Si-04 dentro do Meu plano: período, CPF, Pix/Boleto/Cartão, teste; `?periodo=&pagamento=`), `upsell-ia.tsx` (Al-M1), selo do Você
-- [ ] Site: Si-04
+- [x] Site: Si-04 (`apps/site/src/pages/pro.astro` → `app/assinar` → login quando preciso → `/plan?periodo=&pagamento=`)
 - [x] Envs em docker-compose.prod.yml e .env.example
 - [ ] Docs: BILLING.md, REDESIGN_PROGRESS.md
 - [ ] lint, typecheck, testes
@@ -56,6 +56,8 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 
 - Web: com teste, o checkout não abre aba (nada a pagar hoje); sem teste, abre a aba no clique. Pendente: "Trocar a forma de pagamento" reabre o formulário (a API cancela o pendente de outra forma).
 
+- Site: preços vêm de `BILLING_PRO_*_CENTS` como build args (`PUBLIC_PRO_*_CENTS`), sem env nova no .env.
+
 ## Próximo passo
 
-Site Si-04: `apps/site/src/pages/pro.astro` (sem sessão: escolhe período e forma de pagamento e manda para `${appUrl}/plan?periodo=&pagamento=#assinar`; CPF é digitado na web). Depois docs (BILLING.md, REDESIGN_PROGRESS.md), lint/typecheck/testes, commit final sem este arquivo.
+Docs (BILLING.md, REDESIGN_PROGRESS.md "Etapa 6"), `pnpm lint`, `pnpm typecheck`, testes de api/api-client/web/mobile, commit final sem este arquivo, SubagentHandback.
