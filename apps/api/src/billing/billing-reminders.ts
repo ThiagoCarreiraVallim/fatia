@@ -208,15 +208,18 @@ export function billingReminderTexts(
     case 'TRIAL_ENDING': {
       const fim = dia(sub.trialEndsAt ?? sub.currentPeriodEnd);
       if (loja) {
+        // Decisão da revisão da #386: o aviso fica (a prancha Al-M3 promete), mas
+        // é da loja: nada de preço, link ou instrução de pagamento do Fatia, só
+        // "se não quiser continuar, cancele na loja" com o link da tela dela.
         return {
           push: push(
             'Seu teste acaba em 2 dias',
-            'Para não ser cobrado, cancele nas assinaturas da loja.',
+            'Se não quiser continuar, cancele nas assinaturas da loja.',
           ),
           email: emailEx03({
             subject: 'Seu teste do PRO acaba em 2 dias',
             title: 'Seu teste acaba em 2 dias',
-            text: `Em ${fim} a ${loja.nome} cobra a assinatura do PRO. Se não quiser continuar, cancele antes nas assinaturas da loja.`,
+            text: `Seu teste do PRO acaba em ${fim}. Se não quiser continuar, cancele nas assinaturas da ${loja.nome} antes disso.`,
             cta: `Abrir assinaturas da ${loja.nome}`,
             href: loja.url,
             note: 'Cancelando, você volta ao Free e não perde nada.',

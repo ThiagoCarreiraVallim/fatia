@@ -214,6 +214,29 @@ describe('billingReminderTexts', () => {
     }
   });
 
+  it('fim do teste da loja: só "cancele na loja" com o link da loja, nada de preço ou pagamento do Fatia', () => {
+    const lojas = {
+      APPLE: ['App Store', 'https://apps.apple.com/account/subscriptions'],
+      GOOGLE: ['Google Play', 'https://play.google.com/store/account/subscriptions'],
+    } as const;
+    for (const source of ['APPLE', 'GOOGLE'] as const) {
+      const [nome, url] = lojas[source];
+      const t = billingReminderTexts(
+        'TRIAL_ENDING',
+        sub({ source, status: 'TRIALING', paymentMethod: null, trialEndsAt: sp('2026-11-12') }),
+        ctx,
+      );
+      const tudo = [t.push.title, t.push.body, t.email.subject, t.email.text, t.email.html].join(
+        '\n',
+      );
+      expect(tudo).not.toMatch(/R\$|pix|boleto|cart[aã]o|pague|pagamento|cobra/i);
+      expect(tudo).not.toContain('fat.ia.br/plan');
+      expect(t.push.body).toBe('Se não quiser continuar, cancele nas assinaturas da loja.');
+      expect(t.email.text).toContain(`Se não quiser continuar, cancele nas assinaturas da ${nome}`);
+      expect(t.email.html).toContain(`href="${url}"`);
+    }
+  });
+
   it('fim do teste no cartão: manda pagar a primeira fatura, nunca promete cobrar sozinho', () => {
     const t = billingReminderTexts(
       'TRIAL_ENDING',
