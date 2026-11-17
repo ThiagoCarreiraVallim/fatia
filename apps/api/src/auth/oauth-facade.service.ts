@@ -1,8 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { OAuthError } from './oauth-error';
+import { Injectable, Logger } from '@nestjs/common';
+import { OAuthError, type OAuthErrorCode } from './oauth-error';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import { PrismaService } from '../common/prisma.service';
+import { McpConnectionService } from './mcp-connection.service';
 
 interface AuthorizeParams {
   clientId: string;
@@ -22,6 +23,18 @@ interface ExchangeCodeParams {
 
 const AUTH_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Códigos da RFC 6749 §5.2 do Logto que repassamos como vieram. `invalid_client`
+ * e `unauthorized_client` ficam de fora: lá eles falam do app do facade no Logto
+ * (segredo errado), não do cliente MCP, que não tem o que corrigir.
+ */
+const TOKEN_ERROR_CODES: ReadonlySet<string> = new Set<OAuthErrorCode>([
+  'invalid_request',
+  'invalid_grant',
+  'unsupported_grant_type',
+  'invalid_scope',
+]);
+
 @Injectable()
 export class OAuthFacadeService {
   private readonly logger = new Logger(OAuthFacadeService.name);
@@ -29,6 +42,7 @@ export class OAuthFacadeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly connections: McpConnectionService,
   ) {}
 
   private logtoEndpoint(): string {
@@ -244,17 +258,30 @@ export class OAuthFacadeService {
       where: { clientId: row.clientId },
       data: { lastUsedAt: new Date() },
     });
+    await this.connections.recordIssuedToken(row.clientId, tokenResp);
 
     return tokenResp;
   }
 
-  async refreshToken(params: { refreshToken: string; resource?: string; scope?: string }) {
-    return this.callLogtoToken({
+  /**
+   * O `clientId` é o `client_id` que o cliente público manda no refresh (RFC
+   * 6749 §3.2.1). Só serve para dizer qual conexão renovou; o dono continua
+   * sendo o do token que o Logto devolve.
+   */
+  async refreshToken(params: {
+    refreshToken: string;
+    resource?: string;
+    scope?: string;
+    clientId?: string;
+  }) {
+    const tokenResp = await this.callLogtoToken({
       grant_type: 'refresh_token',
       refresh_token: params.refreshToken,
       resource: this.resolveResource(params.resource),
       ...(params.scope ? { scope: params.scope } : {}),
     });
+    await this.connections.recordIssuedToken(params.clientId, tokenResp);
+    return tokenResp;
   }
 
   private async callLogtoToken(body: Record<string, string>): Promise<Record<string, unknown>> {
@@ -271,7 +298,14 @@ export class OAuthFacadeService {
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       this.logger.warn(`Logto token error: ${res.status} ${JSON.stringify(json)}`);
-      throw new UnauthorizedException(
+      // Formato da RFC 6749 também aqui: com o 401 genérico do Nest, o Claude não
+      // reconhecia o refresh vencido e repetia a chamada em vez de refazer o login.
+      const code =
+        typeof json.error === 'string' && TOKEN_ERROR_CODES.has(json.error)
+          ? (json.error as OAuthErrorCode)
+          : 'invalid_grant';
+      throw new OAuthError(
+        code,
         typeof json.error_description === 'string'
           ? json.error_description
           : 'Token exchange failed',

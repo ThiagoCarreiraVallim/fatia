@@ -24,8 +24,8 @@ Pranchas Al-V6..V6e copiadas para `.canvas/project/` do checkout principal (fora
 
 ## Checklist
 
-- [ ] API: migration + `McpOAuthConnection` + serviço + rota + toque no /mcp (testes vermelhos primeiro)
-- [ ] Isolamento: `user-isolation.spec.ts` (lista e caminho OAuth)
+- [x] API: migration `20261117000000_mcp_oauth_connections` + `auth/mcp-connection.service.ts` + `GET /users/me/mcp-connections` (`UsersController`) + toque no `/mcp` (`mcp.controller.ts`); erros do Logto no `/oauth/token` agora saem como `OAuthError` (RFC 6749); `apiPublicUrl` mudou para `common/public-url.ts` (+ `mcpPublicUrl`)
+- [x] Isolamento: `user-isolation.spec.ts`, bloco #388 (lista, guard, refresh com client_id alheio, toque)
 - [ ] api-client: `connect-ai.ts` (provedores, passos, estado, último acesso) + `mcpConnectionsApi`
 - [ ] Web: tela nova em `/profile/connect`
 - [ ] App: tela nova em `/profile/connect`, ajuda abre tutorial por parâmetro
@@ -34,4 +34,4 @@ Pranchas Al-V6..V6e copiadas para `.canvas/project/` do checkout principal (fora
 
 ## Próximo passo
 
-Escrever os testes da API (connection service) e vê-los vermelhos.
+Rodar a suíte inteira da API; depois api-client `connect-ai.ts` (testes primeiro).
