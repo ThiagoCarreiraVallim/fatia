@@ -60,7 +60,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] B1 session-kind circuito + filtro Circuitos
 - [x] B2 detalhe do histórico com CircuitResultBlocks (web/app) + Repetir circuito
 - [x] B3 log() com fromPlan/planName
-- [ ] B4 Salvar como plano recusa circuito (400) + esconder botão
+- [x] B4 Salvar como plano recusa circuito (400) + esconder botão
 - [ ] C1 resultado recalculado no servidor / limites sem eventos
 - [ ] C2 eventos limitados por startedAt
 - [ ] C3 finish atômico + exercício pessoal apagado

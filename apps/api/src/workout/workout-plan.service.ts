@@ -165,6 +165,7 @@ export class WorkoutPlanService {
         completedAt: true,
         exerciseOrder: true,
         planName: true,
+        circuit: true,
         plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
         sets: {
           select: {
@@ -184,6 +185,11 @@ export class WorkoutPlanService {
       },
     });
     if (!session) throw new NotFoundException('Session not found');
+    // O circuito (#380) tem formato, tempos e rounds que um plano de séries não
+    // guarda: virar plano perderia o circuito em silêncio.
+    if (session.circuit != null) {
+      throw new BadRequestException('Circuito não vira plano de força');
+    }
     if (!session.completedAt) {
       throw new ConflictException('Termine o treino antes de salvar como plano');
     }

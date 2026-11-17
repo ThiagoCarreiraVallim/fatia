@@ -263,6 +263,18 @@ describe('circuitos (banco real)', () => {
     expect(summary.kind).toBe('circuit');
   });
 
+  it('"Salvar como plano" recusa o circuito com 400, sem criar plano (#381)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const logged = await circuits.log(userId, { planId: plan.id, roundsCompleted: 1 });
+    const before = await prisma.workoutPlan.count({ where: { userId } });
+    const attempt = plans.createFromSession(userId, logged.sessionId, {});
+    await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+    await expect(plans.createFromSession(userId, logged.sessionId, {})).rejects.toThrow(
+      'Circuito não vira plano de força',
+    );
+    expect(await prisma.workoutPlan.count({ where: { userId } })).toBe(before);
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',
