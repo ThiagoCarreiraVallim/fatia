@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AchievementService } from '../achievement.service';
+import { AchievementService, type AchievementEntry } from '../achievement.service';
 import {
   McpTool,
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { achievementBadges } from './achievement-badges';
 
 @Injectable()
 @McpTool()
@@ -29,16 +30,8 @@ export class ListAchievementsTool implements McpToolDef {
     return this.achievements.list({ userId, timezone }, { withProgress: true });
   }
 
-  /** Os selos, desbloqueados ou não (prancha IA-Cartoes, #384). */
+  /** Os selos, com quantos já saíram (prancha IA-Cartoes, #384). */
   artifact(result: unknown) {
-    const conquistas = result as { title: string; unlockedAt: string | null }[];
-    const badges = conquistas.map((c) => ({ title: c.title, unlocked: c.unlockedAt !== null }));
-    return {
-      kind: 'badges',
-      label: 'Conquistas',
-      unlocked: badges.filter((b) => b.unlocked).length,
-      total: badges.length,
-      badges,
-    };
+    return achievementBadges(result as AchievementEntry[]);
   }
 }

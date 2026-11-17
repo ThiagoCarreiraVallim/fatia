@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { GoalKind, GoalStatus } from '@prisma/client';
-import { GoalsService } from '../goals.service';
+import { GoalsService, type GoalWithProgress } from '../goals.service';
 import {
   McpTool,
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { goalProgressItem } from './goal-progress-item';
 
 @Injectable()
 @McpTool()
@@ -38,26 +39,10 @@ export class ListGoalsTool implements McpToolDef {
 
   /** Uma barra de progresso por meta (prancha IA-Cartoes, #384). */
   artifact(result: unknown) {
-    const metas = result as {
-      title: string;
-      unit: string;
-      currentValue: number | null;
-      targetValue: number;
-      progressPercent: number | null;
-      status: string;
-    }[];
     return {
       kind: 'progress',
       label: 'Metas',
-      items: metas.map((meta) => ({
-        title: meta.title,
-        percent: meta.progressPercent ?? 0,
-        detail:
-          meta.currentValue === null
-            ? `alvo ${meta.targetValue} ${meta.unit}`
-            : `${meta.currentValue} de ${meta.targetValue} ${meta.unit}`,
-        status: meta.status,
-      })),
+      items: (result as GoalWithProgress[]).map(goalProgressItem),
     };
   }
 }

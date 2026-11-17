@@ -6,6 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { dayMonth } from '../../mcp/card-format';
 
 @Injectable()
 @McpTool()
@@ -23,5 +24,21 @@ export class GetNutrientSummaryTool implements McpToolDef {
   } as const;
   execute(input: { date: string }, { userId, timezone }: McpToolContext) {
     return this.targets.getNutrientSummary(userId, input.date, timezone);
+  }
+
+  /** O total de cada nutriente do dia dentro da faixa da pessoa (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const resumo = result as Awaited<ReturnType<NutrientTargetService['getNutrientSummary']>>;
+    return {
+      kind: 'range',
+      label: `Nutrientes em ${dayMonth(resumo.date)}`,
+      rows: resumo.nutrients.map((n) => ({
+        label: n.label,
+        value: Math.round(n.total * 10) / 10,
+        min: n.min,
+        max: n.max,
+        unit: n.unit,
+      })),
+    };
   }
 }

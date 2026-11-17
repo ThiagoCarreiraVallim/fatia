@@ -6,6 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { dayMonth } from '../../mcp/card-format';
 
 @Injectable()
 @McpTool()
@@ -31,5 +32,20 @@ export class GetVolumeProgressTool implements McpToolDef {
   } as const;
   execute(input: { days: number; muscleGroup?: string }, { userId, timezone }: McpToolContext) {
     return this.progress.volumeProgress(input.days, input.muscleGroup, { userId, timezone });
+  }
+
+  /** O volume de cada semana, com a média semanal (prancha IA-Cartoes, #384). */
+  artifact(result: unknown, input: { days: number }) {
+    const progresso = result as Awaited<ReturnType<ProgressService['volumeProgress']>>;
+    return {
+      kind: 'bars',
+      label: `Volume por semana nos últimos ${input.days} dias`,
+      unit: 'kg',
+      average: Math.round(progresso.averageWeeklyVolumeKg),
+      bars: progresso.weeks.map((semana) => ({
+        label: dayMonth(semana.weekStart),
+        value: Math.round(semana.totalVolumeKg),
+      })),
+    };
   }
 }

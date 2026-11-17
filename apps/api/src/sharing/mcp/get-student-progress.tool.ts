@@ -67,4 +67,49 @@ export class GetStudentProgressTool implements McpToolDef {
     // fuso usado para cortar os dias é o dele — não o de quem está lendo.
     return this.students.read(userId, membershipId, scope, days ?? DIAS_PADRAO);
   }
+
+  /**
+   * A série do aluno na categoria lida (prancha IA-Cartoes, #384): peso no Corpo, volume
+   * semanal no Treino, calorias na Alimentação e passos nos Hábitos. Metas e fotos não são
+   * série no tempo, e ficam sem cartão.
+   */
+  artifact(result: unknown) {
+    const { reading } = result as Awaited<ReturnType<StudentViewService['read']>>;
+    switch (reading.scope) {
+      case ShareScope.BODY:
+        return {
+          kind: 'timeline',
+          label: 'Peso do aluno',
+          unit: 'kg',
+          delta: reading.weight.totalDeltaKg,
+          events: reading.weight.points.map((p) => ({ date: p.date, value: p.weightKg })),
+        };
+      case ShareScope.WORKOUT:
+        return {
+          kind: 'timeline',
+          label: 'Volume semanal do aluno',
+          unit: 'kg',
+          events: reading.volume.weeks.map((s) => ({
+            date: s.weekStart,
+            value: Math.round(s.totalVolumeKg),
+          })),
+        };
+      case ShareScope.NUTRITION:
+        return {
+          kind: 'timeline',
+          label: 'Calorias do aluno',
+          unit: 'kcal',
+          events: reading.history.series.map((d) => ({ date: d.date, value: Math.round(d.kcal) })),
+        };
+      case ShareScope.HABITS:
+        return {
+          kind: 'timeline',
+          label: 'Passos do aluno',
+          unit: 'passos',
+          events: reading.steps.points.map((d) => ({ date: d.date, value: d.steps })),
+        };
+      default:
+        return null;
+    }
+  }
 }

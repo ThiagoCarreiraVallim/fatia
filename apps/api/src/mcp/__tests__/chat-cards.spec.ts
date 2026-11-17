@@ -115,7 +115,14 @@ describe('cartões das tools no chat (#384)', () => {
   });
 
   it('sequência: a métrica em dias', () => {
-    expect(new GetStreakTool(semServico).artifact({ activeDays: 5 })).toEqual({
+    const activeDays = {
+      periodos: 5,
+      faltasUsadas: 0,
+      faltasPermitidas: 1,
+      periodoCorrenteEmAberto: false,
+      janelaEsgotada: false,
+    };
+    expect(new GetStreakTool(semServico).artifact({ activeDays })).toEqual({
       kind: 'metric',
       label: 'Dias seguidos',
       value: 5,
