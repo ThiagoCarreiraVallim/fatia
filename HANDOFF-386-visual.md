@@ -9,7 +9,7 @@
 
 ## Etapa 2: passada visual (checkout principal)
 
-- [ ] estado original do demo registrado
+- [x] estado original do demo registrado (conferido de novo após o reinício: igual)
 - [x] merge commitado; checkout principal em redesign/386-plano; migration aplicada no banco dev
 - [x] pranchas copiadas do .canvas do worktree para .canvas/project (faltavam as 10); renders em ~/.cache/fatia-vis/386/board
 - Estado original do demo em ~/.cache/fatia-vis/386/demo-original-state.txt:
@@ -17,3 +17,7 @@
   pool da academia-demo: SEATS, 3 assentos, ACTIVE, sem programName, currentPeriodEnd 2026-12-05 03:00; BillingReminder vazio.
   Para restaurar: apagar UserSubscription do demo, proTrialStartedAt=null, apagar membership MEMBER do demo na academia-demo (se criada),
   pool academia-demo mode=SEATS programName=null currentPeriodEnd='2026-12-05 03:00', apagar BillingReminder e InboxNotice BILLING criados.
+- Ferramentas (scratchpad da sessão, recriar se sumir): state.sh <free|trial|trial-store|active|due-soon|pending|due-today|late|grace|paused|canceled|expired|store-active|store-issue|community|program|original>
+  (escreve linhas fake id vis386-sub / vis386-demo-membership no banco dev) e shot386.mjs (shot-web com webCheckout forçado a true, porque o dev não tem Asaas).
+- Achado: chat-locked.tsx do app ainda leva a /profile/tokens, que a #388 apagou -> trocar por /profile/connect (teste de rotas estáticas, vermelho primeiro).
+- Achado: web free mostra "O PRO acrescenta" (lista) antes do hero; o app e a prancha M2 não têm a lista no Free.
