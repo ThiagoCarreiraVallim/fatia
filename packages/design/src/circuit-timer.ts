@@ -472,6 +472,8 @@ export interface CircuitAlarm {
   at: number;
   kind: 'work' | 'rest' | 'done';
   exerciseIndex: number | null;
+  /** Intervalo (Tabata) ou minuto (EMOM) desta troca, a partir de 0; nulo no fim e no For Time. */
+  index: number | null;
 }
 
 /**
@@ -494,17 +496,27 @@ export function circuitAlarms(
     const last = segments.at(-1);
     for (const seg of segments) {
       if (seg.start <= state.timeline) continue;
-      out.push({ at: wall(seg.start), kind: seg.kind, exerciseIndex: seg.exerciseIndex });
+      out.push({
+        at: wall(seg.start),
+        kind: seg.kind,
+        exerciseIndex: seg.exerciseIndex,
+        index: seg.index,
+      });
     }
-    if (last) out.push({ at: wall(last.end), kind: 'done', exerciseIndex: null });
+    if (last) out.push({ at: wall(last.end), kind: 'done', exerciseIndex: null, index: null });
   } else if (def.format === 'AMRAP' && state.totalSeconds !== null) {
-    out.push({ at: wall(state.totalSeconds), kind: 'done', exerciseIndex: null });
+    out.push({ at: wall(state.totalSeconds), kind: 'done', exerciseIndex: null, index: null });
   } else if (def.format === 'FOR_TIME' && state.rest) {
     out.push({
       at: wall(state.timeline + state.rest.remainingSeconds),
       kind: 'work',
       exerciseIndex: 0,
+      index: null,
     });
   }
-  return out.slice(0, limit);
+  if (out.length <= limit) return out;
+  // Com teto (o iOS guarda 64 avisos por app), o fim nunca sai: as trocas
+  // mais distantes é que ficam para o próximo agendamento.
+  const done = out.at(-1)?.kind === 'done' ? out.at(-1)! : null;
+  return done ? [...out.slice(0, Math.max(0, limit - 1)), done] : out.slice(0, limit);
 }

@@ -44,11 +44,29 @@ describe('avisos do sistema para o circuito com a tela bloqueada', () => {
     ).toEqual([]);
   });
 
-  it('não passa do teto de avisos agendados', () => {
+  it('não passa do teto de avisos agendados, e o de fim fica sempre (revisão C5)', () => {
     const long = { ...tabata, config: { workSeconds: 20, restSeconds: 10, intervals: 60 } };
-    expect(circuitAlarmNotices(long, { startedAt: 0, events: [] }, 0)).toHaveLength(
-      CIRCUIT_NOTICE_LIMIT,
+    const notices = circuitAlarmNotices(long, { startedAt: 0, events: [] }, 0);
+    expect(notices).toHaveLength(CIRCUIT_NOTICE_LIMIT);
+    expect(notices.at(-1)).toEqual({
+      seconds: 1800,
+      title: 'Tabata concluído',
+      body: 'Abra o app para salvar o treino.',
+    });
+    // O último descanso da lista cortada não diz "fim": o circuito segue.
+    expect(notices.at(-2)?.body).not.toBe('a seguir · fim');
+  });
+
+  it('cada intervalo leva o próprio número, mesmo com a lista cortada (revisão C5)', () => {
+    const long = { ...tabata, config: { workSeconds: 20, restSeconds: 10, intervals: 60 } };
+    const works = circuitAlarmNotices(long, { startedAt: 0, events: [] }, 0).filter((n) =>
+      n.title.startsWith('Trabalhe'),
     );
+    expect(works[0]?.body).toBe('intervalo 2 de 60');
+    expect(works[1]?.body).toBe('intervalo 3 de 60');
+    // No meio do circuito: o aviso do intervalo 31 diz 31.
+    const middle = circuitAlarmNotices(long, { startedAt: 0, events: [] }, 29 * 30_000 + 25_000);
+    expect(middle.find((n) => n.title.startsWith('Trabalhe'))?.body).toBe('intervalo 31 de 60');
   });
 });
 

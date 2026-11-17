@@ -255,4 +255,12 @@ describe('avisos e alarmes', () => {
     ]);
     expect(circuitAlarms(amrap, run([{ type: 'pause', at: at(6) }]), at(7))).toEqual([]);
   });
+
+  it('com teto, o alarme de fim fica e cada troca diz o intervalo dela (revisão C5)', () => {
+    const long = { ...tabata, config: { workSeconds: 20, restSeconds: 10, intervals: 60 } };
+    const alarms = circuitAlarms(long, run(), at(0), 10);
+    expect(alarms).toHaveLength(10);
+    expect(alarms.at(-1)).toMatchObject({ at: at(1800), kind: 'done' });
+    expect(alarms[1]).toMatchObject({ at: at(30), kind: 'work', index: 1 });
+  });
 });

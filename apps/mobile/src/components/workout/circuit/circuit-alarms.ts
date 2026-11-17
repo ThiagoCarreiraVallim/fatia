@@ -28,10 +28,9 @@ export function circuitAlarmNotices(
 ): CircuitNotice[] {
   const alarms = circuitAlarms(def, run, now, CIRCUIT_NOTICE_LIMIT);
   const emom = def.format === 'EMOM';
-  const works = alarms.filter((a) => a.kind === 'work');
   const total = emom
     ? Math.ceil((def.config.durationSeconds ?? 0) / 60)
-    : (def.config.intervals ?? works.length);
+    : (def.config.intervals ?? 0);
   const exercise = (i: number | null) => (i === null ? undefined : def.exercises[i]);
   const done = `${circuitBadge(def.format).label} concluído`;
 
@@ -40,10 +39,18 @@ export function circuitAlarmNotices(
     if (a.kind === 'done')
       return { seconds, title: done, body: 'Abra o app para salvar o treino.' };
     const nextWork = alarms.slice(k + 1).find((x) => x.kind === 'work');
-    const following = exercise(nextWork?.exerciseIndex ?? null)?.name ?? 'fim';
+    // Com a lista cortada pelo teto, a próxima troca pode não estar nela: o
+    // exercício sai do rodízio pelo número do intervalo.
+    const nextIndex = a.index === null ? null : a.index + 1;
+    const rotated =
+      nextIndex !== null && nextIndex < total && def.exercises.length > 0
+        ? nextIndex % def.exercises.length
+        : null;
+    const following = exercise(nextWork?.exerciseIndex ?? rotated)?.name ?? 'fim';
     if (a.kind === 'rest') return { seconds, title: 'Descanse', body: `a seguir · ${following}` };
     const item = exercise(a.exerciseIndex);
-    const number = total - works.length + works.indexOf(a) + 1;
+    // O número vem da troca (e não da posição na lista, que o teto corta).
+    const number = (a.index ?? 0) + 1;
     if (emom) {
       return {
         seconds,
