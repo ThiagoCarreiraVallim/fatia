@@ -20,7 +20,7 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 - [x] API: `GET /groups/:id/team` (quem da equipe vê, "viu hoje")
 - [x] API: benefícios (membro + CRUD equipe), isolamento
 - [x] MCP: `list_group_benefits` + produtor de cartão + números regenerados
-- [ ] api-client: tipos, `parseCommunityEntry`, textos
+- [x] api-client: tipos, `parseCommunityEntry`, textos
 - [ ] web: Cm-01, Cm-02, Cm-04 (sobre), Cm-22, painel Pn-28
 - [ ] app: Cm-01, Cm-02 (QR), Cm-04, Cm-22
 - [ ] docs REDESIGN_PROGRESS + lint/typecheck/testes
@@ -35,4 +35,4 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Próximo passo
 
-api-client (tipos, parseCommunityEntry), depois web e app.
+web: Cm-01 e Cm-02 feitos; falta Sobre (settings → Cm-04), Benefícios (/community/[id]/benefits), painel /org/[id]/benefits + código em Convites; depois app.

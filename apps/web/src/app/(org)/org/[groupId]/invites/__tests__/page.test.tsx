@@ -27,6 +27,7 @@ import OrgInvitesPage from '../page';
 
 const convite = (p: Partial<InviteView> = {}): InviteView => ({
   id: 'i1',
+  code: null,
   role: 'MEMBER',
   email: null,
   maxUses: 10,
