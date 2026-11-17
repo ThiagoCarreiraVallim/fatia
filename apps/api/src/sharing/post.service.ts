@@ -250,6 +250,14 @@ export class PostService {
     const temMais = linhas.length > FEED_PAGE_SIZE;
     const pagina = linhas.slice(0, FEED_PAGE_SIZE);
     const rows = await this.withCommentCounts([...fixados, ...pagina], eu);
+    // Abrir o mural (a primeira página) é ter visto: zera os "posts novos" do
+    // cartão de Minhas comunidades (#393). As páginas seguintes não mudam nada.
+    if (!depois) {
+      await this.prisma.groupMembership.update({
+        where: { id: eu.membershipId },
+        data: { feedSeenAt: new Date() },
+      });
+    }
 
     return {
       policy,

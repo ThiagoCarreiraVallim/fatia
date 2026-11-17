@@ -95,7 +95,34 @@ export interface GroupSummary {
   postPolicy: PostPolicy;
   /** O que a comunidade exige que membros compartilhem para entrar. */
   requiredSharingScopes: ShareScope[];
+  /** Pública ou privada (Cm-01, Cm-04). */
+  visibility: GroupVisibility;
+  /** Fuso da comunidade ("fuso Cuiabá" no Cm-04). */
+  timezone: string;
+  /** Pessoas ativas na comunidade. */
+  memberCount: number;
+  /** Posts dos outros desde a última visita ao mural (`feedSeenAt`). */
+  newPostCount: number;
+  /** O que a equipe mandou e espera resposta desta pessoa ("3 para você"). */
+  forYouCount: number;
+  /** A posição desta pessoa no desafio em andamento em que ela entrou. */
+  challenge: { id: string; title: string; rank: number } | null;
 }
+
+/** O que o cartão de "Minhas comunidades" conta, por associação (#393). */
+interface MembershipExtras {
+  memberCount: number;
+  newPostCount: number;
+  forYouCount: number;
+  challenge: GroupSummary['challenge'];
+}
+
+const SEM_EXTRAS: MembershipExtras = {
+  memberCount: 0,
+  newPostCount: 0,
+  forYouCount: 0,
+  challenge: null,
+};
 
 /** Preview mostrado a quem foi convidado, ANTES de decidir entrar. */
 export interface GroupPreview {
@@ -125,6 +152,7 @@ function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
   hasAiSeat: boolean,
+  extras: MembershipExtras,
 ): GroupSummary {
   return {
     id: m.group.id,
@@ -144,6 +172,9 @@ function toSummary(
     avatarUrl,
     postPolicy: m.group.postPolicy,
     requiredSharingScopes: m.group.requiredSharingScopes,
+    visibility: m.group.visibility,
+    timezone: m.group.timezone,
+    ...extras,
   };
 }
 
@@ -168,9 +199,86 @@ export class GroupService {
   private async summaryOf(
     m: GroupMembership & { group: Group & { avatarFile: MediaFile | null } },
     withSeat: ReadonlySet<string>,
+    extras: ReadonlyMap<string, MembershipExtras>,
   ): Promise<GroupSummary> {
     const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
-    return toSummary(m, avatar?.url ?? null, withSeat.has(m.id));
+    return toSummary(m, avatar?.url ?? null, withSeat.has(m.id), extras.get(m.id) ?? SEM_EXTRAS);
+  }
+
+  /**
+   * As contagens do cartão (#393, Cm-01), só das associações ativas: o pedido
+   * que espera aprovação ainda não lê o mural nem recebe plano. Uma consulta
+   * por associação: a pessoa está em poucas comunidades.
+   */
+  private async extrasOf(
+    memberships: readonly GroupMembership[],
+    now: Date = new Date(),
+  ): Promise<Map<string, MembershipExtras>> {
+    const ativas = memberships.filter((m) => m.status === MembershipStatus.ACTIVE);
+    const out = new Map<string, MembershipExtras>();
+    if (ativas.length === 0) return out;
+    const pessoas = await this.prisma.groupMembership.groupBy({
+      by: ['groupId'],
+      where: {
+        groupId: { in: ativas.map((m) => m.groupId) },
+        status: MembershipStatus.ACTIVE,
+      },
+      _count: { _all: true },
+    });
+    const porGrupo = new Map(pessoas.map((p) => [p.groupId, p._count._all]));
+    await Promise.all(
+      ativas.map(async (m) => {
+        const desde = m.feedSeenAt ?? m.joinedAt ?? m.createdAt;
+        const [newPostCount, forYouCount, participacao] = await Promise.all([
+          this.prisma.groupPost.count({
+            where: {
+              groupId: m.groupId,
+              removedAt: null,
+              createdAt: { gt: desde },
+              membershipId: { not: m.id },
+            },
+          }),
+          this.prisma.planOfferVersion.count({
+            where: { status: 'PENDING', offer: { userId: m.userId, groupId: m.groupId } },
+          }),
+          this.prisma.groupChallengeParticipant.findFirst({
+            where: {
+              membershipId: m.id,
+              challenge: {
+                groupId: m.groupId,
+                startsAt: { lte: now },
+                endsAt: { gt: now },
+                endedEarlyAt: null,
+              },
+            },
+            orderBy: { challenge: { endsAt: 'asc' } },
+            select: { score: true, challenge: { select: { id: true, title: true } } },
+          }),
+        ]);
+        // Empate divide a posição (1, 1, 3), como no placar do desafio.
+        const challenge = participacao
+          ? {
+              ...participacao.challenge,
+              rank:
+                1 +
+                (await this.prisma.groupChallengeParticipant.count({
+                  where: {
+                    challengeId: participacao.challenge.id,
+                    score: { gt: participacao.score },
+                    membership: { status: MembershipStatus.ACTIVE },
+                  },
+                })),
+            }
+          : null;
+        out.set(m.id, {
+          memberCount: porGrupo.get(m.groupId) ?? 0,
+          newPostCount,
+          forYouCount,
+          challenge,
+        });
+      }),
+    );
+    return out;
   }
 
   /**
@@ -230,11 +338,14 @@ export class GroupService {
     });
 
     // O assento que vale, pela regra do portão da IA — e não só "atribuído".
-    const withSeat = await membershipsWithEffectiveSeat(
-      this.prisma,
-      memberships.map((m) => m.id),
-    );
-    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat)));
+    const [withSeat, extras] = await Promise.all([
+      membershipsWithEffectiveSeat(
+        this.prisma,
+        memberships.map((m) => m.id),
+      ),
+      this.extrasOf(memberships),
+    ]);
+    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat, extras)));
   }
 
   /**
@@ -257,10 +368,11 @@ export class GroupService {
       throw new NotFoundException(NOT_FOUND);
     }
 
-    return this.summaryOf(
-      membership,
-      await membershipsWithEffectiveSeat(this.prisma, [membership.id]),
-    );
+    const [withSeat, extras] = await Promise.all([
+      membershipsWithEffectiveSeat(this.prisma, [membership.id]),
+      this.extrasOf([membership]),
+    ]);
+    return this.summaryOf(membership, withSeat, extras);
   }
 
   /**
