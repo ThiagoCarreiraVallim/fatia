@@ -29,7 +29,6 @@ import {
 import { cn } from '@/lib/utils';
 import { ReasoningPanel } from '@/components/elements/reasoning-panel';
 import { ToolGroup } from '@/components/elements/tool-group';
-import { SwapLabel } from '@/components/elements/surfaces';
 import { useArtefato, useArtefatos, useTitulosDasTools } from './chat-runtime-provider';
 import { ChatArtifactCard } from './artefato';
 import { useCatalogoDasTools } from './catalogo';
@@ -126,11 +125,15 @@ const STATUS_DA_LINHA: Record<StepState, ToolCallStatus> = {
 function RotuloDaLinha({ texto, falhou }: { texto: string; falhou: boolean }) {
   const corte = texto.indexOf(' · ');
   if (corte < 0) return <>{texto}</>;
+  // O leitor de tela lê a frase inteira; o destaque é só visual.
   return (
     <>
-      {texto.slice(0, corte)} ·{' '}
-      <span className={cn('font-semibold', falhou ? 'text-danger' : 'text-foreground')}>
-        {texto.slice(corte + 3)}
+      <span className="sr-only">{texto}</span>
+      <span aria-hidden>
+        {texto.slice(0, corte)} ·{' '}
+        <span className={cn('font-semibold', falhou ? 'text-danger' : 'text-foreground')}>
+          {texto.slice(corte + 3)}
+        </span>
       </span>
     </>
   );
@@ -287,8 +290,8 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
                     : 'neutro'
           }
         />
-        <SwapLabel active={ativo ? 0 : 1} className="min-w-0 flex-1 text-start">
-          <span className="relative inline-block leading-none">
+        {ativo ? (
+          <span className="relative inline-block min-w-0 flex-1 truncate leading-none">
             <span>{rotulo}</span>
             <span
               aria-hidden
@@ -297,10 +300,12 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
               {rotulo}
             </span>
           </span>
-          <span>
+        ) : (
+          // Terminada, a linha quebra em vez de cortar: "não deu certo" não pode sumir na borda.
+          <span className="fade-in animate-in min-w-0 flex-1 leading-snug duration-200 motion-reduce:animate-none">
             <RotuloDaLinha texto={rotulo} falhou={estado === 'falhou'} />
           </span>
-        </SwapLabel>
+        )}
         {estado === 'feito' ? <span className="sr-only">Feito</span> : null}
         {motivo ? (
           <button
