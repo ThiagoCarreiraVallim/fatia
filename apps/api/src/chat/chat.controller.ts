@@ -30,8 +30,11 @@ import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
 import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
+import { AiConsentService } from './consent/ai-consent.service';
 import {
+  AcceptAiConsentDto,
   ChatActionPreviewDto,
+  ChatPreferencesDto,
   ListConversationsQueryDto,
   MessageFeedbackDto,
   RenameConversationDto,
@@ -72,6 +75,7 @@ export class ChatController {
     private readonly runs: ChatRunRegistry,
     private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
+    private readonly aceites: AiConsentService,
   ) {}
 
   /**
@@ -247,6 +251,26 @@ export class ChatController {
   ) {
     await this.conversas.apagar(user.id, id);
     await this.checkpoints.apagarConversa(user.id, id);
+  }
+
+  /**
+   * Os aceites da IA (#384): o da primeira conversa e o da primeira busca na web, com a versão
+   * do texto que vale hoje, e a preferência da busca. Tudo do usuário do token.
+   */
+  @Get('consent')
+  consent(@CurrentUser() user: CurrentUserPayload) {
+    return this.aceites.status(user.id);
+  }
+
+  @Post('consent')
+  @HttpCode(200)
+  acceptConsent(@CurrentUser() user: CurrentUserPayload, @Body() dto: AcceptAiConsentDto) {
+    return this.aceites.accept(user.id, dto.topic, dto.version);
+  }
+
+  @Patch('preferences')
+  preferences(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChatPreferencesDto) {
+    return this.aceites.setWebSearch(user.id, dto.webSearchEnabled);
   }
 
   /** Quanto da cota diária de IA desta pessoa já foi — o medidor da tela do chat. */

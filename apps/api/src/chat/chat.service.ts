@@ -19,6 +19,7 @@ import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 import { ChatRunRegistry, createSseFramer } from './chat-run.registry';
 import { NotificationService, type Notice } from '../notifications/notification.service';
+import { AiConsentService } from './consent/ai-consent.service';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -62,6 +63,7 @@ export class ChatService {
     private readonly agentes: GroupAgentService,
     private readonly runs: ChatRunRegistry,
     private readonly avisos: NotificationService,
+    private readonly aceites: AiConsentService,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -133,6 +135,9 @@ export class ChatService {
 
     const existente = await this.conversas.find(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
+    // Sem o aceite da primeira conversa (#384, Apple 5.1.2), nada sai para o provedor.
+    await this.aceites.assertChatConsent(user.id);
+    const webSearch = await this.aceites.webSearchMode(user.id);
 
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
     // de abrir outro turno na mesma thread do agente.
@@ -157,6 +162,7 @@ export class ChatService {
           timezone: user.timezone,
           conversationId: dto.conversationId,
           history,
+          webSearch,
           memories: (await this.memorias.listar(user.id)).map(({ id, content }) => ({
             id,
             content,

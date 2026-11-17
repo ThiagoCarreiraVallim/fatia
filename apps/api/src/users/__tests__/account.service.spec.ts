@@ -49,6 +49,7 @@ const makePrisma = () => ({
   dataExport: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
   reminder: { findMany: jest.fn().mockResolvedValue([]) },
+  aiConsent: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -121,6 +122,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   tutorialsSeen: 'tutorialsSeen',
   feedbackIdeas: 'ideas',
   dataExports: 'dataExports',
+  aiConsents: 'aiConsents',
 };
 
 /**

@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type { AiConsentService } from '../consent/ai-consent.service';
 import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { AiAccessService } from '../../ai/ai-access.service';
@@ -156,6 +163,9 @@ function montar(
     agentGroupId?: string | null;
     /** As comunidades com agente que esta pessoa pode escolher, e o padrão. */
     agentes?: { padrao: string | null; disponiveis: string[] };
+    /** Sem o aceite da primeira conversa (#384). */
+    semAceite?: boolean;
+    webSearch?: 'off' | 'ask' | 'on';
   } = {},
 ) {
   const canal = canalDoAgente();
@@ -253,6 +263,14 @@ function montar(
     ),
   } satisfies Partial<GroupAgentService>;
 
+  const aceites = {
+    assertChatConsent: jest.fn(async (_userId: string): Promise<void> => {
+      if (opcoes.semAceite) {
+        throw new ForbiddenException({ code: 'AI_CONSENT_REQUIRED', message: 'aceite' });
+      }
+    }),
+    webSearchMode: jest.fn(async (_userId: string) => opcoes.webSearch ?? 'off'),
+  } satisfies Partial<AiConsentService>;
   const runs = new ChatRunRegistry();
   const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
   const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
@@ -264,6 +282,7 @@ function montar(
     agentes as unknown as GroupAgentService,
     runs,
     avisos as unknown as NotificationService,
+    aceites as unknown as AiConsentService,
   );
 
   return {
@@ -612,7 +631,26 @@ describe('ChatService — ordem das guardas', () => {
       message: 'e agora?',
       history: [{ role: MessageRole.user, content: 'anterior' }],
       memories: [{ id: 'm1', content: 'É vegetariana.' }],
+      webSearch: 'off',
     });
+  });
+
+  it('sem o aceite da primeira conversa recusa com 403, sem abrir o agente nem gravar (#384)', async () => {
+    const { service, agent, conversas } = montar({ semAceite: true });
+    await expect(
+      service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
+    ).rejects.toThrow(ForbiddenException);
+    expect(agent.openTurn).not.toHaveBeenCalled();
+    expect(conversas.iniciarTurno).not.toHaveBeenCalled();
+  });
+
+  it('manda ao agente se a busca na web está desligada, pede aceite ou está liberada (#384)', async () => {
+    const { service, canal, chamadasAoAgente } = montar({ webSearch: 'ask' });
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.encerrar();
+    await turno;
+    expect(chamadasAoAgente[0].webSearch).toBe('ask');
   });
 
   it('conversa nova vai ao agente com o histórico vazio, e nasce com o id do PWA', async () => {

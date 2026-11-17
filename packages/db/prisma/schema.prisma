@@ -82,6 +82,10 @@ model User {
   quietFrom         Int     @default(1320)
   quietTo           Int     @default(420)
 
+  /// Busca na web no chat (#384): o ícone do topo liga e desliga. Ligada só vale depois do
+  /// aceite da primeira busca (`AiConsent` WEB_SEARCH); desligada, a IA nem oferece a busca.
+  webSearchEnabled Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -117,6 +121,7 @@ model User {
 
   conversations  Conversation[]
   memories       UserMemory[]
+  aiConsents     AiConsent[]
   aiUsage        AiUsage[]
   subscriptions  UserSubscription[]
   invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
@@ -1777,6 +1782,29 @@ model UserMemory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// O que a pessoa aceitou antes de a IA hospedada mandar algo a terceiros (#384, Apple 5.1.2).
+enum AiConsentKind {
+  /// "Antes de conversar": mensagens e dados consultados vão ao provedor do modelo.
+  CHAT
+  /// "Buscar na web?": só o texto da pergunta vai ao serviço de busca.
+  WEB_SEARCH
+}
+
+/// Um aceite, com a versão do texto lido. Texto novo é versão nova e pede aceite de novo: a
+/// linha antiga fica, porque é a prova do que a pessoa leu e quando. Sai no export e morre com
+/// a conta.
+model AiConsent {
+  id         String        @id @default(uuid())
+  userId     String
+  kind       AiConsentKind
+  version    String
+  acceptedAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, version])
 }
 
 /// Livro-caixa da inferência que a **Fatia** paga (#135).

@@ -87,6 +87,8 @@ export class AccountService {
         quietHoursEnabled: true,
         quietFrom: true,
         quietTo: true,
+        // A busca na web do chat (#384): ligada ou não. Os aceites vão em `aiConsents`.
+        webSearchEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -132,6 +134,7 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      aiConsents,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -562,6 +565,13 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // Os aceites da IA (#384): qual texto, em que versão, quando. É a prova do que a pessoa
+      // leu antes de a mensagem sair para o provedor — dela, então dela no export.
+      this.prisma.aiConsent.findMany({
+        where: { userId },
+        select: { kind: true, version: true, acceptedAt: true },
+        orderBy: { acceptedAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -624,6 +634,7 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      aiConsents,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -651,6 +662,7 @@ export class AccountService {
         ideas: ideas.length,
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
+        aiConsents: aiConsents.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

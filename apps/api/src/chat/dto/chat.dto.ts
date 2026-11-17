@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBase64,
+  IsBoolean,
   IsDefined,
   IsIn,
   IsInt,
@@ -184,4 +185,21 @@ export class ChatActionPreviewDto {
 
   @IsDefined()
   arguments!: Record<string, unknown>;
+}
+
+/** O aceite de um texto da IA (#384): qual texto e qual versão a pessoa leu. */
+export class AcceptAiConsentDto {
+  @IsIn(['chat', 'web_search'])
+  topic!: 'chat' | 'web_search';
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  version!: string;
+}
+
+/** A busca na web liga e desliga (#384, prancha IA-Ferramentas). */
+export class ChatPreferencesDto {
+  @IsBoolean()
+  webSearchEnabled!: boolean;
 }

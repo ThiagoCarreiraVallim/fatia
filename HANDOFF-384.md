@@ -32,8 +32,8 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 ## Checklist
 
-- [ ] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`
-- [ ] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
+- [x] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`
+- [x] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
 - [ ] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
 - [ ] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
 - [ ] 5. api-client: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
@@ -41,10 +41,23 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - [ ] 7. App: o mesmo
 - [ ] 8. Docs (MCP_TOOL_SURFACE, REDESIGN_PROGRESS), lint, typecheck, testes; apagar este arquivo
 
+## Arquivos tocados
+
+- Item 1: `common/decorators/tool.decorator.ts` (tipos), 90 tools (`card`/`appOnly`),
+  `mcp/generic-card.ts` (Tabela genérica), `mcp/mcp-tool.registry.ts` (`catalogoDoChat`, fallback),
+  `chat/chat.controller.ts` (`GET /chat/tool-catalog`), specs em `mcp/__tests__`.
+- Item 2: `schema.prisma` + migration `20261117022522_ai_consent_and_web_search`,
+  `chat/consent/ai-consent.service.ts`, `chat.service.ts` (trava 403 + `webSearch` no turno),
+  `ai/agent.adapter.ts` e `http-agent.adapter.ts` (`webSearch` no corpo do agente),
+  `chat.controller.ts` (`GET/POST /chat/consent`, `PATCH /chat/preferences`), DTOs,
+  `users/account.service.ts` (export: `aiConsents`, `webSearchEnabled`), `user-isolation.spec.ts`.
+
 ## Comandos
 
-- DB de teste: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?|$)#/fatia_t384\1#'`.
+- DB de teste: `export DATABASE_URL=$(grep '^DATABASE_URL=' /home/thiago/Documentos/pessoal/fatia/.env | cut -d= -f2- | tr -d '"' | sed -E 's#/fatia(\?|$)#/fatia_t384\1#')`
+  e `pnpm --filter @fatia/db exec prisma migrate deploy`.
+- `cd apps/api && npx jest src/chat src/mcp/__tests__/tool-catalog.spec.ts`
 
 ## Próximo passo
 
-Item 1.
+Item 3 (agente): pytest primeiro para `webSearch` no `ChatRequest`, `web_search`, `open_in_app`, pausa por consultas e os formatos novos em `artefatos.py`.

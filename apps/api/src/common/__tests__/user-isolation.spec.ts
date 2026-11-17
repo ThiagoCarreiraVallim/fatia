@@ -20,6 +20,7 @@ import { ProfessionalLinkService } from '../../sharing/professional-link.service
 import { StudentViewService } from '../../sharing/student-view.service';
 import { ConversationService } from '../../chat/conversation.service';
 import { MemoryService } from '../../chat/memory/memory.service';
+import { AI_CONSENT_VERSIONS, AiConsentService } from '../../chat/consent/ai-consent.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { FoodShortcutsService } from '../../nutrition/food-shortcuts.service';
@@ -120,6 +121,7 @@ describe('isolamento entre usuários', () => {
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);
+  const aceitesDaIa = new AiConsentService(prisma);
   const inbox = new InboxService(prisma);
   const reminders = new ReminderService(prisma);
   const nutritionPlans = new NutritionPlanService(
@@ -3032,6 +3034,38 @@ describe('isolamento entre usuários', () => {
 
       expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
       expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
+    });
+  });
+
+  describe('aceites da IA e preferência da busca (#384)', () => {
+    afterAll(async () => {
+      await prisma.aiConsent.deleteMany({ where: { userId: { in: [owned.userA, owned.userB] } } });
+      await prisma.user.updateMany({
+        where: { id: { in: [owned.userA, owned.userB] } },
+        data: { webSearchEnabled: true },
+      });
+    });
+
+    it('o aceite de A abre o chat de A, e não o de B', async () => {
+      await aceitesDaIa.accept(owned.userA, 'chat', AI_CONSENT_VERSIONS.chat);
+
+      await expect(aceitesDaIa.assertChatConsent(owned.userA)).resolves.toBeUndefined();
+      await expect(aceitesDaIa.assertChatConsent(owned.userB)).rejects.toThrow(ForbiddenException);
+      expect((await aceitesDaIa.status(owned.userB)).chat.accepted).toBe(false);
+    });
+
+    it('o aceite da busca de A não liga a busca de B', async () => {
+      await aceitesDaIa.accept(owned.userA, 'web_search', AI_CONSENT_VERSIONS.webSearch);
+
+      expect(await aceitesDaIa.webSearchMode(owned.userA)).toBe('on');
+      expect(await aceitesDaIa.webSearchMode(owned.userB)).toBe('ask');
+    });
+
+    it('desligar a busca de B não mexe na de A', async () => {
+      await aceitesDaIa.setWebSearch(owned.userB, false);
+
+      expect(await aceitesDaIa.webSearchMode(owned.userB)).toBe('off');
+      expect(await aceitesDaIa.webSearchMode(owned.userA)).toBe('on');
     });
   });
 
