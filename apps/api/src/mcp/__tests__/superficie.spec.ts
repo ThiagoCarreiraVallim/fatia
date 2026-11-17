@@ -65,9 +65,12 @@ import {
  * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
  * braço A. As duas chegaram juntas no merge da main na #382.
  * O merge da main (#382) na #380 juntou os dois braços A acima.
+ * A #394 acrescentou `get_group_poll`, `vote_group_poll`, `list_blocked_users`, `block_user` e
+ * `unblock_user` (nenhuma destrutiva nem de intenção), a enquete em `create_group_post` e
+ * `filter` e o bloqueio em `list_group_posts`: muda o braço A.
  */
 
-const SHA_ENTIDADE = 'fae2798cb2d5f3b3b4e9848e70fa89e3e52a760e5312cfd2a4829f23be583078';
+const SHA_ENTIDADE = '05327d9c94a66d48849b491e479f403f86f771c44ae1c16a003ae0114f85b6fc';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

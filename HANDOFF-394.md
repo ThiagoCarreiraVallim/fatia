@@ -32,7 +32,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 6. API posts automáticos por tipo (auto-post.ts; hooks em content, group-exercise, challenge; Group.autoPosts no update)
 - [x] 7. API Para você (for-you.service/controller, GET groups/:id/for-you)
 - [x] 8. LGPD export/exclusão
-- [ ] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
+- [x] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
 - [ ] 10. api-client
 - [ ] 11. Web aluno (Cm-03/05/06/07/20/21) + lista de bloqueados em Você > Conta
 - [ ] 12. Web painel (Pn-14, Pn-26)
@@ -41,6 +41,6 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Próximo passo
 
-Item 9 (MCP).
+Item 10 (api-client: community-feed.ts com pins, poll, blocks, announcements, forYou), depois web 11/12 e app 13.
 
 Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).
