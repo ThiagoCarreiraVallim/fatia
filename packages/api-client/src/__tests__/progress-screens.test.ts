@@ -219,6 +219,13 @@ describe('conquistas (Al-G11)', () => {
     expect(achievementDetail(a)).toEqual({ unlocked: false, text: 'Bloqueada · faltam 58' });
   });
 
+  it('contagem já cumprida, mas ainda não gravada: nunca "faltam 0"', () => {
+    const a = { ...base, key: 'workouts_100', progress: { current: 100, target: 100 } };
+
+    expect(achievementDetail(a)).toEqual({ unlocked: true, text: 'Desbloqueada agora' });
+    expect(achievementTally([a, base])).toEqual({ got: 1, total: 2 });
+  });
+
   it('bloqueada sem contagem: a condição', () => {
     const a = {
       ...base,

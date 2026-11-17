@@ -5,6 +5,7 @@ import {
   achievementDetail,
   achievementIcon,
   achievementTally,
+  isAchievementUnlocked,
   progressApi,
 } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
@@ -21,12 +22,16 @@ import { colors } from '@/theme/colors';
 export default function AchievementsScreen() {
   const query = useQuery({
     queryKey: ['achievements', 'list'],
-    queryFn: () => progressApi.listAchievements(),
+    // O GET só lê; a reavaliação (POST, idempotente) grava o que já vale, como no Hoje.
+    queryFn: async () => {
+      await progressApi.refreshAchievements();
+      return progressApi.listAchievements();
+    },
   });
   const list = query.data ?? [];
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected =
-    list.find((a) => a.key === selectedKey) ?? list.find((a) => a.unlockedAt) ?? list[0];
+    list.find((a) => a.key === selectedKey) ?? list.find(isAchievementUnlocked) ?? list[0];
   const tally = achievementTally(list);
 
   return (
@@ -57,7 +62,7 @@ export default function AchievementsScreen() {
 
             <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
               {list.map((a) => {
-                const unlocked = !!a.unlockedAt;
+                const unlocked = isAchievementUnlocked(a);
                 const on = selected?.key === a.key;
                 return (
                   <View key={a.key} style={{ width: '33.333%', padding: 4 }}>
@@ -105,15 +110,21 @@ export default function AchievementsScreen() {
                 <View
                   className={cn(
                     'h-11 w-11 items-center justify-center rounded-full',
-                    selected.unlockedAt ? 'bg-primary' : 'bg-surface-3',
+                    isAchievementUnlocked(selected) ? 'bg-primary' : 'bg-surface-3',
                   )}
                 >
                   <Icon
                     name={
-                      selected.unlockedAt ? (achievementIcon(selected.key) as IconName) : 'lock'
+                      isAchievementUnlocked(selected)
+                        ? (achievementIcon(selected.key) as IconName)
+                        : 'lock'
                     }
                     size={20}
-                    color={selected.unlockedAt ? colors.primaryForeground : colors.mutedForeground}
+                    color={
+                      isAchievementUnlocked(selected)
+                        ? colors.primaryForeground
+                        : colors.mutedForeground
+                    }
                   />
                 </View>
                 <View className="flex-1">

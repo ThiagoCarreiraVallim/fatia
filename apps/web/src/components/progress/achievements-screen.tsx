@@ -6,6 +6,7 @@ import {
   achievementDetail,
   achievementIcon,
   achievementTally,
+  isAchievementUnlocked,
   progressApi,
 } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
@@ -22,12 +23,16 @@ import { cn } from '@/lib/utils';
 export function AchievementsScreen() {
   const query = useQuery({
     queryKey: ['achievements', 'list'],
-    queryFn: () => progressApi.listAchievements(),
+    // O GET só lê; a reavaliação (POST, idempotente) grava o que já vale, como no Hoje.
+    queryFn: async () => {
+      await progressApi.refreshAchievements();
+      return progressApi.listAchievements();
+    },
   });
   const list = query.data ?? [];
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected =
-    list.find((a) => a.key === selectedKey) ?? list.find((a) => a.unlockedAt) ?? list[0];
+    list.find((a) => a.key === selectedKey) ?? list.find(isAchievementUnlocked) ?? list[0];
   const tally = achievementTally(list);
 
   return (
@@ -60,7 +65,7 @@ export function AchievementsScreen() {
 
           <ul className="grid grid-cols-3 gap-2">
             {list.map((a) => {
-              const unlocked = !!a.unlockedAt;
+              const unlocked = isAchievementUnlocked(a);
               const on = selected?.key === a.key;
               return (
                 <li key={a.key}>
@@ -109,13 +114,17 @@ export function AchievementsScreen() {
               <span
                 className={cn(
                   'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-                  selected.unlockedAt
+                  isAchievementUnlocked(selected)
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-surface-3 text-muted-foreground',
                 )}
               >
                 <Icon
-                  name={selected.unlockedAt ? (achievementIcon(selected.key) as IconName) : 'lock'}
+                  name={
+                    isAchievementUnlocked(selected)
+                      ? (achievementIcon(selected.key) as IconName)
+                      : 'lock'
+                  }
                   size={20}
                 />
               </span>

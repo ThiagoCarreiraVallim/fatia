@@ -19,6 +19,7 @@ const progressApi = vi.hoisted(() => ({
   strength: vi.fn(),
   consistency: vi.fn(),
   listAchievements: vi.fn(),
+  refreshAchievements: vi.fn(),
 }));
 const workoutApi = vi.hoisted(() => ({ recordsOverview: vi.fn(), searchExercises: vi.fn() }));
 
@@ -164,6 +165,7 @@ function mockAll() {
   });
   progressApi.consistency.mockResolvedValue(REPORT);
   progressApi.listAchievements.mockResolvedValue(ACHIEVEMENTS);
+  progressApi.refreshAchievements.mockResolvedValue([]);
   workoutApi.recordsOverview.mockResolvedValue(RECORDS);
 }
 
@@ -236,6 +238,19 @@ describe('Conquistas (Al-G11)', () => {
     await user.click(screen.getByRole('button', { name: /100 treinos/ }));
 
     expect(screen.getByText('Bloqueada · faltam 58')).toBeInTheDocument();
+  });
+});
+
+describe('Conquistas: o que já vale é gravado ao abrir', () => {
+  it('reavalia (POST) antes de listar, como o Hoje', async () => {
+    mockAll();
+    wrap(<AchievementsScreen />);
+
+    await screen.findByText('2 de 3 desbloqueadas');
+    expect(progressApi.refreshAchievements).toHaveBeenCalled();
+    expect(progressApi.refreshAchievements.mock.invocationCallOrder[0]).toBeLessThan(
+      progressApi.listAchievements.mock.invocationCallOrder[0],
+    );
   });
 });
 

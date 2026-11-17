@@ -317,8 +317,18 @@ function contextLine(a: Achievement): string | null {
   return null;
 }
 
+/**
+ * Desbloqueada, ou com a contagem já cumprida e ainda não gravada (a lista veio antes da
+ * reavaliação): esta última nunca pode aparecer como "faltam 0".
+ */
+export function isAchievementUnlocked(a: Achievement): boolean {
+  return !!a.unlockedAt || (!!a.progress && a.progress.current >= a.progress.target);
+}
+
 /** A linha do cartão de detalhe da conquista selecionada. */
 export function achievementDetail(a: Achievement): { unlocked: boolean; text: string } {
+  if (!a.unlockedAt && isAchievementUnlocked(a))
+    return { unlocked: true, text: 'Desbloqueada agora' };
   if (a.unlockedAt) {
     const ctx = contextLine(a);
     return {
@@ -335,7 +345,7 @@ export function achievementDetail(a: Achievement): { unlocked: boolean; text: st
 }
 
 export function achievementTally(list: Achievement[]): { got: number; total: number } {
-  return { got: list.filter((a) => a.unlockedAt).length, total: list.length };
+  return { got: list.filter(isAchievementUnlocked).length, total: list.length };
 }
 
 // ---------------------------------------------------------------------------------------------

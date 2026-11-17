@@ -62,7 +62,11 @@ export default function ProgressScreen() {
   });
   const achievements = useQuery({
     queryKey: ['achievements', 'list'],
-    queryFn: () => progressApi.listAchievements(),
+    // O GET só lê; a reavaliação (POST, idempotente) grava o que já vale, como no Hoje.
+    queryFn: async () => {
+      await progressApi.refreshAchievements();
+      return progressApi.listAchievements();
+    },
   });
 
   const onRefresh = async () => {
