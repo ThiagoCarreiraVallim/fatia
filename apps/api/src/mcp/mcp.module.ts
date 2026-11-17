@@ -14,6 +14,7 @@ import { GetMeTool } from './tools/meta/get-me.tool';
 import { UpdateTimezoneTool } from './tools/meta/update-timezone.tool';
 import { UpdateMeTool } from './tools/meta/update-me.tool';
 import { ProfileModule } from '../users/profile.module';
+import { McpConnectionsModule } from '../auth/mcp-connections.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ProfileModule } from '../users/profile.module';
     ObservabilityModule,
     IntentToolsModule,
     ProfileModule,
+    McpConnectionsModule,
   ],
   controllers: [McpController],
   providers: [

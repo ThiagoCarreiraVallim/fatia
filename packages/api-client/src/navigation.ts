@@ -147,13 +147,9 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
     title: 'IA',
     items: [
       link('chat', 'Conversas', 'chat', '/chat', { requires: 'chat' }),
-      link(
-        'connect',
-        'Conectar sua IA',
-        'link',
-        { web: '/profile/connect', mobile: '/profile/tokens' },
-        { detail: 'Claude, ChatGPT' },
-      ),
+      link('connect', 'Conectar sua IA', 'link', '/profile/connect', {
+        detail: 'Claude, ChatGPT',
+      }),
     ],
   },
   {
@@ -408,6 +404,7 @@ export const ROUTES: readonly RouteDef[] = [
   // O perfil virou Você (#387): `/profile` só redireciona para lá.
   { pattern: '/profile', title: 'Perfil', parent: '/you' },
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/you' },
+  // Rota velha da web, só redireciona para `/profile/connect`.
   { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/you' },
   { pattern: '/profile/notifications', title: 'Notificações', parent: '/you' },
   { pattern: '/profile/appearance', title: 'Aparência', parent: '/you' },

@@ -1,6 +1,7 @@
 import { GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../common/prisma.service';
+import { apiPublicUrl } from '../common/public-url';
 import { AccountService } from './account.service';
 
 /** Validade do link de exportação (prancha Al-V1: "Arquivo com link, vale 24 h"). */
@@ -12,12 +13,6 @@ export const EXPORT_LINK_TTL_MS = 24 * 60 * 60 * 1000;
 export const EXPORT_LINK_REDOWNLOAD_MS = 15 * 60 * 1000;
 
 const hashOf = (token: string) => createHash('sha256').update(token).digest('hex');
-
-/** Onde a API é alcançada de fora. Sem a env, o endereço do dev. */
-export function apiPublicUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const url = env.API_PUBLIC_URL?.trim();
-  return (url || `http://localhost:${env.API_PORT || 3000}`).replace(/\/+$/, '');
-}
 
 export interface ExportLink {
   url: string;

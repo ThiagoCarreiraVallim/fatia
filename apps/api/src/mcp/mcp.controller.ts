@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { McpConnectionService } from '../auth/mcp-connection.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
@@ -12,10 +13,17 @@ import { HEADER_SUPERFICIE, superficieDoHeader } from './intent/superficie';
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
 @Controller('mcp')
 export class McpController {
-  constructor(private readonly registry: McpToolRegistry) {}
+  constructor(
+    private readonly registry: McpToolRegistry,
+    private readonly connections: McpConnectionService,
+  ) {}
 
   @All()
   async handle(@Req() req: Request, @Res() res: Response, @CurrentUser() user: CurrentUserPayload) {
+    // "Último acesso" da tela Conectar sua IA (#388). Sem esperar e sem deixar
+    // a falha subir: a ferramenta não pode pagar pela contabilidade da tela.
+    const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/)?.[1]?.trim();
+    if (bearer) this.connections.touch(bearer).catch(() => undefined);
     // Antes de abrir o servidor: um header inválido é 400 com corpo legível, e não um erro
     // de protocolo no meio do JSON-RPC.
     const superficie = superficieDoHeader(req.headers[HEADER_SUPERFICIE]);

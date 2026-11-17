@@ -673,7 +673,7 @@ function AiMenuPanel({
                       </Pressable>
                       <Pressable
                         accessibilityRole="link"
-                        onPress={() => go('/profile/tokens')}
+                        onPress={() => go('/profile/connect')}
                         className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-full px-4"
                         style={{ borderWidth: 1, borderColor: colors.borderStrong }}
                       >

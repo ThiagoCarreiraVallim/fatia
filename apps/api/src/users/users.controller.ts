@@ -7,6 +7,7 @@ import { SetAvatarDto } from './dto/set-avatar.dto';
 import { AccountService, APP_DELETE_CONFIRMATION } from './account.service';
 import { DataExportService } from './data-export.service';
 import { ProfileService } from './profile.service';
+import { McpConnectionService } from '../auth/mcp-connection.service';
 
 @Controller('users')
 export class UsersController {
@@ -14,6 +15,7 @@ export class UsersController {
     private readonly account: AccountService,
     private readonly profile: ProfileService,
     private readonly exports: DataExportService,
+    private readonly mcp: McpConnectionService,
   ) {}
 
   @Get('me')
@@ -39,6 +41,15 @@ export class UsersController {
   @Delete('me/avatar')
   removeAvatar(@CurrentUser() user: CurrentUserPayload) {
     return this.profile.removeAvatar(user.id);
+  }
+
+  /**
+   * "Conectar sua IA" (#388): o endereço para colar no app de IA e os apps que
+   * esta pessoa já conectou, com o último acesso. Só as conexões dela.
+   */
+  @Get('me/mcp-connections')
+  mcpConnections(@CurrentUser() user: CurrentUserPayload) {
+    return this.mcp.overview(user.id);
   }
 
   /**

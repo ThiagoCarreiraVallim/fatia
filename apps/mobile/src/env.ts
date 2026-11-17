@@ -43,10 +43,6 @@ export const env = {
   get logtoAudience(): string {
     return required(process.env.EXPO_PUBLIC_LOGTO_AUDIENCE, 'EXPO_PUBLIC_LOGTO_AUDIENCE');
   },
-  /** URL do conector MCP mostrada na tela de perfil. */
-  get mcpUrl(): string {
-    return `${env.apiUrl}/mcp`;
-  },
 };
 
 /**
