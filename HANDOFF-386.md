@@ -13,7 +13,7 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 - [x] 1. Apagar conta cancela no Asaas também o TRIALING; `encerrarAntesDeApagar` → inglês
 - [x] 2. Teste sem pagamento: cancela no provedor e EXPIRED (idempotente); checkout cancela toda assinatura viva no provedor; webhook antigo não mexe na nova
 - [x] 3. cancel() limpa paymentUrl; vivaNaWeb sem link velho; EXPIRED / teste cancelado vencido oferecem checkout de novo; ACTIVE cancelada depois do PAYMENT_CREATED
-- [ ] 4. Teste na web (qualquer forma): paga a 1ª fatura até o fim do teste; cartão recebe DUE_SOON/DUE_TODAY; página de pagamento acessível no teste
+- [x] 4. Teste na web (qualquer forma): paga a 1ª fatura até o fim do teste; cartão recebe DUE_SOON/DUE_TODAY; página de pagamento acessível no teste
 - [ ] 5. Fim do programa um dia depois (grant-group) + fixture
 - [ ] 6. "Hoje" do aviso no fuso da pessoa (Cuiabá, Rio Branco, EUA)
 - [ ] 7. Aviso de fim do teste da loja: manter, sem preço/link/pagamento do Fatia, só "cancele na loja" com deep link; registrar decisão nos docs

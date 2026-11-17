@@ -15,8 +15,9 @@ import { CARENCIA_DIAS } from './ai-entitlement';
  *
  * A sequência acompanha a carência de 7 dias (`CARENCIA_DIAS`), só na
  * assinatura da web (Asaas): 3 dias antes do vencimento, no dia, +2 ("faltam
- * 5"), +5 ("faltam 2") e +7 (a IA pausou). Pix e boleto recebem os dois
- * primeiros; cartão é cobrado sozinho e só ouve falar se a cobrança falhar.
+ * 5"), +5 ("faltam 2") e +7 (a IA pausou), em qualquer forma de pagamento:
+ * o Fatia não vê se o cartão ficou salvo no Asaas. No teste da web, o fim (dia
+ * 5) e o "vence hoje" do último dia: a primeira fatura é paga à mão.
  *
  * Assinatura da loja (Apple, Google) **nunca** recebe cobrança nem lembrete do
  * Fatia: só "atualize na loja" quando a RevenueCat indica falha de cobrança.
@@ -64,9 +65,12 @@ export function billingReminderFor(sub: ReminderSubscription, now: Date): DueRem
     const fim = sub.trialEndsAt ?? sub.currentPeriodEnd;
     if (!fim || sub.cancelAtPeriodEnd || sub.source === 'MANUAL') return null;
     const dia = dateInTz(fim, FUSO);
-    return diasEntre(hoje, dia) === AVISO_DO_TESTE_DIAS
-      ? { kind: 'TRIAL_ENDING', dueDate: dia }
-      : null;
+    const faltam = diasEntre(hoje, dia);
+    if (faltam === AVISO_DO_TESTE_DIAS) return { kind: 'TRIAL_ENDING', dueDate: dia };
+    // Na web, a primeira fatura vence no fim do teste e ninguém a paga sozinho
+    // (o Fatia nunca recebe o cartão): no último dia, "vence hoje".
+    if (faltam === 0 && sub.source === 'ASAAS') return { kind: 'DUE_TODAY', dueDate: dia };
+    return null;
   }
 
   if (sub.source === 'APPLE' || sub.source === 'GOOGLE') {
@@ -80,11 +84,11 @@ export function billingReminderFor(sub: ReminderSubscription, now: Date): DueRem
   const vencimento = dateInTz(sub.currentPeriodEnd, FUSO);
   // Pagar adianta o `currentPeriodEnd`: passado do vencimento = não pago.
   const atraso = diasEntre(vencimento, hoje);
-  const automatico = sub.paymentMethod === 'CREDIT_CARD';
+  // Cartão também: o Fatia não vê se o cartão ficou salvo no Asaas.
   const kind: BillingReminderKind | null =
-    atraso === -3 && !automatico
+    atraso === -3
       ? 'DUE_SOON'
-      : atraso === 0 && !automatico
+      : atraso === 0
         ? 'DUE_TODAY'
         : atraso === 2
           ? 'GRACE_5_LEFT'
@@ -197,18 +201,16 @@ export function billingReminderTexts(
           }),
         };
       }
-      const cartao = sub.paymentMethod === 'CREDIT_CARD';
       return {
         push: push('Seu teste acaba em 2 dias', 'Mandamos por e-mail como continuar no PRO.'),
         email: emailEx03({
           subject: 'Seu teste do PRO acaba em 2 dias',
           title: 'Seu teste acaba em 2 dias',
-          text: cartao
-            ? `Em ${fim} cobramos ${preco} pelo plano ${plano}, no seu cartão.`
-            : `Para continuar no PRO, pague ${preco} (plano ${plano}) até ${fim}.`,
-          cta: 'Continuar no PRO',
+          // Nada é cobrado sozinho: o Fatia nunca recebe o cartão.
+          text: `Para continuar no PRO, pague a primeira cobrança de ${preco} (plano ${plano}) até ${fim}, com Pix, boleto ou cartão, na página de pagamento.`,
+          cta: 'Abrir pagamento',
           href: planoUrl,
-          note: 'Cancelando, você volta ao Free e não perde nada.',
+          note: 'Sem pagamento, você volta ao Free e não perde nada.',
         }),
       };
     }
@@ -218,13 +220,27 @@ export function billingReminderTexts(
         email: emailEx03({
           subject: 'Seu PRO vence em 3 dias',
           title: 'Seu PRO vence em 3 dias',
-          text: `${preco} · vence em ${vence}. Pague com Pix ou boleto para não pausar a IA.`,
+          text: `${preco} · vence em ${vence}. Pague com Pix, boleto ou cartão na página de pagamento para não pausar a IA.`,
           cta: 'Abrir pagamento',
           href: planoUrl,
-          note: 'Pix cai na hora · boleto em até 2 dias úteis.',
+          note: 'Pix cai na hora · boleto em até 2 dias úteis · cartão já salvo é cobrado sozinho.',
         }),
       };
     case 'DUE_TODAY':
+      if (sub.status === 'TRIALING') {
+        // Teste sem pagamento não tem carência: volta ao Free.
+        return {
+          push: push('Seu teste acaba hoje', 'Mandamos por e-mail como continuar no PRO.'),
+          email: emailEx03({
+            subject: 'Seu teste do PRO acaba hoje',
+            title: 'Seu teste acaba hoje',
+            text: `Para continuar no PRO, pague a primeira cobrança de ${preco} (plano ${plano}) hoje, com Pix, boleto ou cartão, na página de pagamento.`,
+            cta: 'Abrir pagamento',
+            href: planoUrl,
+            note: 'Sem pagamento, você volta ao Free e não perde nada.',
+          }),
+        };
+      }
       return {
         push: push('Seu PRO vence hoje', 'Depois, 7 dias de carência. Nada muda até lá.'),
         email: emailEx03({
@@ -233,7 +249,7 @@ export function billingReminderTexts(
           text: `O pagamento de ${preco} vence hoje. Assim que cair, o PRO segue sozinho. Se não der hoje, você tem 7 dias de carência.`,
           cta: 'Abrir pagamento',
           href: planoUrl,
-          note: 'Pix cai na hora · boleto em até 2 dias úteis.',
+          note: 'Pix cai na hora · boleto em até 2 dias úteis · cartão já salvo é cobrado sozinho.',
         }),
       };
     case 'GRACE_5_LEFT':

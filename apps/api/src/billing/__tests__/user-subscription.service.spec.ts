@@ -673,6 +673,37 @@ describe('UserSubscriptionService — assinaturas vivas no provedor (banco real)
     expect(plano).toMatchObject({ state: 'CANCELED', paymentUrl: null });
   });
 
+  it('no teste, a página da primeira fatura chega pelo PAYMENT_CREATED e fica acessível', async () => {
+    const { service, provedor } = montar(comTeste);
+    provedor.firstPaymentUrl.mockResolvedValueOnce(null as unknown as string);
+    const u = await pessoa('fatura-do-teste', false);
+    const teste = await service.checkout(u, {
+      interval: 'MONTHLY',
+      cpf: CPF,
+      paymentMethod: 'CREDIT_CARD',
+    });
+    expect(teste).toMatchObject({ state: 'TRIAL', paymentUrl: null });
+    const sub = await prisma.userSubscription.findFirstOrThrow({ where: { userId: u } });
+    await service.handleAsaasWebhook(
+      { 'asaas-access-token': TOKEN },
+      JSON.stringify({
+        id: `${stamp}-fatura-teste`,
+        event: 'PAYMENT_CREATED',
+        payment: {
+          id: 'pay_teste',
+          status: 'PENDING',
+          dueDate: sub.trialEndsAt!.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+          subscription: sub.providerRef,
+          invoiceUrl: 'https://www.asaas.com/i/primeira',
+        },
+      }),
+    );
+    expect(await service.plan(u)).toMatchObject({
+      state: 'TRIAL',
+      paymentUrl: 'https://www.asaas.com/i/primeira',
+    });
+  });
+
   it('linha cancelada até o fim do período com link velho no banco: o plano não mostra o link', async () => {
     const { service } = montar(comTeste);
     const u = await pessoa('link-velho');

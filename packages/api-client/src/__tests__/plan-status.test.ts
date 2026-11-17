@@ -242,7 +242,7 @@ describe('planStatusView: os estados da web (M13b/c)', () => {
     });
   });
 
-  it('cartão não recebe "vence em breve": a cobrança é automática', () => {
+  it('cartão também recebe "vence em breve": o Fatia não sabe se o cartão está salvo', () => {
     const v = planStatusView(
       plan({
         tier: 'PRO',
@@ -253,12 +253,13 @@ describe('planStatusView: os estados da web (M13b/c)', () => {
         interval: 'MONTHLY',
         paymentMethod: 'CREDIT_CARD',
         currentPeriodEnd: '2026-11-13T03:00:00Z',
+        paymentUrl: 'https://www.asaas.com/i/abc',
         paidBy: 'PERSONAL',
       }),
       web,
     );
-    expect(v.badge).toBe('Ativa');
-    expect(v.actions.map((a) => a.kind)).toEqual(['cancel']);
+    expect(v.badge).toBe('Vence em breve');
+    expect(v.actions.map((a) => a.kind)).toEqual(['pay', 'cancel']);
   });
 
   it('carência na web: faltam 2 dias para a IA pausar, com o link de pagamento', () => {
@@ -477,8 +478,9 @@ describe('planStatusView: teste grátis', () => {
       }),
       web,
     );
+    // O Fatia nunca recebe o cartão: nada é cobrado sozinho no fim do teste.
     expect(v.body).toBe(
-      'Depois, R$ 179,00 por ano no cartão. Cancele antes de 14 nov e não paga nada.',
+      'Para continuar, pague a primeira cobrança de R$ 179,00 por ano até 14 nov, com cartão, na página de pagamento. Sem pagamento, volta ao Free e nada é cobrado.',
     );
     expect(v.actions.map((a) => a.kind)).toEqual(['pay', 'cancel']);
     expect(v.actions[1]?.label).toBe('Cancelar o teste');

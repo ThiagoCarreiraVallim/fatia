@@ -64,24 +64,14 @@ describe('billingReminderFor', () => {
     }
   });
 
-  it('cartão não recebe o "vence em 3 dias" nem o "vence hoje": a cobrança é automática', () => {
-    expect(billingReminderFor(sub({ paymentMethod: 'CREDIT_CARD' }), HOJE)).toBeNull();
+  it('cartão também recebe o "vence em 3 dias" e o "vence hoje": o Fatia não sabe se o cartão está salvo', () => {
+    expect(billingReminderFor(sub({ paymentMethod: 'CREDIT_CARD' }), HOJE)?.kind).toBe('DUE_SOON');
     expect(
       billingReminderFor(
         sub({ paymentMethod: 'CREDIT_CARD', currentPeriodEnd: sp('2026-11-10') }),
         HOJE,
-      ),
-    ).toBeNull();
-    expect(
-      billingReminderFor(
-        sub({
-          paymentMethod: 'CREDIT_CARD',
-          status: 'PAST_DUE',
-          currentPeriodEnd: sp('2026-11-08'),
-        }),
-        HOJE,
       )?.kind,
-    ).toBe('GRACE_5_LEFT');
+    ).toBe('DUE_TODAY');
   });
 
   it('cancelada até o fim do período não recebe cobrança', () => {
@@ -131,6 +121,22 @@ describe('billingReminderFor', () => {
     expect(billingReminderFor(teste('APPLE'), HOJE)?.kind).toBe('TRIAL_ENDING');
   });
 
+  it('teste da web, de qualquer forma de pagamento: no último dia, "vence hoje"', () => {
+    for (const paymentMethod of ['PIX', 'BOLETO', 'CREDIT_CARD'] as const) {
+      expect(
+        billingReminderFor(
+          sub({
+            status: 'TRIALING',
+            paymentMethod,
+            trialEndsAt: new Date('2026-11-10T15:00:00Z'),
+            currentPeriodEnd: new Date('2026-11-10T15:00:00Z'),
+          }),
+          HOJE,
+        ),
+      ).toEqual({ kind: 'DUE_TODAY', dueDate: '2026-11-10' });
+    }
+  });
+
   it('teste cancelado não recebe o aviso de fim', () => {
     expect(
       billingReminderFor(
@@ -166,6 +172,31 @@ describe('billingReminderTexts', () => {
       expect(`${t.push.title} ${t.push.body}`).not.toMatch(/pix|boleto|https?:|R\$/i);
       expect(t.push.url).toBe('/plan');
     }
+  });
+
+  it('fim do teste no cartão: manda pagar a primeira fatura, nunca promete cobrar sozinho', () => {
+    const t = billingReminderTexts(
+      'TRIAL_ENDING',
+      sub({ status: 'TRIALING', paymentMethod: 'CREDIT_CARD', trialEndsAt: sp('2026-11-12') }),
+      ctx,
+    );
+    expect(t.email.text).not.toMatch(/cobramos|no seu cartão/i);
+    expect(t.email.text).toMatch(/pague a primeira cobrança/i);
+    expect(t.email.text).toMatch(/Pix, boleto ou cartão/);
+  });
+
+  it('"vence hoje" do teste não promete carência: teste sem pagamento volta ao Free', () => {
+    const t = billingReminderTexts(
+      'DUE_TODAY',
+      sub({
+        status: 'TRIALING',
+        trialEndsAt: sp('2026-11-10'),
+        currentPeriodEnd: sp('2026-11-10'),
+      }),
+      ctx,
+    );
+    expect(`${t.push.body} ${t.email.text}`).not.toMatch(/carência/);
+    expect(t.push.title).toBe('Seu teste acaba hoje');
   });
 
   it('o e-mail da web leva ao "Meu plano" da web e lembra da loja', () => {

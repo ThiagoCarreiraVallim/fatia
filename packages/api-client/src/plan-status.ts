@@ -242,14 +242,12 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         });
       }
       if (web) {
-        const metodo = plan.paymentMethod
-          ? plan.paymentMethod === 'CREDIT_CARD'
-            ? ' no cartão'
-            : ` no ${METHOD[plan.paymentMethod]}`
-          : '';
+        // O Fatia nunca recebe o cartão: nada é cobrado sozinho no fim do teste,
+        // a primeira fatura é paga na página de pagamento, de qualquer forma.
+        const metodo = plan.paymentMethod ? `, com ${METHOD[plan.paymentMethod]}` : '';
         return view({
           ...base,
-          body: `Depois, ${priceOf(plan)} ${perInterval(plan.interval)}${metodo}. Cancele antes de ${day(fim)} e não paga nada.`,
+          body: `Para continuar, pague a primeira cobrança de ${priceOf(plan)} ${perInterval(plan.interval)} até ${day(fim)}${metodo}, na página de pagamento. Sem pagamento, volta ao Free e nada é cobrado.`,
           actions: [
             ...pay('Abrir página de pagamento'),
             { kind: 'cancel', label: 'Cancelar o teste' },
@@ -396,21 +394,19 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         });
       }
       const dueIn = fim ? calendarDays(fim, ctx.now) : null;
-      // Pix e boleto são pagos à mão: três dias antes, a tela lembra (Al-M13b).
-      if (
-        dueIn !== null &&
-        dueIn >= 0 &&
-        dueIn <= 3 &&
-        plan.paymentMethod !== 'CREDIT_CARD' &&
-        !plan.cancelAtPeriodEnd
-      ) {
+      // Três dias antes, a tela lembra (Al-M13b), em qualquer forma: o Fatia
+      // não vê se o cartão ficou salvo no Asaas.
+      if (dueIn !== null && dueIn >= 0 && dueIn <= 3 && !plan.cancelAtPeriodEnd) {
         return view({
           badge: 'Vence em breve',
           tone: 'trial',
           via: viaOf(plan, ctx),
           title: dueIn === 0 ? 'Seu PRO vence hoje' : `Seu PRO vence em ${days(dueIn)}`,
-          body: `${priceOf(plan)} · vence ${day(fim)}. Pague com Pix ou boleto para não pausar a IA.`,
-          note: PIX_E_BOLETO,
+          body:
+            plan.paymentMethod === 'CREDIT_CARD'
+              ? `${priceOf(plan)} · vence ${day(fim)}. Se o cartão não ficou salvo, pague na página de pagamento para não pausar a IA.`
+              : `${priceOf(plan)} · vence ${day(fim)}. Pague com Pix ou boleto para não pausar a IA.`,
+          note: plan.paymentMethod === 'CREDIT_CARD' ? null : PIX_E_BOLETO,
           actions: [...pay(), { kind: 'cancel', label: 'Cancelar assinatura' }],
         });
       }
