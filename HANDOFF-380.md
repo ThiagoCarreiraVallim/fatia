@@ -54,6 +54,24 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - `cd apps/api && npx jest src/workout/__tests__/circuit` ; `cd packages/api-client && npx vitest run`
 - typecheck da api precisa de `pnpm --filter @fatia/design build` (já feito).
 
+## Rodada 2: revisão adversarial + merge da #381
+
+- [x] A merge origin/main (5fff5d31): 153 tools, 84 de escrita, SHA novo, payload regerado
+- [ ] B1 session-kind circuito + filtro Circuitos
+- [ ] B2 detalhe do histórico com CircuitResultBlocks (web/app) + Repetir circuito
+- [ ] B3 log() com fromPlan/planName
+- [ ] B4 Salvar como plano recusa circuito (400) + esconder botão
+- [ ] C1 resultado recalculado no servidor / limites sem eventos
+- [ ] C2 eventos limitados por startedAt
+- [ ] C3 finish atômico + exercício pessoal apagado
+- [ ] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
+- [ ] C5 numeração dos avisos e done sempre
+- [ ] C6 corrida no agendamento (app)
+- [ ] C7 limite de eventos no finish
+- [ ] C8 comparação só com mesma definição
+- [ ] C9 apagar este HANDOFF no último commit
+- D (conquistas #382) fica para o coordenador.
+
 ## Próximo passo
 
-Nada pendente do checklist. Falta só a passada visual do coordenador (prints contra as pranchas) e o relatório.
+Seguir a lista acima na ordem; um commit por item, teste visto vermelho antes.
