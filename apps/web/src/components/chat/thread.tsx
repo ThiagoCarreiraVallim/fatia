@@ -56,6 +56,7 @@ import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota, useCotaEsgotada } from './cota';
+import { AiStateCard } from './ai-state-card';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import { failedQuestion, canDrainQueue, useMessageQueue, type ItemDaFila } from './fila';
 import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
@@ -149,37 +150,38 @@ function FailedAnswer({ error, answerId }: { error: unknown; answerId?: string }
   // Prancha Al-M11, "Cota": volta tal hora, e o registro manual segue — tentar de novo não adianta.
   if (estado === 'quota') {
     return (
-      <div role="alert" className={cn(field, 'w-full space-y-2 rounded-2xl px-4 py-3 text-sm')}>
-        <p className="font-semibold text-foreground">{AI_STATES_COPY.quotaTitle}</p>
-        <p className="text-foreground/75">
-          {erro.resetsAt ? quotaResetLabel(erro.resetsAt) : textoDeErroDoChat(erro)}{' '}
-          {AI_STATES_COPY.quotaManual}
-        </p>
-        <Link href="/nutrition" className="font-semibold text-success underline">
-          {AI_STATES_COPY.quotaAction}
-        </Link>
-      </div>
+      <AiStateCard
+        tone="warning"
+        title={AI_STATES_COPY.quotaTitle}
+        body={`${erro.resetsAt ? quotaResetLabel(erro.resetsAt) : textoDeErroDoChat(erro)} ${AI_STATES_COPY.quotaManual}`}
+        action={{ label: AI_STATES_COPY.quotaAction, href: '/nutrition' }}
+      />
     );
   }
-  const foraDoAr = estado === 'down';
+  // Reenvia a pergunta como mensagem nova: o estado da conversa está no
+  // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.
+  const retry = () => {
+    if (lastQuestion) aui.thread().append(lastQuestion);
+  };
+  // Prancha Al-M11, "Fora do ar": a mensagem ficou salva, e tentar de novo a um toque.
+  if (estado === 'down') {
+    return (
+      <AiStateCard
+        tone="danger"
+        title={AI_STATES_COPY.downTitle}
+        body={AI_STATES_COPY.downBody}
+        action={{ label: AI_STATES_COPY.downAction, onClick: retry }}
+      />
+    );
+  }
   const interrompida = estado === 'interrupted';
   return (
     <ErrorState
       className="max-w-none"
-      title={
-        foraDoAr
-          ? AI_STATES_COPY.downTitle
-          : interrompida
-            ? AI_STATES_COPY.interrupted
-            : 'A resposta falhou'
-      }
-      detail={foraDoAr ? AI_STATES_COPY.downBody : textoDeErroDoChat(erro)}
+      title={interrompida ? AI_STATES_COPY.interrupted : 'A resposta falhou'}
+      detail={textoDeErroDoChat(erro)}
       retryLabel={interrompida ? AI_STATES_COPY.continue : 'Tentar de novo'}
-      // Reenvia a pergunta como mensagem nova: o estado da conversa está no
-      // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.
-      onRetry={() => {
-        if (lastQuestion) aui.thread().append(lastQuestion);
-      }}
+      onRetry={retry}
     />
   );
 }
@@ -645,9 +647,13 @@ function Composer() {
             ? 'Abrindo a conversa…'
             : cotaEsgotada
               ? AI_STATES_COPY.quotaPlaceholder
-              : 'Responda ou peça outra coisa'
+              : erroDoTurno && aiTurnState(erroDoChat(erroDoTurno).code) === 'down'
+                ? AI_STATES_COPY.downPlaceholder
+                : 'Responda ou peça outra coisa'
         }
-        disabled={abrindo}
+        // Cota esgotada: nada sairia (prancha Al-M11, campo apagado). Fora do ar o campo segue
+        // aberto, para a pessoa tentar de novo quando quiser.
+        disabled={abrindo || cotaEsgotada}
         sendLabel="Enviar mensagem"
         stopLabel="Parar resposta"
         actions={acoes}
