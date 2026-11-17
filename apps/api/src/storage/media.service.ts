@@ -39,6 +39,8 @@ export const MEDIA_PURPOSES = {
   agent_avatar: { kinds: [MediaKind.IMAGE], action: 'group.update' },
   /** Imagem de post no mural (Fase 8b). A política do mural vale aqui também. */
   post_image: { kinds: [MediaKind.IMAGE], action: 'post.create' },
+  /** O logo do parceiro num benefício (#393). */
+  benefit_logo: { kinds: [MediaKind.IMAGE], action: 'benefit.manage' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
 /**
@@ -607,6 +609,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             guideVideoOf: { is: null },
             guidePhotoOf: { is: null },
             postImageOf: { is: null },
+            benefitLogoOf: { is: null },
             userAvatarOf: { is: null },
             mealPhotoOf: { is: null },
             chatMessageId: null,

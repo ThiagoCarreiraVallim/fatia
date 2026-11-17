@@ -87,6 +87,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `post.create`      | sim   | sim          | sim     | sim    |
 | `member.ban`       | sim   | não          | não     | não    |
 | `insights.read`    | sim   | não          | não     | não    |
+| `benefit.read`     | sim   | sim          | sim     | sim    |
+| `benefit.manage`   | sim   | não          | não     | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
 futura:
@@ -132,6 +134,9 @@ futura:
   conferido no `PostService` e no pedido de envio da imagem). Reagir, comentar e denunciar são
   `post.read`. Quem modera remove, restaura e fixa e trata a fila de denúncias, sem saber quem
   denunciou; banir é mais forte que remover membro e fica com quem remove.
+- **Benefícios de parceiros (#393): `benefit.read` de todos, `benefit.manage` só do dono.** O
+  desconto é acordo comercial da comunidade, como a cobrança. O membro vê só os que valem (e o
+  vencido de ontem, sem o cupom); o Fatia não rastreia compra nem passa dado ao parceiro.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -175,6 +180,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `post.create`      | não                  |
 | `member.ban`       | não                  |
 | `insights.read`    | não                  |
+| `benefit.read`     | não                  |
+| `benefit.manage`   | não                  |
 
 `group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de
 `group.service.ts` inclui `INVITED`): é a tela "aguardando aprovação". Fechá-lo no guarda faria o

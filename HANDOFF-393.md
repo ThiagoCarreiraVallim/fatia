@@ -12,13 +12,13 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Plano / estado
 
-- [ ] DB: migration `GroupPartnerBenefit`, `GroupInvite.code`, `GroupMembership.feedSeenAt`
-- [ ] API: preview por código/slug (`?code=`), join por código (joinPolicy), `proOffer`
-- [ ] API: código de entrada revogável (convite com `code`) no painel de convites
-- [ ] API: resumo da lista (memberCount, newPosts, forYou, challengeRank, visibility, timezone)
-- [ ] API: feed marca visto na 1ª página
+- [x] DB: migration `GroupPartnerBenefit`, `GroupInvite.code`, `GroupMembership.feedSeenAt`
+- [x] API: preview por código/slug (`?code=`), join por código (joinPolicy), `proOffer`
+- [x] API: código de entrada revogável (convite com `code`) no painel de convites
+- [x] API: resumo da lista (memberCount, newPosts, forYou, challengeRank, visibility, timezone)
+- [x] API: feed marca visto na 1ª página
 - [ ] API: `GET /groups/:id/team-view` (quem da equipe vê, "viu hoje")
-- [ ] API: benefícios (membro + CRUD equipe), isolamento
+- [x] API: benefícios (membro + CRUD equipe), isolamento
 - [ ] MCP: `list_group_benefits` + produtor de cartão + números regenerados
 - [ ] api-client: tipos, `parseCommunityEntry`, textos
 - [ ] web: Cm-01, Cm-02, Cm-04 (sobre), Cm-22, painel Pn-28
@@ -27,8 +27,12 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Decisões
 
-(ver abaixo, preencher ao longo)
+- Código de entrada = `GroupInvite.code` (8 chars sem 0/O/1/I/L), revogável; segue `joinPolicy` (não é aprovação). `POST /groups/:id/invites {role:MEMBER, code:true}`; url do QR `/community?join=1&code=X`. Slug continua valendo como código. `?code=` ou `?slug=` em preview/join.
+- `proOffer` = pool valendo e assento livre (ou ALL_MEMBERS) — `entry-code.ts#groupHasFreeSeat`.
+- Selo "PRO pago pela academia" = `hasAiSeat` (já é o PRO efetivo pela comunidade: assento, ALL_MEMBERS ou programa).
+- "Para você" = versões de PlanOffer PENDING da comunidade. Posts novos: `feedSeenAt` gravado pela 1ª página do `PostService.list` (sem tocar telas do mural).
+- Benefícios: `benefit.read` todos, `benefit.manage` só OWNER; vencido ontem aparece apagado sem cupom; rotas `GET /groups/:id/benefits`, `GET .../benefits/manage`, POST/PATCH/DELETE.
 
 ## Próximo passo
 
-Schema + migration.
+API: `GET /groups/:id/team-view` (Cm-04), depois isolamento em user-isolation.spec, MCP `list_group_benefits`, api-client, web, app.
