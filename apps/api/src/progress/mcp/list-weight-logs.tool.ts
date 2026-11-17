@@ -15,6 +15,7 @@ export class ListWeightLogsTool implements McpToolDef {
   readonly title = 'Listar registros de peso';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Lista logs de peso, com filtro de período e cursor de paginação.';
   readonly inputSchema = {
     from: z.string().optional().describe('Data inicial do intervalo, em YYYY-MM-DD'),

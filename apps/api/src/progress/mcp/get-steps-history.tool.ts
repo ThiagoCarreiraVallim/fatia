@@ -15,6 +15,7 @@ export class GetStepsHistoryTool implements McpToolDef {
   readonly title = 'Histórico de passos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description = 'Série temporal de passos por dia (preenche dias vazios com 0).';
   readonly inputSchema = {
     days: z

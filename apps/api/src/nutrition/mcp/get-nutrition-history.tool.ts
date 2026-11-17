@@ -15,6 +15,7 @@ export class GetNutritionHistoryTool implements McpToolDef {
   readonly title = 'Histórico de nutrição';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description = 'Histórico dos últimos N dias com médias.';
   readonly inputSchema = {
     days: z

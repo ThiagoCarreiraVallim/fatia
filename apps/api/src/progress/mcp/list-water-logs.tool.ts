@@ -15,6 +15,7 @@ export class ListWaterLogsTool implements McpToolDef {
   readonly title = 'Listar registros de água';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Lista logs de água paginados, com filtros opcionais por data.';
   readonly inputSchema = {
     from: z.string().optional().describe('YYYY-MM-DD inicial'),

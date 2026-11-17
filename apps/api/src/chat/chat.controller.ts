@@ -84,6 +84,16 @@ export class ChatController {
     return this.registry.titulos();
   }
 
+  /**
+   * Como cada tool aparece na conversa (#384): consulta (com o formato do cartão), confirmação
+   * ou "só no app" (com a tela que faz). É o que a tela usa para desenhar o cartão e o botão
+   * "Abrir …"; `tools` continua para o cliente que só precisa do título.
+   */
+  @Get('tool-catalog')
+  catalogoDasTools() {
+    return this.registry.catalogoDoChat();
+  }
+
   /** O cartão de confirmação em português: o que a escrita pausada vai fazer. */
   @Post('preview')
   @HttpCode(200)

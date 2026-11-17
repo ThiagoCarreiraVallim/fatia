@@ -17,6 +17,7 @@ export class ListPlannedSessionsTool implements McpToolDef {
   readonly title = 'Agenda de treinos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Devolve a agenda de treinos do usuário por dia: as sessões dos planos de calendário que a ' +
     'equipe enviou, com o estado (done, missed, today, planned) e, nos planos flexíveis, só a ' +

@@ -14,6 +14,7 @@ export class ListMyGroupsTool implements McpToolDef {
   readonly title = 'Listar meus grupos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista as comunidades de que o usuário participa: papel dele, situação (aguardando ' +
     'aprovação ou ativo), como se entra (`joinPolicy`), o que ele compartilha com a equipe ' +

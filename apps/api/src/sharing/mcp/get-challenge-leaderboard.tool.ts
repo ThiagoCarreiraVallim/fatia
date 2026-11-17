@@ -15,6 +15,7 @@ export class GetChallengeLeaderboardTool implements McpToolDef {
   readonly title = 'Ranking de um desafio';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'scoreboard' as const;
   readonly description =
     'Mostra um desafio da comunidade e o ranking: apelido, pontuação e posição de cada ' +
     'participante, com a linha do usuário marcada (isMe). O ranking só vem para quem participa; ' +

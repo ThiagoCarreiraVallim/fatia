@@ -16,6 +16,7 @@ export class GrantDataSharingTool implements McpToolDef {
   readonly title = 'Autorizar um profissional a ver meus dados';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Comunidades', path: '/community' };
   readonly description =
     'Autoriza UM profissional de um grupo a ler categorias específicas dos dados do usuário. ' +
     'Substitui a autorização anterior daquele profissional: a lista enviada passa a ser a lista ' +

@@ -14,6 +14,7 @@ export class GetWeekSummaryTool implements McpToolDef {
   readonly title = 'Resumo da semana';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description = 'Resumo da semana corrente: nutrição, treinos, cardio, passos, peso.';
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {

@@ -15,6 +15,7 @@ export class DeleteMealTemplateTool implements McpToolDef {
   readonly title = 'Excluir refeição salva';
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Salvas e recentes', path: '/nutrition' };
   readonly description =
     'Apaga uma refeição salva. As refeições já registradas com ela continuam. ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';

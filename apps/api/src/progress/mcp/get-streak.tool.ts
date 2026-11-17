@@ -14,6 +14,7 @@ export class GetStreakTool implements McpToolDef {
   readonly title = 'Sequência atual';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description =
     'Sequência atual de dias ativos. Um dia é ativo com ao menos uma área cumprida: refeição ' +
     'registrada, treino concluído, água na meta ou passos na meta. Traz o orçamento de faltas: ' +

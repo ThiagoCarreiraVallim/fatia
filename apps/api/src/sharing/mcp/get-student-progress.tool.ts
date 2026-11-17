@@ -31,6 +31,7 @@ export class GetStudentProgressTool implements McpToolDef {
   readonly title = 'Acompanhar um aluno';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'timeline' as const;
   readonly description =
     'Lê UMA categoria de dados de UM aluno que autorizou este profissional. As categorias são ' +
     'independentes: uma chamada por categoria, e cada uma é conferida contra o que aquele aluno ' +

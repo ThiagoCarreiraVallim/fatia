@@ -10,6 +10,7 @@ export class ListFoodGroupsTool implements McpToolDef {
   readonly title = 'Listar grupos de alimentos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Lista todos os grupos de alimentos.';
   readonly inputSchema = {} as const;
   execute() {

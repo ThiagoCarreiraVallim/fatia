@@ -19,6 +19,7 @@ export class DeleteWorkoutSessionTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Histórico de treinos', path: '/workout/history/:sessionId' };
   readonly description =
     'Exclui uma sessão de treino e todas as séries registradas nela. ' +
     'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555"}';

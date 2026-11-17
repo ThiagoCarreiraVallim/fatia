@@ -4,12 +4,15 @@ import { DiscoveryService } from '@nestjs/core';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   MCP_TOOL_METADATA,
+  type ChatAppOnly,
+  type ChatCardFormat,
   type McpSurface,
   type McpToolContext,
   type McpToolDef,
 } from '../common/decorators/tool.decorator';
 import { servidaNa, SuperficieDeIntencao } from './intent/superficie';
 import { formatToolError } from './mcp-error';
+import { genericTable } from './generic-card';
 import { McpMetricsService } from '../observability/mcp-metrics.service';
 
 type ToolResult = {
@@ -27,13 +30,28 @@ const ok = (data: unknown, artefato?: Record<string, unknown> | null): ToolResul
  * O artefato é enfeite de tela: um defeito nele não pode derrubar a tool, cujo
  * texto é o que o modelo lê para responder.
  */
-function artefatoDe(tool: McpToolDef, data: unknown, input: unknown) {
+function artefatoDe(
+  tool: McpToolDef,
+  data: unknown,
+  input: unknown,
+): Record<string, unknown> | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return tool.artifact?.(data, input as any) ?? null;
+    if (tool.artifact) return tool.artifact(data, input as any);
+    // A Tabela é o formato padrão (#384): quem não monta o próprio cartão ganha o genérico.
+    return tool.card === 'report' ? (genericTable(data) as Record<string, unknown> | null) : null;
   } catch {
     return null;
   }
+}
+
+/** Como uma tool aparece na conversa (#384, prancha IA-Ferramentas). */
+export interface ChatToolCatalogEntry {
+  title: string;
+  /** `read` responde na hora; `confirm` pede o sim; `app_only` a IA nunca faz e leva à tela. */
+  kind: 'read' | 'confirm' | 'app_only';
+  card?: ChatCardFormat;
+  appOnly?: ChatAppOnly;
 }
 
 const fail = (text: string): ToolResult => ({
@@ -87,6 +105,32 @@ export class McpToolRegistry implements OnModuleInit {
     return Object.fromEntries(
       this.tools.filter((tool) => servidaNa(tool, 'entidade')).map((t) => [t.name, t.title]),
     );
+  }
+
+  /**
+   * O catálogo do chat hospedado: classe, cartão e tela de cada tool de entidade. A classe sai
+   * das mesmas anotações de que o agente deriva as três camadas (`tool_policy.py`), e não de
+   * uma lista à parte. Leitura sem `card` é Tabela, o padrão.
+   */
+  catalogoDoChat(): Record<string, ChatToolCatalogEntry> {
+    const entradas = this.tools
+      .filter((tool) => servidaNa(tool, 'entidade'))
+      .map((tool): [string, ChatToolCatalogEntry] => {
+        const a = tool.annotations;
+        if (a.readOnlyHint === true) {
+          return [tool.name, { title: tool.title, kind: 'read', card: tool.card ?? 'report' }];
+        }
+        if (a.confirmableHint === true) return [tool.name, { title: tool.title, kind: 'confirm' }];
+        return [
+          tool.name,
+          {
+            title: tool.title,
+            kind: 'app_only',
+            ...(tool.appOnly ? { appOnly: tool.appOnly } : {}),
+          },
+        ];
+      });
+    return Object.fromEntries(entradas);
   }
 
   /**

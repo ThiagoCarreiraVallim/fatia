@@ -15,6 +15,7 @@ export class GetWeightProgressTool implements McpToolDef {
   readonly title = 'Evolução do peso';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'timeline' as const;
   readonly description = 'Série temporal de peso, médias semanais e delta total no período.';
   readonly inputSchema = {
     days: z

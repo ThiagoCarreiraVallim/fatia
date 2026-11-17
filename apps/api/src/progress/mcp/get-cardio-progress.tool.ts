@@ -15,6 +15,7 @@ export class GetCardioProgressTool implements McpToolDef {
   readonly title = 'Evolução no cardio';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'timeline' as const;
   readonly description =
     'Evolução de cardio em um exercício (duration, distance, pace ou kcal). Exercise deve ter muscleGroup=cardio.';
   readonly inputSchema = {

@@ -16,6 +16,7 @@ export class GetConsistencyTool implements McpToolDef {
   readonly title = 'Constância';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description =
     'Constância do período (30 dias, 90 dias ou 1 ano, terminando hoje): para cada dia, as ' +
     'áreas cumpridas (refeição registrada, treino concluído, água na meta, passos na meta) e a ' +

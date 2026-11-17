@@ -14,6 +14,7 @@ export class GetTodaySummaryTool implements McpToolDef {
   readonly title = 'Resumo de hoje';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description =
     'Resumo agregado de hoje: nutrição, treino, peso (com a variação de 30 dias), passos, água, ' +
     'streaks, metas do dia atingidas (N de M, uma linha por meta), pendências do "Para fazer" e ' +

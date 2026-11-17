@@ -19,6 +19,7 @@ export class ListExercisesByMuscleTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Lists all exercises for a given muscle group.';
   readonly inputSchema = {
     muscleGroup: muscleGroupSchema.describe(

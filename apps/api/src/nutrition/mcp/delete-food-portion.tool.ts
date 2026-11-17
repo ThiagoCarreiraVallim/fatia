@@ -15,6 +15,7 @@ export class DeleteFoodPortionTool implements McpToolDef {
   readonly title = 'Excluir medida caseira';
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Meus alimentos', path: '/nutrition/foods' };
   readonly description =
     'Remove uma medida caseira criada pelo usuário; as do catálogo não saem. ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';

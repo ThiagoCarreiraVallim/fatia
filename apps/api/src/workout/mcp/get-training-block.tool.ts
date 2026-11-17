@@ -18,6 +18,7 @@ export class GetTrainingBlockTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description =
     'Devolve o bloco de periodização ativo já reconciliado com o calendário real: em que semana a pessoa está, o que vem na seguinte, quantas sessões faltam e se alguma semana foi reancorada por falta. Devolve null quando não há bloco ativo — nesse caso não invente uma semana. Semana perdida por inteiro empurra o bloco 7 dias em vez de pular a semana.';
   readonly inputSchema = {} as const;

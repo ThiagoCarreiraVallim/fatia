@@ -18,6 +18,7 @@ export class GetActiveWorkoutSessionTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description = 'Retorna a sessão de treino ativa (ainda não finalizada), se houver.';
   readonly inputSchema = {} as const;
 

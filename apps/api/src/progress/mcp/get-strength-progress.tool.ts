@@ -15,6 +15,7 @@ export class GetStrengthProgressTool implements McpToolDef {
   readonly title = 'Evolução de força';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'timeline' as const;
   readonly description = 'Evolução de carga em um exercício de força (max_weight, 1RM ou volume).';
   readonly inputSchema = {
     exerciseId: z.number().int().describe('ID do exercício a analisar, obtido via search_exercise'),

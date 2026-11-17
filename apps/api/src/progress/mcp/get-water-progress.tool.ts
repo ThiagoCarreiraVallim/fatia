@@ -15,6 +15,7 @@ export class GetWaterProgressTool implements McpToolDef {
   readonly title = 'Evolução da hidratação';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description =
     'Estatísticas de hidratação: série diária, média, melhor dia, dias batendo a meta.';
   readonly inputSchema = {

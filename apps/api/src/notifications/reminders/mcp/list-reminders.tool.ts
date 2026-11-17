@@ -14,6 +14,7 @@ export class ListRemindersTool implements McpToolDef {
   readonly title = 'Listar lembretes';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Lista os lembretes pessoais (água, refeição, pesagem, treino, passos): tipo, intervalo ou ' +
     'horários fixos ("hh:mm" no fuso da pessoa), dias da semana (1 = segunda) e se estão ligados. ' +

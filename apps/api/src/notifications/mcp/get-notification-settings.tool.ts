@@ -14,6 +14,7 @@ export class GetNotificationSettingsTool implements McpToolDef {
   readonly title = 'Ver preferências de aviso';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Mostra quais avisos a pessoa recebe, por tipo (comunidade, comunicados, agenda, treino do ' +
     'dia, desafios, mural, moderação, chat, plano novo, avaliação pedida, questionário, ' +

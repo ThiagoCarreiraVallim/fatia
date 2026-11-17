@@ -18,6 +18,7 @@ export class ListGroupPostsTool implements McpToolDef {
   readonly title = 'Mural de uma comunidade';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lê o mural de uma comunidade de que o usuário faz parte: os posts mais recentes (os ' +
     'fixados pela equipe primeiro), com o apelido de quem publicou, as reações e quantos ' +

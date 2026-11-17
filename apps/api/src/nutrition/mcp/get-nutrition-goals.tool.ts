@@ -14,6 +14,7 @@ export class GetNutritionGoalsTool implements McpToolDef {
   readonly title = 'Ver metas nutricionais';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'range' as const;
   readonly description = 'Retorna as metas nutricionais do usuário.';
   readonly inputSchema = {} as const;
   execute(_input: unknown, { userId }: McpToolContext) {

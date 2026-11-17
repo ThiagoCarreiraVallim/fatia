@@ -15,6 +15,7 @@ export class GetStepsForDateTool implements McpToolDef {
   readonly title = 'Passos de um dia';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description = 'Retorna o valor efetivo de passos para um dia (max entre os logs).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje'),

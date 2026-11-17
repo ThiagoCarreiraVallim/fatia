@@ -14,6 +14,7 @@ export class ListAchievementsTool implements McpToolDef {
   readonly title = 'Conquistas';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'badges' as const;
   readonly description =
     'Catálogo de conquistas do usuário: as dez, sempre (primeira refeição, primeiro treino, ' +
     'primeiro plano, primeiro recorde, 7 e 30 dias seguidos, meta da semana, 100 treinos, ' +

@@ -15,6 +15,7 @@ export class SuggestNutritionGoalsTool implements McpToolDef {
   readonly title = 'Sugerir metas nutricionais';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'comparison' as const;
   readonly description =
     'Calcula metas sugeridas (gasto pela Mifflin-St Jeor × atividade, ajustado ao objetivo) sem gravar nada. ' +
     'Campos omitidos vêm do perfil e da última pesagem; para salvar, use set_nutrition_goals. ' +

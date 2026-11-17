@@ -14,6 +14,7 @@ export class ListMemoriesTool implements McpToolDef {
   readonly title = 'Ver memórias';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista o que o usuário pediu para o assistente lembrar, da mais antiga para a mais nova.';
   readonly inputSchema = {} as const;

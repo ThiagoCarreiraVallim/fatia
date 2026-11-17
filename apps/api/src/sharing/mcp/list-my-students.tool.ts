@@ -14,6 +14,7 @@ export class ListMyStudentsTool implements McpToolDef {
   readonly title = 'Meus alunos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Alunos que o profissional atende nas academias em que ele é PROFESSIONAL, com o que cada um ' +
     'autorizou ele a ver. Devolve só composição de grupo — nome, academia e categorias ' +

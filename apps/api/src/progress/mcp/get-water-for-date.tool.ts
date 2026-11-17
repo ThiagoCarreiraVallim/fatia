@@ -15,6 +15,7 @@ export class GetWaterForDateTool implements McpToolDef {
   readonly title = 'Água de um dia';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description = 'Retorna o total de água consumida em um dia (soma de todos os logs).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje'),

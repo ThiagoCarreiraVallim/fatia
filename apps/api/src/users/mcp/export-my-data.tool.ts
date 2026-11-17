@@ -20,6 +20,7 @@ export class ExportMyDataTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'file' as const;
   readonly description =
     'Gera um link para baixar TODOS os dados do usuário em um arquivo JSON: perfil, metas, refeições e itens, treinos e séries, peso, passos, hidratação, conversas, comunidades e os alimentos e exercícios custom que ele criou. ' +
     'O link vale 24 horas (`expiresAt`) e abre sem login, então entregue-o só ao próprio usuário. Use quando ele pedir uma cópia dos dados, quiser levá-los para outro app, ou antes de apagar a conta.';

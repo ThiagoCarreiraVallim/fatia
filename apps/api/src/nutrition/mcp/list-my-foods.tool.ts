@@ -16,6 +16,7 @@ export class ListMyFoodsTool implements McpToolDef {
   readonly title = 'Alimentos favoritos e recentes';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Favoritos e alimentos comidos nos últimos 60 dias, com a última gramagem (lastGrams). ' +
     'Consulte antes de search_food: o que a pessoa costuma comer já vem com id e porção.';

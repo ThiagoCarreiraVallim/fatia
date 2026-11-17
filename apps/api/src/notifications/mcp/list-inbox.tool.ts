@@ -15,6 +15,7 @@ export class ListInboxTool implements McpToolDef {
   readonly title = 'Listar avisos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista os avisos da central do sino (comunidade, desafios, mural, moderação), do mais ' +
     'recente para o mais antigo, com quantos ainda não foram lidos. Não marca nada como lido.';
