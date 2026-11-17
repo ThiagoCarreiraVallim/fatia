@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { McpConnectionsModule } from '../auth/mcp-connections.module';
 import { ChatModule } from '../chat/chat.module';
 import { UsersController } from './users.controller';
 import { ExportsController } from './exports.controller';
@@ -10,7 +11,7 @@ import { ExportMyDataTool } from './mcp/export-my-data.tool';
 import { DeleteMyAccountTool } from './mcp/delete-my-account.tool';
 
 @Module({
-  imports: [AuthModule, ChatModule, ProfileModule],
+  imports: [AuthModule, ChatModule, ProfileModule, McpConnectionsModule],
   controllers: [UsersController, ExportsController],
   providers: [AccountService, DataExportService, ExportMyDataTool, DeleteMyAccountTool],
   exports: [AccountService],

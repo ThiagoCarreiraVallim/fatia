@@ -134,6 +134,7 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -572,6 +573,12 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // Conectar sua IA (#388): o app e as datas. O hash do token fica de fora.
+      this.prisma.mcpOAuthConnection.findMany({
+        where: { userId },
+        select: { createdAt: true, lastUsedAt: true, client: { select: { clientName: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -634,6 +641,11 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      mcpConnections: mcpConnections.map((c) => ({
+        clientName: c.client.clientName,
+        connectedAt: c.createdAt,
+        lastUsedAt: c.lastUsedAt,
+      })),
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -661,6 +673,7 @@ export class AccountService {
         ideas: ideas.length,
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
+        mcpConnections: mcpConnections.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

@@ -212,8 +212,9 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | Issue | Título             | Estado           | Superfícies                                        |
 | ----- | ------------------ | ---------------- | -------------------------------------------------- |
 | #386  | Plano e assinatura | pronto na branch | api, db, api-client, web, app, site, e-mail e push |
+| #388  | Conectar sua IA    | pronto na branch | api, db, api-client, web, app, docs                |
 
-Pendências da #386 (branch `redesign/386-plano`, migration `20261116060000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
+Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
 
 - **Regra das lojas (o app nunca vende fora da loja):** a tela sai de `planStatusView(plan, { surface, canPurchase, now })` no api-client. Com `surface: 'app'` ela nunca devolve pagar, cancelar, preço da web, Pix, boleto nem link (teste com mutação vista falhar). Sem compra no app (`EXPO_PUBLIC_IAP_ENABLED`), a oferta é "O PRO vem pela sua comunidade" + "Tenho código", sem preço. O `webManageNote` ("entre pelo navegador") saiu.
 - **Assinatura da web vista no app:** mostra o estado e as datas, com "Fora do app" e "mandamos por e-mail como resolver", **sem botão** (o texto da prancha Al-M13). Quem resolve é o e-mail Ex-03, que leva ao Meu plano da web. O push de cobrança não leva preço, Pix nem link.
@@ -248,6 +249,34 @@ Pendências da #386 (branch `redesign/386-plano`, migration `20261116060000_pro_
   - Compra real na loja (exige build de desenvolvimento e contas de teste).
   - Checkout no sandbox do Asaas.
   - Capturas contra as pranchas (o dono faz a passada visual).
+
+Pendências da #388 (branch `redesign/388-conectar-ia`, migration `20261117000000_mcp_oauth_connections`):
+
+- **Decisões:**
+  - Vínculo pessoa × app de IA: tabelas novas `McpOAuthConnection` (pessoa, cliente DCR, `lastUsedAt`) e `McpOAuthConnectionToken` (SHA-256 dos access e refresh tokens de cada conexão, com validade, podados ao vencer). A `McpOAuthAuthorization` não serve: é apagada minutos depois do login. A conexão nasce só na troca do code (cliente da autorização, dono pelo `sub` do token que o Logto emitiu). O refresh acha a conexão pelo hash do refresh token apresentado e nunca cria linha; o `client_id` do corpo não decide nada. Gravar a conexão roda depois da resposta (sem `await`) e nunca derruba nem atrasa o login da IA.
+  - "Último acesso": cada chamada ao `/mcp` acha a conexão pelo hash do Bearer entre os access tokens válidos dela e atualiza `lastUsedAt` (no máximo uma escrita por minuto). Vários aparelhos no mesmo cliente contam. Quem conectou antes da tabela só aparece depois de conectar de novo.
+  - "Conectado" só com último acesso nos últimos 30 dias (`CONNECTED_WINDOW_DAYS`); mais velha, "<IA> conectado antes", com o teste à mão. Sem revogação, o Fatia não sabe quando a pessoa removeu o conector.
+  - `GET /users/me/mcp-connections` devolve `serverUrl` e as conexões da própria pessoa (`clientName`, `connectedAt`, `lastUsedAt`). Isolamento em `user-isolation.spec.ts`, inclusive o fluxo OAuth inteiro (DCR → token → guard → toque), o refresh com o `client_id` do app de outra pessoa (não cria linha) e o refresh sem `client_id`.
+  - Endereço do servidor: `API_PUBLIC_URL` + `/mcp`, servido pela API. É o `resource` do metadata para quem chega pelo endereço público (`public-url.spec.ts`). Sem env nova; nenhuma tela escreve o endereço.
+  - Sem revogação no Fatia: a tela diz "para desconectar, remova o conector no app da sua IA".
+  - Erros do Logto no `/oauth/token` passam a sair no formato da RFC 6749 (`OAuthError`); antes, um refresh vencido voltava como 401 do Nest. `invalid_grant` só quando o Logto disse isso: Logto fora do ar vira `temporarily_unavailable` (503) e configuração errada do facade (`invalid_client`, `invalid_target`…) vira `server_error` (500), para o Claude não jogar fora o refresh token.
+  - O `?tutorial=` da Ajuda marca o tutorial como assistido, como o toque na lista, e sai da URL ao fechar.
+  - O export de dados (LGPD) leva as conexões, sem os hashes.
+  - Entrada: Você › IA › Conectar sua IA, rota `/profile/connect` no app e na web (o app usava `/profile/tokens`, apagada). "Minha IA (MCP)" do menu da IA também leva para lá.
+  - Qual IA é qual: pelo `client_name` do registro (`claude` → Claude, `chatgpt`/`openai` → ChatGPT, o resto → Outro app). A tela abre na IA da conexão mais recente.
+- **Diferenças de propósito em relação às pranchas:**
+  - O endereço é o da configuração (`https://api.<domínio>/mcp`), não o `https://fatia.app/mcp` da prancha.
+  - Al-V6c: "você pode desconectar em Configurações da IA" virou "para desconectar, remova o conector no app da sua IA". A prancha troca o teste pelo cartão de conectado; aqui o cartão fica acima, e o teste (com "Ele responde algo como:") e o "Não funcionou?" continuam embaixo, porque o "Conectado" pode estar velho. O exemplo de resposta vem sem "3 de 5 hábitos" (Hábitos é a #390).
+  - Al-V6d: "Ver o tutorial com imagens" virou "Ver o tutorial" (a Ajuda ainda é só texto, #415); ele abre o tutorial "Conectar ao Claude ou ChatGPT" direto (`/you/help?tutorial=conectar-sua-ia`), que ganhou o que fazer quando não funciona. A terceira verificação muda com a IA escolhida.
+  - Al-V6e: a prancha só chega lá pelo tweak; na tela, o "Não funcionou" tem "Meu app não aceita MCP". "Exportar dados" já exporta (o mesmo link de 24 h de Você). Os dois cartões têm um X para voltar ao teste.
+  - O aviso de privacidade (a IA de fora só lê o que é seu, e passa pela política dela) não está na prancha; a issue pede.
+  - O primeiro passo vem aberto ao entrar e ao trocar de IA; copiar o endereço abre o "Entre e autorize".
+  - Se não deu para copiar (navegador na web; recusa ou `false` do `expo-clipboard` no app), a tela diz para copiar à mão.
+  - O selo "grátis" é o `done` do DS (contorno, minúsculo), não o `bdg ok` cheio em caixa-alta da prancha: no claro o verde sobre véu não passa 4,5:1. O cartão de conectado usa o verde a 10% (a prancha usa 16%), pelo mesmo motivo.
+  - Passada visual (prints de web e app contra Al-V6 a Al-V6e) feita: textos de apoio em 12/13 px como `b3`/`b2`, título em 700, cartões com o respiro da prancha, teste em `s2`, botões dos cartões visíveis sobre o cartão na web, endereço em monoespaçada no app e verde de texto (`primary-text`) no claro.
+- **Falta:**
+  - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
+  - Domínio de produção do endereço (a história de Produção).
 
 ## Etapas seguintes
 
@@ -312,6 +341,12 @@ Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `202
 - **Etapa 5 (#382):**
   - Sequência = dia ativo em todo lugar. Um dia é ativo com ao menos uma área cumprida: refeição, treino, água na meta ou passos na meta. Um cálculo só, sem dois números de sequência.
   - Conquistas: catálogo fechado em 10, com "100 treinos". O contador é N/10, e quem já tem 100 treinos ganha a conquista pela migration.
+- **Etapa 6 (#388):**
+  - Sem revogação no Fatia: o texto manda remover o conector no app da IA.
+  - O endereço do servidor vem da configuração (o `resource` do metadata, com path), nunca escrito no código.
+  - Os passos do ChatGPT seguem a prancha; falta o teste com conta real antes do lançamento.
+  - "Último acesso" com a autorização ligada à pessoa; a rota lista só as conexões de quem pede.
+  - Entrada por Você › IA › Conectar sua IA, no app e na web.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).

@@ -145,6 +145,9 @@ model User {
   feedbackIdeas FeedbackIdea[]
   dataExports   DataExport[]
 
+  // IAs de fora ligadas pelo MCP (#388): o "Último acesso" de Conectar sua IA.
+  mcpConnections McpOAuthConnection[]
+
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
   ownedGroups         Group[]                 @relation("GroupOwner")
@@ -268,6 +271,46 @@ model McpOAuthClient {
   lastUsedAt   DateTime?
 
   authorizations McpOAuthAuthorization[]
+  connections    McpOAuthConnection[]
+}
+
+/// Quem autorizou cada cliente MCP (#388). A `McpOAuthAuthorization` não serve
+/// de vínculo: ela é apagada minutos depois do login (`expiresAt`). Esta linha
+/// nasce só na troca do code no `/oauth/token` (cliente da autorização, dono lido
+/// do token que o Logto emitiu); o refresh só a renova, achada pelo refresh token.
+/// É o que a tela "Conectar sua IA" lista.
+model McpOAuthConnection {
+  id         String   @id @default(uuid())
+  userId     String
+  clientId   String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client McpOAuthClient            @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  tokens McpOAuthConnectionToken[]
+
+  @@unique([userId, clientId])
+}
+
+/// Hashes (sha256) dos tokens que o facade entregou a uma conexão (#388). O
+/// refresh token apresentado no /oauth/token diz qual conexão renovou; os access
+/// tokens dizem qual conexão o /mcp está usando. Vários por conexão (aparelhos,
+/// token antigo ainda válido); cada um vence no `expiresAt` e é apagado na
+/// gravação seguinte. Nunca guarda o token em si.
+model McpOAuthConnectionToken {
+  id           String   @id @default(uuid())
+  connectionId String
+  /// 'access' | 'refresh'
+  kind         String
+  hash         String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  connection McpOAuthConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([expiresAt])
 }
 
 model McpOAuthAuthorization {

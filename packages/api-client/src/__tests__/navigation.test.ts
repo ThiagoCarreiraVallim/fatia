@@ -138,11 +138,12 @@ describe('navegação', () => {
     expect(hrefs(menuSections({ platform: 'web', chatAvailable: false }))).not.toContain('/chat');
   });
 
-  it('no app "Conectar sua IA" vai para a tela de lá', () => {
-    const app = hrefs(menuSections({ platform: 'mobile', chatAvailable: true }));
-    expect(app).toContain('/chat');
-    expect(app).toContain('/profile/tokens');
-    expect(app).not.toContain('/profile/connect');
+  it('"Conectar sua IA" é a mesma rota no app e na web (#388)', () => {
+    for (const platform of ['mobile', 'web'] as const) {
+      const links = hrefs(menuSections({ platform, chatAvailable: true }));
+      expect(links).toContain('/profile/connect');
+      expect(links).not.toContain('/profile/tokens');
+    }
   });
 
   it.each([
