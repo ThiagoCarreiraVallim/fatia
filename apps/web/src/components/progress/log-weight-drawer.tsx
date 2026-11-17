@@ -187,7 +187,8 @@ export function LogWeightDrawer({ open, onClose, date, embedded = false, switche
           decimals={1}
           base={logs.data?.logs[0]?.weightKg ?? null}
           unit="kg"
-          placeholder="0,0"
+          // O último peso como ponto de partida, como na prancha; o − e o + partem dele.
+          placeholder={logs.data?.logs[0] ? formatDecimal(logs.data.logs[0].weightKg) : '0,0'}
         />
         <p className="text-center text-[13px] text-muted-foreground">
           De manhã, em jejum, é o mais consistente.

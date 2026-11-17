@@ -49,7 +49,7 @@ export const ValueStepper = forwardRef<
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       style={{ width: `${chars + 0.3}ch` }}
-      className={`bg-transparent text-center font-display font-bold leading-none tabular-nums outline-none [appearance:textfield] placeholder:text-faint focus-visible:rounded-field focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${size === 'sm' ? 'text-[18px]' : 'text-[44px]'}`}
+      className={`bg-transparent font-display font-bold leading-none tabular-nums outline-none [appearance:textfield] placeholder:text-faint focus-visible:rounded-field focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${size === 'sm' ? 'text-center text-[18px]' : 'text-right text-[44px]'}`}
     />
   );
   if (size === 'sm') {

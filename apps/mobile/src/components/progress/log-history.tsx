@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from 'lucide-react-native';
 import { DrawerScrollView, ErrorState, LoadingState, cn } from '@/components/ui';
 import { chartColors } from '@/components/charts';
 import { ToneBadge } from './progress-ui';
+import { colors } from '@/theme/colors';
 
 export interface LogHistoryEntry {
   id: string;
@@ -67,8 +68,16 @@ export function LogHistory({
         // `DrawerScrollView` (e não `ScrollView`) para a rolagem não disputar o
         // gesto de arrastar o sheet. A altura precisa ser limitada, senão a lista
         // empurra o formulário para fora da tela.
-        <DrawerScrollView style={{ maxHeight: 210 }}>
-          <View className="overflow-hidden rounded-card bg-muted">
+        // O cartão é o próprio rolável: assim os cantos de baixo não somem na rolagem.
+        <DrawerScrollView
+          style={{
+            maxHeight: 250,
+            borderRadius: 20,
+            overflow: 'hidden',
+            backgroundColor: colors.muted,
+          }}
+        >
+          <View>
             {entries.map((entry, i) => {
               const editing = entry.id === editingId;
               const pending = entry.id === pendingId;

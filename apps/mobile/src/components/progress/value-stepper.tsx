@@ -50,7 +50,8 @@ export function ValueStepper({
       keyboardType={decimals ? 'decimal-pad' : 'number-pad'}
       style={{
         minWidth: fontSize,
-        textAlign: 'center',
+        // No grande, colado na unidade (70,2kg); no compacto, no meio da pílula.
+        textAlign: fontSize > 20 ? 'right' : 'center',
         fontSize,
         fontFamily: 'Sora_700Bold',
         color: colors.foreground,
