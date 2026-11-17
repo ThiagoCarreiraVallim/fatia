@@ -22,7 +22,7 @@ vi.mock('@fatia/api-client', async () => {
       mine: vi.fn(),
       previewInvite: vi.fn(),
       acceptInvite: vi.fn(),
-      previewBySlug: vi.fn(),
+      previewByCode: vi.fn(),
       join: vi.fn(),
     },
     nutritionApi: { suggestGoals: vi.fn(), recognizeMealPhoto: vi.fn() },
