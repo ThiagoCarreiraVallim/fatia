@@ -94,3 +94,9 @@ async def test_sem_openrouter_nao_ha_busca():
     async with _provedor(transport, base_url="http://localhost:1234/v1") as provedor:
         with pytest.raises(AIProviderNotConfigured):
             await provedor.web_search("açaí")
+
+
+def test_so_o_openrouter_diz_que_busca():
+    transport = httpx.MockTransport(lambda _r: _resposta([]))
+    assert _provedor(transport).supports_web_search is True
+    assert _provedor(transport, base_url="http://localhost:1234/v1").supports_web_search is False

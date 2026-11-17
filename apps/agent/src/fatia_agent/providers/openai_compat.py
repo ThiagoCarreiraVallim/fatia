@@ -411,6 +411,11 @@ class OpenAICompatProvider:
             model=model,
         )
 
+    @property
+    def supports_web_search(self) -> bool:
+        """O plugin `web` é do OpenRouter; em outro destino a busca não é oferecida."""
+        return endpoint_host(self._base_url) == "openrouter.ai"
+
     async def web_search(self, query: str, *, max_results: int = 5) -> WebSearchResult:
         """Busca na web pelo plugin `web` do OpenRouter (#384), e devolve só as fontes.
 
@@ -425,7 +430,7 @@ class OpenAICompatProvider:
         Só no OpenRouter: o plugin é dele, e outro destino receberia um campo que ignora,
         respondendo sem fonte nenhuma como se a web não soubesse.
         """
-        if endpoint_host(self._base_url) != "openrouter.ai":
+        if not self.supports_web_search:
             raise AIProviderNotConfigured(
                 "A busca na web só existe pelo OpenRouter (plugin `web`); "
                 "esta AI_BASE_URL não aponta para ele."

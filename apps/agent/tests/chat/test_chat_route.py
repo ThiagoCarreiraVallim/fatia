@@ -522,3 +522,70 @@ def test_toda_recusa_do_chat_antes_do_primeiro_byte_sai_no_envelope(settings_fac
         assert "detail" not in devolvido, nome
         assert isinstance(devolvido["error"]["code"], str) and devolvido["error"]["code"], nome
         assert devolvido["error"]["message"], nome
+
+
+# ------------------------------------------------------------------ #384
+
+
+def _oferecidas(provider_transport: ProviderRecordingTransport) -> dict[str, dict[str, object]]:
+    return {t["function"]["name"]: t["function"] for t in provider_transport.corpos[0]["tools"]}
+
+
+def test_o_modo_da_busca_e_validado_no_corpo(settings_factory, monkeypatch):
+    client, _, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
+    )
+
+    resposta = client.post("/chat", json=corpo(message="oi", webSearch="sempre"), headers=BEARER)
+
+    assert resposta.status_code == 422
+
+
+def test_fora_do_openrouter_a_busca_nao_e_oferecida_nem_com_aceite(settings_factory, monkeypatch):
+    """O plugin `web` é do OpenRouter: no LM Studio a tool sumiria em erro a cada chamada."""
+    client, provider_transport, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
+    )
+
+    resposta = client.post("/chat", json=corpo(message="oi", webSearch="on"), headers=BEARER)
+
+    assert resposta.status_code == 200
+    assert "web_search" not in _oferecidas(provider_transport)
+
+
+def test_as_restritas_do_catalogo_viram_o_botao_so_no_app(settings_factory, monkeypatch):
+    client, provider_transport, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
+    )
+
+    client.post("/chat", json=corpo(message="apaga o almoço"), headers=BEARER)
+
+    botao = _oferecidas(provider_transport)["open_in_app"]
+    assert botao["parameters"]["properties"]["tool"]["enum"] == ["delete_meal"]
+
+
+def test_a_pausa_por_consultas_vem_da_env(settings_factory, monkeypatch):
+    rodada = [
+        fragmento_de_tool(0, id="a1", name="list_meals", arguments="{}"),
+        fragmento_de_tool(1, id="a2", name="list_meals", arguments="{}"),
+        fim("tool_calls"),
+    ]
+    segunda = [
+        fragmento_de_tool(0, id="b1", name="list_meals", arguments="{}"),
+        fim("tool_calls"),
+    ]
+    client, _, _ = app_com(
+        settings_factory,
+        turnos=[rodada, segunda],
+        monkeypatch=monkeypatch,
+        agent_chat_pause_after_tools=2,
+    )
+
+    resposta = client.post("/chat", json=corpo(message="tudo"), headers=BEARER)
+
+    pausa = next(
+        d["__interrupt__"][0]["value"]
+        for n, d in quadros([resposta.text])
+        if n == "updates" and "__interrupt__" in d
+    )
+    assert pausa["prompt"] == "Já consultei 2 coisas. Continuo?"

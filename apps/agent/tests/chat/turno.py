@@ -16,6 +16,7 @@ from fatia_agent.chat.graph import GrafoDaConversa, montar_grafo, stream_chat_ev
 from fatia_agent.chat.mcp_client import McpClient
 from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
 from fatia_agent.chat.tool_policy import camada_restrita, todas_permitidas
+from fatia_agent.chat.web import WebSearcher, WebSearchMode
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
 from fatia_agent.tracing import NOOP_TRACE, TracedProvider, TurnTrace
@@ -130,9 +131,9 @@ async def turno(
     planejar: bool = False,
     fotos: Sequence[FotoDoTurno] = (),
     trace: TurnTrace = NOOP_TRACE,
-    web_search: str = "off",
-    buscar: Any = None,
-    pausar_apos_consultas: int = 14,
+    web_search: WebSearchMode = "off",
+    search_web: WebSearcher | None = None,
+    pause_after_tools: int = 14,
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
@@ -156,10 +157,10 @@ async def turno(
         persona=persona,
         planejar=planejar,
         fotos=tuple(fotos),
-        restritas=tuple(camada_restrita(anunciadas)),
+        restricted=tuple(camada_restrita(anunciadas)),
         web_search=web_search,
-        buscar=buscar,
-        pausar_apos_consultas=pausar_apos_consultas,
+        search_web=search_web,
+        pause_after_tools=pause_after_tools,
     )
     brutos = [
         quadro

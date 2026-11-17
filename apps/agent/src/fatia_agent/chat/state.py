@@ -23,6 +23,7 @@ from langgraph.graph.message import add_messages
 from ..providers.base import ToolChatCapability
 from ..tracing import NOOP_TRACE, TurnTrace
 from .mcp_client import McpClient, McpToolInfo
+from .web import WebSearcher, WebSearchMode
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,15 @@ class ContextoDoTurno:
     fotos: Sequence[FotoDoTurno] = field(default=())
     # O trace do turno no Langfuse (ADR 034); o no-op quando ele está desligado.
     trace: TurnTrace = NOOP_TRACE
+    # As ações restritas do catálogo deste turno: viram o `enum` de `open_in_app` (#384), o
+    # botão que abre a tela do app. Nunca executadas — ver `app_only.py`.
+    restricted: tuple[McpToolInfo, ...] = ()
+    # A busca na web (#384): o modo vem do `apps/api` a cada turno, e a busca em si é injetada
+    # (o provedor de produção, um duplo no teste). Sem buscador, a tool não é oferecida.
+    web_search: WebSearchMode = "off"
+    search_web: WebSearcher | None = None
+    # Quantas consultas no turno antes de perguntar "Continuo?" (`AGENT_CHAT_PAUSE_AFTER_TOOLS`).
+    pause_after_tools: int = 14
 
 
 class EstadoDaConversa(TypedDict, total=False):

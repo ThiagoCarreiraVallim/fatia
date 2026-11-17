@@ -46,7 +46,7 @@ import secrets
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -61,6 +61,7 @@ from .chat import (
     GrafoDaConversa,
     McpClient,
     build_mcp_client,
+    camada_restrita,
     interrupcao_pendente,
     montar_grafo,
     stream_chat_events,
@@ -265,6 +266,9 @@ class ChatRequest(BaseModel):
     photos: Annotated[
         list[ChatPhoto], Field(default_factory=list, max_length=MAX_FOTOS_POR_MENSAGEM)
     ]
+    # A busca na web (#384): o `apps/api` decide a cada turno pela preferência e pelo aceite
+    # da pessoa. Ausente é desligada — quem não diz, não liga.
+    web_search: Annotated[Literal["off", "ask", "on"], Field(alias="webSearch")] = "off"
 
     @model_validator(mode="after")
     def _um_dos_dois(self) -> "ChatRequest":
@@ -641,7 +645,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         try:
             # O catálogo antes do stream: é a primeira chamada que exercita o
             # Bearer, e a única chance de um token inválido virar 401 de verdade.
-            permitidas = todas_permitidas(await client.list_tools())
+            anunciadas = await client.list_tools()
+            permitidas = todas_permitidas(anunciadas)
             owner_id = await _owner_id(client)
             thread_id = thread_da_conversa(owner_id, str(payload.conversation_id))
             compilado = await compiled_graph()
@@ -688,6 +693,10 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             persona=payload.persona.para_o_prompt() if payload.persona is not None else None,
             planejar=resolved.agent_chat_planner,
             fotos=fotos,
+            restricted=tuple(camada_restrita(anunciadas)),
+            web_search=payload.web_search,
+            search_web=provider.web_search if provider.supports_web_search else None,
+            pause_after_tools=resolved.agent_chat_pause_after_tools,
         )
 
         async def fluxo() -> AsyncIterator[str]:

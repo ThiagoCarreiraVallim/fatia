@@ -34,7 +34,7 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 
 - [x] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`
 - [x] 2. API: aceites + preferência da busca (migration, endpoints, trava do chat, export/exclusão, isolamento)
-- [ ] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
+- [x] 3. Agente: formatos novos, `open_in_app`, `web_search` + aceite, pausa por consultas, env
 - [ ] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
 - [ ] 5. api-client: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
 - [ ] 6. Web: mensagens, linhas, cartões, confirmação/lote/só no app, composer, busca/aceite, lista, pausa, motivos
@@ -52,12 +52,23 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
   `chat.controller.ts` (`GET/POST /chat/consent`, `PATCH /chat/preferences`), DTOs,
   `users/account.service.ts` (export: `aiConsents`, `webSearchEnabled`), `user-isolation.spec.ts`.
 
+- Item 3: agente — `providers/openai_compat.py` (`web_search`, `supports_web_search`),
+  `providers/base.py` (`WebSource`, `WebSearchResult`), `chat/web.py`, `chat/app_only.py`,
+  `chat/artefatos.py` (formatos novos), `chat/state.py` (`restricted`, `web_search`,
+  `search_web`, `pause_after_tools`), `chat/graph.py` (nós renomeados para inglês nas funções;
+  os nomes dos nós no fio continuam `agente`/`ferramentas`/`portao`/`orcamento`), `api.py`
+  (`webSearch` no corpo), `settings.py` + env `AGENT_CHAT_PAUSE_AFTER_TOOLS` (compose, .env.example),
+  prompt (`open_in_app`, `web_search`). Testes: `tests/chat/test_ferramentas_do_chat.py`,
+  `tests/providers/test_web_search.py`, `test_chat_route.py`.
+
 ## Comandos
 
 - DB de teste: `export DATABASE_URL=$(grep '^DATABASE_URL=' /home/thiago/Documentos/pessoal/fatia/.env | cut -d= -f2- | tr -d '"' | sed -E 's#/fatia(\?|$)#/fatia_t384\1#')`
   e `pnpm --filter @fatia/db exec prisma migrate deploy`.
 - `cd apps/api && npx jest src/chat src/mcp/__tests__/tool-catalog.spec.ts`
+- Agente: `cd apps/agent && uv run --offline pytest -q && uv run --offline ruff check src tests && uv run --offline mypy src`
 
 ## Próximo passo
 
-Item 3 (agente): pytest primeiro para `webSearch` no `ChatRequest`, `web_search`, `open_in_app`, pausa por consultas e os formatos novos em `artefatos.py`.
+Item 4: produtores dos formatos novos nas tools da API (bars, list, range, progress, scoreboard,
+badges, instructions, file; comparison com `before`) e `preview` na lista de conversas.

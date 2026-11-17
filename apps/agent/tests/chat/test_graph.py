@@ -112,7 +112,8 @@ async def test_o_modelo_enxerga_leitura_confirmavel_e_ask_user_mas_nao_a_restrit
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
 
     nomes = {tool["function"]["name"] for tool in r.provider.corpos[0]["tools"]}
-    assert nomes == {"list_meals", "log_meal", "log_weight", "ask_user"}
+    # A restrita não é oferecida: só aparece como opção do botão "só no app" (#384).
+    assert nomes == {"list_meals", "log_meal", "log_weight", "ask_user", "open_in_app"}
 
 
 async def test_tool_alucinada_vira_falha_de_tool_e_a_conversa_continua(settings_factory):

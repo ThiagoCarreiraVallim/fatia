@@ -17,6 +17,19 @@ CAMPO_OBRIGATORIO = {
     "metric": "value",
     "timeline": "events",
     "comparison": "items",
+    # Os formatos da prancha IA-Cartoes (#384). Cada `card` declarado numa tool do
+    # `apps/api` tem de estar aqui, senão o artefato vira Tabela sem `columns` e some.
+    "bars": "bars",
+    "list": "items",
+    "range": "rows",
+    "progress": "items",
+    "scoreboard": "entries",
+    "badges": "badges",
+    "instructions": "steps",
+    "file": "url",
+    # Os dois que nascem no agente: as fontes da busca e o botão do "só no app".
+    "sources": "sources",
+    "app_only": "tool",
 }
 
 

@@ -346,21 +346,22 @@ do outro repositório; se mudar, é ali que aparece.
 
 Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 
-| Variável                        | Papel                                                                            |
-| ------------------------------- | -------------------------------------------------------------------------------- |
-| `AI_BASE_URL`                   | Endpoint OpenAI-compatível. Vazio = degradação explícita.                        |
-| `AI_API_KEY`                    | Obrigatória fora de `localhost`. O LM Studio dispensa; gateway não.              |
-| `AI_MODEL_TEXT`                 | Modelo da capacidade de texto.                                                   |
-| `AI_MODEL_VISION`               | Modelo da capacidade de visão. Com foto no chat, precisa aceitar tools.          |
-| `AI_MODEL_EMBEDDING`            | Modelo da capacidade de embedding.                                               |
-| `AI_MODEL_TRANSCRIPTION`        | Modelo do ditado (`/audio/transcriptions`). Vazio = o microfone some do chat.    |
-| `AI_TIMEOUT_S`                  | Timeout por chamada. Default folgado: visão em CPU é lenta.                      |
-| `AI_MAX_RETRIES`                | Repetições em 429 e 5xx. 401/403 não são repetidos.                              |
-| `AGENT_API_KEY`                 | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.               |
-| `MCP_BASE_URL`                  | `/mcp` do `apps/api`. Único destino do Bearer do usuário; https fora da rede.    |
-| `MCP_TIMEOUT_S`                 | Timeout das chamadas ao `/mcp`. Menor que o de IA de propósito.                  |
-| `AGENT_CHECKPOINT_DATABASE_URL` | Postgres da Fatia, schema `agent_checkpoint`. Vazio = estado em memória.         |
-| `AGENT_CHAT_PLANNER`            | `true` liga o nó `planejar`: uma chamada a mais por turno. Desligado por padrão. |
+| Variável                        | Papel                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `AI_BASE_URL`                   | Endpoint OpenAI-compatível. Vazio = degradação explícita.                             |
+| `AI_API_KEY`                    | Obrigatória fora de `localhost`. O LM Studio dispensa; gateway não.                   |
+| `AI_MODEL_TEXT`                 | Modelo da capacidade de texto.                                                        |
+| `AI_MODEL_VISION`               | Modelo da capacidade de visão. Com foto no chat, precisa aceitar tools.               |
+| `AI_MODEL_EMBEDDING`            | Modelo da capacidade de embedding.                                                    |
+| `AI_MODEL_TRANSCRIPTION`        | Modelo do ditado (`/audio/transcriptions`). Vazio = o microfone some do chat.         |
+| `AI_TIMEOUT_S`                  | Timeout por chamada. Default folgado: visão em CPU é lenta.                           |
+| `AI_MAX_RETRIES`                | Repetições em 429 e 5xx. 401/403 não são repetidos.                                   |
+| `AGENT_API_KEY`                 | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.                    |
+| `MCP_BASE_URL`                  | `/mcp` do `apps/api`. Único destino do Bearer do usuário; https fora da rede.         |
+| `MCP_TIMEOUT_S`                 | Timeout das chamadas ao `/mcp`. Menor que o de IA de propósito.                       |
+| `AGENT_CHECKPOINT_DATABASE_URL` | Postgres da Fatia, schema `agent_checkpoint`. Vazio = estado em memória.              |
+| `AGENT_CHAT_PLANNER`            | `true` liga o nó `planejar`: uma chamada a mais por turno. Desligado por padrão.      |
+| `AGENT_CHAT_PAUSE_AFTER_TOOLS`  | Consultas no turno antes do "Já consultei N coisas. Continuo?". Padrão 14; 0 desliga. |
 
 **`AGENT_CHECKPOINT_DATABASE_URL` vazia é aceitável em teste e em desenvolvimento, e defeito em
 produção.** Em memória, uma pausa do chat — a confirmação de uma escrita, a resposta a uma pergunta —

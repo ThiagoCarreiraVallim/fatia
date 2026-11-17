@@ -5,15 +5,13 @@ transporte trocado. A busca é a única coisa injetada (`buscar`), porque é ela
 e sai para um terceiro — e é ela que este arquivo precisa ver recebendo **só** a pergunta.
 """
 
-from typing import Any
-
 from fatia_agent.chat import web
 from fatia_agent.chat.artefatos import artefato
 from fatia_agent.providers.base import Usage, WebSearchResult, WebSource
 from fatia_agent.providers.errors import AIProviderUnreachable
 
 from .support import fim, fragmento_de_texto, fragmento_de_tool
-from .turno import turno
+from .turno import Resultado, turno
 
 
 def _com_tool(nome: str, *, id: str = "c1", arguments: str = "{}") -> list[dict[str, object]]:
@@ -50,7 +48,7 @@ PERGUNTA_COM_DADO = (
 )
 
 
-def _nomes_oferecidos(r: Any) -> set[str]:
+def _nomes_oferecidos(r: Resultado) -> set[str]:
     return {tool["function"]["name"] for tool in r.provider.corpos[0]["tools"]}
 
 
@@ -81,7 +79,7 @@ def test_os_formatos_novos_passam_e_cada_um_exige_o_proprio_campo():
 
 
 def test_a_pergunta_sai_sem_email_telefone_nem_documento():
-    limpa = web.consulta_limpa(
+    limpa = web.clean_query(
         "calorias do açaí ana.silva@exemplo.com (11) 98765-4321 CPF 123.456.789-09"
     )
     assert "@" not in limpa
@@ -91,25 +89,26 @@ def test_a_pergunta_sai_sem_email_telefone_nem_documento():
 
 
 async def test_busca_desligada_nem_e_oferecida(settings_factory):
-    r = await turno(settings_factory, [[fragmento_de_texto("ok")]], buscar=Buscador(ACHOU))
-    assert web.NOME not in _nomes_oferecidos(r)
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]], search_web=Buscador(ACHOU))
+    assert web.NAME not in _nomes_oferecidos(r)
 
 
 async def test_com_aceite_busca_so_a_pergunta_e_mostra_as_fontes(settings_factory):
     buscador = Buscador(ACHOU)
     r = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments=PERGUNTA_COM_DADO), [fragmento_de_texto("58 kcal.")]],
+        [_com_tool(web.NAME, arguments=PERGUNTA_COM_DADO), [fragmento_de_texto("58 kcal.")]],
         web_search="on",
-        buscar=buscador,
+        search_web=buscador,
     )
 
-    assert web.NOME in _nomes_oferecidos(r)
+    assert web.NAME in _nomes_oferecidos(r)
     (pergunta,) = buscador.perguntas
     assert "ana.silva" not in pergunta and "98765" not in pergunta and "123.456" not in pergunta
     assert "açaí" in pergunta
     (fontes,) = r.data_of("artifact")
-    assert fontes["artifact"] == {
+    assert fontes == {
+        "toolCallId": "c1",
         "kind": "sources",
         "query": pergunta,
         "sources": [{"title": FONTE.title, "url": FONTE.url, "domain": "gov.br"}],
@@ -126,9 +125,9 @@ async def test_sem_aceite_pede_antes_da_primeira_busca(settings_factory):
     buscador = Buscador(ACHOU)
     r = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"calorias do açaí"}')],
+        [_com_tool(web.NAME, arguments='{"query":"calorias do açaí"}')],
         web_search="ask",
-        buscar=buscador,
+        search_web=buscador,
     )
 
     assert buscador.perguntas == []
@@ -139,7 +138,7 @@ async def test_sem_aceite_pede_antes_da_primeira_busca(settings_factory):
     assert acao == {
         "kind": "web_consent",
         "toolCallId": "c1",
-        "tool": web.NOME,
+        "tool": web.NAME,
         "prompt": "Posso buscar na web?",
         "query": "calorias do açaí",
     }
@@ -149,9 +148,9 @@ async def test_aceitou_e_a_api_ligou_a_busca_entao_busca(settings_factory):
     buscador = Buscador(ACHOU)
     pausado = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"calorias do açaí"}')],
+        [_com_tool(web.NAME, arguments='{"query":"calorias do açaí"}')],
         web_search="ask",
-        buscar=buscador,
+        search_web=buscador,
     )
     retomado = await turno(
         settings_factory,
@@ -160,7 +159,7 @@ async def test_aceitou_e_a_api_ligou_a_busca_entao_busca(settings_factory):
         retomada={"approvals": {"c1": True}},
         grafo=pausado.grafo,
         web_search="on",
-        buscar=buscador,
+        search_web=buscador,
     )
 
     assert buscador.perguntas == ["calorias do açaí"]
@@ -172,9 +171,9 @@ async def test_aprovar_sem_o_aceite_gravado_nao_busca(settings_factory):
     buscador = Buscador(ACHOU)
     pausado = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"açaí"}')],
+        [_com_tool(web.NAME, arguments='{"query":"açaí"}')],
         web_search="ask",
-        buscar=buscador,
+        search_web=buscador,
     )
     retomado = await turno(
         settings_factory,
@@ -183,21 +182,21 @@ async def test_aprovar_sem_o_aceite_gravado_nao_busca(settings_factory):
         retomada={"approvals": {"c1": True}},
         grafo=pausado.grafo,
         web_search="ask",
-        buscar=buscador,
+        search_web=buscador,
     )
 
     assert buscador.perguntas == []
     (resultado,) = [m for m in retomado.mensagens_de_tool() if m["tool_call_id"] == "c1"]
-    assert resultado["content"] == web.RECUSADA
+    assert resultado["content"] == web.DECLINED
 
 
 async def test_recusou_e_responde_sem_buscar(settings_factory):
     buscador = Buscador(ACHOU)
     pausado = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"açaí"}')],
+        [_com_tool(web.NAME, arguments='{"query":"açaí"}')],
         web_search="ask",
-        buscar=buscador,
+        search_web=buscador,
     )
     retomado = await turno(
         settings_factory,
@@ -206,33 +205,33 @@ async def test_recusou_e_responde_sem_buscar(settings_factory):
         retomada={"approvals": {"c1": False}},
         grafo=pausado.grafo,
         web_search="on",
-        buscar=buscador,
+        search_web=buscador,
     )
 
     assert buscador.perguntas == []
     (resultado,) = [m for m in retomado.mensagens_de_tool() if m["tool_call_id"] == "c1"]
-    assert resultado["content"] == web.RECUSADA
+    assert resultado["content"] == web.DECLINED
 
 
 async def test_nada_confiavel_e_busca_fora_do_ar_viram_texto_para_o_modelo(settings_factory):
     vazio = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"x"}'), [fragmento_de_texto("Não achei.")]],
+        [_com_tool(web.NAME, arguments='{"query":"x"}'), [fragmento_de_texto("Não achei.")]],
         web_search="on",
-        buscar=Buscador(WebSearchResult()),
+        search_web=Buscador(WebSearchResult()),
     )
     (resultado,) = vazio.mensagens_de_tool()
-    assert resultado["content"] == web.SEM_RESULTADO
+    assert resultado["content"] == web.NO_RESULTS
     assert vazio.data_of("artifact") == []
 
     caiu = await turno(
         settings_factory,
-        [_com_tool(web.NOME, arguments='{"query":"x"}'), [fragmento_de_texto("Sem busca.")]],
+        [_com_tool(web.NAME, arguments='{"query":"x"}'), [fragmento_de_texto("Sem busca.")]],
         web_search="on",
-        buscar=Buscador(AIProviderUnreachable("fora do ar")),
+        search_web=Buscador(AIProviderUnreachable("fora do ar")),
     )
     (resultado,) = caiu.mensagens_de_tool()
-    assert (resultado["status"], resultado["content"]) == ("error", web.INDISPONIVEL)
+    assert (resultado["status"], resultado["content"]) == ("error", web.UNAVAILABLE)
     assert caiu.text() == "Sem busca."
 
 
@@ -251,12 +250,15 @@ async def test_so_no_app_mostra_o_botao_e_nao_executa_nada(settings_factory):
     )
 
     oferecida = next(
-        t["function"] for t in r.provider.corpos[0]["tools"] if t["function"]["name"] == "open_in_app"
+        t["function"]
+        for t in r.provider.corpos[0]["tools"]
+        if t["function"]["name"] == "open_in_app"
     )
     assert oferecida["parameters"]["properties"]["tool"]["enum"] == ["delete_meal"]
     assert r.chamadas_ao_mcp("delete_meal") == 0
     (cartao,) = r.data_of("artifact")
-    assert cartao["artifact"] == {
+    assert cartao == {
+        "toolCallId": "c1",
         "kind": "app_only",
         "tool": "delete_meal",
         "title": "Delete Meal",
@@ -264,7 +266,7 @@ async def test_so_no_app_mostra_o_botao_e_nao_executa_nada(settings_factory):
     }
     (resultado,) = r.mensagens_de_tool()
     assert resultado["status"] == "success"
-    assert "não foi feita" in resultado["content"]
+    assert "NÃO foi feita" in resultado["content"]
 
 
 async def test_so_no_app_recusa_o_que_nao_e_restrito(settings_factory):
@@ -295,7 +297,7 @@ async def test_pausa_depois_de_n_consultas_e_diz_quantas(settings_factory):
     r = await turno(
         settings_factory,
         [_rodada(1, ("a1", "a2")), _rodada(2, ("b1", "b2")), _rodada(3, ("c1", "c2"))],
-        pausar_apos_consultas=3,
+        pause_after_tools=3,
     )
 
     assert r.chamadas_ao_mcp("list_meals") == 4
