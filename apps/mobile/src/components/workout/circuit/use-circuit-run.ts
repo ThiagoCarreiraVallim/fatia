@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, type Href } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import {
-  MAX_CIRCUIT_EVENTS,
+  appendCircuitEvents,
   circuitCue,
   circuitFinishBody,
   circuitState,
@@ -118,8 +118,9 @@ export function useCircuitRun(session: WorkoutSession & { circuit: CircuitSessio
       const at = Date.now();
       setNow(at);
       setEvents((prevEvents) => {
-        if (prevEvents.length + count > MAX_CIRCUIT_EVENTS) return prevEvents;
-        const next = [...prevEvents, ...Array.from({ length: count }, () => ({ type, at }))];
+        // O teto guarda lugar para o "Encerrar" (`appendCircuitEvents`).
+        const next = appendCircuitEvents(prevEvents, type, count, at);
+        if (next === prevEvents) return prevEvents;
         latest.current = next;
         qc.setQueryData<WorkoutSession | null>(['workout', 'active'], (s) =>
           s && s.id === session.id && s.circuit

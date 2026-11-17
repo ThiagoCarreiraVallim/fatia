@@ -189,7 +189,10 @@ export const circuitJsonSchema = z.object({
   definition: circuitDefinitionSchema,
   /** Quando o relógio começou (ISO). */
   startedAt: z.string(),
-  events: z.array(circuitEventSchema).max(MAX_CIRCUIT_EVENTS),
+  // Um a mais que o corpo aceita: o "end" que o servidor põe no fim de uma
+  // lista já cheia (`CircuitSessionService.countFromEvents`). Sem ele o JSON
+  // gravado deixava de ser lido, e o resumo voltava sem o circuito.
+  events: z.array(circuitEventSchema).max(MAX_CIRCUIT_EVENTS + 1),
   result: circuitResultSchema.nullable(),
   /** Opcional: as sessões gravadas antes deste campo não o têm. */
   previous: circuitPreviousSchema.nullable().optional(),

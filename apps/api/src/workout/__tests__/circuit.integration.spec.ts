@@ -514,6 +514,24 @@ describe('circuitos (banco real)', () => {
     expect(again).toMatchObject({ alreadyFinished: true, result: { roundsCompleted: 3 } });
   });
 
+  it('fim com o teto de toques cheio: o "end" do servidor cabe e o resumo lê (revisão C7)', async () => {
+    const plan = await plans.createCircuit(userId, {
+      name: 'For Time 100',
+      format: 'FOR_TIME',
+      rounds: 100,
+      exercises: [{ exerciseId: exerciseIds[0], unit: 'REPS', target: 5 }],
+    });
+    const startedAt = new Date(Date.now() - 60 * 60_000);
+    const s = await sessions.start(userId, { planId: plan.id, startedAt: startedAt.toISOString() });
+    const t = startedAt.getTime();
+    // 2.000 toques de "Pular descanso" sem o "end" (cliente antigo): nenhum round.
+    const events = Array.from({ length: 2000 }, (_, i) => ({ type: 'skip' as const, at: t + i }));
+    await circuits.finish(userId, s.id, { events });
+    const summary = await sessions.summary(userId, s.id);
+    expect(summary.circuit).not.toBeNull();
+    expect(summary.kind).toBe('circuit');
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',

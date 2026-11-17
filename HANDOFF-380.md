@@ -67,7 +67,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
 - [x] C5 numeração dos avisos e done sempre
 - [x] C6 corrida no agendamento (app)
-- [ ] C7 limite de eventos no finish
+- [x] C7 limite de eventos no finish
 - [ ] C8 comparação só com mesma definição
 - [ ] C9 apagar este HANDOFF no último commit
 - D (conquistas #382) fica para o coordenador.

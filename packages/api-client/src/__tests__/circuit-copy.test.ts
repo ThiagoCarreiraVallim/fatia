@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendCircuitEvents,
   CIRCUIT_FORMAT_OPTIONS,
   circuitBadge,
   circuitBarSnapshot,
@@ -23,7 +24,7 @@ import {
   newCircuitDraft,
   type CircuitDraft,
 } from '../workout/circuit-copy';
-import { circuitState, type CircuitDefinition } from '../workout/circuit-timer';
+import { MAX_CIRCUIT_EVENTS, circuitState, type CircuitDefinition } from '../workout/circuit-timer';
 import type { WorkoutPlan, CircuitSummary } from '../workout';
 
 const draft = (over: Partial<CircuitDraft> = {}): CircuitDraft => ({
@@ -348,6 +349,29 @@ describe('a comparação na tela do relógio, antes de salvar (Al-T4e)', () => {
         null,
       ),
     ).toBeNull();
+  });
+});
+
+describe('o teto de toques guarda lugar para o "Encerrar" (revisão C7)', () => {
+  const taps = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ type: 'mark' as const, at: 1_000 + i }));
+
+  it('os toques param um antes do teto; o "end" ainda entra', () => {
+    const almost = taps(MAX_CIRCUIT_EVENTS - 2);
+    expect(appendCircuitEvents(almost, 'mark', 1, 5_000)).toHaveLength(MAX_CIRCUIT_EVENTS - 1);
+    const full = taps(MAX_CIRCUIT_EVENTS - 1);
+    expect(appendCircuitEvents(full, 'mark', 1, 5_000)).toBe(full);
+    expect(appendCircuitEvents(full, 'round', 1, 5_000)).toBe(full);
+    const ended = appendCircuitEvents(full, 'end', 1, 5_000);
+    expect(ended).toHaveLength(MAX_CIRCUIT_EVENTS);
+    expect(ended.at(-1)).toEqual({ type: 'end', at: 5_000 });
+  });
+
+  it('o corpo do "Encerrar" nunca passa do teto que a API aceita', () => {
+    const run = { startedAt: 0, events: taps(MAX_CIRCUIT_EVENTS) };
+    expect(circuitFinishBody(amrap, run, 100_000).events.length).toBeLessThanOrEqual(
+      MAX_CIRCUIT_EVENTS,
+    );
   });
 });
 

@@ -8,9 +8,12 @@ import type {
   WorkoutPlan,
 } from '../workout';
 import {
+  MAX_CIRCUIT_EVENTS,
   circuitResult,
   circuitState,
   type CircuitDefinition,
+  type CircuitEvent,
+  type CircuitEventType,
   type CircuitExerciseTotal,
   type CircuitFormat,
   type CircuitItem,
@@ -426,15 +429,32 @@ export function circuitExerciseTotal(e: {
  * quando o relógio ainda corria) e o resultado só com os campos que a API
  * aceita; os totais por exercício o servidor recalcula.
  */
+/**
+ * Um toque a mais na lista, respeitando o teto da API (`MAX_CIRCUIT_EVENTS`):
+ * os toques param um antes dele, para o "Encerrar" (`end`) sempre caber. Sem
+ * lugar, devolve a mesma lista (o toque some, o relógio segue).
+ */
+export function appendCircuitEvents(
+  events: CircuitEvent[],
+  type: CircuitEventType,
+  count: number,
+  at: number,
+): CircuitEvent[] {
+  const room = type === 'end' ? MAX_CIRCUIT_EVENTS : MAX_CIRCUIT_EVENTS - 1;
+  if (events.length + count > room) return events;
+  return [...events, ...Array.from({ length: count }, () => ({ type, at }))];
+}
+
 export function circuitFinishBody(
   def: CircuitDefinition,
   run: CircuitRun,
   now: number,
 ): CircuitFinishInput {
+  // Lista já no teto (versão antiga do app): vai sem o "end", e o servidor fecha na hora dele.
   const events =
     circuitState(def, run, now).status === 'done'
       ? run.events
-      : [...run.events, { type: 'end' as const, at: now }];
+      : appendCircuitEvents(run.events, 'end', 1, now);
   const r = circuitResult(def, { ...run, events }, now);
   return {
     events,
