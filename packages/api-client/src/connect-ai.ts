@@ -109,17 +109,36 @@ export function providerOfClient(clientName: string | null): AiProvider {
   return 'other';
 }
 
-/** A conexão mais recente daquela IA, ou nada. */
+/**
+ * Por quantos dias depois do último acesso a tela ainda diz "Conectado".
+ *
+ * O Fatia não sabe quando a pessoa remove o conector no app da IA (não há
+ * revogação aqui; o access token só vence). Sem uma janela, quem desconectou
+ * veria "Conectado" para sempre. Trinta dias cobre quem usa a IA de vez em
+ * quando; depois disso a tela fala "conectado antes" e põe o teste à mão.
+ */
+export const CONNECTED_WINDOW_DAYS = 30;
+
+export interface ConnectionStatus {
+  connection: McpConnection;
+  /** Último acesso dentro de `CONNECTED_WINDOW_DAYS`: pode dizer "Conectado". */
+  recent: boolean;
+}
+
+/** A conexão mais recente daquela IA e se ela ainda conta como conectada; ou nada. */
 export function connectionFor(
   provider: AiProvider,
   connections: readonly McpConnection[],
-): McpConnection | null {
+  now: Date = new Date(),
+): ConnectionStatus | null {
   let best: McpConnection | null = null;
   for (const c of connections) {
     if (providerOfClient(c.clientName) !== provider) continue;
     if (!best || Date.parse(c.lastUsedAt) > Date.parse(best.lastUsedAt)) best = c;
   }
-  return best;
+  if (!best) return null;
+  const age = now.getTime() - Date.parse(best.lastUsedAt);
+  return { connection: best, recent: age < CONNECTED_WINDOW_DAYS * 24 * 60 * 60 * 1000 };
 }
 
 /** A tela abre na IA que a pessoa usou por último; sem nenhuma, no Claude. */
@@ -153,15 +172,36 @@ export function lastAccessLabel(iso: string, now: Date = new Date()): string {
   return `em ${dd}/${mm}`;
 }
 
-export function connectedTitle(provider: AiProvider, connection: McpConnection): string {
-  if (provider === 'claude') return 'Conectado ao Claude';
-  if (provider === 'chatgpt') return 'Conectado ao ChatGPT';
-  return connection.clientName ? `${connection.clientName} conectado` : 'App conectado';
+export function connectedTitle(
+  provider: AiProvider,
+  connection: McpConnection,
+  recent = true,
+): string {
+  const name =
+    provider === 'claude'
+      ? 'Claude'
+      : provider === 'chatgpt'
+        ? 'ChatGPT'
+        : (connection.clientName ?? null);
+  if (!recent) return `${name ?? 'App'} conectado antes`;
+  if (provider === 'claude' || provider === 'chatgpt') return `Conectado ao ${name}`;
+  return name ? `${name} conectado` : 'App conectado';
 }
 
-/** O rodapé do estado conectado. Não promete desconectar pelo Fatia (não há revogação aqui). */
-export function connectedFootnote(lastUsedAt: string, now: Date = new Date()): string {
-  return `Último acesso ${lastAccessLabel(lastUsedAt, now)} · para desconectar, remova o conector no app da sua IA.`;
+/**
+ * O rodapé do estado conectado. Não promete desconectar pelo Fatia (não há
+ * revogação aqui). Conexão antiga manda para o teste em vez disso.
+ */
+export function connectedFootnote(
+  lastUsedAt: string,
+  now: Date = new Date(),
+  recent = true,
+): string {
+  const last = `Último acesso ${lastAccessLabel(lastUsedAt, now)}`;
+  if (!recent) {
+    return `${last} · sem uso há mais de ${CONNECTED_WINDOW_DAYS} dias. Se parou de funcionar, faça o teste abaixo ou conecte de novo.`;
+  }
+  return `${last} · para desconectar, remova o conector no app da sua IA.`;
 }
 
 const CHAT_TIP: Record<AiProvider, string> = {

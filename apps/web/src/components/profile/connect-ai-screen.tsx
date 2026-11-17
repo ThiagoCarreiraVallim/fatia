@@ -36,9 +36,12 @@ type Panel = 'test' | 'fail' | 'no-mcp';
 /**
  * Conectar sua IA (pranchas Al-V6 a Al-V6e, #388). A pessoa escolhe a IA, segue
  * os passos, copia o endereço (que vem da API, da configuração do servidor) e
- * testa com uma pergunta. Quando o servidor já viu a conexão daquela IA, o
- * teste vira "Conectado", com o último acesso. Não há "desconectar" aqui: o
- * Fatia não revoga o acesso, então o texto manda remover o conector na IA.
+ * testa com uma pergunta. Quando o servidor já viu a conexão daquela IA, um
+ * cartão diz "Conectado", com o último acesso (ou "conectado antes", sem uso há
+ * mais de 30 dias). O teste e o "Não funcionou?" ficam sempre embaixo: o Fatia
+ * não sabe se a pessoa removeu o conector na IA (revisão da #388; a prancha
+ * Al-V6c troca o teste pelo cartão). Não há "desconectar" aqui: o Fatia não
+ * revoga o acesso, então o texto manda remover o conector na IA.
  */
 export function ConnectAiScreen() {
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
@@ -66,7 +69,7 @@ export function ConnectAiScreen() {
   const email = me.data?.email ?? null;
   const serverUrl = mcp.data?.serverUrl ?? null;
   const steps = connectSteps(current, email);
-  const connection = connectionFor(current, connections);
+  const status = connectionFor(current, connections);
 
   const pick = (next: AiProvider) => {
     setProvider(next);
@@ -186,30 +189,44 @@ export function ConnectAiScreen() {
         )}
       </div>
 
-      {connection ? (
+      {status && (
         <section
-          aria-label={connectedTitle(current, connection)}
-          className="flex flex-col gap-2.5 rounded-card bg-primary/10 p-4 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]"
+          aria-label={connectedTitle(current, status.connection, status.recent)}
+          className={cn(
+            'flex flex-col gap-2 rounded-card p-4',
+            status.recent
+              ? 'bg-primary/10 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]'
+              : 'bg-card shadow-[inset_0_0_0_1px_hsl(var(--border))]',
+          )}
         >
-          <div className="flex items-center gap-2 text-primary">
-            <Icon name="check" size={16} />
-            <b className="text-[15px] text-foreground">{connectedTitle(current, connection)}</b>
+          <div
+            className={cn(
+              'flex items-center gap-2',
+              status.recent ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <Icon name={status.recent ? 'check' : 'info'} size={16} />
+            <b className="text-[15px] text-foreground">
+              {connectedTitle(current, status.connection, status.recent)}
+            </b>
           </div>
-          <p className="text-[14px] text-foreground">
-            <span className="text-muted-foreground">
-              Pergunte “{VERIFY_PROMPT}” e ele responde algo como:{' '}
-            </span>
-            {CONNECTED_EXAMPLE}
-          </p>
           <p className="text-[13px] text-muted-foreground">
-            {connectedFootnote(connection.lastUsedAt)}
+            {connectedFootnote(status.connection.lastUsedAt, new Date(), status.recent)}
           </p>
         </section>
-      ) : panel === 'test' ? (
+      )}
+
+      {panel === 'test' ? (
         <>
           <div className="flex flex-col gap-1.5 rounded-card bg-surface-3 p-3.5">
             <b className="text-[15px] text-foreground">Teste: “{VERIFY_PROMPT}”</b>
-            <span className="text-[13px] text-muted-foreground">{VERIFY_HINT}</span>
+            {status?.recent ? (
+              <span className="text-[13px] text-muted-foreground">
+                Ele responde algo como: <span className="text-foreground">{CONNECTED_EXAMPLE}</span>
+              </span>
+            ) : (
+              <span className="text-[13px] text-muted-foreground">{VERIFY_HINT}</span>
+            )}
           </div>
           <button
             type="button"

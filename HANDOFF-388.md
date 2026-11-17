@@ -18,13 +18,13 @@ linha dela em `_prisma_migrations` e as tabelas antes do `migrate deploy`.
 - [x] 1. Logto fora do ar não vira `invalid_grant` (server_error / temporarily_unavailable)
 - [x] 3. Gravar a conexão não atrasa o `/oauth/token` (fire-and-forget, `flush()` para testes)
 - [x] 4/5. Conexão presa aos tokens: hash do refresh, vários access tokens com validade, `client_id` do corpo não manda
-- [ ] 2. "Conectado" só nos últimos 30 dias; teste e "Não funcionou?" sempre acessíveis
+- [x] 2. "Conectado" só nos últimos 30 dias; teste e "Não funcionou?" sempre acessíveis
 - [ ] 6. `?tutorial=` marca visto e some da URL ao fechar; clipboard do app com falha; MOBILE_PARITY.md
 - [ ] Docs (REDESIGN_PROGRESS, MCP_OAUTH), lint, typecheck, testes; HANDOFF apagado
 
 ## Próximo passo
 
-Item 2: `connectionFor` com janela de 30 dias no api-client (vermelho), depois web e app.
+Item 6: `?tutorial=` pelo mesmo caminho do `openTutorial` (markSeen) na web e no app; limpar a URL na web; MOBILE_PARITY.md. Clipboard do app já feito (copy-text.ts).
 
 ## Decisões (itens 3 e 4/5)
 

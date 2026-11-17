@@ -29,6 +29,7 @@ import { Button, Segmented } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui/utils';
+import { copyText } from '@/components/profile/copy-text';
 import { useExportData } from '@/components/you/use-export-data';
 import { colors } from '@/theme/colors';
 
@@ -39,7 +40,8 @@ type Panel = 'test' | 'fail' | 'no-mcp';
  * Conectar sua IA (pranchas Al-V6 a Al-V6e, #388) — réplica de
  * `apps/web/src/components/profile/connect-ai-screen.tsx`. O endereço vem da API
  * (configuração do servidor). Voltar do app do Claude ou do ChatGPT para cá
- * busca as conexões de novo, e o "Conectado" aparece sozinho.
+ * busca as conexões de novo, e o "Conectado" aparece sozinho. O cartão de
+ * conectado fica acima do teste, que nunca some (revisão da #388).
  */
 export default function ConnectAiScreen() {
   const router = useRouter();
@@ -63,7 +65,7 @@ export default function ConnectAiScreen() {
   const [provider, setProvider] = useState<AiProvider | null>(null);
   const [openStep, setOpenStep] = useState(0);
   const [panel, setPanel] = useState<Panel>('test');
-  const [copied, setCopied] = useState(false);
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sair da tela logo depois de copiar não pode deixar um timer mexendo no estado.
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
@@ -73,23 +75,25 @@ export default function ConnectAiScreen() {
   const email = me.data?.email ?? null;
   const serverUrl = mcp.data?.serverUrl ?? null;
   const steps = connectSteps(current, email);
-  const connection = connectionFor(current, connections);
+  const status = connectionFor(current, connections);
 
   const pick = (next: AiProvider) => {
     setProvider(next);
     setOpenStep(0);
     setPanel('test');
-    setCopied(false);
+    setCopy('idle');
   };
 
   async function copyAddress() {
     if (!serverUrl) return;
-    await Clipboard.setStringAsync(serverUrl);
-    setCopied(true);
+    if (timer.current) clearTimeout(timer.current);
+    const result = await copyText(Clipboard.setStringAsync, serverUrl);
+    setCopy(result);
+    // Falhou: o aviso fica até a próxima tentativa, com o endereço inteiro à vista.
+    if (result === 'failed') return;
     // Copiou: o próximo passo é entrar e autorizar, com o e-mail desta conta.
     setOpenStep(steps.length - 1);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 2500);
+    timer.current = setTimeout(() => setCopy('idle'), 2500);
   }
 
   return (
@@ -160,55 +164,78 @@ export default function ConnectAiScreen() {
         </View>
 
         <View className="flex-row items-center gap-2 rounded-[14px] border border-border bg-card py-1.5 pl-4 pr-1.5">
-          <Text selectable numberOfLines={1} className="flex-1 text-[13px] text-primary-text">
+          <Text
+            selectable
+            numberOfLines={copy === 'failed' ? undefined : 1}
+            className="flex-1 text-[13px] text-primary-text"
+          >
             {serverUrl ?? '…'}
           </Text>
           <Button
             size="xs"
             disabled={!serverUrl}
             onPress={() => void copyAddress()}
-            accessibilityLabel={copied ? 'Endereço copiado' : 'Copiar endereço'}
+            accessibilityLabel={copy === 'copied' ? 'Endereço copiado' : 'Copiar endereço'}
           >
-            <Icon name={copied ? 'check' : 'layers'} size={16} color={colors.primaryForeground} />
+            <Icon
+              name={copy === 'copied' ? 'check' : 'layers'}
+              size={16}
+              color={colors.primaryForeground}
+            />
             <Text className="font-sans-bold text-[13px] text-primary-foreground">
-              {copied ? 'Copiado' : 'Copiar'}
+              {copy === 'copied' ? 'Copiado' : 'Copiar'}
             </Text>
           </Button>
         </View>
+        {copy === 'failed' ? (
+          <Text accessibilityLiveRegion="polite" className="text-[13px] text-muted-foreground">
+            Não deu para copiar. Toque e segure o endereço acima para copiar à mão.
+          </Text>
+        ) : null}
         {mcp.isError ? (
           <Text className="text-[13px] text-muted-foreground">
             Não deu para carregar o endereço. Tente de novo em instantes.
           </Text>
         ) : null}
 
-        {connection ? (
+        {status ? (
           <View
-            accessibilityLabel={connectedTitle(current, connection)}
-            className="gap-2.5 rounded-card border border-primary/35 bg-primary/10 p-4"
+            accessibilityLabel={connectedTitle(current, status.connection, status.recent)}
+            className={cn(
+              'gap-2 rounded-card border p-4',
+              status.recent ? 'border-primary/35 bg-primary/10' : 'border-border bg-card',
+            )}
           >
             <View className="flex-row items-center gap-2">
-              <Icon name="check" size={16} color={colors.primaryText} />
-              <Text className="font-sans-bold text-[15px] text-foreground">
-                {connectedTitle(current, connection)}
+              <Icon
+                name={status.recent ? 'check' : 'info'}
+                size={16}
+                color={status.recent ? colors.primaryText : colors.mutedForeground}
+              />
+              <Text className="flex-1 font-sans-bold text-[15px] text-foreground">
+                {connectedTitle(current, status.connection, status.recent)}
               </Text>
             </View>
-            <Text className="text-[14px] text-foreground">
-              <Text className="text-[14px] text-muted-foreground">
-                Pergunte “{VERIFY_PROMPT}” e ele responde algo como:{' '}
-              </Text>
-              {CONNECTED_EXAMPLE}
-            </Text>
             <Text className="text-[13px] text-muted-foreground">
-              {connectedFootnote(connection.lastUsedAt)}
+              {connectedFootnote(status.connection.lastUsedAt, new Date(), status.recent)}
             </Text>
           </View>
-        ) : panel === 'test' ? (
+        ) : null}
+
+        {panel === 'test' ? (
           <>
             <View className="gap-1.5 rounded-card bg-surface-3 p-3.5">
               <Text className="font-sans-bold text-[15px] text-foreground">
                 Teste: “{VERIFY_PROMPT}”
               </Text>
-              <Text className="text-[13px] text-muted-foreground">{VERIFY_HINT}</Text>
+              {status?.recent ? (
+                <Text className="text-[13px] text-muted-foreground">
+                  Ele responde algo como:{' '}
+                  <Text className="text-[13px] text-foreground">{CONNECTED_EXAMPLE}</Text>
+                </Text>
+              ) : (
+                <Text className="text-[13px] text-muted-foreground">{VERIFY_HINT}</Text>
+              )}
             </View>
             <Pressable
               accessibilityRole="button"

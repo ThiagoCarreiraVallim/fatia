@@ -196,6 +196,43 @@ describe('Conectar sua IA (Al-V6)', () => {
     expect(screen.queryByText(/Configurações da IA/)).not.toBeInTheDocument();
   });
 
+  // Revisão da #388: "Conectado" não pode prender a pessoa. O teste e o
+  // "Não funcionou?" continuam à mão, porque o Fatia não sabe se ela removeu o
+  // conector na IA.
+  it('conectado ainda mostra o teste e o "Não funcionou?"', async () => {
+    api.overview.mockResolvedValue(
+      overview([
+        {
+          id: 'c1',
+          clientName: 'Claude',
+          connectedAt: new Date().toISOString(),
+          lastUsedAt: new Date().toISOString(),
+        },
+      ]),
+    );
+    const user = setupUser();
+    renderScreen();
+    await screen.findByRole('region', { name: 'Conectado ao Claude' });
+
+    expect(screen.getByText('Teste: “Qual é meu resumo de hoje?”')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Não funcionou?' }));
+    expect(screen.getByRole('region', { name: 'Não funcionou' })).toBeInTheDocument();
+  });
+
+  it('conexão sem uso há mais de 30 dias não diz "Conectado"', async () => {
+    const old = new Date(Date.now() - 45 * 24 * 3600_000).toISOString();
+    api.overview.mockResolvedValue(
+      overview([{ id: 'c1', clientName: 'Claude', connectedAt: old, lastUsedAt: old }]),
+    );
+    renderScreen();
+
+    const card = await screen.findByRole('region', { name: 'Claude conectado antes' });
+    expect(within(card).getByText(/sem uso há mais de 30 dias/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Conectado/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Teste: “Qual é meu resumo de hoje?”')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Não funcionou?' })).toBeInTheDocument();
+  });
+
   it('a conexão de outra IA não marca esta como conectada', async () => {
     api.overview.mockResolvedValue(
       overview([
