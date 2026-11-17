@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ChevronRightIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +17,18 @@ import { cn } from '@/lib/utils';
  * rodando ou que tem cartão (a folha do dia, o gráfico), porque esconder o cartão
  * atrás de um toque esconderia o resultado.
  */
+/** "Consultei 3 coisas" com a contagem em destaque, como na prancha IA-Estados. */
+function destaque(label: string) {
+  const m = /^(\D*)(\d.*)$/.exec(label);
+  if (!m) return label;
+  return (
+    <>
+      {m[1]}
+      <span className="font-semibold text-foreground">{m[2]}</span>
+    </>
+  );
+}
+
 export function ToolGroup({
   label,
   defaultOpen = false,
@@ -36,14 +48,20 @@ export function ToolGroup({
       onOpenChange={setOpen}
       className={cn('w-full', className)}
     >
-      <CollapsibleTrigger className="group/trigger flex items-center gap-2 rounded-md py-1 text-[13.5px] text-foreground/55 outline-none transition-colors hover:text-foreground/90">
-        <ChevronRightIcon
+      <CollapsibleTrigger className="group/trigger flex w-full items-center gap-2.5 rounded-2xl bg-foreground/[0.04] px-3 py-2.5 text-start text-[13.5px] text-foreground/65 outline-none transition-colors hover:text-foreground/90 focus-visible:ring-2 focus-visible:ring-foreground/20 dark:bg-foreground/[0.06]">
+        <span
           aria-hidden
-          className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 group-data-[state=open]/trigger:rotate-90 motion-reduce:transition-none"
+          className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/15 text-success"
+        >
+          <CheckIcon className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{destaque(label)}</span>
+        <ChevronDownIcon
+          aria-hidden
+          className="size-4 shrink-0 opacity-60 transition-transform duration-200 group-data-[state=open]/trigger:rotate-180 motion-reduce:transition-none"
         />
-        {label}
       </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-1 pl-5 outline-none">
+      <CollapsibleContent className="mt-2 flex flex-col gap-2 outline-none">
         {children}
       </CollapsibleContent>
     </Collapsible>

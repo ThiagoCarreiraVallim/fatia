@@ -15,6 +15,7 @@ export class AcceptPlanOfferTool implements McpToolDef {
   readonly title = 'Aceitar o plano de treino da equipe';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Aceita a versão de um plano de treino que a equipe enviou (list_plan_offers). A primeira ' +
     'versão cria o plano nos planos do usuário; a de uma atualização troca os exercícios do mesmo ' +

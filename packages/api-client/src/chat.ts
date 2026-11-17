@@ -50,10 +50,12 @@ export type ChatErrorCode =
   | 'AGENT_INTERNAL_ERROR'
   // NestJS.
   | 'AI_PLAN_REQUIRED'
+  | 'AI_CONSENT_REQUIRED'
   | 'AI_QUOTA_EXCEEDED'
   | 'AGENT_STREAM_INTERRUPTED'
   | 'CHAT_INTERNAL_ERROR'
   | 'CHAT_RESUME_MISMATCH'
+  | 'CHAT_RUN_IN_PROGRESS'
   | 'CHAT_NOTHING_TO_RESUME'
   // Cliente: falhas de antes de qualquer resposta do servidor.
   | 'AI_NETWORK_ERROR'
@@ -98,7 +100,14 @@ export type ChatTurnRequest = {
    */
   agentGroupId?: string | null;
 } & (
-  | { message: string; resume?: undefined; photos?: ChatPhoto[] }
+  | {
+      message: string;
+      resume?: undefined;
+      /** Fotos já guardadas no bucket (ADR 046): os ids de `uploadChatPhoto`. */
+      photoIds?: string[];
+      /** O caminho antigo, em base64, que não fica guardado (ADR 020). */
+      photos?: ChatPhoto[];
+    }
   | { message?: undefined; resume: { interruptId: string; value: unknown } }
 );
 
@@ -131,13 +140,24 @@ export interface ChatQuestionAction {
   fields: ChatAskField[];
 }
 
+/** A primeira busca na web, esperando o aceite (#384). Só a `query` sai, se a pessoa aceitar. */
+export interface ChatWebConsentAction {
+  kind: 'web_consent';
+  toolCallId: string;
+  tool: 'web_search';
+  prompt: string;
+  query: string;
+}
+
 /** O `value` de uma pausa do grafo (`__interrupt__`). */
 export interface ChatInterruptValue {
-  kind: 'confirm' | 'question' | 'continue';
+  kind: 'confirm' | 'question' | 'continue' | 'web_consent';
   prompt: string;
-  actions: (ChatConfirmAction | ChatQuestionAction)[];
+  actions: (ChatConfirmAction | ChatQuestionAction | ChatWebConsentAction)[];
   /** Só em `continue`: o que já foi feito, para decidir sem adivinhar. */
   summary?: string;
+  /** Só em `continue`: quantas consultas o turno já fez ("Já consultei N coisas"). */
+  count?: number;
 }
 
 /** A resposta a uma pausa, no formato que o `portao` do agente lê. */
@@ -192,6 +212,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   AI_UNAUTHORIZED: SESSAO,
   AI_PLAN_REQUIRED:
     'O chat com a IA do Fatia faz parte do plano PRO. O registro manual e a sua própria IA pelo MCP continuam livres.',
+  AI_CONSENT_REQUIRED:
+    'Antes da primeira conversa, leia para onde vão as mensagens e dê o aceite para continuar.',
   AI_QUOTA_EXCEEDED: 'Você chegou ao limite de uso do assistente por hoje. Ele volta amanhã.',
   AGENT_STREAM_INTERRUPTED: 'A resposta foi interrompida antes de terminar. Tente enviar de novo.',
   AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
@@ -199,6 +221,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
     'Esta conversa mudou desde que a pergunta apareceu. Recarregue para ver o que ela espera agora.',
   CHAT_NOTHING_TO_RESUME:
     'Esta conversa não está mais esperando resposta. Recarregue para ver como ela ficou.',
+  CHAT_RUN_IN_PROGRESS:
+    'Esta conversa ainda está terminando a resposta anterior. Espere um instante e envie de novo.',
   CHAT_INTERNAL_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
   AGENT_INTERNAL_ERROR: 'O assistente teve um problema nesta resposta. Tente enviar de novo.',
   AI_UNKNOWN_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
@@ -320,7 +344,14 @@ export interface StreamChatInit {
 const RECONEXOES = 3;
 const ESPERA_DA_RECONEXAO_MS = [500, 1500, 4000];
 
-type Abertura = { ok: true; res: Response } | { ok: false; frames: ChatStreamFrame[] };
+type Abertura = { ok: true; res: Response } | { ok: false; frames: ChatStreamFrame[]; busy?: true };
+
+/**
+ * As esperas antes de tentar de novo quando a conversa ainda está ocupada (409
+ * `CHAT_RUN_IN_PROGRESS`): a parada que a pessoa pediu ainda está fechando no servidor, ou a
+ * fila mandou a próxima um instante cedo demais. Depois da última, desiste com o erro nomeado.
+ */
+const ESPERAS_DA_CONVERSA_OCUPADA_MS = [500, 1000, 2000, 4000];
 
 async function abrirStream(
   path: string,
@@ -348,6 +379,9 @@ async function abrirStream(
   if (res.status === 204) return { ok: false, frames: [] };
   if (!res.ok || !res.body) {
     const error = await erroDeResposta(res);
+    if (error.code === 'CHAT_RUN_IN_PROGRESS') {
+      return { ok: false, busy: true, frames: [...comoQuadros(error)] };
+    }
     if (error.code === 'AI_UNAUTHORIZED') await transport.onUnauthorized?.({ path, body: null });
     return { ok: false, frames: [...comoQuadros(error)] };
   }
@@ -447,15 +481,23 @@ export async function* streamChat(
   body: ChatTurnRequest,
   init: StreamChatInit = {},
 ): AsyncGenerator<ChatStreamFrame> {
-  const aberto = await abrirStream(
-    '/api/chat',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    init.signal,
-  );
+  const abrir = () =>
+    abrirStream(
+      '/api/chat',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      init.signal,
+    );
+  let aberto = await abrir();
+  for (const espera of ESPERAS_DA_CONVERSA_OCUPADA_MS) {
+    if (aberto === null || aberto.ok || !aberto.busy) break;
+    await esperar(espera, init.signal);
+    if (init.signal?.aborted) return;
+    aberto = await abrir();
+  }
   if (aberto === null) return;
   if (!aberto.ok) {
     yield* aberto.frames;
@@ -509,6 +551,8 @@ export interface ChatConversationSummary {
   state?: ChatConversationState;
   /** A comunidade cujo agente conduz a conversa; `null` é o assistente da Fatia. */
   agentGroupId?: string | null;
+  /** A última fala, em uma linha (#384). Ausente em API antiga. */
+  preview?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -541,7 +585,10 @@ export interface ChatHistoryMessage {
         /** `stopped`: a pessoa parou a resposta no meio. O texto é o que tinha chegado. */
         status?: 'completed' | 'interrupted' | 'error' | 'resolved' | 'stopped';
         interrupt?: { id: string; value: ChatInterruptValue };
-        /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
+        /**
+         * Na fala da pessoa: quantas fotos foram com ela pelo caminho antigo, que
+         * não guarda a foto (ADR 020). As guardadas vêm em `photos` da mensagem.
+         */
         photos?: number;
         /** As tools pedidas neste turno, com o id que as liga ao desfecho. */
         toolCalls?: { id: string; name: string }[];
@@ -557,6 +604,40 @@ export interface ChatHistoryMessage {
   runId: string | null;
   review: 'like' | 'dislike' | null;
   createdAt: string;
+  /**
+   * As fotos que a pessoa mandou nesta mensagem, guardadas no bucket (ADR 046).
+   * A URL é assinada e vence em minutos: quem precisa de novo relê a conversa.
+   */
+  photos?: ChatHistoryPhoto[];
+}
+
+export interface ChatHistoryPhoto {
+  id: string;
+  url: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * Sobe uma foto do chat (ADR 046): pede a URL, manda o corpo direto ao bucket e
+ * confirma. Devolve o id que vai em `photoIds`. O `put` é do app, como no
+ * `uploadMedia`: o corpo não passa pela API.
+ */
+export async function uploadChatPhoto(
+  input: { mime: string; bytes: number },
+  put: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number }>,
+): Promise<ChatHistoryPhoto> {
+  const ticket = await apiFetch<{
+    fileId: string;
+    uploadUrl: string;
+    headers: Record<string, string>;
+  }>('/api/media/chat-photos', { method: 'POST', body: JSON.stringify(input) });
+  const res = await put(ticket.uploadUrl, ticket.headers);
+  if (!res.ok) throw new Error(`O envio da foto falhou (${res.status}).`);
+  const view = await apiFetch<ChatHistoryPhoto>(`/api/media/${ticket.fileId}/confirm`, {
+    method: 'POST',
+  });
+  return view;
 }
 
 export interface ChatConversation extends ChatConversationSummary {
@@ -734,7 +815,65 @@ export type ChatArtifact =
     })
   | (ChatArtifactBase & {
       kind: 'comparison';
-      items: { label: string; value: number | string; unit?: string }[];
+      items: { label: string; value: number | string; before?: number | string; unit?: string }[];
+    })
+  // Os formatos da prancha IA-Cartoes (#384).
+  | (ChatArtifactBase & {
+      kind: 'bars';
+      unit?: string;
+      average?: number;
+      goal?: number;
+      bars: { label: string; value: number; reached?: boolean }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'list';
+      items: { title: string; detail?: string; value?: number | string; unit?: string }[];
+      total?: string;
+    })
+  | (ChatArtifactBase & {
+      kind: 'range';
+      rows: {
+        label: string;
+        value: number;
+        min?: number | null;
+        max?: number | null;
+        unit?: string;
+      }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'progress';
+      items: { title: string; percent: number; detail?: string; status?: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'scoreboard';
+      entries: { position: number; name: string; value: number; unit?: string; you?: boolean }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'badges';
+      badges: { title: string; unlocked: boolean }[];
+      unlocked: number;
+      total: number;
+    })
+  | (ChatArtifactBase & { kind: 'instructions'; steps: string[]; videoUrl?: string })
+  | (ChatArtifactBase & { kind: 'file'; url: string; filename: string; expiresAt: string })
+  // Os que nascem no agente: as fontes da busca e o botão das ações só do app.
+  | (ChatArtifactBase & {
+      kind: 'sources';
+      query?: string;
+      sources: { title: string; url: string; domain: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'app_only';
+      tool: string;
+      title?: string;
+      params: Record<string, string>;
+    })
+  // "Gravado", com Desfazer: só o componente nesta issue — quem emite é a #385.
+  | (ChatArtifactBase & {
+      kind: 'saved';
+      at: string;
+      lines: { label: string; before?: string; after: string }[];
+      undoable?: boolean;
     });
 
 // ---------------------------------------------------------------- memória e cota

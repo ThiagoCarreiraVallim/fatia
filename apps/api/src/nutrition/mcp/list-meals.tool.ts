@@ -22,6 +22,7 @@ export class ListMealsTool implements McpToolDef {
   readonly title = 'Listar refeições';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Lista refeições do usuário (cursor pagination).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD para filtrar pelo dia'),

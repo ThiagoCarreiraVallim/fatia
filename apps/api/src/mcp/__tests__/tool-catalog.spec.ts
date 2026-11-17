@@ -2,7 +2,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
+import {
+  CHAT_CARD_FORMATS,
+  MCP_TOOL_METADATA,
+  type McpToolDef,
+} from '../../common/decorators/tool.decorator';
 import { INTENT_TOOLS } from '../intent/intent-surface';
 import { servidaNa } from '../intent/superficie';
 
@@ -1066,5 +1070,83 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
     );
 
     expect(readOnlyWithoutExample.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * O contrato do cartão no chat hospedado (#384, prancha IA-Ferramentas): toda tool diz como
+ * aparece na conversa. Leitura → um formato de cartão; escrita confirmável → o cartão de
+ * confirmação (nada a declarar); o resto, que a IA nunca faz → a tela do app que faz.
+ */
+describe('cartão de cada tool no chat (#384)', () => {
+  const navigation = readFileSync(
+    resolve(REPO_ROOT, 'packages/api-client/src/navigation.ts'),
+    'utf8',
+  );
+  const rotas = [...navigation.matchAll(/pattern: '([^']+)'/g)].map((m) => m[1].split('/'));
+  const casaComRota = (path: string) => {
+    const seg = path.split('/');
+    return rotas.some(
+      (r) =>
+        r.length === seg.length &&
+        r.every(
+          (p, i) =>
+            p.startsWith(':') === seg[i].startsWith(':') && (p.startsWith(':') || p === seg[i]),
+        ),
+    );
+  };
+
+  // Decisão do dono (#384): toda tool tem formato explícito — não existe Tabela "padrão" para
+  // quem esqueceu de declarar. Leitura escolhe um formato de consulta; confirmável usa o cartão
+  // de confirmação (ou o formato da prancha, como "Desbloquear conquistas" → Selos); restrita
+  // leva à tela do app. Tool nova sem nada disso reprova aqui.
+  const CONFIRMAVEIS_COM_OUTRO_CARTAO: Record<string, string> = { refresh_achievements: 'badges' };
+
+  it('toda tool do chat declara o cartão, ou a tela do app, de forma explícita', () => {
+    const errados: string[] = [];
+    for (const { tool } of tools.filter(
+      ({ tool }) => (tool.surface ?? 'entidade') === 'entidade',
+    )) {
+      const a = tool.annotations;
+      const restrita = a.readOnlyHint !== true && a.confirmableHint !== true;
+      const conhecido = !!tool.card && (CHAT_CARD_FORMATS as readonly string[]).includes(tool.card);
+      if (restrita) {
+        if (!tool.appOnly) errados.push(`${tool.name}: restrita sem appOnly`);
+        if (tool.card) errados.push(`${tool.name}: restrita com card`);
+        continue;
+      }
+      if (tool.appOnly) errados.push(`${tool.name}: appOnly sem ser restrita`);
+      if (!conhecido) {
+        errados.push(`${tool.name}: sem card conhecido (${String(tool.card)})`);
+        continue;
+      }
+      if (a.readOnlyHint === true && tool.card === 'confirm') {
+        errados.push(`${tool.name}: leitura com cartão de confirmação`);
+      }
+      if (a.readOnlyHint !== true) {
+        const esperado = CONFIRMAVEIS_COM_OUTRO_CARTAO[tool.name] ?? 'confirm';
+        if (tool.card !== esperado)
+          errados.push(`${tool.name}: ${tool.card} (esperado ${esperado})`);
+      }
+    }
+    expect(errados.sort()).toEqual([]);
+  });
+
+  it('a tela de cada restrita é uma rota que existe no PWA e no app', () => {
+    const errados = tools
+      .filter(({ tool }) => tool.appOnly)
+      .filter(({ tool }) => !tool.appOnly!.screen.trim() || !casaComRota(tool.appOnly!.path))
+      .map(({ tool }) => `${tool.name}: ${tool.appOnly!.path}`);
+    expect(errados.sort()).toEqual([]);
+  });
+
+  it('o `:campo` do caminho é um argumento da tool', () => {
+    const errados: string[] = [];
+    for (const { tool } of tools.filter(({ tool }) => tool.appOnly)) {
+      for (const [, campo] of tool.appOnly!.path.matchAll(/:(\w+)/g)) {
+        if (!(campo in tool.inputSchema)) errados.push(`${tool.name}: :${campo}`);
+      }
+    }
+    expect(errados).toEqual([]);
   });
 });

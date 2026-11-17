@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { StorageModule } from '../storage/storage.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatRunRegistry } from './chat-run.registry';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
@@ -28,7 +29,7 @@ import { SharingModule } from '../sharing/sharing.module';
  * valida os argumentos com o schema da própria tool (`previa/`).
  */
 @Module({
-  imports: [McpModule, AiModule, SharingModule, NotificationsModule],
+  imports: [McpModule, AiModule, SharingModule, NotificationsModule, StorageModule],
   controllers: [ChatController],
   providers: [
     ChatRunRegistry,

@@ -77,14 +77,22 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
-from langgraph.types import Command, interrupt
+from langgraph.types import Command, StreamWriter, interrupt
 
 from ..prompts.chat_pt_br import bloco_da_persona, cercar, sistema_do_turno
 from ..providers.base import ReasoningDelta, TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
-from . import events, human
+from . import app_only, events, human, web
 from .artefatos import artefato
-from .errors import McpError, McpToolArgumentsInvalid, McpToolRejected
+from .errors import (
+    McpError,
+    McpRefused,
+    McpResponseUnparseable,
+    McpTimeout,
+    McpToolArgumentsInvalid,
+    McpToolRejected,
+    McpUnreachable,
+)
 from .planejador import com_status, planejar
 from .qualidade import (
     MAX_REFLEXOES,
@@ -100,6 +108,7 @@ from .state import ContextoDoTurno, EstadoDaConversa, FotoDoTurno, estado_vazio
 from .tool_policy import (
     argumentos_do_modelo,
     camada_confirmavel,
+    camada_read_only,
     exigir_permitida,
     formato_openai,
 )
@@ -149,6 +158,31 @@ LIMITE_DE_PASSOS = (
 )
 
 GrafoDaConversa = CompiledStateGraph[EstadoDaConversa, ContextoDoTurno, Any, Any]
+
+
+# Falhas do caminho até o `/mcp` que passam sozinhas: rede, timeout, 429/5xx e
+# resposta quebrada. Viram resultado de tool com erro para o modelo tentar de
+# novo, em vez de derrubar o turno. 401/403 (`McpUnauthorized`) fica de fora: é o
+# token de quem conversa, e repetir não conserta.
+FALHAS_TEMPORARIAS = (McpTimeout, McpUnreachable, McpRefused, McpResponseUnparseable)
+
+
+def falha_temporaria(somente_leitura: bool) -> str:
+    """O que o modelo lê quando a tool não respondeu por um problema passageiro.
+
+    A escrita não é dada como falha: a gravação pode ter chegado e só a resposta
+    ter se perdido. Repetir às cegas registraria a refeição duas vezes.
+    """
+    if somente_leitura:
+        return (
+            "Falha temporária ao falar com o servidor; nada foi alterado. "
+            "Tente esta mesma chamada de novo uma vez antes de avisar a pessoa."
+        )
+    return (
+        "Falha temporária ao falar com o servidor, e não deu para confirmar se a "
+        "alteração foi gravada. Antes de tentar de novo, consulte com uma leitura "
+        "se ela já aparece; se aparecer, não repita."
+    )
 
 
 def _cortado(conteudo: str) -> str:
@@ -428,12 +462,14 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             atualizacao["messages"] = [RemoveMessage(id=REMOVE_ALL_MESSAGES), *semente, *atuais]
         return atualizacao
 
-    async def agente(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
+    async def call_model(
+        state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]
+    ) -> dict[str, Any]:
         """Chama o modelo em streaming. Cada token sai na hora, pelo `writer`."""
         contexto = runtime.context
         writer = get_stream_writer()
         encerrar = bool(state.get("encerrar"))
-        catalogo = [] if encerrar else [*formato_openai(contexto.permitidas), human.DEFINICAO]
+        catalogo = [] if encerrar else _offered_tools(contexto)
         plano = state.get("plano") or []
         sistema = sistema_do_turno(
             contexto.timezone,
@@ -464,7 +500,9 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         texto: list[str] = []
         fim: TurnEnd | None = None
         async for pedaco in contexto.provider.stream_chat(
-            prompt, tools=catalogo, capacidade="vision" if contexto.fotos else "text"
+            prompt,
+            tools=catalogo,
+            capacidade="vision" if contexto.fotos else "text",
         ):
             if isinstance(pedaco, ReasoningDelta):
                 # Só para a tela: o raciocínio não entra em `texto`, então não vai
@@ -495,6 +533,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                             cached_input_units=pedaco.usage.cached_input_units,
                             reasoning_units=pedaco.usage.reasoning_units,
                             cost_usd=pedaco.usage.cost_usd,
+                            web_searches=pedaco.usage.web_searches,
                         )
                     )
 
@@ -532,11 +571,12 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             atualizacao["rodadas"] = (state.get("rodadas") or 0) + 1
         return atualizacao
 
-    async def ferramentas(
+    async def run_tools(
         state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]
     ) -> dict[str, Any]:
         """Executa o que pode rodar agora. Nada aqui interrompe — ver o docstring."""
         contexto = runtime.context
+        writer = get_stream_writer()
         mensagens = state.get("messages") or []
         encontrada = _ultima_do_assistente(mensagens)
         if encontrada is None:
@@ -544,7 +584,10 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         indice, pedido = encontrada
         respondidas = _respondidas(mensagens, indice)
         confirmaveis = {tool.name for tool in camada_confirmavel(contexto.permitidas)}
+        leituras = {tool.name for tool in camada_read_only(contexto.permitidas)}
         decisoes = state.get("decisoes") or {}
+        buscas = dict(state.get("buscas") or {})
+        buscas_antes = len(buscas)
         novas: list[ToolMessage] = []
 
         for chamada in _chamadas(pedido):
@@ -578,6 +621,45 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 novas.append(resultado(human.sentinela(pergunta), artefato={"ask": pergunta}))
                 continue
 
+            if nome == app_only.NAME:
+                cartao = app_only.card(chamada["args"], contexto.restricted)
+                novas.append(
+                    resultado(app_only.SHOWN, artefato={"structured": cartao})
+                    if cartao is not None
+                    else resultado(app_only.refusal(chamada["args"]), erro=True)
+                )
+                continue
+
+            if nome == web.NAME:
+                if contexto.web_search == "off" or contexto.search_web is None:
+                    novas.append(resultado(web.OFF, erro=True))
+                    continue
+                # A pergunta nunca vem do argumento do modelo: é escrita à parte, só com a
+                # última fala da pessoa, e uma vez só — a que o aceite mostra é a buscada.
+                if identificador not in buscas:
+                    buscas[identificador] = await web.build_query(
+                        contexto.write_search_query, _ultima_fala_da_pessoa(mensagens)
+                    )
+                decisao = decisoes.get(identificador)
+                # Sem decisão em `ask`, espera o portão. O sim só busca com o aceite gravado
+                # na API — que, na retomada, manda `on`. Em `ask` o sim não basta.
+                if contexto.web_search == "ask" and decisao is None:
+                    continue
+                if decisao is False or contexto.web_search == "ask":
+                    novas.append(resultado(web.DECLINED))
+                    continue
+                texto, falhou, cartao = await _search(
+                    contexto.search_web, buscas[identificador], writer
+                )
+                novas.append(
+                    resultado(
+                        texto,
+                        erro=falhou,
+                        artefato={"structured": cartao} if cartao is not None else None,
+                    )
+                )
+                continue
+
             if nome in confirmaveis:
                 decisao = decisoes.get(identificador)
                 if decisao is None:
@@ -590,7 +672,11 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 exigir_permitida(nome, contexto.permitidas)
                 if nome in confirmaveis:
                     _exigir_argumentos_no_teto(nome, chamada["args"])
-                saida = await contexto.client.call_tool(nome, chamada["args"])
+                # Leitura repete uma vez a queda de conexão dentro do cliente
+                # (`McpClient._rpc`); escrita nunca, pelo risco de gravar duas vezes.
+                saida = await contexto.client.call_tool(
+                    nome, chamada["args"], read_only=nome in leituras
+                )
                 novas.append(
                     resultado(
                         saida.text,
@@ -603,11 +689,16 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 # para ele ler e se corrigir — derrubar a conversa trocaria "pedi
                 # a tool errada" por "o chat caiu".
                 novas.append(resultado(exc.message, erro=True))
+            except FALHAS_TEMPORARIAS:
+                # Passageira: o modelo lê e tenta de novo na rodada seguinte. Os
+                # tetos que já existem seguram o laço — duas falhas seguidas da
+                # mesma tool viram reflexão (`LIMIAR_DE_FALHAS`), e as rodadas
+                # têm teto (`MAX_RODADAS_DE_TOOL`).
+                novas.append(resultado(falha_temporaria(nome in leituras), erro=True))
 
         if not novas:
-            return {}
+            return {"buscas": buscas} if len(buscas) != buscas_antes else {}
 
-        writer = get_stream_writer()
         falhas = dict(state.get("falhas") or {})
         for mensagem in novas:
             nome = mensagem.name or ""
@@ -634,14 +725,14 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             writer(events.plan(plano))
         return atualizacao
 
-    async def portao(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
+    async def gate(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
         """Para e fala com a pessoa. O ÚNICO nó que interrompe.
 
         ⚠️ Um `interrupt()` só, carregando a lista inteira de `actions`. Um por
         item faria a tela ver só o primeiro, e os outros ficariam sem decisão.
         """
         contexto = runtime.context
-        itens = _paradas(state, contexto)
+        itens = _pending_stops(state, contexto)
         if not itens:
             return {}
 
@@ -652,7 +743,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         decisoes = dict(state.get("decisoes") or {})
         reescritas: list[ToolMessage] = []
         for item in itens:
-            if item["kind"] == "confirm":
+            if item["kind"] in ("confirm", "web_consent"):
                 decisoes[item["toolCallId"]] = _aprovou(resposta, item["toolCallId"])
             else:
                 # Substituição pelo `id` da mensagem, e não acréscimo: não existe
@@ -701,10 +792,10 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             writer(events.plan(plano.passos))
         return {"plano": plano.passos}
 
-    async def orcamento(
+    async def budget_pause(
         state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]
     ) -> dict[str, Any]:
-        """O teto de voltas acabou: pergunta se continua, em vez de parar calado.
+        """O teto de voltas ou de consultas acabou: pergunta se continua, em vez de parar calado.
 
         Sem efeito colateral antes do `interrupt()` — o LangGraph reexecuta este
         nó na retomada, como o portão.
@@ -718,8 +809,9 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         resposta = interrupt(
             {
                 "kind": "continue",
-                "prompt": "Esta tarefa está mais longa que o previsto. Quer que eu continue?",
+                "prompt": _continue_prompt(len(feitas)),
                 "summary": resumo_do_trabalho(feitas),
+                "count": len(feitas),
                 "actions": [],
             }
         )
@@ -805,7 +897,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
     def rota_apos_hidratar(_state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> str:
         return "planejar" if runtime.context.planejar else "agente"
 
-    def rota_apos_agente(state: EstadoDaConversa) -> str:
+    def route_after_agent(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> str:
         encontrada = _ultima_do_assistente(state.get("messages") or [])
         if encontrada is None or not _chamadas(encontrada[1]):
             return "validar"
@@ -815,8 +907,14 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             return "fechar"
         if tool_em_falha(state.get("falhas") or {}):
             return "refletir"
-        teto = MAX_RODADAS_DE_TOOL + (state.get("concedidas") or 0)
+        concedidas = state.get("concedidas") or 0
+        teto = MAX_RODADAS_DE_TOOL + concedidas
         if (state.get("rodadas") or 0) > teto:
+            return "orcamento"
+        # O teto de consultas (#384) cresce a cada "Continuar", como o de voltas.
+        continuacoes = concedidas // MAX_RODADAS_DE_TOOL
+        limite = runtime.context.pause_after_tools * (continuacoes + 1)
+        if limite > 0 and _tools_this_turn(state.get("messages") or []) >= limite:
             return "orcamento"
         return "ferramentas"
 
@@ -828,16 +926,16 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
     def rota_apos_validar(state: EstadoDaConversa) -> str:
         return "agente" if state.get("refazer") else "fechar"
 
-    def rota_apos_ferramentas(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> str:
-        return "portao" if _paradas(state, runtime.context) else "agente"
+    def route_after_tools(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> str:
+        return "portao" if _pending_stops(state, runtime.context) else "agente"
 
     grafo = StateGraph(EstadoDaConversa, context_schema=ContextoDoTurno)
     grafo.add_node("hidratar", hidratar)
     grafo.add_node("planejar", planejar_no)
-    grafo.add_node("agente", agente)
-    grafo.add_node("ferramentas", ferramentas)
-    grafo.add_node("portao", portao)
-    grafo.add_node("orcamento", orcamento)
+    grafo.add_node("agente", call_model)
+    grafo.add_node("ferramentas", run_tools)
+    grafo.add_node("portao", gate)
+    grafo.add_node("orcamento", budget_pause)
     grafo.add_node("refletir", refletir)
     grafo.add_node("validar", validar)
     grafo.add_node("fechar", fechar)
@@ -847,10 +945,10 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
     grafo.add_edge("planejar", "agente")
     grafo.add_conditional_edges(
         "agente",
-        rota_apos_agente,
+        route_after_agent,
         ["ferramentas", "validar", "refletir", "orcamento", "fechar"],
     )
-    grafo.add_conditional_edges("ferramentas", rota_apos_ferramentas, ["portao", "agente"])
+    grafo.add_conditional_edges("ferramentas", route_after_tools, ["portao", "agente"])
     grafo.add_edge("portao", "ferramentas")
     grafo.add_conditional_edges("orcamento", rota_apos_orcamento, ["agente", "ferramentas"])
     grafo.add_edge("refletir", "agente")
@@ -860,8 +958,12 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
     return grafo.compile(checkpointer=checkpointer)
 
 
-def _paradas(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[str, Any]]:
-    """O que a volta atual espera da pessoa: escritas sem decisão e perguntas.
+def _pending_stops(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[str, Any]]:
+    """O que a volta atual espera da pessoa: escritas sem decisão, perguntas e o aceite da busca.
+
+    A busca sem decisão vira `web_consent` com o modo ligado (`ask` ou `on`): em `on` a busca
+    roda antes de o portão olhar, então só chega aqui sem resposta na retomada de uma pausa —
+    e é aí que o "não" da pessoa precisa ser lido, mesmo que a API já esteja em `on`.
 
     Os argumentos da escrita vão **inteiros** na parada: é o que a pessoa lê
     para decidir, e é exatamente o que vai executar se ela aprovar.
@@ -893,6 +995,22 @@ def _paradas(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[st
                     }
                 )
             continue
+        if (
+            chamada["erro"] is None
+            and nome == web.NAME
+            and identificador not in decisoes
+            and contexto.web_search != "off"
+        ):
+            itens.append(
+                {
+                    "kind": "web_consent",
+                    "toolCallId": identificador,
+                    "tool": web.NAME,
+                    "prompt": web.CONSENT_PROMPT,
+                    "query": (state.get("buscas") or {}).get(identificador, ""),
+                }
+            )
+            continue
         if chamada["erro"] is None and nome in confirmaveis and identificador not in decisoes:
             itens.append(
                 {
@@ -905,6 +1023,85 @@ def _paradas(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[st
                 }
             )
     return itens
+
+
+def _offered_tools(contexto: ContextoDoTurno) -> list[dict[str, Any]]:
+    """O catálogo da volta: as do `/mcp`, `ask_user` e as locais da #384 quando cabem."""
+    catalogo = [*formato_openai(contexto.permitidas), human.DEFINICAO]
+    botao = app_only.definition(contexto.restricted)
+    if botao is not None:
+        catalogo.append(botao)
+    if contexto.web_search != "off" and contexto.search_web is not None:
+        catalogo.append(web.DEFINITION)
+    return catalogo
+
+
+def _tools_this_turn(mensagens: Sequence[AnyMessage]) -> int:
+    """Consultas feitas desde a última fala da pessoa. A pergunta à pessoa não conta."""
+    return sum(
+        1 for m in _do_turno(mensagens) if isinstance(m, ToolMessage) and m.name != human.NOME
+    )
+
+
+def _continue_prompt(feitas: int) -> str:
+    """O "Continuo?" da prancha IA-Estados: diz quanto já foi, para a pessoa decidir."""
+    if feitas <= 0:
+        return "Esta tarefa está mais longa que o previsto. Continuo?"
+    return f"Já consultei {feitas} {'coisa' if feitas == 1 else 'coisas'}. Continuo?"
+
+
+async def _search(
+    search_web: web.WebSearcher,
+    query: str,
+    writer: StreamWriter,
+) -> tuple[str, bool, dict[str, Any] | None]:
+    """Roda a busca com a pergunta já escrita e limpa, e lança o custo.
+
+    A busca é lançada na cota **antes** de sair, num `usage` só com `webSearches`: sem
+    `usage` do provedor, com a busca caindo no meio ou com o turno parado enquanto ela roda,
+    a unidade já foi contada — a busca não sai de graça. O custo em token, quando o provedor
+    mede, vem depois, sem contar a busca de novo.
+
+    Devolve o texto para o modelo, se falhou e o cartão de fontes (quando houve fonte).
+    """
+    if not query:
+        return web.EMPTY_QUERY, True, None
+    writer(events.usage(web.CHARGE_MODEL, input_units=None, output_units=None, web_searches=1))
+    try:
+        achado = await search_web(query)
+    except AIProviderError as exc:
+        # Recuperável: a conversa segue sem a busca, e o modelo diz que não conseguiu.
+        logger.warning("Busca na web falhou: %s", exc.code)
+        return web.UNAVAILABLE, True, None
+    if achado.usage is not None:
+        writer(
+            events.usage(
+                achado.usage.model,
+                input_units=achado.usage.input_units,
+                output_units=achado.usage.output_units,
+                cached_input_units=achado.usage.cached_input_units,
+                reasoning_units=achado.usage.reasoning_units,
+                cost_usd=achado.usage.cost_usd,
+            )
+        )
+    if not achado.sources:
+        return web.NO_RESULTS, False, None
+    return web.text_for_model(achado), False, web.sources_artifact(query, achado)
+
+
+def _ultima_fala_da_pessoa(mensagens: Sequence[AnyMessage]) -> str:
+    """O texto da última mensagem da pessoa (só as partes de texto; foto não entra)."""
+    for mensagem in reversed(mensagens):
+        if isinstance(mensagem, HumanMessage):
+            conteudo = mensagem.content
+            if isinstance(conteudo, str):
+                return conteudo
+            return " ".join(
+                str(parte.get("text", ""))
+                for parte in conteudo
+                if isinstance(parte, dict) and parte.get("type") == "text"
+            )
+    return ""
 
 
 AGENT_INTERNAL_ERROR = "AGENT_INTERNAL_ERROR"

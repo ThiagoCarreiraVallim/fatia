@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TIPO_DA_REFEICAO } from './list-meals.tool';
 import { z } from 'zod';
 import { MealItemSource, MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
@@ -46,6 +47,7 @@ export class LogMealTool implements McpToolDef {
   readonly title = 'Registrar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +
     'Cada item aceita source (origem: AI, MANUAL, BARCODE ou PLAN; padrão AI). A resposta diz hasPhoto, nunca o arquivo. ' +
@@ -77,5 +79,21 @@ export class LogMealTool implements McpToolDef {
     { userId }: McpToolContext,
   ) {
     return this.meals.create(userId, { ...input, items: withAiSource(input.items) });
+  }
+
+  /** O que foi gravado, item por item: é o que a pessoa confere depois de aprovar. */
+  artifact(result: unknown) {
+    const refeicao = result as Awaited<ReturnType<MealService['create']>>;
+    return {
+      kind: 'report',
+      label: `${TIPO_DA_REFEICAO[refeicao.mealType] ?? 'Refeição'} registrado`,
+      columns: ['Alimento', 'g', 'kcal', 'Proteína (g)'],
+      rows: refeicao.items.map((item) => [
+        item.foodName,
+        Math.round(item.grams),
+        Math.round(item.kcal),
+        Math.round(item.proteinG),
+      ]),
+    };
   }
 }

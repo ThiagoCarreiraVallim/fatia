@@ -23,6 +23,12 @@ import {
 } from '@/components/chat/message-list';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
+import {
+  ChatConsentSheet,
+  QuickReplies,
+  WebSearchSwitch,
+  useChatUnlocked,
+} from '@/components/chat/consent';
 import { CHAT_KEYS, useChatSession, useChatSnapshot } from '@/chat/chat-provider';
 import { colors } from '@/theme/colors';
 
@@ -36,7 +42,18 @@ export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const sessao = useChatSession();
-  const { thread, agent, isNew, loading, loadError, conversationId } = useChatSnapshot();
+  const {
+    thread,
+    title,
+    agent,
+    isNew,
+    loading,
+    loadError,
+    conversationId,
+    queue,
+    queuePaused,
+    quote,
+  } = useChatSnapshot();
   const lista = useRef<FlatList<ChatThreadMessage>>(null);
 
   useEffect(() => {
@@ -65,11 +82,11 @@ export default function ConversationScreen() {
   const nomeDoAgente = isNew ? (agenteDaNova?.name ?? null) : (agent?.name ?? null);
 
   const aberta = conversationId === id;
+  const liberado = useChatUnlocked();
   const ultima = thread.messages.at(-1);
   const pensando =
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
-  const ultimaPergunta = [...thread.messages].reverse().find((m) => m.role === 'user');
 
   useEffect(() => {
     if (thread.messages.length)
@@ -83,10 +100,11 @@ export default function ConversationScreen() {
 
   return (
     <Screen
-      title={nomeDoAgente ?? 'Chat'}
+      title={nomeDoAgente ?? title ?? (isNew ? 'Nova conversa' : 'Conversa')}
       scroll={false}
       actions={
         <>
+          <WebSearchSwitch />
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Memórias do assistente"
@@ -172,14 +190,26 @@ export default function ConversationScreen() {
             }
             renderItem={({ item, index }) =>
               item.role === 'user' ? (
-                <UserBubble text={item.text} photos={item.photos} />
+                <UserBubble
+                  text={item.text}
+                  photos={item.photos}
+                  images={item.images}
+                  headline={index === 0}
+                />
               ) : (
                 <AssistantBlock
                   message={item}
                   thread={thread}
                   agentName={nomeDoAgente}
                   showName={thread.messages[index - 1]?.role !== 'assistant'}
+                  // A resposta do turno atual pode vir em mais de uma fala do assistente:
+                  // "última" é não ter fala da pessoa depois.
+                  last={!thread.messages.slice(index + 1).some((m) => m.role === 'user')}
                   onVote={(rowId, review) => void sessao.vote(rowId, review).catch(() => undefined)}
+                  onQuote={(text) => sessao.setQuote(text)}
+                  onExplain={(rowId, reasons) =>
+                    void sessao.explainVote(rowId, reasons).catch(() => undefined)
+                  }
                 />
               )
             }
@@ -197,9 +227,8 @@ export default function ConversationScreen() {
                 {thread.error ? (
                   <TurnError
                     error={thread.error}
-                    onRetry={() => {
-                      if (ultimaPergunta) void sessao.send({ text: ultimaPergunta.text });
-                    }}
+                    // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
+                    onRetry={() => void sessao.retry()}
                   />
                 ) : null}
                 {cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
@@ -213,16 +242,29 @@ export default function ConversationScreen() {
             }
           />
         )}
-        <Composer
-          running={thread.running}
-          disabled={!aberta || loading}
-          photosEnabled={disponibilidade.data?.photos ?? false}
-          dictationEnabled={disponibilidade.data?.dictation ?? false}
-          onSend={(text, photos) =>
-            void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
-          }
-          onStop={() => void sessao.stop()}
-        />
+        {liberado ? (
+          <>
+            <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
+            <Composer
+              running={thread.running}
+              disabled={!aberta || loading}
+              photosEnabled={disponibilidade.data?.photos ?? false}
+              dictationEnabled={disponibilidade.data?.dictation ?? false}
+              onSend={(text, photos) =>
+                void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
+              }
+              queue={queue}
+              queuePaused={queuePaused}
+              onSendQueued={(id) => void sessao.sendQueued(id)}
+              quote={quote}
+              onDismissQuote={() => sessao.setQuote(null)}
+              onQueue={(text) => sessao.enqueue(text)}
+              onDequeue={(id) => sessao.dequeue(id)}
+              onStop={() => void sessao.stop()}
+            />
+          </>
+        ) : null}
+        <ChatConsentSheet error={thread.error} />
       </KeyboardAvoidingView>
     </Screen>
   );

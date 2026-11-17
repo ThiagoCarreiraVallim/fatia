@@ -15,6 +15,7 @@ export class LogWeightTool implements McpToolDef {
   readonly title = 'Registrar peso';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Registra uma medição de peso corporal. ' +
     'Exemplo: {"weightKg":78.4,"loggedAt":"2026-07-29T07:10:00-03:00","notes":"em jejum, pela manhã"}';
@@ -32,5 +33,10 @@ export class LogWeightTool implements McpToolDef {
     { userId, timezone }: McpToolContext,
   ) {
     return this.weights.log(input, userId, timezone);
+  }
+
+  /** O peso que foi gravado. O resultado só traz o id; o valor é o do pedido aprovado. */
+  artifact(_result: unknown, input: { weightKg: number }) {
+    return { kind: 'metric', label: 'Peso registrado', value: input.weightKg, unit: 'kg' };
   }
 }

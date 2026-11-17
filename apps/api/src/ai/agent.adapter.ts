@@ -78,6 +78,11 @@ export type TurnInput = {
   memories?: { id: string; content: string }[];
   /** O agente da comunidade nesta conversa (Fase 7c). Ausente: o assistente da Fatia. */
   persona?: ChatPersona;
+  /**
+   * A busca na web (#384): `off` não oferece, `ask` pede o aceite antes da primeira, `on` busca.
+   * Ausente é `off`: quem não diz não liga a busca.
+   */
+  webSearch?: 'off' | 'ask' | 'on';
 } & (
   | {
       message: string;

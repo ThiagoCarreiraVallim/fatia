@@ -14,6 +14,7 @@ export class ListDataSharingTool implements McpToolDef {
   readonly title = 'Ver quem tem acesso aos meus dados';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Responde "quem consegue ver o quê de mim": lista cada profissional autorizado pelo usuário, ' +
     'em qual grupo, quais categorias de dado foram consentidas (treino, alimentação, corpo, ' +

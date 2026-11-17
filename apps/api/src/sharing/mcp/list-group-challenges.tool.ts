@@ -15,6 +15,7 @@ export class ListGroupChallengesTool implements McpToolDef {
   readonly title = 'Desafios de uma comunidade';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista os desafios de uma comunidade (em andamento, marcados e encerrados), com o que cada ' +
     'um mede, as datas, quantas pessoas participam e, se o usuário participa, o apelido, a ' +

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AchievementService } from '../achievement.service';
+import { AchievementService, type AchievementEntry } from '../achievement.service';
 import {
   McpTool,
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { achievementBadges } from './achievement-badges';
 
 @Injectable()
 @McpTool()
@@ -17,6 +18,7 @@ export class RefreshAchievementsTool implements McpToolDef {
   // `readOnlyHint: true` gravando é surpresa desagradável para quem lê a anotação.
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'badges' as const;
   readonly description =
     'Reavalia o catálogo de conquistas e desbloqueia as que o usuário já mereceu, devolvendo as ' +
     'sete chaves com `unlockedAt` atualizado. Idempotente: chamar de novo não duplica nada nem ' +
@@ -25,5 +27,10 @@ export class RefreshAchievementsTool implements McpToolDef {
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {
     return this.achievements.evaluate({ userId, timezone });
+  }
+
+  /** As conquistas depois de recalculadas, como em `list_achievements` (#384). */
+  artifact(result: unknown) {
+    return achievementBadges(result as AchievementEntry[]);
   }
 }

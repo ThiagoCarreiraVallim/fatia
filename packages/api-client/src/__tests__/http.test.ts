@@ -160,3 +160,11 @@ describe('apiFetch', () => {
     expect((init.headers as Headers).get('content-type')).toBe('application/json');
   });
 });
+
+describe('ApiError.isAiConsentRequired (#384)', () => {
+  it('é o 403 com o código do aceite, e não qualquer 403', () => {
+    expect(new ApiError('x', 403, { code: 'AI_CONSENT_REQUIRED' }).isAiConsentRequired).toBe(true);
+    expect(new ApiError('x', 403, { code: 'FORBIDDEN' }).isAiConsentRequired).toBe(false);
+    expect(new ApiError('x', 403).isAiConsentRequired).toBe(false);
+  });
+});

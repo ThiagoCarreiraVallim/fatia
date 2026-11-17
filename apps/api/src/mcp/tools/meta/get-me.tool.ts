@@ -16,6 +16,7 @@ export class GetMeTool implements McpToolDef {
   readonly title = 'Ver meu perfil';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Retorna o perfil do usuário autenticado: nome, e-mail, estatura, fuso, dados da sugestão de metas, ' +
     'apelido e bio das comunidades, quem vê a foto, a preferência de guardar fotos das refeições e as ' +

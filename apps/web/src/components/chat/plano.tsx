@@ -14,10 +14,15 @@ import { usePlanoDoTurno } from './chat-runtime-provider';
 export function PlanoDoTurno() {
   const plano = usePlanoDoTurno();
   if (!plano?.length) return null;
+  const feitos = plano.filter((passo) => passo.status === 'done').length;
   return (
-    <section aria-label="Plano" className={cn(field, 'w-full rounded-xl px-3.5 py-3')}>
-      <h2 className="pb-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+    <section aria-label="Plano" className={cn(field, 'w-full rounded-2xl px-3.5 py-3')}>
+      <h2 className="flex items-baseline justify-between pb-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
         Plano
+        {/* Prancha IA-Estados: o andamento em número, além dos ícones. */}
+        <span className="font-normal normal-case tracking-normal tabular-nums">
+          {feitos} de {plano.length} passos
+        </span>
       </h2>
       <ol className="flex flex-col gap-1 text-sm">
         {plano.map((passo) => (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { ChatReviewReason } from '@fatia/api-client';
+import { CHAT_FEEDBACK_REASON_LABELS, type ChatReviewReason } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { floating, ghostButton, inkButton } from '@/components/elements/surfaces';
 import { useVoto } from './chat-runtime-provider';
@@ -15,14 +15,16 @@ import { useVoto } from './chat-runtime-provider';
  * dá para somar; o texto livre vai à parte.
  */
 
-const MOTIVOS: { valor: ChatReviewReason; rotulo: string }[] = [
-  { valor: 'incorrect', rotulo: 'Informação errada' },
-  { valor: 'wrong_data', rotulo: 'Usou os dados errados' },
-  { valor: 'incomplete', rotulo: 'Incompleta' },
-  { valor: 'did_not_follow', rotulo: 'Não fez o que pedi' },
-  { valor: 'slow', rotulo: 'Demorou demais' },
-  { valor: 'other', rotulo: 'Outro' },
+// Os rótulos da prancha IA-Estados, iguais no app (`CHAT_FEEDBACK_REASON_LABELS`).
+const ORDEM: ChatReviewReason[] = [
+  'incorrect',
+  'wrong_data',
+  'incomplete',
+  'did_not_follow',
+  'slow',
+  'other',
 ];
+const MOTIVOS = ORDEM.map((valor) => ({ valor, rotulo: CHAT_FEEDBACK_REASON_LABELS[valor] }));
 
 export function MotivoDoVoto() {
   const voto = useVoto();

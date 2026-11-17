@@ -15,6 +15,7 @@ export class MarkInboxReadTool implements McpToolDef {
   readonly title = 'Marcar avisos como lidos';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Marca avisos da central do sino como lidos. Sem `ids`, marca todos. Id que não é da ' +
     'pessoa é ignorado. Exemplo: {"ids":["11111111-2222-4333-8444-555555555555"]}';

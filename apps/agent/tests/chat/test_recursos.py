@@ -75,12 +75,11 @@ async def test_structured_content_vira_artefato_pendurado_na_chamada(settings_fa
     assert "Calorias hoje" not in str(r.provider.corpos[1]["messages"])
 
 
-def test_artefato_desconhecido_vira_relatorio_e_incompleto_nao_vira_nada():
-    assert artefato({"kind": "grafico", "columns": [], "rows": []}) == {
-        "kind": "report",
-        "columns": [],
-        "rows": [],
-    }
+def test_artefato_desconhecido_ou_incompleto_nao_vira_nada():
+    """Sem formato padrão (#384): toda tool declara o seu, e um `kind` que a tela não conhece
+    é defeito de quem produziu — virar Tabela esconderia o defeito atrás de um cartão torto."""
+    assert artefato({"kind": "grafico", "columns": [], "rows": []}) is None
+    assert artefato({"columns": [], "rows": []}) is None
     assert artefato({"kind": "metric"}) is None
     # Zero é resultado legítimo: presença da chave, não verdade do valor.
     assert artefato({"kind": "metric", "value": 0}) == {"kind": "metric", "value": 0}

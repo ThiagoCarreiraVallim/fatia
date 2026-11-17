@@ -15,6 +15,7 @@ export class CommentOnGroupPostTool implements McpToolDef {
   readonly title = 'Comentar um post da comunidade';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Comenta um post do mural de uma comunidade de que o usuário faz parte. Todos os membros ' +
     'veem o comentário com o apelido dele. Escreva só o que o usuário pediu. ' +

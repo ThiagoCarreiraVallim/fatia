@@ -209,10 +209,53 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 
 ## Etapa 6: IA, plano e MCP (em andamento)
 
-| Issue | Título             | Estado           | Superfícies                                        |
-| ----- | ------------------ | ---------------- | -------------------------------------------------- |
-| #386  | Plano e assinatura | pronto na branch | api, db, api-client, web, app, site, e-mail e push |
-| #388  | Conectar sua IA    | pronto na branch | api, db, api-client, web, app, docs                |
+| Issue | Título                                                 | Estado           | Superfícies                                                     |
+| ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
+| #384  | Chat com IA: conversas, cartões, estados e ferramentas | pronto na branch | api, db, agente, MCP (contrato de cartão), api-client, web, app |
+| #386  | Plano e assinatura                                     | pronto na branch | api, db, api-client, web, app, site, e-mail e push              |
+| #388  | Conectar sua IA                                        | pronto na branch | api, db, api-client, web, app, docs                             |
+
+Pendências da #384 (branch `redesign/384-chat`, migrations `20261117110000_ai_consent_and_web_search` e `20261117110100_chat_photos_in_media_file`; envs novas `AGENT_CHAT_PAUSE_AFTER_TOOLS`, padrão 14, e `AI_CONSENT_PROVIDER`/`AI_CONSENT_MODEL`/`AI_CONSENT_SEARCH_ENGINE`, vazias = o destino de hoje):
+
+- **Contrato de cartão:** toda tool declara o formato do cartão (`card` no `McpToolDef`), sem Tabela padrão para quem não mapeou (decisão do dono durante a issue). Leitura → um dos 12 formatos de consulta; confirmável → `confirm` (o cartão Gravar/Ajustar; `refresh_achievements` → `badges`); restrita → `appOnly { screen, path }`. As tools do agente também: `web_search` → fontes, `ask_user` → pergunta, `open_in_app` → só no app (`AGENT_LOCAL_TOOLS`). `tool-catalog.spec.ts` reprova tool sem formato; o agente descarta `kind` desconhecido em vez de virar Tabela. Servido em `GET /chat/tool-catalog`. Não vai no fio do MCP: `SHA_ENTIDADE`, contagem e docs do MCP não mudaram (specs rodados depois do merge e do contrato).
+- **Produtores:** toda tool de leitura desenha o cartão que declara. As 22 que não tinham produtor (métricas, barras, linhas do tempo, faixas, progresso, comparações, placar) e `refresh_achievements` ganharam `artifact()`; Tabela e Lista genéricas desenham qualquer resultado com o que mostrar (objeto único vira rótulo/valor, nome aninhado resolvido, coluna sem número). `chat-card-coverage.spec.ts` roda toda tool com `card` contra uma amostra realista e reprova formato sem produtor (44 de 70 casos estavam vermelhos antes). Cliente: formato desconhecido (ou sem o campo principal) vira o aviso "Este cartão precisa de uma versão mais nova do Fatia.", no PWA e no app.
+- **Só no app:** a IA nunca apaga, sai ou autoriza; chama `open_in_app`, que emite o cartão "… é pelo app" com "Abrir <tela>" (link montado por `appOnlyHref` sobre `ROUTES`; sem o parâmetro, a tela-mãe).
+- **Busca na web (só OpenRouter):** tool local `web_search` **sem argumento**: o modelo principal só decide buscar. A pergunta é escrita numa chamada à parte que vê só a última fala da pessoa (sem citação, perfil, memórias nem histórico), depois passa pelo filtro de e-mail, telefone e documento; a mesma pergunta aparece no aceite e é buscada. Chamada separada ao OpenRouter com o plugin `web` (engine `exa`), só com esse texto. Cobra 1 busca antes de sair, mesmo sem `usage` ou parada no meio. Modo `off | ask | on` vem da API a cada turno; `ask` pausa com `web_consent` ("Buscar na web?", com a pergunta à vista). O aceite diz que a retenção zero não cobre a busca. Fontes num cartão. Cada busca cobra na cota (`AiUsage` `web_search`, modelo `openrouter-web-search`).
+- **Aceites:** `AiConsent` (chat e busca, com versão) e `User.webSearchEnabled`. Toda chamada do `HostedAiService` (turno, ditado, foto do prato, rótulo) exige o aceite do chat: sem ele, 403 `AI_CONSENT_REQUIRED`, e o PWA e o app abrem o aceite (no chat, no ditado, na foto, no rótulo e no onboarding); carregando ou sem conseguir ler, o campo não aparece. O 403 diz "atualize o app" para o app antigo, que só mostra a mensagem. Os nomes (provedor, modelo, busca) vêm das envs `AI_CONSENT_*` pela API, e o aceite gravado leva os nomes: trocar um pede o aceite de novo. O texto tem hash amarrado à versão (`2026-11-17`) num teste. No lote, a busca conta como decisão e o aceite dela só é gravado no Enviar, se a escolha final for concordar. Entram no export de dados. A chave do globo no topo liga e desliga a busca. A `/privacy` descreve a busca nova.
+- **Fila e parada:** depois de uma resposta com erro, a fila para e cada item ganha Enviar/Descartar (nada sai sozinho); "Tentar de novo" reenvia a pergunta que falhou. `POST …/stop` responde só depois de o turno fechar (teto de 10 s), a fila espera essa resposta, e o turno que esbarra no 409 `CHAT_RUN_IN_PROGRESS` tenta de novo com espera crescente. No app, o envio confere parada e conversa depois de subir a foto.
+- **Foto do chat passageira:** some em 24 h, presa à mensagem ou não; só fica a que virou refeição (`promoteChatPhotoToMeal`, gancho para a #385, com "guardar as fotos" ligado). A ADR 046 foi emendada para ceder à 038. As fotos entram no export LGPD, na mensagem, com link assinado.
+- **Lista de conversas:** a prévia tira a citação (`> …`) da frente.
+- **Pausa "Continuo?":** depois de `AGENT_CHAT_PAUSE_AFTER_TOOLS` consultas no turno ("Já consultei N coisas. Continuo?"), com Continuar e Parar aqui; 0 desliga.
+- **Merge de `feat/chat-fotos-busca-fila-cartoes`:** ficaram a fila de mensagens, citar trecho, o retry do `/mcp` em falha temporária e a foto do chat no R2 (ADR renumerada para **046**, migration renomeada para ordenar depois das da main). A busca da branch (tool de servidor dentro da chamada do modelo, sem aceite, com a conversa inteira no contexto) saiu; ficou a cobrança por busca dela.
+- **Conversas antigas:** o dono liberou apagar mensagens e conversas antigas se o schema limpo pedisse. Não foi preciso: os formatos novos moram no mesmo `metadata.artifacts`, e as conversas antigas abrem como antes. **Nada foi apagado.**
+- **Tela (web e app):** linhas da tool com "Consultando …", "· nada encontrado" (neutro), "· não deu certo" (vermelho, detalhe num toque), "· você recusou"; 2+ consultas seguidas viram "Consultei N coisas" (nunca com falha); o cartão da última resposta fica aberto e o das antigas recolhe numa linha com ✓ e o resultado; confirmação Gravar/Ajustar com contorno verde, inválida em vermelho sem Gravar, lote "Enviar N decisões"; respostas rápidas; lista Hoje/Esta semana/Antes com a última fala; motivo "Demorou"; "Ouvindo… O áudio vira texto e é descartado."; plano "n de m passos"; "Você" na fala. O app ganhou os motivos do 👎 (`ChatSession.explainVote`), que só o PWA tinha.
+- **Desvios de propósito:**
+  - Ajustar recusa a escrita (nada é gravado) e a correção vai pelo campo: a prancha não diz o que o Ajustar faz.
+  - Sem o "Abrir"/"Abrir dia" no canto de cada cartão de consulta: só ficam Baixar (arquivo), Ver vídeo (instruções) e Abrir (só no app).
+  - O ícone do cartão é o do formato, não o da área.
+  - No app a escrita feita recolhe como "· gravado", sem a hora (o app não guarda a hora de cada fala); no PWA, "· gravado às HH:MM".
+  - "Agora não" do aceite sai do chat (web volta ao início, app volta uma tela).
+  - O anel do progresso no app é um círculo cheio com o número, sem o arco parcial.
+  - O topo da conversa mantém globo, memórias, conversas e nova conversa, em vez de um botão só.
+  - Campo numérico de pergunta é digitável, sem stepper.
+  - O cartão da resposta antiga fica como foi decidido; só o da última resposta fica aberto.
+  - Ficam o tempo da resposta e a barra de ações (copiar, citar, 👍/👎) embaixo de cada resposta.
+  - O cartão de confirmação não ganha respostas rápidas embaixo: a decisão é no cartão.
+  - Sem o selo de iniciais do treinador ("TD") na lista: o resumo da conversa não traz a comunidade.
+  - A conversa nova se chama "Nova conversa" até ser aberta de novo (o título vem do servidor depois do primeiro turno).
+  - No PWA, o Gravar abre com o foco (anel), para dar para confirmar pelo teclado.
+  - O placar usa a inicial como avatar.
+  - O ditado (Al-M17) só aparece com `dictation` ligado na disponibilidade do chat; no banco dev está desligado, e a gravação não foi capturada (só o campo da conversa nova).
+- **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
+- **Passada visual (2026-11-17):** IA-Estados, IA-Cartoes, IA-Conversas, Al-M6, Al-M16, Al-M17, Al-M20 a Al-M23 comparadas lado a lado (prancha, web, app), escuro e uma amostra no claro.
+  - Web e app: linha da tool em pílula cinza da largura da conversa, com selo e o desfecho em negrito; a escrita à espera do sim não ganha linha; a busca diz "Pesquisei na web · N sites" e o aviso "Só a pergunta vai…"; a resposta interrompida virou pílula com pausa.
+  - Cartões: Gravar/Continuar/Responder em pílula clara e Ajustar/Parar aqui cinza; pergunta em azul com "Responder"; pausa "Está mais longo que o previsto"; aceites lado a lado (verde e cinza), sem ícone.
+  - A primeira fala é o título da conversa (grande, à direita, com linha embaixo); as seguintes, balão.
+  - Campo com a câmera dentro e borda verde, "Responda ou peça outra coisa".
+  - Linha do tempo sem eixos, com três datas e "em N dias"; meta com ponto de milhar; "Só no app" no cartão só do app.
+  - Lista (Al-M6): no app, "Conversas", linhas sem cartão, seção em caixa normal, busca com lupa, ponto verde "Esperando você" e giro "pensando", botão de opções e o atalho "Nova conversa…" embaixo; o PWA ganhou o mesmo ponto e giro na gaveta.
+  - O topo da conversa no app mostra o título dela; o nome "Fatia" só aparece para agente de comunidade.
+  - A prévia da lista sai sem a marcação do markdown.
 
 Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
 

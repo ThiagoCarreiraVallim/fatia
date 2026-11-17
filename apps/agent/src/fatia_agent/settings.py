@@ -79,6 +79,11 @@ class AgentSettings(BaseSettings):
     # parada antes da primeira palavra. Ver `chat/planejador.py`.
     agent_chat_planner: bool = False
 
+    # Consultas num turno antes de o chat perguntar "Já consultei N coisas. Continuo?" (#384,
+    # prancha IA-Estados). Além do teto de voltas: cinco consultas por volta esgotam o
+    # orçamento sem que a pessoa veja o tamanho do trabalho. Zero desliga esta pausa.
+    agent_chat_pause_after_tools: int = 14
+
     # Langfuse (ADR 034). Sem as duas chaves, nada é enviado. O padrão é a
     # Langfuse Cloud na região EUA; o texto passa por `tracing.mask` antes.
     langfuse_public_key: str = ""

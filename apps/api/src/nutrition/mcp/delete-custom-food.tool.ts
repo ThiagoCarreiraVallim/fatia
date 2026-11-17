@@ -15,6 +15,7 @@ export class DeleteCustomFoodTool implements McpToolDef {
   readonly title = 'Excluir alimento personalizado';
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Meus alimentos', path: '/nutrition/foods' };
   readonly description = 'Remove um alimento custom do usuário. ' + 'Exemplo: {"id":4217}';
   readonly inputSchema = {
     id: z.number().int().describe('ID do alimento custom a remover (só os seus)'),

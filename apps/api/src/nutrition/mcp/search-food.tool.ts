@@ -15,6 +15,7 @@ export class SearchFoodTool implements McpToolDef {
   readonly title = 'Buscar alimento';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description = 'Busca alimentos no catálogo TACO + customs do usuário.';
   readonly inputSchema = {
     q: z
@@ -36,5 +37,20 @@ export class SearchFoodTool implements McpToolDef {
   } as const;
   execute(params: { q?: string; groupId?: number; limit?: number }, { userId }: McpToolContext) {
     return this.foods.search(userId, params);
+  }
+
+  /** Os alimentos achados, com o que se compara entre eles: kcal e proteína por 100 g. */
+  artifact(result: unknown) {
+    const alimentos = result as Awaited<ReturnType<FoodService['search']>>;
+    return {
+      kind: 'report',
+      label: 'Alimentos encontrados',
+      columns: ['Alimento', 'kcal/100 g', 'Proteína/100 g'],
+      rows: alimentos.map((alimento) => [
+        alimento.name,
+        Math.round(alimento.kcalPer100g),
+        Math.round(alimento.proteinPer100g * 10) / 10,
+      ]),
+    };
   }
 }

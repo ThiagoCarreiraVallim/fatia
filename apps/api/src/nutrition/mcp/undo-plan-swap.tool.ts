@@ -15,6 +15,7 @@ export class UndoPlanSwapTool implements McpToolDef {
   readonly title = 'Desfazer troca do plano';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Desfaz uma troca do plano alimentar: volta ao item do plano, inclusive no diário. A troca ' +
     'fica registrada como desfeita. ' +

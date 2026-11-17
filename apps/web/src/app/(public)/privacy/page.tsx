@@ -77,6 +77,15 @@ export default function PrivacyPage() {
             <strong>Plano:</strong> se você assina o PRO, a origem (web ou loja), o status, o
             intervalo e as datas da assinatura. A base legal é a execução do contrato.
           </li>
+          <li>
+            <strong>Fotos que você manda no chat:</strong> são passageiras. Ficam guardadas por até
+            24 horas, para a conversa mostrar a foto de que fala, e depois são apagadas — a mensagem
+            continua, sem a foto. A exceção é a foto que vira a foto de uma refeição registrada,
+            quando você escolheu guardar as fotos das refeições: aí ela vale o que vale a foto do
+            prato. Antes de guardar, a imagem é reduzida e regravada sem metadado nenhum (sem
+            localização, aparelho ou horário). Só você vê, por um link que vence em minutos, e ela
+            entra no seu export. Apagar a conversa apaga as fotos dela; apagar a conta apaga todas.
+          </li>
         </ul>
         <p>
           Dados de saúde são <strong>dados pessoais sensíveis</strong> pela LGPD (art. 5º, II). A
@@ -130,12 +139,13 @@ export default function PrivacyPage() {
       <LegalSection title="O que NÃO coletamos">
         <ul>
           <li>
-            <strong>Fotos.</strong> Nenhuma imagem é armazenada — não há banco de fotos, nem em
-            disco, nem em cache. Se você usa o <strong>reconhecimento de refeição por foto</strong>{' '}
-            no aplicativo, a imagem <em>transita</em> pelo servidor do Fatia e segue para um
-            provedor de visão, sem os metadados (veja abaixo); ela não é gravada em lugar nenhum e
-            não fica vinculada a você. Se você fotografa uma refeição no seu próprio Claude, a
-            imagem não passa pelo Fatia em momento algum.
+            <strong>Fotos do reconhecimento de refeição.</strong> Se você usa o{' '}
+            <strong>reconhecimento de refeição por foto</strong> no aplicativo, a imagem{' '}
+            <em>transita</em> pelo servidor do Fatia e segue para um provedor de visão, sem os
+            metadados (veja abaixo); ela não é gravada em lugar nenhum e não fica vinculada a você.
+            Se você fotografa uma refeição no seu próprio Claude, a imagem não passa pelo Fatia em
+            momento algum. A exceção é a foto que você manda <em>no chat</em>, que fica guardada por
+            até 24 horas (veja acima).
           </li>
           <li>
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
@@ -218,9 +228,11 @@ export default function PrivacyPage() {
             próxima chamada.
           </li>
           <li>
-            <strong>O Fatia não guarda nada no caminho.</strong> A imagem e o áudio existem em
-            memória durante a requisição e somem com ela: não há bucket, não há disco, não há
-            coluna. Isso vale para o que <em>nós</em> operamos, e é verificável no código aberto.
+            <strong>O Fatia não guarda nada no caminho.</strong> No reconhecimento por foto e no
+            ditado, a imagem e o áudio existem em memória durante a requisição e somem com ela: não
+            há bucket, não há disco, não há coluna. Isso vale para o que <em>nós</em> operamos, e é
+            verificável no código aberto. A foto mandada no chat é a exceção: ela fica guardada por
+            até 24 horas, ou com a refeição que ela virou.
           </li>
           <li>
             <strong>Cada chamada exige retenção zero.</strong> O OpenRouter é um roteador: o mesmo
@@ -230,7 +242,8 @@ export default function PrivacyPage() {
             usam para treinar. Se nenhuma empresa que serve o modelo cumprir as duas, a chamada é{' '}
             <em>recusada</em>. Está no código, e não numa caixa marcada no painel de alguém: uma
             promessa que depende de configuração de painel ninguém consegue conferir, e esta some do
-            repositório se for removida.
+            repositório se for removida. A exceção é a busca na web do chat: a pergunta buscada vai
+            ao buscador, que não está coberto pela retenção zero (ver a lista de quem recebe dados).
           </li>
           <li>
             <strong>Dentro do fornecedor, quem responde é a política dele.</strong> Não temos como
@@ -287,6 +300,20 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Provedor de infraestrutura</strong> — hospeda o servidor e o banco.
+          </li>
+          <li>
+            <strong>Cloudflare R2</strong> — armazena as fotos que você manda no chat e as imagens
+            publicadas nas comunidades. Guarda o arquivo, sem seu nome nem e-mail junto.
+          </li>
+          <li>
+            <strong>Exa, pelo OpenRouter</strong> — quando o assistente do chat busca algo na web, o
+            buscador recebe só o texto da pergunta que vai ser buscada. Essa pergunta é escrita numa
+            chamada à parte ao modelo, que vê só a partir da sua última mensagem — não o seu perfil,
+            as memórias, os dados da conta nem o resto da conversa —, e passa por um filtro que tira
+            e-mail, telefone e documento. Se você puser seu nome na própria mensagem, ele pode ir
+            junto. A primeira busca só acontece depois que você concorda, num cartão que mostra a
+            pergunta; dá para desligar a busca no topo do chat. A busca fica fora da retenção zero:
+            o buscador segue a política dele para a consulta.
           </li>
           <li>
             <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,

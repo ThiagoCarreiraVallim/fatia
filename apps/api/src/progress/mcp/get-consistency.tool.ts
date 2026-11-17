@@ -7,6 +7,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { dayMonth } from '../../mcp/card-format';
 
 @Injectable()
 @McpTool()
@@ -16,6 +17,7 @@ export class GetConsistencyTool implements McpToolDef {
   readonly title = 'Constância';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description =
     'Constância do período (30 dias, 90 dias ou 1 ano, terminando hoje): para cada dia, as ' +
     'áreas cumpridas (refeição registrada, treino concluído, água na meta, passos na meta) e a ' +
@@ -29,5 +31,23 @@ export class GetConsistencyTool implements McpToolDef {
   } as const;
   execute(input: { range?: ConsistencyRange }, { userId, timezone }: McpToolContext) {
     return this.consistency.report({ userId, timezone }, input.range ?? 'month');
+  }
+
+  /**
+   * Quantas áreas cada dia cumpriu, em verde o dia ativo (prancha IA-Cartoes, #384). A barra é
+   * do dia, de 0 a 4: refeição, treino, água e passos.
+   */
+  artifact(result: unknown) {
+    const relatorio = result as Awaited<ReturnType<ConsistencyService['report']>>;
+    return {
+      kind: 'bars',
+      label: `${relatorio.activeDays} de ${relatorio.totalDays} dias ativos`,
+      unit: 'áreas',
+      bars: relatorio.days.map((dia) => ({
+        label: dayMonth(dia.date),
+        value: dia.count,
+        reached: dia.count > 0,
+      })),
+    };
   }
 }

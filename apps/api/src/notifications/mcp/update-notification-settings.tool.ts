@@ -18,6 +18,7 @@ export class UpdateNotificationSettingsTool implements McpToolDef {
   readonly title = 'Mudar preferências de aviso';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Liga ou desliga avisos por tipo e muda o silêncio noturno. Só o que vier muda. Nenhum aviso ' +
     'mostra dado de saúde. ' +

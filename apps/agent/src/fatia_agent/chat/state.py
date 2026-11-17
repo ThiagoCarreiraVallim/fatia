@@ -23,6 +23,7 @@ from langgraph.graph.message import add_messages
 from ..providers.base import ToolChatCapability
 from ..tracing import NOOP_TRACE, TurnTrace
 from .mcp_client import McpClient, McpToolInfo
+from .web import QueryWriter, WebSearcher, WebSearchMode
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,17 @@ class ContextoDoTurno:
     fotos: Sequence[FotoDoTurno] = field(default=())
     # O trace do turno no Langfuse (ADR 034); o no-op quando ele está desligado.
     trace: TurnTrace = NOOP_TRACE
+    # As ações restritas do catálogo deste turno: viram o `enum` de `open_in_app` (#384), o
+    # botão que abre a tela do app. Nunca executadas — ver `app_only.py`.
+    restricted: tuple[McpToolInfo, ...] = ()
+    # A busca na web (#384): o modo vem do `apps/api` a cada turno, e a busca em si é injetada
+    # (o provedor de produção, um duplo no teste). Sem buscador, a tool não é oferecida.
+    web_search: WebSearchMode = "off"
+    search_web: WebSearcher | None = None
+    # Quem escreve a pergunta da busca: uma chamada à parte que só vê a última fala da pessoa.
+    write_search_query: QueryWriter | None = None
+    # Quantas consultas no turno antes de perguntar "Continuo?" (`AGENT_CHAT_PAUSE_AFTER_TOOLS`).
+    pause_after_tools: int = 14
 
 
 class EstadoDaConversa(TypedDict, total=False):
@@ -95,6 +107,7 @@ class EstadoDaConversa(TypedDict, total=False):
     - `refazer`: a validação acabou de reprovar e ainda cabe uma volta.
     - `plano`: os passos do pedido, com status vivo (só com o planejador ligado).
     - `contexto_informado`: o evento `context` já saiu neste turno.
+    - `buscas`: `tool_call_id` → a pergunta da busca, escrita uma vez (a do aceite é a buscada).
 
     🔴 Tudo que é "do turno" é zerado por `hidratar`. O estado vive no checkpoint
     da **conversa**: sem zerar, o orçamento viraria por conversa e um "pare por
@@ -113,6 +126,7 @@ class EstadoDaConversa(TypedDict, total=False):
     refazer: bool
     plano: list[dict[str, Any]]
     contexto_informado: bool
+    buscas: dict[str, str]
 
 
 def estado_vazio() -> dict[str, Any]:
@@ -128,6 +142,7 @@ def estado_vazio() -> dict[str, Any]:
         "refazer": False,
         "plano": [],
         "contexto_informado": False,
+        "buscas": {},
     }
 
 

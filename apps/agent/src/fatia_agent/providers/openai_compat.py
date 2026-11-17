@@ -14,6 +14,7 @@ import random
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -40,6 +41,8 @@ from .base import (
     TurnEnd,
     Usage,
     VisionCapability,
+    WebSearchResult,
+    WebSource,
 )
 from .errors import (
     AIEndpointNotAllowed,
@@ -408,6 +411,73 @@ class OpenAICompatProvider:
             model=model,
         )
 
+    @property
+    def supports_web_search(self) -> bool:
+        """O plugin `web` é do OpenRouter; em outro destino a busca não é oferecida."""
+        return endpoint_host(self._base_url) == "openrouter.ai"
+
+    async def web_search(self, query: str, *, max_results: int = 5) -> WebSearchResult:
+        """Busca na web pelo plugin `web` do OpenRouter (#384), e devolve só as fontes.
+
+        **Só a pergunta sai**: sem sistema, sem histórico, sem tool. Quem limpa a pergunta de
+        dado pessoal é o chamador (`chat/web.py`); aqui não entra nada além dela. O texto do
+        modelo é descartado (`max_tokens` mínimo): o que serve é a lista de `url_citation`,
+        e quem escreve a resposta é o turno do chat, com as fontes cercadas como dado.
+
+        ⚠️ A retenção zero (`provider.zdr`) vale para o modelo, **não** para o motor de busca
+        (Exa) — é o que o texto do aceite da busca diz à pessoa.
+
+        Só no OpenRouter: o plugin é dele, e outro destino receberia um campo que ignora,
+        respondendo sem fonte nenhuma como se a web não soubesse.
+        """
+        if not self.supports_web_search:
+            raise AIProviderNotConfigured(
+                "A busca na web só existe pelo OpenRouter (plugin `web`); "
+                "esta AI_BASE_URL não aponta para ele."
+            )
+        model = self._require_model("text", self._text_model)
+        body = _json_body(
+            await self._request(
+                "POST",
+                "chat/completions",
+                json=self._with_routing(
+                    {
+                        "model": model,
+                        "messages": [{"role": "user", "content": query}],
+                        "plugins": [{"id": "web", "engine": "exa", "max_results": max_results}],
+                        "max_tokens": 16,
+                    }
+                ),
+            )
+        )
+        choices = body.get("choices")
+        primeira = choices[0] if isinstance(choices, list) and choices else None
+        mensagem = primeira.get("message") if isinstance(primeira, dict) else None
+        anotacoes = mensagem.get("annotations") if isinstance(mensagem, dict) else None
+        fontes: list[WebSource] = []
+        vistas: set[str] = set()
+        for anotacao in anotacoes if isinstance(anotacoes, list) else []:
+            citacao = anotacao.get("url_citation") if isinstance(anotacao, dict) else None
+            if not isinstance(citacao, dict):
+                continue
+            url = citacao.get("url")
+            if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+                continue
+            if url in vistas:
+                continue
+            vistas.add(url)
+            titulo = citacao.get("title")
+            conteudo = citacao.get("content")
+            fontes.append(
+                WebSource(
+                    url=url,
+                    title=titulo if isinstance(titulo, str) and titulo.strip() else url,
+                    domain=_dominio(url),
+                    content=conteudo if isinstance(conteudo, str) else "",
+                )
+            )
+        return WebSearchResult(sources=tuple(fontes), usage=_uso_do_fragmento(body, padrao=model))
+
     async def list_models(self) -> list[str]:
         """Usado pelo teste de fumaça e pelo diagnóstico — não é capacidade."""
         body = _json_body(await self._request("GET", "models"))
@@ -752,7 +822,16 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
         reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
         cost_usd=_numero(uso.get("cost")),
+        # A documentação do OpenRouter usa os dois nomes; o medido foi o primeiro.
+        web_searches=_detalhe(uso, "server_tool_use_details", "web_search_requests")
+        or _detalhe(uso, "server_tool_use", "web_search_requests"),
     )
+
+
+def _dominio(url: str) -> str:
+    """`www.gov.br` vira `gov.br`: é o nome que a pessoa reconhece no chip da fonte."""
+    host = urlparse(url).hostname or ""
+    return host[4:] if host.startswith("www.") else host
 
 
 def _detalhe(uso: dict[str, Any], bloco: str, campo: str) -> int | None:

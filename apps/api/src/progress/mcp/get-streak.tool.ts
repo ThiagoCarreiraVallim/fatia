@@ -14,6 +14,7 @@ export class GetStreakTool implements McpToolDef {
   readonly title = 'Sequência atual';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description =
     'Sequência atual de dias ativos. Um dia é ativo com ao menos uma área cumprida: refeição ' +
     'registrada, treino concluído, água na meta ou passos na meta. Traz o orçamento de faltas: ' +
@@ -22,5 +23,14 @@ export class GetStreakTool implements McpToolDef {
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {
     return this.consistency.streak({ userId, timezone });
+  }
+
+  /**
+   * A sequência como métrica (prancha IA-Cartoes, #384). `activeDays` é a sequência inteira,
+   * com o orçamento de faltas; o número da tela é `periodos`.
+   */
+  artifact(result: unknown) {
+    const { activeDays } = result as Awaited<ReturnType<ConsistencyService['streak']>>;
+    return { kind: 'metric', label: 'Dias seguidos', value: activeDays.periodos, unit: 'dias' };
   }
 }

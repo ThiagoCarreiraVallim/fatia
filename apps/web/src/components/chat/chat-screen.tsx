@@ -6,6 +6,7 @@ import { SquarePen } from 'lucide-react';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
 import { ghostButton } from '@/components/elements/surfaces';
 import { TopBarActions, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { WebSearchSwitch } from './aceite';
 import {
   useCabecalhoDaConversa,
   useConversaAberta,
@@ -51,6 +52,7 @@ export function ChatScreen() {
       className="flex h-[calc(100dvh-6.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
     >
       <TopBarActions>
+        <WebSearchSwitch />
         <GavetaDeMemorias />
         <GavetaDeConversas aberta={openId} />
         {/* Como no app: começar outra conversa a um toque, sem abrir a gaveta. */}

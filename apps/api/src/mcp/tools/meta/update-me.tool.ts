@@ -18,6 +18,7 @@ export class UpdateMeTool implements McpToolDef {
   readonly title = 'Atualizar meu perfil';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza o perfil do usuário (nome, estatura, fuso horário, os dados da sugestão de metas, o apelido e a bio ' +
     'das comunidades e as unidades de exibição). Só o que vier é alterado; string vazia apaga apelido e bio. ' +

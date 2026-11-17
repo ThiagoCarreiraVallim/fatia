@@ -19,6 +19,7 @@ export class GetLastSetForExerciseTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'metric' as const;
   readonly description =
     'Retorna a última série registrada para um exercício, útil para sugerir carga do próximo treino.';
   readonly inputSchema = {
@@ -31,5 +32,31 @@ export class GetLastSetForExerciseTool implements McpToolDef {
 
   execute(input: { exerciseId: number; before?: string }, { userId }: McpToolContext) {
     return this.sets.getLastForExercise(userId, input.exerciseId, input.before);
+  }
+
+  /**
+   * A carga da última série, com as repetições embaixo; no cardio, a distância ou o tempo
+   * (prancha IA-Cartoes, #384). Sem série nenhuma, não há cartão.
+   */
+  artifact(result: unknown) {
+    const serie = result as Awaited<ReturnType<SessionSetService['getLastForExercise']>>;
+    if (!serie) return null;
+    const label = `Última série de ${serie.exercise.name}`;
+    const extras = [
+      ...(serie.reps == null ? [] : [{ label: 'Repetições', value: serie.reps }]),
+      ...(serie.rpe == null ? [] : [{ label: 'RPE', value: serie.rpe }]),
+    ];
+    if (serie.weightKg != null) {
+      return { kind: 'metric', label, value: serie.weightKg, unit: 'kg', breakdown: extras };
+    }
+    if (serie.distanceMeters != null) {
+      return { kind: 'metric', label, value: serie.distanceMeters / 1000, unit: 'km' };
+    }
+    if (serie.durationSeconds != null) {
+      return { kind: 'metric', label, value: Math.round(serie.durationSeconds / 60), unit: 'min' };
+    }
+    return serie.reps == null
+      ? null
+      : { kind: 'metric', label, value: serie.reps, unit: 'repetições' };
   }
 }

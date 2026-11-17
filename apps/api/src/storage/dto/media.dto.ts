@@ -27,6 +27,18 @@ export class RequestUploadDto {
   bytes!: number;
 }
 
+/** A foto do chat (ADR 046): pessoal, sem grupo nem propósito no corpo. */
+export class RequestChatPhotoUploadDto {
+  @IsString()
+  @IsIn(MEDIA_LIMITS.IMAGE.mimes)
+  mime!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(MEDIA_LIMITS.IMAGE.maxBytes)
+  bytes!: number;
+}
+
 export class MediaIdParamDto {
   @IsUUID()
   id!: string;

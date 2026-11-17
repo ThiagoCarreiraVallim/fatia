@@ -14,6 +14,7 @@ export class ListPlanOffersTool implements McpToolDef {
   readonly title = 'Planos de treino recebidos da equipe';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista os planos de treino que a equipe da comunidade enviou ao usuário. Em pending vêm os que ' +
     'esperam resposta, cada um com os exercícios, a agenda (CALENDAR com datas ou FLEXIBLE sem ' +

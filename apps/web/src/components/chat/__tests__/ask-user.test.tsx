@@ -6,12 +6,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ChatActionPreview, ChatConfirmAction, ChatInterruptValue } from '@fatia/api-client';
 
 const previewChatAction = vi.fn<(tool: string, args: unknown) => Promise<ChatActionPreview>>();
+const acceptAiConsent = vi.fn();
+const getAiConsent = vi.fn();
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
     previewChatAction: (tool: string, args: unknown) => previewChatAction(tool, args),
+    acceptAiConsent: (topic: string) => acceptAiConsent(topic),
+    getAiConsent: () => getAiConsent(),
   };
 });
 
@@ -23,7 +27,16 @@ function render(elemento: ReactElement) {
   return renderBase(<QueryClientProvider client={client}>{elemento}</QueryClientProvider>);
 }
 
+const status = (buscaAceita: boolean) => ({
+  chat: { accepted: true, version: 'v', acceptedAt: null },
+  webSearch: { accepted: buscaAceita, version: 'v', acceptedAt: null },
+  webSearchEnabled: true,
+  processor: { provider: 'OpenRouter', model: 'GLM', searchEngine: 'Exa' },
+});
+
 beforeEach(() => {
+  acceptAiConsent.mockReset().mockResolvedValue(status(true));
+  getAiConsent.mockReset().mockResolvedValue(status(false));
   previewChatAction.mockReset();
   previewChatAction.mockResolvedValue({
     valida: true,
@@ -49,15 +62,15 @@ describe('AskUser — confirmação', () => {
     const pausa: ChatInterruptValue = { kind: 'confirm', prompt: 'x', actions: [escrita('c1')] };
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Recusar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ajustar' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: false }, answers: {} });
   });
 
-  it('"Confirmar" recebe o foco quando o resumo chega: quem usa teclado estava no campo', async () => {
+  it('"Gravar" recebe o foco quando o resumo chega: quem usa teclado estava no campo', async () => {
     const pausa: ChatInterruptValue = { kind: 'confirm', prompt: 'x', actions: [escrita('c1')] };
     render(<AskUser pausa={pausa} ocupado={false} onResponder={vi.fn()} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar' })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Gravar' })).toHaveFocus());
   });
 
   it('mostra o resumo em português, e nunca o nome técnico nem o JSON da chamada', async () => {
@@ -76,8 +89,8 @@ describe('AskUser — confirmação', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={vi.fn()} />);
 
     expect(screen.getByText('Preparando o resumo…')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Recusar' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Gravar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajustar' })).toBeEnabled();
   });
 
   it('escrita que a tool recusaria mostra o que falta e só deixa recusar', async () => {
@@ -91,8 +104,8 @@ describe('AskUser — confirmação', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Faltou informar: quando');
-    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Recusar' }));
+    expect(screen.queryByRole('button', { name: 'Gravar' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ajustar' }));
     expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: false }, answers: {} });
   });
 
@@ -105,7 +118,7 @@ describe('AskUser — confirmação', () => {
     expect(
       await screen.findByText(/Não consegui mostrar os detalhes/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Gravar' })).toBeEnabled();
   });
 
   it('duas escritas são decididas uma a uma e enviadas juntas', async () => {
@@ -117,12 +130,12 @@ describe('AskUser — confirmação', () => {
     };
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
-    const enviar = screen.getByRole('button', { name: 'Enviar' });
+    const enviar = screen.getByRole('button', { name: 'Enviar 2 decisões' });
     expect(enviar).toBeDisabled();
 
     await screen.findAllByText('200 g de Frango grelhado');
-    const [confirmar1, confirmar2] = screen.getAllByRole('button', { name: 'Confirmar' });
-    const [, recusar2] = screen.getAllByRole('button', { name: 'Recusar' });
+    const [confirmar1, confirmar2] = screen.getAllByRole('button', { name: 'Gravar' });
+    const [, recusar2] = screen.getAllByRole('button', { name: 'Ajustar' });
     await userEvent.click(confirmar1);
     await userEvent.click(recusar2);
     expect(confirmar2).toBeInTheDocument();
@@ -154,7 +167,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText(/Gramas/), '150');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: { Gramas: '150' } } });
   });
@@ -177,7 +190,7 @@ describe('AskUser — pergunta', () => {
     render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
 
     await userEvent.type(screen.getByLabelText('Sua resposta'), 'o jantar');
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Responder' }));
 
     expect(onResponder).toHaveBeenCalledWith({ approvals: {}, answers: { q1: 'o jantar' } });
   });
@@ -191,5 +204,72 @@ describe('normalizeAskFields', () => {
       { name: 'campo_0', label: 'Gramas', type: 'text' },
       { name: 'x', label: 'x', type: 'text', required: false },
     ]);
+  });
+});
+
+describe('AskUser — lote com a busca na web (#384)', () => {
+  const pausa: ChatInterruptValue = {
+    kind: 'confirm',
+    prompt: 'x',
+    actions: [
+      escrita('c1'),
+      { kind: 'web_consent', toolCallId: 'w1', tool: 'web_search', prompt: 'x', query: 'q' },
+    ],
+  };
+
+  it('a busca conta nas decisões e mostra a escolha; mudar de ideia não grava o aceite', async () => {
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    const enviar = screen.getByRole('button', { name: 'Enviar 2 decisões' });
+
+    const concordo = screen.getByRole('button', { name: 'Concordo e buscar' });
+    await userEvent.click(concordo);
+    expect(concordo).toHaveAttribute('aria-pressed', 'true');
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+    const semWeb = screen.getByRole('button', { name: 'Responder sem a web' });
+    await userEvent.click(semWeb);
+    expect(semWeb).toHaveAttribute('aria-pressed', 'true');
+    expect(concordo).toHaveAttribute('aria-pressed', 'false');
+
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Gravar' }));
+    await userEvent.click(enviar);
+
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+    expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: true, w1: false }, answers: {} });
+  });
+
+  it('concordar no lote grava o aceite só no Enviar, antes de responder', async () => {
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    await userEvent.click(screen.getByRole('button', { name: 'Concordo e buscar' }));
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Ajustar' }));
+    expect(acceptAiConsent).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar 2 decisões' }));
+
+    await waitFor(() =>
+      expect(onResponder).toHaveBeenCalledWith({ approvals: { c1: false, w1: true }, answers: {} }),
+    );
+    expect(acceptAiConsent).toHaveBeenCalledWith('web_search');
+    expect(acceptAiConsent.mock.invocationCallOrder[0]).toBeLessThan(
+      onResponder.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('se o aceite não grava, o lote não sai', async () => {
+    acceptAiConsent.mockRejectedValue(new Error('fora'));
+    const onResponder = vi.fn();
+    render(<AskUser pausa={pausa} ocupado={false} onResponder={onResponder} />);
+    await screen.findByText(/Exa/);
+    await userEvent.click(screen.getByRole('button', { name: 'Concordo e buscar' }));
+    await screen.findAllByText('200 g de Frango grelhado');
+    await userEvent.click(screen.getByRole('button', { name: 'Gravar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar 2 decisões' }));
+    expect(await screen.findByText(/Não consegui gravar o aceite/)).toBeInTheDocument();
+    expect(onResponder).not.toHaveBeenCalled();
   });
 });

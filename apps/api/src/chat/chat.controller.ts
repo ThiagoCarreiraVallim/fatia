@@ -30,8 +30,12 @@ import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
 import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
+import { MediaService } from '../storage/media.service';
+import { AiConsentService } from './consent/ai-consent.service';
 import {
+  AcceptAiConsentDto,
   ChatActionPreviewDto,
+  ChatPreferencesDto,
   ListConversationsQueryDto,
   MessageFeedbackDto,
   RenameConversationDto,
@@ -72,6 +76,8 @@ export class ChatController {
     private readonly runs: ChatRunRegistry,
     private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
+    private readonly midia: MediaService,
+    private readonly aceites: AiConsentService,
   ) {}
 
   /**
@@ -82,6 +88,16 @@ export class ChatController {
   @Get('tools')
   titulosDasTools() {
     return this.registry.titulos();
+  }
+
+  /**
+   * Como cada tool aparece na conversa (#384): consulta (com o formato do cartão), confirmação
+   * ou "só no app" (com a tela que faz). É o que a tela usa para desenhar o cartão e o botão
+   * "Abrir …"; `tools` continua para o cliente que só precisa do título.
+   */
+  @Get('tool-catalog')
+  catalogoDasTools() {
+    return this.registry.catalogoDoChat();
   }
 
   /** O cartão de confirmação em português: o que a escrita pausada vai fazer. */
@@ -163,8 +179,14 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const conversa = await this.conversas.obterComMensagens(user.id, id);
+    // As mensagens já são desta pessoa (`obterComMensagens` amarrou a conversa).
+    const fotos = await this.midia.chatPhotoViews(conversa.messages.map((m) => m.id));
     return {
       ...conversa,
+      messages: conversa.messages.map((m) => {
+        const photos = fotos.get(m.id);
+        return photos ? { ...m, photos } : m;
+      }),
       agent: await this.agentes.headerFor(user.id, conversa.agentGroupId),
       // Uma resposta ainda correndo no servidor: a tela assina o `live` em vez de
       // mostrar o histórico parado (ADR 035).
@@ -204,12 +226,15 @@ export class ChatController {
     destino.aoFechar(sair);
   }
 
-  /** Para a resposta em andamento. 204 mesmo sem resposta rodando: o efeito pedido já vale. */
+  /**
+   * Para a resposta em andamento e responde depois que ela fechou (com teto), para a próxima
+   * mensagem não esbarrar no 409. 204 mesmo sem resposta rodando: o efeito pedido já vale.
+   */
   @Post('conversations/:id/stop')
   @HttpCode(204)
   async stop(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
     await this.conversas.assertOwned(user.id, id);
-    this.chat.stop(user.id, id);
+    await this.chat.stop(user.id, id);
   }
 
   @Patch('conversations/:id')
@@ -235,8 +260,33 @@ export class ChatController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    // As fotos antes: depois do `delete` elas não se acham mais pela conversa.
+    // O `assertDaPessoa` de `apagar` não rodou ainda, mas o `where` de
+    // `discardChatPhotosOf` casa conversa **e** dono, então conversa alheia
+    // não acha foto nenhuma.
+    await this.midia.discardChatPhotosOf(user.id, id);
     await this.conversas.apagar(user.id, id);
     await this.checkpoints.apagarConversa(user.id, id);
+  }
+
+  /**
+   * Os aceites da IA (#384): o da primeira conversa e o da primeira busca na web, com a versão
+   * do texto que vale hoje, e a preferência da busca. Tudo do usuário do token.
+   */
+  @Get('consent')
+  consent(@CurrentUser() user: CurrentUserPayload) {
+    return this.aceites.status(user.id);
+  }
+
+  @Post('consent')
+  @HttpCode(200)
+  acceptConsent(@CurrentUser() user: CurrentUserPayload, @Body() dto: AcceptAiConsentDto) {
+    return this.aceites.accept(user.id, dto.topic, dto.version);
+  }
+
+  @Patch('preferences')
+  preferences(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChatPreferencesDto) {
+    return this.aceites.setWebSearch(user.id, dto.webSearchEnabled);
   }
 
   /** Quanto da cota diária de IA desta pessoa já foi — o medidor da tela do chat. */

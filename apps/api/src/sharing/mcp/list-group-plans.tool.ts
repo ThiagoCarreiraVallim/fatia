@@ -15,6 +15,7 @@ export class ListGroupPlansTool implements McpToolDef {
   readonly title = 'Planos prontos de uma comunidade';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Lista os planos prontos (treino e nutrição) que a equipe de uma comunidade publicou: título, ' +
     'nível, exercícios ou metas e refeições sugeridas, e se o usuário já adotou o de treino. ' +

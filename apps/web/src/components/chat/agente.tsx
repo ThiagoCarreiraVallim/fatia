@@ -1,6 +1,7 @@
 'use client';
 
 import { Bot } from 'lucide-react';
+import { useAuiState } from '@assistant-ui/react';
 import { FATIA_AGENT_NAME } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { useAgenteDaConversa, useAgentesDoChat, useEscolhaDoAgente } from './chat-runtime-provider';
@@ -44,8 +45,12 @@ export function AutorDaResposta() {
 /** A linha abaixo da barra de topo: com quem é a conversa, ou a dica de sempre. */
 export function LinhaDoAgente() {
   const agente = useAgenteDaConversa();
-  if (agente === undefined) return <p className="px-5 pb-2 text-sm">&nbsp;</p>;
+  // A dica é para a conversa vazia: numa conversa em andamento ela só ocupa a tela (a prancha
+  // não tem linha nenhuma abaixo do topo).
+  const vazia = useAuiState((s) => s.thread.isEmpty);
+  if (agente === undefined) return vazia ? <p className="px-5 pb-2 text-sm">&nbsp;</p> : null;
   if (!agente) {
+    if (!vazia) return null;
     return (
       <p className="px-5 pb-2 text-sm text-muted-foreground">
         Peça para registrar refeição, consultar treino ou ver sua evolução.

@@ -62,6 +62,12 @@ export type TurnSummary = {
   /** `toolCallId` → a carga tipada que a tela desenha (`artifact`), já normalizada pelo agente. */
   artifacts: Record<string, Record<string, unknown>>;
   usoPorModelo: Map<string, UnidadesDoModelo>;
+  /**
+   * Quantas buscas na web o turno fez (`webSearches` no `usage`; o agente lança cada uma
+   * antes de ela sair, #384). À parte do token: cada uma é um lançamento na cota,
+   * com o preço da busca.
+   */
+  buscasNaWeb: number;
   status: TurnStatus;
   pausa: PausaDoTurno | null;
   /** O id da última mensagem do assistente, como a tela a conhece. */
@@ -121,6 +127,7 @@ export function createTurnReader() {
   const toolResults = new Map<string, ToolResultRecord>();
   const artifacts: Record<string, Record<string, unknown>> = {};
   const usoPorModelo = new Map<string, UnidadesDoModelo>();
+  let buscasNaWeb = 0;
   let status: TurnStatus = 'error';
   let pausa: PausaDoTurno | null = null;
   let runId: string | null = null;
@@ -221,6 +228,11 @@ export function createTurnReader() {
         case 'usage': {
           const dados = dadosDoEvento(evento);
           if (typeof dados?.model !== 'string') return;
+          const buscas = numeroOuIndefinido(dados.webSearches);
+          if (buscas !== undefined && Number.isInteger(buscas) && buscas > 0) buscasNaWeb += buscas;
+          // O lançamento da busca antes de ela sair (#384) não traz token: não é uma chamada
+          // ao modelo, e não pode virar uma linha de chat "não medida".
+          if (dados.inputUnits === undefined && dados.outputUnits === undefined && buscas) return;
           const acumulado = usoPorModelo.get(dados.model) ?? { inputUnits: 0, outputUnits: 0 };
           usoPorModelo.set(dados.model, {
             inputUnits: somarUnidade(acumulado.inputUnits, numeroOuIndefinido(dados.inputUnits)),
@@ -251,6 +263,7 @@ export function createTurnReader() {
         toolResults: [...toolResults.values()],
         artifacts: { ...artifacts },
         usoPorModelo,
+        buscasNaWeb,
         status,
         pausa: status === 'interrupted' ? pausa : null,
         ultimaMensagemId: ids.at(-1) ?? null,

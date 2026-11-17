@@ -15,6 +15,7 @@ export class CreateReminderTool implements McpToolDef {
   readonly title = 'Criar lembrete';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Cria um lembrete pessoal. INTERVAL avisa a cada N horas entre from e to; TIMES avisa nos ' +
     'horários de times. O aviso não sai se a pessoa já fez (água batida, refeição registrada, ' +

@@ -7,9 +7,9 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
-import { ArrowUpIcon, SquareIcon } from 'lucide-react';
+import { ArrowUpIcon, ListPlusIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { field, inkButton } from './surfaces';
+import { field, limeButton } from './surfaces';
 
 /**
  * `elements-mobile-composer` do assistant-ui, adaptado. O Fatia é um PWA de
@@ -58,6 +58,8 @@ export function MobileComposer({
   onValueChange,
   onSend,
   onStop,
+  onQueue,
+  queueLabel = 'Enviar depois desta resposta',
   onFocus,
   onBlur,
   className,
@@ -97,9 +99,17 @@ export function MobileComposer({
   onValueChange?: (value: string) => void;
   onSend?: () => void;
   onStop?: () => void;
+  /**
+   * Com resposta em andamento, guarda o que foi escrito para depois dela. Sem
+   * isto, o Enter não faz nada enquanto o assistente responde.
+   */
+  onQueue?: () => void;
+  queueLabel?: string;
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
+  const temTexto = canSend ?? value.trim() !== '';
+  const enfileiravel = running && Boolean(onQueue) && temTexto;
   const proprio = useRef<HTMLTextAreaElement>(null);
   const campo = ref ?? proprio;
 
@@ -125,10 +135,16 @@ export function MobileComposer({
     >
       {attachments}
       <div className="flex items-end gap-2">
-        {actions}
+        {/* O campo da prancha IA-Estados ("Campo: microfone e enviar"): pílula com contorno
+            verde, a câmera dentro, à esquerda. */}
         <div
-          className={cn(field, 'flex min-w-0 flex-1 items-center gap-2 rounded-[18px] px-3 py-2')}
+          className={cn(
+            field,
+            'flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-[22px] border border-primary/35 py-1 pl-1.5 pr-3',
+            !actions && 'pl-3.5',
+          )}
         >
+          {actions}
           <textarea
             ref={campo}
             rows={1}
@@ -144,7 +160,9 @@ export function MobileComposer({
               // metade.
               if (event.nativeEvent.isComposing) return;
               event.preventDefault();
-              if (!disabled && !running && (canSend ?? value.trim() !== '')) onSend?.();
+              if (disabled) return;
+              if (enfileiravel) onQueue?.();
+              else if (!running && temTexto) onSend?.();
             }}
             placeholder={placeholder}
             aria-label={label}
@@ -154,20 +172,34 @@ export function MobileComposer({
           />
         </div>
 
+        {enfileiravel ? (
+          <button
+            type="button"
+            aria-label={queueLabel}
+            onClick={onQueue}
+            disabled={disabled}
+            className={cn(
+              field,
+              'flex size-11 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25',
+            )}
+          >
+            <ListPlusIcon className="size-4" aria-hidden />
+          </button>
+        ) : null}
         <button
           type="button"
           aria-label={running ? stopLabel : sendLabel}
           onClick={running ? onStop : onSend}
           disabled={disabled || (!running && !(canSend ?? value.trim() !== ''))}
           className={cn(
-            inkButton,
-            'flex size-9 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25',
+            limeButton,
+            'flex size-11 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-30',
           )}
         >
           {running ? (
-            <SquareIcon className="size-3 fill-current" />
+            <SquareIcon className="size-3.5 fill-current" />
           ) : (
-            <ArrowUpIcon className="size-4" />
+            <ArrowUpIcon className="size-5" />
           )}
         </button>
       </div>

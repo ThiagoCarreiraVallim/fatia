@@ -235,6 +235,7 @@ export class HttpAgentAdapter extends AgentAdapter {
       history: input.history.map((m) => ({ role: m.role, content: m.content })),
       memories: input.memories ?? [],
       ...(input.persona ? { persona: input.persona } : {}),
+      webSearch: input.webSearch ?? 'off',
       ...(input.resume
         ? { resume: input.resume }
         : {

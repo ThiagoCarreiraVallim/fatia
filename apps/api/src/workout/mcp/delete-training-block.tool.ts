@@ -19,6 +19,7 @@ export class DeleteTrainingBlockTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Periodização', path: '/workout/block' };
   readonly description =
     'Encerra o bloco de periodização informado, liberando a criação de um novo. O histórico de treinos não é apagado — só o bloco deixa de ser o plano corrente. ' +
     'Exemplo: {"blockId":"3f7c1c2e-9a4b-4b1e-8f0d-2c5a6b7d8e90"}';

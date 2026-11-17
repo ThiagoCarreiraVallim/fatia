@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiAccessService, type Pagador } from './ai-access.service';
 import { AiUsageService } from './ai-usage.service';
+import { AiConsentService } from '../chat/consent/ai-consent.service';
 import type { AiCallUnits } from './ai-pricing';
 import {
   AgentAdapter,
@@ -15,7 +16,16 @@ import {
 } from './agent.adapter';
 
 /** O que vai em `AiUsage.feature`. */
-type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo' | 'label_photo';
+type AiFeature =
+  'chat' | 'chat_title' | 'transcription' | 'meal_photo' | 'label_photo' | 'web_search';
+
+/**
+ * O nome da busca na web do chat no `AI_PRICE_TABLE`: o preço de **uma** busca vai
+ * em `in`, na escala da tabela (micro-dólares por milhão de unidades). A busca é a
+ * ferramenta `web_search` do agente (#384), que chama o plugin `web` do OpenRouter
+ * numa chamada à parte, só com a pergunta; cada chamada é uma busca.
+ */
+export const WEB_SEARCH_MODEL = 'openrouter-web-search';
 
 /**
  * A IA hospedada, num lugar só: **portão de plano e cota → quem paga → agente →
@@ -39,6 +49,7 @@ export class HostedAiService {
     private readonly access: AiAccessService,
     private readonly usage: AiUsageService,
     private readonly agent: AgentAdapter,
+    private readonly consent: AiConsentService,
   ) {}
 
   /** `true` quando esta instância tem agente configurado. */
@@ -133,8 +144,13 @@ export class HostedAiService {
     return generated.title;
   }
 
-  /** Plano antes de cota (ADR 024), e quem paga (ADR 025). */
+  /**
+   * Aceite, plano e cota (ADR 024), e quem paga (ADR 025). O aceite vem primeiro e mora aqui,
+   * na fronteira, e não em cada rota (#384): turno, ditado, foto do prato e rótulo passam todos
+   * por este portão, e nada sai para o provedor sem o "Concordo" da pessoa.
+   */
   private async gate(userId: string): Promise<Pagador> {
+    await this.consent.assertChatConsent(userId);
     return AiAccessService.pagoPor(await this.access.assertPodeUsar(userId));
   }
 
@@ -171,7 +187,15 @@ export class HostedTurn {
    * Turno sem nenhum `usage` vira um lançamento **não medido**, e não nenhum:
    * um turno caro não pode entrar como grátis.
    */
-  async finish(usageByModel: ReadonlyMap<string, AiCallUnits>): Promise<void> {
+  async finish(usageByModel: ReadonlyMap<string, AiCallUnits>, webSearches = 0): Promise<void> {
+    // A busca é cobrada da pessoa pela mesma cota do turno (decisão de 2026-11-05),
+    // num lançamento próprio: a margem por recurso separa conversa de busca.
+    if (webSearches > 0) {
+      await this.recordUsage('web_search', WEB_SEARCH_MODEL, {
+        inputUnits: webSearches,
+        outputUnits: 0,
+      });
+    }
     if (usageByModel.size === 0) {
       await this.recordUsage('chat', null, {});
       return;

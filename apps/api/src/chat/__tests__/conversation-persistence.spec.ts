@@ -320,6 +320,56 @@ describe('ConversationService — o que sobra do turno', () => {
     );
   });
 
+  it('a lista traz a última fala, numa linha só e com teto, para o preview (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'quanto comi?');
+    const longa = `Você comeu\n\n${'arroz '.repeat(60)}`;
+    await conversas.completeTurn(userId, conversationId, resposta({ texto: longa }));
+
+    const item = (await conversas.list(userId)).find((c) => c.id === conversationId);
+    expect(item?.preview?.startsWith('Você comeu arroz arroz')).toBe(true);
+    expect(item?.preview).not.toContain('\n');
+    expect(item!.preview!.length).toBeLessThanOrEqual(121);
+
+    const { conversationId: soPergunta } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      'e de proteína?',
+    );
+    expect((await conversas.list(userId)).find((c) => c.id === soPergunta)?.preview).toBe(
+      'e de proteína?',
+    );
+  });
+
+  it('o preview mostra o texto sem a marcação do markdown (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'e a semana?');
+    const texto =
+      '## Resumo\n\nSemana **boa**! Ficou na meta em *5 de 7 dias*, com `+12%` de [proteína](https://x.y).\n- quinta escapou';
+    await conversas.completeTurn(userId, conversationId, resposta({ texto }));
+
+    expect((await conversas.list(userId)).find((c) => c.id === conversationId)?.preview).toBe(
+      'Resumo Semana boa! Ficou na meta em 5 de 7 dias, com +12% de proteína. quinta escapou',
+    );
+  });
+
+  it('o preview tira a citação (`> …`) da frente da fala (#384)', async () => {
+    const { conversationId } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      '> Você comeu 1.800 kcal\n> ontem\n\nE de proteína?',
+    );
+    const item = (await conversas.list(userId)).find((c) => c.id === conversationId);
+    expect(item?.preview).toBe('E de proteína?');
+
+    const { conversationId: soCitacao } = await conversas.iniciarTurno(
+      userId,
+      randomUUID(),
+      '> só o trecho',
+    );
+    expect((await conversas.list(userId)).find((c) => c.id === soCitacao)?.preview).toBe(
+      'só o trecho',
+    );
+  });
+
   describe('o estado da conversa para o botão da IA (#369)', () => {
     const pausa = { id: 'int-1', value: { kind: 'confirm', prompt: 'Gravo?', actions: [] } };
 

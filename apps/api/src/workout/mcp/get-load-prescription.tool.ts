@@ -19,6 +19,7 @@ export class GetLoadPrescriptionTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'comparison' as const;
   readonly description =
     'Sugere carga, repetições e descanso da próxima sessão de um exercício de força, a partir do histórico e do RPE registrado. Só considera sessões concluídas: a que está em andamento não entra. Devolve status "insufficient_history" quando há menos de 2 sessões concluídas — nesse caso não invente uma carga.';
   readonly inputSchema = {
@@ -31,5 +32,23 @@ export class GetLoadPrescriptionTool implements McpToolDef {
 
   execute(input: { exerciseId: number; targetReps?: string }, { userId }: McpToolContext) {
     return this.prescriptions.forExercise(userId, input.exerciseId, input.targetReps);
+  }
+
+  /**
+   * A carga, as repetições e o descanso sugeridos para a próxima sessão (prancha IA-Cartoes,
+   * #384). Sem histórico suficiente, ou no cardio, não há sugestão nem cartão.
+   */
+  artifact(result: unknown) {
+    const sugestao = result as Awaited<ReturnType<PrescriptionService['forExercise']>>;
+    if (sugestao.status !== 'ok') return null;
+    return {
+      kind: 'comparison',
+      label: 'Próxima sessão',
+      items: [
+        { label: 'Carga', value: sugestao.weightKg, unit: 'kg' },
+        { label: 'Repetições', value: sugestao.reps },
+        { label: 'Descanso', value: sugestao.restSeconds, unit: 's' },
+      ],
+    };
   }
 }

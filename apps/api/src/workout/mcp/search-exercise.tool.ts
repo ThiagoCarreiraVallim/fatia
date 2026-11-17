@@ -20,6 +20,7 @@ export class SearchExerciseTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     "Search for exercises by name or muscle group (chest, back, legs, shoulders, arms, core, cardio). Favorites come first (favorite: true), then exercises from the user's community (gym or creator), marked with communityName.";
   readonly inputSchema = {
@@ -57,5 +58,16 @@ export class SearchExerciseTool implements McpToolDef {
     { userId }: McpToolContext,
   ) {
     return this.exercises.search(userId, input);
+  }
+
+  /** Os exercícios achados, com o grupo muscular: é por ele que a pessoa escolhe. */
+  artifact(result: unknown) {
+    const exercicios = result as Awaited<ReturnType<ExerciseService['search']>>;
+    return {
+      kind: 'report',
+      label: 'Exercícios encontrados',
+      columns: ['Exercício', 'Grupo'],
+      rows: exercicios.map((exercicio) => [exercicio.name, exercicio.muscleGroup]),
+    };
   }
 }

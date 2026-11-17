@@ -84,6 +84,10 @@ model User {
   quietFrom         Int     @default(1320)
   quietTo           Int     @default(420)
 
+  /// Busca na web no chat (#384): o ícone do topo liga e desliga. Ligada só vale depois do
+  /// aceite da primeira busca (`AiConsent` WEB_SEARCH); desligada, a IA nem oferece a busca.
+  webSearchEnabled Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -119,6 +123,7 @@ model User {
 
   conversations  Conversation[]
   memories       UserMemory[]
+  aiConsents     AiConsent[]
   aiUsage        AiUsage[]
   subscriptions  UserSubscription[]
   invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
@@ -1798,6 +1803,8 @@ model Message {
   createdAt      DateTime       @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// As fotos que a pessoa mandou nesta mensagem, guardadas no bucket (ADR 046).
+  photos       MediaFile[]  @relation("ChatPhoto")
 
   /// **Sem `userId` aqui, de propósito.** O dono é a conversa, e uma segunda
   /// coluna de dono é uma segunda verdade que pode divergir da primeira — o
@@ -1822,6 +1829,29 @@ model UserMemory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// O que a pessoa aceitou antes de a IA hospedada mandar algo a terceiros (#384, Apple 5.1.2).
+enum AiConsentKind {
+  /// "Antes de conversar": mensagens e dados consultados vão ao provedor do modelo.
+  CHAT
+  /// "Buscar na web?": só o texto da pergunta vai ao serviço de busca.
+  WEB_SEARCH
+}
+
+/// Um aceite, com a versão do texto lido. Texto novo é versão nova e pede aceite de novo: a
+/// linha antiga fica, porque é a prova do que a pessoa leu e quando. Sai no export e morre com
+/// a conta.
+model AiConsent {
+  id         String        @id @default(uuid())
+  userId     String
+  kind       AiConsentKind
+  version    String
+  acceptedAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, version])
 }
 
 /// Livro-caixa da inferência que a **Fatia** paga (#135).
@@ -2206,8 +2236,17 @@ model MediaFile {
   userAvatarOf   User?                    @relation("UserAvatar")
   mealPhotoOf    Meal?                    @relation("MealPhoto")
 
+  /// Foto do chat (ADR 046): a mensagem da pessoa que a levou, e a ordem nela.
+  /// `SetNull` e não `Cascade`: apagar a conversa apaga as mensagens no banco,
+  /// e a linha da foto precisa sobreviver até o objeto sair do bucket. Quem
+  /// varre é o `ConversationService.apagar`; a faxina de órfãos é a rede.
+  chatMessageId String?
+  chatPosition  Int?
+  chatMessage   Message? @relation("ChatPhoto", fields: [chatMessageId], references: [id], onDelete: SetNull)
+
   @@index([groupId])
   @@index([uploaderId])
+  @@index([chatMessageId])
   @@index([status, createdAt])
 }
 

@@ -15,6 +15,7 @@ export class SuggestNutritionGoalsTool implements McpToolDef {
   readonly title = 'Sugerir metas nutricionais';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'comparison' as const;
   readonly description =
     'Calcula metas sugeridas (gasto pela Mifflin-St Jeor × atividade, ajustado ao objetivo) sem gravar nada. ' +
     'Campos omitidos vêm do perfil e da última pesagem; para salvar, use set_nutrition_goals. ' +
@@ -38,5 +39,23 @@ export class SuggestNutritionGoalsTool implements McpToolDef {
     { userId, timezone }: McpToolContext,
   ) {
     return this.onboarding.suggest(userId, input, timezone);
+  }
+
+  /** O gasto calculado e as faixas sugeridas, lado a lado (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    const s = result as Awaited<ReturnType<OnboardingService['suggest']>>;
+    const faixa = (min: number, max: number) => `${min}–${max}`;
+    return {
+      kind: 'comparison',
+      label: 'Metas sugeridas',
+      items: [
+        { label: 'Gasto em repouso', value: s.bmr, unit: 'kcal' },
+        { label: 'Gasto do dia', value: s.tdee, unit: 'kcal' },
+        { label: 'Calorias', value: faixa(s.goals.kcalMin, s.goals.kcalMax), unit: 'kcal' },
+        { label: 'Proteína', value: faixa(s.goals.proteinMinG, s.goals.proteinMaxG), unit: 'g' },
+        { label: 'Carboidratos', value: faixa(s.goals.carbsMinG, s.goals.carbsMaxG), unit: 'g' },
+        { label: 'Gordura', value: faixa(s.goals.fatMinG, s.goals.fatMaxG), unit: 'g' },
+      ],
+    };
   }
 }

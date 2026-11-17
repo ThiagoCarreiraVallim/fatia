@@ -47,6 +47,7 @@ import { PLAN_QUERY_KEY } from '@/components/billing/plan-screen';
 import { communityKeys } from '@/components/community/query-keys';
 import { useWebPush } from '@/components/notifications/use-web-push';
 import { hojeIso } from '@/lib/dias';
+import { AiConsentCard } from '@/components/chat/aceite';
 import {
   INVITE_COOKIE,
   SIGNUP_NAME_COOKIE,
@@ -442,6 +443,7 @@ export function OnboardingFlow({
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoPhase, setPhotoPhase] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [recognition, setRecognition] = useState<MealRecognition | null>(null);
+  const [consentRequired, setConsentRequired] = useState(false);
 
   async function onPhoto(file: File | undefined) {
     if (!file) return;
@@ -453,7 +455,9 @@ export function OnboardingFlow({
       setPhotoPhase(rec.itens.length > 0 ? 'done' : 'idle');
       if (rec.itens.length === 0) setError('Nenhum alimento reconhecido. Tente outra foto.');
     } catch (err) {
-      setError(errorText(err));
+      // Sem o aceite da IA a foto nem sai (403): o aceite aparece e a pessoa tenta de novo.
+      if (err instanceof ApiError && err.isAiConsentRequired) setConsentRequired(true);
+      else setError(errorText(err));
       setPhotoPhase('idle');
     }
   }
@@ -672,6 +676,13 @@ export function OnboardingFlow({
               onLater={() => void advance({})}
               onOtherCode={() => setStep('code')}
             />
+            {consentRequired ? (
+              <AiConsentCard
+                className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md"
+                onDecline={() => setConsentRequired(false)}
+                onAccepted={() => setConsentRequired(false)}
+              />
+            ) : null}
           </>
         );
       } else {

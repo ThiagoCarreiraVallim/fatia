@@ -48,6 +48,10 @@ export class S3ObjectStore implements ObjectStore {
       region: env.MEDIA_S3_REGION || 'auto',
       // R2 e SeaweedFS aceitam caminho; subdomínio por bucket exigiria DNS no dev.
       forcePathStyle: true,
+      // Sem isto o SDK põe na URL pré-assinada o CRC32 de um corpo vazio
+      // (`x-amz-checksum-crc32=AAAAAA==`): o navegador sobe bytes de verdade, o
+      // bucket confere contra o checksum de nada e recusa o envio.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: MEDIA_S3_ACCESS_KEY_ID,
         secretAccessKey: MEDIA_S3_SECRET_ACCESS_KEY,
@@ -57,8 +61,9 @@ export class S3ObjectStore implements ObjectStore {
   }
 
   presignPut(key: string, mime: string, bytes: number, expiresInSec: number): Promise<string> {
-    // Tipo e tamanho entram na assinatura: corpo de outro tamanho é recusado
-    // pelo storage, antes de a API ver qualquer coisa.
+    // Tipo e tamanho entram na assinatura: corpo de outro tamanho ou tipo é
+    // recusado pelo storage, antes de a API ver qualquer coisa. O tamanho entra
+    // sozinho; o tipo só entra declarado em `signableHeaders`.
     return getSignedUrl(
       this.client,
       new PutObjectCommand({
@@ -67,7 +72,7 @@ export class S3ObjectStore implements ObjectStore {
         ContentType: mime,
         ContentLength: bytes,
       }),
-      { expiresIn: expiresInSec },
+      { expiresIn: expiresInSec, signableHeaders: new Set(['content-type']) },
     );
   }
 

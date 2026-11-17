@@ -71,6 +71,31 @@ describe('McpToolRegistry — artefato', () => {
     expect(resultado).not.toHaveProperty('structuredContent');
   });
 
+  it('tool de Tabela sem artefato próprio ganha a tabela genérica (#384)', async () => {
+    const resultado = await registrar(
+      tool({ card: 'report', execute: async () => [{ name: 'Arroz', kcal: 130 }] }),
+    )({});
+    expect(resultado.structuredContent).toEqual({
+      kind: 'report',
+      columns: ['Nome', 'Calorias'],
+      rows: [['Arroz', 130]],
+    });
+  });
+
+  it('tool de Lista sem artefato próprio ganha a lista genérica (#384)', async () => {
+    const resultado = await registrar(
+      tool({ card: 'list', execute: async () => [{ id: 'g', name: 'Corrida' }] }),
+    )({});
+    expect(resultado.structuredContent).toEqual({ kind: 'list', items: [{ title: 'Corrida' }] });
+  });
+
+  it('a tabela genérica só vale para a Tabela: outro formato sem artefato fica sem cartão', async () => {
+    const resultado = await registrar(
+      tool({ card: 'metric', execute: async () => [{ name: 'Arroz', kcal: 130 }] }),
+    )({});
+    expect(resultado).not.toHaveProperty('structuredContent');
+  });
+
   it('artefato que quebra não derruba a tool', async () => {
     const handler = registrar(
       tool({
@@ -150,5 +175,48 @@ describe('artefatos das tools de leitura', () => {
       { date: '2026-09-01', value: 80 },
       { date: '2026-09-20', value: 78.8 },
     ]);
+  });
+});
+
+describe('McpToolRegistry — catálogo do chat (#384)', () => {
+  function registry(...defs: McpToolDef[]) {
+    const marcadas = defs.map((instance) => {
+      class Marcada {}
+      Reflect.defineMetadata(MCP_TOOL_METADATA, true, Marcada);
+      return { metatype: Marcada, instance };
+    });
+    const discovery = { getProviders: () => marcadas } as unknown as DiscoveryService;
+    const r = new McpToolRegistry(discovery, { record: jest.fn() } as unknown as McpMetricsService);
+    r.onModuleInit();
+    return r;
+  }
+
+  it('diz a classe, o cartão e a tela de cada tool', () => {
+    const r = registry(
+      tool({ name: 'get_coisa', title: 'Coisa', card: 'metric' }),
+      tool({ name: 'list_coisas', title: 'Coisas', card: 'report' }),
+      tool({
+        name: 'log_coisa',
+        title: 'Registrar coisa',
+        card: 'confirm',
+        annotations: { readOnlyHint: false, destructiveHint: false, confirmableHint: true },
+      }),
+      tool({
+        name: 'delete_coisa',
+        title: 'Excluir coisa',
+        annotations: { readOnlyHint: false, destructiveHint: true, confirmableHint: false },
+        appOnly: { screen: 'Coisas', path: '/coisas/:id' },
+      }),
+    );
+    expect(r.catalogoDoChat()).toEqual({
+      get_coisa: { title: 'Coisa', kind: 'read', card: 'metric' },
+      list_coisas: { title: 'Coisas', kind: 'read', card: 'report' },
+      log_coisa: { title: 'Registrar coisa', kind: 'confirm', card: 'confirm' },
+      delete_coisa: {
+        title: 'Excluir coisa',
+        kind: 'app_only',
+        appOnly: { screen: 'Coisas', path: '/coisas/:id' },
+      },
+    });
   });
 });

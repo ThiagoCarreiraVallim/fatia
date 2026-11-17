@@ -16,6 +16,7 @@ import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
 import { GroupAgentService } from '../../sharing/group-agent.service';
 import { MemoryService } from '../memory/memory.service';
+import { AiConsentService } from '../consent/ai-consent.service';
 import { registrarCorposDoChat, TETO_DO_AUDIO } from '../corpos-do-chat';
 import { JPEG_COM_EXIF_GPS } from '../../nutrition/helpers/jpeg-com-exif.fixture';
 
@@ -199,6 +200,15 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
     .overrideProvider(MemoryService)
     .useValue({ listar: jest.fn(async () => []) })
+    // O aceite da primeira conversa (#384) está dado: os testes daqui são da fiação HTTP.
+    .overrideProvider(AiConsentService)
+    .useValue({
+      assertChatConsent: jest.fn(async () => undefined),
+      webSearchMode: jest.fn(async () => 'off'),
+      status: jest.fn(async (userId: string) => ({ userId, chat: { accepted: true } })),
+      accept: jest.fn(async () => ({ chat: { accepted: true } })),
+      setWebSearch: jest.fn(async () => ({ webSearchEnabled: false })),
+    })
     .overrideProvider(GroupAgentService)
     .useValue({
       listForChat: jest.fn(async () => ({ defaultGroupId: null, agents: [] })),
@@ -818,5 +828,56 @@ describe('GET /api/chat/conversations com estado (#369)', () => {
 
     expect(resposta.status).toBe(200);
     expect(await resposta.json()).toEqual({ waiting: 2, thinking: 1 });
+  });
+});
+
+describe('aceites da IA e preferência da busca (#384)', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    cenario.canal.encerrar();
+    await cenario.app.close();
+  });
+
+  const pedir = (path: string, method = 'GET', corpo?: unknown) =>
+    fetch(`${cenario.url}${path}`, {
+      method,
+      headers: { Authorization: 'Bearer token-do-usuario', 'Content-Type': 'application/json' },
+      ...(corpo === undefined ? {} : { body: JSON.stringify(corpo) }),
+    });
+
+  const aceites = () => cenario.app.get(AiConsentService) as unknown as Record<string, jest.Mock>;
+
+  it('o estado dos aceites é o do usuário do token', async () => {
+    const resposta = await pedir('/consent');
+    expect(resposta.status).toBe(200);
+    expect(aceites().status).toHaveBeenCalledWith(USER);
+  });
+
+  it('aceitar grava o tópico e a versão lidos, para o usuário do token, mesmo com userId no corpo', async () => {
+    const resposta = await pedir('/consent', 'POST', {
+      topic: 'web_search',
+      version: '2026-11-16',
+      userId: OUTRO_USER,
+    });
+    expect(resposta.status).toBe(200);
+    expect(aceites().accept).toHaveBeenCalledWith(USER, 'web_search', '2026-11-16');
+  });
+
+  it('tópico fora da lista e versão ausente são 400', async () => {
+    expect((await pedir('/consent', 'POST', { topic: 'tudo', version: 'x' })).status).toBe(400);
+    expect((await pedir('/consent', 'POST', { topic: 'chat' })).status).toBe(400);
+    expect(aceites().accept).not.toHaveBeenCalled();
+  });
+
+  it('a busca na web liga e desliga pela preferência, só com booleano', async () => {
+    const resposta = await pedir('/preferences', 'PATCH', { webSearchEnabled: false });
+    expect(resposta.status).toBe(200);
+    expect(aceites().setWebSearch).toHaveBeenCalledWith(USER, false);
+    expect((await pedir('/preferences', 'PATCH', { webSearchEnabled: 'sim' })).status).toBe(400);
   });
 });

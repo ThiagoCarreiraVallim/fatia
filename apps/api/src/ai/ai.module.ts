@@ -5,6 +5,7 @@ import { AiAccessService } from './ai-access.service';
 import { AiUsageService } from './ai-usage.service';
 import { HostedAiService } from './hosted-ai.service';
 import { HttpAgentAdapter } from './http-agent.adapter';
+import { AiConsentService } from '../chat/consent/ai-consent.service';
 
 /**
  * IA hospedada: portão de plano (`AiAccessService`), cota e livro-caixa
@@ -21,8 +22,9 @@ import { HttpAgentAdapter } from './http-agent.adapter';
     AiUsageService,
     AiAccessService,
     HostedAiService,
+    AiConsentService,
     { provide: AgentAdapter, useClass: HttpAgentAdapter },
   ],
-  exports: [AiUsageService, AiAccessService, HostedAiService],
+  exports: [AiUsageService, AiAccessService, HostedAiService, AiConsentService],
 })
 export class AiModule {}

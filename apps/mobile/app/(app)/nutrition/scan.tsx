@@ -27,6 +27,8 @@ import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { PhotoCapture } from '@/components/nutrition/photo-capture';
 import { ScannedProductDrawer } from '@/components/nutrition/scanned-product-drawer';
 import { hojeIso } from '@/components/nutrition/helpers';
+import { needsAiConsent } from '@/chat/ai-consent-state';
+import { AiConsentCard } from '@/components/chat/consent';
 
 /**
  * Leitor (#140, #375): o código de barras e, na aba "Rótulo", a tabela
@@ -98,6 +100,8 @@ export default function ScanScreen() {
     onSuccess: (reading) => setCreateForm(customFoodFormFromLabel(reading, unknownCode)),
   });
   const planRequired = readLabel.error instanceof ApiError && readLabel.error.isPlanRequired;
+  // 403 `AI_CONSENT_REQUIRED`: a foto nem saiu; o aceite aparece no lugar do erro.
+  const consentRequired = needsAiConsent(readLabel.error);
 
   const onCode = (code: string) => {
     if (!canProcessScan(code, lastCode.current)) return;
@@ -163,7 +167,13 @@ export default function ScanScreen() {
                 </View>
                 <View className="gap-3 pt-4">
                   {readLabel.isPending ? <LoadingState label="Lendo o rótulo…" /> : null}
-                  {readLabel.error && !planRequired ? (
+                  {consentRequired ? (
+                    <AiConsentCard
+                      onDecline={() => readLabel.reset()}
+                      onAccepted={() => readLabel.reset()}
+                    />
+                  ) : null}
+                  {readLabel.error && !planRequired && !consentRequired ? (
                     <Text accessibilityRole="alert" className="text-sm text-destructive">
                       {readLabel.error instanceof ApiError && readLabel.error.status !== 500
                         ? readLabel.error.message

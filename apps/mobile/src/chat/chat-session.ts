@@ -1,8 +1,10 @@
 import {
   EMPTY_CHAT_THREAD,
   PHOTO_ONLY_QUESTION,
+  withQuote,
   ApiError,
   appendUserMessage,
+  erroDoChat,
   applyChatFrame,
   getConversation,
   joinChatRun,
@@ -11,8 +13,10 @@ import {
   streamChat,
   threadFromHistory,
   type ChatAgentHeader,
+  type ChatHistoryPhoto,
   type ChatPhoto,
   type ChatResumeValue,
+  type ChatReviewReason,
   type ChatStreamFrame,
   type ChatThreadState,
 } from '@fatia/api-client';
@@ -31,6 +35,8 @@ import {
 
 export interface ChatSessionSnapshot {
   conversationId: string | null;
+  /** O nome da conversa, para o topo. `null` na nova, que ganha nome depois da 1ª resposta. */
+  title: string | null;
   thread: ChatThreadState;
   /** O agente da conversa (cabeçalho). `null` é o assistente da Fatia. */
   agent: ChatAgentHeader | null;
@@ -38,17 +44,60 @@ export interface ChatSessionSnapshot {
   isNew: boolean;
   loading: boolean;
   loadError: unknown;
+  /**
+   * O que a pessoa escreveu enquanto a resposta corria. Sai uma por vez, quando
+   * a conversa fica livre — e nunca com uma pausa aberta, que a mensagem nova
+   * abandonaria (ADR 022). Trocar de conversa descarta; parar a resposta não.
+   */
+  queue: QueuedChatMessage[];
+  /**
+   * A última resposta falhou (403, 402, cota, rede): a fila **para** e nada sai sozinho. Cada
+   * item espera a pessoa: "Enviar" (`sendQueued`) ou "Descartar" (`dequeue`).
+   */
+  queuePaused: boolean;
+  /**
+   * O trecho de uma resposta que a pessoa escolheu citar. Vai na frente da
+   * próxima mensagem como bloco `> ` (`withQuote`) — no texto, para chegar ao
+   * modelo e voltar com a conversa — e sai com ela.
+   */
+  quote: string | null;
+}
+
+export interface ChatSendInput {
+  text: string;
+  photos?: LocalChatPhoto[];
+  /** Só na conversa nova: `undefined` é o padrão, `null` o assistente da Fatia. */
+  agentGroupId?: string | null;
+}
+
+export interface QueuedChatMessage {
+  id: string;
+  text: string;
 }
 
 type Listener = () => void;
 
+/** A foto escolhida no aparelho: o arquivo para subir, e o base64 para o caminho antigo. */
+export interface LocalChatPhoto {
+  uri: string;
+  /** JPEG em base64, sem o prefixo `data:`. */
+  data: string;
+}
+
+/** Sobe a foto ao bucket (ADR 046). É do app: o corpo sai do arquivo do seletor. */
+export type ChatPhotoUploader = (photo: LocalChatPhoto) => Promise<ChatHistoryPhoto>;
+
 const VAZIO: ChatSessionSnapshot = {
   conversationId: null,
+  title: null,
   thread: EMPTY_CHAT_THREAD,
   agent: null,
   isNew: true,
   loading: false,
   loadError: null,
+  queue: [],
+  queuePaused: false,
+  quote: null,
 };
 
 export class ChatSession {
@@ -57,8 +106,18 @@ export class ChatSession {
   private controller: AbortController | null = null;
   /** Ao fim de cada turno: a lista, a cota e as memórias mudam juntas. */
   private onTurnEnd: (() => void) | null = null;
+  /**
+   * Muda a cada envio, parada e troca de conversa: o envio que esperava a foto subir confere
+   * se ainda é o turno da vez antes de abrir o stream.
+   */
+  private turn = 0;
+  /** O texto da última mensagem enviada, já com a citação: o que "Tentar de novo" reenvia. */
+  private lastText: string | null = null;
 
-  constructor(private readonly newId: () => string) {}
+  constructor(
+    private readonly newId: () => string,
+    private readonly uploadPhoto: ChatPhotoUploader | null = null,
+  ) {}
 
   setTurnEndListener(listener: (() => void) | null): void {
     this.onTurnEnd = listener;
@@ -88,12 +147,15 @@ export class ChatSession {
   async open(conversationId: string): Promise<void> {
     if (this.snapshot.conversationId === conversationId) return;
     this.detach();
+    this.turn++;
+    this.lastText = null;
     this.set({ ...VAZIO, conversationId, loading: true });
     try {
       const conversa = await getConversation(conversationId);
       if (this.snapshot.conversationId !== conversationId) return;
       this.set({
         thread: threadFromHistory(conversa.messages),
+        title: conversa.title ?? null,
         agent: conversa.agent ?? null,
         isNew: false,
         loading: false,
@@ -111,6 +173,8 @@ export class ChatSession {
   startNew(): string {
     this.detach();
     const id = this.newId();
+    this.turn++;
+    this.lastText = null;
     this.set({ ...VAZIO, conversationId: id });
     return id;
   }
@@ -123,20 +187,55 @@ export class ChatSession {
     await this.open(id);
   }
 
-  async send(input: {
-    text: string;
-    photos?: ChatPhoto[];
-    /** Só na conversa nova: `undefined` é o padrão, `null` o assistente da Fatia. */
-    agentGroupId?: string | null;
-  }): Promise<void> {
+  /** Cita um trecho na próxima mensagem; `null` desiste da citação. */
+  setQuote(text: string | null): void {
+    this.set({ quote: text?.trim() || null });
+  }
+
+  /** A citação pendente, se houver, entra na frente do texto e sai do campo. */
+  private takeQuote(text: string): string {
+    const { quote } = this.snapshot;
+    if (!quote) return text;
+    this.set({ quote: null });
+    return withQuote(quote, text);
+  }
+
+  async send(input: ChatSendInput): Promise<void> {
+    if (!this.snapshot.conversationId || this.snapshot.thread.running) return;
+    const texto = input.text.trim() ? this.takeQuote(input.text) : input.text;
+    return this.dispatch({ ...input, text: texto });
+  }
+
+  private async dispatch(input: ChatSendInput): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId || this.snapshot.thread.running) return;
     const fotos = input.photos ?? [];
     const texto = input.text.trim() || (fotos.length ? PHOTO_ONLY_QUESTION : '');
     if (!texto) return;
+    const turno = ++this.turn;
+    this.lastText = texto;
+    // Mandar é decidir: a fila parada pelo erro volta a andar depois desta resposta.
+    if (this.snapshot.queuePaused) this.set({ queuePaused: false });
     this.setThread((t) =>
-      appendUserMessage(t, { id: `local-${this.newId()}`, text: texto, photos: fotos.length }),
+      appendUserMessage(t, {
+        id: `local-${this.newId()}`,
+        text: texto,
+        ...(fotos.length ? { images: fotos.map((f) => f.uri) } : {}),
+      }),
     );
+    let enviadas: { photoIds: string[]; photos: ChatPhoto[] };
+    try {
+      enviadas = await this.prepararFotos(fotos);
+    } catch (erro) {
+      // O corpo da recusa, se houver; o texto do servidor nunca vai à tela.
+      const recusa = erroDoChat(erro instanceof ApiError ? erro.body : null);
+      if (this.turn === turno && this.snapshot.conversationId === conversationId) {
+        this.setThread((t) => ({ ...t, running: false, error: recusa }));
+      }
+      return;
+    }
+    // A foto levou tempo para subir: a pessoa pode ter parado ou trocado de conversa.
+    if (this.turn !== turno || this.snapshot.conversationId !== conversationId) return;
     const novo = this.snapshot.isNew;
     this.set({ isNew: false });
     await this.follow(
@@ -144,12 +243,90 @@ export class ChatSession {
         {
           conversationId,
           message: texto,
-          ...(fotos.length ? { photos: fotos } : {}),
+          ...(enviadas.photoIds.length ? { photoIds: enviadas.photoIds } : {}),
+          ...(enviadas.photos.length ? { photos: enviadas.photos } : {}),
           ...(novo && input.agentGroupId !== undefined ? { agentGroupId: input.agentGroupId } : {}),
         },
         this.signal(),
       ),
     );
+  }
+
+  /**
+   * Sobe as fotos ao bucket (ADR 046). Instância sem bucket responde 503 ao
+   * pedido de envio: aí a foto vai em base64 no turno e não fica guardada (ADR
+   * 020). Qualquer outra falha para o envio, em vez de a foto sair por um
+   * caminho que a pessoa não escolheu.
+   */
+  private async prepararFotos(
+    fotos: LocalChatPhoto[],
+  ): Promise<{ photoIds: string[]; photos: ChatPhoto[] }> {
+    const photoIds: string[] = [];
+    const photos: ChatPhoto[] = [];
+    for (const foto of fotos) {
+      const avulsa = { mediaType: 'image/jpeg' as const, data: foto.data };
+      if (!this.uploadPhoto) {
+        photos.push(avulsa);
+        continue;
+      }
+      try {
+        photoIds.push((await this.uploadPhoto(foto)).id);
+      } catch (erro) {
+        if (erro instanceof ApiError && erro.status === 503) photos.push(avulsa);
+        else throw erro;
+      }
+    }
+    return { photoIds, photos };
+  }
+
+  /** Guarda a mensagem para depois da resposta que está correndo. */
+  enqueue(text: string): void {
+    const limpo = text.trim();
+    if (!limpo || !this.snapshot.conversationId) return;
+    this.set({
+      queue: [...this.snapshot.queue, { id: this.newId(), text: this.takeQuote(limpo) }],
+    });
+  }
+
+  dequeue(id: string): void {
+    const queue = this.snapshot.queue.filter((item) => item.id !== id);
+    this.set({ queue, queuePaused: this.snapshot.queuePaused && queue.length > 0 });
+  }
+
+  /** "Enviar" de um item da fila parada: manda este, e só ele. */
+  async sendQueued(id: string): Promise<void> {
+    const item = this.snapshot.queue.find((q) => q.id === id);
+    if (!item || this.snapshot.thread.running) return;
+    this.set({ queue: this.snapshot.queue.filter((q) => q.id !== id) });
+    return this.dispatch({ text: item.text });
+  }
+
+  /** "Tentar de novo": reenvia a mensagem que falhou, como foi (a citação já vai nela). */
+  async retry(): Promise<void> {
+    if (this.snapshot.thread.running) return;
+    // Sem envio nesta sessão (o erro veio de uma resposta acompanhada ao reabrir): a última fala.
+    const ultima = [...this.snapshot.thread.messages].reverse().find((m) => m.role === 'user');
+    const texto = this.lastText ?? (ultima?.role === 'user' ? ultima.text : null);
+    if (!texto) return;
+    return this.dispatch({ text: texto });
+  }
+
+  /**
+   * A próxima da fila, se a conversa está livre: sem resposta e sem pausa. Depois de um erro,
+   * não: a fila para e espera a pessoa (`queuePaused`).
+   */
+  private drain(): void {
+    const { thread, queue } = this.snapshot;
+    if (thread.running || thread.interrupt || queue.length === 0) return;
+    if (thread.error) {
+      this.set({ queuePaused: true });
+      return;
+    }
+    const [proxima, ...resto] = queue;
+    this.set({ queue: resto });
+    // `dispatch`, e não `send`: a citação do item já foi junto com ele, e a que
+    // estiver no campo agora é para a próxima mensagem que a pessoa escrever.
+    void this.dispatch({ text: proxima.text });
   }
 
   /** A resposta a uma pausa: o `id` dela prova a qual pausa a resposta responde. */
@@ -167,6 +344,7 @@ export class ChatSession {
   async stop(): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId || !this.snapshot.thread.running) return;
+    this.turn++;
     this.detach();
     this.setThread((t) => applyChatFrame(t, { event: 'done', data: { status: 'stopped' } }));
     try {
@@ -174,6 +352,9 @@ export class ChatSession {
     } catch {
       // Sem rede: o servidor termina a resposta, e ela aparece ao reabrir.
     }
+    // Parar não descarta a fila: a próxima sai depois do servidor saber da
+    // parada, senão o turno novo esbarraria na resposta que ainda corre lá.
+    if (this.snapshot.conversationId === conversationId) this.drain();
   }
 
   /**
@@ -201,6 +382,20 @@ export class ChatSession {
       ),
     }));
     await sendChatFeedback(conversationId, rowId, { review });
+  }
+
+  /**
+   * O "por quê" de um 👎, depois do voto e opcional (como o `motivo-do-voto.tsx` do PWA): a
+   * lista fechada soma, o texto livre vai à parte.
+   */
+  async explainVote(rowId: string, reasons: ChatReviewReason[], note?: string): Promise<void> {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
+    await sendChatFeedback(conversationId, rowId, {
+      review: 'dislike',
+      reasons,
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    });
   }
 
   private signal(): { signal: AbortSignal } {
@@ -236,6 +431,7 @@ export class ChatSession {
           else this.setThread((t) => ({ ...t, running: false }));
         }
         this.onTurnEnd?.();
+        if (this.snapshot.conversationId === conversationId) this.drain();
       }
     }
   }

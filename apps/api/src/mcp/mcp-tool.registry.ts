@@ -4,12 +4,15 @@ import { DiscoveryService } from '@nestjs/core';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   MCP_TOOL_METADATA,
+  type ChatAppOnly,
+  type ChatCardFormat,
   type McpSurface,
   type McpToolContext,
   type McpToolDef,
 } from '../common/decorators/tool.decorator';
 import { servidaNa, SuperficieDeIntencao } from './intent/superficie';
 import { formatToolError } from './mcp-error';
+import { genericList, genericTable } from './generic-card';
 import { McpMetricsService } from '../observability/mcp-metrics.service';
 
 type ToolResult = {
@@ -27,13 +30,31 @@ const ok = (data: unknown, artefato?: Record<string, unknown> | null): ToolResul
  * O artefato é enfeite de tela: um defeito nele não pode derrubar a tool, cujo
  * texto é o que o modelo lê para responder.
  */
-function artefatoDe(tool: McpToolDef, data: unknown, input: unknown) {
+export function artifactFor(
+  tool: McpToolDef,
+  data: unknown,
+  input: unknown,
+): Record<string, unknown> | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return tool.artifact?.(data, input as any) ?? null;
+    if (tool.artifact) return tool.artifact(data, input as any);
+    // A Tabela é o formato padrão (#384): quem não monta o próprio cartão ganha o genérico. A
+    // Lista também tem genérico; os outros formatos só existem com produtor próprio.
+    if (tool.card === 'report') return genericTable(data) as Record<string, unknown> | null;
+    if (tool.card === 'list') return genericList(data) as Record<string, unknown> | null;
+    return null;
   } catch {
     return null;
   }
+}
+
+/** Como uma tool aparece na conversa (#384, prancha IA-Ferramentas). */
+export interface ChatToolCatalogEntry {
+  title: string;
+  /** `read` responde na hora; `confirm` pede o sim; `app_only` a IA nunca faz e leva à tela. */
+  kind: 'read' | 'confirm' | 'app_only';
+  card?: ChatCardFormat;
+  appOnly?: ChatAppOnly;
 }
 
 const fail = (text: string): ToolResult => ({
@@ -90,6 +111,34 @@ export class McpToolRegistry implements OnModuleInit {
   }
 
   /**
+   * O catálogo do chat hospedado: classe, cartão e tela de cada tool de entidade. A classe sai
+   * das mesmas anotações de que o agente deriva as três camadas (`tool_policy.py`), e não de
+   * uma lista à parte. Leitura sem `card` é Tabela, o padrão.
+   */
+  catalogoDoChat(): Record<string, ChatToolCatalogEntry> {
+    const entradas = this.tools
+      .filter((tool) => servidaNa(tool, 'entidade'))
+      .map((tool): [string, ChatToolCatalogEntry] => {
+        const a = tool.annotations;
+        if (a.readOnlyHint === true) {
+          return [tool.name, { title: tool.title, kind: 'read', card: tool.card }];
+        }
+        if (a.confirmableHint === true) {
+          return [tool.name, { title: tool.title, kind: 'confirm', card: tool.card }];
+        }
+        return [
+          tool.name,
+          {
+            title: tool.title,
+            kind: 'app_only',
+            ...(tool.appOnly ? { appOnly: tool.appOnly } : {}),
+          },
+        ];
+      });
+    return Object.fromEntries(entradas);
+  }
+
+  /**
    * Registra no servidor da requisição as tools da `superficie` pedida. É o mesmo ponto em
    * que só entra o que a pessoa pode chamar: tool fora do recorte não existe para o modelo.
    */
@@ -119,7 +168,7 @@ export class McpToolRegistry implements OnModuleInit {
             // A métrica repete o log de propósito, sem o `userId`: ela é o que sobrevive semanas
             // agregada, e rótulo por usuário explodiria a cardinalidade do Prometheus.
             this.metrics.record({ tool: tool.name, durationMs, success: true });
-            return ok(data, artefatoDe(tool, data, input));
+            return ok(data, artifactFor(tool, data, input));
           } catch (err) {
             const { category, text } = formatToolError(err);
             const durationMs = Date.now() - start;

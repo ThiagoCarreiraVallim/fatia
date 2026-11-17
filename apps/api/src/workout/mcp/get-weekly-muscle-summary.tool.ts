@@ -24,6 +24,7 @@ export class GetWeeklyMuscleSummaryTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Séries de força por grupo muscular nos últimos 7 dias (com a meta semanal), os grupos mais descansados (dias desde a última série) e o plano da própria pessoa que mais trabalha os grupos descansados.';
   readonly inputSchema = {} as const;

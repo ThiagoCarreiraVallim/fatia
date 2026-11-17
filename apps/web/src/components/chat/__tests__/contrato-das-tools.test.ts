@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TOOL_NOT_RUN_PREFIX, TOOL_REFUSED_PREFIX } from '@fatia/api-client';
+import { AGENT_LOCAL_TOOLS, TOOL_NOT_RUN_PREFIX, TOOL_REFUSED_PREFIX } from '@fatia/api-client';
 import { NEVER_RAN } from '../historico';
 import { NOT_RUN_PREFIX, REFUSED_PREFIX } from '../partes';
 
@@ -37,5 +37,16 @@ describe('contrato dos desfechos de tool com o agente', () => {
 
   it('o "não executada" que a tela escreve é o mesmo do agente', () => {
     expect(NEVER_RAN).toBe(constante('NAO_EXECUTADA'));
+  });
+});
+
+describe('ferramentas locais do agente (#384)', () => {
+  it('toda ferramenta local do agente tem cartão no api-client', () => {
+    const chat = resolve(__dirname, '../../../../../agent/src/fatia_agent/chat');
+    const nomes = ['human.py', 'web.py', 'app_only.py'].map(
+      (arquivo) =>
+        /^(?:NOME|NAME) = "([a-z_]+)"/m.exec(readFileSync(resolve(chat, arquivo), 'utf8'))?.[1],
+    );
+    expect(nomes.sort()).toEqual(Object.keys(AGENT_LOCAL_TOOLS).sort());
   });
 });

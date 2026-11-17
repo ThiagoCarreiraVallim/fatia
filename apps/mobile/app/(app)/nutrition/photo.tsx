@@ -16,6 +16,8 @@ import { Button, DrawerLayer, LoadingState, useActionSheet } from '@/components/
 import { PhotoCapture } from '@/components/nutrition/photo-capture';
 import { RecognitionReviewDrawer } from '@/components/nutrition/recognition-review-drawer';
 import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
+import { needsAiConsent } from '@/chat/ai-consent-state';
+import { AiConsentCard } from '@/components/chat/consent';
 
 /**
  * Registro de refeição por foto (#139).
@@ -88,11 +90,14 @@ export default function PhotoScreen() {
   };
 
   const planoNecessario = reconhecer.error instanceof ApiError && reconhecer.error.isPlanRequired;
-  const falha = reconhecer.error
-    ? mensagemDeErro(reconhecer.error, {
-        alternativa: 'Não consegui analisar a foto. Registre pela busca de alimento.',
-      })
-    : null;
+  // 403 `AI_CONSENT_REQUIRED`: a foto nem saiu; o aceite aparece no lugar do erro.
+  const semAceite = needsAiConsent(reconhecer.error);
+  const falha =
+    reconhecer.error && !semAceite
+      ? mensagemDeErro(reconhecer.error, {
+          alternativa: 'Não consegui analisar a foto. Registre pela busca de alimento.',
+        })
+      : null;
 
   return (
     <>
@@ -110,6 +115,13 @@ export default function PhotoScreen() {
               // A pessoa fica olhando isto por 30 s ou mais: visão em CPU é lenta,
               // e um rótulo genérico ("Carregando…") faz parecer travado.
               <LoadingState label="Analisando o prato… isso pode levar até um minuto." />
+            ) : null}
+
+            {semAceite ? (
+              <AiConsentCard
+                onDecline={() => reconhecer.reset()}
+                onAccepted={() => reconhecer.reset()}
+              />
             ) : null}
 
             {falha ? (

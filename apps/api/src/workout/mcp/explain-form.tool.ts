@@ -19,6 +19,7 @@ export class ExplainFormTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly card = 'instructions' as const;
   readonly description =
     'Retorna os passos de execução e detalhes de técnica de um exercício buscado por nome. Use quando o usuário perguntar "como faz" ou pedir ajuda com a forma — as instruções retornadas são o insumo para explicar a execução correta.';
   readonly inputSchema = {
@@ -30,5 +31,12 @@ export class ExplainFormTool implements McpToolDef {
 
   execute(input: { exerciseName: string }, { userId }: McpToolContext) {
     return this.exercises.explainForm(userId, input.exerciseName);
+  }
+
+  /** Os passos do exercício achado (prancha IA-Cartoes, #384). Sem passos, sem cartão. */
+  artifact(result: unknown) {
+    const [exercicio] = result as { name: string; instructions: string[] }[];
+    if (!exercicio?.instructions?.length) return null;
+    return { kind: 'instructions', label: exercicio.name, steps: exercicio.instructions };
   }
 }

@@ -16,6 +16,7 @@ export class UpdateMealTool implements McpToolDef {
   readonly title = 'Atualizar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza metadados da refeição (mealType/eatenAt/notes). ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","mealType":"DINNER","eatenAt":"2026-07-29T20:15:00-03:00"}';

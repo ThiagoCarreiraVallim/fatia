@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AchievementService } from '../achievement.service';
+import { AchievementService, type AchievementEntry } from '../achievement.service';
 import {
   McpTool,
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import { achievementBadges } from './achievement-badges';
 
 @Injectable()
 @McpTool()
@@ -14,6 +15,7 @@ export class ListAchievementsTool implements McpToolDef {
   readonly title = 'Conquistas';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'badges' as const;
   readonly description =
     'Catálogo de conquistas do usuário: as dez, sempre (primeira refeição, primeiro treino, ' +
     'primeiro plano, primeiro recorde, 7 e 30 dias seguidos, meta da semana, 100 treinos, ' +
@@ -26,5 +28,10 @@ export class ListAchievementsTool implements McpToolDef {
     // Só lê. Quem desbloqueia é `refresh_achievements`, que se declara escrita — uma tool de
     // leitura que grava seria uma surpresa desagradável para quem lê `readOnlyHint`.
     return this.achievements.list({ userId, timezone }, { withProgress: true });
+  }
+
+  /** Os selos, com quantos já saíram (prancha IA-Cartoes, #384). */
+  artifact(result: unknown) {
+    return achievementBadges(result as AchievementEntry[]);
   }
 }

@@ -19,6 +19,9 @@ import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 import { ChatRunRegistry, createSseFramer } from './chat-run.registry';
 import { NotificationService, type Notice } from '../notifications/notification.service';
+import { MediaService } from '../storage/media.service';
+import { MAX_FOTOS_POR_MENSAGEM } from './corpos-do-chat';
+import { AiConsentService } from './consent/ai-consent.service';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -62,6 +65,8 @@ export class ChatService {
     private readonly agentes: GroupAgentService,
     private readonly runs: ChatRunRegistry,
     private readonly avisos: NotificationService,
+    private readonly midia: MediaService,
+    private readonly aceites: AiConsentService,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -126,13 +131,23 @@ export class ChatService {
         'Envie message (turno novo) ou resume (resposta a uma pausa), não os dois.',
       );
     }
-    if (dto.resume && dto.photos?.length) {
+    const fotoIds = dto.photoIds ?? [];
+    if (dto.resume && (dto.photos?.length || fotoIds.length)) {
       throw new BadRequestException('Foto só acompanha uma mensagem nova.');
     }
-    const fotos = fotosDoTurno(dto.photos ?? []);
+    if ((dto.photos?.length ?? 0) + fotoIds.length > MAX_FOTOS_POR_MENSAGEM) {
+      throw new BadRequestException(`No máximo ${MAX_FOTOS_POR_MENSAGEM} fotos por mensagem.`);
+    }
+    // As de base64 vivem só no turno; as guardadas (ADR 046) vêm do bucket, e
+    // um id que não é desta pessoa responde 404 antes de qualquer custo.
+    const fotosAvulsas = fotosDoTurno(dto.photos ?? []);
+    const fotos = [...(await this.midia.chatPhotosForTurn(user.id, fotoIds)), ...fotosAvulsas];
 
     const existente = await this.conversas.find(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
+    // Sem o aceite da primeira conversa (#384, Apple 5.1.2), nada sai para o provedor.
+    await this.aceites.assertChatConsent(user.id);
+    const webSearch = await this.aceites.webSearchMode(user.id);
 
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
     // de abrir outro turno na mesma thread do agente.
@@ -157,6 +172,7 @@ export class ChatService {
           timezone: user.timezone,
           conversationId: dto.conversationId,
           history,
+          webSearch,
           memories: (await this.memorias.listar(user.id)).map(({ id, content }) => ({
             id,
             content,
@@ -186,8 +202,9 @@ export class ChatService {
         user.id,
         dto.conversationId,
         dto.message,
-        fotos.length,
+        fotosAvulsas.length,
         agentGroupId,
+        fotoIds,
       );
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
@@ -268,11 +285,24 @@ export class ChatService {
     }
   }
 
-  /** Para a resposta em andamento desta conversa. `false` quando não há nenhuma. */
-  stop(userId: string, conversationId: string): boolean {
+  /**
+   * Para a resposta em andamento desta conversa e **espera ela fechar** (gravada e fora do
+   * registro), com teto: a próxima mensagem logo depois não esbarra no 409
+   * `CHAT_RUN_IN_PROGRESS`. `false` quando não havia nenhuma.
+   */
+  async stop(userId: string, conversationId: string): Promise<boolean> {
     const run = this.runs.find(userId, conversationId);
     if (!run || run.done) return false;
     run.stop();
+    let teto: NodeJS.Timeout | undefined;
+    await Promise.race([
+      run.closed,
+      new Promise<void>((resolve) => {
+        teto = setTimeout(resolve, STOP_WAIT_MS);
+        teto.unref?.();
+      }),
+    ]);
+    clearTimeout(teto);
     return true;
   }
 
@@ -322,10 +352,13 @@ export class ChatService {
       this.logger.error(`Falha ao gravar a resposta do chat: ${(erro as Error).name}`);
     }
     // Sempre, inclusive quando o stream quebrou: o dinheiro já saiu.
-    await hosted.finish(turno.usoPorModelo);
+    await hosted.finish(turno.usoPorModelo, turno.buscasNaWeb);
     return linha;
   }
 }
+
+/** Quanto o `stop` espera o turno fechar; acima disso responde e o cliente tenta de novo. */
+export const STOP_WAIT_MS = 10_000;
 
 /**
  * O turno que a pessoa parou é `stopped`, e não `error`, com o que já tinha chegado.

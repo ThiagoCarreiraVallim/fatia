@@ -15,6 +15,7 @@ export class AcceptNutritionPlanTool implements McpToolDef {
   readonly title = 'Aceitar o plano alimentar';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Aceita o plano alimentar que espera aceite (pending em get_nutrition_plan). O plano em uso é ' +
     'substituído, as faixas do plano viram as metas do dia (quando applyGoals) e cada opção vira ' +

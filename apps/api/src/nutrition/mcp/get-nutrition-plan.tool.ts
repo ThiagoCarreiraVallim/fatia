@@ -15,6 +15,7 @@ export class GetNutritionPlanTool implements McpToolDef {
   readonly title = 'Ver o plano alimentar';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Plano alimentar que um profissional da equipe enviou ao usuário: o plano em uso (active) e um ' +
     'novo esperando aceite (pending), com refeições, opções, itens, equivalentes liberados, o que já ' +

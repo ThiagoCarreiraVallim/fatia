@@ -17,6 +17,7 @@ export class UpdateTimezoneTool implements McpToolDef {
   readonly title = 'Atualizar fuso horário';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Atualiza o fuso horário do usuário (IANA, ex.: "America/Sao_Paulo"). ' +
     'Exemplo: {"timezone":"America/Sao_Paulo"}';

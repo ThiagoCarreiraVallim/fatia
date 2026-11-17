@@ -62,6 +62,41 @@ export interface ConversationListItem {
   createdAt: Date;
   updatedAt: Date;
   state: ConversationState;
+  /** A última fala, em uma linha e com teto: a segunda linha do item na lista (#384). */
+  preview: string | null;
+}
+
+const TETO_DO_PREVIEW = 120;
+
+/**
+ * A última fala numa linha, para a lista. A citação (`> …`, o trecho respondido) sai da frente:
+ * o que importa é o que a pessoa escreveu; sobra a citação só quando não há mais nada.
+ */
+/** A linha do preview é texto puro: a lista não desenha markdown, então a marcação some. */
+function withoutMarkdown(linha: string): string {
+  return linha
+    .replace(/^\s{0,3}#{1,6}\s+/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/\*([^*\s][^*]*)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+}
+
+function conversationPreview(texto: string | undefined): string | null {
+  const linhas = (texto ?? '').split('\n').map(withoutMarkdown);
+  let i = 0;
+  while (i < linhas.length && linhas[i].startsWith('>')) i++;
+  const resto = linhas.slice(i).join(' ').trim();
+  const fala =
+    resto ||
+    linhas
+      .slice(0, i)
+      .map((l) => l.replace(/^> ?/, ''))
+      .join(' ');
+  const linha = fala.replace(/\s+/g, ' ').trim();
+  if (!linha) return null;
+  return linha.length > TETO_DO_PREVIEW ? `${linha.slice(0, TETO_DO_PREVIEW).trimEnd()}…` : linha;
 }
 
 /**
@@ -118,13 +153,26 @@ export class ConversationService {
         ...(termo ? { title: { contains: termo, mode: Prisma.QueryMode.insensitive } } : {}),
       },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, title: true, agentGroupId: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        title: true,
+        agentGroupId: true,
+        createdAt: true,
+        updatedAt: true,
+        messages: {
+          where: { content: { not: '' } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true },
+        },
+      },
     });
     const waiting = await this.waitingIds(userId);
     const isRunning = opts.isRunning ?? (() => false);
-    const comEstado = conversas.map((c) => ({
+    const comEstado = conversas.map(({ messages, ...c }) => ({
       ...c,
       state: conversationState(isRunning(c.id), waiting.has(c.id)),
+      preview: conversationPreview(messages[0]?.content),
     }));
     const filtradas = opts.state ? comEstado.filter((c) => c.state === opts.state) : comEstado;
     return opts.limit !== undefined ? filtradas.slice(0, opts.limit) : filtradas;
@@ -269,9 +317,13 @@ export class ConversationService {
    * pessoa. O `userId` vem do `@CurrentUser()` e nunca do corpo.
    */
   /**
-   * `fotos` é só a **contagem**: a foto em si não é gravada (ADR 004 e 020). O
-   * número fica em `metadata.photos` para a tela dizer, depois de um F5, que ali
-   * houve uma foto que não foi guardada.
+   * `fotos` é só a **contagem** das fotos em base64, que não são gravadas (ADR
+   * 020). O número fica em `metadata.photos` para a tela dizer, depois de um F5,
+   * que ali houve uma foto que não foi guardada.
+   *
+   * `fotoIds` são as guardadas no bucket (ADR 046): ficam ligadas à mensagem, na
+   * ordem em que vieram. O `MediaService.chatPhotosForTurn` já conferiu o dono;
+   * o `where` repete a conferência para fechar a janela entre as duas leituras.
    */
   async iniciarTurno(
     userId: string,
@@ -279,6 +331,7 @@ export class ConversationService {
     texto: string,
     fotos = 0,
     agentGroupId: string | null = null,
+    fotoIds: string[] = [],
   ): Promise<{ conversationId: string }> {
     const conversa = await this.find(userId, conversationId);
 
@@ -289,14 +342,21 @@ export class ConversationService {
           data: { id: conversationId, userId, title: tituloDe(texto), agentGroupId },
         }));
 
-      await tx.message.create({
+      const mensagem = await tx.message.create({
         data: {
           conversationId: alvo.id,
           role: MessageRole.user,
           content: texto,
           ...(fotos > 0 ? { metadata: { photos: fotos } } : {}),
         },
+        select: { id: true },
       });
+      for (const [posicao, id] of fotoIds.entries()) {
+        await tx.mediaFile.updateMany({
+          where: { id, uploaderId: userId, purpose: 'chat_photo', chatMessageId: null },
+          data: { chatMessageId: mensagem.id, chatPosition: posicao },
+        });
+      }
 
       await tx.conversation.update({
         where: { id: alvo.id },

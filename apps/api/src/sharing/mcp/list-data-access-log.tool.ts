@@ -15,6 +15,7 @@ export class ListDataAccessLogTool implements McpToolDef {
   readonly title = 'Quem olhou meus dados';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Trilha de acesso do usuário: cada vez que um profissional leu — ou TENTOU ler — dados dele, ' +
     'com data, categoria e a operação. As tentativas barradas aparecem marcadas, e são as mais ' +

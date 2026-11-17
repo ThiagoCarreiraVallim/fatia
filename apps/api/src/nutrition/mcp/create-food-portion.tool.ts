@@ -15,6 +15,7 @@ export class CreateFoodPortionTool implements McpToolDef {
   readonly title = 'Criar medida caseira';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Cria uma medida caseira do usuário para um alimento (ex.: "minha concha" = 140 g), para registrar com portionId. ' +
     'Exemplo: {"foodId":312,"name":"concha","grams":140}';

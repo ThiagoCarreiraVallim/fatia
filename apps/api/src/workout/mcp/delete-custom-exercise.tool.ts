@@ -19,6 +19,7 @@ export class DeleteCustomExerciseTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
+  readonly appOnly = { screen: 'Planos de treino', path: '/workout/plans' };
   readonly description =
     'Remove um exercício custom do usuário. Falha se há sets registrados com esse exercício. ' +
     'Exemplo: {"id":9001}';

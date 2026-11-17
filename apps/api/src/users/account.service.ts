@@ -89,6 +89,8 @@ export class AccountService {
         quietHoursEnabled: true,
         quietFrom: true,
         quietTo: true,
+        // A busca na web do chat (#384): ligada ou não. Os aceites vão em `aiConsents`.
+        webSearchEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -134,6 +136,7 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      aiConsents,
       mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
@@ -325,6 +328,19 @@ export class AccountService {
               reviewReasons: true,
               reviewNote: true,
               createdAt: true,
+              // As fotos do chat (ADR 046): passageiras, então só as que ainda existem.
+              photos: {
+                where: { status: 'READY' },
+                select: {
+                  mime: true,
+                  bytes: true,
+                  width: true,
+                  height: true,
+                  key: true,
+                  status: true,
+                },
+                orderBy: { chatPosition: 'asc' },
+              },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -573,6 +589,13 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // Os aceites da IA (#384): qual texto, em que versão, quando. É a prova do que a pessoa
+      // leu antes de a mensagem sair para o provedor — dela, então dela no export.
+      this.prisma.aiConsent.findMany({
+        where: { userId },
+        select: { kind: true, version: true, acceptedAt: true },
+        orderBy: { acceptedAt: 'asc' },
+      }),
       // Conectar sua IA (#388): o app e as datas. O hash do token fica de fora.
       this.prisma.mcpOAuthConnection.findMany({
         where: { userId },
@@ -625,7 +648,9 @@ export class AccountService {
       achievements,
       trainingBlocks,
       professionalLinks,
-      conversations,
+      conversations: await Promise.all(
+        conversations.map((c) => this.exportConversation(c, opts.photoLinks === true)),
+      ),
       memories,
       subscriptions,
       communityMemberships,
@@ -641,6 +666,7 @@ export class AccountService {
       dataExports,
       inboxNotices,
       reminders,
+      aiConsents,
       mcpConnections: mcpConnections.map((c) => ({
         clientName: c.client.clientName,
         connectedAt: c.createdAt,
@@ -673,6 +699,7 @@ export class AccountService {
         ideas: ideas.length,
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
+        aiConsents: aiConsents.length,
         mcpConnections: mcpConnections.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
@@ -714,6 +741,35 @@ export class AccountService {
    * baixado pelo link de exportação, um link assinado para baixá-la (ADR 038,
    * item 5). Pelo MCP vai só o `hasPhoto`: nenhuma tool leva a foto à IA.
    */
+  /**
+   * A conversa no export: cada foto na mensagem dela, com o link assinado no arquivo baixado
+   * (`photoLinks`) — o mesmo prazo das fotos das refeições. Sem a chave do bucket nem o id.
+   */
+  private async exportConversation<
+    C extends {
+      messages: {
+        photos: Pick<MediaFile, 'mime' | 'bytes' | 'width' | 'height' | 'key' | 'status'>[];
+      }[];
+    },
+  >(conversation: C, photoLinks: boolean) {
+    return {
+      ...conversation,
+      messages: await Promise.all(
+        conversation.messages.map(async (message) => ({
+          ...message,
+          photos: await Promise.all(
+            message.photos.map(async ({ key, status, ...foto }) => ({
+              ...foto,
+              ...(photoLinks && this.media
+                ? { url: await this.media.exportUrl({ key, status }) }
+                : {}),
+            })),
+          ),
+        })),
+      ),
+    };
+  }
+
   private async exportMeal<
     M extends Parameters<typeof presentMeal>[0] & {
       photoFile: MediaFile | null;

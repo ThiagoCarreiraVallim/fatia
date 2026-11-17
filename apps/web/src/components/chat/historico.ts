@@ -1,5 +1,6 @@
 import type { LangChainMessage, LangGraphInterruptState } from '@assistant-ui/react-langgraph';
 import type { ChatArtifact, ChatHistoryMessage, ChatResumeValue } from '@fatia/api-client';
+import { imagemDaFotoGuardada } from './foto';
 
 /**
  * A conversa gravada no `apps/api`, na forma que o runtime do assistant-ui redesenha.
@@ -81,7 +82,11 @@ function assistantMessages(
   return [mensagem, ...resultados];
 }
 
-/** A foto não é guardada (ADR 004); depois de recarregar, fica o aviso de que ela existiu. */
+/**
+ * A foto mandada pelo caminho antigo não é guardada (ADR 020); depois de
+ * recarregar, fica o aviso de que ela existiu. A guardada (ADR 046) volta como
+ * imagem.
+ */
 export const AVISO_DE_FOTO = '📷 Foto enviada — ela não fica guardada.';
 
 /**
@@ -100,9 +105,23 @@ export function historyToMessages(linhas: readonly ChatHistoryMessage[]): LangCh
   return linhas.flatMap((linha): LangChainMessage[] => {
     if (linha.role === 'user') {
       if (!linha.content) return [];
-      const fotos = linha.metadata?.photos ?? 0;
-      const content = fotos > 0 ? `${linha.content}\n\n${AVISO_DE_FOTO}` : linha.content;
-      return [{ id: linha.id, type: 'human', content }];
+      const avulsas = linha.metadata?.photos ?? 0;
+      const texto = avulsas > 0 ? `${linha.content}\n\n${AVISO_DE_FOTO}` : linha.content;
+      const guardadas = (linha.photos ?? []).filter((foto) => foto.url);
+      if (guardadas.length === 0) return [{ id: linha.id, type: 'human', content: texto }];
+      return [
+        {
+          id: linha.id,
+          type: 'human',
+          content: [
+            { type: 'text', text: texto },
+            ...guardadas.map((foto) => ({
+              type: 'image_url' as const,
+              image_url: { url: imagemDaFotoGuardada(foto) },
+            })),
+          ],
+        },
+      ];
     }
     return assistantMessages(linha, results);
   });

@@ -15,6 +15,7 @@ export class GetGroupInviteTool implements McpToolDef {
   readonly title = 'Ver um convite de comunidade';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Mostra a comunidade de um convite antes de aceitar: nome, descrição, quem convidou, o ' +
     'papel oferecido e quem da equipe poderia ver os dados compartilhados. Não entra nem ' +

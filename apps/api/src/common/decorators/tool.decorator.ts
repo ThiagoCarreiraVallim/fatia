@@ -54,6 +54,39 @@ export interface McpToolAnnotations {
  */
 export type McpSurface = 'entidade' | 'intencao';
 
+/**
+ * O formato do cartão de uma consulta no chat hospedado (prancha IA-Cartoes, #384). É o `kind`
+ * do artefato que a tela desenha; `report` é a Tabela, o padrão de quem não tem outro.
+ */
+export const CHAT_CARD_FORMATS = [
+  'metric',
+  'bars',
+  'timeline',
+  'list',
+  'report',
+  'range',
+  'progress',
+  'comparison',
+  'scoreboard',
+  'badges',
+  'instructions',
+  'file',
+  // O cartão de confirmação das escritas (Gravar / Ajustar). Não é consulta: é o formato de
+  // toda confirmável, e o resultado depois do sim pode vir num dos formatos acima.
+  'confirm',
+] as const;
+export type ChatCardFormat = (typeof CHAT_CARD_FORMATS)[number];
+
+/**
+ * A tela do app que faz o que o chat não faz (as ações sem volta, prancha IA-Ferramentas).
+ * `path` é a rota comum ao PWA e ao app (`navigation.ts`); um `:campo` é trocado pelo argumento
+ * de mesmo nome que a IA mandou, e sem ele a tela abre na rota de cima.
+ */
+export interface ChatAppOnly {
+  screen: string;
+  path: string;
+}
+
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   name: string;
   /** Nome de exibição, legível por humano. Exigido pelo diretório. */
@@ -98,6 +131,15 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
    * o de `apps/agent/.../chat/artefatos.py`; o que não se encaixa é descartado lá.
    */
   artifact?(result: unknown, input: z.infer<z.ZodObject<S>>): Record<string, unknown> | null;
+  /**
+   * O formato do cartão desta tool no chat (#384). **Toda** tool que o chat alcança declara —
+   * leitura, um formato de consulta; confirmável, `confirm` — e a restrita declara `appOnly`.
+   * Não há formato padrão: o `tool-catalog.spec.ts` reprova quem não declara. Não vai no fio do
+   * MCP: é contrato da tela do chat, servido em `GET /chat/tool-catalog`.
+   */
+  card?: ChatCardFormat;
+  /** Só nas restritas (nunca feitas pela IA): a tela que a pessoa abre para fazer. */
+  appOnly?: ChatAppOnly;
   /**
    * Ausente é `entidade`: as 100 e tantas tools do catálogo não declaram nada, e o
    * recorte de sempre continua sendo o default. Só as tools de intenção declaram.

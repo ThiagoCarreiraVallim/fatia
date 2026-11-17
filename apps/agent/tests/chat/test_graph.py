@@ -112,7 +112,8 @@ async def test_o_modelo_enxerga_leitura_confirmavel_e_ask_user_mas_nao_a_restrit
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
 
     nomes = {tool["function"]["name"] for tool in r.provider.corpos[0]["tools"]}
-    assert nomes == {"list_meals", "log_meal", "log_weight", "ask_user"}
+    # A restrita não é oferecida: só aparece como opção do botão "só no app" (#384).
+    assert nomes == {"list_meals", "log_meal", "log_weight", "ask_user", "open_in_app"}
 
 
 async def test_tool_alucinada_vira_falha_de_tool_e_a_conversa_continua(settings_factory):
@@ -383,7 +384,7 @@ async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_fac
 async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_factory):
     class ProvedorQueCai:
         async def stream_chat(
-            self, messages, *, tools=(), capacidade="text"
+            self, messages, *, tools=(), capacidade="text", web_search=False
         ) -> AsyncIterator[TextDelta]:
             from fatia_agent.providers.errors import AIProviderTimeout
 
@@ -408,7 +409,7 @@ async def test_defeito_nosso_vira_evento_de_erro_e_traceback_no_log(settings_fac
     """
 
     class ProvedorComDefeito:
-        def stream_chat(self, messages, *, tools=(), capacidade="text") -> Never:
+        def stream_chat(self, messages, *, tools=(), capacidade="text", web_search=False) -> Never:
             raise ZeroDivisionError("defeito de programação")
 
     fluxo = await _fluxo(ProvedorComDefeito(), mensagem="oi")
@@ -500,6 +501,7 @@ class ProvedorComPortao:
         *,
         tools: Sequence[dict[str, object]] = (),
         capacidade: str = "text",
+        web_search: bool = False,
     ) -> AsyncIterator[TextDelta | TurnEnd]:
         self._chamadas += 1
         if self._chamadas > 1:

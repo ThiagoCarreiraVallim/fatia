@@ -6,6 +6,14 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
+import type { StrengthMetric } from '../progress.service';
+
+/** O nome de cada métrica no título do cartão. */
+const STRENGTH_METRIC_LABEL: Record<StrengthMetric, string> = {
+  max_weight: 'Maior carga',
+  estimated_1rm: '1RM estimado',
+  total_volume: 'Volume',
+};
 
 @Injectable()
 @McpTool()
@@ -15,6 +23,7 @@ export class GetStrengthProgressTool implements McpToolDef {
   readonly title = 'Evolução de força';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'timeline' as const;
   readonly description = 'Evolução de carga em um exercício de força (max_weight, 1RM ou volume).';
   readonly inputSchema = {
     exerciseId: z.number().int().describe('ID do exercício a analisar, obtido via search_exercise'),
@@ -43,5 +52,21 @@ export class GetStrengthProgressTool implements McpToolDef {
       input.metric ?? 'max_weight',
       { userId, timezone },
     );
+  }
+
+  /** A métrica pedida sessão a sessão, com a variação no período (prancha IA-Cartoes, #384). */
+  artifact(result: unknown, input: { days: number }) {
+    const serie = result as Awaited<ReturnType<ProgressService['strengthProgress']>>;
+    const titulo = STRENGTH_METRIC_LABEL[serie.metric];
+    return {
+      kind: 'timeline',
+      label: `${titulo} de ${serie.exercise.name} nos últimos ${input.days} dias`,
+      unit: 'kg',
+      delta:
+        serie.startValue == null || serie.currentValue == null
+          ? null
+          : Math.round((serie.currentValue - serie.startValue) * 10) / 10,
+      events: serie.points.map((p) => ({ date: p.sessionDate, value: p.value })),
+    };
   }
 }

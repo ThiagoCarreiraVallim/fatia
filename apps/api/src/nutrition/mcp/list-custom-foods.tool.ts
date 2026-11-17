@@ -14,6 +14,7 @@ export class ListCustomFoodsTool implements McpToolDef {
   readonly title = 'Meus alimentos cadastrados';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'report' as const;
   readonly description =
     'Alimentos que a pessoa cadastrou (create_custom_food), com valores por 100 g e medidas. ' +
     'Use para achar o id antes de update_custom_food ou delete_custom_food.';

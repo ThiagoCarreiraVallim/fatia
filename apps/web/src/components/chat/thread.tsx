@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CameraIcon,
   CheckIcon,
@@ -10,6 +11,7 @@ import {
   SquareIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  XIcon,
 } from 'lucide-react';
 import {
   ActionBarPrimitive,
@@ -22,7 +24,7 @@ import {
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
 import Link from 'next/link';
-import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat } from '@fatia/api-client';
+import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat, withQuote } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { LiveJoin } from './live-join';
 import { DrawerMessage } from './drawer-message';
@@ -44,7 +46,12 @@ import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
-import { AnexosDaMensagem, AnexosDoComposer } from './anexos';
+import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
+import { failedQuestion, canDrainQueue, useMessageQueue, type ItemDaFila } from './fila';
+import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
+import { ChatConsentSheet, useChatUnlocked } from './aceite';
+import { CHAVE_DOS_ACEITES } from './catalogo';
+import { PilulasDeResposta } from './pilulas';
 import {
   useConversaAberta,
   useDisponibilidadeDoChat,
@@ -76,30 +83,45 @@ const SUGESTOES = [
 ] as const;
 
 function MensagemDaPessoa() {
+  // A primeira fala é o assunto da conversa: grande, à direita, com uma linha embaixo (prancha
+  // IA-Estados, "Sua mensagem"). As seguintes são respostas curtas, em balão (Al-M20).
+  const assunto = useAuiState((s) => s.thread.messages[0]?.id === s.message.id);
   return (
-    <MessagePrimitive.Root className="flex w-full flex-col items-end gap-2">
+    // Citar é para a resposta: a própria fala a pessoa reescreve.
+    <MessagePrimitive.Root
+      data-aui-quote-selectable="false"
+      className={cn(
+        'flex w-full flex-col items-end gap-2',
+        assunto && 'border-b border-foreground/10 pb-4',
+      )}
+    >
+      <span className="pr-1 text-xs text-foreground/50">Você</span>
       <AnexosDaMensagem />
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
-      <div className={cn(field, 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm')}>
-        <MessagePrimitive.Parts />
+      <div
+        className={cn(
+          'whitespace-pre-wrap',
+          assunto
+            ? 'max-w-[92%] pr-1 text-right text-[22px] font-bold leading-tight tracking-tight'
+            : cn(
+                field,
+                'max-w-[85%] rounded-3xl rounded-br-lg px-4 py-2.5 text-[15px] leading-relaxed',
+              ),
+        )}
+      >
+        <MessagePrimitive.Parts components={{ Text: TextoDaPessoa, Image: FotoDaFala }} />
       </div>
     </MessagePrimitive.Root>
   );
 }
 
-/** O texto da última pergunta da pessoa — o que "tentar de novo" reenvia. */
-function useLastQuestion(): string {
-  return useAuiState((s) => {
-    const pessoa = [...s.thread.messages].reverse().find((m) => m.role === 'user');
-    const parte = pessoa?.content.find((p) => p.type === 'text');
-    return parte && parte.type === 'text' ? parte.text : '';
-  });
-}
-
-/** O cartão de erro, no texto do código — nunca a prosa do servidor. */
-function FailedAnswer({ error }: { error: unknown }) {
-  const lastQuestion = useLastQuestion();
+/**
+ * O cartão de erro, no texto do código — nunca a prosa do servidor. `answerId` é a resposta
+ * que falhou: "Tentar de novo" reenvia a pergunta dela, e não a última da conversa.
+ */
+function FailedAnswer({ error, answerId }: { error: unknown; answerId?: string }) {
+  const lastQuestion = useAuiState((s) => failedQuestion(s.thread.messages, answerId));
   const aui = useAui();
   const erro = erroDoChat(error);
   // O plano acabou no meio da conversa (ADR 024): tentar de novo daria o mesmo 402.
@@ -130,8 +152,9 @@ function FailedAnswer({ error }: { error: unknown }) {
 
 function ErroDaResposta() {
   const status = useAuiState((s) => s.message.status);
+  const id = useAuiState((s) => s.message.id);
   if (status?.type !== 'incomplete' || status.reason !== 'error') return null;
-  return <FailedAnswer error={status.error} />;
+  return <FailedAnswer error={status.error} answerId={id} />;
 }
 
 /**
@@ -318,11 +341,14 @@ function BotaoDeFoto({ disabled }: { disabled: boolean }) {
 function BotaoDeDitado({
   disabled,
   onAviso,
+  onGravando,
 }: {
   disabled: boolean;
   onAviso: (aviso: string | null) => void;
+  onGravando: (gravando: boolean) => void;
 }) {
   const aui = useAui();
+  const queryClient = useQueryClient();
   const ditado = useDitado(
     (texto) => {
       const atual = aui.composer().getState().text;
@@ -330,9 +356,15 @@ function BotaoDeDitado({
       onAviso(null);
     },
     (mensagem) => onAviso(mensagem),
+    // Sem aceite (#384): relê o estado, e o aceite toma o lugar do campo.
+    () => {
+      onAviso(null);
+      void queryClient.invalidateQueries({ queryKey: CHAVE_DOS_ACEITES });
+    },
   );
   const gravando = ditado.estado === 'gravando';
   const transcrevendo = ditado.estado === 'transcrevendo';
+  useEffect(() => onGravando(gravando), [gravando, onGravando]);
   return (
     <button
       type="button"
@@ -365,11 +397,86 @@ function BotaoDeDitado({
   );
 }
 
+/**
+ * O que espera a resposta terminar, acima do campo. Cada item tem X: parar a
+ * resposta não descarta a fila, e o que foi escrito não some sem a pessoa ver.
+ */
+function ComposerQueue({
+  itens,
+  onTirar,
+  onMandar,
+  pausado,
+  parada,
+  rodando,
+}: {
+  itens: ItemDaFila[];
+  onTirar: (id: string) => void;
+  onMandar: (id: string) => void;
+  pausado: boolean;
+  /** A última resposta falhou: nada sai sozinho; cada item espera "Enviar" ou "Descartar". */
+  parada: boolean;
+  rodando: boolean;
+}) {
+  if (itens.length === 0) return null;
+  return (
+    <section aria-label="Mensagens na fila" className="flex shrink-0 flex-col gap-1.5 px-4 pb-2">
+      <p className="text-xs text-muted-foreground">
+        {parada
+          ? 'A resposta anterior falhou. Estas ficaram esperando você:'
+          : pausado
+            ? 'Vai depois que você responder o cartão acima:'
+            : 'Vai depois desta resposta:'}
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {itens.map((item) => (
+          <li
+            key={item.id}
+            className={cn(field, 'flex items-center gap-2 rounded-xl py-1.5 pl-3 pr-1.5 text-sm')}
+          >
+            <span className="min-w-0 flex-1 truncate">{item.texto}</span>
+            {parada ? (
+              <>
+                <button
+                  type="button"
+                  disabled={rodando}
+                  aria-label={`Enviar: ${item.texto}`}
+                  onClick={() => onMandar(item.id)}
+                  className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold text-success hover:underline disabled:opacity-50"
+                >
+                  Enviar
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Descartar: ${item.texto}`}
+                  onClick={() => onTirar(item.id)}
+                  className="shrink-0 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Descartar
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                aria-label={`Tirar da fila: ${item.texto}`}
+                onClick={() => onTirar(item.id)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <XIcon size={14} aria-hidden />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Composer() {
   const aui = useAui();
   const campo = useRef<HTMLTextAreaElement>(null);
   const texto = useAuiState((s) => s.composer.text);
   const temFoto = useAuiState((s) => s.composer.attachments.length > 0);
+  const citacao = useAuiState((s) => s.composer.quote?.text);
   const rodando = useAuiState((s) => s.thread.isRunning);
   const recursos = useDisponibilidadeDoChat();
   // O runtime só chega à conversa da URL depois que a lista de conversas responde
@@ -383,10 +490,36 @@ function Composer() {
   const markStopped = useMarkStopped();
   const [digitando, setDigitando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [gravando, setGravando] = useState(false);
   const podeEnviar = texto.trim() !== '' || temFoto;
+  // "Parar" espera o servidor fechar o turno antes de a fila andar: a próxima esbarraria no 409.
+  const [parando, setParando] = useState(false);
+  const erroDoTurno = useTurnError();
+  const respostaFalhou = useAuiState((s) => {
+    const ultima = s.thread.messages.at(-1);
+    return (
+      ultima?.role === 'assistant' &&
+      ultima.status?.type === 'incomplete' &&
+      ultima.status.reason === 'error'
+    );
+  });
+  const fila = useMessageQueue({
+    conversa: aberta,
+    livre: canDrainQueue({ rodando, pausado, abrindo, parando }),
+    enviar: (pergunta) => aui.thread().append(pergunta),
+    falhou: respostaFalhou || Boolean(erroDoTurno),
+  });
+  // A foto fica no campo: subir ao bucket é do envio, e a fila guarda só texto.
+  const podeEnfileirar = texto.trim() !== '' && !temFoto;
 
   function enviar() {
     if (!podeEnviar || rodando || abrindo) return;
+    // A citação entra no texto: o metadado em que o assistant-ui a guarda não
+    // passa pela conversão para o LangChain (ver `./citacao`).
+    if (citacao) {
+      aui.composer().setText(withQuote(citacao, texto));
+      aui.composer().setQuote(undefined);
+    }
     aui.composer().send();
     // A #221 nasceu de foco perdido para o `<body>`. Sem esta linha, quem conversa
     // pelo teclado teria de reencontrar o campo antes de cada mensagem.
@@ -397,9 +530,19 @@ function Composer() {
     recursos?.photos || recursos?.dictation ? (
       <>
         {recursos.photos ? <BotaoDeFoto disabled={abrindo} /> : null}
-        {recursos.dictation ? <BotaoDeDitado disabled={abrindo} onAviso={setAviso} /> : null}
+        {recursos.dictation ? (
+          <BotaoDeDitado disabled={abrindo} onAviso={setAviso} onGravando={setGravando} />
+        ) : null}
       </>
     ) : undefined;
+
+  function enfileirar() {
+    if (!podeEnfileirar) return;
+    fila.enfileirar(withQuote(citacao, texto));
+    aui.composer().setText('');
+    if (citacao) aui.composer().setQuote(undefined);
+    campo.current?.focus();
+  }
 
   return (
     <>
@@ -408,6 +551,22 @@ function Composer() {
           {aviso}
         </p>
       ) : null}
+      {gravando ? (
+        // Prancha Al-M17: quem fala precisa saber que a voz não fica guardada.
+        <p role="status" className="shrink-0 px-5 pb-1 text-xs text-muted-foreground">
+          <span className="font-semibold text-danger">Ouvindo…</span> O áudio vira texto e é
+          descartado.
+        </p>
+      ) : null}
+      <ComposerQueue
+        itens={fila.itens}
+        onTirar={fila.tirar}
+        onMandar={fila.mandar}
+        pausado={pausado}
+        parada={fila.parada}
+        rodando={rodando || parando}
+      />
+      <CitacaoDoComposer />
       <MobileComposer
         ref={campo}
         value={texto}
@@ -418,11 +577,8 @@ function Composer() {
         onBlur={() => setDigitando(false)}
         label="Mensagem para o Fatia"
         placeholder={
-          abrindo
-            ? 'Abrindo a conversa…'
-            : pausado
-              ? 'Responda no cartão acima, ou escreva outra coisa'
-              : 'Escreva sua mensagem'
+          // O texto da prancha IA-Estados; com uma pausa na mesa, o cartão acima já pede a resposta.
+          abrindo ? 'Abrindo a conversa…' : 'Responda ou peça outra coisa'
         }
         disabled={abrindo}
         sendLabel="Enviar mensagem"
@@ -431,13 +587,20 @@ function Composer() {
         attachments={<AnexosDoComposer />}
         canSend={podeEnviar}
         onSend={enviar}
+        onQueue={podeEnfileirar ? enfileirar : undefined}
         onStop={() => {
           // Marcada antes de cancelar: o runtime não diferencia "parou" de
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
           const ultima = aui.thread().getState().messages.at(-1);
           if (ultima?.role === 'assistant') markStopped(ultima.id);
-          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno.
-          if (aberta) void stopChatRun(aberta).catch(() => undefined);
+          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno. A fila
+          // espera o servidor responder (ele responde depois de o turno fechar).
+          if (aberta) {
+            setParando(true);
+            void stopChatRun(aberta)
+              .catch(() => undefined)
+              .finally(() => setParando(false));
+          }
           aui.thread().cancelRun();
         }}
         className="shrink-0 bg-transparent shadow-none"
@@ -448,10 +611,12 @@ function Composer() {
 
 export function ChatThread() {
   const rodando = useAuiState((s) => s.thread.isRunning);
+  const liberado = useChatUnlocked();
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <LiveJoin />
       <DrawerMessage />
+      <BarraDeCitacao />
       <Conversation aria-busy={rodando} className="min-h-0">
         <ConversationContent>
           <AuiIf condition={(s) => s.thread.isEmpty && !s.thread.isLoading}>
@@ -471,7 +636,13 @@ export function ChatThread() {
       </Conversation>
       <Anuncio />
       <AvisoDeCota />
-      <Composer />
+      {liberado ? (
+        <>
+          <PilulasDeResposta />
+          <Composer />
+        </>
+      ) : null}
+      <ChatConsentSheet />
     </ThreadPrimitive.Root>
   );
 }

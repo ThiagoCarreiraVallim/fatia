@@ -15,11 +15,23 @@ export class GetWaterHistoryTool implements McpToolDef {
   readonly title = 'Histórico de água';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'bars' as const;
   readonly description = 'Histórico diário de consumo de água, preenchendo dias sem log com 0.';
   readonly inputSchema = {
     days: z.number().int().positive().max(365).describe('Quantidade de dias retroativos'),
   } as const;
   async execute({ days }: { days: number }, { userId, timezone }: McpToolContext) {
     return this.waters.getHistory(days, userId, timezone);
+  }
+
+  /** Barras por dia em ml (prancha IA-Cartoes, #384). */
+  artifact(result: unknown, input: { days: number }) {
+    const serie = result as { date: string; totalMl: number }[];
+    return {
+      kind: 'bars',
+      label: `Água nos últimos ${input.days} dias`,
+      unit: 'ml',
+      bars: serie.map((dia) => ({ label: dia.date, value: dia.totalMl })),
+    };
   }
 }

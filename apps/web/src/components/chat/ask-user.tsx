@@ -1,19 +1,29 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, HelpCircle, PlayCircle } from 'lucide-react';
+import { AlertCircle, Clock, Globe, Layers, MessageCircle, PencilLine } from 'lucide-react';
 import type {
   ChatAskField,
   ChatConfirmAction,
   ChatInterruptValue,
   ChatQuestionAction,
   ChatResumeValue,
+  ChatWebConsentAction,
 } from '@fatia/api-client';
-import { askFieldsOf, previewChatAction, questionAnswer } from '@fatia/api-client';
+import {
+  AI_CONSENT_TEXTS,
+  aiConsentBody,
+  pauseDecisionCount,
+  webConsentToSaveOnSend,
+  askFieldsOf,
+  previewChatAction,
+  questionAnswer,
+} from '@fatia/api-client';
+import { useAceitar, useAceitesDaIa } from './catalogo';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { field, floating, ghostButton, inkButton } from '../elements/surfaces';
+import { field, floating, grayButton, inkButton, limeButton } from '../elements/surfaces';
 
 /**
  * A pausa do agente, nas três formas que ela tem (ADR 023).
@@ -42,18 +52,63 @@ export function AskUser({ pausa, ocupado, onResponder }: Props) {
   return <Acoes pausa={pausa} ocupado={ocupado} onResponder={onResponder} />;
 }
 
+/** O cabeçalho dos cartões da pausa: ícone, a ação pequena em cima e o título. */
+function Cabecalho({
+  icone,
+  acima,
+  titulo,
+  perigo = false,
+  pergunta = false,
+}: {
+  icone: ReactNode;
+  acima: string;
+  titulo: string;
+  perigo?: boolean;
+  /** A pergunta da IA é azul, como na prancha IA-Cartoes ("Pergunta"). */
+  pergunta?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        aria-hidden
+        className={cn(
+          'grid size-9 shrink-0 place-items-center rounded-xl',
+          perigo
+            ? 'bg-danger/15 text-danger'
+            : pergunta
+              ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+              : 'bg-primary/15 text-success',
+        )}
+      >
+        {icone}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs text-muted-foreground">{acima}</span>
+        <span className="block text-[15px] font-bold leading-snug text-foreground">{titulo}</span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Uma escrita à espera do sim (prancha IA-Cartoes, "Confirmação"): o que vai gravar, Gravar e
+ * Ajustar. Ajustar recusa — nada é gravado — e a pessoa diz no campo o que mudar. Se a IA
+ * montou algo que a tool recusaria, o cartão fica vermelho e não deixa gravar.
+ */
 function Escrita({
   acao,
   decisao,
   ocupado,
   onDecidir,
   focar,
+  emLote,
 }: {
   acao: ChatConfirmAction;
   decisao: boolean | undefined;
   ocupado: boolean;
   onDecidir: (aprovada: boolean) => void;
   focar: boolean;
+  emLote: boolean;
 }) {
   const confirmar = useRef<HTMLButtonElement>(null);
   const {
@@ -66,77 +121,173 @@ function Escrita({
     staleTime: Infinity,
     retry: 1,
   });
-  // Confirmar antes de o resumo chegar seria aprovar sem ler; e o argumento que a
+  // Gravar antes de o resumo chegar seria aprovar sem ler; e o argumento que a
   // própria tool recusaria só levaria a um erro depois.
-  const travado = isPending || previa?.valida === false;
+  const invalida = previa?.valida === false;
+  const travado = isPending || invalida;
   useEffect(() => {
-    // O foco vai para "Confirmar" quando o resumo aparece: quem conversa pelo
+    // O foco vai para "Gravar" quando o resumo aparece: quem conversa pelo
     // teclado estava no campo de texto, e sem isto tabularia a conversa inteira.
     if (focar && !travado) confirmar.current?.focus();
   }, [focar, travado]);
 
   return (
-    <div className={cn(field, 'rounded-lg p-3 text-sm')}>
-      <p className="font-semibold text-foreground">{acao.title}</p>
-      {isPending ? (
-        <p className="mt-1 text-xs text-muted-foreground">Preparando o resumo…</p>
-      ) : isError ? (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Não consegui mostrar os detalhes. Se tiver dúvida, recuse e peça de novo.
-        </p>
-      ) : (
-        <>
-          {previa.linhas.length > 0 ? (
-            <dl className="mt-2 space-y-1">
-              {previa.linhas.map((linha, indice) => (
-                <div key={`${linha.rotulo}-${indice}`} className="flex gap-2">
-                  <dt className="shrink-0 text-foreground/50">{linha.rotulo}</dt>
-                  <dd className="text-foreground/85">{linha.valor}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-          {previa.valida === false ? (
-            <p role="alert" className="mt-2 text-xs text-danger">
-              {previa.problema}
-            </p>
-          ) : null}
-        </>
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-2xl border p-3.5 text-sm',
+        emLote ? 'border-transparent bg-foreground/[0.04]' : field,
+        !emLote && (invalida ? 'border-danger/50' : 'border-primary/60'),
       )}
-      <div className="mt-3 flex gap-2">
-        <button
-          ref={confirmar}
-          type="button"
-          aria-pressed={decisao === true}
-          disabled={ocupado || travado}
-          onClick={() => onDecidir(true)}
-          className={cn(
-            inkButton,
-            'rounded-full px-3 py-1.5 text-xs font-bold',
-            decisao === false && 'opacity-40',
-            (ocupado || travado) && 'pointer-events-none opacity-50',
-          )}
-        >
-          Confirmar
-        </button>
+    >
+      <Cabecalho
+        icone={invalida ? <AlertCircle size={18} /> : <PencilLine size={18} />}
+        acima={acao.title}
+        titulo={invalida ? 'Não dá para gravar assim' : 'Confere antes de gravar'}
+        perigo={invalida}
+      />
+      {isPending ? (
+        <p className="text-xs text-muted-foreground">Preparando o resumo…</p>
+      ) : isError ? (
+        <p className="text-xs text-muted-foreground">
+          Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.
+        </p>
+      ) : invalida ? (
+        <p role="alert" className="text-sm text-foreground/75">
+          {previa.problema}
+        </p>
+      ) : previa.linhas.length > 0 ? (
+        <dl className="divide-y divide-border rounded-xl bg-foreground/[0.04] px-3">
+          {previa.linhas.map((linha, indice) => (
+            <div key={`${linha.rotulo}-${indice}`} className="flex gap-3 py-2">
+              <dt className="shrink-0 text-foreground/55">{linha.rotulo}</dt>
+              <dd className="flex-1 text-right font-semibold text-foreground">{linha.valor}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      <div className="flex gap-2">
+        {invalida ? null : (
+          <button
+            ref={confirmar}
+            type="button"
+            aria-pressed={emLote ? decisao === true : undefined}
+            disabled={ocupado || travado}
+            onClick={() => onDecidir(true)}
+            className={cn(
+              inkButton,
+              'flex-1 rounded-full px-4 py-2 text-sm font-bold',
+              decisao === false && 'opacity-40',
+              (ocupado || travado) && 'pointer-events-none opacity-50',
+            )}
+          >
+            Gravar
+          </button>
+        )}
         {/* Nunca desabilitado por texto digitado: recusar é a saída, e uma saída
             que depende de preencher algo não é saída. */}
         <button
           type="button"
-          aria-pressed={decisao === false}
+          aria-pressed={emLote ? decisao === false : undefined}
+          aria-description="Não grava. Diga no campo o que mudar."
           disabled={ocupado}
           onClick={() => onDecidir(false)}
           className={cn(
-            ghostButton,
-            'rounded-full px-3 py-1.5 text-xs',
+            grayButton,
+            'rounded-full px-4 py-2 text-sm font-semibold',
+            invalida && 'flex-1',
             decisao === true && 'opacity-40',
             ocupado && 'pointer-events-none opacity-50',
           )}
         >
-          Recusar
+          Ajustar
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * O aceite da busca na web, no meio da conversa e com a pergunta à vista: o que sai é só
+ * esse texto. Sozinho, concordar grava o aceite (se ainda não havia) e libera a busca desta
+ * vez. No lote, tocar só escolhe (e mostra a escolha): o aceite é gravado no "Enviar", e só se
+ * a escolha final for concordar.
+ */
+function AceiteDaBusca({
+  acao,
+  ocupado,
+  onDecidir,
+  emLote = false,
+  decisao,
+}: {
+  acao: ChatWebConsentAction;
+  ocupado: boolean;
+  onDecidir: (aprovada: boolean) => void;
+  emLote?: boolean;
+  decisao?: boolean;
+}) {
+  const textos = AI_CONSENT_TEXTS.webSearch;
+  const { data: aceites } = useAceitesDaIa();
+  const aceitar = useAceitar();
+  const [falhou, setFalhou] = useState(false);
+  return (
+    <section
+      role="group"
+      aria-label={textos.title}
+      className={cn(field, 'flex w-full flex-col gap-3 rounded-2xl border border-primary/60 p-3.5')}
+    >
+      <Cabecalho icone={<Globe size={18} />} acima="Buscar na web" titulo={textos.title} />
+      {acao.query ? (
+        <p className="rounded-xl bg-foreground/[0.04] px-3 py-2 text-sm text-foreground">
+          Vou buscar: “{acao.query}”
+        </p>
+      ) : null}
+      <p className="text-xs leading-relaxed text-foreground/70">
+        {aceites?.processor
+          ? aiConsentBody('web_search', aceites.processor)
+          : 'Carregando o aviso…'}
+      </p>
+      {falhou ? (
+        <p role="alert" className="text-xs text-danger">
+          Não consegui gravar o aceite. Tente de novo.
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          aria-pressed={emLote ? decisao === true : undefined}
+          disabled={ocupado || aceitar.isPending || !aceites?.processor}
+          onClick={async () => {
+            if (emLote) {
+              onDecidir(true);
+              return;
+            }
+            setFalhou(false);
+            if (!aceites?.webSearch.accepted) {
+              try {
+                await aceitar.mutateAsync('web_search');
+              } catch {
+                setFalhou(true);
+                return;
+              }
+            }
+            onDecidir(true);
+          }}
+          className={cn(limeButton, 'flex-1 rounded-full px-4 py-2 text-sm font-bold')}
+        >
+          {textos.accept}
+        </button>
+        <button
+          type="button"
+          aria-pressed={emLote ? decisao === false : undefined}
+          disabled={ocupado}
+          onClick={() => onDecidir(false)}
+          className={cn(grayButton, 'flex-1 rounded-full px-4 py-2 text-sm font-semibold')}
+        >
+          {textos.decline}
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">{textos.footnote}</p>
+    </section>
   );
 }
 
@@ -173,8 +324,8 @@ function CampoDaPergunta({
               aria-pressed={valor === opcao}
               onClick={() => onMudar(opcao)}
               className={cn(
-                valor === opcao ? inkButton : ghostButton,
-                'rounded-full border border-border px-3 py-1 text-xs',
+                valor === opcao ? limeButton : grayButton,
+                'rounded-full px-3.5 py-1.5 text-sm',
               )}
             >
               {opcao}
@@ -213,11 +364,13 @@ function Pergunta({
 }) {
   const campos = askFieldsOf(acao);
   return (
-    <div className={cn(field, 'space-y-3 rounded-lg p-3')}>
-      <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-        <HelpCircle size={15} className="shrink-0 text-primary" aria-hidden />
-        {acao.prompt}
-      </p>
+    <div className="space-y-3">
+      <Cabecalho
+        icone={<MessageCircle size={18} />}
+        acima="Pergunta"
+        titulo={acao.prompt}
+        pergunta
+      />
       {campos.map((campo) => (
         <CampoDaPergunta
           key={campo.name}
@@ -240,10 +393,19 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     () => pausa.actions.filter((a): a is ChatQuestionAction => a.kind === 'question'),
     [pausa.actions],
   );
+  const buscas = useMemo(
+    () => pausa.actions.filter((a): a is ChatWebConsentAction => a.kind === 'web_consent'),
+    [pausa.actions],
+  );
   const [decisoes, setDecisoes] = useState<Record<string, boolean>>({});
+  const { data: aceites } = useAceitesDaIa();
+  const aceitar = useAceitar();
+  const [aceiteFalhou, setAceiteFalhou] = useState(false);
   const [respostas, setRespostas] = useState<Record<string, Record<string, string>>>({});
 
-  const faltaDecidir = escritas.some((acao) => decisoes[acao.toolCallId] === undefined);
+  const faltaDecidir = [...escritas, ...buscas].some(
+    (acao) => decisoes[acao.toolCallId] === undefined,
+  );
   const faltaResponder = perguntas.some((acao) =>
     askFieldsOf(acao).some(
       (campo) =>
@@ -254,7 +416,8 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
   // Uma escrita sozinha responde no clique: um segundo botão "enviar" para uma
   // decisão só seria atrito. Com mais de uma coisa na mesa, a pessoa decide cada
   // uma e envia no fim — aprovar uma e recusar outra é o comportamento certo.
-  const soUmaEscrita = escritas.length === 1 && perguntas.length === 0;
+  const soUmaEscrita = escritas.length + buscas.length === 1 && perguntas.length === 0;
+  const soPergunta = perguntas.length > 0 && escritas.length + buscas.length === 0;
 
   function enviar(extra: Record<string, boolean> = {}) {
     const aprovacoes = { ...decisoes, ...extra };
@@ -269,39 +432,63 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     });
   }
 
-  function aoEnviar(evento: FormEvent) {
+  async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!faltaDecidir && !faltaResponder) enviar();
+    if (faltaDecidir || faltaResponder) return;
+    // A busca aprovada no lote grava o aceite agora, com a escolha final; sem ele, nada sai.
+    if (webConsentToSaveOnSend(pausa.actions, decisoes, aceites?.webSearch.accepted === true)) {
+      setAceiteFalhou(false);
+      try {
+        await aceitar.mutateAsync('web_search');
+      } catch {
+        setAceiteFalhou(true);
+        return;
+      }
+    }
+    enviar();
   }
 
-  const titulo =
-    escritas.length > 1
-      ? `${escritas.length} ações aguardando confirmação`
-      : escritas.length === 1
-        ? 'Ação aguardando confirmação'
-        : 'Pergunta do assistente';
+  const decisoesNoLote = pauseDecisionCount(pausa.actions);
+  const emLote = decisoesNoLote > 1;
+  const titulo = emLote
+    ? `${decisoesNoLote} ações aguardando confirmação`
+    : escritas.length === 1
+      ? 'Ação aguardando confirmação'
+      : 'Pergunta do assistente';
+  const decidir = (acao: { toolCallId: string }) => (aprovada: boolean) => {
+    if (soUmaEscrita) {
+      enviar({ [acao.toolCallId]: aprovada });
+      return;
+    }
+    setDecisoes((atual) => ({ ...atual, [acao.toolCallId]: aprovada }));
+  };
+
+  // A busca sozinha é o cartão do aceite, sem moldura de formulário em volta.
+  if (buscas.length === 1 && escritas.length === 0 && perguntas.length === 0) {
+    return <AceiteDaBusca acao={buscas[0]!} ocupado={ocupado} onDecidir={decidir(buscas[0]!)} />;
+  }
 
   return (
     <form
       role="group"
       aria-label={titulo}
-      onSubmit={aoEnviar}
-      className={cn(floating, 'w-full space-y-3 rounded-xl p-4')}
+      onSubmit={(evento) => void aoEnviar(evento)}
+      className={cn(
+        'w-full space-y-3',
+        (emLote || perguntas.length > 0 || buscas.length > 0) &&
+          cn(
+            floating,
+            'rounded-2xl border p-3.5',
+            soPergunta ? 'border-blue-500/60' : 'border-primary/60',
+          ),
+      )}
     >
-      {escritas.length > 0 ? (
-        <div className="flex items-start gap-2">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden />
-          <div>
-            <p className="text-sm font-bold text-foreground">
-              {escritas.length > 1 ? 'Confirmar estas ações?' : 'Confirmar esta ação?'}
-            </p>
-            {/* A garantia da ADR 022 dita para quem decide: enquanto este cartão
-                está na tela, o banco não mudou. */}
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Nada foi salvo ainda. Confira os dados antes de confirmar.
-            </p>
-          </div>
-        </div>
+      {emLote ? (
+        <Cabecalho
+          icone={<Layers size={18} />}
+          acima="Lote"
+          titulo={`${decisoesNoLote} ações para decidir`}
+        />
       ) : null}
 
       {perguntas.map((acao) => (
@@ -318,59 +505,81 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
         />
       ))}
 
+      {buscas.map((acao) => (
+        <AceiteDaBusca
+          key={acao.toolCallId}
+          acao={acao}
+          ocupado={ocupado}
+          emLote={emLote}
+          decisao={decisoes[acao.toolCallId]}
+          onDecidir={decidir(acao)}
+        />
+      ))}
+
       {escritas.map((acao, indice) => (
         <Escrita
           key={acao.toolCallId}
           acao={acao}
           decisao={decisoes[acao.toolCallId]}
           ocupado={ocupado}
+          emLote={emLote}
           focar={indice === 0 && perguntas.length === 0}
-          onDecidir={(aprovada) => {
-            if (soUmaEscrita) {
-              enviar({ [acao.toolCallId]: aprovada });
-              return;
-            }
-            setDecisoes((atual) => ({ ...atual, [acao.toolCallId]: aprovada }));
-          }}
+          onDecidir={decidir(acao)}
         />
       ))}
 
+      {aceiteFalhou ? (
+        <p role="alert" className="text-xs text-danger">
+          Não consegui gravar o aceite da busca. Tente de novo.
+        </p>
+      ) : null}
       {soUmaEscrita ? null : (
         <button
           type="submit"
-          disabled={ocupado || faltaDecidir || faltaResponder}
+          disabled={ocupado || faltaDecidir || faltaResponder || aceitar.isPending}
           className={cn(
             inkButton,
-            'rounded-full px-4 py-2 text-sm font-bold',
+            'w-full rounded-full px-4 py-2.5 text-sm font-bold',
             (ocupado || faltaDecidir || faltaResponder) && 'pointer-events-none opacity-50',
           )}
         >
-          {ocupado ? 'Enviando…' : 'Enviar'}
+          {ocupado
+            ? 'Enviando…'
+            : emLote
+              ? `Enviar ${decisoesNoLote} decisões`
+              : soPergunta
+                ? 'Responder'
+                : 'Enviar'}
         </button>
       )}
     </form>
   );
 }
 
-/** O orçamento acabou. O resumo é o que permite decidir sem adivinhar. */
+/**
+ * O orçamento acabou, ou o turno já consultou muita coisa ("Já consultei N coisas.
+ * Continuo?"). O resumo é o que permite decidir sem adivinhar.
+ */
 function Continuar({ pausa, ocupado, onResponder }: Props) {
   return (
     <section
       role="group"
-      aria-label="O assistente pede para continuar"
-      className={cn(floating, 'w-full space-y-3 rounded-xl p-4')}
+      aria-label={pausa.prompt || 'O assistente pede para continuar'}
+      className={cn(floating, 'w-full space-y-3 rounded-2xl border border-primary/60 p-3.5')}
     >
-      <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-        <PlayCircle size={15} className="shrink-0 text-primary" aria-hidden />
-        {pausa.prompt}
-      </p>
+      <Cabecalho
+        icone={<Clock size={18} />}
+        acima="Pausa"
+        titulo="Está mais longo que o previsto"
+      />
+      {pausa.prompt ? <p className="text-sm text-foreground/75">{pausa.prompt}</p> : null}
       {pausa.summary ? <p className="text-xs text-muted-foreground">{pausa.summary}</p> : null}
       <div className="flex gap-2">
         <button
           type="button"
           disabled={ocupado}
           onClick={() => onResponder(true)}
-          className={cn(inkButton, 'rounded-full px-4 py-2 text-sm font-bold')}
+          className={cn(inkButton, 'flex-1 rounded-full px-4 py-2 text-sm font-bold')}
         >
           Continuar
         </button>
@@ -378,9 +587,9 @@ function Continuar({ pausa, ocupado, onResponder }: Props) {
           type="button"
           disabled={ocupado}
           onClick={() => onResponder(false)}
-          className={cn(ghostButton, 'rounded-full px-4 py-2 text-sm')}
+          className={cn(grayButton, 'rounded-full px-4 py-2 text-sm font-semibold')}
         >
-          Parar por aqui
+          Parar aqui
         </button>
       </div>
     </section>

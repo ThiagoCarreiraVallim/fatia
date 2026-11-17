@@ -32,6 +32,8 @@ export class CreateWorkoutPlanTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
+
+  readonly card = 'confirm' as const;
   readonly description =
     'Cria um novo plano de treino com nome. Para um circuito com timer (AMRAP, EMOM, Tabata ou ' +
     'For Time), informe circuit com o formato e os campos dele (AMRAP e EMOM: durationMinutes; ' +

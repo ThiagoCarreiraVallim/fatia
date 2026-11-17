@@ -14,6 +14,7 @@ export class ListMealTemplatesTool implements McpToolDef {
   readonly title = 'Listar refeições salvas';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
+  readonly card = 'list' as const;
   readonly description =
     'Lista as refeições salvas do usuário ("meu café de sempre"), com os itens. Registre uma com log_meal_template.';
   readonly inputSchema = {} as const;

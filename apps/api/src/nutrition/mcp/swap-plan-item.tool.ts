@@ -15,6 +15,7 @@ export class SwapPlanItemTool implements McpToolDef {
   readonly title = 'Trocar item do plano';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
+  readonly card = 'confirm' as const;
   readonly description =
     'Troca, num dia, um item do plano alimentar por um dos equivalentes que o profissional liberou ' +
     '(items[].equivalents em get_nutrition_plan), com a quantidade já ajustada. Se a refeição já ' +
