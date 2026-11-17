@@ -37,7 +37,7 @@ export interface MudancaDeAssinatura {
 }
 
 /** O que um evento muda na assinatura. `null` = nada (evento velho ou irrelevante). */
-export function mudancaDoEvento(
+export function subscriptionEventChange(
   sub: Pick<UserSubscription, 'status' | 'interval' | 'currentPeriodEnd'>,
   evento: string,
   dueDate: string | null,

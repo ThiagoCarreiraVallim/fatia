@@ -1,4 +1,4 @@
-import { assinaturaDoAssinante, intervaloDoProduto } from '../revenuecat/revenuecat';
+import { storeSubscriptionFromSubscriber, intervaloDoProduto } from '../revenuecat/revenuecat';
 
 const AGORA = new Date('2026-10-15T12:00:00Z');
 const U = 'user-1';
@@ -12,9 +12,9 @@ const assinante = (sub: Record<string, unknown>, ent: Record<string, unknown> = 
   },
 });
 
-describe('assinaturaDoAssinante', () => {
+describe('storeSubscriptionFromSubscriber', () => {
   it('compra na App Store vira APPLE ativa, mensal, até a expiração', () => {
-    expect(assinaturaDoAssinante(assinante({}), U, 'pro', AGORA)).toEqual({
+    expect(storeSubscriptionFromSubscriber(assinante({}), U, 'pro', AGORA)).toEqual({
       source: 'APPLE',
       providerRef: 'user-1:fatia_pro_mensal',
       productId: 'fatia_pro_mensal',
@@ -28,7 +28,7 @@ describe('assinaturaDoAssinante', () => {
 
   it('Google Play vira GOOGLE; cancelamento detectado vale até o fim', () => {
     expect(
-      assinaturaDoAssinante(
+      storeSubscriptionFromSubscriber(
         assinante({ store: 'play_store', unsubscribe_detected_at: '2026-10-14T00:00:00Z' }),
         U,
         'pro',
@@ -39,7 +39,7 @@ describe('assinaturaDoAssinante', () => {
 
   it('problema de cobrança depois do vencimento é carência da loja', () => {
     expect(
-      assinaturaDoAssinante(
+      storeSubscriptionFromSubscriber(
         assinante(
           {
             expires_date: '2026-10-14T00:00:00Z',
@@ -59,7 +59,7 @@ describe('assinaturaDoAssinante', () => {
 
   it('vencida sem carência expira; estorno expira na hora', () => {
     expect(
-      assinaturaDoAssinante(
+      storeSubscriptionFromSubscriber(
         assinante(
           { expires_date: '2026-10-01T00:00:00Z' },
           { expires_date: '2026-10-01T00:00:00Z' },
@@ -70,14 +70,20 @@ describe('assinaturaDoAssinante', () => {
       )?.status,
     ).toBe('EXPIRED');
     expect(
-      assinaturaDoAssinante(assinante({ refunded_at: '2026-10-10T00:00:00Z' }), U, 'pro', AGORA)
-        ?.status,
+      storeSubscriptionFromSubscriber(
+        assinante({ refunded_at: '2026-10-10T00:00:00Z' }),
+        U,
+        'pro',
+        AGORA,
+      )?.status,
     ).toBe('EXPIRED');
   });
 
   it('sem o entitlement, ou fora das lojas (promocional), não há assinatura', () => {
-    expect(assinaturaDoAssinante({ entitlements: {} }, U, 'pro', AGORA)).toBeNull();
-    expect(assinaturaDoAssinante(assinante({ store: 'promotional' }), U, 'pro', AGORA)).toBeNull();
+    expect(storeSubscriptionFromSubscriber({ entitlements: {} }, U, 'pro', AGORA)).toBeNull();
+    expect(
+      storeSubscriptionFromSubscriber(assinante({ store: 'promotional' }), U, 'pro', AGORA),
+    ).toBeNull();
   });
 
   it('o intervalo sai do id do produto', () => {

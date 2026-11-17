@@ -16,12 +16,16 @@ import type { AiEntitlement } from './ai-entitlement';
 import type { SubscriptionProvider } from './billing-provider.port';
 import { cpfValido, somenteDigitos } from './cpf';
 import { SeatPoolService } from './seat-pool.service';
-import { mudancaDoEvento } from './subscription-events';
+import { subscriptionEventChange } from './subscription-events';
 import { AiEntitlements } from './subscription-entitlements.service';
 
 // A regra dos eventos mora em `subscription-events.ts`; reexportada para quem
 // já a importava daqui.
-export { fimDoPeriodo, mudancaDoEvento, type MudancaDeAssinatura } from './subscription-events';
+export {
+  fimDoPeriodo,
+  subscriptionEventChange,
+  type MudancaDeAssinatura,
+} from './subscription-events';
 
 /** Token do provedor de assinatura web. `null` = instância sem Asaas configurado. */
 export const SUBSCRIPTION_PROVIDER = Symbol('SUBSCRIPTION_PROVIDER');
@@ -390,7 +394,7 @@ export class UserSubscriptionService {
         return { received: true as const, ignored: 'assinatura_desconhecida' };
       }
 
-      const mudanca = mudancaDoEvento(sub, r.event, r.dueDate);
+      const mudanca = subscriptionEventChange(sub, r.event, r.dueDate);
       if (mudanca) await tx.userSubscription.update({ where: { id: sub.id }, data: mudanca });
       await marcar(mudanca ? null : 'sem_efeito');
       return { received: true as const };

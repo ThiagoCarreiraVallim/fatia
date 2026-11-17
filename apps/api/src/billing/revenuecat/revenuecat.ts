@@ -73,7 +73,7 @@ export function intervaloDoProduto(produto: string): BillingInterval {
  * de uma loja (cupom promocional da RevenueCat, por exemplo, fica de fora: o
  * PRO de cortesia do Fatia é o `MANUAL`).
  */
-export function assinaturaDoAssinante(
+export function storeSubscriptionFromSubscriber(
   assinante: RcSubscriber,
   userId: string,
   entitlementId: string,

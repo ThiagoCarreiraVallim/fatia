@@ -1,5 +1,5 @@
 import { PrismaClient } from '@fatia/db';
-import { resolverDireitoIa } from '../ai-entitlement';
+import { resolveAiEntitlement } from '../ai-entitlement';
 import { ASSINATURA_LIDA } from '../subscription-entitlements.service';
 import {
   ensureReviewAccount,
@@ -72,7 +72,7 @@ describe('store:review-account (banco real)', () => {
       select: ASSINATURA_LIDA,
     });
     expect(cortesias).toHaveLength(1);
-    expect(resolverDireitoIa(cortesias)).toMatchObject({ tier: 'PRO', source: 'MANUAL' });
+    expect(resolveAiEntitlement(cortesias)).toMatchObject({ tier: 'PRO', source: 'MANUAL' });
 
     expect(await prisma.meal.count({ where: { userId: user.id } })).toBe(9);
     expect(await prisma.waterLog.count({ where: { userId: user.id } })).toBe(3);
