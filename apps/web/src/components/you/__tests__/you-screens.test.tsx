@@ -295,6 +295,18 @@ describe('Ajuda (Al-V12/V12b)', () => {
     expect(screen.getByRole('button', { name: /Ver a carga em libras/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Registrar uma refeição/ })).toBeNull();
   });
+
+  it('abre direto no tutorial pedido (o "Ver o tutorial" de Conectar sua IA, #388)', async () => {
+    renderWith(<HelpScreen initialTutorialId="conectar-sua-ia" />);
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText('Conectar ao Claude ou ChatGPT')).toBeInTheDocument();
+    expect(within(sheet).getByText(/remova o conector no app da sua IA/)).toBeInTheDocument();
+  });
+
+  it('tutorial que não existe não abre nada', () => {
+    renderWith(<HelpScreen initialTutorialId="nao-existe" />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });
 
 describe('foto de perfil', () => {

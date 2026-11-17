@@ -29,12 +29,12 @@ Pranchas Al-V6..V6e copiadas para `.canvas/project/` do checkout principal (fora
 
 - [x] API: migration `20261117000000_mcp_oauth_connections` + `auth/mcp-connection.service.ts` + `GET /users/me/mcp-connections` (`UsersController`) + toque no `/mcp` (`mcp.controller.ts`); erros do Logto no `/oauth/token` agora saem como `OAuthError` (RFC 6749); `apiPublicUrl` mudou para `common/public-url.ts` (+ `mcpPublicUrl`)
 - [x] Isolamento: `user-isolation.spec.ts`, bloco #388 (lista, guard, refresh com client_id alheio, toque)
-- [ ] api-client: `connect-ai.ts` (provedores, passos, estado, último acesso) + `mcpConnectionsApi`
-- [ ] Web: tela nova em `/profile/connect`
+- [x] api-client: `connect-ai.ts` (provedores, passos, estado, último acesso) + `mcpConnectionsApi`; `tutorialById`; navegação do app → `/profile/connect`
+- [x] Web: `components/profile/connect-ai-screen.tsx` em `/profile/connect`; Ajuda abre `?tutorial=`; apagados connect-steps, connect-troubleshooting, copy-line, lib/mcp-url
 - [ ] App: tela nova em `/profile/connect`, ajuda abre tutorial por parâmetro
 - [ ] Docs: MCP_OAUTH.md, REDESIGN_PROGRESS.md
 - [ ] lint, typecheck, testes; HANDOFF apagado no commit final
 
 ## Próximo passo
 
-api-client `connect-ai.ts`: o teste `packages/api-client/src/__tests__/connect-ai.test.ts` já está escrito (vermelho); implementar `src/connect-ai.ts` e `tutorialById`/`CONNECT_AI_TUTORIAL_ID` em `tutorials.ts`.
+App: tela `apps/mobile/app/(app)/profile/connect.tsx` (réplica da web, expo-clipboard), apagar `tokens.tsx` e `copy-mcp-url.tsx`, `env.mcpUrl`; `go('/profile/tokens')` do ai-menu → `/profile/connect`; Ajuda do app lê `?tutorial=`.

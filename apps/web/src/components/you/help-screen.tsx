@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { searchTutorials, tutorialsApi, tutorialSubtitle, type Tutorial } from '@fatia/api-client';
+import {
+  searchTutorials,
+  tutorialById,
+  tutorialsApi,
+  tutorialSubtitle,
+  type Tutorial,
+} from '@fatia/api-client';
 import { Badge } from '@/components/ui/badge';
 import {
   Drawer,
@@ -20,13 +26,14 @@ const SEEN_KEY = ['you', 'tutorials', 'seen'] as const;
 /**
  * Ajuda e tutoriais (pranchas Al-V12/V12b). O texto vem no pacote, então a
  * ajuda funciona sem internet; só o vídeo some, com o aviso. "assistido" é o
- * que a pessoa já abriu, guardado na API.
+ * que a pessoa já abriu, guardado na API. `initialTutorialId` (o `?tutorial=`
+ * da rota) abre um tutorial direto, como o "Ver o tutorial" de Conectar sua IA.
  */
-export function HelpScreen() {
+export function HelpScreen({ initialTutorialId }: { initialTutorialId?: string } = {}) {
   const online = useOnline();
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState<Tutorial | null>(null);
+  const [open, setOpen] = useState<Tutorial | null>(() => tutorialById(initialTutorialId));
 
   const seen = useQuery({
     queryKey: SEEN_KEY,
