@@ -235,9 +235,18 @@ Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_c
 - **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
 
-Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migration `20261117100000_ai_write_modes_and_memory_category`; nenhuma env nova):
+Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `20261117100000_ai_write_modes_and_memory_category` e `20261118090000_ai_auto_write_hardening`; nenhuma env nova, a credencial é a `AGENT_API_KEY` que já existe):
 
 - **Modo por categoria (ADR 039):** Registros do dia, Treino, Metas e Memórias, padrão Perguntar antes. A API decide (`toolModes` a cada turno) e confere de novo no `/mcp` com o header `x-fatia-auto-write`: modo, até 5 gravações por resposta, até 10 itens, nunca apagar; fora disso volta ao cartão de confirmação. Cada gravação automática guarda o "antes" (`AiAutoWrite`) e tem inversa por tool; "Gravado" com Desfazer (`POST /chat/auto-writes/:id/undo`, dono, uma vez, 24 h). Desligado tira as escritas da categoria do catálogo. Cobrança, equipe e mural não têm categoria: sempre pedem OK.
+- **Endurecimento da revisão (ADR 039, nota de 2026-11-18):**
+  - Cada gravação automática guarda também o "depois". O Desfazer recusa com `AUTO_WRITE_CHANGED` se o registro ou os filhos mudaram.
+  - Num timeout o agente consulta pelo `toolCallId` e nunca abre o cartão.
+  - O header só vale com `X-Fatia-Agent-Key` e com o token de um turno ativo.
+  - O teto de 5 conta por mensagem da pessoa, atravessando a retomada e o "Continuar".
+  - `toolCallId` repetido é idempotente.
+  - As cópias somem em 24 h, ao desfazer ou quando o registro é apagado.
+  - O cartão mostra os erros, lembra "Desfeito" ao recarregar e mostra antes → depois.
+  - Falha ao gravar a escolha de guardar a foto avisa e deixa tentar de novo.
 - **Config da IA (Al-M24):** engrenagem no topo do chat (web e app), com as categorias (toque gira o modo), "Nunca é automático", busca na web (a mesma preferência do globo) e Mais (memórias com "n de 50", Usar sua própria IA, Meu plano).
 - **Memórias (Al-M9):** `category` (preferência, rotina, treino, hábito) e data; "n de 50"; com 50 a IA pede para apagar uma; "Apagar todas" com confirmação (`DELETE /chat/memories`, sem tool no MCP); a equipe nunca lê.
 - **Estados (Al-M11):** cota com "volta amanhã às 00:00", "Registrar à mão" e campo "Volta amanhã"; fora do ar com "Sua mensagem ficou salva" e Tentar de novo; interrompida com Continuar; "Pode sair da tela" enquanto pensa (o aviso de pronto já existia).
@@ -245,7 +254,6 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migration `2
 - **MCP:** `save_memory` ganhou `category` (opcional); números e `SHA_ENTIDADE` regerados pelos specs. Nenhuma tool lê ou muda o modo.
 - **Desvios de propósito:**
   - Só grava sozinha a tool com inversa exata; as outras de uma categoria em Automático continuam pedindo OK (criar plano, bloco, exercício próprio, copiar dia, entre outras).
-  - O "Gravado" mostra só o valor gravado, sem o "antes → depois" das edições.
   - A pergunta de guardar a foto vem antes do reconhecimento, não depois: é nele que a API guarda.
   - A escolha do agente segue na conversa nova, não na Config da IA.
   - A câmera do app não ganhou as abas Prato/Rótulo nem o "Tirar outra" depois do disparo: o rótulo continua no alimento próprio; o "Tirar outra" está no aviso do provedor.

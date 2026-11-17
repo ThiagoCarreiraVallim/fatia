@@ -104,3 +104,34 @@ A conferência do redesign confirma onde cada parte desta decisão aparece, sem 
   memórias (`DELETE /chat/memories` é só do app).
 - Os testes obrigatórios estão em `auto-write.integration.spec.ts` (API) e
   `tests/chat/test_gravacao_automatica.py` (agente).
+
+## Nota — endurecimento depois da revisão (#385, 2026-11-18)
+
+A revisão adversarial achou seis furos. A migration `20261118090000_ai_auto_write_hardening` e estas
+regras os fecham:
+
+- **O Desfazer confere o depois.** A gravação guarda também o retrato de depois (`after`), com os
+  filhos que importam: os itens e os registros do plano da refeição, as séries e o check-in da sessão.
+  O Desfazer compara o estado de agora com esse retrato dentro da transação. Se algo mudou (item a
+  mais, ml editado, série gravada, outra gravação por cima), responde 409 `AUTO_WRITE_CHANGED` e não
+  muda nada.
+- **Timeout não vira cartão.** A linha nasce pendente antes de a tool rodar e só fica `doneAt` com o
+  resultado. Se a tool falha, a linha some; se a linha não entra, a tool não roda. Quando o agente
+  perde a resposta, ele consulta pelo `toolCallId`, com `lookup: true` no header. Se a linha existe
+  e terminou, mostra o "Gravado" dela. Se não, o modelo lê que a gravação pode não ter acontecido e
+  pergunta à pessoa. Não abre o cartão de confirmação, que gravaria duas vezes.
+- **Só o agente manda o header.** `x-fatia-auto-write` exige `X-Fatia-Agent-Key` igual à
+  `AGENT_API_KEY`, comparada em tempo constante. Sem a chave, inclusive de cliente OAuth ou de
+  token de API, é 403. O `runId` do header é o token de um `ChatRun` ativo daquela conversa e
+  daquela pessoa (`runToken`, que a API manda ao agente a cada turno). O modo é conferido de novo no
+  servidor.
+- **Teto por mensagem da pessoa.** As 5 gravações contam por `answerKey`. A retomada de uma pausa e o
+  "Continuar" (`CHAT_CONTINUE_MESSAGE`) herdam a chave da volta anterior.
+- **`toolCallId` repetido.** Com o mesmo input na mesma conversa, devolve o "Gravado" que já existe.
+  Com qualquer outra coisa, `AUTO_WRITE_NEEDS_OK`.
+- **As cópias duram pouco.** `input`, `result`, `before`, `after` e `card` são zerados (com
+  `clearedAt`) ao desfazer, depois das 24 h e quando o registro some pela tela dele. Fica o
+  metadado. Ver `DATA_RETENTION.md`.
+- **A tela.** `GET /chat/auto-writes/:id` dá o estado, e o cartão recarregado mostra "Desfeito" ou
+  o prazo vencido. As recusas (`AUTO_WRITE_UNDONE`, `AUTO_WRITE_EXPIRED`, `AUTO_WRITE_CHANGED`) viram
+  texto no web e no app. Numa alteração, o "Gravado" mostra antes → depois.
