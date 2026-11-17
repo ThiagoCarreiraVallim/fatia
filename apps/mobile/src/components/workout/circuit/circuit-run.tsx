@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, View, useWindowDimensions } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Bell, BellOff, Check, Minus, Pause, Play, X } from 'lucide-react-native';
 import {
   circuitDoneLine,
@@ -97,19 +97,12 @@ export function CircuitRun({
 
   return (
     <>
-      <Screen footer={footer}>
+      {/* Intervalos: tela fixa, com os pontos no pé, como na prancha (Al-T4b/T4d). */}
+      <Screen footer={footer} scroll={!view}>
         {view ? (
-          <View
-            pointerEvents="none"
-            className="absolute inset-x-0 top-0 h-[520px]"
-            style={{
-              backgroundColor: `${view.tone === 'rest' ? colors.water : colors.primary}14`,
-              borderBottomLeftRadius: 260,
-              borderBottomRightRadius: 260,
-            }}
-          />
+          <IntervalGlow color={view.tone === 'rest' ? colors.water : colors.primary} />
         ) : null}
-        <View className="gap-4 px-4">
+        <View className={cn('gap-4 px-4', view && 'flex-1')}>
           <View className="flex-row items-center justify-between gap-2">
             <Pressable
               accessibilityRole="button"
@@ -215,7 +208,7 @@ function IntervalsBody({ def, state }: { def: CircuitDefinition; state: CircuitS
   }
   const v = circuitIntervalsView(def, state);
   return (
-    <View className="items-center gap-3.5 px-2 pt-6">
+    <View className="flex-1 items-center gap-3.5 px-2 pt-6">
       <Text
         className={cn(
           'font-sans-extrabold text-sm tracking-[1.7px]',
@@ -237,7 +230,7 @@ function IntervalsBody({ def, state }: { def: CircuitDefinition; state: CircuitS
       </Text>
       <Text className="text-center font-display text-[28px] text-foreground">{v.now}</Text>
       <Text className="text-sm text-muted-foreground">a seguir · {v.next}</Text>
-      <View className="mt-8 w-full flex-row gap-1.5">
+      <View className="mt-auto w-full flex-row gap-1.5 pt-8">
         {v.dots.map((d, k) => (
           <View
             key={k}
@@ -251,7 +244,7 @@ function IntervalsBody({ def, state }: { def: CircuitDefinition; state: CircuitS
           />
         ))}
       </View>
-      <Text className="text-center text-xs text-faint">{v.foot}</Text>
+      <Text className="pb-2 text-center text-xs text-faint">{v.foot}</Text>
     </View>
   );
 }
@@ -497,5 +490,36 @@ function RoundsBody({
         </Text>
       ) : null}
     </>
+  );
+}
+
+/**
+ * O brilho atrás do número dos intervalos (Al-T4b/T4d): o mesmo
+ * `radial-gradient(90% 60% at 50% 30%, cor/.2, transparente 70%)` da prancha e
+ * da web, em SVG. A versão antiga era um bloco com cantos redondos, de borda dura.
+ */
+function IntervalGlow({ color }: { color: string }) {
+  const { width, height } = useWindowDimensions();
+  return (
+    <View pointerEvents="none" className="absolute inset-x-0 top-0" style={{ height }}>
+      <Svg width={width} height={height}>
+        <Defs>
+          <RadialGradient
+            id="circuit-glow"
+            cx="50%"
+            cy="30%"
+            rx="90%"
+            ry="60%"
+            fx="50%"
+            fy="30%"
+            gradientUnits="objectBoundingBox"
+          >
+            <Stop offset="0" stopColor={color} stopOpacity={0.2} />
+            <Stop offset="0.7" stopColor={color} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width={width} height={height} fill="url(#circuit-glow)" />
+      </Svg>
+    </View>
   );
 }
