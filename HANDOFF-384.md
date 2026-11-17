@@ -67,7 +67,14 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - [x] 4. API: artefatos dos formatos novos nas tools (produtores) + preview na lista
 - [x] 5. api-client (`chat-cards.ts`: catálogo, `AGENT_LOCAL_TOOLS`, `appOnlyHref`, `groupToolCalls`, `quickReplies`, `groupConversationsByDay`, aceites; tipos em `chat.ts`)
 - [x] D11 aplicado: `confirm` em 62 confirmáveis + `badges` em `refresh_achievements`; spec `toda tool do chat declara o cartão…`; `catalogoDoChat` sem `?? 'report'`; `artefatos.py` descarta kind desconhecido. MCP: specs rodados depois do merge e do D11 — `SHA_ENTIDADE`, contagem e docs inalterados (card/appOnly não vão no fio).: tipos, catálogo, helpers (link, grupos, respostas rápidas, lista), aceite
-- [ ] 6. Web: mensagens, linhas, cartões, confirmação/lote/só no app, composer, busca/aceite, lista, pausa, motivos
+- [x] 6. Web: `artefato.tsx` (13 formatos + fontes/só no app/Gravado com cabeçalho igual), `partes.tsx`
+      (Consultando…/nada encontrado/não deu certo/você recusou/gravado às HH:MM; recolhe quando não é a
+      última resposta; agrupa ≥2), `ask-user.tsx` (Gravar/Ajustar, inválida vermelha, lote "Enviar N
+      decisões", aceite da busca, "Continuo?" com Parar aqui), `aceite.tsx` (aceite da 1ª conversa no lugar
+      do campo + chave do globo no topo), `pilulas.tsx`, `catalogo.ts` (hooks), lista Hoje/Esta semana/Antes
+      com prévia, motivo "Demorou", "Ouvindo… O áudio vira texto e é descartado.", plano "n de m passos",
+      "Você" na fala; /privacy reescrita para a busca da #384. Helpers novos no api-client:
+      `chatCardTitle`, `isEmptyChatArtifact`, `formatChatNumber`.
 - [ ] 7. App: o mesmo
 - [ ] 8. Docs (MCP_TOOL_SURFACE, REDESIGN_PROGRESS), lint, typecheck, testes; apagar este arquivo
 
@@ -105,6 +112,15 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
 - Agente: `cd apps/agent && uv run --offline pytest -q && uv run --offline ruff check src tests && uv run --offline mypy src`
 
 ## Próximo passo
+
+Item 7 (app, `apps/mobile/src/components/chat/`): o mesmo do item 6 — cartões (todos os formatos
+com `chatCardTitle`), linhas da tool (4 estados, recolher, agrupar ≥2), confirmação Gravar/Ajustar
+
+- lote, aceite da busca (`web_consent`), "Continuo?", aceite da 1ª conversa, chave do globo,
+  pílulas (`quickReplies`), lista por dia com prévia, motivo "Demorou", aviso do ditado.
+  Gavetas: `snapPoints={['85%']}` e rodapé `pb-8`. Testes do app são vitest.
+
+(Antigo, já feito:)
 
 Item 6 (web): reescrever `apps/web/src/components/chat/artefato.tsx` com os 13 formatos +
 sources/app_only/saved (hoje só metric/timeline/comparison/report; o resto cai em null),
