@@ -213,7 +213,7 @@ export function CircuitEditor({ initial, planId }: { initial: CircuitDraft; plan
 
       <section aria-labelledby="circuit-exercises" className="space-y-2">
         <div className="flex items-baseline justify-between px-1">
-          <h2 id="circuit-exercises" className="text-xs font-normal text-faint">
+          <h2 id="circuit-exercises" className="font-sans text-xs font-normal text-faint">
             Exercícios
           </h2>
           <span className="text-xs text-faint">na ordem do circuito</span>

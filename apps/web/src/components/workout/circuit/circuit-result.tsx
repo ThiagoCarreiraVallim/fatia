@@ -80,7 +80,7 @@ export function CircuitResultBlocks({
 
       {rows.length > 0 && (
         <section aria-labelledby="circuito-rounds" className="rounded-[20px] bg-card px-4 py-1">
-          <h2 id="circuito-rounds" className="pb-1 pt-2.5 text-xs font-normal text-faint">
+          <h2 id="circuito-rounds" className="pb-1 pt-2.5 font-sans text-xs font-normal text-faint">
             Tempo de cada round
           </h2>
           <ul>
@@ -113,7 +113,10 @@ export function CircuitResultBlocks({
       )}
 
       <section aria-labelledby="circuito-exercicios" className="rounded-[20px] bg-card px-4 py-1">
-        <h2 id="circuito-exercicios" className="pb-1 pt-2.5 text-xs font-normal text-faint">
+        <h2
+          id="circuito-exercicios"
+          className="pb-1 pt-2.5 font-sans text-xs font-normal text-faint"
+        >
           Exercícios
         </h2>
         <ul>

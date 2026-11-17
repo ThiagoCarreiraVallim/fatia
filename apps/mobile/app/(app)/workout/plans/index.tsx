@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { ChevronRight, Layers, Play, Plus, Trash2, Users } from 'lucide-react-native';
 import {
   circuitBadge,
+  circuitExerciseChips,
   circuitPlanSummary,
   planExerciseChips,
   planSummaryLine,
@@ -284,7 +285,7 @@ function PlanCard({
   onDelete: () => void;
 }) {
   const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
-  const chips = planExerciseChips(exercises);
+  const chips = circuit ? circuitExerciseChips(exercises) : planExerciseChips(exercises);
   const summary = circuit ? circuitPlanSummary(plan) : planSummaryLine(exercises);
   const format = circuit ? plan.circuit?.format : undefined;
   const template = Boolean(plan.fromTemplateId);
@@ -331,12 +332,17 @@ function PlanCard({
             {chips.map((c) => (
               <View
                 key={c.label}
-                className="h-[30px] flex-row items-center gap-1.5 rounded-[15px] bg-muted pl-[3px] pr-2.5"
+                className="h-[30px] max-w-full flex-row items-center gap-1.5 rounded-[15px] bg-muted pl-[3px] pr-2.5"
               >
                 <View className="h-6 w-6 items-center justify-center rounded-full bg-surface-3">
                   <Text className="font-sans-extrabold text-[11px] text-foreground">{c.label}</Text>
                 </View>
-                <Text className="font-sans-semibold text-xs text-foreground">{c.name}</Text>
+                <Text
+                  numberOfLines={1}
+                  className="shrink font-sans-semibold text-xs text-foreground"
+                >
+                  {c.name}
+                </Text>
               </View>
             ))}
           </View>

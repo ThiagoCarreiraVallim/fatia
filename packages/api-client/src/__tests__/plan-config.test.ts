@@ -19,6 +19,7 @@ import {
   planHistoryLine,
   planCountsLine,
   planDraftSummary,
+  circuitExerciseChips,
   planExerciseChips,
 } from '../workout/plan-config';
 import { ageFromBirthDate } from '../onboarding';
@@ -157,6 +158,23 @@ describe('chips e contagens do plano (Al-T6, Al-T7, Al-T19)', () => {
       { label: '3', name: 'Crucifixo no' },
       { label: '+', name: '2 mais' },
     ]);
+  });
+
+  it('circuito (Al-T6 › Circuitos): todos os exercícios, em ordem e com o nome inteiro', () => {
+    expect(
+      circuitExerciseChips([
+        named('Salto na Caixa Frontal', 2),
+        named('Thruster com Kettlebell', 1),
+        named('Abdominal', 3),
+        named('Prancha', 4),
+      ]),
+    ).toEqual([
+      { label: '1', name: 'Thruster com Kettlebell' },
+      { label: '2', name: 'Salto na Caixa Frontal' },
+      { label: '3', name: 'Abdominal' },
+      { label: '4', name: 'Prancha' },
+    ]);
+    expect(circuitExerciseChips([])).toEqual([]);
   });
 
   it('sem "+ mais" com até três, e nada com o plano vazio', () => {

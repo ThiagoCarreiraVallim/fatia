@@ -279,6 +279,19 @@ export function planExerciseChips(
   return chips;
 }
 
+/**
+ * Chips do card de circuito (Al-T6 › Circuitos): todos os exercícios, na ordem e
+ * com o nome inteiro. O circuito é curto e a ordem é o próprio treino; cortar
+ * em três e em duas palavras ("Thruster com") escondia o que vem a seguir.
+ */
+export function circuitExerciseChips(
+  exercises: ReadonlyArray<{ order: number; exercise: { name: string } }>,
+): Array<{ label: string; name: string }> {
+  return [...exercises]
+    .sort((a, b) => a.order - b.order)
+    .map((e, i) => ({ label: String(i + 1), name: e.exercise.name.trim() }));
+}
+
 /** "feito 12 vezes · último há 4 dias" — o histórico no topo do plano (Al-T7). */
 export function planHistoryLine(
   timesDone: number,

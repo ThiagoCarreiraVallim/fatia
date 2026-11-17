@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   circuitBadge,
+  circuitExerciseChips,
   circuitPlanSummary,
   planExerciseChips,
   planSummaryLine,
@@ -305,7 +306,7 @@ function PlanCard({
   onDelete: () => void;
 }) {
   const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
-  const chips = planExerciseChips(exercises);
+  const chips = circuit ? circuitExerciseChips(exercises) : planExerciseChips(exercises);
   const template = Boolean(plan.fromTemplateId);
   const format = circuit ? plan.circuit?.format : undefined;
   return (
@@ -343,12 +344,12 @@ function PlanCard({
             {chips.map((c) => (
               <span
                 key={c.label}
-                className="inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-[15px] bg-muted pl-[3px] pr-2.5 text-xs font-semibold text-foreground"
+                className="inline-flex h-[30px] max-w-full items-center gap-1.5 whitespace-nowrap rounded-[15px] bg-muted pl-[3px] pr-2.5 text-xs font-semibold text-foreground"
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-3 text-[11px] font-extrabold">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[11px] font-extrabold">
                   {c.label}
                 </span>
-                {c.name}
+                <span className="truncate">{c.name}</span>
               </span>
             ))}
           </span>
