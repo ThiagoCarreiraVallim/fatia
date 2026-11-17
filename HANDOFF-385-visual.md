@@ -25,3 +25,4 @@
 - Al-M12/M10 app: foto aparece no lugar da câmera durante aviso, pergunta de guardar, reconhecimento e revisão; ActionSheetRequest.onCancel; título 'Foto do prato'. Aceite CHAT criado na corrida #3 do app é mantido para os estados do chat. Próximo: Al-M11.
 - Al-M11 web: AiStateCard (cota âmbar, fora do ar vermelho), campo desligado com cota, placeholder Indisponível fora do ar. Prints via mocks de rota (scratchpad/states-web.mjs quota|down|live). Próximo: pensando/interrompida reais, depois app.
 - Al-M11 web: Pensando antes do 1º token vira cartão (spinner + título + texto de fundo); Continuar dentro da barra "Resposta interrompida" (StoppedRun ganhou `action`). Próximo: app pensando/interrompida, cmp Al-M11, restaurar demo.
+- Al-M11 app: AiStateCard no app (cota/fora do ar), Pensando em cartão, Continuar em pílula, placeholder Indisponível fora do ar. cmp-Al-M11 pronto. Próximo: testes, restaurar demo, apagar HANDOFF.

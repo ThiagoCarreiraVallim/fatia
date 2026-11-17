@@ -7,6 +7,7 @@ import { List, Settings2, SquarePen } from 'lucide-react-native';
 import {
   AI_SETTINGS_COPY,
   AI_STATES_COPY,
+  aiTurnState,
   quotaResetLabel,
   FATIA_AGENT_NAME,
   getChatAvailability,
@@ -17,7 +18,7 @@ import {
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import { Button, ErrorState, LoadingState, cn } from '@/components/ui';
+import { ErrorState, LoadingState, cn } from '@/components/ui';
 import {
   AssistantBlock,
   PlanCard,
@@ -25,6 +26,7 @@ import {
   TurnError,
   UserBubble,
 } from '@/components/chat/message-list';
+import { AiStateCard } from '@/components/chat/ai-state-card';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
 import {
@@ -240,17 +242,13 @@ export default function ConversationScreen() {
                 ) : null}
                 {cota.data && !cota.data.allowed && !thread.error ? (
                   // Prancha Al-M11, "Cota": a hora da volta e o registro manual a um toque.
-                  <View className="gap-2 rounded-xl border border-border bg-card p-4">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {AI_STATES_COPY.quotaTitle}
-                    </Text>
-                    <Text className="text-sm text-muted-foreground">
-                      {quotaResetLabel(cota.data.resetsAt)} {AI_STATES_COPY.quotaManual}
-                    </Text>
-                    <Button size="sm" variant="outline" onPress={() => router.push('/nutrition')}>
-                      <Text className="text-sm text-foreground">{AI_STATES_COPY.quotaAction}</Text>
-                    </Button>
-                  </View>
+                  <AiStateCard
+                    tone="warning"
+                    title={AI_STATES_COPY.quotaTitle}
+                    body={`${quotaResetLabel(cota.data.resetsAt)} ${AI_STATES_COPY.quotaManual}`}
+                    actionLabel={AI_STATES_COPY.quotaAction}
+                    onAction={() => router.push('/nutrition')}
+                  />
                 ) : cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
                   <Text className="text-center text-xs text-muted-foreground">
                     {`Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`}
@@ -267,7 +265,12 @@ export default function ConversationScreen() {
               running={thread.running}
               disabled={!aberta || loading || cota.data?.allowed === false}
               blockedPlaceholder={
-                cota.data?.allowed === false ? AI_STATES_COPY.quotaPlaceholder : undefined
+                cota.data?.allowed === false
+                  ? AI_STATES_COPY.quotaPlaceholder
+                  : // Fora do ar o campo segue ligado (a mensagem fica salva), só avisa.
+                    thread.error && aiTurnState(thread.error.code) === 'down'
+                    ? AI_STATES_COPY.downPlaceholder
+                    : undefined
               }
               photosEnabled={disponibilidade.data?.photos ?? false}
               dictationEnabled={disponibilidade.data?.dictation ?? false}

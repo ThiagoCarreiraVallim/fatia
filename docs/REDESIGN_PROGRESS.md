@@ -355,8 +355,11 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
   - O botão da IA no menu não gira com a resposta em segundo plano; fica o "Respondendo…" que já existia no PWA.
   - A revisão da foto (Al-M10) fica na tela da foto, e não no fio do chat com chips e campo de correção: no PWA, logo abaixo da foto; no app, na gaveta de revisão da #374. A conversa sobre a foto continua possível pelo chat.
   - A Config da IA não tem a escolha do agente ("Com quem você conversa"): ela fica na conversa nova, como já registrado acima.
+  - Com a IA fora do ar o campo segue ligado (só o texto muda para "Indisponível"): a mensagem fica salva e "Tentar de novo" reenvia; a prancha apaga o campo.
+  - "Continuar" da resposta interrompida fica dentro da própria barra "Resposta interrompida", e não num cartão "Está mais longo que o previsto" com "Parar aqui": parar já é o botão de parar do campo.
+  - "Pensando…" antes do primeiro token é um cartão com o aviso de segundo plano; depois que o texto começa, fica só o indicador.
 - **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
-- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+- **Passada visual (Al-M12, Al-M10, Al-M24, Al-M9, Al-M11):** web e app conferidos contra as pranchas; cota e fora do ar do app conferidos com estado forçado (a cota fica desligada no dev).
 
 ## Etapas seguintes
 

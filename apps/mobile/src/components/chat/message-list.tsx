@@ -42,6 +42,7 @@ import {
 import { Button, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { ArtifactCard, useChatToolCatalog } from './artifact-card';
+import { AiStateCard } from './ai-state-card';
 import { ChatMarkdown } from './chat-markdown';
 
 /**
@@ -200,9 +201,9 @@ export function AssistantBlock({
             <Pressable
               accessibilityRole="button"
               onPress={onContinue}
-              className="min-h-[44px] justify-center px-2"
+              className="min-h-[40px] justify-center rounded-full bg-foreground/10 px-4"
             >
-              <Text className="text-xs font-semibold text-primary-text">
+              <Text className="text-sm font-semibold text-foreground">
                 {AI_STATES_COPY.continue}
               </Text>
             </Pressable>
@@ -294,14 +295,14 @@ export function Thinking() {
     <View
       accessibilityRole="progressbar"
       accessibilityLabel="Pensando"
-      className="flex-row items-center gap-2"
+      className="gap-2.5 rounded-3xl bg-card p-4"
     >
-      <ActivityIndicator size="small" color={colors.primaryText} />
-      <View className="flex-1">
-        <Text className="text-sm text-muted-foreground">Pensando…</Text>
-        {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
-        <Text className="text-xs text-muted-foreground">{AI_STATES_COPY.background}</Text>
+      <View className="flex-row items-center gap-3">
+        <ActivityIndicator size="small" color={colors.primaryText} />
+        <Text className="text-[15px] font-bold text-foreground">{AI_STATES_COPY.thinking}</Text>
       </View>
+      {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
+      <Text className="text-sm text-muted-foreground">{AI_STATES_COPY.background}</Text>
     </View>
   );
 }
@@ -368,6 +369,29 @@ export function TurnError({
       : estado === 'down'
         ? AI_STATES_COPY.downBody
         : textoDeErroDoChat(error);
+  if (!plano && estado === 'quota') {
+    return (
+      <AiStateCard
+        tone="warning"
+        title={titulo}
+        body={texto}
+        actionLabel={AI_STATES_COPY.quotaAction}
+        onAction={() => router.push('/nutrition')}
+      />
+    );
+  }
+  if (!plano && estado === 'down') {
+    return (
+      <AiStateCard
+        tone="danger"
+        title={titulo}
+        body={texto}
+        actionLabel={AI_STATES_COPY.downAction}
+        onAction={onRetry}
+        retry
+      />
+    );
+  }
   return (
     <View accessibilityRole="alert" className="gap-3 rounded-xl border border-border bg-card p-4">
       <Text className="text-sm font-semibold text-foreground">{titulo}</Text>
