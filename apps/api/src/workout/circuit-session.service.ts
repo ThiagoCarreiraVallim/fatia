@@ -82,7 +82,10 @@ export class CircuitSessionService {
     return this.close(userId, session.id, { ...json, events: counted.events, result }, rows, dto);
   }
 
-  /** Fecha a sessão aberta com o resultado e as séries. */
+  /**
+   * Fecha a sessão aberta com o resultado e as séries, numa transação só: se as
+   * séries falham, a sessão segue aberta e o "Encerrar" pode ser repetido.
+   */
   private async close(
     userId: string,
     sessionId: string,
@@ -90,22 +93,26 @@ export class CircuitSessionService {
     rows: ReturnType<typeof circuitSetRows>,
     extra: { feeling?: number; notes?: string },
   ) {
-    const { count } = await this.prisma.workoutSession.updateMany({
-      where: { id: sessionId, userId, completedAt: null },
-      data: {
-        completedAt: new Date(),
-        circuit: next as unknown as Prisma.InputJsonValue,
-        ...(extra.feeling !== undefined ? { feeling: extra.feeling } : {}),
-        ...(extra.notes !== undefined ? { notes: extra.notes } : {}),
-      },
+    const closed = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.workoutSession.updateMany({
+        where: { id: sessionId, userId, completedAt: null },
+        data: {
+          completedAt: new Date(),
+          circuit: next as unknown as Prisma.InputJsonValue,
+          ...(extra.feeling !== undefined ? { feeling: extra.feeling } : {}),
+          ...(extra.notes !== undefined ? { notes: extra.notes } : {}),
+        },
+      });
+      if (count === 0) return false;
+      await this.createSets(tx, sessionId, rows);
+      return true;
     });
-    if (count === 0) {
+    if (!closed) {
       // Outro "Encerrar" passou na frente: o fim dele vale.
       const again = parseCircuitJson((await this.ownSession(userId, sessionId)).circuit);
       if (again?.result) return { sessionId, result: again.result, alreadyFinished: true };
       throw new ConflictException('Esta sessão já foi encerrada.');
     }
-    await this.createSets(sessionId, rows);
     return { sessionId, result: next.result!, alreadyFinished: false };
   }
 
@@ -178,31 +185,49 @@ export class CircuitSessionService {
     const startedAt = new Date(completedAt.getTime() - resultDto.elapsedSeconds * 1000);
     const { result, rows } = this.buildResult(definition, resultDto, { roundTimesOptional: true });
     const json: CircuitJsonV1 = { ...newCircuitJson(definition, startedAt), result };
-    const session = await this.prisma.workoutSession.create({
-      data: {
-        userId,
-        planId: plan.id,
-        // O retrato do plano, como no `start()`: apagar o circuito depois não
-        // apaga o nome nem o tipo da sessão no histórico.
-        fromPlan: true,
-        planName: plan.name,
-        startedAt,
-        completedAt,
-        feeling: dto.feeling ?? null,
-        notes: dto.notes ?? null,
-        circuit: json as unknown as Prisma.InputJsonValue,
-      },
+    const session = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.workoutSession.create({
+        data: {
+          userId,
+          planId: plan.id,
+          // O retrato do plano, como no `start()`: apagar o circuito depois não
+          // apaga o nome nem o tipo da sessão no histórico.
+          fromPlan: true,
+          planName: plan.name,
+          startedAt,
+          completedAt,
+          feeling: dto.feeling ?? null,
+          notes: dto.notes ?? null,
+          circuit: json as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.createSets(tx, created.id, rows);
+      return created;
     });
-    await this.createSets(session.id, rows);
     return { sessionId: session.id, result, alreadyFinished: false };
   }
 
-  private async createSets(sessionId: string, rows: ReturnType<typeof circuitSetRows>) {
+  /**
+   * As séries do fim. O exercício pessoal apagado depois do começo (o retrato
+   * ainda o tem) fica sem série: escolha da revisão da #380, em vez de travar o
+   * "Apagar exercício" por causa de um circuito aberto. O resultado no JSON
+   * guarda o total dele.
+   */
+  private async createSets(
+    db: Prisma.TransactionClient,
+    sessionId: string,
+    rows: ReturnType<typeof circuitSetRows>,
+  ) {
     if (rows.length === 0) return;
-    await this.prisma.sessionSet.createMany({
-      data: rows.map((r) => ({ sessionId, ...r })),
-      skipDuplicates: true,
-    });
+    const ids = [...new Set(rows.map((r) => r.exerciseId))];
+    const alive = new Set(
+      (await db.exercise.findMany({ where: { id: { in: ids } }, select: { id: true } })).map(
+        (e) => e.id,
+      ),
+    );
+    const data = rows.filter((r) => alive.has(r.exerciseId)).map((r) => ({ sessionId, ...r }));
+    if (data.length === 0) return;
+    await db.sessionSet.createMany({ data, skipDuplicates: true });
   }
 
   /** O resultado conferido pelas faixas, com reps e totais contados pelas séries. */

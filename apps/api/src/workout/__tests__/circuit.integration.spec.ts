@@ -385,6 +385,73 @@ describe('circuitos (banco real)', () => {
     await sessions.delete(userId, s.id);
   });
 
+  it('o fim é atômico: se as séries falham, a sessão segue aberta (revisão C3)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const startedAt = new Date(Date.now() - 20 * 60_000);
+    const s = await sessions.start(userId, { planId: plan.id, startedAt: startedAt.toISOString() });
+    const boom = () => Promise.reject(new Error('falha ao gravar as séries'));
+    // O mesmo banco, com a escrita das séries quebrada (fora e dentro da transação).
+    const broken = new Proxy(prisma, {
+      get(target, key, receiver) {
+        if (key === 'sessionSet') return { createMany: boom };
+        if (key === '$transaction') {
+          return (fn: (tx: unknown) => Promise<unknown>) =>
+            target.$transaction((tx) =>
+              fn(
+                new Proxy(tx, {
+                  get: (t, k) => (k === 'sessionSet' ? { createMany: boom } : Reflect.get(t, k)),
+                }),
+              ),
+            );
+        }
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const fragile = new CircuitSessionService(broken);
+    await expect(
+      fragile.finish(userId, s.id, { events: roundsOfMarks(startedAt.getTime(), 1) }),
+    ).rejects.toThrow('falha ao gravar as séries');
+    const after = await prisma.workoutSession.findUniqueOrThrow({ where: { id: s.id } });
+    expect(after.completedAt).toBeNull();
+    expect((after.circuit as { result: unknown }).result).toBeNull();
+    // E o "Encerrar" de novo, com o banco bom, fecha normalmente.
+    const ok = await circuits.finish(userId, s.id, {
+      events: roundsOfMarks(startedAt.getTime(), 1),
+    });
+    expect(ok.result.roundsCompleted).toBe(1);
+  });
+
+  it('exercício pessoal apagado depois do começo: o fim grava as séries dos outros (revisão C3)', async () => {
+    const custom = await prisma.exercise.create({
+      data: { name: `${stamp}-pessoal`, muscleGroup: 'pernas', createdByUserId: userId },
+    });
+    const plan = await plans.createCircuit(userId, {
+      ...amrap(),
+      exercises: [
+        { exerciseId: exerciseIds[0], unit: 'REPS', target: 15 },
+        { exerciseId: custom.id, unit: 'REPS', target: 10 },
+      ],
+    });
+    const startedAt = new Date(Date.now() - 20 * 60_000);
+    const s = await sessions.start(userId, { planId: plan.id, startedAt: startedAt.toISOString() });
+    // Tira o exercício do circuito e o apaga, com a sessão (e o retrato) ainda aberta.
+    await plans.replaceCircuit(userId, plan.id, {
+      ...amrap(),
+      exercises: [{ exerciseId: exerciseIds[0], unit: 'REPS', target: 15 }],
+    });
+    await new ExerciseService(prisma).deleteCustom(userId, custom.id);
+    const t = startedAt.getTime();
+    const marks = Array.from({ length: 4 }, (_, i) => ({
+      type: 'mark' as const,
+      at: t + (i + 1) * 10_000,
+    }));
+    const done = await circuits.finish(userId, s.id, { events: marks });
+    expect(done.result.roundsCompleted).toBe(2);
+    const sets = await prisma.sessionSet.findMany({ where: { sessionId: s.id } });
+    expect(sets.map((x) => x.exerciseId)).toEqual([exerciseIds[0], exerciseIds[0]]);
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',
