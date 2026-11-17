@@ -11,8 +11,9 @@ vi.mock('@fatia/api-client', async () => {
 
 const { Artefato } = await import('../artefato');
 
-const gravado = (extra: Partial<ChatArtifact & { kind: 'saved' }>): ChatArtifact => ({
+const gravado = (extra: { undoable?: boolean; autoWriteId?: string }): ChatArtifact => ({
   kind: 'saved',
+  toolCallId: 'c1',
   label: 'Gravado',
   at: '2026-11-17T12:00:00Z',
   lines: [{ label: 'Quantidade', after: '300 ml' }],
