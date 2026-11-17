@@ -24,6 +24,14 @@
 - DB de teste: `export DATABASE_URL=$(grep ^DATABASE_URL /home/thiago/Documentos/pessoal/fatia/.env | cut -d= -f2- | sed -E 's#/fatia(\?|$)#/fatia_t380\1#')`
 - `cd apps/api && npx jest <arquivo>`
 
+## Passe visual (em andamento)
+
+- Checkout principal agora em redesign/380-circuitos; migration aplicada no dev; pnpm install --offline (api-client -> @fatia/design); next.config.ts tocado para o Next recarregar.
+- Pranchas copiadas para .canvas/project (T22, T4, T4b, T4c, T4d, T4e). Render com clique: scratchpad/render-board-click.mjs "Al-T6-Planos@Circuitos" <nome>
+- Dados demo criados (pela tela Novo circuito, script scratchpad/mk-circuits.mjs): AMRAP 12 (213b4565), Tabata de core (4de50725), EMOM 10 (feb87c5c), For Time 3 (d1598fe5).
+- Achado: chips do card de circuito cortam em 2 palavras e 3 + "N mais"; a prancha mostra todos com nome inteiro (C() no x-dc).
+- Plano: For Time 3 de ponta a ponta (única sessão real); AMRAP/EMOM/Tabata rodando na web por mock de rota.
+
 ## Próximo passo
 
 Passe visual. As pranchas T22/T4/T4b/T4c/T4d/T4e não estavam em .canvas/project; copiadas de
