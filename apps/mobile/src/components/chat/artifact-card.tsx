@@ -1,7 +1,7 @@
 import { useState, type ComponentType } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -25,6 +25,8 @@ import {
   appOnlyHref,
   chatCardTitle,
   getChatToolCatalog,
+  savedUndoId,
+  undoAutoWrite,
   type ChatArtifact,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
@@ -147,7 +149,7 @@ function Conteudo({ artifact }: { artifact: ChatArtifact }) {
     case 'app_only':
       return <SoNoApp artifact={artifact} />;
     case 'saved':
-      return <Gravado artifact={artifact} />;
+      return <GravadoComDesfazer artifact={artifact} />;
   }
 }
 
@@ -633,9 +635,28 @@ function SoNoApp({ artifact }: De<'app_only'>) {
   );
 }
 
+/** O Desfazer de verdade (ADR 039): pela API, e depois relê tudo — o registro sai das telas. */
+function GravadoComDesfazer({ artifact }: De<'saved'>) {
+  const queryClient = useQueryClient();
+  const id = savedUndoId(artifact);
+  return (
+    <Gravado
+      artifact={artifact}
+      onUndo={
+        id
+          ? async () => {
+              await undoAutoWrite(id);
+              void queryClient.invalidateQueries();
+            }
+          : undefined
+      }
+    />
+  );
+}
+
 /**
- * "Gravado", com Desfazer. Só o componente nesta issue: quem emite e executa o desfazer é a
- * #385 — sem `onUndo`, o botão não aparece.
+ * "Gravado", com Desfazer (ADR 039): o `/mcp` emite na gravação automática. Sem `onUndo`, o
+ * botão não aparece.
  */
 export function Gravado({
   artifact,

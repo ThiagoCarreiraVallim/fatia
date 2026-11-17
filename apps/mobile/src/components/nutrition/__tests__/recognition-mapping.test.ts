@@ -3,7 +3,9 @@ import type { MealRecognition, RecognizedFoodItem } from '@fatia/api-client';
 import {
   faixaDeConfianca,
   itensDeRefeicao,
-  itensEditaveis,
+  editableItems,
+  reviewKcalTotal,
+  stepGrams,
   itensParaGravar,
   mensagemDeFotoSemComida,
   podeGravar,
@@ -30,9 +32,9 @@ function resposta(itens: RecognizedFoodItem[]): MealRecognition {
   return { itens, observacao: null };
 }
 
-describe('itensEditaveis', () => {
+describe('editableItems', () => {
   it('nasce com tudo marcado — desmarcar é do usuário, não o contrário', () => {
-    const itens = itensEditaveis(resposta([reconhecido(), reconhecido({ grams: 90 })]));
+    const itens = editableItems(resposta([reconhecido(), reconhecido({ grams: 90 })]));
 
     expect(itens.map((i) => i.incluido)).toEqual([true, true]);
     expect(itens.map((i) => i.gramas)).toEqual(['150', '90']);
@@ -42,9 +44,7 @@ describe('itensEditaveis', () => {
     // Um prato com dois pedaços de pão devolve "pão" duas vezes. Chave pelo nome
     // faria a lista do React reutilizar a linha errada e a edição de porção de um
     // aparecer no outro.
-    const itens = itensEditaveis(
-      resposta([reconhecido({ grams: 50 }), reconhecido({ grams: 70 })]),
-    );
+    const itens = editableItems(resposta([reconhecido({ grams: 50 }), reconhecido({ grams: 70 })]));
 
     expect(new Set(itens.map((i) => i.chave)).size).toBe(2);
   });
@@ -52,7 +52,7 @@ describe('itensEditaveis', () => {
   it('item casado com a TACO não carrega cópia de macro', () => {
     // Guardar uma cópia faria o número exibido divergir do gravado assim que a
     // porção mudasse — quem recalcula é a API, a partir de `foodId`.
-    const [item] = itensEditaveis(
+    const [item] = editableItems(
       resposta([
         reconhecido({
           foodId: 42,
@@ -71,7 +71,7 @@ describe('itensEditaveis', () => {
 
 describe('previaDoItem', () => {
   it('reescala a estimativa quando a pessoa corrige a porção', () => {
-    const [item] = itensEditaveis(
+    const [item] = editableItems(
       resposta([reconhecido({ grams: 100, kcal: 200, proteinG: 10, carbsG: 20, fatG: 4 })]),
     );
 
@@ -84,7 +84,7 @@ describe('previaDoItem', () => {
   });
 
   it('porção em branco ou inválida não vira zero', () => {
-    const [item] = itensEditaveis(resposta([reconhecido()]));
+    const [item] = editableItems(resposta([reconhecido()]));
 
     expect(previaDoItem({ ...item, gramas: '' })).toBeNull();
     expect(previaDoItem({ ...item, gramas: '0' })).toBeNull();
@@ -96,7 +96,7 @@ describe('podeGravar', () => {
   it('item livre sem macro nenhum não pode ser gravado', () => {
     // Ele iria para a refeição valendo zero caloria, que é indistinguível de um
     // alimento que realmente não tem caloria. A tela manda buscar no catálogo.
-    const [item] = itensEditaveis(
+    const [item] = editableItems(
       resposta([reconhecido({ kcal: null, proteinG: null, carbsG: null, fatG: null })]),
     );
 
@@ -107,13 +107,13 @@ describe('podeGravar', () => {
   it('item livre com macro parcial também não passa', () => {
     // Metade dos macros preenchida e metade em zero é pior que nenhum: o total
     // do dia fica errado e nada indica isso.
-    const [item] = itensEditaveis(resposta([reconhecido({ carbsG: null })]));
+    const [item] = editableItems(resposta([reconhecido({ carbsG: null })]));
 
     expect(podeGravar(item)).toBe(false);
   });
 
   it('porção inválida barra a gravação mesmo com macro completo', () => {
-    const [item] = itensEditaveis(resposta([reconhecido()]));
+    const [item] = editableItems(resposta([reconhecido()]));
 
     expect(podeGravar({ ...item, gramas: '-5' })).toBe(false);
   });
@@ -121,7 +121,7 @@ describe('podeGravar', () => {
 
 describe('itensDeRefeicao', () => {
   it('grava só o que ficou marcado', () => {
-    const itens = itensEditaveis(
+    const itens = editableItems(
       resposta([
         reconhecido({ nomeReconhecido: 'arroz' }),
         reconhecido({ nomeReconhecido: 'refrigerante' }),
@@ -138,7 +138,7 @@ describe('itensDeRefeicao', () => {
   });
 
   it('item casado manda só foodId e grams — o macro é da TACO', () => {
-    const itens = itensEditaveis(
+    const itens = editableItems(
       resposta([
         reconhecido({
           foodId: 42,
@@ -157,7 +157,7 @@ describe('itensDeRefeicao', () => {
   });
 
   it('item livre manda os macros da porção corrigida, não da estimada', () => {
-    const itens = itensEditaveis(
+    const itens = editableItems(
       resposta([reconhecido({ grams: 100, kcal: 200, proteinG: 10, carbsG: 20, fatG: 4 })]),
     );
 
@@ -169,7 +169,7 @@ describe('itensDeRefeicao', () => {
   it('nem confiança nem "estimado" chegam ao banco', () => {
     // Confiança auto-relatada por LLM não é calibrada. Gravada, ela vira um
     // número que alguém acredita.
-    const itens = itensEditaveis(resposta([reconhecido({ confidence: 0.31 })]));
+    const itens = editableItems(resposta([reconhecido({ confidence: 0.31 })]));
 
     const [payload] = itensDeRefeicao(itens);
 
@@ -180,7 +180,7 @@ describe('itensDeRefeicao', () => {
   it('item marcado mas ingravável não escapa pelo botão', () => {
     // `itensParaGravar` e o botão da tela usam a mesma decisão: se divergissem,
     // um item sem macro entraria zerado ao tocar "Registrar".
-    const itens = itensEditaveis(resposta([reconhecido({ kcal: null })]));
+    const itens = editableItems(resposta([reconhecido({ kcal: null })]));
 
     expect(itensParaGravar(itens)).toEqual([]);
     expect(itensDeRefeicao(itens)).toEqual([]);
@@ -202,5 +202,30 @@ describe('mensagemDeFotoSemComida', () => {
     expect(mensagemDeFotoSemComida(null)).toContain('busca de alimento');
     expect(mensagemDeFotoSemComida('  ')).toContain('busca de alimento');
     expect(mensagemDeFotoSemComida('prato coberto')).toContain('prato coberto');
+  });
+});
+
+describe('revisão da foto (Al-M10, #385)', () => {
+  it('o −/+ anda 10 g e não passa de 10 g; texto inválido parte do que a IA viu', () => {
+    const [item] = editableItems(resposta([reconhecido({ grams: 150 })]));
+    expect(stepGrams(item!, 1)).toBe('160');
+    expect(stepGrams({ ...item!, gramas: '15' }, -1)).toBe('10');
+    expect(stepGrams({ ...item!, gramas: '' }, 1)).toBe('160');
+  });
+
+  it('o total soma só o marcado, casado com a TACO inclusive, na porção digitada', () => {
+    const itens = editableItems(
+      resposta([
+        reconhecido({ grams: 100, kcal: 130, foodId: 1, nomeDoCatalogo: 'Arroz' }),
+        reconhecido({ nomeReconhecido: 'feijão', grams: 100, kcal: 80 }),
+      ]),
+    );
+    expect(reviewKcalTotal(itens)).toBe(210);
+    expect(
+      reviewKcalTotal([
+        { ...itens[0]!, gramas: '200' },
+        { ...itens[1]!, incluido: false },
+      ]),
+    ).toBe(260);
   });
 });

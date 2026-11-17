@@ -52,7 +52,7 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 10. Isolamento (foto já coberta pela #374) (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
 - [x] 11. api-client: settings, memórias, desfazer, foto da refeição
 - [x] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
-- [ ] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
+- [x] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
 - [ ] 14. Docs: ADRs (notas), DATA_RETENTION, privacy, MCP (se mudou), REDESIGN_PROGRESS
 - [ ] 15. lint, typecheck, testes de tudo; commit final sem este arquivo
 
@@ -94,7 +94,14 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   antes do reconhecimento quando `keepMealPhotos` é null, revisão Al-M10 (±10 g, total, 20–30%,
   "Gravar no…"). Web: 977 testes verdes, tsc e eslint limpos.
 
+- App: `chat/settings.tsx` (Al-M24, engrenagem no topo do chat no lugar do cérebro; memórias pela
+  linha "O que a IA lembra"), `chat/memories.tsx` (Al-M9), Desfazer no `artifact-card.tsx`, estados
+  Al-M11 em `message-list.tsx`/`[id].tsx`/`composer.tsx`, `nutrition/photo.tsx` (aviso do provedor =
+  aceite do chat, 403, "Vai para:", textos da pergunta de guardar), revisão com ±10 g, total, aviso
+  20–30% e "Gravar no…" (`recognition-mapping.ts`: `editableItems` renomeado, `stepGrams`,
+  `reviewKcalTotal`), permissões da câmera e da galeria em `app.config.ts`. App: 508 testes.
+
 ## Próximo passo exato
 
-App (item 13): Config da IA, Memórias Al-M9, Desfazer no `artifact-card.tsx`, estados Al-M11,
-câmera (aviso do provedor/aceite 403, revisão ±10 g) e o texto da permissão em `app.config.ts`.
+Item 14: docs (ADR 039/038 notas, DATA_RETENTION com `AiAutoWrite`, MOBILE_PARITY da foto no PWA,
+REDESIGN_PROGRESS #385). Depois item 15.

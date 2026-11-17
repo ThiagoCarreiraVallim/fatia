@@ -17,7 +17,9 @@ import {
 import {
   AGENT_LOCAL_TOOLS,
   CHAT_FEEDBACK_REASON_LABELS,
+  AI_STATES_COPY,
   FATIA_AGENT_NAME,
+  aiTurnState,
   chatCardTitle,
   chatMarkdownPlainText,
   collapsedLabel,
@@ -26,6 +28,7 @@ import {
   toolLineLabel,
   type ChatToolPart,
   type ToolCallStatus,
+  quotaResetLabel,
   splitQuote,
   textoDeErroDoChat,
   type ChatAssistantMessage,
@@ -108,6 +111,7 @@ export function AssistantBlock({
   onVote,
   onQuote,
   onExplain,
+  onContinue,
   last = false,
 }: {
   message: ChatAssistantMessage;
@@ -125,6 +129,8 @@ export function AssistantBlock({
   onQuote?: (text: string) => void;
   /** O motivo do 👎, opcional e depois do voto. */
   onExplain?: (rowId: string, reasons: ChatReviewReason[]) => void;
+  /** "Continuar" da resposta parada (prancha Al-M11, "Interrompida"). */
+  onContinue?: () => void;
 }) {
   const [pensamentoAberto, setPensamentoAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -157,7 +163,20 @@ export function AssistantBlock({
       <ToolLines message={message} thread={thread} last={last} />
       {message.text ? <ChatMarkdown source={message.text} /> : null}
       {message.stopped ? (
-        <Text className="text-xs text-muted-foreground">Resposta interrompida</Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-xs text-muted-foreground">{AI_STATES_COPY.interrupted}</Text>
+          {onContinue && last && !thread.running ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onContinue}
+              className="min-h-[44px] justify-center px-2"
+            >
+              <Text className="text-xs font-semibold text-primary-text">
+                {AI_STATES_COPY.continue}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       {message.text && !thread.running ? (
         <View className="flex-row items-center gap-1">
@@ -247,7 +266,11 @@ export function Thinking() {
       className="flex-row items-center gap-2"
     >
       <ActivityIndicator size="small" color={colors.primaryText} />
-      <Text className="text-sm text-muted-foreground">Pensando…</Text>
+      <View className="flex-1">
+        <Text className="text-sm text-muted-foreground">Pensando…</Text>
+        {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
+        <Text className="text-xs text-muted-foreground">{AI_STATES_COPY.background}</Text>
+      </View>
     </View>
   );
 }
@@ -284,22 +307,57 @@ export function PlanCard({ steps }: { steps: ChatPlanStep[] }) {
   );
 }
 
-/** O erro do turno, com o caminho que ele pede: tentar de novo, ou o plano PRO. */
-export function TurnError({ error, onRetry }: { error: ChatStreamError; onRetry: () => void }) {
+/**
+ * O erro do turno, com o caminho que ele pede (prancha Al-M11): cota (volta tal hora, registro
+ * manual), fora do ar (a mensagem ficou salva, tentar de novo), interrompida (continuar), plano.
+ */
+export function TurnError({
+  error,
+  onRetry,
+  onContinue,
+}: {
+  error: ChatStreamError;
+  onRetry: () => void;
+  onContinue?: () => void;
+}) {
   const router = useRouter();
   const plano = error.code === 'AI_PLAN_REQUIRED';
-  const cota = error.code === 'AI_QUOTA_EXCEEDED';
+  const estado = aiTurnState(error.code);
+  const titulo =
+    estado === 'quota'
+      ? AI_STATES_COPY.quotaTitle
+      : estado === 'down'
+        ? AI_STATES_COPY.downTitle
+        : estado === 'interrupted'
+          ? AI_STATES_COPY.interrupted
+          : 'A resposta falhou';
+  const texto =
+    estado === 'quota'
+      ? `${error.resetsAt ? quotaResetLabel(error.resetsAt) : textoDeErroDoChat(error)} ${AI_STATES_COPY.quotaManual}`
+      : estado === 'down'
+        ? AI_STATES_COPY.downBody
+        : textoDeErroDoChat(error);
   return (
     <View accessibilityRole="alert" className="gap-3 rounded-xl border border-border bg-card p-4">
-      <Text className="text-sm font-semibold text-foreground">A resposta falhou</Text>
-      <Text className="text-sm text-muted-foreground">{textoDeErroDoChat(error)}</Text>
+      <Text className="text-sm font-semibold text-foreground">{titulo}</Text>
+      <Text className="text-sm text-muted-foreground">{texto}</Text>
       {plano ? (
         <Button size="sm" onPress={() => router.push('/plan')}>
           <Text className="text-sm font-bold text-primary-foreground">Ver o plano PRO</Text>
         </Button>
-      ) : cota ? null : (
-        <Button size="sm" variant="outline" onPress={onRetry}>
-          <Text className="text-sm text-foreground">Tentar de novo</Text>
+      ) : estado === 'quota' ? (
+        <Button size="sm" variant="outline" onPress={() => router.push('/nutrition')}>
+          <Text className="text-sm text-foreground">{AI_STATES_COPY.quotaAction}</Text>
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onPress={estado === 'interrupted' && onContinue ? onContinue : onRetry}
+        >
+          <Text className="text-sm text-foreground">
+            {estado === 'interrupted' ? AI_STATES_COPY.continue : AI_STATES_COPY.downAction}
+          </Text>
         </Button>
       )}
     </View>

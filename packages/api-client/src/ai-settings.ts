@@ -225,10 +225,13 @@ export const MEAL_PHOTO_COPY = {
   keepNo: 'Agora não',
   keptYes: 'Fotos das refeições: guardadas. Muda em Você.',
   keptNo: 'Fotos das refeições: não guardadas. Esta foi descartada.',
-  /** Texto de permissão da câmera (Apple 5.1.1): diz o uso de verdade. */
+  /**
+   * Texto de permissão da câmera (Apple 5.1.1): diz o uso de verdade. O mesmo de
+   * `apps/mobile/app.config.ts`, que não importa pacote do monorepo.
+   */
   cameraPermission:
-    'O Fatia usa a câmera para fotografar refeições e rótulos. A foto vai para a IA reconhecer ' +
-    'os alimentos e só fica guardada se você permitir.',
+    'O Fatia usa a câmera para fotografar refeições e rótulos e para ler códigos de barras. A ' +
+    'foto vai para a IA reconhecer os alimentos e só fica guardada se você permitir.',
 } as const;
 
 /** Um item da revisão: o que a IA viu, com o peso que a pessoa ajusta e a marca de "comi". */

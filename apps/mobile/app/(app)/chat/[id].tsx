@@ -3,8 +3,10 @@ import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Brain, List, SquarePen } from 'lucide-react-native';
+import { List, Settings2, SquarePen } from 'lucide-react-native';
 import {
+  AI_STATES_COPY,
+  quotaResetLabel,
   FATIA_AGENT_NAME,
   getChatAvailability,
   getChatQuota,
@@ -13,7 +15,7 @@ import {
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import { ErrorState, LoadingState, cn } from '@/components/ui';
+import { Button, ErrorState, LoadingState, cn } from '@/components/ui';
 import {
   AssistantBlock,
   PlanCard,
@@ -78,6 +80,7 @@ export default function ConversationScreen() {
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
   const ultimaPergunta = [...thread.messages].reverse().find((m) => m.role === 'user');
+  const continuar = () => void sessao.send({ text: 'Continue de onde parou.' });
 
   useEffect(() => {
     if (thread.messages.length)
@@ -98,11 +101,11 @@ export default function ConversationScreen() {
           <WebSearchSwitch />
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Memórias do assistente"
-            onPress={() => router.push('/chat/memories')}
+            accessibilityLabel="Config da IA"
+            onPress={() => router.push('/chat/settings')}
             className={TOP_BAR_ACTION}
           >
-            <Brain size={20} color={colors.primaryText} />
+            <Settings2 size={20} color={colors.primaryText} />
           </Pressable>
           <Pressable
             accessibilityRole="link"
@@ -196,6 +199,7 @@ export default function ConversationScreen() {
                   onExplain={(rowId, reasons) =>
                     void sessao.explainVote(rowId, reasons).catch(() => undefined)
                   }
+                  onContinue={continuar}
                 />
               )
             }
@@ -216,13 +220,25 @@ export default function ConversationScreen() {
                     onRetry={() => {
                       if (ultimaPergunta) void sessao.send({ text: ultimaPergunta.text });
                     }}
+                    onContinue={continuar}
                   />
                 ) : null}
-                {cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
+                {cota.data && !cota.data.allowed && !thread.error ? (
+                  // Prancha Al-M11, "Cota": a hora da volta e o registro manual a um toque.
+                  <View className="gap-2 rounded-xl border border-border bg-card p-4">
+                    <Text className="text-sm font-semibold text-foreground">
+                      {AI_STATES_COPY.quotaTitle}
+                    </Text>
+                    <Text className="text-sm text-muted-foreground">
+                      {quotaResetLabel(cota.data.resetsAt)} {AI_STATES_COPY.quotaManual}
+                    </Text>
+                    <Button size="sm" variant="outline" onPress={() => router.push('/nutrition')}>
+                      <Text className="text-sm text-foreground">{AI_STATES_COPY.quotaAction}</Text>
+                    </Button>
+                  </View>
+                ) : cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
                   <Text className="text-center text-xs text-muted-foreground">
-                    {cota.data.allowed
-                      ? `Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`
-                      : 'Você chegou ao limite de uso do assistente por hoje.'}
+                    {`Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`}
                   </Text>
                 ) : null}
               </View>
@@ -234,7 +250,10 @@ export default function ConversationScreen() {
             <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
             <Composer
               running={thread.running}
-              disabled={!aberta || loading}
+              disabled={!aberta || loading || cota.data?.allowed === false}
+              blockedPlaceholder={
+                cota.data?.allowed === false ? AI_STATES_COPY.quotaPlaceholder : undefined
+              }
               photosEnabled={disponibilidade.data?.photos ?? false}
               dictationEnabled={disponibilidade.data?.dictation ?? false}
               onSend={(text, photos) =>

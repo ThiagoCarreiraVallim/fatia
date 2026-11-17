@@ -35,9 +35,12 @@ export function Composer({
   onQueue,
   onDequeue,
   onStop,
+  blockedPlaceholder,
 }: {
   running: boolean;
   disabled: boolean;
+  /** O campo travado por um motivo que a pessoa precisa ler ("Volta amanhã", Al-M11). */
+  blockedPlaceholder?: string;
   photosEnabled: boolean;
   dictationEnabled: boolean;
   queue: QueuedChatMessage[];
@@ -215,9 +218,11 @@ export function Composer({
               ? 'Ouvindo… toque no quadrado para parar'
               : ditado.state === 'transcribing'
                 ? 'Transcrevendo…'
-                : disabled
-                  ? 'Abrindo a conversa…'
-                  : 'Escreva sua mensagem'
+                : blockedPlaceholder
+                  ? blockedPlaceholder
+                  : disabled
+                    ? 'Abrindo a conversa…'
+                    : 'Escreva sua mensagem'
           }
           placeholderTextColor={colors.mutedForeground}
           className="max-h-32 min-h-[44px] flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-[15px] text-foreground"
