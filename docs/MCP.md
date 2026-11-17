@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **152 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **153 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 152 tools): **137,2 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 153 tools): **138,6 k caracteres**
 hoje, dos quais **7.895 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (114,2 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (115,6 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -359,6 +359,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Dashboard**              | `get_today_summary`            | R        |
 |                            | `get_week_summary`             | R        |
 | **Engajamento**            | `get_streak`                   | R        |
+|                            | `get_consistency`              | R        |
 |                            | `list_achievements`            | R        |
 |                            | `refresh_achievements`         | W        |
 | **Grupos (B2B)**           | `list_my_groups`               | R        |
@@ -397,7 +398,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **152 tools**. Cada uma documentada abaixo.
+Total: **153 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1907,9 +1908,11 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 
 Recorde pessoal de **todos** os exercícios já treinados, num só retorno. Use para "quais são meus PRs?" em vez de chamar `get_personal_record` N vezes.
 
-Força: maior carga, reps na carga máxima e 1RM estimado. Cardio: maior distância e a duração dessa sessão. Cada entrada traz a data do recorde, a última vez treinado e o total de séries. Ordenado do recorde mais recente para o mais antigo.
+Força: maior carga, reps na carga máxima, 1RM estimado e `monthEvolution` — o 1RM estimado do começo e do fim dos últimos 30 dias, em % (`{ startE1RM, endE1RM, percent }`, ou `null` com menos de duas sessões no período). Cardio: maior distância e a duração dessa sessão. Cada entrada traz a data do recorde, a última vez treinado e o total de séries. Ordenado do recorde mais recente para o mais antigo.
 
 **Input:** `{}`
+
+**Output (#382):** `{ records: PersonalRecordEntry[]; highlight: PersonalRecordEntry | null }` — `highlight` é a "maior evolução do mês" (a maior % positiva), o mesmo do `GET /workout/records`.
 
 ### `get_load_prescription`
 
@@ -2420,10 +2423,14 @@ Metas dinâmicas definidas pelo usuário, distintas de `get_nutrition_goals`/`se
   startValue?: number;          // derivado do estado atual quando o kind tem fonte
   targetValue: number;
   unit: string;                 // "kg", "%", "treinos/semana", "passos"
-  deadline?: string;            // ISO datetime
+  deadline?: string;            // ISO datetime, ou YYYY-MM-DD (fim do dia no fuso do usuário)
   lastReportedValue?: number;   // para kind=body_fat ou custom
 }
 ```
+
+**Prazo (#382):** só a data vale até o fim daquele dia no fuso do usuário (e não até a
+meia-noite UTC, que no Brasil é 21h da véspera). Prazo no passado é recusado com 400
+("O prazo não pode estar no passado."), aqui e no `update_goal`.
 
 ### `get_goal`
 
@@ -2440,6 +2447,11 @@ Metas do usuário com progresso calculado.
 ### `update_goal`
 
 Use `lastReportedValue` para reportar progresso manual em metas `body_fat` ou `custom`.
+
+**Novo prazo (#382):** a meta ativa cujo prazo passou é lida como `expired` (derivado na leitura,
+nada é gravado). Mandar um `deadline` no futuro numa meta vencida a volta para `active`; um
+`status` explícito vence essa regra. O `deadline` segue as regras do `create_goal`: só a data
+vale até o fim do dia, e no passado é recusado.
 
 **Input:**
 
@@ -2791,19 +2803,18 @@ Resumo da semana corrente.
 Sequência atual do usuário, com a regra de tolerância a falha (issue #147). Serve para o Claude
 dizer "você está no seu 12º dia" sem carregar o dashboard inteiro.
 
+**Dia ativo (#382):** ao menos uma área cumprida — refeição registrada, treino concluído, água na
+meta ou passos na meta. É a mesma regra da Constância (`get_consistency`), do Hoje e das conquistas
+de sequência: um cálculo só (`ConsistencyService`). Sem `UserGoals`, água e passos não têm meta e
+ficam fora do dia ativo.
+
 **Input:** _(nenhum)_
 
 **Output:**
 
 ```typescript
 {
-  // Dia ativo = pelo menos uma refeição registrada OU uma sessão concluída OU a meta de
-  // passos batida. É o número grande da tela.
-  activeDays: StreakResult;
-  nutritionDays: StreakResult;
-  workoutWeeks: StreakResult; // em SEMANAS, não em dias
-  stepsDays: StreakResult;
-  stepsTargetSet: boolean; // false = sem `UserGoals`; passos ficam fora do dia ativo
+  activeDays: StreakResult; // o número grande da tela
 }
 
 type StreakResult = {
@@ -2811,19 +2822,52 @@ type StreakResult = {
   faltasUsadas: number;
   faltasPermitidas: number;
   periodoCorrenteEmAberto: boolean; // hoje ainda sem registro, mas o dia não acabou
-  janelaEsgotada: boolean; // encostou no teto varrido (365 dias / 53 semanas)
+  janelaEsgotada: boolean; // encostou no teto varrido (365 dias)
 };
 ```
 
-**Tolerância:** a sequência começa com uma falta liberada e ganha mais uma a cada 7 períodos
+**Tolerância:** a sequência começa com uma falta liberada e ganha mais uma a cada 7 dias
 ativos, saturando em duas. Ela quebra na **segunda falta consecutiva** ou quando o orçamento
 acaba. Um dia perdido não zera meses de trabalho — streak que pune desproporcionalmente faz o
 usuário desistir de vez em vez de voltar.
 
+### `get_consistency`
+
+Constância do período (prancha Al-G12, #382): a grade de dias com as áreas cumpridas, os dias
+ativos, a sequência atual, o recorde do período e os dias na meta por área. Calculada na leitura,
+sem tabela. Nada aqui cobra o dia vazio.
+
+**Input:** `{ range?: "month" | "quarter" | "year" }` — 30, 90 ou 365 dias terminando hoje
+(padrão `month`).
+
+**Output:**
+
+```typescript
+{
+  range: 'month' | 'quarter' | 'year';
+  from: string; // YYYY-MM-DD, fuso do usuário
+  to: string; // hoje
+  days: Array<{
+    date: string;
+    meal: boolean;
+    workout: boolean;
+    water: boolean;
+    steps: boolean;
+    count: number;
+  }>;
+  activeDays: number; // dias com ao menos uma área
+  totalDays: number;
+  streak: StreakResult; // a mesma de `get_streak`
+  record: number; // maior sequência que termina no período (contada inteira)
+  byArea: Record<'meal' | 'workout' | 'water' | 'steps', { days: number; of: number | null }>;
+  // `of` do treino = semanas cheias × meta semanal; null quando a área não tem meta
+}
+```
+
 ### `list_achievements`
 
-Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
-saber o que sugerir como próximo passo.
+Catálogo de conquistas, fechado em **dez** (#382). Devolve as dez chaves sempre, desbloqueadas ou
+não, para o Claude saber o que sugerir como próximo passo.
 
 **Input:** _(nenhum)_
 
@@ -2832,12 +2876,14 @@ saber o que sugerir como próximo passo.
 ```typescript
 Array<{
   key: string; // first_meal | first_workout | plan_created | first_pr
-  // | first_full_week | streak_7 | streak_30
-  // | challenge_finished | challenge_podium
+  // | streak_7 | streak_30 | first_full_week | workouts_100
+  // | challenge_finished | challenge_podium   (a ordem da prancha Al-G11)
   title: string;
   description: string;
+  condition: string; // o que falta, quando bloqueada ("Conclua 100 treinos")
   unlockedAt: string | null; // ISO da data do EVENTO, não a de quando o app percebeu
-  context: unknown; // { weightKg, exerciseName } em first_pr, por exemplo
+  context: unknown; // { weightKg, exerciseName } em first_pr, { planName } em first_workout...
+  progress: { current: number; target: number } | null; // bloqueadas de contagem (sequência, 100 treinos)
 }>;
 ```
 

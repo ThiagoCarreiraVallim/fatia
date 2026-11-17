@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  clockTime,
   dayLabel,
   progressApi,
   undoMessage,
+  stepSourceBadge,
   stepsRestoreInput,
   type StepLog,
 } from '@fatia/api-client';
@@ -23,7 +25,8 @@ import { dayMonth, formatInteger } from '@/components/charts';
 import { useToast } from '@/components/ui/toast';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { SeletorDeDia } from './seletor-de-dia';
-import { SheetField } from './sheet-field';
+import { ValueStepper } from './value-stepper';
+import { Text } from '@/components/ui/text';
 import { parseAmount } from './parse';
 
 const HISTORY_DAYS = 30;
@@ -36,11 +39,17 @@ export function LogStepsDrawer({
   open,
   onClose,
   date,
+  embedded = false,
+  switcher,
 }: {
   open: boolean;
   onClose: () => void;
   /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
+  /** Só o miolo, sem a gaveta: a folha Peso/Passos (Al-G7) é quem abre e fecha. */
+  embedded?: boolean;
+  /** O segmentado Peso · Passos da folha, no topo. */
+  switcher?: ReactNode;
 }) {
   const hoje = hojeIso();
   const [dia, setDia] = useState(date ?? hoje);
@@ -61,7 +70,7 @@ export function LogStepsDrawer({
   const logs = useQuery({
     queryKey: ['step-logs', from],
     queryFn: () => progressApi.listSteps({ from }),
-    enabled: open,
+    enabled: open || embedded,
   });
 
   function invalidate() {
@@ -131,9 +140,100 @@ export function LogStepsDrawer({
     id: log.id,
     title: `${formatInteger(log.steps)} passos`,
     subtitle: dayMonth(log.date),
+    time: clockTime(log.loggedAt),
+    badge: stepSourceBadge(log.source),
+    readOnly: !stepSourceBadge(log.source).manual,
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
+
+  const content = (
+    <>
+      {switcher}
+
+      {/* Na folha Peso/Passos (Al-G7) o título não aparece: o segmentado já diz o que é. */}
+      {embedded && !editing ? null : (
+        <DrawerHeader className="px-0">
+          <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
+          <DrawerDescription>
+            {editing ? `Corrigindo o registro de ${dayMonth(editing.date)}.` : 'Passos do dia.'}
+          </DrawerDescription>
+        </DrawerHeader>
+      )}
+
+      <View className="gap-4 py-3">
+        {editing ? null : (
+          <SeletorDeDia
+            dia={dia}
+            hoje={hoje}
+            onChange={setDia}
+            variant={embedded ? 'nav' : 'field'}
+          />
+        )}
+        <ValueStepper
+          label="Passos"
+          value={steps}
+          onChange={setSteps}
+          step={500}
+          decimals={0}
+          base={logs.data?.logs[0]?.steps ?? null}
+          unit="passos"
+          placeholder="0"
+        />
+        {error ? <FormMessage>{error}</FormMessage> : null}
+        <Text className="text-center text-[13px] text-muted-foreground">
+          Vários registros no dia: vale o maior. Os do celular chegam sozinhos.
+        </Text>
+
+        {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
+
+        <LogHistory
+          entries={entries}
+          isLoading={logs.isLoading}
+          error={logs.error}
+          onRetry={() => logs.refetch()}
+          editingId={editing?.id ?? null}
+          onEdit={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (!log) return;
+            setEditing(log);
+            setSteps(String(log.steps));
+            setFormError(null);
+          }}
+          onDelete={(entry) => {
+            const log = logs.data?.logs.find((item) => item.id === entry.id);
+            if (log) remove.mutate(log);
+          }}
+          pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
+          emptyLabel="Nenhum registro de passos nos últimos 30 dias."
+        />
+      </View>
+
+      <DrawerFooter className="px-0 pb-8">
+        <Button onPress={submit} loading={save.isPending}>
+          {editing
+            ? 'Salvar alteração'
+            : dia === hoje
+              ? 'Salvar'
+              : `Salvar em ${dayLabel(dia, hoje)}`}
+        </Button>
+        {editing ? (
+          <Button
+            variant="outline"
+            onPress={() => {
+              setEditing(null);
+              setSteps('');
+              setFormError(null);
+            }}
+          >
+            Cancelar edição
+          </Button>
+        ) : null}
+      </DrawerFooter>
+    </>
+  );
+
+  if (embedded) return content;
 
   return (
     <Drawer
@@ -145,74 +245,7 @@ export function LogStepsDrawer({
         }
       }}
     >
-      <DrawerContent className="px-4">
-        <DrawerHeader className="px-0">
-          <DrawerTitle>{editing ? 'Editar passos' : 'Logar passos'}</DrawerTitle>
-          <DrawerDescription>
-            {editing
-              ? `Corrigindo o registro de ${dayMonth(editing.date)}.`
-              : 'Múltiplos logs no mesmo dia são OK — o servidor pega o maior valor.'}
-          </DrawerDescription>
-        </DrawerHeader>
-
-        <View className="gap-4 py-3">
-          {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
-          <SheetField
-            label="Passos"
-            value={steps}
-            onChangeText={setSteps}
-            placeholder="ex: 9500"
-            keyboardType="number-pad"
-            autoFocus
-            error={error}
-          />
-
-          {remove.error ? <FormMessage>{(remove.error as Error).message}</FormMessage> : null}
-
-          <LogHistory
-            entries={entries}
-            isLoading={logs.isLoading}
-            error={logs.error}
-            onRetry={() => logs.refetch()}
-            editingId={editing?.id ?? null}
-            onEdit={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (!log) return;
-              setEditing(log);
-              setSteps(String(log.steps));
-              setFormError(null);
-            }}
-            onDelete={(entry) => {
-              const log = logs.data?.logs.find((item) => item.id === entry.id);
-              if (log) remove.mutate(log);
-            }}
-            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
-            emptyLabel="Nenhum registro de passos nos últimos 30 dias."
-          />
-        </View>
-
-        <DrawerFooter className="px-0">
-          <Button onPress={submit} loading={save.isPending}>
-            {editing
-              ? 'Salvar alteração'
-              : dia === hoje
-                ? 'Salvar'
-                : `Salvar em ${dayLabel(dia, hoje)}`}
-          </Button>
-          {editing ? (
-            <Button
-              variant="outline"
-              onPress={() => {
-                setEditing(null);
-                setSteps('');
-                setFormError(null);
-              }}
-            >
-              Cancelar edição
-            </Button>
-          ) : null}
-        </DrawerFooter>
-      </DrawerContent>
+      <DrawerContent className="px-4">{content}</DrawerContent>
     </Drawer>
   );
 }

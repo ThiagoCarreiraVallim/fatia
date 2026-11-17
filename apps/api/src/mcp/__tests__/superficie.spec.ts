@@ -57,9 +57,12 @@ import {
  * `list_workout_sessions` e o treino livre na descrição de `start_workout_session`: muda o
  * braço A. A revisão da #381 disse na descrição de `save_session_as_plan` que ela é idempotente
  * por sessão e recusa a sessão aberta: muda o braço A.
+ * A #382 acrescentou `get_consistency` (só leitura) e mudou as descrições de `get_streak`,
+ * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
+ * braço A. As duas chegaram juntas no merge da main na #382.
  */
 
-const SHA_ENTIDADE = 'a35568d161e2824355a4e0455eed3e11bc65f53b5e6e8e71aa234da1edb88896';
+const SHA_ENTIDADE = '2af00531bf1bc319f4a7045c95b7ffa2c214df33d82a2f882fbb2de027b876c7';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

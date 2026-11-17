@@ -42,13 +42,7 @@ export function todaySummary(partial: Partial<TodaySummary> = {}): TodaySummary 
     },
     steps: { today: 4231, target: 8000, goalReached: false, logged: true },
     water: { todayMl: 800, targetMl: 2500, goalReached: false, logged: true },
-    streak: {
-      activeDays: streak(12),
-      nutritionDays: streak(3),
-      workoutWeeks: streak(1),
-      stepsDays: streak(0),
-      stepsTargetSet: true,
-    },
+    streak: { activeDays: streak(12) },
     achievements: [],
     dailyGoals: {
       met: 2,

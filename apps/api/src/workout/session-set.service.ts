@@ -9,6 +9,7 @@ import { PrismaService } from '../common/prisma.service';
 import { rpeToFeeling } from './helpers/feeling';
 import { isCardioExercise } from './helpers/is-cardio';
 import { estimate1RM } from './helpers/estimate-1rm';
+import { monthEvolution, pickHighlight, type MonthEvolution } from './helpers/month-evolution';
 import { readableExercises } from './helpers/exercise-access';
 
 export interface PersonalRecordEntry {
@@ -27,6 +28,14 @@ export interface PersonalRecordEntry {
   achievedAt: string | null;
   lastPerformedAt: string | null;
   totalSets: number;
+  /** Força: o 1RM estimado do começo e do fim dos últimos 30 dias, em % (#382). */
+  monthEvolution: MonthEvolution | null;
+}
+
+export interface RecordsOverview {
+  records: PersonalRecordEntry[];
+  /** "Maior evolução do mês": o recorde de maior % positiva, ou `null`. */
+  highlight: PersonalRecordEntry | null;
 }
 
 interface CreateSetInput {
@@ -352,11 +361,12 @@ export class SessionSetService {
         durationSeconds: true,
         sessionId: true,
         exercise: { select: { id: true, name: true, muscleGroup: true } },
-        session: { select: { startedAt: true } },
+        session: { select: { startedAt: true, completedAt: true } },
       },
     });
 
     const byExercise = new Map<number, PersonalRecordEntry>();
+    const e1rmPoints = new Map<number, Array<{ sessionId: string; at: Date; e1rm: number }>>();
     // Cardio: distância e duração somadas por exercício e sessão.
     const cardioTotals = new Map<
       string,
@@ -380,6 +390,7 @@ export class SessionSetService {
           achievedAt: null,
           lastPerformedAt: null,
           totalSets: 0,
+          monthEvolution: null,
         };
         byExercise.set(ex.id, entry);
       }
@@ -413,8 +424,20 @@ export class SessionSetService {
         if (s.reps != null) {
           const e1rm = estimate1RM(s.weightKg, s.reps);
           if (entry.estimated1RM == null || e1rm > entry.estimated1RM) entry.estimated1RM = e1rm;
+          // Carga 0 é peso do corpo (#377): sem 1RM estimado que compare. A sessão ainda aberta
+          // fica fora: a evolução do mês compara treinos concluídos, não a série de agora.
+          if (s.weightKg > 0 && s.session.completedAt != null) {
+            const points = e1rmPoints.get(ex.id) ?? [];
+            points.push({ sessionId: s.sessionId, at: s.session.startedAt, e1rm });
+            e1rmPoints.set(ex.id, points);
+          }
         }
       }
+    }
+
+    const now = new Date();
+    for (const [exerciseId, points] of e1rmPoints) {
+      byExercise.get(exerciseId)!.monthEvolution = monthEvolution(points, now);
     }
 
     for (const total of cardioTotals.values()) {
@@ -430,6 +453,12 @@ export class SessionSetService {
     return [...byExercise.values()].sort((a, b) =>
       (b.lastPerformedAt ?? '').localeCompare(a.lastPerformedAt ?? ''),
     );
+  }
+
+  /** `GET /workout/records` e `list_personal_records`: os recordes e o destaque do mês (Al-G5). */
+  async recordsOverview(userId: string): Promise<RecordsOverview> {
+    const records = await this.listPersonalRecords(userId);
+    return { records, highlight: pickHighlight(records) };
   }
 
   /**

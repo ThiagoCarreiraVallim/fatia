@@ -65,7 +65,7 @@ export function ExercisePickerDrawer({
       }}
       // Lista longa precisa de altura fixa: com dimensionamento dinâmico o sheet
       // abriria ocupando a tela inteira e ainda assim sem rolagem previsível.
-      snapPoints={['80%']}
+      snapPoints={['85%']}
     >
       <DrawerContent className="px-4">
         <DrawerHeader className="px-0">

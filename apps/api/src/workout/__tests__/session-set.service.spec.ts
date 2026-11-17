@@ -298,6 +298,68 @@ describe('SessionSetService', () => {
     });
   });
 
+  describe('recordsOverview (Al-G5, #382)', () => {
+    const agora = new Date('2026-11-16T12:00:00Z');
+    const serie = (
+      id: string,
+      startedAt: Date,
+      weightKg: number,
+      reps: number,
+      ex = strengthExercise,
+      completedAt: Date | null = startedAt,
+    ) => ({
+      exerciseId: ex.id,
+      weightKg,
+      reps,
+      distanceMeters: null,
+      durationSeconds: null,
+      sessionId: id,
+      exercise: ex,
+      session: { startedAt, completedAt },
+    });
+    const diasAtras = (n: number) => new Date(agora.getTime() - n * 86_400_000);
+
+    beforeEach(() => jest.useFakeTimers().setSystemTime(agora));
+    afterEach(() => jest.useRealTimers());
+
+    it('cada recorde traz a evolução do 1RM estimado dos últimos 30 dias, e o destaque é a maior', async () => {
+      const outro = { ...strengthExercise, id: 99, name: 'Rosca direta', muscleGroup: 'braço' };
+      prisma.sessionSet.findMany.mockResolvedValue([
+        serie('s1', diasAtras(20), 60, 10),
+        serie('s2', diasAtras(2), 70, 10),
+        serie('s1', diasAtras(20), 20, 10, outro),
+        serie('s2', diasAtras(2), 21, 10, outro),
+      ]);
+
+      const r = await service.recordsOverview(userId);
+
+      const supino = r.records.find((x) => x.exerciseId === strengthExercise.id)!;
+      expect(supino.monthEvolution).toEqual({ startE1RM: 80, endE1RM: 93.33, percent: 16.7 });
+      expect(r.highlight?.exerciseId).toBe(strengthExercise.id);
+    });
+
+    it('a sessão ainda aberta não entra na evolução: só treino concluído', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        serie('s1', diasAtras(20), 60, 10),
+        serie('s2', diasAtras(0), 90, 10, strengthExercise, null),
+      ]);
+
+      const r = await service.recordsOverview(userId);
+
+      expect(r.records[0].monthEvolution).toBeNull();
+      expect(r.highlight).toBeNull();
+    });
+
+    it('sem duas sessões no período, não há destaque', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([serie('s1', diasAtras(2), 60, 10)]);
+
+      const r = await service.recordsOverview(userId);
+
+      expect(r.records[0].monthEvolution).toBeNull();
+      expect(r.highlight).toBeNull();
+    });
+  });
+
   describe('listPersonalRecords', () => {
     const d1 = new Date('2026-01-10T10:00:00Z');
     const d2 = new Date('2026-02-20T10:00:00Z');

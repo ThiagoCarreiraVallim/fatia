@@ -19,10 +19,10 @@ export class ListPersonalRecordsTool implements McpToolDef {
 
   readonly hostedInference = false;
   readonly description =
-    'Lista o recorde pessoal de cada exercício que o usuário já treinou. Força: maior carga (kg), reps na carga máxima e 1RM estimado. Cardio: maior distância e a duração dessa sessão. Inclui data do recorde, última vez treinado e total de séries. Ordenado do mais recente para o mais antigo.';
+    'Lista o recorde pessoal de cada exercício que o usuário já treinou, em `records`. Força: maior carga (kg), reps na carga máxima, 1RM estimado e `monthEvolution` (1RM estimado do começo e do fim dos últimos 30 dias, em %). Cardio: maior distância e a duração dessa sessão. Inclui data do recorde, última vez treinado e total de séries, do mais recente para o mais antigo. `highlight` é a maior evolução do mês (ou null).';
   readonly inputSchema = {} as const;
 
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
-    return this.sets.listPersonalRecords(userId);
+    return this.sets.recordsOverview(userId);
   }
 }

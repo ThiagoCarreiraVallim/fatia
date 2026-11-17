@@ -49,6 +49,7 @@ export type MenuKey =
   | 'progress'
   | 'personal-goals'
   | 'records'
+  | 'achievements'
   | 'nutrition-plan'
   | 'daily-goals'
   | 'nutrients'
@@ -110,7 +111,7 @@ const link = (
 /**
  * As seções de Você, na ordem da prancha `Al-V1-Voce` (ADR 040, item 3). Só
  * entram as linhas cujo destino existe: Sua semana e cards, Avaliações,
- * Conquistas, Configurações da IA, Hábitos, Lembretes, a saúde do celular e
+ * Configurações da IA, Hábitos, Lembretes, a saúde do celular e
  * Objetivo e rotina chegam com as issues donas das telas (#382, #383, #385,
  * #389, #390, #371). Aparência fica em Conta pela ADR 041 e pela revisão da
  * ADR 040, mesmo sem estar desenhada na prancha.
@@ -122,6 +123,7 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
       link('progress', 'Progresso', 'trend', '/progress'),
       link('personal-goals', 'Metas pessoais', 'target', '/goals'),
       link('records', 'Recordes', 'trophy', '/progress/records'),
+      link('achievements', 'Conquistas', 'medal', '/progress/achievements'),
     ],
   },
   {
@@ -324,6 +326,11 @@ interface RouteDef {
   parent: string | null;
   /** Fecha no X em vez da seta (criar algo em tela cheia, ex.: Al-T19). */
   dismiss?: boolean;
+  /**
+   * A prancha não mostra título na barra (Al-G1: só o voltar e o período). O título segue
+   * para o leitor de tela e para o rótulo do "voltar" das filhas.
+   */
+  untitled?: boolean;
 }
 
 export const HOME_TITLE = 'Hoje';
@@ -367,9 +374,12 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/you/news', title: 'Novidades', parent: '/you' },
   { pattern: '/you/help', title: 'Ajuda e tutoriais', parent: '/you' },
   { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
-  { pattern: '/progress', title: 'Progresso', parent: '/you' },
+  { pattern: '/progress', title: 'Progresso', parent: '/you', untitled: true },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
-  { pattern: '/goals', title: 'Metas pessoais', parent: '/you' },
+  { pattern: '/progress/charts', title: 'Gráficos', parent: '/progress' },
+  { pattern: '/progress/achievements', title: 'Conquistas', parent: '/progress' },
+  { pattern: '/progress/consistency', title: 'Constância', parent: '/progress' },
+  { pattern: '/goals', title: 'Metas', parent: '/you' },
   // O perfil virou Você (#387): `/profile` só redireciona para lá.
   { pattern: '/profile', title: 'Perfil', parent: '/you' },
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/you' },
@@ -436,6 +446,8 @@ export interface RouteInfo {
   parentTitle: string | null;
   /** O botão da esquerda é um X ("Fechar"), não a seta. Só aparece quando é. */
   dismiss?: true;
+  /** O título não aparece na barra (só para leitor de tela). Só aparece quando é. */
+  untitled?: true;
 }
 
 function segments(path: string): string[] {
@@ -505,5 +517,11 @@ export function routeInfo(pathname: string): RouteInfo {
     }
   }
   const parentTitle = parent === null ? null : (find(segments(parent))?.title ?? HOME_TITLE);
-  return { title, parent, parentTitle, ...(def?.dismiss ? { dismiss: true as const } : {}) };
+  return {
+    title,
+    parent,
+    parentTitle,
+    ...(def?.dismiss ? { dismiss: true as const } : {}),
+    ...(def?.untitled ? { untitled: true as const } : {}),
+  };
 }

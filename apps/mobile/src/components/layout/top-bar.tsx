@@ -73,14 +73,24 @@ export function TopBar({
             )}
           </Pressable>
         ) : null}
-        <Text
-          accessibilityRole="header"
-          numberOfLines={1}
-          className="flex-1 font-display-semibold text-[17px] text-foreground"
-          style={parent !== null ? { textAlign: 'center' } : undefined}
-        >
-          {title || info.title}
-        </Text>
+        {!info.untitled || title ? (
+          <Text
+            accessibilityRole="header"
+            numberOfLines={1}
+            className="flex-1 font-display-semibold text-[17px] text-foreground"
+            style={parent !== null ? { textAlign: 'center' } : undefined}
+          >
+            {title || info.title}
+          </Text>
+        ) : (
+          // Sem título na prancha (Al-G1): o nome fica só para o leitor de tela.
+          <View
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={info.title}
+            className="flex-1"
+          />
+        )}
         {actions ? (
           <View className="flex-row items-center gap-2">{actions}</View>
         ) : parent !== null ? (

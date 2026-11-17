@@ -61,7 +61,7 @@ import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui/utils';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { hojeIso } from '@/components/nutrition/helpers';
-import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
+import { BodyLogSheet, LogWaterDrawer } from '@/components/progress';
 import { inAppPurchaseAvailable } from '@/billing/purchases';
 import { useChatSession } from '@/chat/chat-provider';
 import { useDictation } from '@/chat/dictation';
@@ -175,8 +175,12 @@ export function AiMenuProvider({ children, nav }: { children: ReactNode; nav: Re
           />
         ) : null}
         <LogWaterDrawer open={target === 'water'} onClose={closeTarget} />
-        <LogWeightDrawer open={target === 'weight'} onClose={closeTarget} />
-        <LogStepsDrawer open={target === 'steps'} onClose={closeTarget} />
+        {/* Peso e passos são a mesma folha (Al-G7), com o segmentado no topo. */}
+        <BodyLogSheet
+          open={target === 'weight' || target === 'steps'}
+          initialKind={target === 'steps' ? 'steps' : 'weight'}
+          onClose={closeTarget}
+        />
       </DrawerLayer>
     </AiMenuContext.Provider>
   );

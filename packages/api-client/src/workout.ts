@@ -650,7 +650,9 @@ export const workoutApi = {
         }
       | null
     >(`/api/workout/exercises/${exerciseId}/pr`),
-  listPersonalRecords: () => apiFetch<PersonalRecordEntry[]>('/api/workout/records'),
+  recordsOverview: () => apiFetch<RecordsOverview>('/api/workout/records'),
+  listPersonalRecords: () =>
+    apiFetch<RecordsOverview>('/api/workout/records').then((r) => r.records),
 
   // -------- Periodização em blocos (#145) --------
 
@@ -758,4 +760,18 @@ export interface PersonalRecordEntry {
   achievedAt: string | null;
   lastPerformedAt: string | null;
   totalSets: number;
+  /** Força: 1RM estimado do começo e do fim dos últimos 30 dias, em % (#382). */
+  monthEvolution: MonthEvolution | null;
+}
+
+export interface MonthEvolution {
+  startE1RM: number;
+  endE1RM: number;
+  percent: number;
+}
+
+/** `GET /workout/records` (#382): os recordes e a "maior evolução do mês". */
+export interface RecordsOverview {
+  records: PersonalRecordEntry[];
+  highlight: PersonalRecordEntry | null;
 }

@@ -26,11 +26,9 @@ vi.mock('@/components/nutrition/food-search-drawer', () => ({
 vi.mock('@/components/progress/log-water-drawer', () => ({
   LogWaterDrawer: ({ open }: { open: boolean }) => (open ? <div data-testid="agua" /> : null),
 }));
-vi.mock('@/components/progress/log-weight-drawer', () => ({
-  LogWeightDrawer: ({ open }: { open: boolean }) => (open ? <div data-testid="peso" /> : null),
-}));
-vi.mock('@/components/progress/log-steps-drawer', () => ({
-  LogStepsDrawer: ({ open }: { open: boolean }) => (open ? <div data-testid="passos" /> : null),
+vi.mock('@/components/progress/body-log-sheet', () => ({
+  BodyLogSheet: ({ open, initialKind }: { open: boolean; initialKind: string }) =>
+    open ? <div data-testid={initialKind === 'steps' ? 'passos' : 'peso'} /> : null,
 }));
 
 vi.mock('@fatia/api-client', async () => {

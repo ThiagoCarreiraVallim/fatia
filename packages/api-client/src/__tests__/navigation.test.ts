@@ -61,6 +61,7 @@ describe('navegação', () => {
       '/progress',
       '/goals',
       '/progress/records',
+      '/progress/achievements',
       '/nutrition/goals',
       '/nutrition/nutrient-targets',
       '/nutrition/foods',
@@ -244,7 +245,7 @@ describe('navegação', () => {
       ['/you', 'Você', null, null],
       ['/profile', 'Perfil', '/you', 'Você'],
       ['/progress', 'Progresso', '/you', 'Você'],
-      ['/goals', 'Metas pessoais', '/you', 'Você'],
+      ['/goals', 'Metas', '/you', 'Você'],
       ['/profile/notifications', 'Notificações', '/you', 'Você'],
       ['/nutrition/foods', 'Meus alimentos', '/nutrition', 'Nutrição'],
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
@@ -259,6 +260,9 @@ describe('navegação', () => {
       ['/workout/history/s1', 'Treino', '/workout/history', 'Histórico'],
       ['/workout/free', 'Treino atual', '/workout', 'Treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
+      ['/progress/charts', 'Gráficos', '/progress', 'Progresso'],
+      ['/progress/achievements', 'Conquistas', '/progress', 'Progresso'],
+      ['/progress/consistency', 'Constância', '/progress', 'Progresso'],
       ['/plan', 'Meu plano', '/you', 'Você'],
       ['/chat/c1', 'Chat', '/', 'Hoje'],
       ['/community/g1', 'Comunidade', '/community', 'Comunidade'],
@@ -274,6 +278,11 @@ describe('navegação', () => {
       ['/org/g1/moderation', 'Moderação', '/org/g1', 'Painel'],
     ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
       expect(routeInfo(path)).toMatchObject({ title, parent, parentTitle });
+    });
+
+    it('Progresso (Al-G1) não tem título na barra: só o voltar e o período', () => {
+      expect(routeInfo('/progress')).toMatchObject({ title: 'Progresso', untitled: true });
+      expect(routeInfo('/progress/records').untitled).toBeUndefined();
     });
 
     it('rota fora do mapa volta ao ancestral conhecido mais próximo', () => {

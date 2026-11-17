@@ -3,7 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
 import { WeightLogService } from './weight-log.service';
 import { WaterLogService } from './water-log.service';
-import { StreakService } from './streak.service';
+import { ConsistencyService } from './consistency.service';
 import { AchievementService, type AchievementEntry } from './achievement.service';
 import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
@@ -29,7 +29,7 @@ export class DashboardService {
     private readonly stepLogs: StepLogService,
     private readonly weightLogs: WeightLogService,
     private readonly waterLogs: WaterLogService,
-    private readonly streaks: StreakService,
+    private readonly consistency: ConsistencyService,
     private readonly achievements: AchievementService,
     private readonly trainingBlocks: TrainingBlockService,
   ) {}
@@ -101,7 +101,7 @@ export class DashboardService {
       this.weightLogs.getLatest(ctx.userId),
       this.stepLogs.getStepsForDate(date, ctx.userId),
       this.waterLogs.getForDate(date, ctx.userId),
-      this.streaks.compute(ctx),
+      this.consistency.streak(ctx),
       // Quem preenche `plannedToday` é o bloco de periodização (#145): sem bloco
       // ativo — ou com um bloco já vencido, que o `getActive` devolve como `null` —
       // o campo continua nulo e o card volta a dizer "treino livre".

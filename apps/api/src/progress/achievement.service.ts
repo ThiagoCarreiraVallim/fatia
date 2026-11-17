@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { StreakService } from './streak.service';
+import { ConsistencyService } from './consistency.service';
 import { weekStartInTz } from './helpers/date-tz';
 import {
   ACHIEVEMENT_CATALOG,
+  type AchievementProgress,
   type AchievementSnapshot,
   type AchievementUnlock,
 } from './achievement-catalog';
@@ -18,15 +19,24 @@ export interface AchievementEntry {
   key: string;
   title: string;
   description: string;
+  /** O que falta, quando bloqueada ("Conclua 100 treinos"). */
+  condition: string;
   /** `null` = ainda bloqueada. O catálogo inteiro é devolvido sempre, para a tela mostrar o alvo. */
   unlockedAt: string | null;
   context: Prisma.JsonValue | null;
+  /**
+   * Só nas bloqueadas de contagem (sequência, 100 treinos) e só quando pedido: quanto já tem.
+   * O Hoje não pede — ali a lista é só o fato, e o progresso custaria a sequência inteira de novo.
+   */
+  progress: AchievementProgress | null;
 }
 
+type Unlocked = Map<string, { unlockedAt: Date; context: Prisma.JsonValue | null }>;
+
 /** Memoiza a promessa, não o valor: duas conquistas que precisam do mesmo dado consultam uma vez. */
-function umaVez<T>(fn: () => Promise<T>): () => Promise<T> {
-  let pendente: Promise<T> | null = null;
-  return () => (pendente ??= fn());
+function once<T>(fn: () => Promise<T>): () => Promise<T> {
+  let pending: Promise<T> | null = null;
+  return () => (pending ??= fn());
 }
 
 /**
@@ -53,16 +63,21 @@ function umaVez<T>(fn: () => Promise<T>): () => Promise<T> {
 export class AchievementService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly streaks: StreakService,
+    private readonly consistency: ConsistencyService,
   ) {}
 
-  /** Só lê. Usada pelo endpoint e pela tool — não desbloqueia nada. */
-  async list(ctx: UserCtx): Promise<AchievementEntry[]> {
-    const desbloqueadas = await this.prisma.userAchievement.findMany({
+  /**
+   * Só lê — não desbloqueia nada. `withProgress` traz, nas bloqueadas de contagem, quanto já tem
+   * (a tela de Conquistas e a tool); o Hoje lê sem.
+   */
+  async list(ctx: UserCtx, opts: { withProgress?: boolean } = {}): Promise<AchievementEntry[]> {
+    const unlocked = await this.prisma.userAchievement.findMany({
       where: { userId: ctx.userId },
       select: { key: true, unlockedAt: true, context: true },
     });
-    return this.montar(new Map(desbloqueadas.map((a) => [a.key, a])));
+    const byKey: Unlocked = new Map(unlocked.map((a) => [a.key, a]));
+    if (!opts.withProgress) return this.assemble(byKey);
+    return this.assemble(byKey, await this.lockedProgress(byKey, this.snapshot(ctx)));
   }
 
   async evaluate(ctx: UserCtx): Promise<AchievementEntry[]> {
@@ -70,13 +85,13 @@ export class AchievementService {
       where: { userId: ctx.userId },
       select: { key: true, unlockedAt: true, context: true },
     });
-    const porChave = new Map(desbloqueadas.map((a) => [a.key, a]));
+    const porChave: Unlocked = new Map(desbloqueadas.map((a) => [a.key, a]));
 
     const pendentes = ACHIEVEMENT_CATALOG.filter((d) => !porChave.has(d.key));
-    if (pendentes.length === 0) return this.montar(porChave);
+    if (pendentes.length === 0) return this.assemble(porChave);
 
     const snapshot = this.snapshot(ctx);
-    // Em paralelo: os critérios são independentes, e o `umaVez` faz duas conquistas que pedem o
+    // Em paralelo: os critérios são independentes, e o `once` faz duas conquistas que pedem o
     // mesmo dado compartilharem a MESMA promessa — então concorrência aqui não duplica consulta.
     // Sequencial, sete pendentes viravam sete idas ao banco enfileiradas na primeira avaliação.
     const avaliadas = await Promise.all(
@@ -85,7 +100,7 @@ export class AchievementService {
     const novas = avaliadas.filter(
       (r): r is { key: string; unlock: AchievementUnlock } => r.unlock !== null,
     );
-    if (novas.length === 0) return this.montar(porChave);
+    if (novas.length === 0) return this.assemble(porChave);
 
     await this.prisma.userAchievement.createMany({
       data: novas.map(({ key, unlock }) => ({
@@ -99,25 +114,39 @@ export class AchievementService {
 
     for (const { key, unlock } of novas) {
       porChave.set(key, {
-        key,
         unlockedAt: unlock.unlockedAt,
         context: (unlock.context ?? null) as Prisma.JsonValue,
       });
     }
-    return this.montar(porChave);
+    return this.assemble(porChave);
   }
 
-  private montar(
-    porChave: Map<string, { unlockedAt: Date; context: Prisma.JsonValue | null }>,
+  private async lockedProgress(
+    byKey: Unlocked,
+    snapshot: AchievementSnapshot,
+  ): Promise<Map<string, AchievementProgress>> {
+    const entries = await Promise.all(
+      ACHIEVEMENT_CATALOG.filter((def) => def.progress && !byKey.has(def.key)).map(
+        async (def) => [def.key, await def.progress!(snapshot)] as const,
+      ),
+    );
+    return new Map(entries);
+  }
+
+  private assemble(
+    byKey: Unlocked,
+    progress: Map<string, AchievementProgress> = new Map(),
   ): AchievementEntry[] {
     return ACHIEVEMENT_CATALOG.map((def) => {
-      const linha = porChave.get(def.key);
+      const row = byKey.get(def.key);
       return {
         key: def.key,
         title: def.title,
         description: def.description,
-        unlockedAt: linha ? linha.unlockedAt.toISOString() : null,
-        context: linha?.context ?? null,
+        condition: def.condition,
+        unlockedAt: row ? row.unlockedAt.toISOString() : null,
+        context: row?.context ?? null,
+        progress: progress.get(def.key) ?? null,
       };
     });
   }
@@ -126,34 +155,51 @@ export class AchievementService {
     const { userId, timezone } = ctx;
 
     return {
-      primeiraRefeicao: umaVez(async () => {
+      firstMeal: once(async () => {
         const meal = await this.prisma.meal.findFirst({
           where: { userId },
           orderBy: { eatenAt: 'asc' },
-          select: { eatenAt: true },
+          select: { eatenAt: true, mealType: true },
         });
-        return meal?.eatenAt ?? null;
+        return meal ? { at: meal.eatenAt, mealType: meal.mealType } : null;
       }),
 
-      primeiroTreino: umaVez(async () => {
+      firstWorkout: once(async () => {
         const session = await this.prisma.workoutSession.findFirst({
           where: { userId, completedAt: { not: null } },
           orderBy: { completedAt: 'asc' },
-          select: { completedAt: true },
+          select: { completedAt: true, plan: { select: { name: true } } },
         });
-        return session?.completedAt ?? null;
+        return session?.completedAt
+          ? { at: session.completedAt, planName: session.plan?.name ?? null }
+          : null;
       }),
 
-      primeiroPlano: umaVez(async () => {
+      firstPlan: once(async () => {
         const plan = await this.prisma.workoutPlan.findFirst({
           where: { userId },
           orderBy: { createdAt: 'asc' },
-          select: { createdAt: true },
+          select: { createdAt: true, name: true },
         });
-        return plan?.createdAt ?? null;
+        return plan ? { at: plan.createdAt, planName: plan.name } : null;
       }),
 
-      primeiroRecorde: umaVez(async () => {
+      // O N-ésimo pelo `skip`: uma linha só volta, por mais treinos que a pessoa tenha.
+      nthCompletedWorkout: async (n: number) => {
+        const session = await this.prisma.workoutSession.findFirst({
+          where: { userId, completedAt: { not: null } },
+          orderBy: { completedAt: 'asc' },
+          skip: n - 1,
+          select: { completedAt: true },
+        });
+        return session?.completedAt ?? null;
+      },
+
+      completedWorkoutCount: once(() =>
+        this.prisma.workoutSession.count({ where: { userId, completedAt: { not: null } } }),
+      ),
+
+      firstRecord: once(async () => {
         // Recorde é **superação**: a maior carga de um exercício ter vindo de uma sessão
         // posterior a alguma em que ele já havia sido treinado. Só ter carregado peso uma vez
         // não é recorde — seria a mesma coisa que `first_workout` com outro nome.
@@ -211,7 +257,7 @@ export class AchievementService {
         return { ...melhor, exerciseName: exercise?.name ?? '' };
       }),
 
-      primeiraSemanaCompleta: umaVez(async () => {
+      firstFullWeek: once(async () => {
         const metas = await this.prisma.userGoals.findUnique({
           where: { userId },
           select: { weeklyWorkouts: true },
@@ -241,16 +287,16 @@ export class AchievementService {
         return null;
       }),
 
-      diasAtivosSeguidos: umaVez(async () => {
+      activeDayStreak: once(async () => {
         // Preguiçoso como os demais: some do caminho assim que `streak_7` e `streak_30` estão
         // desbloqueadas, que é o estado estável de quem usa o app há um mês.
-        const resumo = await this.streaks.compute(ctx);
-        return resumo.activeDays.periodos;
+        const summary = await this.consistency.streak(ctx);
+        return summary.activeDays.periodos;
       }),
 
       // Desafios (Fase 8a): só o que já fechou conta, e só com pontuação — quem entrou e não
       // registrou nada não "concluiu". A data é a do fechamento, não a da avaliação.
-      primeiroDesafioConcluido: umaVez(async () => {
+      firstChallengeFinished: once(async () => {
         const p = await this.prisma.groupChallengeParticipant.findFirst({
           where: {
             membership: { userId },
@@ -266,7 +312,7 @@ export class AchievementService {
           : null;
       }),
 
-      primeiroPodio: umaVez(async () => {
+      firstPodium: once(async () => {
         const p = await this.prisma.groupChallengeParticipant.findFirst({
           where: {
             membership: { userId },

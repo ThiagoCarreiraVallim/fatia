@@ -24,7 +24,7 @@ import { headerButtonClass } from '@/components/layout/tab-header';
 import { ErrorState } from '@/components/ui/error-state';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
+import { BodyLogSheet } from '@/components/progress/body-log-sheet';
 import { ShareSheet } from '@/components/sharing/share-sheet';
 import type { ShareIdentity } from '@/components/sharing/share-card';
 import {
@@ -245,7 +245,11 @@ export default function HomePage() {
             targetMl={data.water.targetMl ?? 2500}
           />
           <WeightSheet open={sheet === 'weight'} onOpenChange={closeOn} />
-          <LogStepsDrawer open={sheet === 'steps'} onClose={() => setSheet(null)} />
+          <BodyLogSheet
+            open={sheet === 'steps'}
+            initialKind="steps"
+            onClose={() => setSheet(null)}
+          />
           <InboxSheet open={sheet === 'inbox'} onOpenChange={closeOn} />
           <ShareSheet
             open={sheet === 'share'}
