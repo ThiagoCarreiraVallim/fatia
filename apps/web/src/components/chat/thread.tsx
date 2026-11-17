@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CameraIcon,
   CheckIcon,
@@ -48,7 +49,8 @@ import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
 import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
-import { AceiteDoChat, useChatLiberado } from './aceite';
+import { ChatConsentSheet, useChatUnlocked } from './aceite';
+import { CHAVE_DOS_ACEITES } from './catalogo';
 import { PilulasDeResposta } from './pilulas';
 import {
   useConversaAberta,
@@ -340,6 +342,7 @@ function BotaoDeDitado({
   onGravando: (gravando: boolean) => void;
 }) {
   const aui = useAui();
+  const queryClient = useQueryClient();
   const ditado = useDitado(
     (texto) => {
       const atual = aui.composer().getState().text;
@@ -347,6 +350,11 @@ function BotaoDeDitado({
       onAviso(null);
     },
     (mensagem) => onAviso(mensagem),
+    // Sem aceite (#384): relê o estado, e o aceite toma o lugar do campo.
+    () => {
+      onAviso(null);
+      void queryClient.invalidateQueries({ queryKey: CHAVE_DOS_ACEITES });
+    },
   );
   const gravando = ditado.estado === 'gravando';
   const transcrevendo = ditado.estado === 'transcrevendo';
@@ -542,7 +550,7 @@ function Composer() {
 
 export function ChatThread() {
   const rodando = useAuiState((s) => s.thread.isRunning);
-  const liberado = useChatLiberado();
+  const liberado = useChatUnlocked();
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <LiveJoin />
@@ -573,7 +581,7 @@ export function ChatThread() {
           <Composer />
         </>
       ) : null}
-      <AceiteDoChat />
+      <ChatConsentSheet />
     </ThreadPrimitive.Root>
   );
 }

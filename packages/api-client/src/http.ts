@@ -37,6 +37,15 @@ export class ApiError extends Error {
   get isPlanRequired(): boolean {
     return this.status === 402;
   }
+
+  /**
+   * 403 `AI_CONSENT_REQUIRED` (#384): falta o aceite da IA. Toda função de IA (chat, ditado,
+   * foto do prato, rótulo) recusa assim, e a tela responde mostrando o aceite.
+   */
+  get isAiConsentRequired(): boolean {
+    const corpo = this.body as { code?: unknown } | undefined;
+    return this.status === 403 && corpo?.code === 'AI_CONSENT_REQUIRED';
+  }
 }
 
 let transport: ApiTransport | null = null;

@@ -16,8 +16,8 @@ import { useTurnError } from './chat-runtime-provider';
  * provedor e do modelo. Fica no lugar do campo enquanto não houver aceite — a API recusa o
  * turno com 403 `AI_CONSENT_REQUIRED` sem ele, e esse 403 também traz o aviso de volta.
  */
-export function AceiteDoChat() {
-  const { data } = useAceitesDaIa();
+export function ChatConsentSheet() {
+  const { data, isPending } = useAceitesDaIa();
   const aceitar = useAceitar();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -27,7 +27,9 @@ export function AceiteDoChat() {
     // O aceite caiu (versão nova do texto, outro aparelho): relê o estado.
     if (recusado) void queryClient.invalidateQueries({ queryKey: CHAVE_DOS_ACEITES });
   }, [recusado, queryClient]);
-  if (!data || data.chat.accepted) return null;
+  // Sem saber (erro ao ler), o aceite aparece: aceitar de novo é inofensivo, e escrever
+  // sem aceite só daria num 403.
+  if (isPending || data?.chat.accepted) return null;
   const textos = AI_CONSENT_TEXTS.chat;
   return (
     <section
@@ -74,17 +76,20 @@ export function AceiteDoChat() {
   );
 }
 
-/** Sem aceite do chat, o campo não aparece: escrever só para ouvir um 403 seria pior. */
-export function useChatLiberado(): boolean {
+/**
+ * O campo só aparece com o aceite confirmado: carregando ou sem conseguir ler, não. Escrever
+ * só para ouvir um 403 seria pior que esperar o aceite.
+ */
+export function useChatUnlocked(): boolean {
   const { data } = useAceitesDaIa();
-  return data?.chat.accepted !== false;
+  return data?.chat.accepted === true;
 }
 
 /**
  * A chave da busca na web no cabeçalho (prancha Al-M16): ligada, a IA pode buscar (pedindo o
  * aceite na primeira vez); desligada, ela responde só com o que sabe e os dados da pessoa.
  */
-export function ChaveDaBusca() {
+export function WebSearchSwitch() {
   const { data } = useAceitesDaIa();
   const mudar = useChaveDaBusca();
   if (!data) return null;
