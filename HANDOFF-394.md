@@ -34,13 +34,13 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 8. LGPD export/exclusão
 - [x] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
 - [x] 10. api-client (community-feed.ts: tipos, feedApi/moderationApi/announcementsApi/blocksApi/forYouApi, helpers de enquete/horário/repetir; abas Mural/Para você/Desafios/Conteúdo, Agenda escondida até #397; markdown-lite título e citação + renderers web/app)
-- [~] 11. Web aluno: feito composer, poll-block, block-dialog, feed-ui (menu copiar/ocultar/bloquear, fixar com prazo, tipos), page (filtros, carrossel, novos), for-you, /you/blocked. FALTA testes web
+- [x] 11. Web aluno (composer Post/Enquete/Prévia/toolbar/publicar como/fixar; poll-block; block-dialog; menu copiar/ocultar/bloquear/denunciar; fixar com prazo; carrossel; filtros; novos+markSeen; for-you; /you/blocked; testes vistos vermelhos: 13 falhas com os arquivos antigos)
 - [ ] 12. Web painel (Pn-14, Pn-26)
 - [ ] 13. App (Cm-03/05/06/07/20/21) + bloqueados
 - [ ] 14. ADR 032, PERMISSIONS, REDESIGN_PROGRESS, lint/typecheck/testes
 
 ## Próximo passo
 
-Item 11 web aluno. Atualizar apps/web/src/app/(app)/community/[groupId]/**tests**/page.test.tsx (abas novas). Depois 12 e 13.
+Item 12 web painel: apps/web/src/app/(app)/org/[groupId]/moderation (Pn-14: pins ordem/desafixar, comunicado novo com horário 15 min/repetir/prazo do fixado/push, agendados com cancelar, quem posta, posts automáticos; Pn-26: enquetes). Depois 13 app.
 
 Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).
