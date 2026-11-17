@@ -42,7 +42,7 @@ export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const sessao = useChatSession();
-  const { thread, agent, isNew, loading, loadError, conversationId, queue, quote } =
+  const { thread, agent, isNew, loading, loadError, conversationId, queue, queuePaused, quote } =
     useChatSnapshot();
   const lista = useRef<FlatList<ChatThreadMessage>>(null);
 
@@ -77,7 +77,6 @@ export default function ConversationScreen() {
   const pensando =
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
-  const ultimaPergunta = [...thread.messages].reverse().find((m) => m.role === 'user');
 
   useEffect(() => {
     if (thread.messages.length)
@@ -213,9 +212,8 @@ export default function ConversationScreen() {
                 {thread.error ? (
                   <TurnError
                     error={thread.error}
-                    onRetry={() => {
-                      if (ultimaPergunta) void sessao.send({ text: ultimaPergunta.text });
-                    }}
+                    // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
+                    onRetry={() => void sessao.retry()}
                   />
                 ) : null}
                 {cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
@@ -241,6 +239,8 @@ export default function ConversationScreen() {
                 void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
               }
               queue={queue}
+              queuePaused={queuePaused}
+              onSendQueued={(id) => void sessao.sendQueued(id)}
               quote={quote}
               onDismissQuote={() => sessao.setQuote(null)}
               onQueue={(text) => sessao.enqueue(text)}
