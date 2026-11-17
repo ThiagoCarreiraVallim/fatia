@@ -175,16 +175,18 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 
 - **Sequência:** um cálculo só (`ConsistencyService`) para `GET /streak`, o Hoje, `get_streak`, `get_day_overview` e as conquistas. A tolerância de faltas da #147 continua. As sub-sequências (nutrição, treino em semanas, passos) saíram do `StreakSummary`, junto com os `StreakCard` mortos da web e do app. O desafio `ACTIVE_DAYS` da comunidade não mudou: é comparação entre pessoas, com regra própria.
 - **Constância (G12):** `GET /progress/consistency?range=month|quarter|year` e o MCP `get_consistency`, derivados na leitura, sem tabela. Água conta a soma do dia; passos contam o maior registro (ADR 007). Água e passos sem `UserGoals` ficam "sem meta". O treino conta contra a meta semanal. O recorde é por período (o maior entre o histórico e a janela).
-- **Conquistas (G11):** catálogo de 10 com `condition` e `progress` (o "faltam 58"). A `workouts_100` vale retroativa pela migration e também no fim de cada treino (`WORKOUT_FINISHED_HOOKS`, num módulo global para não criar ciclo de módulos).
-- **Recordes (G5):** `GET /workout/records` virou `{ records, highlight }`. "Maior evolução do mês" usa os últimos 30 dias corridos, não o mês do calendário, em % de 1RM estimado. `listPersonalRecords` do api-client segue devolvendo a lista.
+- **Conquistas (G11):** catálogo de 10 com `condition` e `progress` (o "faltam 58"). A tela reavalia (`POST /achievements/evaluate`) antes de listar, como o Hoje; se a contagem já bateu e ainda não gravou, mostra desbloqueada. A `workouts_100` vale retroativa pela migration e também no fim de cada treino (`WORKOUT_FINISHED_HOOKS`, num módulo global para não criar ciclo de módulos).
+- **Recordes (G5):** `GET /workout/records` virou `{ records, highlight }`. "Maior evolução do mês" usa os últimos 30 dias corridos, não o mês do calendário, em % de 1RM estimado. Só entram séries de treino concluído. `listPersonalRecords` do api-client segue devolvendo a lista.
 - **Metas (G9/G10):**
   - "Vencida" é derivada na leitura (`effectiveStatus`). O PATCH com prazo futuro volta a meta para ativa.
   - São três abas, como no canvas: Ativas, Concluídas e Arquivadas. A issue fala em quatro; a vencida fica nas ativas, com o selo.
-  - Concluir, arquivar e apagar perguntam antes. Só a arquivada pode ser apagada.
+  - Concluir, arquivar e apagar perguntam antes. "Só a arquivada pode ser apagada" é regra de tela: o servidor (`DELETE /goals/:id`) e o chat (`delete_goal`) continuam apagando qualquer meta.
+  - Prazo: no passado volta 400 ("O prazo não pode estar no passado."), no criar e no editar, pela REST e pelo MCP. Só a data (`"2026-12-31"`) vale até o fim desse dia no fuso da pessoa. A vencida continua achável pelo `mark_goal_done`.
   - Metas marcadas à mão (% de gordura e "Outra") ganham "Atualizar". "Outra" também ganhou o campo Unidade.
   - O rodapé não fala de gordura: a % só se atualiza sozinha com a #383.
+- **Metas de água e passos valem para trás:** a constância (G12) e a sequência leem a meta atual de `UserGoals` para todos os dias, inclusive os antigos. Mudar a meta reescreve o passado. É comportamento conhecido; guardar o histórico de metas fica para depois.
 - **Gráficos (G6):**
-  - Cardio usa `GET /progress/cardio` sem `exerciseId`, que soma todo o cardio da sessão.
+  - Cardio usa `GET /progress/cardio` sem `exerciseId`, que soma todo o cardio da sessão. O ritmo somado divide só o tempo das séries com distância (a bike sem distância não puxa o ritmo); as kcal somam tudo.
   - Força usa o exercício de maior 1RM até a pessoa escolher outro.
   - Ganhou "Registrar peso" e "Registrar passos", que não estão no canvas.
 - **Registrar peso (G7):** uma folha com Peso e Passos (`body-log-sheet`), aberta pelo menu da IA, pelo Hoje (passos) e pelo "Peso atual" de Você. O miolo é o das gavetas de antes, com `embedded`.

@@ -66,7 +66,7 @@ pelo coordenador. Antes do merge, apagar este HANDOFF.
 - [x] 3 evolução do mês só com sessão concluída (8e306fbd)
 - [x] 4 ritmo somado só com tempo das séries com distância (5752b26d)
 - [x] 5 prazo: passado → 400; só data = fim do dia no fuso (service, REST e MCP)
-- [ ] 5/6 notas em REDESIGN_PROGRESS "Pendências da #382" (apagar só arquivada = regra de UI; água/passos retroativos)
+- [x] 5/6 notas em REDESIGN_PROGRESS "Pendências da #382" (apagar só arquivada = regra de UI; água/passos retroativos)
 - [ ] 7 checagens finais e apagar este HANDOFF no último commit
 
 Ambiente: o worktree resolvia `@prisma/client` no checkout principal (que já tem o schema da #381,
