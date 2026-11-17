@@ -48,7 +48,7 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 6. API: `AutoWriteService` (retrato, inversa, limites) + `POST /chat/auto-writes/:id/undo`
 - [x] 7. Testes obrigatórios da ADR 039
 - [x] 8. Memórias: categoria, data, `DELETE /chat/memories`, teto 50 com pedido de apagar, renomes
-- [ ] 9. Foto: chat descarta no fim do turno; MCP de refeição informa foto; export/exclusão
+- [x] 9. Foto: chat descarta no fim do turno; MCP de refeição informa foto; export/exclusão
 - [x] 10. Isolamento (foto já coberta pela #374) (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
 - [ ] 11. api-client: settings, memórias, desfazer, foto da refeição
 - [ ] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
@@ -79,6 +79,11 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   Vermelho visto: sem a checagem do NEEDS_OK, sem o filtro de apagar, sem `saved` → 1 falha cada.
   Agente: 577 passed, ruff e mypy limpos.
 
+- api-client: `src/ai-settings.ts` (modos, cópia da Al-M24/M9/M11/M10, `savedUndoId`, `undoAutoWrite`,
+  `forgetAllChatMemories`, `memoryMeta`, `quotaResetLabel`, revisão da foto com ±10 g) + teste (11).
+  `ChatMemory.category`, `autoWriteId` no `saved`. 921 testes verdes.
+
 ## Próximo passo exato
 
-Item 9 (api-client): settings, modos, memórias (categoria, apagar todas), undo, `autoWriteId`.
+Web: Config da IA (`/chat/settings`?), memórias com categoria e "Apagar todas", Desfazer do Gravado,
+estados da Al-M11 e foto do prato por upload.

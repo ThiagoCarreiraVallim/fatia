@@ -847,12 +847,14 @@ export type ChatArtifact =
       title?: string;
       params: Record<string, string>;
     })
-  // "Gravado", com Desfazer: só o componente nesta issue — quem emite é a #385.
+  // "Gravado", com Desfazer: o `/mcp` o devolve na gravação automática (#385, ADR 039).
   | (ChatArtifactBase & {
       kind: 'saved';
       at: string;
       lines: { label: string; before?: string; after: string }[];
       undoable?: boolean;
+      /** O id do Desfazer (`POST /chat/auto-writes/:id/undo`). */
+      autoWriteId?: string;
     });
 
 // ---------------------------------------------------------------- memória e cota
@@ -861,6 +863,8 @@ export type ChatArtifact =
 export interface ChatMemory {
   id: string;
   content: string;
+  /** Preferência, rotina, treino ou hábito (#385). `null` nas antigas. */
+  category: import('./ai-settings').MemoryCategory | null;
   createdAt: string;
 }
 
