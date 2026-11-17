@@ -10,3 +10,10 @@
 ## Etapa 2: passada visual (checkout principal)
 
 - [ ] estado original do demo registrado
+- [x] merge commitado; checkout principal em redesign/386-plano; migration aplicada no banco dev
+- [x] pranchas copiadas do .canvas do worktree para .canvas/project (faltavam as 10); renders em ~/.cache/fatia-vis/386/board
+- Estado original do demo em ~/.cache/fatia-vis/386/demo-original-state.txt:
+  sem UserSubscription, proTrialStartedAt nulo, OWNER do grupo "Fatia" (sem pool), fora da academia-demo;
+  pool da academia-demo: SEATS, 3 assentos, ACTIVE, sem programName, currentPeriodEnd 2026-12-05 03:00; BillingReminder vazio.
+  Para restaurar: apagar UserSubscription do demo, proTrialStartedAt=null, apagar membership MEMBER do demo na academia-demo (se criada),
+  pool academia-demo mode=SEATS programName=null currentPeriodEnd='2026-12-05 03:00', apagar BillingReminder e InboxNotice BILLING criados.
