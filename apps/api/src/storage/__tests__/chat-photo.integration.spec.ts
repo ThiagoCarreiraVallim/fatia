@@ -5,6 +5,9 @@ import { PrismaService } from '../../common/prisma.service';
 import { ConversationService } from '../../chat/conversation.service';
 import { CHAT_PHOTO_TTL_MS, MediaService, ORPHAN_AFTER_MS } from '../media.service';
 import { MemoryObjectStore } from '../memory-object-store';
+import { AccountService } from '../../users/account.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 
 /**
  * A foto do chat guardada no bucket (ADR 046), no Postgres real com o bucket em
@@ -16,6 +19,13 @@ describe('foto do chat (integração)', () => {
   const store = new MemoryObjectStore();
   const media = new MediaService(prisma, store);
   const conversas = new ConversationService(prisma);
+  const account = new AccountService(
+    prisma,
+    {} as LogtoManagementService,
+    {} as CheckpointPurgeService,
+    [],
+    media,
+  );
 
   const stamp = `foto-chat-${Date.now()}`;
   const criados: string[] = [];
@@ -243,6 +253,29 @@ describe('foto do chat (integração)', () => {
         'chat_photo',
       );
     });
+  });
+
+  it('o export (LGPD) leva a foto na mensagem dela, com link assinado; o MCP não vê o link', async () => {
+    const dono = await pessoa();
+    const id = await fotoPronta(dono);
+    await conversas.iniciarTurno(dono, randomUUID(), 'o que tem aqui?', 0, null, [id]);
+
+    const arquivo = await account.exportData(dono, { photoLinks: true });
+    const mensagem = arquivo.conversations[0].messages.find((m) => m.role === 'user');
+    expect(mensagem).toMatchObject({
+      content: 'o que tem aqui?',
+      photos: [
+        {
+          mime: 'image/jpeg',
+          width: 1280,
+          url: expect.stringContaining('memory://get/users/'),
+        },
+      ],
+    });
+    const peloMcp = await account.exportData(dono);
+    const semLink = peloMcp.conversations[0].messages.find((m) => m.role === 'user');
+    expect(semLink?.photos[0]).not.toHaveProperty('url');
+    expect(JSON.stringify(peloMcp)).not.toContain(id);
   });
 
   it('apagar a conta leva as fotos do chat', async () => {

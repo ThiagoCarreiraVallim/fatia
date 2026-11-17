@@ -325,6 +325,19 @@ export class AccountService {
               reviewReasons: true,
               reviewNote: true,
               createdAt: true,
+              // As fotos do chat (ADR 046): passageiras, então só as que ainda existem.
+              photos: {
+                where: { status: 'READY' },
+                select: {
+                  mime: true,
+                  bytes: true,
+                  width: true,
+                  height: true,
+                  key: true,
+                  status: true,
+                },
+                orderBy: { chatPosition: 'asc' },
+              },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -618,7 +631,9 @@ export class AccountService {
       achievements,
       trainingBlocks,
       professionalLinks,
-      conversations,
+      conversations: await Promise.all(
+        conversations.map((c) => this.exportConversation(c, opts.photoLinks === true)),
+      ),
       memories,
       subscriptions,
       communityMemberships,
@@ -703,6 +718,35 @@ export class AccountService {
    * baixado pelo link de exportação, um link assinado para baixá-la (ADR 038,
    * item 5). Pelo MCP vai só o `hasPhoto`: nenhuma tool leva a foto à IA.
    */
+  /**
+   * A conversa no export: cada foto na mensagem dela, com o link assinado no arquivo baixado
+   * (`photoLinks`) — o mesmo prazo das fotos das refeições. Sem a chave do bucket nem o id.
+   */
+  private async exportConversation<
+    C extends {
+      messages: {
+        photos: Pick<MediaFile, 'mime' | 'bytes' | 'width' | 'height' | 'key' | 'status'>[];
+      }[];
+    },
+  >(conversation: C, photoLinks: boolean) {
+    return {
+      ...conversation,
+      messages: await Promise.all(
+        conversation.messages.map(async (message) => ({
+          ...message,
+          photos: await Promise.all(
+            message.photos.map(async ({ key, status, ...foto }) => ({
+              ...foto,
+              ...(photoLinks && this.media
+                ? { url: await this.media.exportUrl({ key, status }) }
+                : {}),
+            })),
+          ),
+        })),
+      ),
+    };
+  }
+
   private async exportMeal<
     M extends Parameters<typeof presentMeal>[0] & {
       photoFile: MediaFile | null;
