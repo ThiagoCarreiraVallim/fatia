@@ -485,6 +485,45 @@ describe('planStatusView: teste grátis', () => {
   });
 });
 
+describe('planStatusView: voltar ao PRO na web sem beco sem saída (revisão #386)', () => {
+  it('IA pausada com a cobrança aberta: pagar ou assinar de novo, com o formulário', () => {
+    const v = planStatusView(
+      plan({
+        reason: 'expirada',
+        state: 'EXPIRED',
+        degraded: true,
+        source: 'ASAAS',
+        status: 'PAST_DUE',
+        paymentMethod: 'PIX',
+        currentPeriodEnd: '2026-10-01T03:00:00Z',
+        paymentUrl: 'https://www.asaas.com/i/abc',
+        trialEligible: false,
+      }),
+      web,
+    );
+    expect(v.actions.map((a) => a.kind)).toEqual(['pay', 'subscribe']);
+    expect(v.offer).toBe('web');
+  });
+
+  it('teste cancelado que já acabou: volta ao Free com a oferta da web', () => {
+    const v = planStatusView(
+      plan({
+        reason: 'teste_acabou',
+        state: 'FREE',
+        source: 'ASAAS',
+        status: 'TRIALING',
+        cancelAtPeriodEnd: true,
+        trialEndsAt: '2026-11-08T12:00:00Z',
+        currentPeriodEnd: '2026-11-08T12:00:00Z',
+        paymentUrl: null,
+        trialEligible: false,
+      }),
+      web,
+    );
+    expect(v.offer).toBe('web');
+  });
+});
+
 describe('planStatusView: teste cancelado', () => {
   it('nada será cobrado, o PRO vai até o fim do teste e não há o que cancelar de novo', () => {
     const v = planStatusView(

@@ -282,6 +282,28 @@ describe('PlanScreen', () => {
     );
   });
 
+  it('IA pausada: além de pagar, dá para assinar de novo ali mesmo', async () => {
+    plan.mockResolvedValue({
+      ...JA_TESTOU,
+      source: 'ASAAS',
+      reason: 'expirada',
+      state: 'EXPIRED',
+      degraded: true,
+      status: 'PAST_DUE',
+      paymentMethod: 'PIX',
+      currentPeriodEnd: '2020-01-01T03:00:00.000Z',
+      paymentUrl: 'https://sandbox.asaas.com/i/atraso',
+    });
+    renderScreen();
+
+    expect(await screen.findByRole('link', { name: /pagar com pix/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Assinar de novo' })).toHaveAttribute(
+      'href',
+      '#assinar',
+    );
+    expect(screen.getByLabelText('CPF')).toBeInTheDocument();
+  });
+
   it('PRO pela loja: sem cancelar aqui, com o link da loja', async () => {
     plan.mockResolvedValue(PRO_LOJA);
     renderScreen();

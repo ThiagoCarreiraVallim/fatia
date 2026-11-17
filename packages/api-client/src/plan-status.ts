@@ -435,9 +435,11 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
           title: 'A IA pausou',
           body: 'Seu registro continua normal. Pague e a IA volta na hora.',
           note: plan.paymentMethod === 'CREDIT_CARD' ? null : PIX_E_BOLETO,
-          actions: pay(),
+          // Pagar a cobrança aberta ou assinar de novo: o checkout encerra a antiga.
+          actions: [...pay(), { kind: 'subscribe', label: 'Assinar de novo' }],
           featuresTitle: 'Pausados',
           featuresOn: false,
+          offer,
         });
       }
       return view({
