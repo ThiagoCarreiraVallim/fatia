@@ -10,6 +10,7 @@ import { MediaService } from '../../storage/media.service';
 import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { AnnouncementService } from '../announcement.service';
 import { BlockService } from '../block.service';
+import { publishAutoPost } from '../auto-post';
 import { GroupService } from '../group.service';
 import { POLL_MIN_VOTES, PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
@@ -572,6 +573,36 @@ describe('mural do redesign (integração)', () => {
       const aviso = enviados.find((e) => e.notice.kind === 'ANNOUNCEMENTS');
       expect(aviso!.userIds).not.toContain(a.ana);
       expect(aviso!.userIds).toContain(a.gabi);
+    });
+  });
+
+  describe('posts automáticos', () => {
+    it('conteúdo novo vira post uma vez só, só nos tipos ligados', async () => {
+      const a = await comunidade();
+      const entrada = {
+        groupId: a.groupId,
+        actorUserId: a.prof,
+        kind: 'TIP' as const,
+        refId: 'dica-1',
+        title: 'Proteína em cada refeição',
+        meta: 'nutrição',
+      };
+      const id = await publishAutoPost(prisma, entrada);
+      expect(id).not.toBeNull();
+      expect(await publishAutoPost(prisma, entrada)).toBeNull();
+      const conteudo = await posts.list(a.ana, a.groupId, null, 'content');
+      expect(conteudo.posts).toEqual([
+        expect.objectContaining({
+          kind: 'AUTO',
+          title: 'Proteína em cada refeição',
+          auto: { kind: 'TIP', refId: 'dica-1' },
+        }),
+      ]);
+      await groups.update(a.dono, a.groupId, { autoPosts: ['PLAN'] });
+      expect(await publishAutoPost(prisma, { ...entrada, refId: 'dica-2' })).toBeNull();
+      expect(
+        await publishAutoPost(prisma, { ...entrada, kind: 'PLAN', refId: 'p1' }),
+      ).not.toBeNull();
     });
   });
 });

@@ -29,7 +29,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 3. API ocultar post, filtros do mural, pins com ordem/prazo, publicar como, não vistos
 - [x] 4. API enquetes
 - [x] 5. API comunicados (agendar/repetir/job/push) + permissão + PERMISSIONS.md
-- [ ] 6. API posts automáticos por tipo
+- [x] 6. API posts automáticos por tipo (auto-post.ts; hooks em content, group-exercise, challenge; Group.autoPosts no update)
 - [ ] 7. API Para você
 - [x] 8. LGPD export/exclusão
 - [ ] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
@@ -41,6 +41,6 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Próximo passo
 
-Item 6 (posts automáticos: função `publishAutoPost` em sharing/auto-post.ts chamada por content/exercise/challenge services), depois 7 (Para você), 9 (MCP).
+Item 7 (Para você), 9 (MCP).
 
 Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).

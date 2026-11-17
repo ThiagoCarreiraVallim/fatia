@@ -17,6 +17,7 @@ import {
   MinLength,
 } from 'class-validator';
 import {
+  AutoPostKind,
   GroupRole,
   GroupType,
   GroupVisibility,
@@ -79,6 +80,13 @@ export class UpdateGroupDto {
   @IsOptional() @IsEnum(GroupVisibility) visibility?: GroupVisibility;
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) timezone?: string;
   @IsOptional() @IsEnum(PostPolicy) postPolicy?: PostPolicy;
+
+  /** Que conteúdo novo vira post automático no mural (#394). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(Object.keys(AutoPostKind).length)
+  @IsEnum(AutoPostKind, { each: true })
+  autoPosts?: AutoPostKind[];
 
   /** Vale para quem entrar dali em diante; ver `consent-scopes.ts`. */
   @IsOptional()
