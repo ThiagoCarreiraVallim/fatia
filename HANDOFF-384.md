@@ -5,16 +5,16 @@ Worktree `.claude/worktrees/384-chat`, branch `redesign/384-chat`. Não fazer pu
 
 ## Checklist
 
-- [ ] R1 toda tool com cartão de verdade (produtor por tool ou genéricos robustos; spec com amostra real por tool, sem o "17 tools")
+- [x] R1 (fa8415f1, 38e0f04c, 7c1a6721; 44/70 vermelhos antes) toda tool com cartão de verdade (produtor por tool ou genéricos robustos; spec com amostra real por tool, sem o "17 tools")
 - [ ] 1 foto do chat transitória (24 h), apagada pela varredura se não virou refeição; gancho `promoteChatPhotoToMeal` para a #385; ADR 046 cede à 038
 - [x] 2 (falta texto: aceite, /privacy, DATA_RETENTION) pergunta da busca gerada numa chamada separada que só vê a última fala; regex depois; teste com modelo falso vazando perfil/memória; aceite, /privacy, DATA_RETENTION
-- [~] 3 (API, api-client e chat/ditado web feitos; falta web rótulo/onboarding e app) aceite em toda chamada do HostedAiService (ditado, foto, rótulo); 403 abre o aceite; loading/erro = sem aceite; `useChatLiberado` → inglês
+- [x] 3 aceite em toda chamada do HostedAiService (ditado, foto, rótulo); 403 abre o aceite; loading/erro = sem aceite; `useChatLiberado` → inglês
 - [ ] 4 fotos do chat no export LGPD com link assinado e a mensagem
 - [ ] 5 fila pausa depois de erro (Enviar/Descartar), retry reenvia a que falhou, web espera `stopChatRun`, 409 `CHAT_RUN_IN_PROGRESS` com backoff (web e app)
 - [ ] 6 app: `dispatch` depois do upload confere parada e conversa
 - [ ] 7 lote com busca: aceite só no Enviar e se a escolha final for concordar; estado selecionado; contagem inclui busca
 - [x] 8 busca sem `usage` ou parada no meio cobra 1 unidade
-- [ ] 9 kind desconhecido não quebra (web e app); prévia sem a citação; aceite com modelo/provedor da config e hash do texto amarrado à versão; app antigo com 403
+- [~] 9 (feito: kind desconhecido, prévia, aceite da config+hash, 403 legível; falta nada) kind desconhecido não quebra (web e app); prévia sem a citação; aceite com modelo/provedor da config e hash do texto amarrado à versão; app antigo com 403
 - [ ] fim: lint, typecheck, testes (API em fatia_t384, agente pytest/ruff/mypy), números do MCP, REDESIGN_PROGRESS, ADR 046, /privacy, DATA_RETENTION, apagar este arquivo
 
 ## Comandos
@@ -24,4 +24,4 @@ Worktree `.claude/worktrees/384-chat`, branch `redesign/384-chat`. Não fazer pu
 
 ## Próximo passo
 
-R1 com subagente (não mexer em apps/api/src/mcp). Eu: item 3 web rótulo/onboarding, app; depois 9, 7, 6, 5, 1, 4.
+Itens 7, 6, 5, 1, 4; depois docs (aceite/privacy/DATA_RETENTION/ADR 046/REDESIGN_PROGRESS).
