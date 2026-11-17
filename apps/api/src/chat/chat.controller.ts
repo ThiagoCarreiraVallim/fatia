@@ -313,6 +313,12 @@ export class ChatController {
     return this.autoWrites.setMode(user.id, dto.category, dto.mode);
   }
 
+  /** O estado do Desfazer de uma gravação: o cartão recarregado mostra "Desfeito" ou vencido. */
+  @Get('auto-writes/:id')
+  autoWriteStatus(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.autoWrites.status(user.id, id);
+  }
+
   /** O "Desfazer" do cartão "Gravado" (ADR 039, item 3). Só o dono, uma vez. */
   @Post('auto-writes/:id/undo')
   @HttpCode(200)

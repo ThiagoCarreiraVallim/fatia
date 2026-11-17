@@ -32,6 +32,10 @@ export const AUTO_WRITE_UNDO_MS = 24 * 60 * 60 * 1000;
 export const AUTO_WRITE_NEEDS_OK = 'AUTO_WRITE_NEEDS_OK';
 /** O Desfazer recusado porque o registro mudou depois da gravação: desfazer apagaria a mudança. */
 export const AUTO_WRITE_CHANGED = 'AUTO_WRITE_CHANGED';
+/** Desfazer de novo o que já foi desfeito. */
+export const AUTO_WRITE_UNDONE = 'AUTO_WRITE_UNDONE';
+/** Passou a janela do Desfazer (ou as cópias já foram limpas). */
+export const AUTO_WRITE_EXPIRED = 'AUTO_WRITE_EXPIRED';
 /**
  * A consulta pelo id da chamada não sabe dizer se gravou (linha em andamento ou inexistente). O
  * agente não repete nem pede OK às cegas: diz que pode não ter gravado e pergunta.
@@ -86,6 +90,14 @@ export function autoEligible(tool: McpToolDef): boolean {
 
 const needsOk = (motivo: string) =>
   new ConflictException(`${AUTO_WRITE_NEEDS_OK}: ${motivo} Peça a confirmação da pessoa.`);
+
+const alreadyUndone = () =>
+  new ConflictException({ code: AUTO_WRITE_UNDONE, message: 'Esta gravação já foi desfeita.' });
+const expired = () =>
+  new ConflictException({
+    code: AUTO_WRITE_EXPIRED,
+    message: 'Passou o prazo do Desfazer. Mude pela tela do registro.',
+  });
 
 const changed = () =>
   new ConflictException({
@@ -349,13 +361,13 @@ export class AutoWriteService implements McpAutoWriter, OnModuleInit, OnModuleDe
   async undo(userId: string, id: string): Promise<{ undone: true }> {
     const linha = await this.prisma.aiAutoWrite.findFirst({ where: { id, userId } });
     if (!linha) throw new NotFoundException('Gravação não encontrada.');
-    if (linha.undoneAt) throw new ConflictException('Esta gravação já foi desfeita.');
+    if (linha.undoneAt) throw alreadyUndone();
     if (
       !linha.doneAt ||
       linha.clearedAt ||
       Date.now() - linha.createdAt.getTime() > AUTO_WRITE_UNDO_MS
     ) {
-      throw new ConflictException('Passou o prazo do Desfazer. Mude pela tela do registro.');
+      throw expired();
     }
     const spec = AUTO_UNDO[linha.tool];
     if (!spec) throw new ConflictException('Esta gravação não tem Desfazer.');
@@ -370,7 +382,7 @@ export class AutoWriteService implements McpAutoWriter, OnModuleInit, OnModuleDe
         where: { id, userId, undoneAt: null },
         data: { undoneAt: new Date(), clearedAt: new Date(), ...SEM_COPIAS },
       });
-      if (count === 0) throw new ConflictException('Esta gravação já foi desfeita.');
+      if (count === 0) throw alreadyUndone();
       const agora = await stateOf(tx, spec, record, userId);
       if (stableJson(agora) !== stableJson(linha.after)) throw changed();
       await spec.revert(tx, record, userId);

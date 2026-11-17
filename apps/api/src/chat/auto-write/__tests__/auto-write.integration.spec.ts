@@ -25,6 +25,8 @@ import { LogStepsTool } from '../../../progress/mcp/log-steps.tool';
 import { UpdateStepLogTool } from '../../../progress/mcp/update-step-log.tool';
 import {
   AUTO_WRITE_CHANGED,
+  AUTO_WRITE_EXPIRED,
+  AUTO_WRITE_UNDONE,
   AUTO_WRITE_MAX_PER_ANSWER,
   AUTO_WRITE_NEEDS_OK,
   AUTO_WRITE_UNDO_MS,
@@ -819,17 +821,27 @@ describe('gravação automática da IA (integração, ADR 039)', () => {
       const id = String(artifact.autoWriteId);
       await expect(auto.undo(outra.userId, id)).rejects.toThrow(NotFoundException);
       expect(await prisma.waterLog.count({ where: { userId: p.userId } })).toBe(1);
+      expect(await auto.status(p.userId, id)).toEqual({ state: 'active' });
       await auto.undo(p.userId, id);
-      await expect(auto.undo(p.userId, id)).rejects.toThrow(ConflictException);
+      const codigo = (e: unknown) =>
+        JSON.stringify((e as ConflictException).getResponse()).match(/AUTO_WRITE_[A-Z_]+/)?.[0];
+      // O código vai para a tela dizer por que não desfez; o estado sobrevive ao recarregar.
+      expect(codigo(await auto.undo(p.userId, id).catch((e: unknown) => e))).toBe(
+        AUTO_WRITE_UNDONE,
+      );
+      expect(await auto.status(p.userId, id)).toEqual({ state: 'undone' });
+      await expect(auto.status(outra.userId, id)).rejects.toThrow(NotFoundException);
 
       const segunda = await auto.run(tool('log_water'), agua, ctx(p));
       await prisma.aiAutoWrite.update({
         where: { id: String(segunda.artifact.autoWriteId) },
         data: { createdAt: new Date(Date.now() - AUTO_WRITE_UNDO_MS - 1000) },
       });
-      await expect(auto.undo(p.userId, String(segunda.artifact.autoWriteId))).rejects.toThrow(
-        ConflictException,
+      const vencida = String(segunda.artifact.autoWriteId);
+      expect(codigo(await auto.undo(p.userId, vencida).catch((e: unknown) => e))).toBe(
+        AUTO_WRITE_EXPIRED,
       );
+      expect(await auto.status(p.userId, vencida)).toEqual({ state: 'expired' });
     });
 
     it('treino começado com série gravada depois não é apagado pelo Desfazer', async () => {

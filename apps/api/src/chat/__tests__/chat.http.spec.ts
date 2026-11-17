@@ -217,6 +217,7 @@ async function subirApp(): Promise<Cenario> {
       })),
       setMode: jest.fn(async () => ({})),
       undo: jest.fn(async () => ({ undone: true })),
+      status: jest.fn(async () => ({ state: 'undone' })),
     })
     // O aceite da primeira conversa (#384) está dado: os testes daqui são da fiação HTTP.
     .overrideProvider(AiConsentService)
@@ -937,6 +938,15 @@ describe('aceites da IA e preferência da busca (#384)', () => {
     expect((await pedir(`/auto-writes/${id}/undo`, 'POST')).status).toBe(200);
     expect(autoWrites().undo).toHaveBeenCalledWith(USER, id);
     expect((await pedir('/auto-writes/nao-e-uuid/undo', 'POST')).status).toBe(400);
+  });
+
+  it('o estado do Desfazer é lido do servidor, com o usuário do token (#385)', async () => {
+    const id = '7f0c2d2e-2f4c-4b8a-9a77-5f1c2b3d4e5f';
+    const resposta = await pedir(`/auto-writes/${id}`, 'GET');
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({ state: 'undone' });
+    expect(autoWrites().status).toHaveBeenCalledWith(USER, id);
+    expect((await pedir('/auto-writes/nao-e-uuid', 'GET')).status).toBe(400);
   });
 
   it('"Apagar todas" as memórias é do usuário do token (#385)', async () => {
