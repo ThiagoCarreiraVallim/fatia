@@ -292,6 +292,18 @@ describe('Sessão do histórico', () => {
     expect(startSession.mock.calls[0]![0].planId).toBe('circuito-1');
   });
 
+  it('circuito da primeira vez: sem comparação, os dois cartões dividem a linha (sem buraco)', async () => {
+    getSummary.mockResolvedValue({
+      ...circuitSession,
+      circuit: { ...circuitSession.circuit!, comparison: null },
+    });
+    renderPage();
+    await screen.findByRole('region', { name: 'Resultado do circuito' });
+    expect(screen.queryByText(/vs\. a última vez/)).toBeNull();
+    const row = screen.getByText('reps no total').closest('p')!.parentElement!;
+    expect(row.className).toContain('grid-cols-2');
+  });
+
   it('circuito com o plano apagado não oferece repetir', async () => {
     getSummary.mockResolvedValue({ ...circuitSession, planId: null });
     renderPage();

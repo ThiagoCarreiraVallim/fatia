@@ -27,6 +27,7 @@ export function CircuitResultBlocks({
 }) {
   const facts = circuitResultFacts(circuit);
   const comparison = circuitComparisonLabel(circuit);
+  const tiles = 1 + (comparison ? 1 : 0) + (feeling !== undefined ? 1 : 0);
   const rows = circuitRoundRows(circuit);
   const longest = Math.max(1, ...rows.map((r) => r.seconds));
   const partial = rows.find((r) => r.partial);
@@ -50,7 +51,13 @@ export function CircuitResultBlocks({
         </dl>
       </section>
 
-      <div className={cn('grid gap-2', feeling === undefined ? 'grid-cols-2' : 'grid-cols-3')}>
+      {/* Uma coluna por cartão: na primeira vez não há comparação, e a linha não fica com buraco. */}
+      <div
+        className={cn(
+          'grid gap-2',
+          tiles === 1 ? 'grid-cols-1' : tiles === 2 ? 'grid-cols-2' : 'grid-cols-3',
+        )}
+      >
         {comparison && (
           <p
             className={cn(
