@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   searchTutorials,
@@ -27,13 +28,18 @@ const SEEN_KEY = ['you', 'tutorials', 'seen'] as const;
  * Ajuda e tutoriais (pranchas Al-V12/V12b). O texto vem no pacote, então a
  * ajuda funciona sem internet; só o vídeo some, com o aviso. "assistido" é o
  * que a pessoa já abriu, guardado na API. `initialTutorialId` (o `?tutorial=`
- * da rota) abre um tutorial direto, como o "Ver o tutorial" de Conectar sua IA.
+ * da rota) abre um tutorial direto, como o "Ver o tutorial" de Conectar sua IA:
+ * pelo mesmo `openTutorial` do toque na lista (marca como assistido), e fechar
+ * tira o parâmetro da URL, para voltar ou recarregar não reabrir.
  */
 export function HelpScreen({ initialTutorialId }: { initialTutorialId?: string } = {}) {
   const online = useOnline();
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
+  const router = useRouter();
   const [open, setOpen] = useState<Tutorial | null>(() => tutorialById(initialTutorialId));
+  /** O tutorial aberto veio do `?tutorial=` e o parâmetro ainda está na URL. */
+  const fromUrl = useRef(open !== null);
 
   const seen = useQuery({
     queryKey: SEEN_KEY,
@@ -47,10 +53,33 @@ export function HelpScreen({ initialTutorialId }: { initialTutorialId?: string }
   const seenIds = new Set(seen.data?.seen ?? []);
   const areas = searchTutorials(query);
 
-  const openTutorial = (t: Tutorial) => {
-    setOpen(t);
+  /** O mesmo para o toque na lista e para o `?tutorial=`. */
+  const markSeenIfNew = (t: Tutorial) => {
     if (online && !seenIds.has(t.id)) markSeen.mutate(t.id);
   };
+  const openTutorial = (t: Tutorial) => {
+    setOpen(t);
+    markSeenIfNew(t);
+  };
+
+  const closeTutorial = () => {
+    setOpen(null);
+    if (fromUrl.current) {
+      fromUrl.current = false;
+      router.replace('/you/help', { scroll: false });
+    }
+  };
+
+  // Só na montagem: o tutorial do `?tutorial=` já abriu no estado inicial; aqui
+  // ele é marcado como assistido. O ref segura o duplo efeito do StrictMode.
+  const markedInitial = useRef(false);
+  useEffect(() => {
+    if (markedInitial.current) return;
+    markedInitial.current = true;
+    const initial = tutorialById(initialTutorialId);
+    if (initial) markSeenIfNew(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-col gap-3.5 px-6 pb-8 pt-4">
@@ -139,7 +168,7 @@ export function HelpScreen({ initialTutorialId }: { initialTutorialId?: string }
         </section>
       ))}
 
-      <Drawer open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
+      <Drawer open={open !== null} onOpenChange={(o) => !o && closeTutorial()}>
         <DrawerContent className="px-6 pb-8">
           {open && (
             <>

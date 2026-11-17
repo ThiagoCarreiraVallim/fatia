@@ -19,12 +19,12 @@ linha dela em `_prisma_migrations` e as tabelas antes do `migrate deploy`.
 - [x] 3. Gravar a conexão não atrasa o `/oauth/token` (fire-and-forget, `flush()` para testes)
 - [x] 4/5. Conexão presa aos tokens: hash do refresh, vários access tokens com validade, `client_id` do corpo não manda
 - [x] 2. "Conectado" só nos últimos 30 dias; teste e "Não funcionou?" sempre acessíveis
-- [ ] 6. `?tutorial=` marca visto e some da URL ao fechar; clipboard do app com falha; MOBILE_PARITY.md
+- [x] 6. `?tutorial=` marca visto e some da URL ao fechar; clipboard do app com falha; MOBILE_PARITY.md
 - [ ] Docs (REDESIGN_PROGRESS, MCP_OAUTH), lint, typecheck, testes; HANDOFF apagado
 
 ## Próximo passo
 
-Item 6: `?tutorial=` pelo mesmo caminho do `openTutorial` (markSeen) na web e no app; limpar a URL na web; MOBILE_PARITY.md. Clipboard do app já feito (copy-text.ts).
+Docs (REDESIGN_PROGRESS #388, MCP_OAUTH), depois lint, typecheck e testes completos (api em fatia_t388, api-client, web, mobile).
 
 ## Decisões (itens 3 e 4/5)
 
