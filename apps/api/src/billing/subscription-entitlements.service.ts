@@ -78,36 +78,48 @@ function poolAsSubscription(
  * membership, lido a cada chamada.
  */
 export async function seatsAsSubscriptions(
-  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupMembership'>,
+  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupSeatPool'>,
   userId: string,
 ): Promise<AssinaturaLida[]> {
-  const [assentos, todos] = await Promise.all([
+  const [assentos, comunidades] = await Promise.all([
     prisma.groupSeatAssignment.findMany({
       where: { revokedAt: null, membership: { userId, status: 'ACTIVE' } },
       select: SEAT_AS_SUBSCRIPTION,
     }),
-    prisma.groupMembership.findMany({
-      where: {
-        userId,
-        status: 'ACTIVE',
-        role: 'MEMBER',
-        group: { seatPool: { mode: 'ALL_MEMBERS' } },
-      },
-      select: {
-        joinedAt: true,
-        createdAt: true,
-        group: { select: { seatPool: { select: POOL_AS_SUBSCRIPTION } } },
-      },
-    }),
+    allMembersPools(prisma, { userId }),
   ]);
   return [
     ...assentos.map((a) => poolAsSubscription(a.pool, a.assignedAt, 'SEAT')),
-    ...todos.flatMap((m) =>
-      m.group.seatPool
-        ? [poolAsSubscription(m.group.seatPool, m.joinedAt ?? m.createdAt, 'COMMUNITY')]
-        : [],
+    ...comunidades.flatMap((pool) =>
+      pool.group.memberships.map((m) =>
+        poolAsSubscription(pool, m.joinedAt ?? m.createdAt, 'COMMUNITY'),
+      ),
     ),
   ];
+}
+
+/**
+ * Pools em `ALL_MEMBERS` com as memberships pedidas que contam: ativas e de
+ * papel MEMBER (a equipe não é aluna). Lido pelo pool para uma consulta só.
+ */
+function allMembersPools(
+  prisma: Pick<PrismaService, 'groupSeatPool'>,
+  membership: { userId: string } | { id: { in: string[] } },
+) {
+  const where = { ...membership, status: 'ACTIVE' as const, role: 'MEMBER' as const };
+  return prisma.groupSeatPool.findMany({
+    where: { mode: 'ALL_MEMBERS', group: { memberships: { some: where } } },
+    select: {
+      ...POOL_AS_SUBSCRIPTION,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          memberships: { where, select: { id: true, joinedAt: true, createdAt: true } },
+        },
+      },
+    },
+  });
 }
 
 /**
@@ -122,12 +134,12 @@ export async function seatsAsSubscriptions(
  * paga o próprio PRO, nem como.
  */
 export async function membershipsWithEffectiveSeat(
-  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupMembership'>,
+  prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupSeatPool'>,
   membershipIds: string[],
   now: Date = new Date(),
 ): Promise<Set<string>> {
   if (membershipIds.length === 0) return new Set();
-  const [seats, todos] = await Promise.all([
+  const [seats, comunidades] = await Promise.all([
     prisma.groupSeatAssignment.findMany({
       where: {
         revokedAt: null,
@@ -136,32 +148,16 @@ export async function membershipsWithEffectiveSeat(
       },
       select: SEAT_AS_SUBSCRIPTION,
     }),
-    prisma.groupMembership.findMany({
-      where: {
-        id: { in: membershipIds },
-        status: 'ACTIVE',
-        role: 'MEMBER',
-        group: { seatPool: { mode: 'ALL_MEMBERS' } },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        group: { select: { seatPool: { select: POOL_AS_SUBSCRIPTION } } },
-      },
-    }),
+    allMembersPools(prisma, { id: { in: membershipIds } }),
   ]);
   const valendo = (a: AssinaturaLida) => resolveAiEntitlement([a], now).tier === 'PRO';
   return new Set([
     ...seats
       .filter((seat) => valendo(poolAsSubscription(seat.pool, seat.assignedAt, 'SEAT')))
       .map((seat) => seat.membershipId),
-    ...todos
-      .filter(
-        (m) =>
-          m.group.seatPool !== null &&
-          valendo(poolAsSubscription(m.group.seatPool, m.createdAt, 'COMMUNITY')),
-      )
-      .map((m) => m.id),
+    ...comunidades
+      .filter((pool) => valendo(poolAsSubscription(pool, now, 'COMMUNITY')))
+      .flatMap((pool) => pool.group.memberships.map((m) => m.id)),
   ]);
 }
 
