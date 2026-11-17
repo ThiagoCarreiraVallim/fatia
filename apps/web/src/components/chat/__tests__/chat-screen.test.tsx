@@ -73,7 +73,11 @@ let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
 let acesso: { allowed?: boolean; reason?: string } = {};
 let agentes: ChatAgents = { defaultGroupId: null, agents: [] };
-const aceito = { accepted: true, version: '2026-11-16', acceptedAt: '2026-11-16T10:00:00.000Z' };
+const aceito: { accepted: boolean; version: string; acceptedAt: string | null } = {
+  accepted: true,
+  version: '2026-11-16',
+  acceptedAt: '2026-11-16T10:00:00.000Z',
+};
 let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
 const acceptAiConsentMock = vi.fn(async (topico: 'chat' | 'web_search') => {
   aceites = { ...aceites, [topico === 'chat' ? 'chat' : 'webSearch']: aceito };

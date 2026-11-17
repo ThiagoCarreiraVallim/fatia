@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { AlertCircleIcon, CheckIcon } from 'lucide-react';
+import {
+  AlertCircleIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  SearchXIcon,
+} from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import {
   useAuiState,
@@ -10,11 +16,20 @@ import {
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
+import {
+  AGENT_LOCAL_TOOLS,
+  chatCardTitle,
+  collapsedLabel,
+  isEmptyChatArtifact,
+  TOOL_GROUP_MIN,
+} from '@fatia/api-client';
+import { cn } from '@/lib/utils';
 import { ReasoningPanel } from '@/components/elements/reasoning-panel';
 import { ToolGroup } from '@/components/elements/tool-group';
 import { SwapLabel } from '@/components/elements/surfaces';
 import { useArtefato, useArtefatos, useTitulosDasTools } from './chat-runtime-provider';
 import { Artefato } from './artefato';
+import { useCatalogoDasTools } from './catalogo';
 
 /**
  * As partes de uma mensagem do assistente: o texto em markdown e as tools.
@@ -43,10 +58,8 @@ export const AssistantReasoning: ReasoningMessagePartComponent = ({ text, status
   />
 );
 
-/** A tool local do agente: a pergunta dela aparece no cartão da pausa. */
-const TITULOS_LOCAIS: Record<string, string> = { ask_user: 'Pergunta para você' };
-
-export type StepState = 'rodando' | 'aguardando' | 'feito' | 'falhou' | 'recusada' | 'nao_rodou';
+export type StepState =
+  'rodando' | 'aguardando' | 'feito' | 'vazio' | 'falhou' | 'recusada' | 'nao_rodou';
 
 /**
  * Os dois desfechos que o próprio agente escreve, e que não são falha da tool:
@@ -57,19 +70,25 @@ export type StepState = 'rodando' | 'aguardando' | 'feito' | 'falhou' | 'recusad
 export const REFUSED_PREFIX = 'A pessoa recusou';
 export const NOT_RUN_PREFIX = 'Não executada';
 
-/** O que a linha diz em cada estado — só português, nunca o nome técnico da tool. */
-export function stepLabel(titulo: string, estado: StepState): string {
+/**
+ * O que a linha diz em cada estado — só português, nunca o nome técnico da tool. O desfecho
+ * vem depois de um "·", como na prancha IA-Estados ("Atualizar exercício · não deu certo").
+ * `gravacao`: a tool grava (a linha não diz "Consultando").
+ */
+export function stepLabel(titulo: string, estado: StepState, gravacao = false): string {
   switch (estado) {
     case 'rodando':
-      return `${titulo}…`;
+      return gravacao ? `${titulo}…` : `Consultando ${titulo}…`;
     case 'aguardando':
-      return `${titulo}: aguardando sua confirmação`;
+      return `${titulo} · aguardando sua confirmação`;
+    case 'vazio':
+      return `${titulo} · nada encontrado`;
     case 'falhou':
-      return `${titulo}: não deu certo`;
+      return `${titulo} · não deu certo`;
     case 'recusada':
-      return `${titulo}: você recusou, nada foi gravado`;
+      return `${titulo} · você recusou`;
     case 'nao_rodou':
-      return `${titulo}: não chegou a rodar`;
+      return `${titulo} · não chegou a rodar`;
     default:
       return titulo;
   }
@@ -111,31 +130,86 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
   result,
 }) => {
   const titulos = useTitulosDasTools();
+  const catalogo = useCatalogoDasTools();
   const artefato = useArtefato(toolCallId);
+  // Texto, e não objeto, no seletor: o runtime compara por igualdade.
+  const ultima = useAuiState((s) => s.message.isLast);
+  const criadaEm = useAuiState((s) => s.message.createdAt?.getTime() ?? 0);
   const [detalhe, setDetalhe] = useState(false);
-  const estado = stepState(status, isError, result);
-  const titulo = titulos[toolName] ?? TITULOS_LOCAIS[toolName] ?? 'Ação do assistente';
+  const [aberto, setAberto] = useState(false);
+  const bruto = stepState(status, isError, result);
+  const estado = bruto === 'feito' && artefato && isEmptyChatArtifact(artefato) ? 'vazio' : bruto;
+  const local = AGENT_LOCAL_TOOLS[toolName as keyof typeof AGENT_LOCAL_TOOLS];
+  const titulo =
+    titulos[toolName] ?? catalogo?.[toolName]?.title ?? local?.title ?? 'Ação do assistente';
+  const gravacao = catalogo?.[toolName]?.kind === 'confirm';
   const ativo = estado === 'rodando' || estado === 'aguardando';
   const motivo = estado === 'falhou' && typeof result === 'string' ? result.trim() : '';
+  const cartao = estado === 'feito' && artefato ? artefato : null;
+  const hora =
+    gravacao && estado === 'feito' && criadaEm
+      ? new Date(criadaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : null;
+  const rotulo = hora ? `${titulo} · gravado às ${hora}` : stepLabel(titulo, estado, gravacao);
+
+  // O cartão da última resposta fica aberto, com o nome da tool no cabeçalho dele; o de uma
+  // resposta antiga recolhe numa linha com ✓ e o resultado, e tocar abre de novo.
+  if (cartao && ultima) return <Artefato artefato={cartao} ferramenta={titulo} />;
+  if (cartao) {
+    return (
+      <div className="flex w-full flex-col gap-2">
+        <button
+          type="button"
+          aria-expanded={aberto}
+          onClick={() => setAberto((a) => !a)}
+          className="flex items-center gap-2 rounded-xl py-1 text-start text-[13.5px] text-foreground/55 hover:text-foreground/80"
+        >
+          <CheckIcon aria-hidden className="size-3.5 shrink-0 text-success" />
+          <span className="min-w-0 flex-1 truncate">
+            {titulo} ·{' '}
+            <span className="font-semibold text-foreground/80">{chatCardTitle(cartao)}</span>
+          </span>
+          <ChevronRightIcon
+            aria-hidden
+            className={cn(
+              'size-3.5 shrink-0 opacity-60 transition-transform',
+              aberto && 'rotate-90',
+            )}
+          />
+        </button>
+        {aberto ? <Artefato artefato={cartao} ferramenta={titulo} /> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col gap-2">
       <p
         data-slot="passo"
         data-estado={estado}
-        className="flex items-center gap-2 py-1 text-[13.5px] text-foreground/55"
+        className={cn(
+          'flex items-center gap-2 py-1 text-[13.5px] text-foreground/55',
+          estado === 'falhou' && 'text-danger',
+        )}
       >
+        {estado === 'rodando' ? (
+          <LoaderCircleIcon
+            aria-hidden
+            className="size-3.5 shrink-0 animate-spin text-success motion-reduce:animate-none"
+          />
+        ) : null}
+        {estado === 'vazio' ? <SearchXIcon aria-hidden className="size-3.5 shrink-0" /> : null}
         <SwapLabel active={ativo ? 0 : 1} className="text-start">
           <span className="relative inline-block leading-none">
-            <span>{stepLabel(titulo, estado)}</span>
+            <span>{rotulo}</span>
             <span
               aria-hidden
               className="shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
             >
-              {stepLabel(titulo, estado)}
+              {rotulo}
             </span>
           </span>
-          <>{stepLabel(titulo, estado)}</>
+          <>{rotulo}</>
         </SwapLabel>
         {estado === 'feito' ? (
           <CheckIcon
@@ -154,7 +228,7 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
             type="button"
             aria-expanded={detalhe}
             onClick={() => setDetalhe((aberto) => !aberto)}
-            className="ml-1 text-xs underline underline-offset-2 hover:text-foreground/80"
+            className="ml-1 text-xs text-foreground/55 underline underline-offset-2 hover:text-foreground/80"
           >
             {detalhe ? 'Ocultar detalhe' : 'Ver detalhe'}
           </button>
@@ -165,16 +239,13 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
           {motivo}
         </p>
       ) : null}
-      {artefato && estado === 'feito' ? <Artefato artefato={artefato} /> : null}
     </div>
   );
 };
 
-/** A partir de quantas tools seguidas o grupo resume — com menos, o cabeçalho é ruído. */
-export const TOOL_GROUP_MIN = 3;
-
 /**
- * Tools seguidas numa resposta, resumidas num cabeçalho.
+ * Tools seguidas numa resposta, resumidas num cabeçalho — a partir de duas (`TOOL_GROUP_MIN`,
+ * prancha IA-Cartoes: "Depois de 2 seguidas, agrupa").
  *
  * **Nunca agrupa quando alguma falhou.** A falha é o que a pessoa mais precisa
  * ver, e escondê-la atrás de "Consultei 4 coisas ✓" seria dizer que deu tudo certo.
@@ -211,7 +282,7 @@ export function ToolCallGroup({
   if (ids.length < TOOL_GROUP_MIN || algumaFalhou) return <>{children}</>;
   const temCartao = ids.some((id) => artefatos[id] !== undefined);
   return (
-    <ToolGroup label={`Consultei ${ids.length} coisas`} defaultOpen={rodando || temCartao}>
+    <ToolGroup label={collapsedLabel(ids.length)} defaultOpen={rodando || temCartao}>
       {children}
     </ToolGroup>
   );

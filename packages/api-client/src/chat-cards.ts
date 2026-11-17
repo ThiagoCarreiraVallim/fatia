@@ -44,7 +44,7 @@ export type ChatToolCatalog = Record<string, ChatToolCatalogEntry>;
  */
 export const AGENT_LOCAL_TOOLS = {
   ask_user: { title: 'Perguntar', card: 'question' },
-  web_search: { title: 'Pesquisar na web', card: 'sources' },
+  web_search: { title: 'Buscar na web', card: 'sources' },
   open_in_app: { title: 'Abrir no app', card: 'app_only' },
 } as const;
 
