@@ -260,7 +260,54 @@ const TECNICA: Record<string, string> = {
   TO_FAILURE: 'Até a falha',
 };
 
+const duracao: Formato = (valor) => {
+  if (typeof valor !== 'number') return null;
+  const minutos = Math.floor(valor / 60);
+  const segundos = Math.round(valor % 60);
+  if (!minutos) return `${segundos} s`;
+  return segundos ? `${minutos} min ${segundos} s` : `${minutos} min`;
+};
+
+/** "14:34": o relógio do circuito. */
+const relogio = (s: number) =>
+  `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
+/** O circuito de `create_workout_plan` (#380): "AMRAP de 12 min", "Tabata 8 × 20 s / 10 s". */
+const circuito: Formato = (valor) => {
+  if (typeof valor !== 'object' || valor === null) return null;
+  const c = valor as Record<string, unknown>;
+  const n = (k: string) => (typeof c[k] === 'number' ? (c[k] as number) : null);
+  if (c.format === 'AMRAP') return `AMRAP de ${n('durationMinutes') ?? '?'} min`;
+  if (c.format === 'EMOM') return `EMOM de ${n('durationMinutes') ?? '?'} min`;
+  if (c.format === 'TABATA') {
+    return `Tabata ${n('intervals') ?? 8} × ${n('workSeconds') ?? 20} s / ${n('restSeconds') ?? 10} s`;
+  }
+  if (c.format === 'FOR_TIME') {
+    const descanso = n('restBetweenRoundsSeconds');
+    return `For Time, ${n('rounds') ?? '?'} rounds${descanso ? `, ${descanso} s de descanso entre rounds` : ''}`;
+  }
+  return null;
+};
+
 export const CAMPOS: Record<string, Campo> = {
+  // Circuitos (#380): `create_workout_plan.circuit` e `log_circuit_result`.
+  circuit: { rotulo: 'Circuito', formato: circuito },
+  seconds: { rotulo: 'Tempo', formato: comUnidade('s', 0) },
+  roundsCompleted: { rotulo: 'Rounds completos', formato: semUnidade },
+  partialExercises: { rotulo: 'Exercícios do round incompleto', formato: semUnidade },
+  finalTimeSeconds: {
+    rotulo: 'Tempo final',
+    formato: (valor) => (typeof valor === 'number' ? relogio(valor) : null),
+  },
+  roundSeconds: {
+    rotulo: 'Tempo de cada round',
+    formato: (valor) =>
+      Array.isArray(valor) && valor.every((x) => typeof x === 'number')
+        ? (valor as number[]).map(relogio).join(', ')
+        : null,
+  },
+  intervalsCompleted: { rotulo: 'Intervalos feitos', formato: semUnidade },
+  elapsedSeconds: { rotulo: 'Duração', formato: duracao },
   // `mark_inbox_read` (#373): quantos avisos; sem a lista, a tool marca todos.
   ids: {
     rotulo: 'Avisos marcados como lidos',
@@ -360,16 +407,7 @@ export const CAMPOS: Record<string, Campo> = {
   source: { rotulo: 'Origem', formato: deMapa(ORIGEM_DOS_PASSOS) },
   reps: { rotulo: 'Repetições', formato: semUnidade },
   rpe: { rotulo: 'Esforço (0 a 10)', formato: semUnidade },
-  durationSeconds: {
-    rotulo: 'Duração',
-    formato: (valor) => {
-      if (typeof valor !== 'number') return null;
-      const minutos = Math.floor(valor / 60);
-      const segundos = Math.round(valor % 60);
-      if (!minutos) return `${segundos} s`;
-      return segundos ? `${minutos} min ${segundos} s` : `${minutos} min`;
-    },
-  },
+  durationSeconds: { rotulo: 'Duração', formato: duracao },
   distanceMeters: {
     rotulo: 'Distância',
     formato: (valor) =>
