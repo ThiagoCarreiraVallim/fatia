@@ -5,6 +5,7 @@ import {
   SubscriptionEntitlementsService,
 } from '../subscription-entitlements.service';
 import { grantGroup, parseGrantGroupArgs } from '../grant-group';
+import { dateInTz } from '../../progress/helpers/date-tz';
 
 describe('billing:grant-group — argumentos', () => {
   it('lê o código, a data final, o programa e --revoke', () => {
@@ -160,6 +161,8 @@ describe('PRO pela comunidade (banco real)', () => {
       subscription: { paidBy: 'PROGRAM', programName: 'Verão 21' },
     });
     expect(d.subscription?.currentPeriodEnd?.getTime()).toBeGreaterThan(Date.now());
+    // O último dia é o próprio --until, no fuso de São Paulo (não o dia seguinte).
+    expect(dateInTz(d.subscription!.currentPeriodEnd!, 'America/Sao_Paulo')).toBe(fim);
   });
 
   it('--revoke encerra o PRO de todos os membros', async () => {

@@ -73,8 +73,9 @@ export async function grantGroup(prisma: Db, args: GrantGroupArgs): Promise<stri
     return `PRO de todos os membros encerrado em ${group.name}`;
   }
 
-  // O dia inteiro vale: acaba à meia-noite do dia seguinte, em São Paulo.
-  const end = args.until ? dayBoundsInTz(args.until, FUSO).end : null;
+  // O dia inteiro vale: acaba às 23:59:59.999 desse dia, em São Paulo — e é
+  // esse o dia que a tela mostra ("PRO até 30/11"), não o seguinte.
+  const end = args.until ? new Date(dayBoundsInTz(args.until, FUSO).end.getTime() - 1) : null;
   const data = {
     mode: 'ALL_MEMBERS' as const,
     status: 'ACTIVE' as const,

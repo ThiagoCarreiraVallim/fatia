@@ -585,7 +585,8 @@ describe('planStatusView: PRO pela comunidade (M5)', () => {
         paidBy: 'PROGRAM',
         groupName: 'Academia Demo',
         programName: 'Programa Verão 21',
-        currentPeriodEnd: '2026-11-17T02:59:59Z',
+        // O que `billing:grant-group --until 2026-11-16` grava: o fim do dia 16 em São Paulo.
+        currentPeriodEnd: '2026-11-17T02:59:59.999Z',
         cancelAtPeriodEnd: true,
         trialEligible: false,
       }),

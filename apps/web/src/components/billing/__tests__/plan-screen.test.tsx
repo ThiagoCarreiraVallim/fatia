@@ -338,7 +338,8 @@ describe('PlanScreen', () => {
       state: 'ACTIVE',
       paidBy: 'PROGRAM',
       programName: 'Programa Verão 21',
-      currentPeriodEnd: '2099-11-30T12:00:00.000Z',
+      // O que `billing:grant-group --until 2099-11-30` grava: o fim do dia 30 em São Paulo.
+      currentPeriodEnd: '2099-12-01T02:59:59.999Z',
       groupName: 'Academia Demo',
     });
     renderScreen();
