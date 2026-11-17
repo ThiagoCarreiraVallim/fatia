@@ -11,7 +11,7 @@ Worktree `.claude/worktrees/385-ia-config`, branch `redesign/385-ia-config`. Nã
 
 - [x] 1. Desfazer compara com o estado pós-gravação (409 `AUTO_WRITE_CHANGED`), filhos inclusos; StepLog no `estado()`
 - [x] 2. Timeout na gravação automática: consulta por `toolCallId`; gravação + linha atômicas; testes
-- [ ] 3. Limpeza de `input/result/before` após 24 h, ao apagar o registro e no desfazer; export; DATA_RETENTION
+- [x] 3. Limpeza de `input/result/before` após 24 h, ao apagar o registro e no desfazer; export; DATA_RETENTION
 - [x] 4. Header só com a credencial do agente; `runId` amarrado a `ChatRun` ativo; teto por mensagem da pessoa
 - [x] 5. `toolCallId` repetido: mesmo input → idempotente; senão `AUTO_WRITE_NEEDS_OK`
 - [ ] 6. UI do Desfazer (erros, persistência, antes → depois) e falha do `updateMe` na foto
@@ -19,8 +19,8 @@ Worktree `.claude/worktrees/385-ia-config`, branch `redesign/385-ia-config`. Nã
 
 ## Próximo passo exato
 
-Itens 1, 2, 4 e 5 prontos (API + agente). Falta: item 3 (export LGPD com after/card/category/doneAt/
-clearedAt; DATA_RETENTION.md), item 6 (GET /chat/auto-writes/:id → status; api-client getAutoWriteStatus
+Itens 1-5 prontos. Falta:
+item 6 (GET /chat/auto-writes/:id → status; api-client getAutoWriteStatus
 
 - mensagens de erro do desfazer; web artefato.tsx e app artifact-card.tsx; meal-photo-screen updateMe),
   docs (ADR 039, REDESIGN_PROGRESS), lint/typecheck/suítes, commit final sem este arquivo.

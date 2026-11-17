@@ -579,17 +579,23 @@ export class AccountService {
         where: { userId },
         select: { category: true, mode: true, updatedAt: true },
       }),
-      // As gravações automáticas, com o que foi pedido e o retrato de antes (ADR 039).
+      // As gravações automáticas (ADR 039). O pedido, os retratos e o cartão só existem durante a
+      // janela de 24 h do Desfazer (#385): depois voltam nulos, e ficam os metadados.
       this.prisma.aiAutoWrite.findMany({
         where: { userId },
         select: {
           conversationId: true,
           tool: true,
+          category: true,
           input: true,
           result: true,
           before: true,
+          after: true,
+          card: true,
           createdAt: true,
+          doneAt: true,
           undoneAt: true,
+          clearedAt: true,
         },
         orderBy: { createdAt: 'asc' },
       }),

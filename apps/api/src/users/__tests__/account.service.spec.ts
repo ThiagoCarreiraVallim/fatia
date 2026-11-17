@@ -394,6 +394,32 @@ describe('AccountService', () => {
       expect(result.exportedAt).toBeTruthy();
     });
 
+    it('gravação automática: o pedido, os retratos e o cartão enquanto guardados, e o que sobra depois (#385)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      await service.exportData('user-A');
+      const { select } = prisma.aiAutoWrite.findMany.mock.calls[0][0] as {
+        select: Record<string, boolean>;
+      };
+      // Depois da janela de 24 h, `input`, `result`, `before`, `after` e `card` voltam nulos — o
+      // export devolve o que ainda está guardado, e os metadados que ficam para sempre.
+      expect(Object.keys(select).sort()).toEqual(
+        [
+          'after',
+          'before',
+          'card',
+          'category',
+          'clearedAt',
+          'conversationId',
+          'createdAt',
+          'doneAt',
+          'input',
+          'result',
+          'tool',
+          'undoneAt',
+        ].sort(),
+      );
+    });
+
     it('falha quando o usuário não existe', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
