@@ -51,7 +51,7 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 9. Foto: descarte da foto do chat fica com a #384 (heads-up); MCP de refeição já informa `hasPhoto` e export/exclusão já vêm da #374
 - [x] 10. Isolamento (foto já coberta pela #374) (`user-isolation.spec.ts`): foto, memórias, preferências, desfazer
 - [x] 11. api-client: settings, memórias, desfazer, foto da refeição
-- [ ] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
+- [x] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
 - [ ] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
 - [ ] 14. Docs: ADRs (notas), DATA_RETENTION, privacy, MCP (se mudou), REDESIGN_PROGRESS
 - [ ] 15. lint, typecheck, testes de tudo; commit final sem este arquivo
@@ -89,7 +89,12 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   "Registrar à mão" e placeholder "Volta amanhã", fora do ar, interrompida com Continuar, "Pode sair
   da tela"). Testes: `gravado.test.tsx`, `config-da-ia.test.tsx`, casos novos em `chat-screen.test.tsx`.
 
+- Web (foto): `/nutrition/photo` (`meal-photo-screen.tsx`): arquivo com `capture`, EXIF fora por
+  `recodificarFoto`, aviso do OpenRouter = aceite do chat (403 traz de volta), pergunta de guardar
+  antes do reconhecimento quando `keepMealPhotos` é null, revisão Al-M10 (±10 g, total, 20–30%,
+  "Gravar no…"). Web: 977 testes verdes, tsc e eslint limpos.
+
 ## Próximo passo exato
 
-Web: `/nutrition/photo` (o menu da IA já aponta para lá e a página não existe): upload de arquivo,
-aviso do provedor na primeira foto, pergunta de guardar, revisão Al-M10, 403 do aceite.
+App (item 13): Config da IA, Memórias Al-M9, Desfazer no `artifact-card.tsx`, estados Al-M11,
+câmera (aviso do provedor/aceite 403, revisão ±10 g) e o texto da permissão em `app.config.ts`.
