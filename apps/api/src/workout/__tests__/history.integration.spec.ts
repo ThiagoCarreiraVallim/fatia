@@ -165,7 +165,9 @@ describe('treino livre e histórico #381 (banco real)', () => {
     it('pagina pelo cursor', async () => {
       const first = await sessions.history(userId, { limit: 2 });
       expect(first.items).toHaveLength(2);
-      expect(first.nextCursor).toBe(first.items[1]!.id);
+      // Opaco: a posição da última linha, não o id dela.
+      expect(first.nextCursor).toEqual(expect.any(String));
+      expect(first.nextCursor).not.toBe(first.items[1]!.id);
       const rest = await sessions.history(userId, { limit: 2, cursor: first.nextCursor! });
       expect(rest.items).toHaveLength(1);
       expect(rest.nextCursor).toBeNull();
@@ -226,9 +228,17 @@ describe('treino livre e histórico #381 (banco real)', () => {
     });
 
     it('sessão sem série não tem o que virar plano', async () => {
-      await expect(plans.createFromSession(userId, openId, {})).rejects.toThrow(
+      const empty = await prisma.workoutSession.create({
+        data: {
+          userId,
+          startedAt: at('2026-10-01T10:00:00Z'),
+          completedAt: at('2026-10-01T10:05:00Z'),
+        },
+      });
+      await expect(plans.createFromSession(userId, empty.id, {})).rejects.toThrow(
         BadRequestException,
       );
+      await prisma.workoutSession.delete({ where: { id: empty.id } });
     });
   });
 

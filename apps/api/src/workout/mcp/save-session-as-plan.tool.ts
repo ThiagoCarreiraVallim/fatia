@@ -9,7 +9,8 @@ import { WorkoutPlanService } from '../workout-plan.service';
 
 /**
  * "Salvar como plano" (#381, prancha `Al-T11b`): a mesma rota do app
- * (`POST /workout/sessions/:id/plan`). Cria um plano novo, não mexe na sessão.
+ * (`POST /workout/sessions/:id/plan`). Cria um plano novo, não mexe na sessão;
+ * idempotente por sessão (`WorkoutPlan.fromSessionId`).
  */
 @Injectable()
 @McpTool()
@@ -27,7 +28,9 @@ export class SaveSessionAsPlanTool implements McpToolDef {
     'Cria um plano de treino novo a partir de uma sessão já feita (treino livre, inclusive o só ' +
     'de cardio): os exercícios na ordem da sessão, com as séries, a faixa de repetições e a carga ' +
     'da primeira série; no cardio, a distância e o tempo feitos viram a meta. Sem name, o plano ' +
-    'leva o nome do plano da sessão, do único exercício ou "Treino livre". ' +
+    'leva o nome do plano da sessão, do único exercício ou "Treino livre". Só sessão terminada ' +
+    '(a aberta dá conflito: finalize antes); salvar de novo a mesma sessão devolve o plano que ' +
+    'ela já virou, sem criar outro. ' +
     'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555","name":"Esteira 5 km"}';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão que vira plano'),

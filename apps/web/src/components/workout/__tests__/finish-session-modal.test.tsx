@@ -61,4 +61,21 @@ describe('FinishSessionModal (#377)', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/workout'));
     expect(push).not.toHaveBeenCalledWith('/workout/session/s1');
   });
+
+  it('finalizar deixa velhos a lista e o histórico de treinos (#381)', async () => {
+    finishSession.mockResolvedValue({ ...SESSION, completedAt: new Date().toISOString() });
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={client}>
+        <FinishSessionModal open onOpenChange={() => undefined} session={SESSION} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Finalizar treino' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/workout/session/s1'));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workout', 'sessions'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workout', 'history'] });
+  });
 });

@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 152 tools): **137,0 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 152 tools): **137,2 k caracteres**
 hoje, dos quais **7.895 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (114,1 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (114,2 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1651,14 +1651,15 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 {
   date?: string;   // YYYY-MM-DD (UTC)
   limit?: number;
-  cursor?: string;
+  cursor?: string; // id da última sessão da página anterior; de outra pessoa ou já apagada: BAD_REQUEST
   kind?: 'plan' | 'circuit' | 'free'; // #381
 }
 ```
 
 **Output:** as sessões, cada uma com séries, plano, `feeling` (1 Leve a 5 No limite), `notes` e
 `kind` (#381): `plan` (com plano), `free` (treino livre, inclusive o só de cardio) ou `circuit`.
-O tipo é derivado, nunca gravado; não há tipo "cardio", porque cardio é exercício
+O tipo vem do retrato gravado ao começar (`fromPlan` e `planName` na sessão): apagar o plano não
+faz a sessão virar `free`. Não há tipo "cardio", porque cardio é exercício
 (`muscleGroup === 'cardio'`). Circuito chega com a #380: até lá nenhuma sessão é `circuit`.
 
 ### `save_session_as_plan`
@@ -1667,7 +1668,10 @@ O tipo é derivado, nunca gravado; não há tipo "cardio", porque cardio é exer
 novo com os exercícios da sessão, na ordem dela. Força guarda as séries feitas, a faixa de
 repetições (ou de segundos) e a carga da primeira série como carga inicial; cardio guarda a
 distância e o tempo somados como meta de cardio (por distância quando houve distância, senão por
-tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`.
+tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`; sessão ainda
+aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"). Idempotente por sessão: salvar
+de novo a mesma sessão devolve o plano que ela já virou (`WorkoutPlan.fromSessionId`, único por
+pessoa), sem criar outro nem renomear; o resumo da sessão traz esse id em `savedPlanId`.
 
 **Input:**
 

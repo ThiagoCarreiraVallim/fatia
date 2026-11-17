@@ -254,6 +254,24 @@ describe('Sessão do histórico', () => {
     expect(saveAsPlan).toHaveBeenCalledWith('sessao-1');
   });
 
+  it('plano apagado: a sessão segue de plano e não oferece virar plano', async () => {
+    getSummary.mockResolvedValue({ ...base, kind: 'plan', planId: null });
+    renderPage();
+    await screen.findByRole('region', { name: 'Resumo do treino' });
+    expect(screen.queryByRole('button', { name: 'Salvar como plano' })).toBeNull();
+  });
+
+  it('livre já salvo como plano: "Ver plano" no lugar de "Salvar como plano"', async () => {
+    getSummary.mockResolvedValue({ ...cardio, savedPlanId: 'plano-salvo' });
+    renderPage();
+    await screen.findByRole('region', { name: 'Resumo do treino' });
+    expect(screen.getByRole('link', { name: 'Ver plano' })).toHaveAttribute(
+      'href',
+      '/workout/plans/plano-salvo',
+    );
+    expect(screen.queryByRole('button', { name: 'Salvar como plano' })).toBeNull();
+  });
+
   it('livre: "Repetir" começa outro livre com os mesmos exercícios já escolhidos', async () => {
     getSummary.mockResolvedValue(cardio);
     startSession.mockResolvedValue({ id: 'nova' } as never);

@@ -31,6 +31,9 @@ export interface SummaryInput {
   session: {
     id: string;
     planId: string | null;
+    /** Retrato do plano ao começar; sobrevive à exclusão do plano. */
+    fromPlan?: boolean;
+    planName?: string | null;
     startedAt: Date;
     completedAt: Date | null;
     feeling: number | null;
@@ -349,7 +352,7 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
     sessionId: session.id,
     kind: sessionKind(session),
     planId: session.planId,
-    planName: session.plan?.name ?? null,
+    planName: session.plan?.name ?? session.planName ?? null,
     startedAt: session.startedAt,
     completedAt: session.completedAt,
     durationMinutes,

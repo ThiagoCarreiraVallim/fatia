@@ -6,6 +6,9 @@ import { sessionKind, type SessionKind } from './helpers/session-kind';
 export interface HistorySessionInput {
   id: string;
   planId: string | null;
+  /** Retrato do plano ao começar; sobrevive à exclusão do plano. */
+  fromPlan?: boolean;
+  planName?: string | null;
   startedAt: Date;
   completedAt: Date | null;
   feeling: number | null;
@@ -30,7 +33,10 @@ export interface HistoryItem {
   startedAt: Date;
   completedAt: Date | null;
   kind: SessionKind;
-  /** O nome do plano. Nulo no treino livre: a tela escreve "Treino livre". */
+  /**
+   * O nome do plano (o atual, ou o do retrato se o plano foi apagado). Nulo no
+   * treino livre: a tela escreve "Treino livre".
+   */
   title: string | null;
   /**
    * "Como foi o treino?", 1 a 5. Sem marca, a média das séries de força: a
@@ -57,7 +63,7 @@ export interface HistoryItem {
 export interface WorkoutHistory {
   totals: { sessions: number; avgDurationMinutes: number | null; volumeKg: number };
   items: HistoryItem[];
-  /** Passe como `cursor` para a próxima página; nulo no fim. */
+  /** Passe como `cursor` para a próxima página (opaco); nulo no fim. */
   nextCursor: string | null;
 }
 
@@ -86,7 +92,7 @@ export function historyItemOf(session: HistorySessionInput): HistoryItem {
     startedAt: session.startedAt,
     completedAt: session.completedAt,
     kind: sessionKind(session),
-    title: session.plan?.name ?? null,
+    title: session.plan?.name ?? session.planName ?? null,
     feeling: session.feeling ?? averageFeeling(strength.map((s) => s.rpe)),
     notes: session.notes,
     durationMinutes: session.completedAt

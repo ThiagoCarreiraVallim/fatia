@@ -303,6 +303,11 @@ export interface WorkoutSessionSummary {
   checkin: (Omit<WorkoutCheckin, 'sessionId'> & { sessionId?: string }) | null;
   /** Nulo: ninguém da equipe lê Treino, a folha de perguntas não aparece. */
   questions: { askedBy: string[]; items: PostWorkoutQuestion[] } | null;
+  /**
+   * O plano que esta sessão virou no "Salvar como plano" (#381): o detalhe
+   * mostra "Ver plano" no lugar do botão. Opcional para respostas antigas.
+   */
+  savedPlanId?: string | null;
 }
 
 /** Uma linha do histórico (`GET /workout/history`, #381, Al-T10). */
@@ -435,7 +440,16 @@ export const workoutApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  startSession: (body: { planId?: string; startedAt?: string; notes?: string }) =>
+  /**
+   * `exerciseOrder`: a ordem dos exercícios escolhidos antes de começar (treino
+   * livre, #381), gravada na sessão para o detalhe e o "Salvar como plano".
+   */
+  startSession: (body: {
+    planId?: string;
+    startedAt?: string;
+    notes?: string;
+    exerciseOrder?: number[];
+  }) =>
     apiFetch<WorkoutSession>('/api/workout/sessions', {
       method: 'POST',
       body: JSON.stringify(body),

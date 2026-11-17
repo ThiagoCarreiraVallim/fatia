@@ -34,7 +34,7 @@ const SUGGESTIONS = 8;
 export default function FreeWorkoutScreen() {
   const { add: addParam } = useLocalSearchParams<{ add?: string }>();
   const toast = useToast();
-  const start = useStartSession();
+  const start = useStartSession({ replace: true });
   const [picked, setPicked] = useState<Exercise[]>([]);
   const [addOpen, setAddOpen] = useState(addParam === 'cardio');
   // O filtro Cardio vale só na primeira vez que a busca abre.

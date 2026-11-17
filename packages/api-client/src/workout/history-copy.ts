@@ -187,6 +187,20 @@ export function cardioRecordLine(
  * "Repetir" (#381): a sessão com plano repete o plano; a livre começa outra
  * livre com os mesmos exercícios, que entram como escolhidos e ainda sem série.
  */
+/** O que o detalhe oferece ao lado do "Repetir": salvar como plano, ou ver o plano salvo. */
+export type SessionPlanAction = { kind: 'save' } | { kind: 'view'; planId: string } | null;
+
+/**
+ * "Salvar como plano" só no treino livre — pelo `kind`, e não pelo `planId`:
+ * apagar o plano zera o `planId`, e a sessão continua sendo de plano. Já
+ * salva, a sessão leva ao plano que virou ("Ver plano"), em vez de criar outro.
+ */
+export function sessionPlanAction(summary: WorkoutSessionSummary): SessionPlanAction {
+  const kind = summary.kind ?? (summary.planId ? 'plan' : 'free');
+  if (kind !== 'free') return null;
+  return summary.savedPlanId ? { kind: 'view', planId: summary.savedPlanId } : { kind: 'save' };
+}
+
 export function repeatPlanOf(summary: WorkoutSessionSummary): {
   planId: string | null;
   pending: PendingExercise[];

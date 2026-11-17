@@ -144,6 +144,17 @@ describe('Treino livre', () => {
     ]);
   });
 
+  it('"Iniciar" grava a ordem em que os exercícios foram escolhidos', async () => {
+    startSession.mockResolvedValue({ id: 'sessao-1' } as WorkoutSession);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Adicionar Esteira' }));
+    await user.click(screen.getByRole('button', { name: 'Adicionar Puxada frente' }));
+    await user.click(screen.getByRole('button', { name: 'Iniciar treino · 2 exercícios' }));
+    await waitFor(() => expect(startSession).toHaveBeenCalled());
+    expect(startSession.mock.calls[0]![0].exerciseOrder).toEqual([3, 2]);
+  });
+
   it('com um treino já aberto (409), cai nele sem misturar os escolhidos', async () => {
     startSession.mockRejectedValue(new ApiError('aberta', 409, { activeSessionId: 'outra' }));
     const user = userEvent.setup();

@@ -13,6 +13,7 @@ import {
   formatBestSet,
   muscleGroupName,
   repeatPlanOf,
+  sessionPlanAction,
   sessionDetailTitle,
   sessionHero,
   setLine,
@@ -107,11 +108,16 @@ function Detail({ summary }: { summary: WorkoutSessionSummary }) {
   const feeling = feelingOf(summary.feeling ?? summary.overallFeeling);
   const repeat = useStartWithExercises();
   const isFree = summary.planId == null;
+  const planAction = sessionPlanAction(summary);
 
   const saveAsPlan = useMutation({
     mutationFn: () => workoutApi.saveSessionAsPlan(summary.sessionId),
     onSuccess: (plan) => {
       void qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
+      // A volta ao detalhe já mostra "Ver plano".
+      void qc.invalidateQueries({
+        queryKey: ['workout', 'session', summary.sessionId, 'summary'],
+      });
       router.push(`/workout/plans/${plan.id}`);
     },
   });
@@ -181,7 +187,7 @@ function Detail({ summary }: { summary: WorkoutSessionSummary }) {
           <Repeat size={16} aria-hidden />
           {isFree ? 'Repetir' : 'Repetir este treino'}
         </button>
-        {isFree && (
+        {planAction?.kind === 'save' && (
           <button
             type="button"
             disabled={saveAsPlan.isPending}
@@ -191,6 +197,14 @@ function Detail({ summary }: { summary: WorkoutSessionSummary }) {
             <Plus size={16} aria-hidden />
             {saveAsPlan.isPending ? 'Salvando...' : 'Salvar como plano'}
           </button>
+        )}
+        {planAction?.kind === 'view' && (
+          <Link
+            href={`/workout/plans/${planAction.planId}`}
+            className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-primary text-[15px] font-bold text-primary-foreground"
+          >
+            Ver plano
+          </Link>
         )}
       </DockedAction>
     </DockedPage>

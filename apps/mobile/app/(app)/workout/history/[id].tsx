@@ -12,6 +12,7 @@ import {
   formatBestSet,
   muscleGroupName,
   repeatPlanOf,
+  sessionPlanAction,
   sessionDetailTitle,
   sessionHero,
   setLine,
@@ -118,11 +119,16 @@ function Detail({
   const feeling = feelingOf(summary.feeling ?? summary.overallFeeling);
   const repeat = useStartSession();
   const isFree = summary.planId == null;
+  const planAction = sessionPlanAction(summary);
 
   const saveAsPlan = useMutation({
     mutationFn: () => workoutApi.saveSessionAsPlan(summary.sessionId),
     onSuccess: (plan) => {
       void qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
+      // A volta ao detalhe já mostra "Ver plano".
+      void qc.invalidateQueries({
+        queryKey: ['workout', 'session', summary.sessionId, 'summary'],
+      });
       router.push(`/workout/plans/${plan.id}` as Href);
     },
   });
@@ -162,7 +168,16 @@ function Detail({
               {isFree ? 'Repetir' : 'Repetir este treino'}
             </Text>
           </Pressable>
-          {isFree ? (
+          {planAction?.kind === 'view' ? (
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push(`/workout/plans/${planAction.planId}` as Href)}
+              className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-primary active:opacity-80"
+            >
+              <Text className="font-sans-bold text-[15px] text-primary-foreground">Ver plano</Text>
+            </Pressable>
+          ) : null}
+          {planAction?.kind === 'save' ? (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: saveAsPlan.isPending }}

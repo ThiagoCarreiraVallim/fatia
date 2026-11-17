@@ -55,10 +55,11 @@ import {
  * intenção) e `weeks` em `create_training_block`: muda o braço A.
  * A #381 acrescentou `save_session_as_plan` (não destrutiva nem de intenção), `kind` em
  * `list_workout_sessions` e o treino livre na descrição de `start_workout_session`: muda o
- * braço A.
+ * braço A. A revisão da #381 disse na descrição de `save_session_as_plan` que ela é idempotente
+ * por sessão e recusa a sessão aberta: muda o braço A.
  */
 
-const SHA_ENTIDADE = '4fd793cbd0e0ddd60be4bc8c43538fb1044daf30a6e5b564239ec34dd3958ab2';
+const SHA_ENTIDADE = 'a35568d161e2824355a4e0455eed3e11bc65f53b5e6e8e71aa234da1edb88896';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

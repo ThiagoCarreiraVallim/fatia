@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   buildExerciseGroups,
@@ -10,7 +10,6 @@ import {
   pickFocusedGroup,
   workoutApi,
   type ExerciseGroup,
-  type PendingExercise,
   type SessionSet,
   type WorkoutSession,
 } from '@fatia/api-client';
@@ -33,7 +32,7 @@ import { Switch } from '@/components/ui/switch';
 import { useSessionRestTimer } from '@/components/workout/rest-timer-provider';
 import { useSessionLayout } from '@/components/workout/use-session-layout';
 import { useWakeLock } from '@/components/workout/use-wake-lock';
-import { pendingKey } from '@/components/workout/use-start-with-exercises';
+import { usePendingExercises } from '@/components/workout/use-pending-exercises';
 import { WorkoutHome } from '@/components/workout/workout-home';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -65,12 +64,9 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
-  // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
-  // O Treino livre e o "Repetir" (#381) deixam os escolhidos no cache ao abrir a sessão.
-  const qc = useQueryClient();
-  const [pending, setPending] = useState<PendingExercise[]>(
-    () => qc.getQueryData<PendingExercise[]>(pendingKey(session.id)) ?? [],
-  );
+  // Escolhidos na busca e ainda sem série (ver `buildExerciseGroups`): no cache,
+  // onde o Treino livre e o "Repetir" (#381) os deixam ao abrir a sessão.
+  const { pending, add: addPending, drop: dropPending } = usePendingExercises(session.id);
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [currentOpen, setCurrentOpen] = useState(false);
   // Desligado o "passar sozinho", o fim de um exercício mostra a lista do que
@@ -124,7 +120,7 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
 
   function removeExercise(group: ExerciseGroup) {
     setRemoveTarget(null);
-    setPending((prev) => prev.filter((p) => p.id !== group.exerciseId));
+    dropPending(group.exerciseId);
     if (pickedId === group.exerciseId) setPickedId(null);
     // Escolhido na busca e ainda sem série: só existia na tela.
     if (!group.isPlanned && group.sets.length === 0) return;
@@ -380,7 +376,7 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         onPick={(exercise) => {
-          setPending((prev) => [...prev, exercise]);
+          addPending(exercise);
           setPickedId(exercise.id);
           setPicking(false);
         }}

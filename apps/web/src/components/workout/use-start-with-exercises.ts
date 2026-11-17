@@ -4,13 +4,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   activeSessionIdFromError,
+  pendingExercisesKey,
+  startSessionBody,
   workoutApi,
   type PendingExercise,
   type WorkoutSession,
 } from '@fatia/api-client';
-
-/** Onde a sessão aberta guarda os escolhidos ainda sem série (o app usa a mesma chave). */
-export const pendingKey = (sessionId: string) => ['workout', 'session', sessionId, 'pending'];
 
 /**
  * Começa uma sessão e leva ao treino em andamento (#381): o "Iniciar treino"
@@ -27,15 +26,13 @@ export function useStartWithExercises() {
   return useMutation({
     mutationFn: async ({
       planId,
+      pending,
     }: {
       planId: string | null;
       pending: PendingExercise[];
     }): Promise<WorkoutSession | null> => {
       try {
-        return await workoutApi.startSession({
-          planId: planId ?? undefined,
-          startedAt: new Date().toISOString(),
-        });
+        return await workoutApi.startSession(startSessionBody(planId, pending));
       } catch (error) {
         if (activeSessionIdFromError(error)) return null;
         throw error;
@@ -43,7 +40,7 @@ export function useStartWithExercises() {
     },
     onSuccess: (session, { pending }) => {
       if (session) {
-        qc.setQueryData(pendingKey(session.id), pending);
+        qc.setQueryData(pendingExercisesKey(session.id), pending);
         qc.setQueryData(['workout', 'active'], session);
       }
       void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
