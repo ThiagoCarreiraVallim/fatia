@@ -47,7 +47,7 @@ import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
-import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
+import { failedQuestion, canDrainQueue, useMessageQueue, type ItemDaFila } from './fila';
 import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
 import { ChatConsentSheet, useChatUnlocked } from './aceite';
 import { CHAVE_DOS_ACEITES } from './catalogo';
@@ -105,18 +105,12 @@ function MensagemDaPessoa() {
   );
 }
 
-/** O texto da última pergunta da pessoa — o que "tentar de novo" reenvia. */
-function useLastQuestion(): string {
-  return useAuiState((s) => {
-    const pessoa = [...s.thread.messages].reverse().find((m) => m.role === 'user');
-    const parte = pessoa?.content.find((p) => p.type === 'text');
-    return parte && parte.type === 'text' ? parte.text : '';
-  });
-}
-
-/** O cartão de erro, no texto do código — nunca a prosa do servidor. */
-function FailedAnswer({ error }: { error: unknown }) {
-  const lastQuestion = useLastQuestion();
+/**
+ * O cartão de erro, no texto do código — nunca a prosa do servidor. `answerId` é a resposta
+ * que falhou: "Tentar de novo" reenvia a pergunta dela, e não a última da conversa.
+ */
+function FailedAnswer({ error, answerId }: { error: unknown; answerId?: string }) {
+  const lastQuestion = useAuiState((s) => failedQuestion(s.thread.messages, answerId));
   const aui = useAui();
   const erro = erroDoChat(error);
   // O plano acabou no meio da conversa (ADR 024): tentar de novo daria o mesmo 402.
@@ -147,8 +141,9 @@ function FailedAnswer({ error }: { error: unknown }) {
 
 function ErroDaResposta() {
   const status = useAuiState((s) => s.message.status);
+  const id = useAuiState((s) => s.message.id);
   if (status?.type !== 'incomplete' || status.reason !== 'error') return null;
-  return <FailedAnswer error={status.error} />;
+  return <FailedAnswer error={status.error} answerId={id} />;
 }
 
 /**
@@ -395,20 +390,31 @@ function BotaoDeDitado({
  * O que espera a resposta terminar, acima do campo. Cada item tem X: parar a
  * resposta não descarta a fila, e o que foi escrito não some sem a pessoa ver.
  */
-function FilaDoComposer({
+function ComposerQueue({
   itens,
   onTirar,
+  onMandar,
   pausado,
+  parada,
+  rodando,
 }: {
   itens: ItemDaFila[];
   onTirar: (id: string) => void;
+  onMandar: (id: string) => void;
   pausado: boolean;
+  /** A última resposta falhou: nada sai sozinho; cada item espera "Enviar" ou "Descartar". */
+  parada: boolean;
+  rodando: boolean;
 }) {
   if (itens.length === 0) return null;
   return (
     <section aria-label="Mensagens na fila" className="flex shrink-0 flex-col gap-1.5 px-4 pb-2">
       <p className="text-xs text-muted-foreground">
-        {pausado ? 'Vai depois que você responder o cartão acima:' : 'Vai depois desta resposta:'}
+        {parada
+          ? 'A resposta anterior falhou. Estas ficaram esperando você:'
+          : pausado
+            ? 'Vai depois que você responder o cartão acima:'
+            : 'Vai depois desta resposta:'}
       </p>
       <ul className="flex flex-col gap-1.5">
         {itens.map((item) => (
@@ -417,14 +423,36 @@ function FilaDoComposer({
             className={cn(field, 'flex items-center gap-2 rounded-xl py-1.5 pl-3 pr-1.5 text-sm')}
           >
             <span className="min-w-0 flex-1 truncate">{item.texto}</span>
-            <button
-              type="button"
-              aria-label={`Tirar da fila: ${item.texto}`}
-              onClick={() => onTirar(item.id)}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-            >
-              <XIcon size={14} aria-hidden />
-            </button>
+            {parada ? (
+              <>
+                <button
+                  type="button"
+                  disabled={rodando}
+                  aria-label={`Enviar: ${item.texto}`}
+                  onClick={() => onMandar(item.id)}
+                  className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold text-success hover:underline disabled:opacity-50"
+                >
+                  Enviar
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Descartar: ${item.texto}`}
+                  onClick={() => onTirar(item.id)}
+                  className="shrink-0 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Descartar
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                aria-label={`Tirar da fila: ${item.texto}`}
+                onClick={() => onTirar(item.id)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <XIcon size={14} aria-hidden />
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -453,10 +481,22 @@ function Composer() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const podeEnviar = texto.trim() !== '' || temFoto;
-  const fila = useFilaDeMensagens({
+  // "Parar" espera o servidor fechar o turno antes de a fila andar: a próxima esbarraria no 409.
+  const [parando, setParando] = useState(false);
+  const erroDoTurno = useTurnError();
+  const respostaFalhou = useAuiState((s) => {
+    const ultima = s.thread.messages.at(-1);
+    return (
+      ultima?.role === 'assistant' &&
+      ultima.status?.type === 'incomplete' &&
+      ultima.status.reason === 'error'
+    );
+  });
+  const fila = useMessageQueue({
     conversa: aberta,
-    livre: podeEscoar({ rodando, pausado, abrindo }),
+    livre: canDrainQueue({ rodando, pausado, abrindo, parando }),
     enviar: (pergunta) => aui.thread().append(pergunta),
+    falhou: respostaFalhou || Boolean(erroDoTurno),
   });
   // A foto fica no campo: subir ao bucket é do envio, e a fila guarda só texto.
   const podeEnfileirar = texto.trim() !== '' && !temFoto;
@@ -507,7 +547,14 @@ function Composer() {
           descartado.
         </p>
       ) : null}
-      <FilaDoComposer itens={fila.itens} onTirar={fila.tirar} pausado={pausado} />
+      <ComposerQueue
+        itens={fila.itens}
+        onTirar={fila.tirar}
+        onMandar={fila.mandar}
+        pausado={pausado}
+        parada={fila.parada}
+        rodando={rodando || parando}
+      />
       <CitacaoDoComposer />
       <MobileComposer
         ref={campo}
@@ -538,8 +585,14 @@ function Composer() {
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
           const ultima = aui.thread().getState().messages.at(-1);
           if (ultima?.role === 'assistant') markStopped(ultima.id);
-          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno.
-          if (aberta) void stopChatRun(aberta).catch(() => undefined);
+          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno. A fila
+          // espera o servidor responder (ele responde depois de o turno fechar).
+          if (aberta) {
+            setParando(true);
+            void stopChatRun(aberta)
+              .catch(() => undefined)
+              .finally(() => setParando(false));
+          }
           aui.thread().cancelRun();
         }}
         className="shrink-0 bg-transparent shadow-none"

@@ -747,6 +747,76 @@ describe('ChatScreen', () => {
     expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
   });
 
+  async function enfileirar(user: ReturnType<typeof userEvent.setup>, texto: string) {
+    await user.type(screen.getByRole('textbox', { name: 'Mensagem para o Fatia' }), texto);
+    await user.click(screen.getByRole('button', { name: 'Enviar depois desta resposta' }));
+  }
+
+  it('resposta que falha para a fila: nada sai sozinho, e cada item tem Enviar e Descartar', async () => {
+    montar();
+    const user = await enviar('quanto comi hoje?');
+    await enfileirar(user, 'e o jantar?');
+    await enfileirar(user, 'e amanhã?');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_PROVIDER_ERROR', message: 'x' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText(/A resposta anterior falhou/)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fontes).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Descartar: e amanhã?' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar: e o jantar?' }));
+    await waitFor(() => expect(fontes).toHaveLength(2));
+    expect(corpos[1]).toMatchObject({ message: 'e o jantar?' });
+  });
+
+  it('"Tentar de novo" reenvia a pergunta que falhou, e não a última da conversa', async () => {
+    montar();
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir(
+      fragmento('ai-1', 'Você'),
+      { event: 'error', data: { code: 'AI_PROVIDER_ERROR', message: 'x' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+    expect(await screen.findByText('A resposta falhou')).toBeInTheDocument();
+    const user = await enviar('e de proteína?');
+    fontes[1].emitir(fragmento('ai-2', 'Bastante.'), {
+      event: 'done',
+      data: { status: 'completed' },
+    });
+    fontes[1].fechar();
+    expect(await screen.findByText('Bastante.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    await waitFor(() => expect(fontes).toHaveLength(3));
+    expect(corpos[2]).toMatchObject({ message: 'quanto comi hoje?' });
+  });
+
+  it('depois de parar, a fila espera o servidor fechar o turno', async () => {
+    let liberar!: () => void;
+    stopChatRunMock.mockImplementationOnce(
+      () => new Promise<undefined>((resolve) => (liberar = () => resolve(undefined))),
+    );
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve'));
+    expect(await screen.findByText('Seu almoço teve')).toBeInTheDocument();
+    await enfileirar(user, 'e o jantar?');
+
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+    await waitFor(() => expect(stopChatRunMock).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fontes).toHaveLength(1);
+
+    liberar();
+    await waitFor(() => expect(fontes).toHaveLength(2));
+    expect(corpos[1]).toMatchObject({ message: 'e o jantar?' });
+  });
+
   it('parar vai ao servidor, e não só fecha a conexão (ADR 035)', async () => {
     montar();
     const user = await enviar('me conta do meu almoço');
