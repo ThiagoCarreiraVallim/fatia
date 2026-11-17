@@ -78,7 +78,12 @@ const aceito: { accepted: boolean; version: string; acceptedAt: string | null } 
   version: '2026-11-16',
   acceptedAt: '2026-11-16T10:00:00.000Z',
 };
-let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+const PROCESSADOR = {
+  provider: 'OpenRouter',
+  model: 'GLM 5.3 Flash, da Z.ai',
+  searchEngine: 'Exa',
+};
+let aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true, processor: PROCESSADOR };
 let aceiteFalha = false;
 const acceptAiConsentMock = vi.fn(async (topico: 'chat' | 'web_search') => {
   aceites = { ...aceites, [topico === 'chat' ? 'chat' : 'webSearch']: aceito };
@@ -228,7 +233,7 @@ beforeEach(() => {
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
   transcribeAudioMock.mockClear();
-  aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true };
+  aceites = { chat: aceito, webSearch: aceito, webSearchEnabled: true, processor: PROCESSADOR };
   aceiteFalha = false;
   acceptAiConsentMock.mockClear();
   setWebSearchEnabledMock.mockClear();

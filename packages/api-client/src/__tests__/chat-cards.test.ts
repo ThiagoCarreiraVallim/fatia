@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_CONSENT_TEXTS,
   AI_CONSENT_VERSIONS,
+  aiConsentBody,
   appOnlyHref,
   chatCardTitle,
   collapsedLabel,
@@ -141,15 +142,60 @@ describe('groupConversationsByDay — Hoje, Esta semana e Antes (#384)', () => {
   });
 });
 
+const HASH_CHAT = '4e35b2fd';
+const HASH_BUSCA = '48166ae7';
+
 describe('textos dos aceites (#384)', () => {
-  it('a versão é a mesma da API, e o texto nomeia o provedor e a busca de verdade', () => {
-    expect(AI_CONSENT_VERSIONS).toEqual({ chat: '2026-11-16', webSearch: '2026-11-16' });
-    expect(AI_CONSENT_TEXTS.chat.body).toContain('OpenRouter');
-    expect(AI_CONSENT_TEXTS.chat.body).toContain('GLM 5.3 Flash');
-    expect(AI_CONSENT_TEXTS.chat.body).not.toContain('[');
-    expect(AI_CONSENT_TEXTS.webSearch.body).toContain('Exa');
-    // A retenção zero não cobre a busca: o texto diz isso, sem prometer o que não vale.
-    expect(AI_CONSENT_TEXTS.webSearch.body).toMatch(/não vale para a busca/);
+  // FNV-1a de 32 bits do texto: basta para notar que ele mudou.
+  const sha = (valor: unknown) => {
+    let h = 0x811c9dc5;
+    for (const c of JSON.stringify(valor)) {
+      h ^= c.codePointAt(0)!;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16);
+  };
+
+  it('mudar o texto sem subir a versão falha: quem leu o texto antigo não aceitou o novo', () => {
+    // Mudou o texto? Suba a versão aqui e em `AI_CONSENT_VERSIONS` da API, e só então troque
+    // o hash. Todo mundo verá o aceite de novo.
+    expect({ versao: AI_CONSENT_VERSIONS.chat, texto: sha(AI_CONSENT_TEXTS.chat) }).toEqual({
+      versao: '2026-11-17',
+      texto: HASH_CHAT,
+    });
+    expect({
+      versao: AI_CONSENT_VERSIONS.webSearch,
+      texto: sha(AI_CONSENT_TEXTS.webSearch),
+    }).toEqual({ versao: '2026-11-17', texto: HASH_BUSCA });
+  });
+
+  it('os nomes do provedor, do modelo e da busca vêm da API, não do texto', () => {
+    const nomes = { provider: 'Prov', model: 'Mod X', searchEngine: 'Busca Y' };
+    const chat = aiConsentBody('chat', nomes);
+    expect(chat).toContain('Prov');
+    expect(chat).toContain('Mod X');
+    expect(chat).not.toMatch(/[{}]/);
+    const busca = aiConsentBody('web_search', nomes);
+    expect(busca).toContain('Busca Y');
+    expect(busca).toContain('Prov');
+    expect(busca).not.toMatch(/[{}]/);
+    for (const corpo of [AI_CONSENT_TEXTS.chat.body, AI_CONSENT_TEXTS.webSearch.body]) {
+      expect(corpo).not.toMatch(/OpenRouter|GLM|Z\.ai|Exa/);
+    }
+  });
+
+  it('a busca diz de onde sai a pergunta e que a retenção zero não vale para ela', () => {
+    const busca = aiConsentBody('web_search', {
+      provider: 'P',
+      model: 'M',
+      searchEngine: 'S',
+    });
+    expect(busca).toMatch(/última mensagem/);
+    expect(busca).toMatch(/não vale para a busca/);
+    // Não promete o que não dá para garantir.
+    expect(aiConsentBody('chat', { provider: 'P', model: 'M', searchEngine: 'S' })).not.toMatch(
+      /Só usamos servidores que não guardam/,
+    );
   });
 
   it('o 403 do aceite tem texto próprio', () => {

@@ -11,7 +11,14 @@ import {
 export const AI_CONSENT_KEY = ['chat', 'consent'] as const;
 
 export function useAiConsent() {
-  return useQuery({ queryKey: AI_CONSENT_KEY, queryFn: getAiConsent, staleTime: 5 * 60_000 });
+  // `retryOnMount: false`: o cartão do aceite também lê os aceites; montar de novo depois de um
+  // erro zeraria o erro e o aviso sumiria e voltaria em laço. Quem tenta de novo é o botão.
+  return useQuery({
+    queryKey: AI_CONSENT_KEY,
+    queryFn: getAiConsent,
+    staleTime: 5 * 60_000,
+    retryOnMount: false,
+  });
 }
 
 export function useAcceptAiConsent() {

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
+  aiConsentBody,
   askFieldsOf,
   previewChatAction,
   questionAnswer,
@@ -353,14 +354,18 @@ function AceiteDaBusca({
           Vou buscar: “{acao.query}”
         </Text>
       ) : null}
-      <Text className="text-xs leading-5 text-muted-foreground">{textos.body}</Text>
+      <Text className="text-xs leading-5 text-muted-foreground">
+        {aceites?.processor
+          ? aiConsentBody('web_search', aceites.processor)
+          : 'Carregando o aviso…'}
+      </Text>
       {falhou ? (
         <Text accessibilityRole="alert" className="text-xs text-danger">
           Não consegui gravar o aceite. Tente de novo.
         </Text>
       ) : null}
       <Button
-        disabled={ocupado || aceitar.isPending}
+        disabled={ocupado || aceitar.isPending || !aceites?.processor}
         onPress={async () => {
           setFalhou(false);
           if (!aceites?.webSearch.accepted) {

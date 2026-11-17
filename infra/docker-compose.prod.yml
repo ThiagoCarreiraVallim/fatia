@@ -63,6 +63,10 @@ services:
       AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
       AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
       AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Os nomes que o aceite da IA mostra (#384); trocar qualquer um pede o aceite de novo.
+      AI_CONSENT_PROVIDER: ${AI_CONSENT_PROVIDER:-}
+      AI_CONSENT_MODEL: ${AI_CONSENT_MODEL:-}
+      AI_CONSENT_SEARCH_ENGINE: ${AI_CONSENT_SEARCH_ENGINE:-}
       # Plano Free/PRO e assentos (ADR 024/025). A instância pública usa true.
       AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
       BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}

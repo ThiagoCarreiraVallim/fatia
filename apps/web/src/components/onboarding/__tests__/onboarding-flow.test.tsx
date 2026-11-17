@@ -28,6 +28,7 @@ vi.mock('@fatia/api-client', async () => {
     nutritionApi: { suggestGoals: vi.fn(), recognizeMealPhoto: vi.fn() },
     remindersApi: { list: vi.fn(), create: vi.fn() },
     acceptAiConsent: vi.fn(),
+    getAiConsent: vi.fn(),
   };
 });
 
@@ -36,6 +37,7 @@ import {
   ApiError,
   acceptAiConsent,
   billingApi,
+  getAiConsent,
   groupsApi,
   nutritionApi,
   onboardingApi,
@@ -204,6 +206,12 @@ describe('OnboardingFlow (#371)', () => {
     vi.mocked(nutritionApi.recognizeMealPhoto).mockRejectedValue(
       new ApiError('Aceite pendente', 403, { code: 'AI_CONSENT_REQUIRED' }),
     );
+    vi.mocked(getAiConsent).mockResolvedValue({
+      chat: { accepted: false, version: 'v', acceptedAt: null },
+      webSearch: { accepted: false, version: 'v', acceptedAt: null },
+      webSearchEnabled: false,
+      processor: { provider: 'OpenRouter', model: 'GLM 5.3 Flash, da Z.ai', searchEngine: 'Exa' },
+    });
     vi.mocked(acceptAiConsent).mockResolvedValue({
       chat: { accepted: true },
       webSearch: { accepted: false },
@@ -217,6 +225,7 @@ describe('OnboardingFlow (#371)', () => {
     );
     expect(await screen.findByRole('dialog', { name: AI_CONSENT_TEXTS.chat.title })).toBeTruthy();
     expect(screen.queryByText('Aceite pendente')).toBeNull();
+    expect(await screen.findByText(/GLM 5\.3 Flash/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: AI_CONSENT_TEXTS.chat.accept }));
     expect(acceptAiConsent).toHaveBeenCalledWith('chat');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

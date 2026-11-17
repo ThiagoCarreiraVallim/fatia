@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Globe, ShieldCheck } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
+  aiConsentBody,
   lastToolName,
   quickReplies,
   type ChatStreamError,
@@ -52,7 +53,10 @@ export function AiConsentCard({
   onAccepted?: () => void;
 }) {
   const aceitar = useAcceptAiConsent();
+  const { data, isError, refetch } = useAiConsent();
   const textos = AI_CONSENT_TEXTS.chat;
+  // Os nomes do provedor e do modelo vêm da API: sem eles, não há o que aceitar ainda.
+  const corpo = data?.processor ? aiConsentBody('chat', data.processor) : null;
   return (
     <View className="m-3 gap-3 rounded-3xl border border-border bg-card p-5 pb-8">
       <View className="size-10 items-center justify-center rounded-2xl bg-primary/15">
@@ -61,7 +65,18 @@ export function AiConsentCard({
       <Text accessibilityRole="header" className="text-lg font-bold text-foreground">
         {textos.title}
       </Text>
-      <Text className="text-sm leading-5 text-muted-foreground">{textos.body}</Text>
+      {corpo ? (
+        <Text className="text-sm leading-5 text-muted-foreground">{corpo}</Text>
+      ) : isError ? (
+        <Pressable accessibilityRole="button" onPress={() => void refetch()}>
+          <Text className="text-sm text-muted-foreground">
+            Não consegui carregar o aviso.{' '}
+            <Text className="font-semibold text-primary-text underline">Tentar de novo</Text>
+          </Text>
+        </Pressable>
+      ) : (
+        <Text className="text-sm text-muted-foreground">Carregando o aviso…</Text>
+      )}
       <Pressable accessibilityRole="link" onPress={() => openLegal('/privacy')}>
         <Text className="text-sm font-semibold text-primary-text underline">{textos.link}</Text>
       </Pressable>
@@ -71,7 +86,7 @@ export function AiConsentCard({
         </Text>
       ) : null}
       <Button
-        disabled={aceitar.isPending}
+        disabled={!corpo || aceitar.isPending}
         onPress={() => aceitar.mutate('chat', { onSuccess: () => onAccepted?.() })}
       >
         {textos.accept}

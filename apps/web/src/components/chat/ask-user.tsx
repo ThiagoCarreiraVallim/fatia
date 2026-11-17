@@ -13,6 +13,7 @@ import type {
 } from '@fatia/api-client';
 import {
   AI_CONSENT_TEXTS,
+  aiConsentBody,
   askFieldsOf,
   previewChatAction,
   questionAnswer,
@@ -225,7 +226,11 @@ function AceiteDaBusca({
           Vou buscar: “{acao.query}”
         </p>
       ) : null}
-      <p className="text-xs leading-relaxed text-foreground/70">{textos.body}</p>
+      <p className="text-xs leading-relaxed text-foreground/70">
+        {aceites?.processor
+          ? aiConsentBody('web_search', aceites.processor)
+          : 'Carregando o aviso…'}
+      </p>
       {falhou ? (
         <p role="alert" className="text-xs text-danger">
           Não consegui gravar o aceite. Tente de novo.
@@ -234,7 +239,7 @@ function AceiteDaBusca({
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          disabled={ocupado || aceitar.isPending}
+          disabled={ocupado || aceitar.isPending || !aceites?.processor}
           onClick={async () => {
             setFalhou(false);
             if (!aceites?.webSearch.accepted) {

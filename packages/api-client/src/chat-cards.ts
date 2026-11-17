@@ -389,16 +389,24 @@ export function groupConversationsByDay<T extends { updatedAt: string }>(
 
 // ---------------------------------------------------------------- aceites
 
-/** As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar aqui. */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-16', webSearch: '2026-11-16' } as const;
+/**
+ * As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar a
+ * versão aqui e lá — o teste amarra um hash do texto à versão, para não esquecer.
+ */
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
 
+/**
+ * Os textos dos aceites. Os nomes (`{provider}`, `{model}`, `{searchEngine}`) não moram aqui:
+ * vêm da API (`AiConsentStatus.processor`, das envs `AI_CONSENT_*`) por `aiConsentBody`.
+ */
 export const AI_CONSENT_TEXTS = {
   chat: {
     title: 'Antes de conversar',
     body:
       'Suas mensagens e os dados que a IA consulta (refeições, treinos, metas) vão para o ' +
-      'OpenRouter, que encaminha ao modelo GLM 5.3 Flash, da Z.ai, para gerar as respostas. ' +
-      'Só usamos servidores que não guardam o que recebem e não treinam modelos com isso.',
+      '{provider}, que encaminha ao modelo {model}, para gerar as respostas. O Fatia pede ao ' +
+      '{provider} só servidores de retenção zero, que declaram não guardar o que recebem nem ' +
+      'treinar modelos com isso.',
     link: 'Como tratamos seus dados',
     accept: 'Concordo',
     decline: 'Agora não',
@@ -406,14 +414,32 @@ export const AI_CONSENT_TEXTS = {
   webSearch: {
     title: 'Buscar na web?',
     body:
-      'Só o texto da pergunta vai para a Exa, o serviço de busca, pelo OpenRouter, sem seu ' +
-      'nome nem seus dados. A regra de não guardar o que recebem, das conversas, não vale para ' +
-      'a busca: a Exa pode guardar a pergunta. As fontes aparecem num cartão no fim.',
+      'Só a pergunta da busca vai para a {searchEngine}, o serviço de busca, pelo {provider}. ' +
+      'Ela é escrita a partir da sua última mensagem, sem o seu perfil, as memórias ou o resto ' +
+      'da conversa, e sem e-mail, telefone nem documento. A retenção zero das conversas não ' +
+      'vale para a busca: a {searchEngine} pode guardar a pergunta. As fontes aparecem num ' +
+      'cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
     footnote: 'Dá para desligar no globo, no topo do chat.',
   },
 } as const;
+
+/** Quem recebe: o provedor, o modelo e a busca, como a API os nomeia (`AI_CONSENT_*`). */
+export interface AiProcessor {
+  provider: string;
+  model: string;
+  searchEngine: string;
+}
+
+/** O texto do aceite com os nomes de verdade, vindos da API. */
+export function aiConsentBody(topic: AiConsentTopic, processor: AiProcessor): string {
+  const corpo = topic === 'chat' ? AI_CONSENT_TEXTS.chat.body : AI_CONSENT_TEXTS.webSearch.body;
+  return corpo
+    .replaceAll('{provider}', processor.provider)
+    .replaceAll('{model}', processor.model)
+    .replaceAll('{searchEngine}', processor.searchEngine);
+}
 
 export type AiConsentTopic = 'chat' | 'web_search';
 
@@ -427,6 +453,8 @@ export interface AiConsentStatus {
   chat: AiConsentState;
   webSearch: AiConsentState;
   webSearchEnabled: boolean;
+  /** Os nomes que o texto do aceite mostra (`aiConsentBody`). */
+  processor: AiProcessor;
 }
 
 export function getAiConsent(): Promise<AiConsentStatus> {
