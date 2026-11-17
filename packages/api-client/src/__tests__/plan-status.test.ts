@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MyPlan } from '../billing';
 import {
+  planBadge,
   planOfferView,
   planStatusView,
   storeTermsText,
@@ -574,5 +575,25 @@ describe('textos das condições', () => {
     expect(webTermsText(0)).toBe(
       'Renova sozinho. Cancele quando quiser: o PRO vale até o fim do período pago.',
     );
+  });
+});
+
+describe('planBadge (o selo do Você)', () => {
+  it('Free, PRO e o teste com os dias que faltam', () => {
+    expect(planBadge(base, NOW)).toEqual({ label: 'Free', tone: 'free' });
+    expect(planBadge(plan({ tier: 'PRO', state: 'ACTIVE' }), NOW)).toEqual({
+      label: 'PRO',
+      tone: 'pro',
+    });
+    expect(
+      planBadge(plan({ tier: 'PRO', state: 'TRIAL', trialEndsAt: '2026-11-11T12:00:00Z' }), NOW),
+    ).toEqual({ label: 'Teste · 1 dia', tone: 'trial' });
+  });
+
+  it('PRO na carência ganha o tom de atenção', () => {
+    expect(planBadge(plan({ tier: 'PRO', state: 'PAST_DUE' }), NOW)).toEqual({
+      label: 'PRO',
+      tone: 'warn',
+    });
   });
 });

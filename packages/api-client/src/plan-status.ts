@@ -531,3 +531,15 @@ export function webTermsText(trialDays: number): string {
     ? `${days(trialDays)} grátis; a primeira cobrança vence no fim do teste. ${fim}`
     : fim;
 }
+
+/** O selo curto do plano (Você, cabeçalhos): "Free", "PRO", "Teste · 3 dias". */
+export function planBadge(plan: MyPlan, now: Date): { label: string; tone: PlanTone } {
+  if (plan.state === 'TRIAL') {
+    const fim = plan.trialEndsAt ?? plan.currentPeriodEnd;
+    const left = fim ? Math.max(0, calendarDays(fim, now)) : 0;
+    return { label: `Teste · ${days(left)}`, tone: 'trial' };
+  }
+  if (plan.tier === 'PRO')
+    return { label: 'PRO', tone: plan.state === 'PAST_DUE' ? 'warn' : 'pro' };
+  return { label: 'Free', tone: 'free' };
+}

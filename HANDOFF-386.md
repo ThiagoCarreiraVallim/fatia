@@ -25,7 +25,7 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - [x] API: billing:grant-group
 - [x] API: isolamento (user-isolation.spec.ts) + export (proTrialStartedAt, paymentMethod, trialEndsAt, reminders)
 - [x] api-client: tipos e visão pura das telas (regra das lojas) + testes (`plan-status.ts`)
-- [ ] App: Al-M1 (chat bloqueado), Al-M2/M3 (assinar, teste), M5, M13/b/c/d
+- [x] App: Al-M1 (`chat-locked.tsx`), Al-M2/M3 (`store-offer.tsx`), M5/M13/M13d (`plan-status-card.tsx`), selo do Você (`planBadge`)
 - [ ] Web: idem, com Asaas
 - [ ] Site: Si-04
 - [x] Envs em docker-compose.prod.yml e .env.example
@@ -50,6 +50,10 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
   Loja PAST_DUE: M13d nas duas superfícies. Free no app sem IAP: `offer: 'community'` + "Tenho código".
 - `proBlockCopy`: "free" diz "sem cobrar nada hoje" (não "sem cobrança no fim"); pending-grace → "Ver o plano".
 
+- App: teste só é prometido quando o pacote da loja tem intro grátis (`storeTrialDays`) e `trialEligible`; preço é o da loja.
+  "Tenho código" no chat vai a `/community?join=1` (a folha precisa da camada da tela); no plano abre o `JoinByCodeDrawer` direto.
+  `planOffer`/`webManageNote` removidos ("entre pelo navegador" apontava para fora do app).
+
 ## Próximo passo
 
-App: `plan.tsx` com `planStatusView` (surface app) + oferta da loja (M2/M3, termos via `storeTermsText`, trial só se o pacote tem intro grátis), "Tenho código" abre `JoinByCodeDrawer`; Al-M1 no chat (`apps/mobile/app/(app)/chat/index.tsx`) como componente próprio; selo "Teste · n dias" no Você.
+Web: `plan-screen.tsx` com `planStatusView` (surface web) + Si-04 (forma de pagamento Pix/Boleto/Cartão, CPF, teste), lê `?periodo=&pagamento=` do site; `upsell-ia.tsx` como Al-M1; selo do Você com `planBadge`. Depois site Si-04 (`apps/site/src/pages/pro.astro`).
