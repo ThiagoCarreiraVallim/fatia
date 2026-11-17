@@ -1,11 +1,13 @@
 import { SharedWithService } from '../../sharing/shared-with.service';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  UnauthorizedException,
+  type ExecutionContext,
 } from '@nestjs/common';
 import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
@@ -61,6 +63,14 @@ import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { AgendaService } from '../../workout/agenda.service';
+import type { ConfigService } from '@nestjs/config';
+import type { Reflector } from '@nestjs/core';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import type { JwtValidationService } from '../../auth/jwt-validation.service';
+import { McpConnectionService } from '../../auth/mcp-connection.service';
+import { OAuthFacadeService } from '../../auth/oauth-facade.service';
+import { UserProvisioningService } from '../../auth/user-provisioning.service';
+import { UsersController } from '../../users/users.controller';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -3242,6 +3252,194 @@ describe('isolamento entre usuários', () => {
       expect(body.meals).toEqual([]);
       expect(body.newsRead).toEqual([]);
       expect(body.mediaUploaded).toEqual([]);
+    });
+  });
+
+  /**
+   * Conectar sua IA (#388). O token que o Claude ou o ChatGPT recebem pelo
+   * facade OAuth é do Logto, emitido para o app do facade: a única coisa que
+   * diz de quem ele é é o `sub`. Este bloco faz o fluxo inteiro (DCR →
+   * authorize → callback → token) com o Logto falso e confere que a conexão, o
+   * guard e o último acesso ficam com o dono do token, e só com ele.
+   */
+  describe('Conectar sua IA: conexões e o caminho OAuth (#388)', () => {
+    const REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
+    const CALLBACK = 'https://api.example.com/oauth/callback';
+    const config = {
+      getOrThrow: (key: string) =>
+        ({
+          LOGTO_ENDPOINT: 'https://logto.example.com',
+          LOGTO_AUDIENCE: 'https://api.example.com',
+          LOGTO_MCP_APP_ID: 'mcp-app',
+          LOGTO_MCP_APP_SECRET: 'segredo',
+        })[key],
+    } as unknown as ConfigService;
+    /** access token → sub, como o Logto assinaria. */
+    const issued: Record<string, string> = {};
+    const validation = {
+      verify: async (token: string) => {
+        const sub = issued[token];
+        if (!sub) throw new UnauthorizedException('Invalid token');
+        return { sub };
+      },
+    } as unknown as JwtValidationService;
+    const provisioning = new UserProvisioningService(prisma);
+    const connections = new McpConnectionService(prisma, validation, provisioning);
+    const facade = new OAuthFacadeService(prisma, config, connections);
+    const users = new UsersController(
+      {} as AccountService,
+      {} as ProfileService,
+      {} as DataExportService,
+      connections,
+    );
+    const realFetch = global.fetch;
+    const clientIds: string[] = [];
+    let subA = '';
+    let subB = '';
+
+    /** Conecta um app de IA como a pessoa do `sub`, pelo facade, e devolve o token. */
+    async function connectAs(sub: string, clientName: string) {
+      const reg = await facade.registerClient({ redirectUris: [REDIRECT], clientName });
+      clientIds.push(reg.client_id);
+      const verifier = randomUUID() + randomUUID();
+      const { logtoAuthorizeUrl } = await facade.startAuthorization(
+        {
+          clientId: reg.client_id,
+          redirectUri: REDIRECT,
+          clientState: 'st',
+          clientCodeChallenge: createHash('sha256').update(verifier).digest('base64url'),
+          scope: undefined,
+          resource: undefined,
+        },
+        CALLBACK,
+      );
+      const state = new URL(logtoAuthorizeUrl).searchParams.get('state')!;
+      const { redirectUrl } = await facade.handleCallback(state, `logto-${randomUUID()}`);
+      const accessToken = `at-${randomUUID()}`;
+      issued[accessToken] = sub;
+      global.fetch = (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: accessToken, token_type: 'Bearer' }),
+      })) as unknown as typeof fetch;
+      await facade.exchangeCode(
+        {
+          code: new URL(redirectUrl).searchParams.get('code')!,
+          redirectUri: REDIRECT,
+          clientId: reg.client_id,
+          codeVerifier: verifier,
+        },
+        CALLBACK,
+      );
+      return { clientId: reg.client_id, accessToken };
+    }
+
+    /** O guard de toda rota, com o token no cabeçalho, como o /mcp recebe. */
+    async function guardUser(token: string) {
+      const guard = new JwtAuthGuard(
+        { getAllAndOverride: () => false } as unknown as Reflector,
+        validation,
+        provisioning,
+      );
+      const req = { headers: { authorization: `Bearer ${token}`, host: 'api.example.com' } } as {
+        headers: Record<string, string>;
+        user?: { id: string };
+      };
+      const ctx = {
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => req, getResponse: () => ({ setHeader() {} }) }),
+      } as unknown as ExecutionContext;
+      await guard.canActivate(ctx);
+      return req.user!.id;
+    }
+
+    let claudeA = { clientId: '', accessToken: '' };
+
+    beforeAll(async () => {
+      subA = (await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } })).logtoSub;
+      subB = (await prisma.user.findUniqueOrThrow({ where: { id: owned.userB } })).logtoSub;
+      claudeA = await connectAs(subA, 'Claude');
+    });
+
+    afterAll(async () => {
+      global.fetch = realFetch;
+      await prisma.mcpOAuthClient.deleteMany({ where: { clientId: { in: clientIds } } });
+    });
+
+    it('a conexão que o user-A autorizou é dele (caminho feliz)', async () => {
+      const deA = await users.mcpConnections({ id: owned.userA } as never);
+      expect(deA.connections.map((c) => c.clientName)).toEqual(['Claude']);
+    });
+
+    it('GET /users/me/mcp-connections do user-B não mostra a do user-A', async () => {
+      const deB = await users.mcpConnections({ id: owned.userB } as never);
+      expect(deB.connections).toEqual([]);
+      expect(deB.serverUrl).toMatch(/\/mcp$/);
+    });
+
+    it('o token que o user-A deu à IA resolve para o user-A no guard, nunca para o user-B', async () => {
+      expect(await guardUser(claudeA.accessToken)).toBe(owned.userA);
+    });
+
+    it('o user-B conectando o mesmo tipo de app ganha a própria conexão, sem herdar a do user-A', async () => {
+      const claudeB = await connectAs(subB, 'Claude');
+      expect(await guardUser(claudeB.accessToken)).toBe(owned.userB);
+
+      const deB = await users.mcpConnections({ id: owned.userB } as never);
+      expect(deB.connections).toHaveLength(1);
+      const noBanco = await prisma.mcpOAuthConnection.findMany({
+        where: { clientId: { in: [claudeA.clientId, claudeB.clientId] } },
+      });
+      expect(noBanco.map((c) => [c.clientId, c.userId]).sort()).toEqual(
+        [
+          [claudeA.clientId, owned.userA],
+          [claudeB.clientId, owned.userB],
+        ].sort(),
+      );
+    });
+
+    it('refresh com o client_id do user-A e o token do user-B não liga o cliente do A ao B', async () => {
+      // O dono vem do token que o Logto emitiu, nunca do client_id do corpo:
+      // quem renova com o cliente do vizinho só cria a própria linha.
+      const tokenB = `at-${randomUUID()}`;
+      issued[tokenB] = subB;
+      global.fetch = (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: tokenB }),
+      })) as unknown as typeof fetch;
+      await facade.refreshToken({ refreshToken: 'rt', clientId: claudeA.clientId });
+
+      const doA = await prisma.mcpOAuthConnection.findUniqueOrThrow({
+        where: { userId_clientId: { userId: owned.userA, clientId: claudeA.clientId } },
+      });
+      expect(doA.accessTokenHash).toBe(
+        createHash('sha256').update(claudeA.accessToken).digest('hex'),
+      );
+      const deA = await users.mcpConnections({ id: owned.userA } as never);
+      expect(deA.connections).toHaveLength(1);
+    });
+
+    it('o toque do /mcp com o token do user-A não mexe no último acesso do user-B', async () => {
+      const antigo = new Date('2026-01-01T00:00:00Z');
+      await prisma.mcpOAuthConnection.updateMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+        data: { lastUsedAt: antigo },
+      });
+
+      await connections.touch(claudeA.accessToken);
+
+      const linhas = await prisma.mcpOAuthConnection.findMany({
+        where: { userId: { in: [owned.userA, owned.userB] } },
+      });
+      for (const linha of linhas) {
+        if (linha.userId === owned.userA && linha.clientId === claudeA.clientId) {
+          expect(linha.lastUsedAt.getTime()).toBeGreaterThan(antigo.getTime());
+        } else {
+          expect(linha.lastUsedAt.getTime()).toBe(antigo.getTime());
+        }
+      }
     });
   });
 

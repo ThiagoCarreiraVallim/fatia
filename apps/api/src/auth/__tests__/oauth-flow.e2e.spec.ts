@@ -3,6 +3,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../common/prisma.service';
 import { OAuthFacadeService } from '../oauth-facade.service';
 import { OAuthError } from '../oauth-error';
+import type { JwtValidationService } from '../jwt-validation.service';
+import { McpConnectionService } from '../mcp-connection.service';
+import { UserProvisioningService } from '../user-provisioning.service';
 
 /**
  * Happy path completo do OAuth facade (issue #91), contra Postgres real.
@@ -43,7 +46,19 @@ const s256 = (verifier: string) => createHash('sha256').update(verifier).digest(
 
 describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)', () => {
   const prisma = new PrismaService();
-  const service = new OAuthFacadeService(prisma, config);
+  // O JWKS é do Logto: aqui o token "jwt-de-acesso" é de uma pessoa fixa.
+  const SUB = `oauth-flow-${Date.now()}`;
+  const validation = {
+    verify: async (token: string) => {
+      if (token !== 'jwt-de-acesso') throw new Error('token desconhecido');
+      return { sub: SUB };
+    },
+  } as unknown as JwtValidationService;
+  const service = new OAuthFacadeService(
+    prisma,
+    config,
+    new McpConnectionService(prisma, validation, new UserProvisioningService(prisma)),
+  );
 
   const fetchMock = jest.fn();
   const realFetch = global.fetch;
@@ -65,6 +80,7 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
     await prisma.mcpOAuthClient
       .deleteMany({ where: { clientId: { in: createdClientIds } } })
       .catch(() => undefined);
+    await prisma.user.deleteMany({ where: { logtoSub: SUB } }).catch(() => undefined);
     await prisma.$disconnect();
   });
 
@@ -244,6 +260,13 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
       where: { clientId: registration.client_id },
     });
     expect(client?.lastUsedAt).toBeTruthy();
+
+    // #388: o cliente fica ligado a quem autorizou, e é isso que a tela lista.
+    const connection = await prisma.mcpOAuthConnection.findFirst({
+      where: { clientId: registration.client_id },
+      include: { user: true },
+    });
+    expect(connection?.user.logtoSub).toBe(SUB);
   }, 30_000);
 
   it('recusa o segundo uso do mesmo code (one-time use)', async () => {

@@ -3,6 +3,7 @@ import { OAuthFacadeService } from '../oauth-facade.service';
 import { OAuthError } from '../oauth-error';
 import type { PrismaService } from '../../common/prisma.service';
 import type { ConfigService } from '@nestjs/config';
+import type { McpConnectionService } from '../mcp-connection.service';
 
 type MockPrisma = {
   mcpOAuthClient: {
@@ -49,10 +50,16 @@ describe('OAuthFacadeService', () => {
   let prisma: MockPrisma;
   let service: OAuthFacadeService;
   const fetchMock = jest.fn();
+  const connections = { recordIssuedToken: jest.fn().mockResolvedValue(undefined) };
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new OAuthFacadeService(prisma as unknown as PrismaService, makeConfig());
+    connections.recordIssuedToken.mockClear();
+    service = new OAuthFacadeService(
+      prisma as unknown as PrismaService,
+      makeConfig(),
+      connections as unknown as McpConnectionService,
+    );
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
   });
@@ -357,6 +364,8 @@ describe('OAuthFacadeService', () => {
         }),
       );
       expect(prisma.mcpOAuthClient.update).toHaveBeenCalled();
+      // #388: a conexão nasce aqui, ligada ao dono do token que o Logto emitiu.
+      expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_xxx', tokenResponse);
     });
 
     it('throws OAuthError when Logto returns a non-ok response', async () => {
@@ -367,9 +376,25 @@ describe('OAuthFacadeService', () => {
         json: async () => ({ error: 'invalid_grant', error_description: 'expired code' }),
       });
 
+      const call = service.exchangeCode(validParams, 'https://api.example.com/oauth/callback');
+      await expect(call).rejects.toThrow(/expired code/);
+      // RFC 6749 §5.2: o cliente decide pelo `error`. Um 401 do Nest com `message`
+      // faria o Claude repetir a chamada em laço em vez de refazer o login.
+      await expect(call).rejects.toBeInstanceOf(OAuthError);
+      await expect(call).rejects.toMatchObject({ code: 'invalid_grant' });
+      expect(connections.recordIssuedToken).not.toHaveBeenCalled();
+    });
+
+    it('devolve invalid_grant no formato da RFC quando o Logto responde sem código conhecido', async () => {
+      prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
+      fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+
       await expect(
         service.exchangeCode(validParams, 'https://api.example.com/oauth/callback'),
-      ).rejects.toThrow(/expired code/);
+      ).rejects.toMatchObject({
+        code: 'invalid_grant',
+        response: { error: 'invalid_grant', error_description: 'Token exchange failed' },
+      });
     });
   });
 
@@ -388,6 +413,33 @@ describe('OAuthFacadeService', () => {
       expect(body.get('grant_type')).toBe('refresh_token');
       expect(body.get('refresh_token')).toBe('old-refresh');
       expect(body.get('resource')).toBe('https://api.example.com');
+    });
+
+    it('renova a conexão do cliente que pediu (#388)', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'new-access' }),
+      });
+
+      await service.refreshToken({ refreshToken: 'old-refresh', clientId: 'mcp_yyy' });
+
+      expect(connections.recordIssuedToken).toHaveBeenCalledWith('mcp_yyy', {
+        access_token: 'new-access',
+      });
+    });
+
+    it('refresh recusado pelo Logto sai como invalid_grant, o que faz o cliente refazer o login', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'invalid_grant', error_description: 'grant expired' }),
+      });
+
+      await expect(service.refreshToken({ refreshToken: 'velho' })).rejects.toMatchObject({
+        code: 'invalid_grant',
+        response: { error: 'invalid_grant', error_description: 'grant expired' },
+      });
     });
 
     it('omits scope from the request when not provided', async () => {
