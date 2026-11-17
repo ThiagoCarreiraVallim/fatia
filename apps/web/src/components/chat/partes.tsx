@@ -28,7 +28,7 @@ import { ReasoningPanel } from '@/components/elements/reasoning-panel';
 import { ToolGroup } from '@/components/elements/tool-group';
 import { SwapLabel } from '@/components/elements/surfaces';
 import { useArtefato, useArtefatos, useTitulosDasTools } from './chat-runtime-provider';
-import { Artefato } from './artefato';
+import { ChatArtifactCard } from './artefato';
 import { useCatalogoDasTools } from './catalogo';
 
 /**
@@ -154,7 +154,7 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
 
   // O cartão da última resposta fica aberto, com o nome da tool no cabeçalho dele; o de uma
   // resposta antiga recolhe numa linha com ✓ e o resultado, e tocar abre de novo.
-  if (cartao && ultima) return <Artefato artefato={cartao} ferramenta={titulo} />;
+  if (cartao && ultima) return <ChatArtifactCard artifact={cartao} toolTitle={titulo} />;
   if (cartao) {
     return (
       <div className="flex w-full flex-col gap-2">
@@ -177,7 +177,7 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
             )}
           />
         </button>
-        {aberto ? <Artefato artefato={cartao} ferramenta={titulo} /> : null}
+        {aberto ? <ChatArtifactCard artifact={cartao} toolTitle={titulo} /> : null}
       </div>
     );
   }

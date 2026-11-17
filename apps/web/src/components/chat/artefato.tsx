@@ -22,7 +22,13 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { appOnlyHref, chatCardTitle, type ChatArtifact } from '@fatia/api-client';
+import {
+  UNKNOWN_CHAT_ARTIFACT_TEXT,
+  appOnlyHref,
+  chatCardTitle,
+  isRenderableChatArtifact,
+  type ChatArtifact,
+} from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { field, ghostButton, inkButton } from '@/components/elements/surfaces';
 import { useCatalogoDasTools } from './catalogo';
@@ -679,7 +685,7 @@ const ICONES: Record<ChatArtifact['kind'], ComponentType<{ className?: string }>
   saved: Check,
 };
 
-function Corpo({ artefato }: { artefato: ChatArtifact }): ReactNode {
+function CardBody({ artefato }: { artefato: ChatArtifact }): ReactNode {
   switch (artefato.kind) {
     case 'metric':
       return <Metrica artefato={artefato} />;
@@ -716,15 +722,37 @@ function Corpo({ artefato }: { artefato: ChatArtifact }): ReactNode {
 
 /**
  * O cartão inteiro: cabeçalho igual em todos (ícone, ferramenta pequena, resultado como
- * título) e o corpo do formato. `ferramenta` é o título da tool em português.
+ * título) e o corpo do formato. `toolTitle` é o título da tool em português. Um formato que
+ * este PWA não sabe desenhar (API mais nova, carga sem o campo principal) vira um aviso neutro.
  */
-export function Artefato({
-  artefato,
-  ferramenta,
+export function ChatArtifactCard({
+  artifact: artefato,
+  toolTitle: ferramenta,
 }: {
-  artefato: ChatArtifact;
-  ferramenta?: string;
+  artifact: ChatArtifact;
+  toolTitle?: string;
 }) {
+  if (!isRenderableChatArtifact(artefato)) {
+    return (
+      <figure
+        aria-label={ferramenta ?? 'Cartão'}
+        className={cn(field, 'flex w-full items-center gap-3 rounded-2xl px-3.5 py-3.5')}
+      >
+        <span
+          aria-hidden
+          className="grid size-9 shrink-0 place-items-center rounded-xl bg-foreground/[0.08] text-foreground/70"
+        >
+          <Lock className="size-[18px]" />
+        </span>
+        <figcaption className="min-w-0 flex-1">
+          {ferramenta ? (
+            <span className="block truncate text-xs text-muted-foreground">{ferramenta}</span>
+          ) : null}
+          <span className="block text-sm text-foreground/75">{UNKNOWN_CHAT_ARTIFACT_TEXT}</span>
+        </figcaption>
+      </figure>
+    );
+  }
   const titulo = chatCardTitle(artefato);
   const Icone = ICONES[artefato.kind];
   const video = artefato.kind === 'instructions' ? artefato.videoUrl : undefined;
@@ -762,7 +790,7 @@ export function Artefato({
           </a>
         ) : null}
       </figcaption>
-      <Corpo artefato={artefato} />
+      <CardBody artefato={artefato} />
     </figure>
   );
 }

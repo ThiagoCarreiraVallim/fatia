@@ -6,6 +6,7 @@ import {
   chatCardTitle,
   collapsedLabel,
   isEmptyChatArtifact,
+  isRenderableChatArtifact,
   lastToolName,
   toolCallStatusOf,
   toolLineLabel,
@@ -14,7 +15,7 @@ import {
   quickReplies,
   type ChatToolCatalogEntry,
 } from '../chat-cards';
-import { CHAT_ERROR_CODES, textoDeErroDoChat } from '../chat';
+import { CHAT_ERROR_CODES, textoDeErroDoChat, type ChatArtifact } from '../chat';
 
 const apagarRefeicao: ChatToolCatalogEntry = {
   title: 'Apagar refeição',
@@ -304,5 +305,34 @@ describe('toolCallStatusOf, toolLineLabel e lastToolName — a linha da tool no 
     expect(lastToolName([resposta])).toBe('get_today_summary');
     expect(lastToolName([resposta, { role: 'user', id: 'u', text: 'oi', photos: 0 }])).toBeNull();
     expect(lastToolName([])).toBeNull();
+  });
+});
+
+/** Um app antigo recebe um formato que ainda não conhece: cai no aviso, não quebra a conversa. */
+describe('isRenderableChatArtifact', () => {
+  it('aceita os formatos conhecidos com o campo de que o desenho depende', () => {
+    expect(isRenderableChatArtifact({ kind: 'metric', value: 3 })).toBe(true);
+    expect(isRenderableChatArtifact({ kind: 'bars', bars: [] })).toBe(true);
+    expect(
+      isRenderableChatArtifact({ kind: 'file', url: 'https://x', filename: 'a', expiresAt: '' }),
+    ).toBe(true);
+  });
+
+  it('recusa formato novo, sem kind ou com o campo principal faltando', () => {
+    expect(isRenderableChatArtifact({ kind: 'mapa', pontos: [] })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'bars' })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'metric', value: 'x' })).toBe(false);
+    expect(isRenderableChatArtifact({ kind: 'badges', badges: 'x' })).toBe(false);
+    expect(isRenderableChatArtifact(null)).toBe(false);
+    expect(isRenderableChatArtifact('metric')).toBe(false);
+  });
+
+  it('título e "vazio" não quebram com a carga que não dá para desenhar', () => {
+    const quebrado = { kind: 'bars' } as unknown as ChatArtifact;
+    const novo = { kind: 'mapa' } as unknown as ChatArtifact;
+    for (const a of [quebrado, novo]) {
+      expect(isEmptyChatArtifact(a)).toBe(false);
+      expect(chatCardTitle(a)).toBe('Cartão');
+    }
   });
 });

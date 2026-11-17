@@ -22,9 +22,11 @@ import {
   Trophy,
 } from 'lucide-react-native';
 import {
+  UNKNOWN_CHAT_ARTIFACT_TEXT,
   appOnlyHref,
   chatCardTitle,
   getChatToolCatalog,
+  isRenderableChatArtifact,
   type ChatArtifact,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
@@ -72,7 +74,31 @@ export function useChatToolCatalog() {
   }).data;
 }
 
+/**
+ * Um formato que este app não sabe desenhar (API mais nova, carga sem o campo principal) vira
+ * um aviso neutro: app antigo não derruba a conversa.
+ */
 export function ArtifactCard({ artifact, tool }: { artifact: ChatArtifact; tool?: string }) {
+  if (!isRenderableChatArtifact(artifact)) {
+    return (
+      <View
+        accessibilityLabel={tool ?? 'Cartão'}
+        className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3.5"
+      >
+        <View className="size-9 items-center justify-center rounded-xl bg-secondary">
+          <Lock size={18} color={colors.mutedForeground} />
+        </View>
+        <View className="flex-1">
+          {tool ? (
+            <Text numberOfLines={1} className="text-xs text-muted-foreground">
+              {tool}
+            </Text>
+          ) : null}
+          <Text className="text-sm text-muted-foreground">{UNKNOWN_CHAT_ARTIFACT_TEXT}</Text>
+        </View>
+      </View>
+    );
+  }
   const Icone = ICONES[artifact.kind];
   const titulo = chatCardTitle(artifact);
   const video = artifact.kind === 'instructions' ? artifact.videoUrl : undefined;
@@ -107,7 +133,7 @@ export function ArtifactCard({ artifact, tool }: { artifact: ChatArtifact; tool?
           </Pressable>
         ) : null}
       </View>
-      <Conteudo artifact={artifact} />
+      <CardContent artifact={artifact} />
     </View>
   );
 }
@@ -116,7 +142,7 @@ const Vazio = ({ texto }: { texto: string }) => (
   <Text className="text-sm text-muted-foreground">{texto}</Text>
 );
 
-function Conteudo({ artifact }: { artifact: ChatArtifact }) {
+function CardContent({ artifact }: { artifact: ChatArtifact }) {
   switch (artifact.kind) {
     case 'metric':
       return <Metrica artifact={artifact} />;

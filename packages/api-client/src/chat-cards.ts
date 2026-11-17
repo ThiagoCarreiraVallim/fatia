@@ -104,6 +104,7 @@ const naFaixa = (r: { value: number; min?: number | null; max?: number | null })
  * cartão recolhe: "Resumo de hoje · 934 kcal".
  */
 export function chatCardTitle(a: ChatArtifact): string {
+  if (!isRenderableChatArtifact(a)) return 'Cartão';
   switch (a.kind) {
     case 'metric':
       return a.label ?? comUnidade(a.value, a.unit);
@@ -149,8 +150,53 @@ export function chatCardTitle(a: ChatArtifact): string {
   }
 }
 
+/**
+ * O campo de que o desenho de cada formato depende (o mesmo `CAMPO_OBRIGATORIO` do agente).
+ * Lista em vez de `switch` para que um formato novo, vindo de uma API mais nova, caia fora.
+ */
+const CAMPO_DO_FORMATO: Record<
+  ChatArtifact['kind'],
+  { campo: string; tipo: 'array' | 'number' | 'string' | 'object' }
+> = {
+  metric: { campo: 'value', tipo: 'number' },
+  bars: { campo: 'bars', tipo: 'array' },
+  timeline: { campo: 'events', tipo: 'array' },
+  list: { campo: 'items', tipo: 'array' },
+  report: { campo: 'rows', tipo: 'array' },
+  range: { campo: 'rows', tipo: 'array' },
+  progress: { campo: 'items', tipo: 'array' },
+  comparison: { campo: 'items', tipo: 'array' },
+  scoreboard: { campo: 'entries', tipo: 'array' },
+  badges: { campo: 'badges', tipo: 'array' },
+  instructions: { campo: 'steps', tipo: 'array' },
+  file: { campo: 'url', tipo: 'string' },
+  sources: { campo: 'sources', tipo: 'array' },
+  app_only: { campo: 'params', tipo: 'object' },
+  saved: { campo: 'lines', tipo: 'array' },
+};
+
+/**
+ * Se o cartão sabe desenhar esta carga. Um formato que este cliente não conhece (app antigo,
+ * API nova) ou sem o campo principal vira o aviso neutro em vez de derrubar a conversa.
+ */
+export function isRenderableChatArtifact(a: unknown): a is ChatArtifact {
+  if (!a || typeof a !== 'object') return false;
+  const kind = (a as { kind?: unknown }).kind;
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CAMPO_DO_FORMATO, kind))
+    return false;
+  const { campo, tipo } = CAMPO_DO_FORMATO[kind as ChatArtifact['kind']];
+  const valor = (a as Record<string, unknown>)[campo];
+  if (tipo === 'array') return Array.isArray(valor);
+  if (tipo === 'object') return !!valor && typeof valor === 'object';
+  return typeof valor === tipo;
+}
+
+/** O aviso no lugar de um cartão que este cliente não sabe desenhar. */
+export const UNKNOWN_CHAT_ARTIFACT_TEXT = 'Este cartão precisa de uma versão mais nova do Fatia.';
+
 /** "Nada encontrado": a consulta rodou e voltou sem linha nenhuma (fica neutra, não vermelha). */
 export function isEmptyChatArtifact(a: ChatArtifact): boolean {
+  if (!isRenderableChatArtifact(a)) return false;
   switch (a.kind) {
     case 'timeline':
       return a.events.length === 0;
