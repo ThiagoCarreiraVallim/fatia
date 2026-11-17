@@ -91,6 +91,9 @@ class ContextoDoTurno:
     # As confirmáveis que gravam sem cartão (modo "Automático" da categoria, ADR 039). Já
     # filtradas por `automaticas` em `tool_policy.py`.
     auto_write: frozenset[str] = frozenset()
+    # O token do turno que o `apps/api` abriu (#385). Vai como `runId` no header da gravação
+    # automática, e o `/mcp` só aceita se for de um turno ativo desta conversa. Sem ele, pede o OK.
+    run_token: str | None = None
 
 
 class EstadoDaConversa(TypedDict, total=False):

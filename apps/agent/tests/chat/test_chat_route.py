@@ -624,7 +624,9 @@ def test_tool_modes_e_validado_no_corpo(settings_factory, monkeypatch):
         assert resposta.status_code == 422, modos
 
 
-def test_automatica_no_tool_modes_grava_com_a_conversa_no_header(settings_factory, monkeypatch):
+def _auto_almoco(
+    settings_factory, monkeypatch, *, corpo_extra: dict[str, object], **overrides: object
+) -> tuple[httpx.Response, list[httpx.Request]]:
     transporte = mcp()
     client, _, _ = app_com(
         settings_factory,
@@ -637,22 +639,56 @@ def test_automatica_no_tool_modes_grava_com_a_conversa_no_header(settings_factor
         ],
         mcp_transport=transporte,
         monkeypatch=monkeypatch,
+        **overrides,
     )
-
+    headers = dict(BEARER)
+    if overrides.get("agent_api_key"):
+        headers["X-Fatia-Agent-Key"] = str(overrides["agent_api_key"])
     resposta = client.post(
         "/chat",
-        json=corpo(message="almocei", toolModes={"auto": ["log_meal"], "off": []}),
-        headers=BEARER,
+        json=corpo(message="almocei", toolModes={"auto": ["log_meal"], "off": []}, **corpo_extra),
+        headers=headers,
     )
-
     assert resposta.status_code == 200
-    (chamada,) = [
+    chamadas = [
         r
         for r in transporte.requests
         if json.loads(r.content).get("method") == "tools/call"
         and json.loads(r.content)["params"]["name"] == "log_meal"
     ]
+    return resposta, chamadas
+
+
+def test_automatica_no_tool_modes_grava_com_o_token_do_turno_e_a_chave(
+    settings_factory, monkeypatch
+):
+    _, (chamada,) = _auto_almoco(
+        settings_factory,
+        monkeypatch,
+        corpo_extra={"runToken": "token-do-turno"},
+        agent_api_key="segredo-compartilhado",
+    )
     cabecalho = json.loads(chamada.headers["x-fatia-auto-write"])
-    assert cabecalho["conversationId"] == CONVERSA
-    assert cabecalho["toolCallId"] == "c1"
-    assert cabecalho["runId"]
+    assert cabecalho == {
+        "conversationId": CONVERSA,
+        "runId": "token-do-turno",
+        "toolCallId": "c1",
+    }
+    # A credencial de serviço vai junto: sem ela, o `/mcp` recusa o header com 403.
+    assert chamada.headers["x-fatia-agent-key"] == "segredo-compartilhado"
+
+
+def test_sem_token_do_turno_a_automatica_volta_ao_cartao(settings_factory, monkeypatch):
+    resposta, chamadas = _auto_almoco(
+        settings_factory, monkeypatch, corpo_extra={}, agent_api_key="segredo-compartilhado"
+    )
+    assert chamadas == []
+    assert '"status": "interrupted"' in resposta.text or '"interrupted"' in resposta.text
+
+
+def test_sem_chave_do_agente_a_automatica_volta_ao_cartao(settings_factory, monkeypatch):
+    resposta, chamadas = _auto_almoco(
+        settings_factory, monkeypatch, corpo_extra={"runToken": "token-do-turno"}
+    )
+    assert chamadas == []
+    assert '"interrupted"' in resposta.text

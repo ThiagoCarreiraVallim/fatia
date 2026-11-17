@@ -141,12 +141,18 @@ async def turno(
     pause_after_tools: int = 14,
     auto_write: Sequence[str] = (),
     off: Sequence[str] = (),
+    run_token: str | None = "token-1",
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
     provider = build_provider(settings_factory(), transport=provider_transport)
     transporte_mcp = mcp_transport if mcp_transport is not None else duplo_do_mcp(catalogo=catalogo)
-    client = McpClient(base_url="http://localhost:3000/mcp", bearer=token, transport=transporte_mcp)
+    client = McpClient(
+        base_url="http://localhost:3000/mcp",
+        bearer=token,
+        transport=transporte_mcp,
+        agent_key="chave-do-agente",
+    )
     compilado = grafo if grafo is not None else montar_grafo(InMemorySaver())
 
     anunciadas = await client.list_tools()
@@ -170,6 +176,7 @@ async def turno(
         pause_after_tools=pause_after_tools,
         conversation_id=CONVERSA,
         auto_write=automaticas(permitidas, auto_write),
+        run_token=run_token,
     )
     brutos = [
         quadro

@@ -166,7 +166,7 @@ class McpDoEval(McpClient):
         arguments: dict[str, Any],
         *,
         read_only: bool = False,
-        auto_write: Mapping[str, str] | None = None,
+        auto_write: Mapping[str, Any] | None = None,
     ) -> McpToolResult:
         try:
             return await super().call_tool(
@@ -209,7 +209,7 @@ class McpSemDestrutivas(McpDoEval):
         arguments: dict[str, Any],
         *,
         read_only: bool = False,
-        auto_write: Mapping[str, str] | None = None,
+        auto_write: Mapping[str, Any] | None = None,
     ) -> McpToolResult:
         if name in self.destrutivas:
             self.interceptadas.append(name)

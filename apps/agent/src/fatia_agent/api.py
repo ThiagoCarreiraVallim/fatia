@@ -289,6 +289,9 @@ class ChatRequest(BaseModel):
     web_search: Annotated[Literal["off", "ask", "on"], Field(alias="webSearch")] = "off"
     # O modo por categoria (#385). Ausente é "Perguntar antes" em tudo — o default da ADR 039.
     tool_modes: Annotated[ChatToolModes | None, Field(alias="toolModes")] = None
+    # O token do turno aberto no `apps/api` (#385): volta no header da gravação automática, e o
+    # `/mcp` só a aceita de um turno ativo desta conversa. Ausente, nada grava sem o OK.
+    run_token: Annotated[str | None, Field(alias="runToken", min_length=1, max_length=64)] = None
 
     @model_validator(mode="after")
     def _um_dos_dois(self) -> "ChatRequest":
@@ -719,7 +722,11 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             search_web=provider.web_search if provider.supports_web_search else None,
             pause_after_tools=resolved.agent_chat_pause_after_tools,
             conversation_id=str(payload.conversation_id),
-            auto_write=automaticas(permitidas, modos.auto),
+            # Sem a credencial do agente o `/mcp` recusaria o header (403): nem tenta.
+            auto_write=automaticas(permitidas, modos.auto)
+            if resolved.agent_api_key.strip() and payload.run_token
+            else frozenset(),
+            run_token=payload.run_token,
         )
 
         async def fluxo() -> AsyncIterator[str]:

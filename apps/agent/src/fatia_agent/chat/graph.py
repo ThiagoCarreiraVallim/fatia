@@ -91,6 +91,7 @@ from .errors import (
     McpTimeout,
     McpToolArgumentsInvalid,
     McpToolRejected,
+    McpUnauthorized,
     McpUnreachable,
 )
 from .mcp_client import AUTO_WRITE_NEEDS_OK, McpToolResult
@@ -1029,33 +1030,56 @@ def _pending_stops(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[d
     return itens
 
 
+# O que o modelo lê quando a gravação automática estourou o tempo e a consulta não achou registro
+# (ou também falhou). Não vira cartão: aprovar gravaria duas vezes se a primeira tiver chegado.
+GRAVACAO_INCERTA = (
+    "A gravação pode não ter acontecido: o servidor demorou a responder e não confirmou. "
+    "Não repita a gravação. Diga à pessoa que pode não ter gravado e pergunte se ela quer "
+    "conferir ou tentar de novo."
+)
+
+
 async def _auto_write(contexto: ContextoDoTurno, chamada: dict[str, Any]) -> McpToolResult | None:
     """Grava sem cartão a escrita do modo "Automático" (ADR 039), ou `None` para pedir o OK.
 
     `None` deixa a chamada sem resultado, e o portão a mostra como qualquer confirmável: é o
     caminho da recusa `AUTO_WRITE_NEEDS_OK` do `/mcp` (teto de 5 por resposta, 10 itens, modo
-    trocado), de argumentos acima do teto e de falha de transporte — na dúvida, pergunta.
+    trocado), de argumentos acima do teto, de turno sem token e da credencial recusada — casos em
+    que nada foi gravado. Falha temporária é outra coisa: a gravação pode ter chegado e só a
+    resposta se perdeu. Aí consulta pelo `toolCallId` e nunca cai no cartão (#385).
     """
-    if contexto.conversation_id is None:
+    if contexto.conversation_id is None or not contexto.run_token:
         return None
     nome = chamada["name"]
+    pedido = {
+        "conversationId": contexto.conversation_id,
+        "runId": contexto.run_token,
+        "toolCallId": chamada["id"],
+    }
     try:
         exigir_permitida(nome, contexto.permitidas)
         _exigir_argumentos_no_teto(nome, chamada["args"])
-        saida = await contexto.client.call_tool(
-            nome,
-            chamada["args"],
-            auto_write={
-                "conversationId": contexto.conversation_id,
-                "runId": contexto.run_id,
-                "toolCallId": chamada["id"],
-            },
-        )
-    except (McpToolRejected, *FALHAS_TEMPORARIAS):
+        saida = await contexto.client.call_tool(nome, chamada["args"], auto_write=pedido)
+    except (McpToolRejected, McpUnauthorized):
         return None
+    except FALHAS_TEMPORARIAS:
+        return await _consultar_gravacao(contexto, nome, chamada["args"], pedido)
     if saida.is_error and AUTO_WRITE_NEEDS_OK in saida.text:
         return None
     return saida
+
+
+async def _consultar_gravacao(
+    contexto: ContextoDoTurno, nome: str, args: dict[str, Any], pedido: dict[str, str]
+) -> McpToolResult:
+    """Depois de um timeout: o "Gravado" se a chamada gravou, senão o aviso de incerteza."""
+    try:
+        achada = await contexto.client.call_tool(nome, args, auto_write={**pedido, "lookup": True})
+    except McpError:
+        return McpToolResult(text=GRAVACAO_INCERTA, is_error=True, structured=None)
+    if achada.is_error:
+        return McpToolResult(text=GRAVACAO_INCERTA, is_error=True, structured=None)
+    return achada
 
 
 def _offered_tools(contexto: ContextoDoTurno) -> list[dict[str, Any]]:

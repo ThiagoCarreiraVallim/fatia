@@ -15,7 +15,7 @@ from collections.abc import Callable
 
 import httpx
 
-from fatia_agent.chat.mcp_client import HEADER_AUTO_WRITE
+from fatia_agent.chat.mcp_client import HEADER_AGENT_KEY, HEADER_AUTO_WRITE
 
 from .support import (
     McpRecordingTransport,
@@ -94,9 +94,11 @@ async def test_automatica_grava_sem_cartao_e_manda_o_header(settings_factory):
     (chamada,) = _chamadas(mcp, "log_water")
     assert json.loads(chamada.headers[HEADER_AUTO_WRITE]) == {
         "conversationId": CONVERSA,
-        "runId": "run-1",
+        "runId": "token-1",
         "toolCallId": "c1",
     }
+    # Com a credencial de serviço do agente: sem ela o `/mcp` recusa o header (403).
+    assert chamada.headers[HEADER_AGENT_KEY] == "chave-do-agente"
     # O cartão "Gravado" chega à tela, com o id que o Desfazer usa.
     assert r.data_of("artifact") == [{"toolCallId": "c1", **GRAVADO}]
 
@@ -232,3 +234,125 @@ async def test_escrita_normal_nao_leva_o_header(settings_factory):
     )
     (chamada,) = _chamadas(mcp, "log_water")
     assert HEADER_AUTO_WRITE not in chamada.headers
+
+
+def _e_consulta(request: httpx.Request) -> bool:
+    return bool(json.loads(request.headers.get(HEADER_AUTO_WRITE, "{}")).get("lookup"))
+
+
+def _timeout_e_depois(consulta: Callable[[], dict[str, object]]) -> McpRecordingTransport:
+    """A gravação estoura o tempo (pode ter gravado); a consulta por `toolCallId` responde."""
+
+    def responder(nome: str, request: httpx.Request) -> dict[str, object]:
+        if _e_consulta(request):
+            return consulta()
+        raise httpx.ReadTimeout("o /mcp demorou", request=request)
+
+    return _mcp(responder)
+
+
+async def test_timeout_que_gravou_mostra_o_gravado_pela_consulta(settings_factory):
+    mcp = _timeout_e_depois(lambda: _gravou("log_water", None))  # type: ignore[arg-type]
+    r = await turno(
+        settings_factory,
+        [_pede("c1", "log_water", AGUA), [fragmento_de_texto("Anotei 300 ml.")]],
+        mensagem="bebi 300 ml",
+        mcp_transport=mcp,
+        catalogo=CATALOGO_IA,
+        auto_write=["log_water"],
+    )
+
+    assert r.data_of("done") == [{"status": "completed"}]
+    gravacao, consulta = _chamadas(mcp, "log_water")
+    assert not _e_consulta(gravacao)
+    assert json.loads(consulta.headers[HEADER_AUTO_WRITE]) == {
+        "conversationId": CONVERSA,
+        "runId": "token-1",
+        "toolCallId": "c1",
+        "lookup": True,
+    }
+    assert r.data_of("artifact") == [{"toolCallId": "c1", **GRAVADO}]
+
+
+async def test_timeout_sem_registro_nao_vira_cartao_nem_grava_de_novo(settings_factory):
+    mcp = _timeout_e_depois(
+        lambda: {
+            "content": [
+                {"type": "text", "text": "AUTO_WRITE_UNKNOWN: não há gravação desta chamada."}
+            ],
+            "isError": True,
+        }
+    )
+    r = await turno(
+        settings_factory,
+        [_pede("c1", "log_water", AGUA), [fragmento_de_texto("Pode não ter gravado.")]],
+        mensagem="bebi 300 ml",
+        mcp_transport=mcp,
+        catalogo=CATALOGO_IA,
+        auto_write=["log_water"],
+    )
+
+    # Sem cartão de confirmação: aprovar gravaria duas vezes se a primeira tiver chegado.
+    assert r.data_of("done") == [{"status": "completed"}]
+    (mensagem,) = r.mensagens_de_tool()
+    assert "pode não ter" in mensagem["content"].lower()
+    assert "pergunte" in mensagem["content"].lower()
+    gravacoes = [c for c in _chamadas(mcp, "log_water") if not _e_consulta(c)]
+    assert len(gravacoes) == 1
+
+
+async def test_consulta_que_tambem_falha_avisa_sem_gravar_de_novo(settings_factory):
+    def responder(_nome: str, request: httpx.Request) -> dict[str, object]:
+        raise httpx.ReadTimeout("o /mcp demorou", request=request)
+
+    mcp = _mcp(responder)
+    r = await turno(
+        settings_factory,
+        [_pede("c1", "log_water", AGUA), [fragmento_de_texto("Pode não ter gravado.")]],
+        mensagem="bebi 300 ml",
+        mcp_transport=mcp,
+        catalogo=CATALOGO_IA,
+        auto_write=["log_water"],
+    )
+
+    assert r.data_of("done") == [{"status": "completed"}]
+    (mensagem,) = r.mensagens_de_tool()
+    assert "pode não ter" in mensagem["content"].lower()
+    assert len([c for c in _chamadas(mcp, "log_water") if not _e_consulta(c)]) == 1
+
+
+async def test_credencial_recusada_volta_ao_cartao(settings_factory):
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = json.loads(request.content)
+        if corpo["method"] == "tools/list":
+            return sse_jsonrpc(resultado_mcp(corpo["id"], {"tools": CATALOGO_IA}))
+        if HEADER_AUTO_WRITE in request.headers:
+            return httpx.Response(403, json={"message": "só do agente"})
+        return sse_jsonrpc(resultado_mcp(corpo["id"], _gravou("log_water", request)))
+
+    mcp = McpRecordingTransport(handler)
+    r = await turno(
+        settings_factory,
+        [_pede("c1", "log_water", AGUA)],
+        mensagem="bebi 300 ml",
+        mcp_transport=mcp,
+        catalogo=CATALOGO_IA,
+        auto_write=["log_water"],
+    )
+    # 403 vem antes de qualquer gravação: o cartão é seguro.
+    assert r.data_of("done") == [{"status": "interrupted"}]
+
+
+async def test_sem_token_do_turno_pede_o_ok(settings_factory):
+    mcp = _mcp(_gravou)
+    r = await turno(
+        settings_factory,
+        [_pede("c1", "log_water", AGUA)],
+        mensagem="bebi 300 ml",
+        mcp_transport=mcp,
+        catalogo=CATALOGO_IA,
+        auto_write=["log_water"],
+        run_token=None,
+    )
+    assert r.data_of("done") == [{"status": "interrupted"}]
+    assert _chamadas(mcp, "log_water") == []

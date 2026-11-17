@@ -10,16 +10,17 @@ Worktree `.claude/worktrees/385-ia-config`, branch `redesign/385-ia-config`. Nã
 ## Checklist
 
 - [x] 1. Desfazer compara com o estado pós-gravação (409 `AUTO_WRITE_CHANGED`), filhos inclusos; StepLog no `estado()`
-- [ ] 2. Timeout na gravação automática: consulta por `toolCallId`; gravação + linha atômicas; testes
+- [x] 2. Timeout na gravação automática: consulta por `toolCallId`; gravação + linha atômicas; testes
 - [ ] 3. Limpeza de `input/result/before` após 24 h, ao apagar o registro e no desfazer; export; DATA_RETENTION
-- [ ] 4. Header só com a credencial do agente; `runId` amarrado a `ChatRun` ativo; teto por mensagem da pessoa
+- [x] 4. Header só com a credencial do agente; `runId` amarrado a `ChatRun` ativo; teto por mensagem da pessoa
 - [x] 5. `toolCallId` repetido: mesmo input → idempotente; senão `AUTO_WRITE_NEEDS_OK`
 - [ ] 6. UI do Desfazer (erros, persistência, antes → depois) e falha do `updateMe` na foto
 - [ ] 7. lint, typecheck, testes, docs (ADR 039, REDESIGN_PROGRESS), commit final sem este arquivo
 
 ## Próximo passo exato
 
-API do item 4 pronta (fb606b31 + este commit): `runToken` vai ao agente, "Continuar"/retomada seguem o
-answerKey, `/mcp` exige `X-Fatia-Agent-Key` com o header, `lookup: true` só consulta.
-Falta: agente (ChatRequest.run_token → runId do header; auto desligado sem token/chave; manda a chave;
-timeout → lookup; McpUnauthorized → cartão), item 3 export/DATA_RETENTION, item 6 UI, docs.
+Itens 1, 2, 4 e 5 prontos (API + agente). Falta: item 3 (export LGPD com after/card/category/doneAt/
+clearedAt; DATA_RETENTION.md), item 6 (GET /chat/auto-writes/:id → status; api-client getAutoWriteStatus
+
+- mensagens de erro do desfazer; web artefato.tsx e app artifact-card.tsx; meal-photo-screen updateMe),
+  docs (ADR 039, REDESIGN_PROGRESS), lint/typecheck/suítes, commit final sem este arquivo.
