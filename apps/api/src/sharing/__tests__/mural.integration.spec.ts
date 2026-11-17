@@ -11,6 +11,7 @@ import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { AnnouncementService } from '../announcement.service';
 import { BlockService } from '../block.service';
 import { publishAutoPost } from '../auto-post';
+import { ForYouService } from '../for-you.service';
 import { GroupService } from '../group.service';
 import { POLL_MIN_VOTES, PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
@@ -36,6 +37,7 @@ describe('mural do redesign (integração)', () => {
   const posts = new PostService(prisma, media, notifications);
   const blocks = new BlockService(prisma);
   const announcements = new AnnouncementService(prisma, posts, notifications);
+  const forYou = new ForYouService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const groups = new GroupService(prisma, links, [], media);
 
@@ -603,6 +605,79 @@ describe('mural do redesign (integração)', () => {
       expect(
         await publishAutoPost(prisma, { ...entrada, kind: 'PLAN', refId: 'p1' }),
       ).not.toBeNull();
+    });
+  });
+
+  describe('Para você', () => {
+    it('lista o que a equipe mandou só para a pessoa, os comunicados não vistos e o resolvido', async () => {
+      const a = await comunidade();
+      const b = await comunidade();
+      const plano = await prisma.nutritionPlan.create({
+        data: {
+          userId: a.ana,
+          authorId: a.prof,
+          groupId: a.groupId,
+          version: 1,
+          kcalMin: 1700,
+          kcalMax: 1900,
+          proteinMinG: 100,
+          proteinMaxG: 120,
+          carbsMinG: 150,
+          carbsMaxG: 200,
+          fatMinG: 50,
+          fatMaxG: 60,
+        },
+      });
+      // De outra comunidade não entra.
+      await prisma.nutritionPlan.create({
+        data: {
+          userId: a.ana,
+          groupId: b.groupId,
+          version: 1,
+          kcalMin: 1,
+          kcalMax: 2,
+          proteinMinG: 1,
+          proteinMaxG: 2,
+          carbsMinG: 1,
+          carbsMaxG: 2,
+          fatMinG: 1,
+          fatMaxG: 2,
+        },
+      });
+      await announcements.create(a.dono, a.groupId, {
+        title: 'Feriado na sexta',
+        body: 'Abrimos às 8h.',
+        publishedAs: 'GROUP',
+        pin: false,
+        pinDays: null,
+        push: false,
+        at: null,
+        repeat: 'NONE',
+      });
+
+      const ana = await forYou.get(a.ana, a.groupId);
+      expect(ana.todo).toEqual([
+        expect.objectContaining({ kind: 'NUTRITION_PLAN', id: plano.id, href: '/nutrition/plan' }),
+      ]);
+      expect(ana.fromTeam).toEqual([
+        expect.objectContaining({ title: 'Feriado na sexta', unread: true }),
+      ]);
+      expect(ana.count).toBe(2);
+      // A Gabi não vê o plano da Ana.
+      const gabi = await forYou.get(a.gabi, a.groupId);
+      expect(gabi.todo).toEqual([]);
+
+      await prisma.nutritionPlan.update({
+        where: { id: plano.id },
+        data: { status: 'ACCEPTED', acceptedAt: new Date() },
+      });
+      await posts.markSeen(a.ana, a.groupId);
+      const depois = await forYou.get(a.ana, a.groupId);
+      expect(depois.todo).toEqual([]);
+      expect(depois.done).toEqual([expect.objectContaining({ id: plano.id })]);
+      expect(depois.fromTeam[0]!.unread).toBe(false);
+      expect(depois.count).toBe(0);
+      await expect(forYou.get(b.ana, a.groupId)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

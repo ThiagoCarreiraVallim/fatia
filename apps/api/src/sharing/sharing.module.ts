@@ -15,6 +15,8 @@ import { AnnouncementController } from './announcement.controller';
 import { AnnouncementService } from './announcement.service';
 import { BlockController } from './block.controller';
 import { BlockService } from './block.service';
+import { ForYouController } from './for-you.controller';
+import { ForYouService } from './for-you.service';
 import { PostService } from './post.service';
 import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
 import { CreateGroupPostTool } from './mcp/create-group-post.tool';
@@ -121,6 +123,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PostController,
     AnnouncementController,
     BlockController,
+    ForYouController,
     ModerationController,
     PlanOfferController,
   ],
@@ -142,6 +145,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PostService,
     AnnouncementService,
     BlockService,
+    ForYouService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
