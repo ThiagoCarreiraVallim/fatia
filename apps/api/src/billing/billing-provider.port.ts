@@ -93,8 +93,10 @@ export interface EntradaDeAssinatura {
   providerCustomerId: string;
   valueCents: number;
   cycle: 'MONTHLY' | 'YEARLY';
-  /** Vencimento da primeira cobrança. */
+  /** Vencimento da primeira cobrança (o fim do teste, quando há teste). */
   nextDueAt: Date;
+  /** Forma escolhida; sem ela, a pessoa escolhe na página de pagamento. */
+  billingType?: 'PIX' | 'BOLETO' | 'CREDIT_CARD';
   description: string;
   externalReference: string;
 }

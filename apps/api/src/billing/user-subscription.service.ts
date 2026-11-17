@@ -10,9 +10,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type BillingInterval, type UserSubscription } from '@prisma/client';
+import {
+  Prisma,
+  type BillingInterval,
+  type PaymentMethod,
+  type UserSubscription,
+} from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import type { AiEntitlement } from './ai-entitlement';
+import type { AiEntitlement, GroupPayer } from './ai-entitlement';
 import type { SubscriptionProvider } from './billing-provider.port';
 import { cpfValido, somenteDigitos } from './cpf';
 import { SeatPoolService } from './seat-pool.service';
@@ -39,27 +44,70 @@ export const GESTAO_NA_LOJA = {
   GOOGLE: 'https://play.google.com/store/account/subscriptions',
 } as const;
 
+/**
+ * O estado que a tela "Meu plano" desenha (#386, `Al-M13`): um só, derivado do
+ * direito e da assinatura que decidiu.
+ */
+export type PlanState =
+  'FREE' | 'TRIAL' | 'ACTIVE' | 'PENDING' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+
+/** Quem paga o PRO (#386): a própria pessoa, um assento, a comunidade ou um programa. */
+export type PlanPayer = 'PERSONAL' | GroupPayer;
+
 export interface PlanoDaPessoa {
   tier: 'FREE' | 'PRO';
   source: AiEntitlement['source'];
   reason: AiEntitlement['motivo'];
   degraded: boolean;
+  state: PlanState;
   status: UserSubscription['status'] | null;
   interval: BillingInterval | null;
   currentPeriodEnd: string | null;
   graceEndsAt: string | null;
   cancelAtPeriodEnd: boolean;
-  /** Link do checkout aberto, enquanto `PENDING`. */
+  /** Fim do teste grátis, enquanto `TRIAL`. */
+  trialEndsAt: string | null;
+  /** Pode começar o teste grátis: nunca teve teste nem PRO pessoal. */
+  trialEligible: boolean;
+  /** Dias do teste grátis (`BILLING_PRO_TRIAL_DAYS`); 0 = sem teste. */
+  trialDays: number;
+  /** Pix, boleto ou cartão, quando a assinatura é da web. */
+  paymentMethod: PaymentMethod | null;
+  /**
+   * Página da cobrança em aberto no Asaas (checkout, teste, renovação ou
+   * atraso). Só na assinatura da web; **o app nunca mostra** (regra das lojas).
+   */
   paymentUrl: string | null;
   /** Gestão fora do app (lojas). */
   manageUrl: string | null;
-  /** A comunidade que paga, quando o PRO é um assento (`source: 'GROUP'`). */
+  /** Quem paga: a pessoa, um assento, a comunidade ou um programa. */
+  paidBy: PlanPayer | null;
+  /** A comunidade que paga, quando o PRO vem dela (`source: 'GROUP'`). */
   groupName: string | null;
+  /** Nome do programa ("Verão 21"), quando `paidBy` é `PROGRAM`. */
+  programName: string | null;
   /** A instância exige plano para a IA? Sem exigência, não há o que vender. */
   requiresPlan: boolean;
   /** Assinatura pela web disponível (Asaas configurado). */
   webCheckout: boolean;
   prices: { monthlyCents: number; yearlyCents: number };
+}
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/** O estado da tela, a partir do direito. */
+export function planState(
+  direito: Pick<AiEntitlement, 'tier' | 'source' | 'motivo' | 'degraded'>,
+  cancelAtPeriodEnd: boolean,
+): PlanState {
+  if (direito.source === 'INSTANCE') return 'ACTIVE';
+  if (direito.tier === 'PRO') {
+    if (direito.motivo === 'teste') return 'TRIAL';
+    if (direito.motivo === 'carencia') return 'PAST_DUE';
+    return cancelAtPeriodEnd ? 'CANCELED' : 'ACTIVE';
+  }
+  if (direito.motivo === 'pendente') return 'PENDING';
+  return direito.degraded ? 'EXPIRED' : 'FREE';
 }
 
 /**
@@ -80,14 +128,42 @@ export class UserSubscriptionService {
     @Optional() private readonly assentos?: SeatPoolService,
   ) {}
 
-  precos() {
+  prices() {
     return {
       monthlyCents: this.config.get<number>('BILLING_PRO_MONTHLY_CENTS', 1990),
       yearlyCents: this.config.get<number>('BILLING_PRO_YEARLY_CENTS', 17900),
     };
   }
 
-  async plano(userId: string): Promise<PlanoDaPessoa> {
+  /** Dias do teste grátis do PRO; 0 desliga. */
+  trialDays(): number {
+    const dias = Number(this.config.get<number | string>('BILLING_PRO_TRIAL_DAYS', 7));
+    return Number.isInteger(dias) && dias > 0 ? dias : 0;
+  }
+
+  /**
+   * Pode começar o teste? Um por pessoa (#386): quem já começou um teste, ou
+   * já teve PRO pessoal de qualquer origem (pago ou cortesia), não ganha outro.
+   * O PRO dado pela comunidade não conta: não foi da pessoa.
+   */
+  async trialEligible(userId: string): Promise<boolean> {
+    if (this.trialDays() === 0) return false;
+    const [user, jaTeve] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { proTrialStartedAt: true } }),
+      this.prisma.userSubscription.count({
+        where: {
+          userId,
+          OR: [
+            { status: { in: ['ACTIVE', 'PAST_DUE', 'TRIALING', 'EXPIRED'] } },
+            { currentPeriodEnd: { not: null } },
+          ],
+        },
+      }),
+    ]);
+    return Boolean(user) && user!.proTrialStartedAt === null && jaTeve === 0;
+  }
+
+  async plan(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
     const base = {
       tier: direito.tier,
@@ -96,23 +172,33 @@ export class UserSubscriptionService {
       degraded: direito.degraded,
       requiresPlan: this.direitos.exigePlano(),
       webCheckout: this.provedor !== null,
-      prices: this.precos(),
+      prices: this.prices(),
+      trialDays: this.trialDays(),
+      trialEligible:
+        direito.tier === 'FREE' && this.direitos.exigePlano()
+          ? await this.trialEligible(userId)
+          : false,
     };
 
-    // Assento de comunidade (ADR 025): a validade é a do pool, e quem gerencia
-    // é a equipe — não há checkout, cancelamento nem loja.
+    // PRO pela comunidade (ADR 025, #288): a validade é a do pool, e quem
+    // gerencia é a equipe — não há checkout, cancelamento nem loja.
     if (direito.source === 'GROUP' && direito.subscription) {
       const assento = direito.subscription;
       return {
         ...base,
+        state: planState(direito, assento.cancelAtPeriodEnd && !assento.programName),
         status: assento.status,
         interval: null,
         currentPeriodEnd: assento.currentPeriodEnd?.toISOString() ?? null,
         graceEndsAt: assento.graceEndsAt?.toISOString() ?? null,
         cancelAtPeriodEnd: assento.cancelAtPeriodEnd,
+        trialEndsAt: null,
+        paymentMethod: null,
         paymentUrl: null,
         manageUrl: null,
+        paidBy: assento.paidBy ?? 'SEAT',
         groupName: assento.group?.name ?? null,
+        programName: assento.programName ?? null,
       };
     }
 
@@ -122,17 +208,24 @@ export class UserSubscriptionService {
         })
       : null;
     const loja = sub && (sub.source === 'APPLE' || sub.source === 'GOOGLE') ? sub.source : null;
+    const vivaNaWeb =
+      sub?.source === 'ASAAS' && sub.status !== 'CANCELED' && sub.status !== 'EXPIRED';
 
     return {
       ...base,
+      state: planState(direito, sub?.cancelAtPeriodEnd ?? false),
       status: sub?.status ?? null,
       interval: sub?.interval ?? null,
       currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
       graceEndsAt: sub?.graceEndsAt?.toISOString() ?? null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
-      paymentUrl: sub?.status === 'PENDING' ? sub.paymentUrl : null,
+      trialEndsAt: sub?.status === 'TRIALING' ? (sub.trialEndsAt?.toISOString() ?? null) : null,
+      paymentMethod: sub?.paymentMethod ?? null,
+      paymentUrl: vivaNaWeb ? sub.paymentUrl : null,
       manageUrl: loja ? GESTAO_NA_LOJA[loja] : null,
+      paidBy: direito.tier === 'PRO' && direito.source !== 'INSTANCE' ? 'PERSONAL' : null,
       groupName: null,
+      programName: null,
     };
   }
 
@@ -145,7 +238,7 @@ export class UserSubscriptionService {
    */
   async checkout(
     userId: string,
-    entrada: { interval: BillingInterval; cpf: string },
+    entrada: { interval: BillingInterval; cpf: string; paymentMethod?: PaymentMethod },
   ): Promise<PlanoDaPessoa> {
     if (!cpfValido(entrada.cpf)) {
       throw new BadRequestException('CPF inválido. Confira os números e tente de novo.');
@@ -164,11 +257,12 @@ export class UserSubscriptionService {
     if (direito.tier === 'PRO') {
       throw new ConflictException(
         direito.source === 'GROUP'
-          ? 'Você já tem o PRO por um assento da sua comunidade.'
+          ? 'Você já tem o PRO pela sua comunidade.'
           : 'Você já tem o plano PRO.',
       );
     }
 
+    const metodo = entrada.paymentMethod ?? null;
     const pendentes = await this.prisma.userSubscription.findMany({
       where: { userId: userId, source: 'ASAAS', status: 'PENDING' },
       orderBy: { createdAt: 'desc' },
@@ -177,12 +271,13 @@ export class UserSubscriptionService {
     const reusavel = pendentes.find(
       (p) =>
         p.interval === entrada.interval &&
+        p.paymentMethod === metodo &&
         p.paymentUrl &&
         agora - p.createdAt.getTime() < CHECKOUT_REUSAVEL_MS,
     );
-    if (reusavel) return this.plano(userId);
+    if (reusavel) return this.plan(userId);
 
-    // Checkouts antigos (outro intervalo ou link vencido) saem do caminho.
+    // Checkouts antigos (outro intervalo, outra forma ou link vencido) saem do caminho.
     for (const antigo of pendentes) {
       if (antigo.providerRef) {
         await provedor.cancelSubscription(antigo.providerRef).catch((err: Error) => {
@@ -217,12 +312,27 @@ export class UserSubscriptionService {
       });
     }
 
-    const precos = this.precos();
+    // Teste grátis (#386): a primeira cobrança vence no fim do teste, e o
+    // teste é marcado na conta antes de falar com o provedor — dois cliques ao
+    // mesmo tempo não ganham dois testes.
+    const dias = this.trialDays();
+    const comTeste =
+      (await this.trialEligible(user.id)) &&
+      (
+        await this.prisma.user.updateMany({
+          where: { id: user.id, proTrialStartedAt: null },
+          data: { proTrialStartedAt: new Date() },
+        })
+      ).count === 1;
+    const fimDoTeste = comTeste ? new Date(agora + dias * DIA_MS) : null;
+
+    const precos = this.prices();
     const { providerSubscriptionId } = await provedor.createSubscription({
       providerCustomerId: clienteId,
       valueCents: entrada.interval === 'YEARLY' ? precos.yearlyCents : precos.monthlyCents,
       cycle: entrada.interval,
-      nextDueAt: new Date(),
+      nextDueAt: fimDoTeste ?? new Date(),
+      billingType: metodo ?? undefined,
       description:
         entrada.interval === 'YEARLY' ? 'Fatia PRO — plano anual' : 'Fatia PRO — plano mensal',
       externalReference: `user:${user.id}`,
@@ -233,15 +343,22 @@ export class UserSubscriptionService {
       data: {
         userId: user.id,
         source: 'ASAAS',
-        status: 'PENDING',
+        status: comTeste ? 'TRIALING' : 'PENDING',
         interval: entrada.interval,
         providerRef: providerSubscriptionId,
         paymentUrl,
+        paymentMethod: metodo,
+        trialEndsAt: fimDoTeste,
+        currentPeriodEnd: fimDoTeste,
       },
     });
-    this.logger.log({ event: 'checkout_aberto', userId: user.id, interval: entrada.interval });
+    this.logger.log({
+      event: comTeste ? 'teste_iniciado' : 'checkout_aberto',
+      userId: user.id,
+      interval: entrada.interval,
+    });
 
-    return this.plano(user.id);
+    return this.plan(user.id);
   }
 
   /**
@@ -276,7 +393,7 @@ export class UserSubscriptionService {
     if (alvo.source === 'MANUAL') {
       throw new ConflictException('Este PRO é uma cortesia da equipe; não há cobrança a cancelar.');
     }
-    if (alvo.cancelAtPeriodEnd && alvo.status !== 'PENDING') return this.plano(userId);
+    if (alvo.cancelAtPeriodEnd && alvo.status !== 'PENDING') return this.plan(userId);
 
     if (alvo.providerRef) {
       if (!this.provedor) {
@@ -295,7 +412,7 @@ export class UserSubscriptionService {
           : { cancelAtPeriodEnd: true, canceledAt: new Date() },
     });
     this.logger.log({ event: 'assinatura_cancelada', userId, status: alvo.status });
-    return this.plano(userId);
+    return this.plan(userId);
   }
 
   /**
@@ -336,7 +453,7 @@ export class UserSubscriptionService {
    * Eventos fora de ordem não regridem o estado: uma confirmação só **avança**
    * `currentPeriodEnd`, e um atraso de uma cobrança já superada é ignorado.
    */
-  async processarWebhookAsaas(
+  async handleAsaasWebhook(
     headers: Record<string, string | undefined>,
     corpo: string,
   ): Promise<{ received: true; duplicate?: true; ignored?: string }> {
@@ -394,7 +511,7 @@ export class UserSubscriptionService {
         return { received: true as const, ignored: 'assinatura_desconhecida' };
       }
 
-      const mudanca = subscriptionEventChange(sub, r.event, r.dueDate);
+      const mudanca = subscriptionEventChange(sub, r.event, r.dueDate, r.invoiceUrl);
       if (mudanca) await tx.userSubscription.update({ where: { id: sub.id }, data: mudanca });
       await marcar(mudanca ? null : 'sem_efeito');
       return { received: true as const };

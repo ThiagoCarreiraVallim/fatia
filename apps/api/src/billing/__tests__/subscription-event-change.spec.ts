@@ -71,3 +71,59 @@ describe('subscriptionEventChange', () => {
     ).toBeNull();
   });
 });
+
+describe('subscriptionEventChange — teste e link da cobrança em aberto (#386)', () => {
+  const teste = {
+    status: 'TRIALING' as const,
+    interval: 'YEARLY' as const,
+    currentPeriodEnd: new Date('2026-11-23T03:00:00Z'),
+  };
+
+  it('o primeiro pagamento no fim do teste vira ACTIVE pelo período inteiro', () => {
+    expect(subscriptionEventChange(teste, 'PAYMENT_RECEIVED', '2026-11-23')).toMatchObject({
+      status: 'ACTIVE',
+      paymentUrl: null,
+      currentPeriodEnd: new Date('2027-11-23T03:00:00Z'),
+    });
+  });
+
+  it('teste não pago não entra em carência: o atraso do primeiro pagamento é ignorado', () => {
+    expect(subscriptionEventChange(teste, 'PAYMENT_OVERDUE', '2026-11-23')).toBeNull();
+  });
+
+  it('a cobrança da renovação criada guarda o link para "Abrir página de pagamento"', () => {
+    expect(
+      subscriptionEventChange(
+        ativa('2026-11-15T03:00:00Z'),
+        'PAYMENT_CREATED',
+        '2026-11-15',
+        'https://www.asaas.com/i/pay_2',
+      ),
+    ).toEqual({ paymentUrl: 'https://www.asaas.com/i/pay_2' });
+  });
+
+  it('o atraso também guarda o link da cobrança vencida', () => {
+    expect(
+      subscriptionEventChange(
+        ativa('2026-11-15T03:00:00Z'),
+        'PAYMENT_OVERDUE',
+        '2026-11-15',
+        'https://www.asaas.com/i/pay_2',
+      ),
+    ).toMatchObject({ status: 'PAST_DUE', paymentUrl: 'https://www.asaas.com/i/pay_2' });
+  });
+
+  it('cobrança criada de um período já pago, ou sem link, não muda nada', () => {
+    expect(
+      subscriptionEventChange(
+        ativa('2026-12-15T03:00:00Z'),
+        'PAYMENT_CREATED',
+        '2026-10-15',
+        'https://x/i',
+      ),
+    ).toBeNull();
+    expect(
+      subscriptionEventChange(ativa('2026-11-15T03:00:00Z'), 'PAYMENT_CREATED', '2026-11-15', null),
+    ).toBeNull();
+  });
+});
