@@ -24,14 +24,14 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Checklist
 
-- [ ] 1. Schema + migration
-- [ ] 2. API bloqueio (UserBlock) + filtros + testes + user-isolation
-- [ ] 3. API ocultar post, filtros do mural, pins com ordem/prazo, publicar como, não vistos
-- [ ] 4. API enquetes
-- [ ] 5. API comunicados (agendar/repetir/job/push) + permissão + PERMISSIONS.md
+- [x] 1. Schema + migration (`20261117200000_mural_polls_blocks`)
+- [x] 2. API bloqueio (UserBlock) + filtros + testes + user-isolation
+- [x] 3. API ocultar post, filtros do mural, pins com ordem/prazo, publicar como, não vistos
+- [x] 4. API enquetes
+- [x] 5. API comunicados (agendar/repetir/job/push) + permissão + PERMISSIONS.md
 - [ ] 6. API posts automáticos por tipo
 - [ ] 7. API Para você
-- [ ] 8. LGPD export/exclusão
+- [x] 8. LGPD export/exclusão
 - [ ] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
 - [ ] 10. api-client
 - [ ] 11. Web aluno (Cm-03/05/06/07/20/21) + lista de bloqueados em Você > Conta
@@ -41,4 +41,6 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Próximo passo
 
-Item 1.
+Item 6 (posts automáticos: função `publishAutoPost` em sharing/auto-post.ts chamada por content/exercise/challenge services), depois 7 (Para você), 9 (MCP).
+
+Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).
