@@ -135,6 +135,8 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      aiWriteModes,
+      aiAutoWrites,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -335,7 +337,7 @@ export class AccountService {
       // aprovou, e entra em toda conversa — a portabilidade cobre os dois.
       this.prisma.userMemory.findMany({
         where: { userId },
-        select: { content: true, createdAt: true },
+        select: { content: true, category: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
@@ -572,6 +574,25 @@ export class AccountService {
         select: { kind: true, version: true, acceptedAt: true },
         orderBy: { acceptedAt: 'asc' },
       }),
+      // Configurações da IA (#385): o modo de cada categoria (sem linha = Perguntar antes).
+      this.prisma.aiWriteModeSetting.findMany({
+        where: { userId },
+        select: { category: true, mode: true, updatedAt: true },
+      }),
+      // As gravações automáticas, com o que foi pedido e o retrato de antes (ADR 039).
+      this.prisma.aiAutoWrite.findMany({
+        where: { userId },
+        select: {
+          conversationId: true,
+          tool: true,
+          input: true,
+          result: true,
+          before: true,
+          createdAt: true,
+          undoneAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -635,6 +656,8 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      aiWriteModes,
+      aiAutoWrites,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -663,6 +686,7 @@ export class AccountService {
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
         aiConsents: aiConsents.length,
+        aiAutoWrites: aiAutoWrites.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

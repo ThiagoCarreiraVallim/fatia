@@ -21,6 +21,7 @@ export class ForgetMemoryTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'MEMORIES' as const;
   readonly description =
     'Esquece uma memória guardada pelo assistente, pelo id (de list_memories). ' +
     'Exemplo: {"memoryId":"3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44"}';
@@ -28,6 +29,6 @@ export class ForgetMemoryTool implements McpToolDef {
     memoryId: z.string().uuid().describe('ID da memória, como list_memories devolve'),
   } as const;
   execute({ memoryId }: { memoryId: string }, { userId }: McpToolContext) {
-    return this.memorias.esquecer(userId, memoryId);
+    return this.memorias.forget(userId, memoryId);
   }
 }

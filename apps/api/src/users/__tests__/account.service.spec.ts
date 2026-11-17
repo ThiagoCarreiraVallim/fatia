@@ -50,6 +50,8 @@ const makePrisma = () => ({
   inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
   reminder: { findMany: jest.fn().mockResolvedValue([]) },
   aiConsent: { findMany: jest.fn().mockResolvedValue([]) },
+  aiWriteModeSetting: { findMany: jest.fn().mockResolvedValue([]) },
+  aiAutoWrite: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -123,6 +125,10 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   feedbackIdeas: 'ideas',
   dataExports: 'dataExports',
   aiConsents: 'aiConsents',
+  // Configurações da IA (#385): o modo de cada categoria e as gravações automáticas com o
+  // retrato do Desfazer — dado de saúde da pessoa, então dela no export.
+  aiWriteModes: 'aiWriteModes',
+  aiAutoWrites: 'aiAutoWrites',
 };
 
 /**

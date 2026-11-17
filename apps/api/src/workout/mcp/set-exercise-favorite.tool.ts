@@ -17,6 +17,7 @@ export class SetExerciseFavoriteTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Marca ou desmarca um exercício como favorito; favoritos aparecem primeiro na busca do app e em ' +
     'search_exercise com favoritesOnly. Exemplo: {"id":42,"favorite":true}';

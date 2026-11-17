@@ -17,6 +17,7 @@ export class LogStepsTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Registra uma contagem de passos para um dia. Múltiplos logs por dia são permitidos — o servidor considera o maior valor (ADR 007). ' +
     'Exemplo: {"date":"2026-07-29","steps":9420,"source":"MANUAL"}';

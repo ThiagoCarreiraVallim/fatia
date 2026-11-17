@@ -27,8 +27,16 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - Só é automática a tool com categoria **e** operação inversa declarada; sem inversa, pede OK mesmo em
   Automático. `delete_*`, RESTRICTED, compartilhamento, mural e cobrança não têm categoria de automático.
 - "Desligado" tira do catálogo do modelo as tools de escrita da categoria (a leitura fica).
-- Foto do chat comum (ADR 046): descartada ao fim do turno (dono, ADR 038 item 4). Só vira foto guardada
-  pelo fluxo da câmera "Prato" com a revisão (reconhecimento da #374 + `POST /meals` com `photoFileId`).
+- Foto do chat comum: **a revisão da #384 a torna transitória** (turno + janela curta) e deixa um gancho
+  que promove foto do chat a foto da refeição. Aqui NÃO implemento descarte de foto do chat. O fluxo da
+  câmera "Prato" usa o reconhecimento da #374 (`/nutrition/meals/recognize` + `POST /meals` com
+  `photoFileId`), que só guarda com `keepMealPhotos = true`. **No merge da #384:** se o gancho de promoção
+  existir e houver caminho de foto do chat virando refeição, chamá-lo só com refeição criada E
+  `keepMealPhotos === true`.
+- **No merge da #384:** todo `HostedAiService` passa a exigir o aceite (403 `AI_CONSENT_REQUIRED`),
+  inclusive o reconhecimento por foto: a câmera/revisão precisa mostrar o aceite nesse 403 (já tratado
+  aqui pelo código do erro). Todo tool precisa de produtor de cartão real (spec nova da #384): conferir
+  `save_memory` (mudei o schema) contra ela. Evitei mexer no aceite, na fila e nos produtores de cartão.
 
 ## Checklist
 

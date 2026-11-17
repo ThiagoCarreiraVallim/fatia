@@ -16,6 +16,7 @@ export class LogPlanMealTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     '"Comi isso": registra no diário uma refeição do plano alimentar em uso, com as trocas do dia ' +
     'aplicadas. Refeição com mais de uma opção exige optionId. Repetir no dia devolve a mesma. ' +

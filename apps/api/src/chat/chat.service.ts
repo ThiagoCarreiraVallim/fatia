@@ -22,6 +22,7 @@ import { NotificationService, type Notice } from '../notifications/notification.
 import { MediaService } from '../storage/media.service';
 import { MAX_FOTOS_POR_MENSAGEM } from './corpos-do-chat';
 import { AiConsentService } from './consent/ai-consent.service';
+import { AutoWriteService } from './auto-write/auto-write.service';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -67,6 +68,7 @@ export class ChatService {
     private readonly avisos: NotificationService,
     private readonly midia: MediaService,
     private readonly aceites: AiConsentService,
+    private readonly autoWrites: AutoWriteService,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -148,6 +150,8 @@ export class ChatService {
     // Sem o aceite da primeira conversa (#384, Apple 5.1.2), nada sai para o provedor.
     await this.aceites.assertChatConsent(user.id);
     const webSearch = await this.aceites.webSearchMode(user.id);
+    // Lido a cada turno, inclusive na retomada: trocar o modo vale já para a próxima volta.
+    const toolModes = await this.autoWrites.turnModes(user.id);
 
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
     // de abrir outro turno na mesma thread do agente.
@@ -173,7 +177,8 @@ export class ChatService {
           conversationId: dto.conversationId,
           history,
           webSearch,
-          memories: (await this.memorias.listar(user.id)).map(({ id, content }) => ({
+          toolModes,
+          memories: (await this.memorias.list(user.id)).map(({ id, content }) => ({
             id,
             content,
           })),

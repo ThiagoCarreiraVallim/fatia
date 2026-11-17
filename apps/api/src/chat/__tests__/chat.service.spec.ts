@@ -1,3 +1,4 @@
+import type { AutoWriteService } from '../auto-write/auto-write.service';
 import type { MediaService } from '../../storage/media.service';
 import {
   BadRequestException,
@@ -167,6 +168,7 @@ function montar(
     /** Sem o aceite da primeira conversa (#384). */
     semAceite?: boolean;
     webSearch?: 'off' | 'ask' | 'on';
+    toolModes?: { auto: string[]; off: string[] };
     /** Fotos guardadas desta pessoa (ADR 046): id → base64 do JPEG. */
     fotosGuardadas?: Record<string, string>;
   } = {},
@@ -241,8 +243,8 @@ function montar(
   } satisfies Partial<AiUsageService>;
 
   const memorias = {
-    listar: jest.fn(async (_userId: string) =>
-      (opcoes.memorias ?? []).map((m) => ({ ...m, createdAt: new Date(0) })),
+    list: jest.fn(async (_userId: string) =>
+      (opcoes.memorias ?? []).map((m) => ({ ...m, category: null, createdAt: new Date(0) })),
     ),
   } satisfies Partial<MemoryService>;
 
@@ -281,6 +283,9 @@ function montar(
     }),
     webSearchMode: jest.fn(async (_userId: string) => opcoes.webSearch ?? 'off'),
   } satisfies Partial<AiConsentService>;
+  const autoWrites = {
+    turnModes: jest.fn(async (_userId: string) => opcoes.toolModes ?? { auto: [], off: [] }),
+  } satisfies Partial<AutoWriteService>;
   const guardadas = opcoes.fotosGuardadas ?? {};
   const midia = {
     chatPhotosForTurn: jest.fn(async (_userId: string, ids: string[]) =>
@@ -304,6 +309,7 @@ function montar(
     avisos as unknown as NotificationService,
     midia as unknown as MediaService,
     aceites as unknown as AiConsentService,
+    autoWrites as unknown as AutoWriteService,
   );
 
   return {
@@ -654,6 +660,7 @@ describe('ChatService — ordem das guardas', () => {
       history: [{ role: MessageRole.user, content: 'anterior' }],
       memories: [{ id: 'm1', content: 'É vegetariana.' }],
       webSearch: 'off',
+      toolModes: { auto: [], off: [] },
     });
   });
 
@@ -673,6 +680,16 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
     expect(chamadasAoAgente[0].webSearch).toBe('ask');
+  });
+
+  it('manda ao agente o modo por categoria do turno: o que grava sozinho e o que sai (#385)', async () => {
+    const toolModes = { auto: ['log_water'], off: ['save_memory'] };
+    const { service, canal, chamadasAoAgente } = montar({ toolModes });
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.encerrar();
+    await turno;
+    expect(chamadasAoAgente[0].toolModes).toEqual(toolModes);
   });
 
   it('conversa nova vai ao agente com o histórico vazio, e nasce com o id do PWA', async () => {

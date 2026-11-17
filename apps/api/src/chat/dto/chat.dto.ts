@@ -1,3 +1,4 @@
+import { AiWriteCategory, AiWriteMode } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -5,6 +6,7 @@ import {
   IsBase64,
   IsBoolean,
   IsDefined,
+  IsEnum,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -213,6 +215,14 @@ export class AcceptAiConsentDto {
 }
 
 /** A busca na web liga e desliga (#384, prancha IA-Ferramentas). */
+export class SetAiWriteModeDto {
+  @IsEnum(AiWriteCategory)
+  category!: AiWriteCategory;
+
+  @IsEnum(AiWriteMode)
+  mode!: AiWriteMode;
+}
+
 export class ChatPreferencesDto {
   @IsBoolean()
   webSearchEnabled!: boolean;

@@ -57,6 +57,18 @@ export interface ChatToolCatalogEntry {
   appOnly?: ChatAppOnly;
 }
 
+/**
+ * Quem executa a gravação automática (ADR 039, #385): o `AutoWriteService` do chat, que se
+ * registra aqui ao subir. Pela inversão, e não por import, porque o chat já importa este módulo.
+ */
+export interface McpAutoWriter {
+  run(
+    tool: McpToolDef,
+    input: Record<string, unknown>,
+    ctx: McpToolContext,
+  ): Promise<{ data: unknown; artifact: Record<string, unknown> }>;
+}
+
 const fail = (text: string): ToolResult => ({
   content: [{ type: 'text', text }],
   isError: true,
@@ -66,6 +78,7 @@ const fail = (text: string): ToolResult => ({
 export class McpToolRegistry implements OnModuleInit {
   private readonly logger = new Logger(McpToolRegistry.name);
   private tools: McpToolDef[] = [];
+  private autoWriter: McpAutoWriter | null = null;
 
   constructor(
     private readonly discovery: DiscoveryService,
@@ -101,6 +114,16 @@ export class McpToolRegistry implements OnModuleInit {
    */
   buscar(nome: string): McpToolDef | undefined {
     return this.tools.find((tool) => tool.name === nome && servidaNa(tool, 'entidade'));
+  }
+
+  /** Registra quem executa a gravação automática. Ver `McpAutoWriter`. */
+  useAutoWriter(writer: McpAutoWriter): void {
+    this.autoWriter = writer;
+  }
+
+  /** As tools de entidade: o catálogo que o chat hospedado alcança. */
+  entidades(): McpToolDef[] {
+    return this.tools.filter((tool) => servidaNa(tool, 'entidade'));
   }
 
   /** Nome → título em português, o mesmo que o `tools/list` de entidade anuncia. */
@@ -162,6 +185,18 @@ export class McpToolRegistry implements OnModuleInit {
         async (input: any) => {
           const start = Date.now();
           try {
+            // Gravação automática (ADR 039): só pelo `AutoWriteService`, que confere o modo, os
+            // limites e tira o retrato. Sem ele registrado, recusa — nunca grava sem o Desfazer.
+            if (ctx.autoWrite) {
+              if (!this.autoWriter) throw new Error('Gravação automática sem executor registrado.');
+              const auto = await this.autoWriter.run(tool, input, ctx);
+              this.metrics.record({
+                tool: tool.name,
+                durationMs: Date.now() - start,
+                success: true,
+              });
+              return ok(auto.data, auto.artifact);
+            }
             const data = await tool.execute(input, ctx);
             const durationMs = Date.now() - start;
             this.logger.log({ tool: tool.name, userId: ctx.userId, durationMs, success: true });

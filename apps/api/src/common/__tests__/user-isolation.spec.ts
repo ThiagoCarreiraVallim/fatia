@@ -1,3 +1,6 @@
+import { AutoWriteService } from '../../chat/auto-write/auto-write.service';
+import { PreviaDaAcaoService } from '../../chat/previa/previa-da-acao.service';
+import type { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { SharedWithService } from '../../sharing/shared-with.service';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -428,7 +431,7 @@ describe('isolamento entre usuários', () => {
       pausa: null,
       runId: null,
     });
-    owned.memoryId = (await memorias.lembrar(owned.userA, 'Não come carne nem ovo.')).id;
+    owned.memoryId = (await memorias.remember(owned.userA, 'Não come carne nem ovo.')).id;
     owned.inboxNoticeId = (
       await prisma.inboxNotice.create({
         data: {
@@ -3192,14 +3195,65 @@ describe('isolamento entre usuários', () => {
 
   describe('memória do assistente', () => {
     it('list_memories do user-B não traz a memória do user-A', async () => {
-      expect(await memorias.listar(owned.userB)).toEqual([]);
+      expect(await memorias.list(owned.userB)).toEqual([]);
     });
 
     it('forget_memory recusa o id do user-A, e a memória fica', async () => {
-      await expect(memorias.esquecer(owned.userB, owned.memoryId)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(memorias.forget(owned.userB, owned.memoryId)).rejects.toThrow(NotFoundException);
       expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
+    });
+
+    it('"Apagar todas" do user-B não apaga a memória do user-A (#385)', async () => {
+      await memorias.forgetAll(owned.userB);
+      expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
+      expect(await memorias.count(owned.userB)).toBe(0);
+    });
+  });
+
+  describe('Configurações da IA e Desfazer (#385)', () => {
+    const registry = {
+      useAutoWriter: () => undefined,
+      entidades: () => [],
+      buscar: () => undefined,
+    } as unknown as McpToolRegistry;
+    const autoWrites = new AutoWriteService(
+      prisma,
+      registry,
+      new PreviaDaAcaoService(registry, prisma),
+    );
+
+    it('o modo de uma pessoa não muda o da outra', async () => {
+      await autoWrites.setMode(owned.userA, 'DAY_LOG', 'AUTO');
+      expect((await autoWrites.modes(owned.userB)).DAY_LOG).toBe('ASK');
+      await autoWrites.setMode(owned.userB, 'DAY_LOG', 'OFF');
+      expect((await autoWrites.modes(owned.userA)).DAY_LOG).toBe('AUTO');
+      await autoWrites.setMode(owned.userA, 'DAY_LOG', 'ASK');
+      await autoWrites.setMode(owned.userB, 'DAY_LOG', 'ASK');
+    });
+
+    it('o user-B não desfaz a gravação automática do user-A, e nada muda', async () => {
+      const conversa = await prisma.conversation.create({ data: { userId: owned.userA } });
+      const log = await prisma.waterLog.create({
+        data: { userId: owned.userA, date: '2026-11-16', ml: 300 },
+      });
+      const linha = await prisma.aiAutoWrite.create({
+        data: {
+          userId: owned.userA,
+          conversationId: conversa.id,
+          runId: 'r',
+          toolCallId: `iso-${conversa.id}`,
+          tool: 'log_water',
+          input: { ml: 300 },
+          result: { waterLogId: log.id },
+        },
+      });
+      await expect(autoWrites.undo(owned.userB, linha.id)).rejects.toThrow(NotFoundException);
+      expect(await prisma.waterLog.findUnique({ where: { id: log.id } })).toBeTruthy();
+      expect(
+        (await prisma.aiAutoWrite.findUnique({ where: { id: linha.id } }))?.undoneAt,
+      ).toBeNull();
+      await prisma.conversation.delete({ where: { id: conversa.id } });
+      await prisma.waterLog.delete({ where: { id: log.id } });
     });
   });
 

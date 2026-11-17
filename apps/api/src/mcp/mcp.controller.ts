@@ -7,6 +7,7 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 import { HEADER_SUPERFICIE, superficieDoHeader } from './intent/superficie';
+import { autoWriteFromHeader, HEADER_AUTO_WRITE } from './auto-write-header';
 
 @UseGuards(McpThrottlerGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
@@ -24,11 +25,16 @@ export class McpController {
         `${HEADER_SUPERFICIE}: intencao exige MCP_SUPERFICIE_INTENCAO ligada nesta instância.`,
       );
     }
+    const autoWrite = autoWriteFromHeader(req.headers[HEADER_AUTO_WRITE]);
     const server = new McpServer(
       { name: 'fatia-mcp', version: '0.1.0' },
       { capabilities: { tools: {} } },
     );
-    this.registry.bindAll(server, { userId: user.id, timezone: user.timezone }, superficie);
+    this.registry.bindAll(
+      server,
+      { userId: user.id, timezone: user.timezone, ...(autoWrite ? { autoWrite } : {}) },
+      superficie,
+    );
 
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {

@@ -83,6 +83,11 @@ export type TurnInput = {
    * Ausente é `off`: quem não diz não liga a busca.
    */
   webSearch?: 'off' | 'ask' | 'on';
+  /**
+   * O modo da IA por categoria (ADR 039, #385): `auto` são as escritas que gravam sem pausa (com o
+   * cartão "Gravado" e Desfazer), `off` as que saem do catálogo do modelo. Ausente: tudo pede OK.
+   */
+  toolModes?: { auto: string[]; off: string[] };
 } & (
   | {
       message: string;
