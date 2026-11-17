@@ -28,7 +28,11 @@ import {
   type CircuitJsonV1,
   type CircuitSummaryView,
 } from './helpers/circuit';
-import { WORKOUT_FINISHED_HOOKS, type WorkoutFinishedHook } from './workout-finished.hook';
+import {
+  WORKOUT_FINISHED_HOOKS,
+  runWorkoutFinishedHooks,
+  type WorkoutFinishedHook,
+} from './workout-finished.hook';
 import { historyItemOf, type WorkoutHistory } from './session-history';
 import { sessionKind, sessionKindWhere } from './helpers/session-kind';
 import { isCardioExercise } from './helpers/is-cardio';
@@ -432,19 +436,9 @@ export class WorkoutSessionService {
       },
     });
     if (dto.checkin) await this.saveCheckin(userId, id, dto.checkin);
-    await this.runFinishedHooks(userId);
+    // Conquistas na hora (#382). Falhar aqui não desfaz o treino: a próxima abertura reavalia.
+    await runWorkoutFinishedHooks(this.finishedHooks, userId, this.logger);
     return updated;
-  }
-
-  /** Conquistas na hora (#382). Falhar aqui não desfaz o treino: a próxima abertura reavalia. */
-  private async runFinishedHooks(userId: string) {
-    for (const hook of this.finishedHooks ?? []) {
-      try {
-        await hook.afterFinish(userId);
-      } catch (err) {
-        this.logger.warn(`gancho do fim do treino falhou: ${(err as Error).message}`);
-      }
-    }
   }
 
   /**

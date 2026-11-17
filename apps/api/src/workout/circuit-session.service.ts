@@ -1,8 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { circuitResult, circuitState, type CircuitEvent } from '@fatia/design';
@@ -25,6 +28,11 @@ import {
   type CircuitJsonV1,
   type CircuitResultV1,
 } from './helpers/circuit';
+import {
+  WORKOUT_FINISHED_HOOKS,
+  runWorkoutFinishedHooks,
+  type WorkoutFinishedHook,
+} from './workout-finished.hook';
 
 /** Folga para relógio de aparelho adiantado; a mesma do `finish` da sessão. */
 const CLOCK_SLACK_MS = 5 * 60 * 1000;
@@ -42,7 +50,14 @@ const EVENTS_AFTER_START_MS = 6 * 60 * 60 * 1000;
  */
 @Injectable()
 export class CircuitSessionService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CircuitSessionService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(WORKOUT_FINISHED_HOOKS)
+    private readonly finishedHooks: WorkoutFinishedHook[] = [],
+  ) {}
 
   /** Guarda os toques. A lista vem inteira e substitui a anterior: reenviar é idempotente. */
   async saveProgress(userId: string, sessionId: string, events: CircuitEventDto[]) {
@@ -135,6 +150,8 @@ export class CircuitSessionService {
       if (again?.result) return { sessionId, result: again.result, alreadyFinished: true };
       throw new ConflictException('Esta sessão já foi encerrada.');
     }
+    // Depois do commit, como o fim normal: as conquistas e a sequência na hora (#382).
+    await runWorkoutFinishedHooks(this.finishedHooks, userId, this.logger);
     return { sessionId, result: next.result!, alreadyFinished: false };
   }
 
@@ -233,6 +250,7 @@ export class CircuitSessionService {
       await this.createSets(tx, created.id, rows);
       return created;
     });
+    await runWorkoutFinishedHooks(this.finishedHooks, userId, this.logger);
     return { sessionId: session.id, result, alreadyFinished: false };
   }
 
