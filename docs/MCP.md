@@ -1702,7 +1702,8 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
 `kind` (#381): `plan` (com plano), `free` (treino livre, inclusive o só de cardio) ou `circuit`.
 O tipo vem do retrato gravado ao começar (`fromPlan` e `planName` na sessão): apagar o plano não
 faz a sessão virar `free`. Não há tipo "cardio", porque cardio é exercício
-(`muscleGroup === 'cardio'`). Circuito chega com a #380: até lá nenhuma sessão é `circuit`.
+(`muscleGroup === 'cardio'`). `circuit` é a sessão de circuito (#380), mesmo vinda de um plano:
+`plan` não a inclui.
 
 ### `save_session_as_plan`
 

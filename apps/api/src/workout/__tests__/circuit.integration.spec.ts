@@ -233,6 +233,34 @@ describe('circuitos (banco real)', () => {
     expect(await prisma.sessionSet.count({ where: { sessionId: logged.sessionId } })).toBe(8);
   });
 
+  it('no histórico o circuito é "circuito", com filtro próprio e fora de Planos (#381, Al-T10)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const logged = await circuits.log(userId, {
+      planId: plan.id,
+      roundsCompleted: 2,
+      partialExercises: 1,
+    });
+    const all = await sessions.history(userId, {});
+    const row = all.items.find((i) => i.id === logged.sessionId);
+    expect(row?.kind).toBe('circuit');
+    expect(row?.circuit).toEqual({
+      format: 'AMRAP',
+      roundsCompleted: 2,
+      partialExercises: 1,
+      intervalsCompleted: null,
+      exercises: 4,
+    });
+    const onlyCircuits = await sessions.history(userId, { kind: 'circuit' });
+    expect(onlyCircuits.items.map((i) => i.id)).toContain(logged.sessionId);
+    expect(onlyCircuits.items.every((i) => i.kind === 'circuit')).toBe(true);
+    const onlyPlans = await sessions.history(userId, { kind: 'plan' });
+    expect(onlyPlans.items.map((i) => i.id)).not.toContain(logged.sessionId);
+    const listed = await sessions.list(userId, { kind: 'circuit' });
+    expect(listed.map((s) => s.id)).toContain(logged.sessionId);
+    const summary = await sessions.summary(userId, logged.sessionId);
+    expect(summary.kind).toBe('circuit');
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',

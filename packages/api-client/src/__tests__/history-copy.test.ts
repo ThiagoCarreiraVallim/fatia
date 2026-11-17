@@ -46,9 +46,32 @@ const treadmill = {
 };
 
 describe('histórico (Al-T10)', () => {
-  it('filtros: Tudo, Planos e Livres; Circuitos só com a #380', () => {
-    expect(HISTORY_FILTERS.map((f) => f.label)).toEqual(['Tudo', 'Planos', 'Livres']);
-    expect(HISTORY_FILTERS.map((f) => f.kind)).toEqual([undefined, 'plan', 'free']);
+  it('filtros: Tudo, Planos, Circuitos e Livres (#380)', () => {
+    expect(HISTORY_FILTERS.map((f) => f.label)).toEqual(['Tudo', 'Planos', 'Circuitos', 'Livres']);
+    expect(HISTORY_FILTERS.map((f) => f.kind)).toEqual([undefined, 'plan', 'circuit', 'free']);
+  });
+
+  it('circuito: rounds (+ exercícios do round incompleto) ou intervalos, e os exercícios', () => {
+    const circuit = (over: Partial<NonNullable<WorkoutHistoryItem['circuit']>>) =>
+      item({
+        kind: 'circuit',
+        title: 'AMRAP 12',
+        circuit: {
+          format: 'AMRAP',
+          roundsCompleted: 4,
+          partialExercises: 2,
+          intervalsCompleted: null,
+          exercises: 4,
+          ...over,
+        },
+      });
+    expect(historyLine(circuit({}), KM)).toBe('4 rounds + 2 · 4 exercícios');
+    expect(
+      historyLine(circuit({ format: 'FOR_TIME', roundsCompleted: 1, partialExercises: 0 }), KM),
+    ).toBe('1 round · 4 exercícios');
+    expect(
+      historyLine(circuit({ format: 'TABATA', intervalsCompleted: 8, exercises: 2 }), KM),
+    ).toBe('8 intervalos · 2 exercícios');
   });
 
   it('o selo de tipo', () => {

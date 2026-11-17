@@ -23,14 +23,11 @@ function trim(n: number): string {
   return (Math.round(n * 10) / 10).toFixed(1).replace('.', ',').replace(/,0$/, '');
 }
 
-/**
- * Os filtros do topo do histórico. **Ponto de extensão (#380):** "Circuitos"
- * (`kind: 'circuit'`) entra aqui quando a sessão de circuito existir; antes
- * disso a aba ficaria sempre vazia (a mesma escolha do "Planos de treino" da #378).
- */
+/** Os filtros do topo do histórico (Al-T10), com os circuitos da #380. */
 export const HISTORY_FILTERS: ReadonlyArray<{ kind: SessionKind | undefined; label: string }> = [
   { kind: undefined, label: 'Tudo' },
   { kind: 'plan', label: 'Planos' },
+  { kind: 'circuit', label: 'Circuitos' },
   { kind: 'free', label: 'Livres' },
 ];
 
@@ -59,6 +56,7 @@ function cardioBits(
  * 146 bpm" (só cardio) ou "5 exercícios + esteira 10 min" (força com cardio).
  */
 export function historyLine(item: WorkoutHistoryItem, units: Units): string {
+  if (item.circuit) return circuitHistoryLine(item.circuit);
   if (item.strengthExercises === 0 && item.cardio) {
     return [item.cardio.exerciseName, ...cardioBits(item.cardio, units, true)].join(' · ');
   }
@@ -72,6 +70,16 @@ export function historyLine(item: WorkoutHistoryItem, units: Units): string {
   if (!item.cardio) return strength;
   const cardio = [item.cardio.exerciseName.toLowerCase(), ...cardioBits(item.cardio, units, false)];
   return `${strength} + ${cardio.join(' ')}`;
+}
+
+/** Circuito (#380, Al-T10): "4 rounds + 2 · 4 exercícios" ou "8 intervalos · 2 exercícios". */
+function circuitHistoryLine(c: NonNullable<WorkoutHistoryItem['circuit']>): string {
+  const exercises = plural(c.exercises, 'exercício', 'exercícios');
+  if (c.intervalsCompleted != null) {
+    return `${plural(c.intervalsCompleted, 'intervalo', 'intervalos')} · ${exercises}`;
+  }
+  const rounds = plural(c.roundsCompleted, 'round', 'rounds');
+  return `${c.partialExercises > 0 ? `${rounds} + ${c.partialExercises}` : rounds} · ${exercises}`;
 }
 
 /** A coluna do dia: "ter" e "3", no fuso do aparelho. */

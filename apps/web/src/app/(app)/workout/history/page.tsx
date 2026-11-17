@@ -22,7 +22,7 @@ import { ErrorState } from '@/components/elements/error-state';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { cn } from '@/lib/utils';
 
-type Filter = 'all' | 'plan' | 'free';
+type Filter = 'all' | 'plan' | 'circuit' | 'free';
 
 const OPTIONS = HISTORY_FILTERS.map((f) => ({
   value: (f.kind ?? 'all') as Filter,
@@ -77,8 +77,7 @@ function Row({ item, first }: { item: WorkoutHistoryItem; first: boolean }) {
  * Histórico (prancha `Al-T10`, #381): os totais (sessões, duração média e
  * volume), o filtro por tipo e as sessões concluídas, cada uma com o tipo, o
  * resumo e a sensação. O toque abre o detalhe (Al-T11).
- *
- * **Ponto de extensão (#380):** a aba "Circuitos" entra em `HISTORY_FILTERS`.
+ * A aba "Circuitos" é da #380 (`HISTORY_FILTERS`).
  */
 export default function WorkoutHistoryPage() {
   const [filter, setFilter] = useState<Filter>('all');

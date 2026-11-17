@@ -24,11 +24,10 @@ import { colors } from '@/theme/colors';
  * Réplica de `apps/web/src/app/(app)/workout/history/page.tsx` (prancha
  * `Al-T10`, #381): os totais, o filtro por tipo e as sessões concluídas. O
  * toque abre o detalhe (`history/[id]`, Al-T11), que volta para cá.
- *
- * **Ponto de extensão (#380):** a aba "Circuitos" entra em `HISTORY_FILTERS`.
+ * A aba "Circuitos" é da #380 (`HISTORY_FILTERS`).
  */
 
-type Filter = 'all' | 'plan' | 'free';
+type Filter = 'all' | 'plan' | 'circuit' | 'free';
 
 const OPTIONS = HISTORY_FILTERS.map((f) => ({
   value: (f.kind ?? 'all') as Filter,

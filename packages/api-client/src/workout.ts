@@ -451,6 +451,14 @@ export interface WorkoutHistoryItem {
     durationSeconds: number | null;
     avgHeartRate: number | null;
   } | null;
+  /** Circuito (#380): o resultado para a linha. Opcional para respostas antigas. */
+  circuit?: {
+    format: CircuitFormat;
+    roundsCompleted: number;
+    partialExercises: number;
+    intervalsCompleted: number | null;
+    exercises: number;
+  } | null;
 }
 
 export interface WorkoutHistory {

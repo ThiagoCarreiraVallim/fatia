@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { SESSION_KINDS, sessionKind, sessionKindWhere } from '../helpers/session-kind';
 
 /**
@@ -13,6 +14,12 @@ describe('sessionKind', () => {
     expect(sessionKind({ planId: null, fromPlan: true })).toBe('plan');
   });
 
+  it('sessão com o circuito congelado é "circuit", mesmo vinda de um plano (#380)', () => {
+    expect(sessionKind({ planId: 'p1', fromPlan: true, circuit: { version: 1 } })).toBe('circuit');
+    expect(sessionKind({ planId: null, fromPlan: true, circuit: { version: 1 } })).toBe('circuit');
+    expect(sessionKind({ planId: 'p1', fromPlan: true, circuit: null })).toBe('plan');
+  });
+
   it('sessão sem plano é treino livre, inclusive a só de esteira', () => {
     expect(sessionKind({ planId: null })).toBe('free');
   });
@@ -23,18 +30,23 @@ describe('sessionKind', () => {
 });
 
 describe('sessionKindWhere', () => {
-  it('plano filtra quem tem planId ou o retrato de plano', () => {
+  it('plano filtra quem tem planId ou o retrato de plano, sem circuito', () => {
     expect(sessionKindWhere('plan')).toEqual({
       OR: [{ planId: { not: null } }, { fromPlan: true }],
+      circuit: { equals: Prisma.AnyNull },
     });
   });
 
-  it('livre filtra quem não tem plano nem o retrato', () => {
-    expect(sessionKindWhere('free')).toEqual({ planId: null, fromPlan: false });
+  it('livre filtra quem não tem plano nem o retrato nem circuito', () => {
+    expect(sessionKindWhere('free')).toEqual({
+      planId: null,
+      fromPlan: false,
+      circuit: { equals: Prisma.AnyNull },
+    });
   });
 
-  it('circuito ainda não casa nada (a sessão de circuito chega com a #380)', () => {
-    expect(sessionKindWhere('circuit')).toEqual({ id: { in: [] } });
+  it('circuito filtra quem tem o circuito congelado (#380)', () => {
+    expect(sessionKindWhere('circuit')).toEqual({ circuit: { not: Prisma.AnyNull } });
   });
 
   it('sem filtro não restringe', () => {

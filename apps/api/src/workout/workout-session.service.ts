@@ -311,6 +311,7 @@ export class WorkoutSessionService {
           completedAt: true,
           feeling: true,
           notes: true,
+          circuit: true,
           plan: { select: { name: true } },
           sets: {
             select: {
@@ -575,6 +576,7 @@ export class WorkoutSessionService {
         feeling: session.feeling,
         notes: session.notes,
         exerciseOrder: session.exerciseOrder,
+        circuit: session.circuit,
         plan: session.plan,
         sets: session.sets,
       },
