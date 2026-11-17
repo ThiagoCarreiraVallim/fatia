@@ -48,10 +48,10 @@ type Registro = Record<string, unknown>;
 const isRecord = (v: unknown): v is Registro =>
   typeof v === 'object' && v !== null && !Array.isArray(v) && !(v instanceof Date);
 
-const isListaDeRegistros = (v: unknown): v is Registro[] =>
+const isRecordList = (v: unknown): v is Registro[] =>
   Array.isArray(v) && v.length > 0 && v.every(isRecord);
 
-/** O formato de quem só desenha texto, sem fuso: as datas não passam por ele (ver `valorDe`). */
+/** O formato de quem só desenha texto, sem fuso: as datas não passam por ele (ver `cellOf`). */
 const SEM_FUSO = { timezone: 'UTC', agora: new Date(0) };
 
 const fmt = (campo: string) => CAMPOS[campo]?.formato;
@@ -173,7 +173,7 @@ const TECNICOS = new Set([
   '__typename',
 ]);
 
-const ehTecnico = (chave: string) =>
+const isTechnical = (chave: string) =>
   chave === 'id' ||
   chave.endsWith('Id') ||
   chave.endsWith('Ids') ||
@@ -184,8 +184,8 @@ const ehTecnico = (chave: string) =>
  * O campo como aparece no cartão; `null` quando não aparece. Sem `legivel`, só o que tem rótulo
  * em português; com ele, o resto ganha o nome do campo legível ("loggedAt" → "Logged at").
  */
-function campoDe(chave: string, legivel = false): Campo | null {
-  if (ehTecnico(chave)) return null;
+function fieldOf(chave: string, legivel = false): Campo | null {
+  if (isTechnical(chave)) return null;
   const campo = ROTULOS_DO_RESULTADO[chave] ?? CAMPOS[chave];
   if (campo) return campo;
   return legivel ? { rotulo: readableKey(chave) } : null;
@@ -202,7 +202,7 @@ export function readableKey(chave: string): string {
 }
 
 /** O título que um objeto aninhado tem, quando tem: "Supino reto", e não o objeto. */
-function nomeDe(valor: unknown): string | null {
+function nameOf(valor: unknown): string | null {
   if (!isRecord(valor)) return null;
   for (const chave of ['name', 'title', 'displayName'] as const) {
     const v = valor[chave];
@@ -211,28 +211,28 @@ function nomeDe(valor: unknown): string | null {
   return null;
 }
 
-const ehCampoDeData = (campo: Campo) => campo.formato === dataEHora || campo.formato === dia;
+const isDateField = (campo: Campo) => campo.formato === dataEHora || campo.formato === dia;
 
 /**
  * O valor de um campo, como a pessoa lê. `undefined` = o campo não tem como aparecer (lista de
  * objetos, objeto sem nome). Data sai em ISO: o cartão fica gravado e reaparece dias depois, e
  * "hoje" já seria mentira — quem desenha formata no fuso de quem lê.
  */
-function valorDe(campo: Campo, valor: unknown): Celula | undefined {
+function cellOf(campo: Campo, valor: unknown): Celula | undefined {
   if (valor === null || valor === undefined) return null;
   if (valor instanceof Date) {
     if (Number.isNaN(valor.getTime())) return null;
     const iso = valor.toISOString();
     // Data sem hora (nascimento): o formato do campo lê "YYYY-MM-DD".
-    return ehCampoDeData(campo) || !campo.formato
+    return isDateField(campo) || !campo.formato
       ? iso
       : (campo.formato(iso.slice(0, 10), SEM_FUSO) ?? iso);
   }
   if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;
-  if (typeof valor === 'string' && ehCampoDeData(campo)) return valor;
+  if (typeof valor === 'string' && isDateField(campo)) return valor;
   if (Array.isArray(valor) && valor.some(isRecord)) return undefined;
   if (isRecord(valor)) {
-    const titulo = nomeDe(valor);
+    const titulo = nameOf(valor);
     if (titulo) return titulo;
   }
   const texto = campo.formato?.(valor, SEM_FUSO);
@@ -244,8 +244,8 @@ function valorDe(campo: Campo, valor: unknown): Celula | undefined {
 }
 
 /** O mesmo valor, como texto de uma linha da Lista: o número leva a unidade do campo. */
-function textoDe(campo: Campo, valor: unknown): string | null {
-  const v = valorDe(campo, valor);
+function textOf(campo: Campo, valor: unknown): string | null {
+  const v = cellOf(campo, valor);
   if (v === null || v === undefined) return null;
   if (typeof v === 'number') return campo.formato?.(v, SEM_FUSO) ?? String(v);
   return v;
@@ -255,15 +255,15 @@ function textoDe(campo: Campo, valor: unknown): string | null {
  * A lista que o resultado traz: ele mesmo, a primeira lista não vazia de objetos nele, ou, sem
  * nenhuma, a primeira um nível abaixo (`{ date, active: { meals: [...] } }`).
  */
-function listaDe(dados: unknown): Registro[] | null {
-  if (Array.isArray(dados)) return isListaDeRegistros(dados) ? dados : null;
+function listOf(dados: unknown): Registro[] | null {
+  if (Array.isArray(dados)) return isRecordList(dados) ? dados : null;
   if (!isRecord(dados)) return null;
   const valores = Object.values(dados);
-  const lista = valores.find(isListaDeRegistros);
+  const lista = valores.find(isRecordList);
   if (lista) return lista;
   for (const valor of valores) {
     if (!isRecord(valor)) continue;
-    const aninhada = Object.values(valor).find(isListaDeRegistros);
+    const aninhada = Object.values(valor).find(isRecordList);
     if (aninhada) return aninhada;
   }
   return null;
@@ -273,23 +273,23 @@ function listaDe(dados: unknown): Registro[] | null {
  * O nome do objeto que traz a lista, para o título do cartão: o plano, a comunidade do
  * convite. Só quando a lista veio de dentro de um objeto.
  */
-function rotuloDe(dados: unknown): { label?: string } {
+function cardLabelOf(dados: unknown): { label?: string } {
   if (!isRecord(dados)) return {};
-  const label = nomeDe(dados) ?? ANINHADOS_DE_TITULO.map((c) => nomeDe(dados[c])).find(Boolean);
+  const label = nameOf(dados) ?? ANINHADOS_DE_TITULO.map((c) => nameOf(dados[c])).find(Boolean);
   return label ? { label: label.slice(0, MAX_TITULO) } : {};
 }
 
-const ehInstante = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v);
+const isInstant = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v);
 
 /** Os campos de um objeto solto, rótulo e texto, na ordem em que vêm. */
-function camposDoObjeto(objeto: unknown, legivel: boolean): [string, string][] {
+function objectFields(objeto: unknown, legivel: boolean): [string, string][] {
   if (!isRecord(objeto)) return [];
   const linhas: [string, string][] = [];
   for (const [chave, valor] of Object.entries(objeto)) {
-    const campo = campoDe(chave, legivel);
+    const campo = fieldOf(chave, legivel);
     // Instante sem rótulo não tem formato de data: em ISO ele não se lê.
-    if (!campo || (legivel && (valor instanceof Date || ehInstante(valor)))) continue;
-    const texto = textoDe(campo, valor);
+    if (!campo || (legivel && (valor instanceof Date || isInstant(valor)))) continue;
+    const texto = textOf(campo, valor);
     if (texto) linhas.push([campo.rotulo, texto.slice(0, MAX_DETALHE)]);
     if (linhas.length === MAX_CAMPOS) break;
   }
@@ -300,31 +300,31 @@ function camposDoObjeto(objeto: unknown, legivel: boolean): [string, string][] {
  * O que mostrar de um resultado sem lista de objetos: os campos com rótulo em português; sem
  * nenhum, a lista de textos soltos que ele traga; sem ela, os campos pelo nome legível.
  */
-function semLista(
+function withoutObjectList(
   dados: unknown,
 ): { campos: [string, string][] } | { soltos: (string | number)[] } | null {
-  const comRotulo = camposDoObjeto(dados, false);
+  const comRotulo = objectFields(dados, false);
   if (comRotulo.length) return { campos: comRotulo };
-  const soltos = soltosDe(dados);
+  const soltos = looseValuesOf(dados);
   if (soltos) return { soltos: soltos.slice(0, MAX_LINHAS) };
-  const legiveis = camposDoObjeto(dados, true);
+  const legiveis = objectFields(dados, true);
   return legiveis.length ? { campos: legiveis } : null;
 }
 
-const ehSolto = (v: unknown) =>
+const isLoose = (v: unknown) =>
   (typeof v === 'string' && v.trim() !== '') || (typeof v === 'number' && Number.isFinite(v));
 
 /**
  * Uma lista só de textos ou números (`["Peito", "Costas"]`), o resultado ou a primeira dentro
  * dele; `null` se não houver. Num objeto, só vale quando os campos dele não têm o que mostrar.
  */
-function soltosDe(dados: unknown): (string | number)[] | null {
+function looseValuesOf(dados: unknown): (string | number)[] | null {
   const lista = Array.isArray(dados)
     ? dados
     : isRecord(dados)
-      ? Object.values(dados).find((v) => Array.isArray(v) && v.length > 0 && v.every(ehSolto))
+      ? Object.values(dados).find((v) => Array.isArray(v) && v.length > 0 && v.every(isLoose))
       : null;
-  return Array.isArray(lista) && lista.length > 0 && lista.every(ehSolto)
+  return Array.isArray(lista) && lista.length > 0 && lista.every(isLoose)
     ? (lista as (string | number)[])
     : null;
 }
@@ -347,25 +347,25 @@ const CAMPOS_DE_TITULO = [
 const ANINHADOS_DE_TITULO = ['exercise', 'plan', 'group', 'author'] as const;
 
 /** A chave que dá o título da linha: um campo de texto, ou um objeto aninhado com nome. */
-function chaveDoTitulo(linha: Registro): string | null {
+function titleKeyOf(linha: Registro): string | null {
   const propria = CAMPOS_DE_TITULO.find((c) => typeof linha[c] === 'string' && linha[c]);
   if (propria) return propria;
-  return ANINHADOS_DE_TITULO.find((c) => nomeDe(linha[c])) ?? null;
+  return ANINHADOS_DE_TITULO.find((c) => nameOf(linha[c])) ?? null;
 }
 
 /** O rótulo e o valor da coluna do nome da linha, tenha ou não rótulo em `CAMPOS`. */
-const campoDoTitulo = (chave: string): Campo => campoDe(chave) ?? { rotulo: 'Nome' };
+const titleFieldOf = (chave: string): Campo => fieldOf(chave) ?? { rotulo: 'Nome' };
 
 /** As colunas de uma lista de objetos: o nome da linha, os números, e o resto do texto. */
-function colunasDe(linhas: Registro[], titulo: string | null, legivel: boolean): string[] {
+function columnsOf(linhas: Registro[], titulo: string | null, legivel: boolean): string[] {
   const numericas: string[] = [];
   const outras: string[] = [];
   for (const linha of linhas) {
     for (const [chave, valor] of Object.entries(linha)) {
       if (chave === titulo || numericas.includes(chave) || outras.includes(chave)) continue;
-      const campo = campoDe(chave, legivel);
+      const campo = fieldOf(chave, legivel);
       if (!campo) continue;
-      const v = valorDe(campo, valor);
+      const v = cellOf(campo, valor);
       if (v === undefined || v === null) continue;
       (typeof v === 'number' ? numericas : outras).push(chave);
     }
@@ -374,9 +374,9 @@ function colunasDe(linhas: Registro[], titulo: string | null, legivel: boolean):
 }
 
 export function genericTable(dados: unknown): GenericTable | null {
-  const linhas = listaDe(dados);
+  const linhas = listOf(dados);
   if (!linhas) {
-    const conteudo = semLista(dados);
+    const conteudo = withoutObjectList(dados);
     if (!conteudo) return null;
     return 'campos' in conteudo
       ? { kind: 'report', columns: ['Campo', 'Valor'], rows: conteudo.campos }
@@ -385,23 +385,23 @@ export function genericTable(dados: unknown): GenericTable | null {
 
   // O nome da linha primeiro, os números em seguida — a prancha desenha a Tabela para comparar
   // número —, e o resto do texto enquanto houver coluna. Sem número a Tabela sai do mesmo jeito.
-  const titulo = chaveDoTitulo(linhas[0]);
+  const titulo = titleKeyOf(linhas[0]);
   let legivel = false;
-  let chaves = colunasDe(linhas, titulo, legivel);
+  let chaves = columnsOf(linhas, titulo, legivel);
   if (chaves.length <= (titulo ? 1 : 0)) {
     legivel = true;
-    chaves = colunasDe(linhas, titulo, legivel);
+    chaves = columnsOf(linhas, titulo, legivel);
   }
   if (!chaves.length) return null;
   const campoDaColuna = (c: string) =>
-    c === titulo ? campoDoTitulo(c) : (campoDe(c, legivel) as Campo);
+    c === titulo ? titleFieldOf(c) : (fieldOf(c, legivel) as Campo);
   return {
     kind: 'report',
-    ...rotuloDe(dados),
+    ...cardLabelOf(dados),
     columns: chaves.map((c) => campoDaColuna(c).rotulo),
     rows: linhas
       .slice(0, MAX_LINHAS)
-      .map((l) => chaves.map((c) => valorDe(campoDaColuna(c), l[c]) ?? null)),
+      .map((l) => chaves.map((c) => cellOf(campoDaColuna(c), l[c]) ?? null)),
   };
 }
 
@@ -411,9 +411,9 @@ export function genericTable(dados: unknown): GenericTable | null {
  * objeto solto vira um item por campo.
  */
 export function genericList(dados: unknown): GenericList | null {
-  const linhas = listaDe(dados);
+  const linhas = listOf(dados);
   if (!linhas) {
-    const conteudo = semLista(dados);
+    const conteudo = withoutObjectList(dados);
     if (!conteudo) return null;
     const items =
       'campos' in conteudo
@@ -423,28 +423,28 @@ export function genericList(dados: unknown): GenericList | null {
   }
 
   const itensDe = (legivel: boolean) =>
-    linhas.slice(0, MAX_LINHAS).flatMap((linha) => itemDe(linha, legivel));
+    linhas.slice(0, MAX_LINHAS).flatMap((linha) => itemOf(linha, legivel));
   const itens = itensDe(false);
   const lidos = itens.length ? itens : itensDe(true);
-  return lidos.length ? { kind: 'list', ...rotuloDe(dados), items: lidos } : null;
+  return lidos.length ? { kind: 'list', ...cardLabelOf(dados), items: lidos } : null;
 }
 
 /** Um objeto como item da Lista: o título e, no detalhe, os primeiros campos com rótulo. */
-function itemDe(linha: Registro, legivel: boolean): GenericList['items'] {
-  const chave = chaveDoTitulo(linha);
+function itemOf(linha: Registro, legivel: boolean): GenericList['items'] {
+  const chave = titleKeyOf(linha);
   const partes: string[] = [];
   for (const [c, valor] of Object.entries(linha)) {
     if (c === chave || partes.length === PARTES_DO_DETALHE) continue;
-    const campo = campoDe(c, legivel);
+    const campo = fieldOf(c, legivel);
     // Momento fica de fora do detalhe: em ISO ele não se lê, e formatado viraria "hoje".
-    if (!campo || ehCampoDeData(campo) || valor instanceof Date || ehInstante(valor)) continue;
-    const texto = textoDe(campo, valor);
+    if (!campo || isDateField(campo) || valor instanceof Date || isInstant(valor)) continue;
+    const texto = textOf(campo, valor);
     if (texto) partes.push(`${campo.rotulo}: ${texto}`);
   }
   const titulo = chave
     ? typeof linha[chave] === 'string'
       ? (linha[chave] as string)
-      : nomeDe(linha[chave])
+      : nameOf(linha[chave])
     : partes.shift();
   if (!titulo) return [];
   const detalhe = partes.join(' · ').slice(0, MAX_DETALHE);
