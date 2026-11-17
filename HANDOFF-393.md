@@ -19,7 +19,7 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 - [x] API: feed marca visto na 1ª página
 - [x] API: `GET /groups/:id/team` (quem da equipe vê, "viu hoje")
 - [x] API: benefícios (membro + CRUD equipe), isolamento
-- [ ] MCP: `list_group_benefits` + produtor de cartão + números regenerados
+- [x] MCP: `list_group_benefits` + produtor de cartão + números regenerados
 - [ ] api-client: tipos, `parseCommunityEntry`, textos
 - [ ] web: Cm-01, Cm-02, Cm-04 (sobre), Cm-22, painel Pn-28
 - [ ] app: Cm-01, Cm-02 (QR), Cm-04, Cm-22
@@ -35,4 +35,4 @@ Branch `redesign/393-comunidades` (worktree `.claude/worktrees/393-comunidades`)
 
 ## Próximo passo
 
-MCP `list_group_benefits`, api-client, web, app.
+api-client (tipos, parseCommunityEntry), depois web e app.

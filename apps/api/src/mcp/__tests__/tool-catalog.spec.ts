@@ -89,7 +89,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
     // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
     // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
     // ou morrer, a frase que explica a decisão tem de acompanhar.
-    text: 'entra com **24 tools**',
+    text: 'entra com **25 tools**',
     count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
   },
   {
@@ -344,22 +344,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**143,1 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(119,9 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**143,9 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(120,6 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**8.297 são os exemplos**',
+    text: '**8.356 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**143,1 k caracteres**',
+    text: '**143,9 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 119,9 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 120,6 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**8.297 caracteres**',
+    text: '**8.356 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
