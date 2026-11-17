@@ -207,6 +207,33 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 - **Dica da constância:** é só o lado bom. O "Sábado é o que mais falha" da prancha saiu.
 - **Ainda não conferido:** as capturas contra as pranchas. O dono faz a passada visual.
 
+## Etapa 6: IA, plano e MCP (em andamento)
+
+| Issue | Título                                                 | Estado           | Superfícies                                                     |
+| ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
+| #384  | Chat com IA: conversas, cartões, estados e ferramentas | pronto na branch | api, db, agente, MCP (contrato de cartão), api-client, web, app |
+
+Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_consent_and_web_search` e `20261117030000_chat_photos_in_media_file`; env nova `AGENT_CHAT_PAUSE_AFTER_TOOLS`, padrão 14):
+
+- **Contrato de cartão:** toda tool declara o formato do cartão (`card` no `McpToolDef`), sem Tabela padrão para quem não mapeou (decisão do dono durante a issue). Leitura → um dos 12 formatos de consulta; confirmável → `confirm` (o cartão Gravar/Ajustar; `refresh_achievements` → `badges`); restrita → `appOnly { screen, path }`. As tools do agente também: `web_search` → fontes, `ask_user` → pergunta, `open_in_app` → só no app (`AGENT_LOCAL_TOOLS`). `tool-catalog.spec.ts` reprova tool sem formato; o agente descarta `kind` desconhecido em vez de virar Tabela. Servido em `GET /chat/tool-catalog`. Não vai no fio do MCP: `SHA_ENTIDADE`, contagem e docs do MCP não mudaram (specs rodados depois do merge e do contrato).
+- **Produtores:** passos e água (barras), metas (progresso), conquistas (selos), explicar execução (instruções), exportar dados (arquivo), sequência (métrica), treino em andamento (lista rica); lista e tabela têm o genérico. Faixa e placar ainda não têm produtor, nem parte das barras, métricas e linhas do tempo: essas tools mostram só a linha até ganharem `artifact()`.
+- **Só no app:** a IA nunca apaga, sai ou autoriza; chama `open_in_app`, que emite o cartão "… é pelo app" com "Abrir <tela>" (link montado por `appOnlyHref` sobre `ROUTES`; sem o parâmetro, a tela-mãe).
+- **Busca na web (só OpenRouter):** tool local `web_search(query)`, chamada separada ao OpenRouter com o plugin `web` (engine `exa`), só com o texto da pergunta (sem histórico, sem sistema, sem id; e-mail, telefone e documentos são removidos). Modo `off | ask | on` vem da API a cada turno; `ask` pausa com `web_consent` ("Buscar na web?", com a pergunta à vista). O aceite diz que a retenção zero não cobre a busca. Fontes num cartão. Cada busca cobra na cota (`AiUsage` `web_search`, modelo `openrouter-web-search`).
+- **Aceites:** `AiConsent` (chat e busca, com versão) e `User.webSearchEnabled`. Sem o aceite do chat, `POST /chat` é 403 `AI_CONSENT_REQUIRED` e a tela mostra o aceite no lugar do campo. Textos com nomes reais: OpenRouter → GLM 5.3 Flash (Z.ai); busca Exa pelo OpenRouter. Entram no export de dados. A chave do globo no topo liga e desliga a busca. A `/privacy` descreve a busca nova.
+- **Pausa "Continuo?":** depois de `AGENT_CHAT_PAUSE_AFTER_TOOLS` consultas no turno ("Já consultei N coisas. Continuo?"), com Continuar e Parar aqui; 0 desliga.
+- **Merge de `feat/chat-fotos-busca-fila-cartoes`:** ficaram a fila de mensagens, citar trecho, o retry do `/mcp` em falha temporária e a foto do chat no R2 (ADR renumerada para **046**, migration renomeada para ordenar depois das da main). A busca da branch (tool de servidor dentro da chamada do modelo, sem aceite, com a conversa inteira no contexto) saiu; ficou a cobrança por busca dela.
+- **Conversas antigas:** o dono liberou apagar mensagens e conversas antigas se o schema limpo pedisse. Não foi preciso: os formatos novos moram no mesmo `metadata.artifacts`, e as conversas antigas abrem como antes. **Nada foi apagado.**
+- **Tela (web e app):** linhas da tool com "Consultando …", "· nada encontrado" (neutro), "· não deu certo" (vermelho, detalhe num toque), "· você recusou"; 2+ consultas seguidas viram "Consultei N coisas" (nunca com falha); o cartão da última resposta fica aberto e o das antigas recolhe numa linha com ✓ e o resultado; confirmação Gravar/Ajustar com contorno verde, inválida em vermelho sem Gravar, lote "Enviar N decisões"; respostas rápidas; lista Hoje/Esta semana/Antes com a última fala; motivo "Demorou"; "Ouvindo… O áudio vira texto e é descartado."; plano "n de m passos"; "Você" na fala. O app ganhou os motivos do 👎 (`ChatSession.explainVote`), que só o PWA tinha.
+- **Desvios de propósito:**
+  - Ajustar recusa a escrita (nada é gravado) e a correção vai pelo campo: a prancha não diz o que o Ajustar faz.
+  - Sem o "Abrir"/"Abrir dia" no canto de cada cartão de consulta: só ficam Baixar (arquivo), Ver vídeo (instruções) e Abrir (só no app).
+  - O ícone do cartão é o do formato, não o da área.
+  - No app a escrita feita recolhe como "· gravado", sem a hora (o app não guarda a hora de cada fala); no PWA, "· gravado às HH:MM".
+  - "Agora não" do aceite sai do chat (web volta ao início, app volta uma tela).
+  - O anel do progresso no app é um círculo cheio com o número, sem o arco parcial.
+- **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
+- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -214,7 +241,7 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
-| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
+| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
