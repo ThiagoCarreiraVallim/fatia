@@ -1,132 +1,291 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Crown } from 'lucide-react-native';
 import {
   ApiError,
+  CAMERA_NOTE,
+  ENTRY_INVALID,
+  entryPolicyView,
   groupsApi,
-  joinPolicyLabel,
   joinResultMessage,
-  type GroupPreview,
+  parseCommunityEntry,
+  PRO_OFFER_NOTE,
+  VISIBILITY_WORD,
+  type CommunityEntry,
   type JoinConsent,
+  type ShareScope,
+  type TeamMember,
 } from '@fatia/api-client';
 import { DrawerInput } from '@/components/nutrition/drawer-input';
+import { QrScanModal } from '@/components/onboarding/qr-scan';
 import {
   Button,
   Drawer,
   DrawerDescription,
+  DrawerFooter,
   DrawerHeader,
   DrawerScrollView,
   DrawerTitle,
 } from '@/components/ui';
+import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
+import { colors } from '@/theme/colors';
 import { ConsentForm } from './consent-form';
+import { GroupAvatar } from './group-avatar';
 
-/** Réplica de `apps/web/src/components/community/join-by-code-drawer.tsx`. */
+/** A comunidade achada, venha de código ou de convite: o cartão do Cm-02. */
+interface Found {
+  entry: CommunityEntry;
+  name: string;
+  meta: string;
+  badge: string;
+  tone: 'done' | 'lite' | 'pending';
+  text: string;
+  cta: string;
+  proOffer: boolean;
+  team: TeamMember[];
+  required: ShareScope[];
+}
+
+const TONE = { ok: 'done', warn: 'lite', muted: 'pending' } as const;
+const TYPE_WORD = { SPONSORED: 'patrocinada', SOCIAL: 'social' } as const;
+const membros = (n: number) => `${n} ${n === 1 ? 'membro' : 'membros'}`;
+
+async function lookup(entry: CommunityEntry): Promise<Found> {
+  if (entry.kind === 'invite') {
+    const c = await groupsApi.previewInvite(entry.token);
+    return {
+      entry,
+      name: c.group.name,
+      meta: `${TYPE_WORD[c.group.type]} · ${membros(c.memberCount)}`,
+      badge: 'convite',
+      tone: 'done',
+      text: c.invitedBy ? `Convite de ${c.invitedBy}: entra na hora` : 'O convite já é a aprovação',
+      cta: 'Entrar',
+      proOffer: false,
+      team: c.team,
+      required: c.requiredSharingScopes,
+    };
+  }
+  const g = await groupsApi.previewByCode(entry.code);
+  const policy = entryPolicyView(g.joinPolicy);
+  return {
+    entry: { kind: 'code', code: g.code },
+    name: g.name,
+    meta: `${TYPE_WORD[g.type]} · ${VISIBILITY_WORD[g.visibility]} · ${membros(g.memberCount)}`,
+    badge: policy.badge,
+    tone: TONE[policy.tone],
+    text: policy.text,
+    cta: policy.cta,
+    proOffer: g.proOffer,
+    team: g.team,
+    required: g.requiredSharingScopes,
+  };
+}
+
+/**
+ * Entrar numa comunidade (Cm-02), espelho de
+ * `apps/web/src/components/community/join-by-code-drawer.tsx`, mais a leitura
+ * do QR da recepção pela câmera (`expo-camera`, roda no Expo Go). Código
+ * inválido, vencido, revogado ou de comunidade só por convite dá a mesma frase.
+ */
 export function JoinByCodeDrawer({
   open,
   onOpenChange,
   onJoined,
+  initialCode,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onJoined: (groupId: string) => void;
+  /** O código que veio no link do QR (`/community?join=1&code=…`): já procura. */
+  initialCode?: string | null;
 }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [code, setCode] = useState('');
-  const [preview, setPreview] = useState<GroupPreview | null>(null);
+  const [code, setCode] = useState(initialCode ?? '');
+  const [found, setFound] = useState<Found | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const look = useMutation({
-    mutationFn: (slug: string) => groupsApi.previewBySlug(slug),
-    onSuccess: setPreview,
+    mutationFn: lookup,
+    onSuccess: (f) => {
+      setFound(f);
+      setInvalid(false);
+    },
+    onError: (err) => setInvalid(err instanceof ApiError && err.isNotFound),
   });
   const join = useMutation({
-    mutationFn: (consent: JoinConsent) => groupsApi.join(preview!.slug, consent),
+    mutationFn: (consent: JoinConsent) =>
+      found!.entry.kind === 'invite'
+        ? groupsApi.acceptInvite(found!.entry.token, consent)
+        : groupsApi.join(found!.entry.code, consent),
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: ['community'] });
+      void qc.invalidateQueries({ queryKey: ['billing'] });
       toast.show({ message: joinResultMessage(r) });
-      fechar(false);
+      reset(false);
       onJoined(r.groupId);
     },
   });
 
-  function fechar(aberto: boolean) {
+  function reset(aberto: boolean) {
     if (!aberto) {
       setCode('');
-      setPreview(null);
+      setFound(null);
+      setSharing(false);
+      setInvalid(false);
       look.reset();
       join.reset();
     }
     onOpenChange(aberto);
   }
 
-  const erroDaBusca = look.isError
-    ? look.error instanceof ApiError && look.error.isNotFound
-      ? 'Nenhuma comunidade com esse código.'
-      : 'Não deu para procurar agora. Tente de novo.'
-    : null;
-  const erroDaEntrada = join.isError
+  function search(raw: string) {
+    const entry = parseCommunityEntry(raw);
+    setFound(null);
+    if (!entry) {
+      setInvalid(true);
+      return;
+    }
+    look.mutate(entry);
+  }
+
+  // O link do QR abre a folha já com o código: procura uma vez.
+  const autoLooked = useRef(false);
+  useEffect(() => {
+    if (!open || !initialCode || autoLooked.current) return;
+    autoLooked.current = true;
+    const entry = parseCommunityEntry(initialCode);
+    if (entry) look.mutate(entry);
+  }, [open, initialCode, look]);
+
+  const lookError = invalid
+    ? ENTRY_INVALID
+    : look.isError
+      ? 'Não deu para procurar agora. Tente de novo.'
+      : null;
+  const joinError = join.isError
     ? join.error instanceof ApiError && join.error.isConflict
       ? join.error.message
       : 'Não deu para entrar agora. Tente de novo.'
     : null;
 
-  // Altura fixa nos dois passos: sem `DrawerContent` (BottomSheetView) o sheet
-  // de altura dinâmica não mede os filhos e abre com 0 px, invisível.
   return (
-    <Drawer open={open} onOpenChange={fechar} snapPoints={preview ? ['90%'] : ['45%']}>
-      <DrawerHeader>
-        <DrawerTitle>{preview ? preview.name : 'Entrar com código'}</DrawerTitle>
-        <DrawerDescription>
-          {preview
-            ? `${joinPolicyLabel(preview.joinPolicy)} · ${preview.memberCount} ${preview.memberCount === 1 ? 'membro' : 'membros'}`
-            : 'O código que sua academia ou seu treinador divulgou.'}
-        </DrawerDescription>
-      </DrawerHeader>
-      {preview ? (
-        <DrawerScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {preview.description ? (
-            <Text className="text-sm text-muted-foreground">{preview.description}</Text>
-          ) : null}
-          <ConsentForm
-            team={preview.team}
-            required={preview.requiredSharingScopes}
-            submitLabel={preview.joinPolicy === 'OPEN' ? 'Entrar' : 'Pedir para entrar'}
-            pending={join.isPending}
-            error={erroDaEntrada}
-            onSubmit={(consent) => join.mutate(consent)}
-            secondary={
-              <Button variant="ghost" onPress={() => setPreview(null)}>
-                Outro código
+    <>
+      <Drawer open={open} onOpenChange={reset} snapPoints={['85%']}>
+        <DrawerHeader>
+          <DrawerTitle>
+            {sharing && found ? `O que compartilhar com ${found.name}` : 'Entrar numa comunidade'}
+          </DrawerTitle>
+          <DrawerDescription>
+            {sharing
+              ? 'A equipe vê só o que você ligar aqui. Dá para mudar depois, em Sobre.'
+              : 'Leia o QR Code da recepção ou digite o código ou o link que sua academia ou treinador divulgou.'}
+          </DrawerDescription>
+        </DrawerHeader>
+        {sharing && found ? (
+          <DrawerScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>
+            <ConsentForm
+              team={found.team}
+              required={found.required}
+              submitLabel={found.cta}
+              pending={join.isPending}
+              error={joinError}
+              onSubmit={(consent) => join.mutate(consent)}
+              secondary={
+                <Button variant="ghost" onPress={() => setSharing(false)}>
+                  Voltar
+                </Button>
+              }
+            />
+          </DrawerScrollView>
+        ) : (
+          <>
+            <DrawerScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}
+            >
+              <Button variant="outline" onPress={() => setScanning(true)}>
+                Ler QR Code
               </Button>
-            }
-          />
-        </DrawerScrollView>
-      ) : (
-        <View className="gap-3 px-4 pb-6">
-          <DrawerInput
-            label="Código da comunidade"
-            placeholder="ex.: academia-centro"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={code}
-            onChangeText={setCode}
-          />
-          {erroDaBusca ? (
-            <Text accessibilityRole="alert" className="text-sm text-destructive">
-              {erroDaBusca}
-            </Text>
-          ) : null}
-          <Button
-            disabled={!code.trim()}
-            loading={look.isPending}
-            onPress={() => look.mutate(code.trim().toLowerCase())}
-          >
-            Continuar
-          </Button>
-        </View>
-      )}
-    </Drawer>
+              <Text className="text-xs text-muted-foreground">{CAMERA_NOTE}</Text>
+              <DrawerInput
+                label="Código ou link"
+                placeholder="AD7K3Q9P"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                value={code}
+                onChangeText={(t) => {
+                  setCode(t);
+                  setInvalid(false);
+                }}
+                onSubmitEditing={() => search(code)}
+              />
+              {lookError ? (
+                <Text accessibilityRole="alert" className="text-sm text-destructive">
+                  {lookError}
+                </Text>
+              ) : null}
+              {found ? (
+                <View
+                  accessibilityLabel="Comunidade encontrada"
+                  className="gap-3 rounded-2xl bg-card p-4"
+                >
+                  <View className="flex-row items-center gap-3">
+                    <GroupAvatar name={found.name} url={null} />
+                    <View className="min-w-0 flex-1">
+                      <Text numberOfLines={1} className="font-sans-bold text-foreground">
+                        {found.name}
+                      </Text>
+                      <Text className="text-xs text-muted-foreground">{found.meta}</Text>
+                    </View>
+                  </View>
+                  <View className="flex-row flex-wrap items-center gap-2">
+                    <Badge variant={found.tone}>{found.badge}</Badge>
+                    <Text className="text-xs text-muted-foreground">{found.text}</Text>
+                  </View>
+                  {found.proOffer ? (
+                    <View className="flex-row items-center gap-2 rounded-xl bg-primary/10 px-3 py-2">
+                      <Crown size={16} color={colors.primaryText} />
+                      <Text className="flex-1 text-sm text-foreground">{PRO_OFFER_NOTE}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </DrawerScrollView>
+            <DrawerFooter className="pb-8">
+              {found ? (
+                <Button onPress={() => setSharing(true)}>{found.cta}</Button>
+              ) : (
+                <Button
+                  disabled={!code.trim()}
+                  loading={look.isPending}
+                  onPress={() => search(code)}
+                >
+                  Continuar
+                </Button>
+              )}
+            </DrawerFooter>
+          </>
+        )}
+      </Drawer>
+      <QrScanModal
+        open={scanning}
+        title="Ler QR Code"
+        parse={(raw) => (parseCommunityEntry(raw) ? raw : null)}
+        onClose={() => setScanning(false)}
+        onCode={(raw) => {
+          setScanning(false);
+          const entry = parseCommunityEntry(raw);
+          setCode(entry?.kind === 'code' ? entry.code : raw);
+          search(raw);
+        }}
+      />
+    </>
   );
 }
