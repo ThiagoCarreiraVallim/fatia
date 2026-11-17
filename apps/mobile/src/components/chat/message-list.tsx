@@ -4,7 +4,6 @@ import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import {
-  Ban,
   Check,
   ChevronDown,
   ChevronRight,
@@ -16,37 +15,32 @@ import {
   ThumbsUp,
 } from 'lucide-react-native';
 import {
+  AGENT_LOCAL_TOOLS,
   FATIA_AGENT_NAME,
+  chatCardTitle,
   chatMarkdownPlainText,
+  collapsedLabel,
+  groupToolCalls,
+  toolCallStatusOf,
+  toolLineLabel,
+  type ChatToolPart,
+  type ToolCallStatus,
   splitQuote,
   textoDeErroDoChat,
   type ChatAssistantMessage,
   type ChatPlanStep,
   type ChatStreamError,
   type ChatThreadState,
-  type ChatToolStatus,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { ArtifactCard } from './artifact-card';
+import { ArtifactCard, useChatToolCatalog } from './artifact-card';
 import { ChatMarkdown } from './chat-markdown';
 
 /**
  * Uma fala da pessoa. A foto guardada (ADR 046) aparece; a que foi pelo caminho
  * antigo não ficou guardada (ADR 020), e sobra o aviso.
  */
-
-/**
- * O desfecho de cada chamada, em português e como no PWA (`partes.tsx`): recusar
- * uma escrita ou a conversa seguir antes não é "não deu certo".
- */
-const TOOL_STATUS_LABEL: Record<ChatToolStatus, string> = {
-  running: 'em andamento',
-  success: 'feito',
-  error: 'não deu certo',
-  refused: 'você recusou, nada foi gravado',
-  not_run: 'não chegou a rodar',
-};
 
 export function UserBubble({
   text,
@@ -108,9 +102,12 @@ export function AssistantBlock({
   showName,
   onVote,
   onQuote,
+  last = false,
 }: {
   message: ChatAssistantMessage;
   thread: ChatThreadState;
+  /** A última resposta: o cartão dela fica aberto; o das antigas recolhe numa linha. */
+  last?: boolean;
   agentName: string | null;
   showName: boolean;
   onVote: (rowId: string, review: 'like' | 'dislike') => void;
@@ -148,34 +145,7 @@ export function AssistantBlock({
           ) : null}
         </Pressable>
       ) : null}
-      {message.tools.map((tool) => (
-        <View key={tool.id} className="gap-2">
-          <View
-            accessibilityLabel={`${thread.toolTitles[tool.name] ?? tool.name}: ${TOOL_STATUS_LABEL[tool.status]}`}
-            className="flex-row items-center gap-2 self-start rounded-full border border-border px-3 py-1"
-          >
-            {tool.status === 'running' ? (
-              <ActivityIndicator size="small" color={colors.primaryText} />
-            ) : tool.status === 'success' ? (
-              <Check size={14} color={colors.primaryText} />
-            ) : tool.status === 'error' ? (
-              <CircleX size={14} color={colors.mutedForeground} />
-            ) : (
-              <Ban size={14} color={colors.mutedForeground} />
-            )}
-            <Text className="text-xs text-foreground">
-              {thread.toolTitles[tool.name] ?? tool.name}
-              {tool.status === 'refused' || tool.status === 'not_run'
-                ? `: ${TOOL_STATUS_LABEL[tool.status]}`
-                : ''}
-            </Text>
-          </View>
-          {tool.status === 'error' && tool.errorText ? (
-            <Text className="text-xs text-muted-foreground">{tool.errorText}</Text>
-          ) : null}
-          {thread.artifacts[tool.id] ? <ArtifactCard artifact={thread.artifacts[tool.id]} /> : null}
-        </View>
-      ))}
+      <ToolLines message={message} thread={thread} last={last} />
       {message.text ? <ChatMarkdown source={message.text} /> : null}
       {message.stopped ? (
         <Text className="text-xs text-muted-foreground">Resposta interrompida</Text>
@@ -305,6 +275,141 @@ export function TurnError({ error, onRetry }: { error: ChatStreamError; onRetry:
           <Text className="text-sm text-foreground">Tentar de novo</Text>
         </Button>
       )}
+    </View>
+  );
+}
+
+type Linha = { tool: ChatToolPart; status: ToolCallStatus };
+
+/**
+ * As tools de uma resposta (prancha IA-Estados): "Consultando …" enquanto roda, "· nada
+ * encontrado" neutro, "· não deu certo" em vermelho com o motivo atrás de um toque, e o cartão.
+ * Duas ou mais consultas seguidas fecham em "Consultei N coisas" — nunca com falha
+ * (`groupToolCalls`, o mesmo do PWA).
+ */
+function ToolLines({
+  message,
+  thread,
+  last,
+}: {
+  message: ChatAssistantMessage;
+  thread: ChatThreadState;
+  last: boolean;
+}) {
+  const [grupoAberto, setGrupoAberto] = useState<Record<number, boolean>>({});
+  const linhas: Linha[] = message.tools.map((tool) => ({
+    tool,
+    status: toolCallStatusOf(tool, thread.artifacts[tool.id]),
+  }));
+  const segmentos = groupToolCalls(linhas);
+  return (
+    <>
+      {segmentos.map((segmento, i) => {
+        if (segmento.type === 'single') {
+          return (
+            <ToolLine key={segmento.item.tool.id} {...segmento.item} thread={thread} last={last} />
+          );
+        }
+        // Com cartão na última resposta, o grupo nasce aberto: o cartão é o resultado.
+        const temCartao = segmento.items.some((l) => thread.artifacts[l.tool.id]);
+        const aberto = grupoAberto[i] ?? (last && temCartao);
+        return (
+          <View key={segmento.items[0]!.tool.id} className="gap-2">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: aberto }}
+              onPress={() => setGrupoAberto((g) => ({ ...g, [i]: !aberto }))}
+              className="min-h-[36px] flex-row items-center gap-2 self-start rounded-full bg-secondary px-3"
+            >
+              <Check size={14} color={colors.primaryText} />
+              <Text className="text-xs font-semibold text-foreground">
+                {collapsedLabel(segmento.items.length)}
+              </Text>
+              {aberto ? (
+                <ChevronDown size={14} color={colors.mutedForeground} />
+              ) : (
+                <ChevronRight size={14} color={colors.mutedForeground} />
+              )}
+            </Pressable>
+            {aberto
+              ? segmento.items.map((l) => (
+                  <ToolLine key={l.tool.id} {...l} thread={thread} last={last} />
+                ))
+              : null}
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+function ToolLine({
+  tool,
+  status,
+  thread,
+  last,
+}: Linha & { thread: ChatThreadState; last: boolean }) {
+  const catalogo = useChatToolCatalog();
+  const [aberto, setAberto] = useState(false);
+  const [detalhe, setDetalhe] = useState(false);
+  const local = AGENT_LOCAL_TOOLS[tool.name as keyof typeof AGENT_LOCAL_TOOLS];
+  const titulo =
+    thread.toolTitles[tool.name] ??
+    catalogo?.[tool.name]?.title ??
+    local?.title ??
+    'Ação do assistente';
+  const write = catalogo?.[tool.name]?.kind === 'confirm';
+  const cartao = status === 'done' ? thread.artifacts[tool.id] : undefined;
+
+  if (cartao && last) return <ArtifactCard artifact={cartao} tool={titulo} />;
+
+  // A escrita feita diz "gravado" (o app não guarda a hora de cada fala para dizer "às 15:02").
+  const rotulo = toolLineLabel(titulo, status, {
+    write,
+    cardTitle: cartao ? chatCardTitle(cartao) : write && status === 'done' ? 'gravado' : undefined,
+  });
+  return (
+    <View className="gap-2">
+      <Pressable
+        accessibilityRole={cartao || tool.errorText ? 'button' : undefined}
+        accessibilityState={cartao ? { expanded: aberto } : undefined}
+        accessibilityLabel={rotulo}
+        disabled={!cartao && !tool.errorText}
+        onPress={() => (cartao ? setAberto((v) => !v) : setDetalhe((v) => !v))}
+        className="min-h-[36px] flex-row items-center gap-2 self-start rounded-full bg-secondary px-3"
+      >
+        {status === 'running' ? (
+          <ActivityIndicator size="small" color={colors.primaryText} />
+        ) : status === 'done' ? (
+          <Check size={14} color={colors.primaryText} />
+        ) : status === 'error' ? (
+          <CircleX size={14} color={colors.danger} />
+        ) : null}
+        <Text
+          numberOfLines={1}
+          className={cn('shrink text-xs', status === 'error' ? 'text-danger' : 'text-foreground')}
+        >
+          {rotulo}
+        </Text>
+        {status === 'error' && tool.errorText ? (
+          <Text className="text-xs text-muted-foreground underline">
+            {detalhe ? 'ocultar' : 'ver detalhe'}
+          </Text>
+        ) : null}
+        {cartao ? (
+          aberto ? (
+            <ChevronDown size={14} color={colors.mutedForeground} />
+          ) : (
+            <ChevronRight size={14} color={colors.mutedForeground} />
+          )
+        ) : null}
+      </Pressable>
+      {detalhe && tool.errorText ? (
+        <Text className="rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+          {tool.errorText}
+        </Text>
+      ) : null}
+      {cartao && aberto ? <ArtifactCard artifact={cartao} tool={titulo} /> : null}
     </View>
   );
 }

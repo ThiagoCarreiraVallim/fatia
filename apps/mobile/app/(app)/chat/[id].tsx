@@ -180,6 +180,9 @@ export default function ConversationScreen() {
                   thread={thread}
                   agentName={nomeDoAgente}
                   showName={thread.messages[index - 1]?.role !== 'assistant'}
+                  // A resposta do turno atual pode vir em mais de uma fala do assistente:
+                  // "última" é não ter fala da pessoa depois.
+                  last={!thread.messages.slice(index + 1).some((m) => m.role === 'user')}
                   onVote={(rowId, review) => void sessao.vote(rowId, review).catch(() => undefined)}
                   onQuote={(text) => sessao.setQuote(text)}
                 />
