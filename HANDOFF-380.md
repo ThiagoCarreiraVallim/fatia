@@ -41,9 +41,11 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
       (`circuit-run.tsx`, `/workout/circuit/[id]`), aba Circuitos no T6, "Circuito" no T1, T5 com `circuit-result.tsx`,
       barra ativa e `/workout` levando ao relógio. Testes em `components/workout/circuit/__tests__`.
 - [x] sessão nasce com `circuit.previous` (última vez) para o selo do T4e
-- [ ] app: idem + keep-awake, som/vibração com fallback
-- [ ] REDESIGN_PROGRESS (decisões do dono #380, pendências)
-- [ ] lint, typecheck, testes api/api-client/web/mobile
+- [x] app: idem + keep-awake, som (`assets/sounds/*.wav` via expo-audio), háptico, avisos agendados no fundo
+      (`circuit-alarms.ts` testado, `circuit-feedback.ts`), rota da sessão redireciona circuito aberto
+- [x] REDESIGN_PROGRESS (decisões do dono #380, pendências)
+- [x] lint, typecheck, testes api (2921) / api-client (799) / web (908) / mobile (489)
+- [x] rótulos do cartão de confirmação do chat para os campos novos (`chat/previa/rotulos.ts`)
 
 ## Comandos
 
@@ -54,6 +56,4 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 
 ## Próximo passo
 
-App (Expo): mesmas telas em `apps/mobile/app/(app)/workout/circuits/new.tsx`, `circuits/[id].tsx`,
-`circuit/[id].tsx`; keep-awake, haptics, expo-audio com try/catch, avisos locais via `circuitAlarms`
-(`@/notifications/native`, pode ser nulo). Depois REDESIGN_PROGRESS, lint/typecheck/testes completos.
+Nada pendente do checklist. Falta só a passada visual do coordenador (prints contra as pranchas) e o relatório.
