@@ -66,7 +66,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] C3 finish atômico ($transaction) + exercício pessoal apagado: séries dele ficam de fora (escolha: pular, não travar o deleteCustom)
 - [x] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
 - [x] C5 numeração dos avisos e done sempre
-- [ ] C6 corrida no agendamento (app)
+- [x] C6 corrida no agendamento (app)
 - [ ] C7 limite de eventos no finish
 - [ ] C8 comparação só com mesma definição
 - [ ] C9 apagar este HANDOFF no último commit

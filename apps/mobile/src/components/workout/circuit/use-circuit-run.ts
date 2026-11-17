@@ -15,6 +15,7 @@ import {
   type WorkoutSession,
 } from '@fatia/api-client';
 import { circuitAlarmNotices } from './circuit-alarms';
+import { createCircuitNoticeScheduler } from './circuit-notice-scheduler';
 import {
   cancelCircuitNotices,
   playCircuitCue,
@@ -69,27 +70,22 @@ export function useCircuitRun(session: WorkoutSession & { circuit: CircuitSessio
     runRef.current = run;
   }, [run]);
   useEffect(() => {
-    let scheduled: string[] = [];
-    let alive = true;
+    const notices = createCircuitNoticeScheduler({
+      notices: (now) => circuitAlarmNotices(def, runRef.current, now),
+      schedule: scheduleCircuitNotices,
+      cancel: (ids) => void cancelCircuitNotices(ids),
+    });
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
-        const ids = scheduled;
-        scheduled = [];
-        void cancelCircuitNotices(ids);
+        notices.active();
         setNow(Date.now());
-      } else if (next === 'background' && scheduled.length === 0) {
-        void scheduleCircuitNotices(circuitAlarmNotices(def, runRef.current, Date.now())).then(
-          (ids) => {
-            if (alive) scheduled = ids;
-            else void cancelCircuitNotices(ids);
-          },
-        );
+      } else if (next === 'background') {
+        notices.background();
       }
     });
     return () => {
-      alive = false;
       sub.remove();
-      void cancelCircuitNotices(scheduled);
+      notices.dispose();
     };
   }, [def]);
 

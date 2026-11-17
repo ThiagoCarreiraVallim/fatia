@@ -10,8 +10,10 @@ import {
 export const CIRCUIT_NOTICE_LIMIT = 40;
 
 export interface CircuitNotice {
-  /** Segundos a partir de agora. */
+  /** Segundos a partir do `now` passado (os testes leem este). */
   seconds: number;
+  /** Horário do aviso (ms): quem agenda conta os segundos na hora de cada chamada. */
+  at: number;
   title: string;
   body: string;
 }
@@ -35,9 +37,10 @@ export function circuitAlarmNotices(
   const done = `${circuitBadge(def.format).label} concluído`;
 
   return alarms.map((a, k) => {
-    const seconds = Math.max(1, Math.round((a.at - now) / 1000));
+    const seconds = secondsUntil(a.at, now);
+    const at = a.at;
     if (a.kind === 'done')
-      return { seconds, title: done, body: 'Abra o app para salvar o treino.' };
+      return { seconds, at, title: done, body: 'Abra o app para salvar o treino.' };
     const nextWork = alarms.slice(k + 1).find((x) => x.kind === 'work');
     // Com a lista cortada pelo teto, a próxima troca pode não estar nela: o
     // exercício sai do rodízio pelo número do intervalo.
@@ -47,26 +50,35 @@ export function circuitAlarmNotices(
         ? nextIndex % def.exercises.length
         : null;
     const following = exercise(nextWork?.exerciseIndex ?? rotated)?.name ?? 'fim';
-    if (a.kind === 'rest') return { seconds, title: 'Descanse', body: `a seguir · ${following}` };
+    if (a.kind === 'rest') {
+      return { seconds, at, title: 'Descanse', body: `a seguir · ${following}` };
+    }
     const item = exercise(a.exerciseIndex);
     // O número vem da troca (e não da posição na lista, que o teto corta).
     const number = (a.index ?? 0) + 1;
     if (emom) {
       return {
         seconds,
+        at,
         title: `Minuto ${number}${item ? ` · ${circuitNowLabel(item)}` : ''}`,
         body: `a seguir · ${following}`,
       };
     }
     if (def.format === 'FOR_TIME') {
-      return { seconds, title: 'Fim do descanso', body: item ? circuitNowLabel(item) : '' };
+      return { seconds, at, title: 'Fim do descanso', body: item ? circuitNowLabel(item) : '' };
     }
     return {
       seconds,
+      at,
       title: `Trabalhe${item ? ` · ${item.name}` : ''}`,
       body: `intervalo ${number} de ${total}`,
     };
   });
+}
+
+/** Segundos até `at`, nunca menos de 1 (o sistema recusa zero). */
+export function secondsUntil(at: number, now: number): number {
+  return Math.max(1, Math.round((at - now) / 1000));
 }
 
 export const CIRCUIT_CHANNEL_ID = 'workout-circuit';

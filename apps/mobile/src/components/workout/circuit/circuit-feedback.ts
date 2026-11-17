@@ -9,6 +9,7 @@ import { colors } from '@/theme/colors';
 import {
   CIRCUIT_CHANNEL_ID,
   CIRCUIT_NOTIFICATION_KIND,
+  secondsUntil,
   type CircuitNotice,
 } from './circuit-alarms';
 
@@ -107,6 +108,10 @@ export async function scheduleCircuitNotices(notices: CircuitNotice[]): Promise<
   if (!(await ensurePermission())) return [];
   const ids: string[] = [];
   for (const n of notices) {
+    // Os segundos saem agora, e não de quando a lista foi montada: o pedido de
+    // permissão e os agendamentos anteriores levam tempo.
+    const now = Date.now();
+    if (n.at <= now) continue;
     try {
       ids.push(
         await Notifications.scheduleNotificationAsync({
@@ -118,7 +123,7 @@ export async function scheduleCircuitNotices(notices: CircuitNotice[]): Promise<
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: n.seconds,
+            seconds: secondsUntil(n.at, now),
             repeats: false,
             channelId: CIRCUIT_CHANNEL_ID,
           },

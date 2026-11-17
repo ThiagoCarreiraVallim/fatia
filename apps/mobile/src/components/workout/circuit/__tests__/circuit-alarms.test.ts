@@ -21,10 +21,15 @@ describe('avisos do sistema para o circuito com a tela bloqueada', () => {
   it('cada troca vira um aviso em segundos a partir de agora, com o que fazer', () => {
     const notices = circuitAlarmNotices(tabata, { startedAt: 0, events: [] }, 5_000);
     expect(notices).toEqual([
-      { seconds: 15, title: 'Descanse', body: 'a seguir · Abdominal' },
-      { seconds: 25, title: 'Trabalhe · Abdominal', body: 'intervalo 2 de 2' },
-      { seconds: 45, title: 'Descanse', body: 'a seguir · fim' },
-      { seconds: 55, title: 'Tabata concluído', body: 'Abra o app para salvar o treino.' },
+      { seconds: 15, at: 20_000, title: 'Descanse', body: 'a seguir · Abdominal' },
+      { seconds: 25, at: 30_000, title: 'Trabalhe · Abdominal', body: 'intervalo 2 de 2' },
+      { seconds: 45, at: 50_000, title: 'Descanse', body: 'a seguir · fim' },
+      {
+        seconds: 55,
+        at: 60_000,
+        title: 'Tabata concluído',
+        body: 'Abra o app para salvar o treino.',
+      },
     ]);
   });
 
@@ -32,12 +37,18 @@ describe('avisos do sistema para o circuito com a tela bloqueada', () => {
     const emom = { ...tabata, format: 'EMOM' as const, config: { durationSeconds: 120 } };
     expect(circuitAlarmNotices(emom, { startedAt: 0, events: [] }, 0)[0]).toEqual({
       seconds: 60,
+      at: 60_000,
       title: 'Minuto 2 · Abdominal × 10',
       body: 'a seguir · fim',
     });
     const amrap = { ...tabata, format: 'AMRAP' as const, config: { durationSeconds: 600 } };
     expect(circuitAlarmNotices(amrap, { startedAt: 0, events: [] }, 0)).toEqual([
-      { seconds: 600, title: 'AMRAP concluído', body: 'Abra o app para salvar o treino.' },
+      {
+        seconds: 600,
+        at: 600_000,
+        title: 'AMRAP concluído',
+        body: 'Abra o app para salvar o treino.',
+      },
     ]);
     expect(
       circuitAlarmNotices(tabata, { startedAt: 0, events: [{ type: 'pause', at: 1_000 }] }, 2_000),
@@ -50,6 +61,7 @@ describe('avisos do sistema para o circuito com a tela bloqueada', () => {
     expect(notices).toHaveLength(CIRCUIT_NOTICE_LIMIT);
     expect(notices.at(-1)).toEqual({
       seconds: 1800,
+      at: 1_800_000,
       title: 'Tabata concluído',
       body: 'Abra o app para salvar o treino.',
     });
