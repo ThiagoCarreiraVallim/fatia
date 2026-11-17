@@ -371,6 +371,14 @@ export class WorkoutSessionService {
    */
   async finish(userId: string, id: string, dto: FinishSessionDto) {
     const session = await this.assertOwner(userId, id);
+    // Circuito (#380) sem resultado não fecha por aqui: fecharia sem rounds nem
+    // séries, e o "Treino feito" e o histórico ficariam vazios.
+    if (session.circuit != null && !parseCircuitJson(session.circuit)?.result) {
+      throw new ConflictException(
+        `Esta sessão é um circuito (id ${id}): encerre pelo relógio ("Encerrar circuito") ou ` +
+          'registre o resultado com log_circuit_result (planId e sessionId).',
+      );
+    }
 
     let requested: Date | null = null;
     if (dto.completedAt) {

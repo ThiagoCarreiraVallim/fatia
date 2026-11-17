@@ -29,7 +29,8 @@ export class FinishWorkoutSessionTool implements McpToolDef {
     'Também grava como foi o treino (feeling: 1 Leve, 2 Firme, 3 Puxado, 4 Muito puxado, ' +
     '5 No limite) e as respostas rápidas pós-treino que a equipe lê com Treino liberado ' +
     '(difficulty, fatigue, motivation de 1 a 5; pain e painLocation). Chamar de novo numa ' +
-    'sessão já finalizada não muda o horário: só atualiza sensação e respostas. ' +
+    'sessão já finalizada não muda o horário: só atualiza sensação e respostas. Sessão de ' +
+    'circuito sem resultado dá conflito: registre com log_circuit_result. ' +
     'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555","completedAt":"2026-07-31T20:15:00-03:00","notes":"treino completo","feeling":3,"fatigue":4,"pain":true,"painLocation":"joelho direito"}';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão a finalizar'),

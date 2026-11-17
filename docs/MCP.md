@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 153 tools): **141,3 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 153 tools): **141,6 k caracteres**
 hoje, dos quais **8.297 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (118,2 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (118,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1422,6 +1422,16 @@ Registra o resultado de um circuito (#380). Com `sessionId`, encerra a sessão d
 exercício por round, minuto ou intervalo, e o resultado em `WorkoutSession.circuit`, que
 `get_workout_session` devolve e o "Treino feito" compara com a última vez.
 
+Os números são conferidos contra o circuito congelado na sessão (revisão da #380), e o que não
+cabe é `BAD_REQUEST` sem gravar nada: rounds do AMRAP até o que cabe na duração (3 s por
+exercício de reps, o alvo nos de segundos), tempo até a duração do circuito (e, numa sessão
+aberta, até o que correu desde o começo dela), `roundSeconds` com um tempo por round completo ou
+vazio, `finalTimeSeconds` só com todos os rounds e sem parcial, maior que zero e não menor que a
+soma dos rounds, e no máximo 2.400 séries. Com `sessionId` de uma sessão de circuito que fechou
+sem resultado (o `finish_workout_session` antes da revisão), o resultado entra nela. O
+"Encerrar circuito" do app não passa por aqui: lá o servidor conta o resultado de novo pelos
+toques, e o resultado que o app manda é só uma dica.
+
 **Input:**
 
 ```typescript
@@ -1712,7 +1722,8 @@ novo com os exercícios da sessão, na ordem dela. Força guarda as séries feit
 repetições (ou de segundos) e a carga da primeira série como carga inicial; cardio guarda a
 distância e o tempo somados como meta de cardio (por distância quando houve distância, senão por
 tempo). Sessão de outra pessoa é `NOT_FOUND`; sessão sem série, `BAD_REQUEST`; sessão ainda
-aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"). Idempotente por sessão: salvar
+aberta, `CONFLICT` ("Termine o treino antes de salvar como plano"); sessão de circuito (#380),
+`BAD_REQUEST` ("Circuito não vira plano de força"). Idempotente por sessão: salvar
 de novo a mesma sessão devolve o plano que ela já virou (`WorkoutPlan.fromSessionId`, único por
 pessoa), sem criar outro nem renomear; o resumo da sessão traz esse id em `savedPlanId`.
 
@@ -1744,6 +1755,9 @@ Atualiza as notas de uma sessão, finalizada ou em andamento. Para corrigir sér
 
 Marca sessão como concluída. Idempotente — chamar de novo não muda o horário do fim (a não
 ser com `completedAt` explícito); só atualiza notes, sensação e respostas.
+
+Sessão de circuito (#380) ainda sem resultado é `CONFLICT`, apontando `log_circuit_result`:
+fechar por aqui deixaria o circuito sem rounds nem séries.
 
 Desde a #377 grava também `feeling` ("Como foi o treino?", 1 Leve a 5 No limite, em
 `WorkoutSession.feeling`) e as respostas rápidas pós-treino (`WorkoutCheckin`, uma por sessão,

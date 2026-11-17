@@ -59,9 +59,11 @@ import {
  * por sessão e recusa a sessão aberta: muda o braço A.
  * A #380 acrescentou `log_circuit_result` e `circuit`/`exercises` em `create_workout_plan`
  * (nenhuma destrutiva nem de intenção): muda o braço A.
+ * A revisão da #380 disse nas descrições de `log_circuit_result`, `finish_workout_session` e
+ * `save_session_as_plan` as faixas do resultado e as recusas do circuito: muda o braço A.
  */
 
-const SHA_ENTIDADE = 'be8823f3e1a53e00675d40c9d49d2ef0b4c670c510ab8b4bb6108432e260c6a4';
+const SHA_ENTIDADE = '9457ff5e20804644cbccd585922ff31aeed726601c0930c9cdabb0d9a9a3f3d9';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

@@ -64,7 +64,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] C1 resultado recalculado no servidor / limites sem eventos
 - [x] C2 eventos limitados por startedAt
 - [x] C3 finish atômico ($transaction) + exercício pessoal apagado: séries dele ficam de fora (escolha: pular, não travar o deleteCustom)
-- [ ] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
+- [x] C4 finish genérico não fecha circuito sem resultado; log anexa resultado a sessão fechada sem resultado
 - [ ] C5 numeração dos avisos e done sempre
 - [ ] C6 corrida no agendamento (app)
 - [ ] C7 limite de eventos no finish

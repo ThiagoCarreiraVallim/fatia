@@ -23,8 +23,11 @@ export class LogCircuitResultTool implements McpToolDef {
     'Registra o resultado de um circuito (plano com circuit, de create_workout_plan): rounds e ' +
     'exercícios do round incompleto (AMRAP e For Time), tempo final (For Time terminado), ' +
     'minutos ou intervalos feitos (EMOM e Tabata; sem eles, conta o circuito inteiro). Grava uma ' +
-    'série por exercício por round. Com sessionId, encerra a sessão de circuito aberta no app; ' +
-    'sem ele, cria a sessão já terminada (completedAt, padrão agora). ' +
+    'série por exercício por round. Com sessionId, encerra a sessão de circuito aberta no app ' +
+    '(ou completa a que fechou sem resultado); sem ele, cria a sessão já terminada ' +
+    '(completedAt, padrão agora). Os números precisam caber no circuito: rounds no tempo do ' +
+    'AMRAP, roundSeconds com um tempo por round (ou nenhum) e finalTimeSeconds só com todos os ' +
+    'rounds feitos; fora disso, 400. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","roundsCompleted":5,"partialExercises":2,"feeling":4} ' +
     'Exemplo (For Time): {"planId":"11111111-2222-4333-8444-555555555555","finalTimeSeconds":874,"roundSeconds":[170,172,175,178,179]}';
   readonly inputSchema = {

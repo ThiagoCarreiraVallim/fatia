@@ -452,6 +452,68 @@ describe('circuitos (banco real)', () => {
     expect(sets.map((x) => x.exerciseId)).toEqual([exerciseIds[0], exerciseIds[0]]);
   });
 
+  it('o fim genérico não fecha circuito sem resultado: 409 apontando o log_circuit_result (revisão C4)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const s = await sessions.start(userId, { planId: plan.id });
+    await expect(sessions.finish(userId, s.id, {})).rejects.toBeInstanceOf(ConflictException);
+    await expect(sessions.finish(userId, s.id, {})).rejects.toThrow(/log_circuit_result/);
+    const still = await prisma.workoutSession.findUniqueOrThrow({ where: { id: s.id } });
+    expect(still.completedAt).toBeNull();
+    // Com o resultado já gravado, o fim genérico só acerta sensação e nota.
+    await circuits.log(userId, {
+      planId: plan.id,
+      sessionId: s.id,
+      roundsCompleted: 0,
+      elapsedSeconds: 30,
+    });
+    await expect(sessions.finish(userId, s.id, { feeling: 3 })).resolves.toMatchObject({
+      feeling: 3,
+    });
+  });
+
+  it('circuito fechado sem resultado (antes da correção) ainda recebe o resultado (revisão C4)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const startedAt = new Date(Date.now() - 30 * 60_000);
+    const viaClock = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: startedAt.toISOString(),
+    });
+    const closedAt = new Date(startedAt.getTime() + 12 * 60_000);
+    await prisma.workoutSession.update({
+      where: { id: viaClock.id },
+      data: { completedAt: closedAt },
+    });
+    const attached = await circuits.finish(userId, viaClock.id, {
+      events: roundsOfMarks(startedAt.getTime(), 2),
+    });
+    expect(attached).toMatchObject({ alreadyFinished: false, result: { roundsCompleted: 2 } });
+    const row = await prisma.workoutSession.findUniqueOrThrow({ where: { id: viaClock.id } });
+    expect(row.completedAt).toEqual(closedAt);
+    expect(await prisma.sessionSet.count({ where: { sessionId: viaClock.id } })).toBe(8);
+
+    const viaMcp = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+    });
+    await prisma.workoutSession.update({
+      where: { id: viaMcp.id },
+      data: { completedAt: new Date() },
+    });
+    const logged = await circuits.log(userId, {
+      planId: plan.id,
+      sessionId: viaMcp.id,
+      roundsCompleted: 3,
+    });
+    expect(logged).toMatchObject({ alreadyFinished: false, result: { roundsCompleted: 3 } });
+    // Já com resultado, repetir devolve o mesmo fim.
+    const again = await circuits.log(userId, {
+      planId: plan.id,
+      sessionId: viaMcp.id,
+      roundsCompleted: 5,
+    });
+    expect(again).toMatchObject({ alreadyFinished: true, result: { roundsCompleted: 3 } });
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',

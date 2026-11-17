@@ -73,13 +73,26 @@ export class CircuitSessionService {
     const session = await this.ownSession(userId, sessionId);
     const json = parseCircuitJson(session.circuit);
     if (!json) throw new BadRequestException('Esta sessão não é de circuito.');
-    if (session.completedAt) {
-      if (json.result) return { sessionId, result: json.result, alreadyFinished: true };
-      throw new ConflictException('Esta sessão já foi encerrada.');
+    if (session.completedAt && json.result) {
+      return { sessionId, result: json.result, alreadyFinished: true };
     }
-    const counted = this.countFromEvents(json, this.checkEvents(dto.events, session.startedAt));
+    // Fechada sem resultado (o fim genérico, antes da revisão da #380): o
+    // resultado entra agora, com o fim no horário em que ela fechou.
+    const endAt = session.completedAt?.getTime() ?? Date.now();
+    const counted = this.countFromEvents(
+      json,
+      this.checkEvents(dto.events, session.startedAt),
+      endAt,
+    );
     const { result, rows } = this.buildResult(json.definition, counted.result);
-    return this.close(userId, session.id, { ...json, events: counted.events, result }, rows, dto);
+    return this.close(
+      userId,
+      session.id,
+      { ...json, events: counted.events, result },
+      rows,
+      dto,
+      session.completedAt !== null,
+    );
   }
 
   /**
@@ -92,12 +105,21 @@ export class CircuitSessionService {
     next: CircuitJsonV1,
     rows: ReturnType<typeof circuitSetRows>,
     extra: { feeling?: number; notes?: string },
+    attach = false,
   ) {
     const closed = await this.prisma.$transaction(async (tx) => {
+      if (attach) {
+        // Só a sessão fechada que ainda não tem resultado: o primeiro vale.
+        const current = await tx.workoutSession.findFirst({
+          where: { id: sessionId, userId, completedAt: { not: null } },
+          select: { circuit: true },
+        });
+        if (!current || parseCircuitJson(current.circuit)?.result) return false;
+      }
       const { count } = await tx.workoutSession.updateMany({
-        where: { id: sessionId, userId, completedAt: null },
+        where: { id: sessionId, userId, completedAt: attach ? { not: null } : null },
         data: {
-          completedAt: new Date(),
+          ...(attach ? {} : { completedAt: new Date() }),
           circuit: next as unknown as Prisma.InputJsonValue,
           ...(extra.feeling !== undefined ? { feeling: extra.feeling } : {}),
           ...(extra.notes !== undefined ? { notes: extra.notes } : {}),
@@ -121,9 +143,9 @@ export class CircuitSessionService {
    * entre o servidor e o último toque: com o aparelho adiantado, o fim que ele
    * marcou não fica de fora.
    */
-  private countFromEvents(json: CircuitJsonV1, events: CircuitEvent[]) {
+  private countFromEvents(json: CircuitJsonV1, events: CircuitEvent[], endAt: number) {
     const startedAt = Date.parse(json.startedAt);
-    const now = events.reduce((max, e) => Math.max(max, e.at), Date.now());
+    const now = events.reduce((max, e) => Math.max(max, e.at), endAt);
     let run = { startedAt, events };
     if (circuitState(json.definition, run, now).status !== 'done') {
       run = { startedAt, events: [...events, { type: 'end', at: now }] };
@@ -158,13 +180,13 @@ export class CircuitSessionService {
       }
       const json = parseCircuitJson(session.circuit);
       if (!json) throw new BadRequestException('Esta sessão não é de circuito.');
-      if (session.completedAt) {
-        if (json.result)
-          return { sessionId: session.id, result: json.result, alreadyFinished: true };
-        throw new ConflictException('Esta sessão já foi encerrada.');
+      if (session.completedAt && json.result) {
+        return { sessionId: session.id, result: json.result, alreadyFinished: true };
       }
-      // Sem toques, o tempo contado não passa do que correu desde o começo.
-      const sinceStart = (Date.now() - session.startedAt.getTime() + CLOCK_SLACK_MS) / 1000;
+      // Sem toques, o tempo contado não passa do que correu desde o começo
+      // (até o fim, na sessão que já fechou sem resultado).
+      const until = session.completedAt?.getTime() ?? Date.now();
+      const sinceStart = (until - session.startedAt.getTime() + CLOCK_SLACK_MS) / 1000;
       if (resultDto.elapsedSeconds > sinceStart) {
         throw new BadRequestException('O tempo passa do que correu desde o começo da sessão.');
       }
@@ -172,7 +194,14 @@ export class CircuitSessionService {
       const { result, rows } = this.buildResult(json.definition, resultDto, {
         roundTimesOptional: true,
       });
-      return this.close(userId, session.id, { ...json, result }, rows, dto);
+      return this.close(
+        userId,
+        session.id,
+        { ...json, result },
+        rows,
+        dto,
+        session.completedAt !== null,
+      );
     }
 
     const completedAt = dto.completedAt ? new Date(dto.completedAt) : new Date();
