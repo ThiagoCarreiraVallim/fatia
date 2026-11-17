@@ -532,6 +532,42 @@ describe('circuitos (banco real)', () => {
     expect(summary.kind).toBe('circuit');
   });
 
+  it('só compara com a última vez do mesmo circuito: editar formato ou exercícios zera (revisão C8)', async () => {
+    const plan = await plans.createCircuit(userId, amrap());
+    const firstStart = new Date(Date.now() - 50 * 60_000);
+    const first = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: firstStart.toISOString(),
+    });
+    await circuits.finish(userId, first.id, { events: roundsOfMarks(firstStart.getTime(), 3) });
+
+    // Mesmo plano, outro circuito: 3 exercícios em vez de 4.
+    await plans.replaceCircuit(userId, plan.id, {
+      ...amrap(),
+      exercises: amrap().exercises.slice(0, 3),
+    });
+    const secondStart = new Date(Date.now() - 30 * 60_000);
+    const second = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: secondStart.toISOString(),
+    });
+    expect((second.circuit as { previous: unknown }).previous).toBeNull();
+    await circuits.finish(userId, second.id, { events: [] });
+    const summary = await sessions.summary(userId, second.id);
+    expect(summary.circuit?.previous).toBeNull();
+    expect(summary.circuit?.comparison).toBeNull();
+
+    // A próxima do mesmo circuito editado compara com a segunda, e não com a primeira.
+    const third = await sessions.start(userId, {
+      planId: plan.id,
+      startedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+    });
+    expect((third.circuit as { previous: { sessionId: string } | null }).previous?.sessionId).toBe(
+      second.id,
+    );
+    await sessions.delete(userId, third.id);
+  });
+
   it('o retrato do plano (modelo da comunidade, oferta da equipe) leva o circuito', async () => {
     const plan = await plans.createCircuit(userId, {
       name: 'For Time 5',

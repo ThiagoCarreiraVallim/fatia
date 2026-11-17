@@ -22,6 +22,7 @@ import {
   circuitSummaryView,
   newCircuitJson,
   parseCircuitJson,
+  sameCircuitDefinition,
   type CircuitJsonV1,
   type CircuitSummaryView,
 } from './helpers/circuit';
@@ -178,8 +179,9 @@ export class WorkoutSessionService {
         if (plan.exercises.length === 0) {
           throw new BadRequestException('Adicione exercícios ao circuito antes de começar.');
         }
-        const previous = await this.lastCircuitResult(userId, plan.id, startedAt);
-        circuit = newCircuitJson(circuitDefinitionFromPlan(plan), startedAt, previous);
+        const definition = circuitDefinitionFromPlan(plan);
+        const previous = await this.lastCircuitResult(userId, plan.id, definition, startedAt);
+        circuit = newCircuitJson(definition, startedAt, previous);
       }
     }
     try {
@@ -614,15 +616,27 @@ export class WorkoutSessionService {
     const json = parseCircuitJson(session.circuit);
     if (!json?.result) return null;
     const previous = session.planId
-      ? await this.lastCircuitResult(userId, session.planId, session.startedAt, session.id)
+      ? await this.lastCircuitResult(
+          userId,
+          session.planId,
+          json.definition,
+          session.startedAt,
+          session.id,
+        )
       : null;
     return circuitSummaryView(json, previous);
   }
 
-  /** A última sessão terminada do circuito, com resultado, antes de `before`. */
+  /**
+   * A última sessão terminada do mesmo circuito, com resultado, antes de
+   * `before`. "Mesmo" é o formato, a configuração e os exercícios iguais
+   * (`sameCircuitDefinition`): o plano editado de 4 para 3 exercícios, ou de
+   * 12 para 15 min, não compara rounds com a versão antiga.
+   */
   private async lastCircuitResult(
     userId: string,
     planId: string,
+    definition: CircuitJsonV1['definition'],
     before: Date,
     excludeId?: string,
   ): Promise<{ sessionId: string; startedAt: Date; json: CircuitJsonV1 } | null> {
@@ -636,12 +650,14 @@ export class WorkoutSessionService {
         circuit: { not: Prisma.AnyNull },
       },
       orderBy: { startedAt: 'desc' },
-      take: 5,
+      take: 20,
       select: { id: true, startedAt: true, circuit: true },
     });
     for (const e of earlier) {
       const json = parseCircuitJson(e.circuit);
-      if (json?.result) return { sessionId: e.id, startedAt: e.startedAt, json };
+      if (json?.result && sameCircuitDefinition(json.definition, definition)) {
+        return { sessionId: e.id, startedAt: e.startedAt, json };
+      }
     }
     return null;
   }

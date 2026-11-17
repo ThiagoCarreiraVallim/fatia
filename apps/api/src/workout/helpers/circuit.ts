@@ -605,3 +605,18 @@ export function checkCircuitResultBounds(
     throw new BadRequestException(`Um circuito grava até ${MAX_CIRCUIT_SETS} séries.`);
   }
 }
+
+/**
+ * O mesmo circuito para comparar com a última vez: formato, configuração e
+ * exercícios (na ordem, com unidade e alvo). O nome não conta.
+ */
+export function sameCircuitDefinition(a: CircuitDefinitionV1, b: CircuitDefinitionV1): boolean {
+  if (a.format !== b.format) return false;
+  const keys = Object.keys(CIRCUIT_LIMITS) as ConfigField[];
+  if (keys.some((k) => (a.config[k] ?? null) !== (b.config[k] ?? null))) return false;
+  if (a.exercises.length !== b.exercises.length) return false;
+  return a.exercises.every((e, i) => {
+    const o = b.exercises[i];
+    return e.exerciseId === o.exerciseId && e.unit === o.unit && e.target === o.target;
+  });
+}

@@ -68,7 +68,7 @@ Se sumirem: `Artifact read` com `paths: ["project/<Prancha>.dc.html"]`.
 - [x] C5 numeração dos avisos e done sempre
 - [x] C6 corrida no agendamento (app)
 - [x] C7 limite de eventos no finish
-- [ ] C8 comparação só com mesma definição
+- [x] C8 comparação só com mesma definição
 - [ ] C9 apagar este HANDOFF no último commit
 - D (conquistas #382) fica para o coordenador.
 
