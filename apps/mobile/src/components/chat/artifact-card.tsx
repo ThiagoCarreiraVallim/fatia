@@ -25,8 +25,13 @@ import {
   appOnlyHref,
   chatCardTitle,
   getChatToolCatalog,
+  getAutoWriteStatus,
+  SAVED_CARD_COPY,
+  savedStateFromStatus,
   savedUndoId,
   undoAutoWrite,
+  undoFailureState,
+  type SavedCardState,
   type ChatArtifact,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
@@ -639,9 +644,18 @@ function SoNoApp({ artifact }: De<'app_only'>) {
 function GravadoComDesfazer({ artifact }: De<'saved'>) {
   const queryClient = useQueryClient();
   const id = savedUndoId(artifact);
+  // O estado guardado no servidor: reabrir a conversa não oferece de novo o que já foi desfeito,
+  // nem um Desfazer vencido (#385).
+  const status = useQuery({
+    queryKey: ['chat', 'auto-write', id],
+    queryFn: () => getAutoWriteStatus(id as string),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
   return (
     <Gravado
       artifact={artifact}
+      fromServer={status.data ? savedStateFromStatus(status.data.state) : undefined}
       onUndo={
         id
           ? async () => {
@@ -656,13 +670,22 @@ function GravadoComDesfazer({ artifact }: De<'saved'>) {
 
 /**
  * "Gravado", com Desfazer (ADR 039): o `/mcp` emite na gravação automática. Sem `onUndo`, o
- * botão não aparece.
+ * botão não aparece. Numa alteração, cada linha mostra antes → depois; os motivos de não desfazer
+ * vêm de `undoFailureState`, iguais aos do PWA.
  */
 export function Gravado({
   artifact,
   onUndo,
-}: De<'saved'> & { onUndo?: () => Promise<void> | void }) {
-  const [estado, setEstado] = useState<'gravado' | 'desfazendo' | 'desfeito'>('gravado');
+  fromServer,
+}: De<'saved'> & { onUndo?: () => Promise<void> | void; fromServer?: SavedCardState }) {
+  // O que aconteceu nesta tela vale mais que o lido do servidor; sem nada local, vale o servidor.
+  const [local, setEstado] = useState<SavedCardState | null>(null);
+  const estado: SavedCardState = local ?? fromServer ?? 'saved';
+  const comBotao = estado === 'saved' || estado === 'undoing' || estado === 'failed';
+  const aviso =
+    estado === 'undone' || estado === 'expired' || estado === 'changed' || estado === 'failed'
+      ? SAVED_CARD_COPY[estado]
+      : null;
   return (
     <View className="gap-2.5">
       {artifact.lines.length ? (
@@ -677,30 +700,29 @@ export function Gravado({
             >
               <Text className="flex-1 text-sm text-muted-foreground">{linha.label}</Text>
               {linha.before ? (
-                <Text className="text-sm text-muted-foreground line-through">{linha.before}</Text>
+                <Text className="text-sm text-muted-foreground">{`${linha.before} →`}</Text>
               ) : null}
               <Text className="text-sm font-semibold text-foreground">{linha.after}</Text>
             </View>
           ))}
         </View>
       ) : null}
-      {estado === 'desfeito' ? (
-        <Text className="text-xs text-muted-foreground">Desfeito. Nada ficou gravado.</Text>
-      ) : artifact.undoable && onUndo ? (
+      {aviso ? <Text className="text-xs text-muted-foreground">{aviso}</Text> : null}
+      {artifact.undoable && onUndo && comBotao ? (
         <Button
           variant="secondary"
-          disabled={estado === 'desfazendo'}
+          disabled={estado === 'undoing'}
           onPress={async () => {
-            setEstado('desfazendo');
+            setEstado('undoing');
             try {
               await onUndo();
-              setEstado('desfeito');
-            } catch {
-              setEstado('gravado');
+              setEstado('undone');
+            } catch (erro) {
+              setEstado(undoFailureState(erro));
             }
           }}
         >
-          {estado === 'desfazendo' ? 'Desfazendo…' : 'Desfazer'}
+          {estado === 'undoing' ? SAVED_CARD_COPY.undoing : SAVED_CARD_COPY.undo}
         </Button>
       ) : null}
     </View>

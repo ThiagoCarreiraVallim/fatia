@@ -12,6 +12,7 @@ import {
   getChatQuota,
   listChatAgents,
   type ChatThreadMessage,
+  CHAT_CONTINUE_MESSAGE,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
@@ -80,7 +81,7 @@ export default function ConversationScreen() {
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
   const ultimaPergunta = [...thread.messages].reverse().find((m) => m.role === 'user');
-  const continuar = () => void sessao.send({ text: 'Continue de onde parou.' });
+  const continuar = () => void sessao.send({ text: CHAT_CONTINUE_MESSAGE });
 
   useEffect(() => {
     if (thread.messages.length)

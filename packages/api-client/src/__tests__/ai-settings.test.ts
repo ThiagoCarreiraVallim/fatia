@@ -18,7 +18,13 @@ import {
   savedUndoId,
   setAiWriteMode,
   undoAutoWrite,
+  getAutoWriteStatus,
+  savedStateFromStatus,
+  undoFailureState,
+  SAVED_CARD_COPY,
 } from '../ai-settings';
+import { ApiError } from '../http';
+import { CHAT_CONTINUE_MESSAGE } from '../chat';
 import type { ChatArtifact } from '../chat';
 import type { MealRecognition } from '../nutrition';
 
@@ -67,6 +73,7 @@ describe('Config da IA (Al-M24, ADR 039)', () => {
     await getAiSettings();
     await setAiWriteMode('DAY_LOG', 'AUTO');
     await undoAutoWrite('a/1');
+    await getAutoWriteStatus('a/1');
     await forgetAllChatMemories();
 
     const chamadas = fetchMock.mock.calls.map(([url, init]) => [
@@ -78,6 +85,7 @@ describe('Config da IA (Al-M24, ADR 039)', () => {
       ['/api/proxy/chat/settings', 'GET', null],
       ['/api/proxy/chat/settings/modes', 'PATCH', '{"category":"DAY_LOG","mode":"AUTO"}'],
       ['/api/proxy/chat/auto-writes/a%2F1/undo', 'POST', null],
+      ['/api/proxy/chat/auto-writes/a%2F1', 'GET', null],
       ['/api/proxy/chat/memories', 'DELETE', null],
     ]);
   });
@@ -241,5 +249,37 @@ describe('qual estado da Al-M11 um erro de turno vira', () => {
     expect(aiTurnState('AGENT_STREAM_INTERRUPTED')).toBe('interrupted');
     expect(aiTurnState('AI_PLAN_REQUIRED')).toBe('other');
     expect(aiTurnState('AI_RESPONSE_TRUNCATED')).toBe('other');
+  });
+});
+
+describe('os estados do Desfazer (#385)', () => {
+  const conflito = (code: string) => new ApiError('x', 409, { code, message: 'x' });
+
+  it('cada recusa da API vira o estado que a tela explica', () => {
+    expect(undoFailureState(conflito('AUTO_WRITE_UNDONE'))).toBe('undone');
+    expect(undoFailureState(conflito('AUTO_WRITE_EXPIRED'))).toBe('expired');
+    expect(undoFailureState(conflito('AUTO_WRITE_CHANGED'))).toBe('changed');
+    // Rede, 500 ou 404: não sabemos o que houve, e o botão volta para tentar de novo.
+    expect(undoFailureState(new ApiError('x', 500))).toBe('failed');
+    expect(undoFailureState(new ApiError('x', 404))).toBe('failed');
+    expect(undoFailureState(new TypeError('rede'))).toBe('failed');
+  });
+
+  it('o estado guardado no servidor sobrevive ao recarregar', () => {
+    expect(savedStateFromStatus('undone')).toBe('undone');
+    expect(savedStateFromStatus('expired')).toBe('expired');
+    expect(savedStateFromStatus('active')).toBe('saved');
+    expect(savedStateFromStatus('pending')).toBe('saved');
+  });
+
+  it('cada estado tem o seu texto', () => {
+    expect(SAVED_CARD_COPY.changed).toMatch(/mudou depois/);
+    expect(SAVED_CARD_COPY.expired).toMatch(/prazo/);
+    expect(SAVED_CARD_COPY.undone).toMatch(/Desfeito/);
+    expect(SAVED_CARD_COPY.failed).toMatch(/Tente de novo/);
+  });
+
+  it('o "Continuar" manda o mesmo texto que a API reconhece', () => {
+    expect(CHAT_CONTINUE_MESSAGE).toBe('Continue de onde parou.');
   });
 });

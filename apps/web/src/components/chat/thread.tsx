@@ -32,6 +32,7 @@ import {
   stopChatRun,
   textoDeErroDoChat,
   withQuote,
+  CHAT_CONTINUE_MESSAGE,
 } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { LiveJoin } from './live-join';
@@ -245,7 +246,7 @@ function ContinuarParada() {
       {rodando ? null : (
         <button
           type="button"
-          onClick={() => aui.thread().append('Continue de onde parou.')}
+          onClick={() => aui.thread().append(CHAT_CONTINUE_MESSAGE)}
           className="rounded-full px-3 py-1 text-xs font-semibold text-success hover:bg-foreground/[0.04]"
         >
           {AI_STATES_COPY.continue}

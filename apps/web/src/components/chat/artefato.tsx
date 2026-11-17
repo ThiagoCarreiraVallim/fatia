@@ -22,12 +22,17 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   appOnlyHref,
   chatCardTitle,
+  getAutoWriteStatus,
+  SAVED_CARD_COPY,
+  savedStateFromStatus,
   savedUndoId,
   undoAutoWrite,
+  undoFailureState,
+  type SavedCardState,
   type ChatArtifact,
 } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
@@ -618,13 +623,27 @@ function SoNoApp({ artefato }: De<'app_only'>) {
 
 /**
  * "Gravado", com Desfazer (ADR 039): o `/mcp` emite o artefato na gravação automática, e o
- * Desfazer volta o estado de antes pela API. Sem `onDesfazer`, o botão não aparece.
+ * Desfazer volta o estado de antes pela API. Sem `onDesfazer`, o botão não aparece. Numa
+ * alteração, cada linha mostra antes → depois. `doServidor` é o estado lido da API, para o cartão
+ * recarregado dizer "Desfeito" ou que o prazo passou (#385).
  */
 export function Gravado({
   artefato,
   onDesfazer,
-}: De<'saved'> & { onDesfazer?: () => Promise<void> | void }) {
-  const [estado, setEstado] = useState<'gravado' | 'desfazendo' | 'desfeito'>('gravado');
+  doServidor,
+}: De<'saved'> & {
+  onDesfazer?: () => Promise<void> | void;
+  doServidor?: SavedCardState;
+}) {
+  // O que aconteceu nesta tela vale mais que o lido do servidor; sem nada local, vale o servidor.
+  const [local, setEstado] = useState<SavedCardState | null>(null);
+  const estado: SavedCardState = local ?? doServidor ?? 'saved';
+  const comBotao =
+    (estado === 'saved' || estado === 'undoing' || estado === 'failed') && !!onDesfazer;
+  const aviso =
+    estado === 'undone' || estado === 'expired' || estado === 'changed' || estado === 'failed'
+      ? SAVED_CARD_COPY[estado]
+      : null;
   return (
     <div className="flex flex-col gap-2.5">
       {artefato.lines.length ? (
@@ -634,9 +653,7 @@ export function Gravado({
               <dt className="flex-1 text-foreground/60">{linha.label}</dt>
               <dd className="text-right font-semibold text-foreground">
                 {linha.before ? (
-                  <span className="mr-1.5 font-normal text-foreground/45 line-through">
-                    {linha.before}
-                  </span>
+                  <span className="font-normal text-foreground/45">{`${linha.before} → `}</span>
                 ) : null}
                 {linha.after}
               </dd>
@@ -644,24 +661,30 @@ export function Gravado({
           ))}
         </dl>
       ) : null}
-      {estado === 'desfeito' ? (
-        <p className="text-xs text-muted-foreground">Desfeito. Nada ficou gravado.</p>
-      ) : artefato.undoable && onDesfazer ? (
+      {aviso ? (
+        <p
+          role={estado === 'failed' || estado === 'changed' ? 'alert' : undefined}
+          className="text-xs text-muted-foreground"
+        >
+          {aviso}
+        </p>
+      ) : null}
+      {artefato.undoable && comBotao ? (
         <button
           type="button"
-          disabled={estado === 'desfazendo'}
+          disabled={estado === 'undoing'}
           onClick={async () => {
-            setEstado('desfazendo');
+            setEstado('undoing');
             try {
-              await onDesfazer();
-              setEstado('desfeito');
-            } catch {
-              setEstado('gravado');
+              await onDesfazer?.();
+              setEstado('undone');
+            } catch (erro) {
+              setEstado(undoFailureState(erro));
             }
           }}
           className={cn(ghostButton, 'self-start rounded-full px-4 py-1.5 text-sm')}
         >
-          {estado === 'desfazendo' ? 'Desfazendo…' : 'Desfazer'}
+          {estado === 'undoing' ? SAVED_CARD_COPY.undoing : SAVED_CARD_COPY.undo}
         </button>
       ) : null}
     </div>
@@ -672,9 +695,18 @@ export function Gravado({
 function GravadoComDesfazer({ artefato }: De<'saved'>) {
   const queryClient = useQueryClient();
   const id = savedUndoId(artefato);
+  // O estado guardado no servidor: recarregar a conversa não pode oferecer de novo o que já foi
+  // desfeito, nem um Desfazer vencido.
+  const status = useQuery({
+    queryKey: ['chat', 'auto-write', id],
+    queryFn: () => getAutoWriteStatus(id as string),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
   return (
     <Gravado
       artefato={artefato}
+      doServidor={status.data ? savedStateFromStatus(status.data.state) : undefined}
       onDesfazer={
         id
           ? async () => {

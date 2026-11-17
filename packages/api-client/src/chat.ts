@@ -923,3 +923,10 @@ export function previewChatAction(
 export function listChatToolTitles(): Promise<Record<string, string>> {
   return apiFetch('/api/chat/tools');
 }
+
+/**
+ * O texto do botão "Continuar" depois de um corte (#385). A API reconhece este texto e conta o turno
+ * como a mesma resposta da pessoa no teto de gravações automáticas — mantenha igual ao
+ * `CHAT_CONTINUE_MESSAGE` de `apps/api/src/chat/dto/chat.dto.ts`.
+ */
+export const CHAT_CONTINUE_MESSAGE = 'Continue de onde parou.';

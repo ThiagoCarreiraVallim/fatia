@@ -104,6 +104,46 @@ export function undoAutoWrite(id: string): Promise<{ undone: true }> {
   return apiFetch(`/api/chat/auto-writes/${encodeURIComponent(id)}/undo`, { method: 'POST' });
 }
 
+/** O estado da gravação no servidor. `pending` é a que ainda está gravando. */
+export type AutoWriteState = 'active' | 'undone' | 'expired' | 'pending';
+
+/** `GET /chat/auto-writes/:id`: o cartão recarregado lê daqui se já foi desfeito ou venceu. */
+export function getAutoWriteStatus(id: string): Promise<{ state: AutoWriteState }> {
+  return apiFetch(`/api/chat/auto-writes/${encodeURIComponent(id)}`);
+}
+
+/**
+ * O que o cartão "Gravado" mostra embaixo das linhas. `saved` e `failed` têm o botão; `failed`
+ * com o aviso para tentar de novo. `changed` é o registro mexido depois: nada foi desfeito.
+ */
+export type SavedCardState = 'saved' | 'undoing' | 'undone' | 'expired' | 'changed' | 'failed';
+
+export const SAVED_CARD_COPY = {
+  undo: 'Desfazer',
+  undoing: 'Desfazendo…',
+  undone: 'Desfeito. Voltou a ser como estava.',
+  expired: 'Passou o prazo do Desfazer. Mude pela tela do registro.',
+  changed: 'O registro mudou depois da gravação. Nada foi desfeito; mude pela tela do registro.',
+  failed: 'Não deu para desfazer agora. Tente de novo.',
+} as const;
+
+/** O estado do servidor no cartão: desfeito e vencido não mostram mais o botão. */
+export function savedStateFromStatus(state: AutoWriteState): SavedCardState {
+  if (state === 'undone') return 'undone';
+  if (state === 'expired') return 'expired';
+  return 'saved';
+}
+
+/** A recusa do Desfazer, pelo código da API. Qualquer outra falha deixa tentar de novo. */
+export function undoFailureState(err: unknown): Exclude<SavedCardState, 'saved' | 'undoing'> {
+  if (!(err instanceof ApiError) || err.status !== 409) return 'failed';
+  const code = (err.body as { code?: unknown } | null | undefined)?.code;
+  if (code === 'AUTO_WRITE_UNDONE') return 'undone';
+  if (code === 'AUTO_WRITE_EXPIRED') return 'expired';
+  if (code === 'AUTO_WRITE_CHANGED') return 'changed';
+  return 'failed';
+}
+
 // ---------------------------------------------------------------- memórias
 
 export type MemoryCategory = 'PREFERENCE' | 'ROUTINE' | 'TRAINING' | 'HABIT';
