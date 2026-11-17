@@ -63,8 +63,8 @@ export type TurnSummary = {
   artifacts: Record<string, Record<string, unknown>>;
   usoPorModelo: Map<string, UnidadesDoModelo>;
   /**
-   * Quantas buscas na web o modelo fez no turno (a tool de servidor do OpenRouter,
-   * `webSearches` no `usage`). À parte do token: cada uma é um lançamento na cota,
+   * Quantas buscas na web o turno fez (`webSearches` no `usage`; o agente lança cada uma
+   * antes de ela sair, #384). À parte do token: cada uma é um lançamento na cota,
    * com o preço da busca.
    */
   buscasNaWeb: number;
@@ -228,13 +228,16 @@ export function createTurnReader() {
         case 'usage': {
           const dados = dadosDoEvento(evento);
           if (typeof dados?.model !== 'string') return;
+          const buscas = numeroOuIndefinido(dados.webSearches);
+          if (buscas !== undefined && Number.isInteger(buscas) && buscas > 0) buscasNaWeb += buscas;
+          // O lançamento da busca antes de ela sair (#384) não traz token: não é uma chamada
+          // ao modelo, e não pode virar uma linha de chat "não medida".
+          if (dados.inputUnits === undefined && dados.outputUnits === undefined && buscas) return;
           const acumulado = usoPorModelo.get(dados.model) ?? { inputUnits: 0, outputUnits: 0 };
           usoPorModelo.set(dados.model, {
             inputUnits: somarUnidade(acumulado.inputUnits, numeroOuIndefinido(dados.inputUnits)),
             outputUnits: somarUnidade(acumulado.outputUnits, numeroOuIndefinido(dados.outputUnits)),
           });
-          const buscas = numeroOuIndefinido(dados.webSearches);
-          if (buscas !== undefined && Number.isInteger(buscas) && buscas > 0) buscasNaWeb += buscas;
           return;
         }
         case 'done': {

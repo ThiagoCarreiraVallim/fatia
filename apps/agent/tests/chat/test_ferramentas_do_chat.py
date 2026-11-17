@@ -115,9 +115,8 @@ async def test_com_aceite_busca_so_a_pergunta_e_mostra_as_fontes(settings_factor
         "sources": [{"title": FONTE.title, "url": FONTE.url, "domain": "gov.br"}],
     }
     # O custo da busca entra no livro-caixa do turno.
-    assert any(
-        u.get("costUsd") == 0.0071 and u.get("webSearches") == 1 for u in r.data_of("usage")
-    )
+    assert any(u.get("costUsd") == 0.0071 for u in r.data_of("usage"))
+    assert sum(u.get("webSearches", 0) for u in r.data_of("usage")) == 1
     (resultado,) = r.mensagens_de_tool()
     assert resultado["status"] == "success"
     assert "58 kcal" in resultado["content"] and FONTE.url in resultado["content"]

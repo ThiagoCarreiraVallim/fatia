@@ -1206,6 +1206,26 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     );
   });
 
+  it('a busca lançada antes de sair (só `webSearches`) conta, e não vira linha de chat', async () => {
+    const { service, canal, uso: livro } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    // O agente lança a busca antes de mandá-la (#384): sem unidade de token, só a busca.
+    canal.emitir(uso({ model: 'openrouter-web-search', webSearches: 1 }));
+    canal.emitir(uso({ model: 'm', inputUnits: 10, outputUnits: 1 }));
+    canal.encerrar();
+    await turno;
+
+    const lancamentos = livro.record.mock.calls.map(([, entrada]) => entrada);
+    expect(lancamentos).toContainEqual(
+      expect.objectContaining({ feature: 'web_search', units: { inputUnits: 1, outputUnits: 0 } }),
+    );
+    expect(lancamentos.filter((l) => l.feature === 'chat')).toEqual([
+      expect.objectContaining({ model: 'm' }),
+    ]);
+  });
+
   it('turno sem busca não ganha lançamento de busca', async () => {
     const { service, canal, uso: livro } = montar();
 

@@ -107,6 +107,7 @@ class EstadoDaConversa(TypedDict, total=False):
     - `refazer`: a validação acabou de reprovar e ainda cabe uma volta.
     - `plano`: os passos do pedido, com status vivo (só com o planejador ligado).
     - `contexto_informado`: o evento `context` já saiu neste turno.
+    - `buscas`: `tool_call_id` → a pergunta da busca, escrita uma vez (a do aceite é a buscada).
 
     🔴 Tudo que é "do turno" é zerado por `hidratar`. O estado vive no checkpoint
     da **conversa**: sem zerar, o orçamento viraria por conversa e um "pare por
@@ -125,6 +126,7 @@ class EstadoDaConversa(TypedDict, total=False):
     refazer: bool
     plano: list[dict[str, Any]]
     contexto_informado: bool
+    buscas: dict[str, str]
 
 
 def estado_vazio() -> dict[str, Any]:
@@ -140,6 +142,7 @@ def estado_vazio() -> dict[str, Any]:
         "refazer": False,
         "plano": [],
         "contexto_informado": False,
+        "buscas": {},
     }
 
 

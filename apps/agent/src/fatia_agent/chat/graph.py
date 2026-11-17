@@ -586,6 +586,8 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         confirmaveis = {tool.name for tool in camada_confirmavel(contexto.permitidas)}
         leituras = {tool.name for tool in camada_read_only(contexto.permitidas)}
         decisoes = state.get("decisoes") or {}
+        buscas = dict(state.get("buscas") or {})
+        buscas_antes = len(buscas)
         novas: list[ToolMessage] = []
 
         for chamada in _chamadas(pedido):
@@ -632,6 +634,12 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 if contexto.web_search == "off" or contexto.search_web is None:
                     novas.append(resultado(web.OFF, erro=True))
                     continue
+                # A pergunta nunca vem do argumento do modelo: é escrita à parte, só com a
+                # última fala da pessoa, e uma vez só — a que o aceite mostra é a buscada.
+                if identificador not in buscas:
+                    buscas[identificador] = await web.build_query(
+                        contexto.write_search_query, _ultima_fala_da_pessoa(mensagens)
+                    )
                 decisao = decisoes.get(identificador)
                 # Sem decisão em `ask`, espera o portão. O sim só busca com o aceite gravado
                 # na API — que, na retomada, manda `on`. Em `ask` o sim não basta.
@@ -640,7 +648,9 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 if decisao is False or contexto.web_search == "ask":
                     novas.append(resultado(web.DECLINED))
                     continue
-                texto, falhou, cartao = await _search(contexto.search_web, chamada["args"], writer)
+                texto, falhou, cartao = await _search(
+                    contexto.search_web, buscas[identificador], writer
+                )
                 novas.append(
                     resultado(
                         texto,
@@ -687,7 +697,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 novas.append(resultado(falha_temporaria(nome in leituras), erro=True))
 
         if not novas:
-            return {}
+            return {"buscas": buscas} if len(buscas) != buscas_antes else {}
 
         falhas = dict(state.get("falhas") or {})
         for mensagem in novas:
@@ -997,7 +1007,7 @@ def _pending_stops(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[d
                     "toolCallId": identificador,
                     "tool": web.NAME,
                     "prompt": web.CONSENT_PROMPT,
-                    "query": web.clean_query(chamada["args"].get("query")),
+                    "query": (state.get("buscas") or {}).get(identificador, ""),
                 }
             )
             continue
@@ -1042,16 +1052,21 @@ def _continue_prompt(feitas: int) -> str:
 
 async def _search(
     search_web: web.WebSearcher,
-    args: dict[str, Any],
+    query: str,
     writer: StreamWriter,
 ) -> tuple[str, bool, dict[str, Any] | None]:
-    """Roda a busca com só a pergunta limpa e lança o custo.
+    """Roda a busca com a pergunta já escrita e limpa, e lança o custo.
+
+    A busca é lançada na cota **antes** de sair, num `usage` só com `webSearches`: sem
+    `usage` do provedor, com a busca caindo no meio ou com o turno parado enquanto ela roda,
+    a unidade já foi contada — a busca não sai de graça. O custo em token, quando o provedor
+    mede, vem depois, sem contar a busca de novo.
 
     Devolve o texto para o modelo, se falhou e o cartão de fontes (quando houve fonte).
     """
-    query = web.clean_query(args.get("query"))
     if not query:
         return web.EMPTY_QUERY, True, None
+    writer(events.usage(web.CHARGE_MODEL, input_units=None, output_units=None, web_searches=1))
     try:
         achado = await search_web(query)
     except AIProviderError as exc:
@@ -1067,14 +1082,26 @@ async def _search(
                 cached_input_units=achado.usage.cached_input_units,
                 reasoning_units=achado.usage.reasoning_units,
                 cost_usd=achado.usage.cost_usd,
-                # A busca em si é cobrada à parte do token, na cota da pessoa: um
-                # lançamento por busca (`leitor-do-turno.ts`).
-                web_searches=1,
             )
         )
     if not achado.sources:
         return web.NO_RESULTS, False, None
     return web.text_for_model(achado), False, web.sources_artifact(query, achado)
+
+
+def _ultima_fala_da_pessoa(mensagens: Sequence[AnyMessage]) -> str:
+    """O texto da última mensagem da pessoa (só as partes de texto; foto não entra)."""
+    for mensagem in reversed(mensagens):
+        if isinstance(mensagem, HumanMessage):
+            conteudo = mensagem.content
+            if isinstance(conteudo, str):
+                return conteudo
+            return " ".join(
+                str(parte.get("text", ""))
+                for parte in conteudo
+                if isinstance(parte, dict) and parte.get("type") == "text"
+            )
+    return ""
 
 
 AGENT_INTERNAL_ERROR = "AGENT_INTERNAL_ERROR"

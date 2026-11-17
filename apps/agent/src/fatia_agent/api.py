@@ -67,6 +67,7 @@ from .chat import (
     stream_chat_events,
     thread_da_conversa,
     todas_permitidas,
+    web,
 )
 from .chat.errors import (
     McpError,
@@ -83,7 +84,7 @@ from .chat.state import FotoDoTurno
 from .chat.titulo import gerar_titulo
 from .http_pool import SharedTransport
 from .providers import build_provider
-from .providers.base import Usage
+from .providers.base import TextCapability, Usage
 from .providers.errors import (
     AgentKeyRejected,
     AIEndpointNotAllowed,
@@ -696,6 +697,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             restricted=tuple(camada_restrita(anunciadas)),
             web_search=payload.web_search,
             search_web=provider.web_search if provider.supports_web_search else None,
+            # A pergunta da busca, numa chamada à parte que só recebe a fala da pessoa (#384).
+            write_search_query=_query_writer(provider) if provider.supports_web_search else None,
             pause_after_tools=resolved.agent_chat_pause_after_tools,
         )
 
@@ -729,6 +732,15 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         )
 
     return app
+
+
+def _query_writer(provider: TextCapability) -> web.QueryWriter:
+    """A chamada que escreve a pergunta da busca: só a fala da pessoa, com o sistema próprio."""
+
+    async def escrever(fala: str) -> str:
+        return await provider.complete(fala, system=web.QUERY_SYSTEM)
+
+    return escrever
 
 
 def _decodificar_imagem(dados: str, media_type: str, campo: str) -> bytes:
