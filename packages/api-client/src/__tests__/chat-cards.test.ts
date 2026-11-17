@@ -436,7 +436,7 @@ describe('timelineAxisLabels — as datas embaixo da curva', () => {
     expect(timelineAxisLabels(events)).toEqual(['6 out', '20 out', '4 nov']);
   });
   it('com um ou dois pontos, só os que existem', () => {
-    expect(timelineAxisLabels([{ date: '2026-11-04T10:00:00Z', value: 1 }])).toEqual(['4 nov']);
+    expect(timelineAxisLabels([{ date: '2026-11-04T10:00:00Z' }])).toEqual(['4 nov']);
     expect(timelineAxisLabels([])).toEqual([]);
   });
 });

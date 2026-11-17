@@ -236,8 +236,26 @@ Pendências da #384 (branch `redesign/384-chat`, migrations `20261117110000_ai_c
   - No app a escrita feita recolhe como "· gravado", sem a hora (o app não guarda a hora de cada fala); no PWA, "· gravado às HH:MM".
   - "Agora não" do aceite sai do chat (web volta ao início, app volta uma tela).
   - O anel do progresso no app é um círculo cheio com o número, sem o arco parcial.
+  - O topo da conversa mantém globo, memórias, conversas e nova conversa, em vez de um botão só.
+  - Campo numérico de pergunta é digitável, sem stepper.
+  - O cartão da resposta antiga fica como foi decidido; só o da última resposta fica aberto.
+  - Ficam o tempo da resposta e a barra de ações (copiar, citar, 👍/👎) embaixo de cada resposta.
+  - O cartão de confirmação não ganha respostas rápidas embaixo: a decisão é no cartão.
+  - Sem o selo de iniciais do treinador ("TD") na lista: o resumo da conversa não traz a comunidade.
+  - A conversa nova se chama "Nova conversa" até ser aberta de novo (o título vem do servidor depois do primeiro turno).
+  - No PWA, o Gravar abre com o foco (anel), para dar para confirmar pelo teclado.
+  - O placar usa a inicial como avatar.
+  - O ditado (Al-M17) só aparece com `dictation` ligado na disponibilidade do chat; no banco dev está desligado, e a gravação não foi capturada (só o campo da conversa nova).
 - **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
-- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+- **Passada visual (2026-11-17):** IA-Estados, IA-Cartoes, IA-Conversas, Al-M6, Al-M16, Al-M17, Al-M20 a Al-M23 comparadas lado a lado (prancha, web, app), escuro e uma amostra no claro.
+  - Web e app: linha da tool em pílula cinza da largura da conversa, com selo e o desfecho em negrito; a escrita à espera do sim não ganha linha; a busca diz "Pesquisei na web · N sites" e o aviso "Só a pergunta vai…"; a resposta interrompida virou pílula com pausa.
+  - Cartões: Gravar/Continuar/Responder em pílula clara e Ajustar/Parar aqui cinza; pergunta em azul com "Responder"; pausa "Está mais longo que o previsto"; aceites lado a lado (verde e cinza), sem ícone.
+  - A primeira fala é o título da conversa (grande, à direita, com linha embaixo); as seguintes, balão.
+  - Campo com a câmera dentro e borda verde, "Responda ou peça outra coisa".
+  - Linha do tempo sem eixos, com três datas e "em N dias"; meta com ponto de milhar; "Só no app" no cartão só do app.
+  - Lista (Al-M6): no app, "Conversas", linhas sem cartão, seção em caixa normal, busca com lupa, ponto verde "Esperando você" e giro "pensando", botão de opções e o atalho "Nova conversa…" embaixo; o PWA ganhou o mesmo ponto e giro na gaveta.
+  - O topo da conversa no app mostra o título dela; o nome "Fatia" só aparece para agente de comunidade.
+  - A prévia da lista sai sem a marcação do markdown.
 
 Pendências da #386 (branch `redesign/386-plano`, migration `20261117100000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
 
