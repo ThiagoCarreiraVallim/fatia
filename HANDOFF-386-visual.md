@@ -17,7 +17,9 @@
   pool da academia-demo: SEATS, 3 assentos, ACTIVE, sem programName, currentPeriodEnd 2026-12-05 03:00; BillingReminder vazio.
   Para restaurar: apagar UserSubscription do demo, proTrialStartedAt=null, apagar membership MEMBER do demo na academia-demo (se criada),
   pool academia-demo mode=SEATS programName=null currentPeriodEnd='2026-12-05 03:00', apagar BillingReminder e InboxNotice BILLING criados.
-- Ferramentas (scratchpad da sessão, recriar se sumir): state.sh <free|trial|trial-store|active|due-soon|pending|due-today|late|grace|paused|canceled|expired|store-active|store-issue|community|program|original>
+- Ferramentas: cópia em ~/.cache/fatia-vis/386/tools (state.sh, shot386.mjs, cap.sh, e.sh, variant.sh, cmp.sh); copiar para o scratchpad se sumir.
   (escreve linhas fake id vis386-sub / vis386-demo-membership no banco dev) e shot386.mjs (shot-web com webCheckout forçado a true, porque o dev não tem Asaas).
 - Achado: chat-locked.tsx do app ainda leva a /profile/tokens, que a #388 apagou -> trocar por /profile/connect (teste de rotas estáticas, vermelho primeiro).
 - Achado: web free mostra "O PRO acrescenta" (lista) antes do hero; o app e a prancha M2 não têm a lista no Free.
+- Feito e commitado: expirada no app sem botão repetido + fim na carência; rota /profile/connect + teste de rotas; app M2/M5/M13; web M2/M5/M13b; outline/termos/cancelar loja; site Si-04 duas colunas.
+- Falta: Ex-03 (e-mails), cmp finais, REDESIGN_PROGRESS, lint/typecheck/testes finais, restaurar demo (state.sh original), apagar HANDOFF.
