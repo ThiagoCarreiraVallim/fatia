@@ -30,6 +30,9 @@ import {
   stepSourceBadge,
   strengthRecordRows,
   trendPercent,
+  strengthTrend,
+  goalIconTone,
+  logDayTitle,
 } from '../progress-screens';
 
 /** Telas de Progresso (#382): a mesma regra de apresentação na web e no app. */
@@ -447,6 +450,18 @@ describe('metas pessoais (Al-G9, Al-G10)', () => {
 });
 
 describe('gráficos', () => {
+  it('força do G1: volume por sessão, para a semana corrente pela metade não derrubar a %', () => {
+    // A semana de hoje só tem 1 treino: o total cai, a sessão não.
+    const weeks = [
+      { weekStart: '2026-10-19', totalVolumeKg: 18000, sessionCount: 4 },
+      { weekStart: '2026-10-26', totalVolumeKg: 0, sessionCount: 0 },
+      { weekStart: '2026-11-16', totalVolumeKg: 4680, sessionCount: 1 },
+    ];
+
+    expect(strengthTrend(weeks)).toEqual({ values: [4500, 4680], percent: 4 });
+    expect(strengthTrend([])).toEqual({ values: [], percent: null });
+  });
+
   it('variação em % do primeiro para o último', () => {
     expect(trendPercent([100, 90, 104])).toBe(4);
     expect(trendPercent([5])).toBeNull();
@@ -655,5 +670,22 @@ describe('data digitada (prazo no app, sem calendário nativo)', () => {
     expect(parseDayInput('31/02/2027')).toBeNull();
     expect(parseDayInput('2026-12-20')).toBeNull();
     expect(parseDayInput('')).toBeNull();
+  });
+});
+
+describe('metas: ícone', () => {
+  it('passos usa o tom dos passos; o resto, o verde (Al-G9)', () => {
+    expect(goalIconTone('step_count')).toBe('steps');
+    expect(goalIconTone('weight')).toBe('lime');
+    expect(goalIconTone('workout_frequency')).toBe('lime');
+    expect(goalIconTone('custom')).toBe('lime');
+  });
+});
+
+describe('registrar peso: o dia (Al-G7)', () => {
+  it('"Hoje · 4 nov", "Ontem · 3 nov" e o dia da semana nos outros', () => {
+    expect(logDayTitle('2026-11-04', '2026-11-04')).toBe('Hoje · 4 nov');
+    expect(logDayTitle('2026-11-03', '2026-11-04')).toBe('Ontem · 3 nov');
+    expect(logDayTitle('2026-10-30', '2026-11-04')).toBe('Sex · 30 out');
   });
 });

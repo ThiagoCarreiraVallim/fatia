@@ -280,6 +280,11 @@ describe('navegação', () => {
       expect(routeInfo(path)).toMatchObject({ title, parent, parentTitle });
     });
 
+    it('Progresso (Al-G1) não tem título na barra: só o voltar e o período', () => {
+      expect(routeInfo('/progress')).toMatchObject({ title: 'Progresso', untitled: true });
+      expect(routeInfo('/progress/records').untitled).toBeUndefined();
+    });
+
     it('rota fora do mapa volta ao ancestral conhecido mais próximo', () => {
       expect(routeInfo('/nutrition/xyz').parent).toBe('/nutrition');
       expect(routeInfo('/desconhecida/a/b').parent).toBe('/');

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   GOAL_KIND_ICONS,
+  goalIconTone,
   GOAL_TABS,
   GOALS_FOOTER,
   goalBadge,
@@ -185,8 +186,17 @@ function GoalCard({
       )}
     >
       <View className="flex-row items-center gap-3">
-        <View className="h-10 w-10 items-center justify-center rounded-[12px] bg-muted">
-          <Icon name={GOAL_KIND_ICONS[goal.kind] as IconName} size={18} />
+        <View
+          className={cn(
+            'h-10 w-10 items-center justify-center rounded-[14px]',
+            goalIconTone(goal.kind) === 'steps' ? 'bg-warning/15' : 'bg-primary/10',
+          )}
+        >
+          <Icon
+            name={GOAL_KIND_ICONS[goal.kind] as IconName}
+            size={18}
+            color={goalIconTone(goal.kind) === 'steps' ? colors.steps : colors.primaryText}
+          />
         </View>
         <View className="min-w-0 flex-1">
           <Text className="font-sans-semibold text-foreground" numberOfLines={1}>
@@ -213,7 +223,7 @@ function GoalCard({
               disabled={busy}
               onPress={onReschedule}
             >
-              Novo prazo
+              <ActionLabel icon="repeat" label="Novo prazo" />
             </Button>
           ) : (
             <Button
@@ -223,7 +233,7 @@ function GoalCard({
               disabled={busy}
               onPress={onComplete}
             >
-              Concluir
+              <ActionLabel icon="check" label="Concluir" />
             </Button>
           )}
           {manual ? (
@@ -237,7 +247,13 @@ function GoalCard({
               Atualizar
             </Button>
           ) : null}
-          <Button size="sm" variant="ghost" className="flex-1" disabled={busy} onPress={onArchive}>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="flex-1"
+            disabled={busy}
+            onPress={onArchive}
+          >
             Arquivar
           </Button>
         </View>
@@ -253,6 +269,16 @@ function GoalCard({
           Apagar
         </Button>
       ) : null}
+    </View>
+  );
+}
+
+/** Ícone e texto do botão da meta (o `.btn sm` com ícone da prancha Al-G9). */
+function ActionLabel({ icon, label }: { icon: IconName; label: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <Icon name={icon} size={16} color={colors.foreground} />
+      <Text className="text-xs font-semibold text-secondary-foreground">{label}</Text>
     </View>
   );
 }
@@ -282,6 +308,7 @@ function RescheduleSheet({ goal, onClose }: { goal: Goal | null; onClose: () => 
           onClose();
         }
       }}
+      snapPoints={['85%']}
     >
       <DrawerContent className="px-4">
         <DrawerHeader className="px-0">
@@ -307,7 +334,7 @@ function RescheduleSheet({ goal, onClose }: { goal: Goal | null; onClose: () => 
           />
           {save.isError ? <FormMessage>Não deu para salvar. Tente de novo.</FormMessage> : null}
         </View>
-        <DrawerFooter className="px-0">
+        <DrawerFooter className="px-0 pb-8">
           <Button
             disabled={day === null || past}
             loading={save.isPending}
@@ -344,6 +371,7 @@ function ReportSheet({ goal, onClose }: { goal: Goal | null; onClose: () => void
           onClose();
         }
       }}
+      snapPoints={['85%']}
     >
       <DrawerContent className="px-4">
         <DrawerHeader className="px-0">
@@ -363,7 +391,7 @@ function ReportSheet({ goal, onClose }: { goal: Goal | null; onClose: () => void
           />
           {save.isError ? <FormMessage>Não deu para salvar. Tente de novo.</FormMessage> : null}
         </View>
-        <DrawerFooter className="px-0">
+        <DrawerFooter className="px-0 pb-8">
           <Button
             disabled={n === null || n < 0}
             loading={save.isPending}

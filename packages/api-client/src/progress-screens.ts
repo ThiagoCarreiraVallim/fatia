@@ -6,6 +6,7 @@
  * a web e o app dizerem a mesma coisa. Os componentes só desenham.
  */
 import { formatDecimal, formatInteger } from './format';
+import { shiftDay } from './meal-templates';
 import type { CreateGoalInput, Goal, GoalKind } from './goals';
 import type { MealType } from './nutrition';
 import type {
@@ -57,6 +58,18 @@ export function shortDay(date: string): string {
   const day = Number(date.slice(8, 10));
   if (!month || !day) return '—';
   return `${day} ${MONTHS_SHORT[month - 1]}`;
+}
+
+/** O dia da folha de registro (Al-G7): "Hoje · 4 nov", "Ontem · 3 nov", "Sex · 30 out". */
+export function logDayTitle(date: string, today: string): string {
+  const yesterday = shiftDay(today, -1);
+  const name =
+    date === today
+      ? 'Hoje'
+      : date === yesterday
+        ? 'Ontem'
+        : WEEKDAYS_SHORT[new Date(`${date}T12:00:00Z`).getUTCDay()]!;
+  return `${name} · ${shortDay(date)}`;
 }
 
 /** "4 nov" de um instante ISO, no fuso de quem está olhando. */
@@ -505,6 +518,11 @@ export const GOAL_KIND_ICONS: Record<GoalKind, string> = {
   custom: 'target',
 };
 
+/** O tom do ícone da meta na lista (Al-G9): passos no tom dos passos, o resto no verde. */
+export function goalIconTone(kind: GoalKind): 'lime' | 'steps' {
+  return kind === 'step_count' ? 'steps' : 'lime';
+}
+
 export interface GoalKindOption {
   kind: GoalKind;
   label: string;
@@ -690,6 +708,20 @@ export function trendPercent(values: number[]): number | null {
   const last = values[values.length - 1]!;
   if (first === 0) return null;
   return Math.round(((last - first) / first) * 100);
+}
+
+/**
+ * A "Força" do G1: o volume médio por treino de cada semana com treino, e a variação da
+ * primeira para a última. Por treino, e não o total da semana, para a semana de hoje (ainda
+ * pela metade) não aparecer como queda.
+ */
+export function strengthTrend(
+  weeks: ReadonlyArray<{ totalVolumeKg: number; sessionCount: number }>,
+): { values: number[]; percent: number | null } {
+  const values = weeks
+    .filter((w) => w.sessionCount > 0)
+    .map((w) => w.totalVolumeKg / w.sessionCount);
+  return { values, percent: trendPercent(values) };
 }
 
 /** "+4%", "−3%", "0%". */

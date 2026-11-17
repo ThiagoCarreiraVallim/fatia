@@ -117,6 +117,8 @@ export function ChartsScreen() {
           <Chip
             key={k.value}
             selected={kind === k.value}
+            // O `.chip.lime` da prancha: o tipo escolhido é o verde da marca.
+            tone={kind === k.value ? 'primary' : 'default'}
             onClick={() => setKind(k.value)}
             className="justify-center gap-1 px-1.5"
           >

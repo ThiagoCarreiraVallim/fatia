@@ -156,19 +156,29 @@ export function LogWeightDrawer({
     <>
       {switcher}
 
-      <DrawerHeader className="px-0">
-        <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
-        <DrawerDescription>
-          {editing
-            ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
-            : dia === hoje
-              ? 'Pesagem de hoje.'
-              : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
-        </DrawerDescription>
-      </DrawerHeader>
+      {/* Na folha Peso/Passos (Al-G7) o título não aparece: o segmentado já diz o que é. */}
+      {embedded && !editing ? null : (
+        <DrawerHeader className="px-0">
+          <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
+          <DrawerDescription>
+            {editing
+              ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
+              : dia === hoje
+                ? 'Pesagem de hoje.'
+                : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
+          </DrawerDescription>
+        </DrawerHeader>
+      )}
 
       <View className="gap-4 py-3">
-        {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
+        {editing ? null : (
+          <SeletorDeDia
+            dia={dia}
+            hoje={hoje}
+            onChange={setDia}
+            variant={embedded ? 'nav' : 'field'}
+          />
+        )}
         <ValueStepper
           label="Peso (kg)"
           value={weight}
@@ -208,7 +218,7 @@ export function LogWeightDrawer({
         />
       </View>
 
-      <DrawerFooter className="px-0">
+      <DrawerFooter className="px-0 pb-8">
         <Button onPress={submit} loading={save.isPending}>
           {editing
             ? 'Salvar alteração'

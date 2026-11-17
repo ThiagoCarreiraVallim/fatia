@@ -151,15 +151,25 @@ export function LogStepsDrawer({
     <>
       {switcher}
 
-      <DrawerHeader className="px-0">
-        <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
-        <DrawerDescription>
-          {editing ? `Corrigindo o registro de ${dayMonth(editing.date)}.` : 'Passos do dia.'}
-        </DrawerDescription>
-      </DrawerHeader>
+      {/* Na folha Peso/Passos (Al-G7) o título não aparece: o segmentado já diz o que é. */}
+      {embedded && !editing ? null : (
+        <DrawerHeader className="px-0">
+          <DrawerTitle>{editing ? 'Editar passos' : 'Registrar passos'}</DrawerTitle>
+          <DrawerDescription>
+            {editing ? `Corrigindo o registro de ${dayMonth(editing.date)}.` : 'Passos do dia.'}
+          </DrawerDescription>
+        </DrawerHeader>
+      )}
 
       <View className="gap-4 py-3">
-        {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
+        {editing ? null : (
+          <SeletorDeDia
+            dia={dia}
+            hoje={hoje}
+            onChange={setDia}
+            variant={embedded ? 'nav' : 'field'}
+          />
+        )}
         <ValueStepper
           label="Passos"
           value={steps}
@@ -199,7 +209,7 @@ export function LogStepsDrawer({
         />
       </View>
 
-      <DrawerFooter className="px-0">
+      <DrawerFooter className="px-0 pb-8">
         <Button onPress={submit} loading={save.isPending}>
           {editing
             ? 'Salvar alteração'

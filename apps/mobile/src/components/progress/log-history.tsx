@@ -67,62 +67,70 @@ export function LogHistory({
         // `DrawerScrollView` (e não `ScrollView`) para a rolagem não disputar o
         // gesto de arrastar o sheet. A altura precisa ser limitada, senão a lista
         // empurra o formulário para fora da tela.
-        <DrawerScrollView style={{ maxHeight: 190 }}>
-          {entries.map((entry) => {
-            const editing = entry.id === editingId;
-            const pending = entry.id === pendingId;
-            return (
-              <View
-                key={entry.id}
-                className={cn(
-                  'mb-1.5 flex-row items-center gap-2 rounded-xl bg-card px-3 py-2',
-                  editing && 'border border-primary',
-                  pending && 'opacity-50',
-                )}
-              >
-                <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-bold text-foreground">{entry.title}</Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {entry.subtitle}
-                    {entry.time ? ` · ${entry.time}` : ''}
-                  </Text>
-                </View>
-                {entry.badge ? (
-                  <ToneBadge tone={entry.badge.tone} label={entry.badge.label} />
-                ) : null}
-                {entry.readOnly ? null : (
-                  <>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
-                      accessibilityState={{ selected: editing, disabled: pending }}
-                      disabled={pending}
-                      onPress={() => onEdit(entry)}
-                      className="h-11 w-11 items-center justify-center rounded-xl"
-                    >
-                      <Pencil
-                        size={16}
-                        color={editing ? chartColors.primary : chartColors.foreground}
-                      />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
-                      accessibilityState={{ disabled: pending }}
-                      disabled={pending}
-                      onPress={() => onDelete(entry)}
-                      className="h-11 w-11 items-center justify-center rounded-xl"
-                    >
-                      {/* Apaga na hora, sem pergunta: o aviso com "Desfazer" (`useToast`)
+        <DrawerScrollView style={{ maxHeight: 210 }}>
+          <View className="overflow-hidden rounded-card bg-muted">
+            {entries.map((entry, i) => {
+              const editing = entry.id === editingId;
+              const pending = entry.id === pendingId;
+              return (
+                <View
+                  key={entry.id}
+                  className={cn(
+                    // O `.list` da prancha: um cartão, linhas separadas por um fio.
+                    'flex-row items-center gap-2 px-4 py-2.5',
+                    i > 0 && 'border-t border-border',
+                    editing && 'rounded-card border-[1.5px] border-primary',
+                    pending && 'opacity-50',
+                  )}
+                >
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm font-bold text-foreground">{entry.title}</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {entry.subtitle}
+                      {entry.time ? ` · ${entry.time}` : ''}
+                    </Text>
+                  </View>
+                  {entry.badge?.tone === 'ok' ? (
+                    <ToneBadge tone="ok" label={entry.badge.label} />
+                  ) : entry.badge ? (
+                    <Text className="px-1 font-sans-extrabold text-[11px] uppercase tracking-[0.4px] text-muted-foreground">
+                      {entry.badge.label}
+                    </Text>
+                  ) : null}
+                  {entry.readOnly ? null : (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
+                        accessibilityState={{ selected: editing, disabled: pending }}
+                        disabled={pending}
+                        onPress={() => onEdit(entry)}
+                        className="h-9 w-9 items-center justify-center rounded-full bg-card"
+                      >
+                        <Pencil
+                          size={16}
+                          color={editing ? chartColors.primary : chartColors.foreground}
+                        />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
+                        onPress={() => onDelete(entry)}
+                        className="h-9 w-9 items-center justify-center rounded-full bg-card"
+                      >
+                        {/* Apaga na hora, sem pergunta: o aviso com "Desfazer" (`useToast`)
                       é a rede de segurança. O vermelho do tema (#93000a) sumiria
                       sobre o card escuro. */}
-                      <Trash2 size={16} color={chartColors.mutedForeground} />
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            );
-          })}
+                        <Trash2 size={16} color={chartColors.mutedForeground} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              );
+            })}
+          </View>
         </DrawerScrollView>
       ) : null}
     </View>

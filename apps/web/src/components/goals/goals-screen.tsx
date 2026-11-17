@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   GOAL_KIND_ICONS,
+  goalIconTone,
   GOAL_TABS,
   GOALS_FOOTER,
   goalBadge,
@@ -204,7 +205,14 @@ function GoalCard({
       )}
     >
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-muted text-foreground">
+        <span
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px]',
+            goalIconTone(goal.kind) === 'steps'
+              ? 'bg-[hsl(var(--warning)/0.14)] text-steps'
+              : 'bg-primary-soft text-primary-text',
+          )}
+        >
           <Icon name={GOAL_KIND_ICONS[goal.kind] as IconName} size={18} />
         </span>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -229,6 +237,7 @@ function GoalCard({
               onClick={onReschedule}
               aria-label={`Novo prazo para ${goal.title}`}
             >
+              <Icon name="repeat" size={16} />
               Novo prazo
             </Button>
           ) : (
@@ -240,6 +249,7 @@ function GoalCard({
               onClick={onComplete}
               aria-label={`Concluir ${goal.title}`}
             >
+              <Icon name="check" size={16} />
               Concluir
             </Button>
           )}
@@ -257,8 +267,8 @@ function GoalCard({
           )}
           <Button
             size="sm"
-            variant="ghost"
-            className="flex-1"
+            variant="secondary"
+            className="flex-1 bg-muted"
             disabled={busy}
             onClick={onArchive}
             aria-label={`Arquivar ${goal.title}`}

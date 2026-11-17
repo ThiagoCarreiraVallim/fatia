@@ -121,8 +121,9 @@ export function ToneBadge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center rounded-pill px-2 py-0.5 text-[11px] font-bold',
-        tone === 'ok' && 'bg-[hsl(var(--success)/0.12)] text-success',
+        // O `.bdg` do canvas: 22 de altura, caixa alta, 800; o `ok` é o verde suave da marca.
+        'inline-flex h-[22px] shrink-0 items-center whitespace-nowrap rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
+        tone === 'ok' && 'bg-primary-soft text-primary-text',
         tone === 'warn' && 'bg-[hsl(var(--warning)/0.12)] text-warning',
         tone === 'bad' && 'bg-[hsl(var(--danger)/0.12)] text-danger',
         tone === 'pro' && 'bg-primary text-primary-foreground',

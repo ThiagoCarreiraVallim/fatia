@@ -14,7 +14,7 @@ import {
   signedDelta,
   signedPercent,
   strengthRecordCount,
-  trendPercent,
+  strengthTrend,
   workoutApi,
 } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
@@ -83,8 +83,8 @@ export default function ProgressScreen() {
   const weightValues = w?.points.map((p) => p.weightKg) ?? [];
   const current = w?.currentWeightKg ?? null;
   const stepValues = steps.data?.points.map((p) => p.steps) ?? [];
-  const volumeValues = volume.data?.weeks.map((x) => x.totalVolumeKg) ?? [];
-  const strengthTrend = trendPercent(volumeValues);
+  // Volume por treino: a semana de hoje, pela metade, não vira queda.
+  const strength = strengthTrend(volume.data?.weeks ?? []);
   const pace = cardio.data ? averagePace(cardio.data) : null;
   const paceValues = (cardio.data?.points ?? [])
     .map((p) => p.paceSecondsPerKm)
@@ -111,15 +111,15 @@ export default function ProgressScreen() {
       color: colors.steps,
       value: steps.data && stepValues.length ? formatInteger(steps.data.averageDaily) : '—',
       unit: '',
-      chart: <MiniBars values={bucketize(stepValues, 12)} height={22} />,
+      chart: <MiniBars values={bucketize(stepValues, 7)} height={22} />,
     },
     {
       label: 'Força',
       icon: 'dumbbell',
       color: colors.primary,
-      value: strengthTrend === null ? '—' : signedPercent(strengthTrend),
+      value: strength.percent === null ? '—' : signedPercent(strength.percent),
       unit: '',
-      chart: <Sparkline values={volumeValues} height={22} fill={false} />,
+      chart: <Sparkline values={strength.values} height={22} fill={false} />,
     },
     {
       label: 'Cardio',
@@ -168,7 +168,7 @@ export default function ProgressScreen() {
               </Text>
               <Text className="ml-1 font-sans-semibold text-base text-muted-foreground">kg</Text>
             </View>
-            <Sparkline values={weightValues} height={56} />
+            <Sparkline values={weightValues} height={48} fill={false} />
           </Pressable>
 
           <View className="flex-row gap-2">

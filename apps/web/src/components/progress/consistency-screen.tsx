@@ -84,51 +84,47 @@ export function ConsistencyScreen() {
             className="flex flex-col gap-3 rounded-card bg-card p-4"
             aria-label={consistencyGridTitle(report)}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col">
-                <span className="text-[15px] font-bold">{consistencyGridTitle(report)}</span>
-                <span className="text-[12px] text-muted-foreground">
-                  {consistencyGridCaption(report)}
-                </span>
-              </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[15px] font-bold">{consistencyGridTitle(report)}</span>
               {report.range !== 'year' && (
                 <span
                   className="flex items-center gap-1 text-[11px] text-muted-foreground"
                   aria-hidden
                 >
-                  0
                   {HEAT_SHADES.map((c) => (
-                    <i key={c} className={cn('h-2.5 w-2.5 rounded-[3px]', c)} />
+                    <i key={c} className={cn('h-2.5 w-2.5 rounded-full', c)} />
                   ))}
-                  4
+                  <span className="ml-0.5">0 a 4</span>
                 </span>
               )}
             </div>
             <Grid report={report} />
+            <span className="text-[11px] text-muted-foreground">
+              {consistencyGridCaption(report)}
+            </span>
           </section>
 
-          <section className="flex flex-col gap-3 rounded-card bg-card p-4">
-            <span className="text-[15px] font-bold">
-              Por área <span className="font-normal text-muted-foreground">· dias na meta</span>
-            </span>
+          <section className="flex flex-col gap-2.5 rounded-card bg-card p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[15px] font-bold">Por área</span>
+              <span className="text-[13px] text-muted-foreground">dias na meta</span>
+            </div>
             {consistencyAreaRows(report).map((row) => (
-              <div key={row.area} className="flex items-center gap-3">
-                <Icon name={row.icon} size={18} className={AREA_ICON[row.tone]} />
-                <span className="w-[92px] shrink-0 text-sm">{row.label}</span>
+              <div key={row.area} className="flex min-h-5 items-center gap-2.5">
+                <Icon name={row.icon} size={16} className={AREA_ICON[row.tone]} />
+                <span className="w-[84px] shrink-0 text-[13px] font-semibold">{row.label}</span>
                 <div className="flex-1">
                   <ProgressBar percent={row.percent} colorClass={AREA_BAR[row.tone]} />
                 </div>
-                <span className="w-[56px] shrink-0 text-right text-[13px] font-bold tabular-nums">
+                <span className="w-[58px] shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
                   {row.text}
                 </span>
               </div>
             ))}
+            <p className="pt-2.5 text-[13px] text-muted-foreground shadow-[inset_0_1px_0_hsl(var(--border))]">
+              {consistencyTip(report)}
+            </p>
           </section>
-
-          <p className="flex items-start gap-2 px-1 text-[13px] text-muted-foreground">
-            <Icon name="info" size={16} className="mt-0.5 shrink-0" />
-            {consistencyTip(report)}
-          </p>
         </>
       )}
     </div>
@@ -170,7 +166,7 @@ function Grid({ report }: { report: ConsistencyReport }) {
     return (
       <div role="img" aria-label={label} className="grid grid-flow-col grid-rows-7 gap-1">
         {cells.map((c) => (
-          <Cell key={c.date} kind={c.kind} level={c.level} />
+          <Cell key={c.date} kind={c.kind} level={c.level} height="h-[14px]" />
         ))}
       </div>
     );
@@ -178,14 +174,14 @@ function Grid({ report }: { report: ConsistencyReport }) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="grid grid-cols-7 gap-1.5" aria-hidden>
+      <div className="grid grid-cols-7 gap-1" aria-hidden>
         {CONSISTENCY_WEEKDAY_LABELS.map((l, i) => (
           <span key={i} className="text-center text-[11px] text-muted-foreground">
             {l}
           </span>
         ))}
       </div>
-      <div role="img" aria-label={label} className="grid grid-cols-7 gap-1.5">
+      <div role="img" aria-label={label} className="grid grid-cols-7 gap-1">
         {cells.map((c) => (
           <Cell key={c.date} kind={c.kind} level={c.level} day={c.day} />
         ))}
@@ -194,13 +190,25 @@ function Grid({ report }: { report: ConsistencyReport }) {
   );
 }
 
-function Cell({ kind, level, day }: { kind: string; level: number; day?: number }) {
-  if (kind === 'outside') return <i aria-hidden className="aspect-square" />;
+function Cell({
+  kind,
+  level,
+  day,
+  height = 'h-[18px]',
+}: {
+  kind: string;
+  level: number;
+  day?: number;
+  /** A prancha: 18 px no mês (com o dia escrito), 14 px no trimestre. */
+  height?: string;
+}) {
+  if (kind === 'outside') return <i aria-hidden className={height} />;
   return (
     <span
       aria-hidden
       className={cn(
-        'relative flex aspect-square items-center justify-center rounded-[6px] text-[11px] tabular-nums',
+        'relative flex items-center justify-center rounded-[5px] text-[10px] font-bold tabular-nums',
+        height,
         kind === 'future' && 'shadow-[inset_0_0_0_1px_hsl(var(--border))] text-faint',
         kind === 'past' && HEAT_SHADES[level],
         kind === 'past' && level >= 3 ? 'text-primary-foreground' : 'text-muted-foreground',

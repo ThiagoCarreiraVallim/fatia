@@ -107,11 +107,12 @@ export function heatColor(level: number): { backgroundColor: string; opacity?: n
 
 /** Selo por tom (os da prancha: `ok`, `warn`, `pro`, `mute`). */
 export function ToneBadge({ tone, label }: { tone: GoalBadgeTone | 'bad'; label: string }) {
+  // O `.bdg` do canvas: 22 de altura, caixa alta, 800; o `ok` é o verde suave da marca.
   return (
     <View
       className={cn(
-        'shrink-0 rounded-pill px-2 py-0.5',
-        tone === 'ok' && 'bg-success/10',
+        'h-[22px] shrink-0 justify-center rounded-pill px-[9px]',
+        tone === 'ok' && 'bg-primary/10',
         tone === 'warn' && 'bg-warning/10',
         tone === 'bad' && 'bg-danger/10',
         tone === 'pro' && 'bg-primary',
@@ -120,8 +121,8 @@ export function ToneBadge({ tone, label }: { tone: GoalBadgeTone | 'bad'; label:
     >
       <Text
         className={cn(
-          'font-sans-bold text-[11px]',
-          tone === 'ok' && 'text-success',
+          'font-sans-extrabold text-[11px] uppercase tracking-[0.4px]',
+          tone === 'ok' && 'text-primary-text',
           tone === 'warn' && 'text-warning',
           tone === 'bad' && 'text-danger',
           tone === 'pro' && 'text-primary-foreground',
@@ -171,13 +172,18 @@ export function IconChip({
   selected,
   onPress,
   className,
+  tone = 'default',
 }: {
   icon?: IconName;
   label: string;
   selected: boolean;
   onPress: () => void;
   className?: string;
+  /** `lime`: o selecionado é o verde da marca (o `.chip.lime` do canvas: G6, G10). */
+  tone?: 'default' | 'lime';
 }) {
+  const lime = selected && tone === 'lime';
+  const onColor = lime ? colors.primaryForeground : colors.background;
   return (
     <Pressable
       accessibilityRole="button"
@@ -186,17 +192,17 @@ export function IconChip({
       onPress={onPress}
       className={cn(
         'min-h-9 flex-row items-center justify-center gap-1 rounded-chip px-3',
-        selected ? 'bg-foreground' : 'bg-muted',
+        lime ? 'bg-primary' : selected ? 'bg-foreground' : 'bg-muted',
         className,
       )}
     >
       {icon ? (
-        <Icon name={icon} size={16} color={selected ? colors.background : colors.mutedForeground} />
+        <Icon name={icon} size={16} color={selected ? onColor : colors.mutedForeground} />
       ) : null}
       <Text
         className={cn(
           'font-sans-semibold text-[13px]',
-          selected ? 'text-background' : 'text-muted-foreground',
+          lime ? 'text-primary-foreground' : selected ? 'text-background' : 'text-muted-foreground',
         )}
         numberOfLines={1}
       >

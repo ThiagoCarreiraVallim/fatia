@@ -47,19 +47,21 @@ export function AchievementsScreen() {
 
       {query.data && (
         <>
-          <section className="flex items-center justify-between gap-3 rounded-card bg-card p-4">
-            <div className="flex flex-col">
-              <span className="font-display text-[22px] font-bold">
-                {tally.got} de {tally.total} desbloqueadas
+          <section className="flex items-center justify-between gap-3">
+            <span className="sr-only">
+              {tally.got} de {tally.total} desbloqueadas
+            </span>
+            <div className="flex flex-col gap-1" aria-hidden>
+              <span className="font-display text-[40px] font-bold leading-none tracking-tight tabular-nums">
+                {tally.got}
+                <span className="ml-1 text-[17px] font-semibold tracking-normal text-muted-foreground">
+                  de {tally.total}
+                </span>
               </span>
-              <span className="text-[13px] text-muted-foreground">
-                Toque numa para ver os detalhes.
-              </span>
+              <span className="text-[13px] text-muted-foreground">desbloqueadas</span>
             </div>
             <Ring value={tally.got} max={tally.total} size={64} stroke={7} label="conquistas">
-              <span className="text-sm font-bold tabular-nums">
-                {tally.total ? Math.round((tally.got / tally.total) * 100) : 0}%
-              </span>
+              <span />
             </Ring>
           </section>
 
@@ -83,7 +85,7 @@ export function AchievementsScreen() {
                       className={cn(
                         'flex h-12 w-12 items-center justify-center rounded-full',
                         unlocked
-                          ? 'bg-primary text-primary-foreground'
+                          ? 'bg-primary-soft text-primary-text'
                           : 'bg-surface-3 text-muted-foreground opacity-50',
                       )}
                     >
@@ -109,13 +111,13 @@ export function AchievementsScreen() {
           {selected && (
             <section
               aria-live="polite"
-              className="flex items-center gap-3 rounded-card bg-card p-4"
+              className="flex items-center gap-3 rounded-card bg-card p-4 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]"
             >
               <span
                 className={cn(
                   'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
                   isAchievementUnlocked(selected)
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary-soft text-primary-text'
                     : 'bg-surface-3 text-muted-foreground',
                 )}
               >

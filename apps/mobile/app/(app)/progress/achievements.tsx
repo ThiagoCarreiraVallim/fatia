@@ -44,19 +44,19 @@ export default function AchievementsScreen() {
 
         {query.data ? (
           <>
-            <View className="flex-row items-center justify-between gap-3 rounded-card bg-card p-4">
-              <View className="flex-1">
-                <Text className="font-display text-[22px] leading-[28px] text-foreground">
-                  {tally.got} de {tally.total} desbloqueadas
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-1 gap-1">
+                <Text className="font-display text-[40px] leading-[44px] text-foreground">
+                  {tally.got}
+                  <Text className="font-sans-semibold text-[17px] text-muted-foreground">
+                    {' '}
+                    de {tally.total}
+                  </Text>
                 </Text>
-                <Text className="text-[13px] text-muted-foreground">
-                  Toque numa para ver os detalhes.
-                </Text>
+                <Text className="text-[13px] text-muted-foreground">desbloqueadas</Text>
               </View>
               <Ring value={tally.got} max={tally.total} size={64} stroke={7} label="conquistas">
-                <Text className="font-sans-bold text-sm text-foreground">
-                  {tally.total ? Math.round((tally.got / tally.total) * 100) : 0}%
-                </Text>
+                <View />
               </Ring>
             </View>
 
@@ -79,13 +79,13 @@ export default function AchievementsScreen() {
                       <View
                         className={cn(
                           'h-12 w-12 items-center justify-center rounded-full',
-                          unlocked ? 'bg-primary' : 'bg-surface-3 opacity-50',
+                          unlocked ? 'bg-primary/10' : 'bg-surface-3 opacity-50',
                         )}
                       >
                         <Icon
                           name={unlocked ? (achievementIcon(a.key) as IconName) : 'lock'}
                           size={22}
-                          color={unlocked ? colors.primaryForeground : colors.mutedForeground}
+                          color={unlocked ? colors.primaryText : colors.mutedForeground}
                         />
                       </View>
                       <Text
@@ -105,12 +105,12 @@ export default function AchievementsScreen() {
             {selected ? (
               <View
                 accessibilityLiveRegion="polite"
-                className="flex-row items-center gap-3 rounded-card bg-card p-4"
+                className="flex-row items-center gap-3 rounded-card border border-primary/35 bg-card p-4"
               >
                 <View
                   className={cn(
                     'h-11 w-11 items-center justify-center rounded-full',
-                    isAchievementUnlocked(selected) ? 'bg-primary' : 'bg-surface-3',
+                    isAchievementUnlocked(selected) ? 'bg-primary/10' : 'bg-surface-3',
                   )}
                 >
                   <Icon
@@ -121,9 +121,7 @@ export default function AchievementsScreen() {
                     }
                     size={20}
                     color={
-                      isAchievementUnlocked(selected)
-                        ? colors.primaryForeground
-                        : colors.mutedForeground
+                      isAchievementUnlocked(selected) ? colors.primaryText : colors.mutedForeground
                     }
                   />
                 </View>

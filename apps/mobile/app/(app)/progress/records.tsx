@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   RECORDS_NOTE,
@@ -10,7 +10,8 @@ import {
   type RecordGroupFilter,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Chip, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { IconChip } from '@/components/progress/progress-ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
@@ -39,53 +40,54 @@ export default function RecordsScreen() {
         ) : null}
 
         {highlight ? (
-          <View className="gap-2 rounded-card bg-primary p-4">
-            <Text className="font-sans-bold text-[11px] uppercase tracking-widest text-primary-foreground opacity-70">
-              Maior evolução do mês
-            </Text>
-            <View className="flex-row items-baseline justify-between gap-2">
-              <Text className="flex-1 font-display text-[20px] leading-[24px] text-primary-foreground">
-                {highlight.title}
-              </Text>
-              <Text className="font-display text-[28px] leading-[32px] text-primary-foreground">
+          <View className="gap-2.5 rounded-card bg-primary p-4">
+            <View className="flex-row items-start justify-between gap-2">
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-sans-bold text-[12px] uppercase text-primary-foreground opacity-70">
+                  Maior evolução do mês
+                </Text>
+                <Text className="font-display text-[22px] leading-[26px] text-primary-foreground">
+                  {highlight.title}
+                </Text>
+              </View>
+              <Text className="font-display text-[40px] leading-[44px] text-primary-foreground">
                 {highlight.percent}
               </Text>
             </View>
-            <View
-              className="h-1.5 w-full overflow-hidden rounded-pill"
-              style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
-            >
+            <View className="flex-row items-center gap-2">
               <View
-                style={{
-                  width: `${highlight.barPercent}%`,
-                  height: '100%',
-                  borderRadius: 999,
-                  backgroundColor: colors.primaryForeground,
-                }}
-              />
+                className="h-2 flex-1 overflow-hidden rounded-pill"
+                style={{ backgroundColor: 'rgba(11,26,5,0.18)' }}
+              >
+                <View
+                  style={{
+                    width: `${highlight.barPercent}%`,
+                    height: '100%',
+                    borderRadius: 999,
+                    backgroundColor: colors.primaryForeground,
+                  }}
+                />
+              </View>
+              <Text className="font-sans-semibold text-[13px] text-primary-foreground opacity-80">
+                {highlight.scale}
+              </Text>
             </View>
-            <Text className="font-sans-semibold text-[13px] text-primary-foreground opacity-80">
-              {highlight.scale}
-            </Text>
           </View>
         ) : null}
 
         {query.data ? (
           <>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
-            >
+            <View className="flex-row gap-1.5">
               {RECORD_GROUP_FILTERS.map((f) => (
-                <Chip
+                <IconChip
                   key={f.value}
                   label={f.label}
                   selected={group === f.value}
                   onPress={() => setGroup(f.value)}
+                  className="flex-1 px-1"
                 />
               ))}
-            </ScrollView>
+            </View>
 
             {rows.length > 0 ? (
               <View accessibilityLabel="Recordes" className="overflow-hidden rounded-card bg-card">
@@ -101,7 +103,7 @@ export default function RecordsScreen() {
                   >
                     <View
                       className="h-10 w-10 items-center justify-center rounded-[12px]"
-                      style={{ backgroundColor: `${colors.steps}24` }}
+                      style={{ backgroundColor: `${colors.warning}24` }}
                     >
                       <Icon name="trophy" size={18} color={colors.steps} />
                     </View>

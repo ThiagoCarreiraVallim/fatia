@@ -15,7 +15,7 @@ import {
   signedDelta,
   signedPercent,
   strengthRecordCount,
-  trendPercent,
+  strengthTrend,
   workoutApi,
 } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
@@ -71,8 +71,8 @@ export function ProgressScreen() {
   const current = w?.currentWeightKg ?? null;
 
   const stepValues = steps.data?.points.map((p) => p.steps) ?? [];
-  const volumeValues = volume.data?.weeks.map((x) => x.totalVolumeKg) ?? [];
-  const strengthTrend = trendPercent(volumeValues);
+  // Volume por treino: a semana de hoje, pela metade, não vira queda.
+  const strength = strengthTrend(volume.data?.weeks ?? []);
   const pace = cardio.data ? averagePace(cardio.data) : null;
   const paceValues = (cardio.data?.points ?? [])
     .map((p) => p.paceSecondsPerKm)
@@ -94,15 +94,15 @@ export function ProgressScreen() {
       iconClass: 'text-steps',
       value: steps.data && stepValues.length ? formatInteger(steps.data.averageDaily) : '—',
       unit: '',
-      chart: <MiniBars values={bucketize(stepValues, 12)} height={22} colorClass="bg-steps" />,
+      chart: <MiniBars values={bucketize(stepValues, 7)} height={22} colorClass="bg-steps" />,
     },
     {
       label: 'Força',
       icon: 'dumbbell',
       iconClass: 'text-primary',
-      value: strengthTrend === null ? '—' : signedPercent(strengthTrend),
+      value: strength.percent === null ? '—' : signedPercent(strength.percent),
       unit: '',
-      chart: <Sparkline values={volumeValues} height={22} fill={false} />,
+      chart: <Sparkline values={strength.values} height={22} fill={false} />,
     },
     {
       label: 'Cardio',
@@ -147,7 +147,7 @@ export function ProgressScreen() {
             {current === null ? '—' : formatDecimal(current)}
             <span className="ml-1 text-base font-semibold text-muted-foreground">kg</span>
           </span>
-          <Sparkline values={weightValues} height={56} className="mt-1" />
+          <Sparkline values={weightValues} height={48} fill={false} className="mt-1" />
         </Link>
 
         <div className="grid grid-cols-3 gap-2">

@@ -42,38 +42,47 @@ export function RecordsScreen() {
       {query.isLoading && <Skeleton className="h-[360px] rounded-card" />}
 
       {highlight && (
-        <section className="flex flex-col gap-2 rounded-card bg-primary p-4 text-primary-foreground">
-          <span className="text-[11px] font-bold uppercase tracking-[0.08em] opacity-70">
-            Maior evolução do mês
-          </span>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-display text-[20px] font-bold leading-tight">
-              {highlight.title}
-            </span>
-            <span className="font-display text-[28px] font-bold tabular-nums">
+        <section className="flex flex-col gap-2.5 rounded-card bg-primary p-4 text-primary-foreground">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-[12px] font-bold uppercase opacity-70">
+                Maior evolução do mês
+              </span>
+              <span className="font-display text-[22px] font-bold leading-tight">
+                {highlight.title}
+              </span>
+            </div>
+            <span className="shrink-0 font-display text-[40px] font-bold leading-none tabular-nums">
               {highlight.percent}
             </span>
           </div>
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-pill bg-[hsl(var(--primary-foreground)/0.2)]"
-            aria-hidden
-          >
+          <div className="flex items-center gap-2">
             <div
-              className="h-full rounded-pill bg-primary-foreground"
-              style={{ width: `${highlight.barPercent}%` }}
-            />
+              className="h-2 flex-1 overflow-hidden rounded-pill bg-[hsl(var(--primary-foreground)/0.18)]"
+              aria-hidden
+            >
+              <div
+                className="h-full rounded-pill bg-primary-foreground"
+                style={{ width: `${highlight.barPercent}%` }}
+              />
+            </div>
+            <span className="shrink-0 text-[13px] font-semibold tabular-nums opacity-80">
+              {highlight.scale}
+            </span>
           </div>
-          <span className="text-[13px] font-semibold tabular-nums opacity-80">
-            {highlight.scale}
-          </span>
         </section>
       )}
 
       {query.data && (
         <>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          <div className="grid grid-cols-5 gap-1.5">
             {RECORD_GROUP_FILTERS.map((f) => (
-              <Chip key={f.value} selected={group === f.value} onClick={() => setGroup(f.value)}>
+              <Chip
+                key={f.value}
+                selected={group === f.value}
+                onClick={() => setGroup(f.value)}
+                className="justify-center px-1"
+              >
                 {f.label}
               </Chip>
             ))}
@@ -85,7 +94,7 @@ export function RecordsScreen() {
                 key={r.id}
                 className="flex items-center gap-3 px-4 py-3 [&+&]:shadow-[inset_0_1px_0_hsl(var(--border))]"
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[hsl(var(--steps)/0.14)] text-steps">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[hsl(var(--warning)/0.14)] text-steps">
                   <Icon name="trophy" size={18} />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">

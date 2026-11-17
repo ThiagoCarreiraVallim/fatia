@@ -77,52 +77,48 @@ export default function ConsistencyScreen() {
             </View>
 
             <View className="gap-3 rounded-card bg-card p-4">
-              <View className="flex-row items-start justify-between gap-2">
-                <View className="flex-1">
-                  <Text className="font-sans-bold text-[15px] text-foreground">
-                    {consistencyGridTitle(report)}
-                  </Text>
-                  <Text className="text-[12px] text-muted-foreground">
-                    {consistencyGridCaption(report)}
-                  </Text>
-                </View>
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="flex-1 font-sans-bold text-[15px] text-foreground">
+                  {consistencyGridTitle(report)}
+                </Text>
                 {report.range !== 'year' ? (
                   <View className="flex-row items-center gap-1" accessibilityElementsHidden>
-                    <Text className="text-[11px] text-muted-foreground">0</Text>
                     {[0, 1, 2, 3, 4].map((l) => (
                       <View
                         key={l}
-                        style={[{ width: 10, height: 10, borderRadius: 3 }, heatColor(l)]}
+                        style={[{ width: 10, height: 10, borderRadius: 5 }, heatColor(l)]}
                       />
                     ))}
-                    <Text className="text-[11px] text-muted-foreground">4</Text>
+                    <Text className="ml-0.5 text-[11px] text-muted-foreground">0 a 4</Text>
                   </View>
                 ) : null}
               </View>
               <Grid report={report} />
+              <Text className="text-[11px] text-muted-foreground">
+                {consistencyGridCaption(report)}
+              </Text>
             </View>
 
-            <View className="gap-3 rounded-card bg-card p-4">
-              <Text className="font-sans-bold text-[15px] text-foreground">
-                Por área <Text className="text-muted-foreground">· dias na meta</Text>
-              </Text>
+            <View className="gap-2.5 rounded-card bg-card p-4">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="font-sans-bold text-[15px] text-foreground">Por área</Text>
+                <Text className="text-[13px] text-muted-foreground">dias na meta</Text>
+              </View>
               {consistencyAreaRows(report).map((row) => (
-                <View key={row.area} className="flex-row items-center gap-3">
-                  <Icon name={row.icon} size={18} color={areaColor[row.tone]} />
-                  <Text className="w-[92px] text-sm text-foreground">{row.label}</Text>
+                <View key={row.area} className="min-h-5 flex-row items-center gap-2.5">
+                  <Icon name={row.icon} size={16} color={areaColor[row.tone]} />
+                  <Text className="w-[84px] font-sans-semibold text-[13px] text-foreground">
+                    {row.label}
+                  </Text>
                   <View className="flex-1">
                     <ProgressBar percent={row.percent} color={areaColor[row.tone]} />
                   </View>
-                  <Text className="w-[56px] text-right font-sans-bold text-[13px] text-foreground">
+                  <Text className="w-[58px] text-right text-[13px] text-muted-foreground">
                     {row.text}
                   </Text>
                 </View>
               ))}
-            </View>
-
-            <View className="flex-row items-start gap-2 px-1">
-              <Icon name="info" size={16} color={colors.mutedForeground} />
-              <Text className="flex-1 text-[13px] text-muted-foreground">
+              <Text className="border-t border-border pt-2.5 text-[13px] text-muted-foreground">
                 {consistencyTip(report)}
               </Text>
             </View>
@@ -174,7 +170,7 @@ function Grid({ report }: { report: ConsistencyReport }) {
         {weeks.map((week) => (
           <View key={week[0]!.date} className="flex-1 gap-1">
             {week.map((c) => (
-              <Cell key={c.date} cell={c} />
+              <Cell key={c.date} cell={c} height={14} />
             ))}
           </View>
         ))}
@@ -183,17 +179,17 @@ function Grid({ report }: { report: ConsistencyReport }) {
   }
 
   return (
-    <View className="gap-1.5">
-      <View className="flex-row gap-1.5" accessibilityElementsHidden>
+    <View className="gap-1">
+      <View className="flex-row gap-1" accessibilityElementsHidden>
         {CONSISTENCY_WEEKDAY_LABELS.map((l, i) => (
           <Text key={i} className="flex-1 text-center text-[11px] text-muted-foreground">
             {l}
           </Text>
         ))}
       </View>
-      <View accessible accessibilityLabel={label} className="gap-1.5">
+      <View accessible accessibilityLabel={label} className="gap-1">
         {weeks.map((week) => (
-          <View key={week[0]!.date} className="flex-row gap-1.5">
+          <View key={week[0]!.date} className="flex-row gap-1">
             {week.map((c) => (
               <Cell key={c.date} cell={c} showDay />
             ))}
@@ -204,16 +200,25 @@ function Grid({ report }: { report: ConsistencyReport }) {
   );
 }
 
-function Cell({ cell, showDay = false }: { cell: ConsistencyCell; showDay?: boolean }) {
-  if (cell.kind === 'outside') return <View style={{ flex: 1, aspectRatio: 1 }} />;
+/** A prancha: 18 de altura no mês (com o dia escrito), 14 no trimestre. */
+function Cell({
+  cell,
+  showDay = false,
+  height = 18,
+}: {
+  cell: ConsistencyCell;
+  showDay?: boolean;
+  height?: number;
+}) {
+  if (cell.kind === 'outside') return <View style={{ flex: 1, height }} />;
   const future = cell.kind === 'future';
   return (
     <View
       style={[
         {
           flex: 1,
-          aspectRatio: 1,
-          borderRadius: 6,
+          height,
+          borderRadius: 5,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -223,7 +228,8 @@ function Cell({ cell, showDay = false }: { cell: ConsistencyCell; showDay?: bool
       {showDay ? (
         <Text
           style={{
-            fontSize: 11,
+            fontSize: 10,
+            fontFamily: 'Manrope_700Bold',
             color: !future && cell.level >= 3 ? colors.primaryForeground : colors.mutedForeground,
           }}
         >

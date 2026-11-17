@@ -116,7 +116,7 @@ export function LogHistory({
         // vaul como arrastar o sheet para baixo, e o drawer fecha na cara de
         // quem só queria ver o registro de ontem. A altura precisa ser limitada
         // ou a lista empurra os botões para fora da tela.
-        <ul data-vaul-no-drag className="max-h-[190px] space-y-1.5 overflow-y-auto">
+        <ul data-vaul-no-drag className="max-h-[210px] overflow-y-auto rounded-card bg-muted">
           {entries.map((entry) => {
             const isEditing = entry.id === editingId;
             const isPending = entry.id === pendingId;
@@ -125,8 +125,9 @@ export function LogHistory({
               <li
                 key={entry.id}
                 className={cn(
-                  'flex items-center gap-2 rounded-xl bg-card px-3 py-2',
-                  isEditing && 'border border-primary',
+                  // O `.list` da prancha: um cartão, linhas separadas por um fio.
+                  'flex items-center gap-2 px-4 py-2.5 [&+&]:shadow-[inset_0_1px_0_hsl(var(--border))]',
+                  isEditing && 'rounded-card shadow-[inset_0_0_0_1.5px_hsl(var(--primary))]',
                   isPending && 'opacity-50',
                 )}
               >
@@ -140,10 +141,10 @@ export function LogHistory({
                 {entry.badge && (
                   <span
                     className={cn(
-                      'shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-bold',
+                      'shrink-0 text-[11px] font-extrabold uppercase tracking-[0.04em]',
                       entry.badge.tone === 'ok'
-                        ? 'bg-[hsl(var(--success)/0.12)] text-success'
-                        : 'bg-surface-3 text-muted-foreground',
+                        ? 'h-[22px] rounded-pill bg-primary-soft px-[9px] leading-[22px] text-primary-text'
+                        : 'px-1 text-muted-foreground',
                     )}
                   >
                     {entry.badge.label}
@@ -159,7 +160,7 @@ export function LogHistory({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 shrink-0"
+                      className="h-9 w-9 shrink-0 rounded-full bg-card"
                       aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
                       aria-pressed={isEditing}
                       disabled={isDeleting}
@@ -171,7 +172,7 @@ export function LogHistory({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 shrink-0 text-muted-foreground"
+                      className="h-9 w-9 shrink-0 rounded-full bg-card text-muted-foreground"
                       aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
                       disabled={isDeleting}
                       onClick={() => onDelete(entry)}

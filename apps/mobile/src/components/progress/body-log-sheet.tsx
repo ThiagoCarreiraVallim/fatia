@@ -54,6 +54,7 @@ export function BodyLogSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
+      snapPoints={['85%']}
     >
       <DrawerContent className="px-4">
         {kind === 'weight' ? (

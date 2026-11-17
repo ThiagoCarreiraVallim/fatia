@@ -104,6 +104,7 @@ export default function ChartsScreen() {
                 icon={k.icon as IconName}
                 label={k.label}
                 selected={kind === k.value}
+                tone="lime"
                 onPress={() => setKind(k.value)}
                 className="flex-1 px-1.5"
               />

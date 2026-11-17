@@ -155,7 +155,8 @@ export function LogWeightDrawer({ open, onClose, date, embedded = false, switche
     <>
       {switcher}
 
-      <DrawerHeader className="px-0">
+      {/* Na folha Peso/Passos (Al-G7) o título não aparece: o segmentado já diz o que é. */}
+      <DrawerHeader className={embedded && !editing ? 'sr-only' : 'px-0'}>
         <DrawerTitle>{editing ? 'Editar peso' : 'Registrar peso'}</DrawerTitle>
         <DrawerDescription>
           {editing
@@ -167,7 +168,15 @@ export function LogWeightDrawer({ open, onClose, date, embedded = false, switche
       </DrawerHeader>
       <div className="my-3 space-y-4">
         {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
-        {!editing && <LogDayField id="weight-day" day={day} today={today} onChange={setDay} />}
+        {!editing && (
+          <LogDayField
+            id="weight-day"
+            day={day}
+            today={today}
+            onChange={setDay}
+            variant={embedded ? 'nav' : 'field'}
+          />
+        )}
         <ValueStepper
           id="weight-kg"
           ref={inputRef}

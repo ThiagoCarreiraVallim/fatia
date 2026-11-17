@@ -25,6 +25,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
 /**
@@ -88,15 +89,17 @@ export function NewGoalSheet({
     >
       <DrawerContent className="px-4 pb-6">
         <DrawerHeader className="px-0">
-          <DrawerTitle>Nova meta</DrawerTitle>
-          <DrawerDescription>{goalAutoText(kind)}</DrawerDescription>
+          <DrawerTitle className="font-display text-[22px] font-bold">Nova meta</DrawerTitle>
         </DrawerHeader>
         <div data-vaul-no-drag className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
-          <div className="flex flex-wrap gap-2">
+          {/* O `.g2` da prancha: duas colunas, o tipo escolhido no verde da marca. */}
+          <div className="grid grid-cols-2 gap-2">
             {GOAL_KIND_OPTIONS.map((o) => (
               <Chip
                 key={o.kind}
                 selected={kind === o.kind}
+                tone={kind === o.kind ? 'primary' : 'default'}
+                className={cn('justify-start', kind !== o.kind && 'bg-card')}
                 onClick={() => {
                   setKind(o.kind);
                   setTarget(String(o.initialTarget));
@@ -107,6 +110,10 @@ export function NewGoalSheet({
               </Chip>
             ))}
           </div>
+          {/* Abaixo dos tipos, como na prancha: diz se o tipo escolhido se atualiza sozinho. */}
+          <DrawerDescription className="-mt-1 text-[13px] text-muted-foreground">
+            {goalAutoText(kind)}
+          </DrawerDescription>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="goal-title" className="text-sm font-medium">
@@ -118,6 +125,7 @@ export function NewGoalSheet({
               onChange={(e) => setTitle(e.target.value)}
               placeholder={option.placeholder}
               maxLength={120}
+              className="border-transparent bg-muted"
             />
           </div>
 
@@ -136,8 +144,8 @@ export function NewGoalSheet({
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium" aria-hidden>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[15px] text-muted-foreground" aria-hidden>
               Alvo
             </span>
             <ValueStepper
@@ -149,21 +157,25 @@ export function NewGoalSheet({
               decimals={option.step < 1 ? 1 : 0}
               base={option.initialTarget}
               unit={kind === 'custom' ? unit || option.unit : option.unit}
+              size="sm"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Prazo</span>
-            <div className="flex flex-wrap gap-2">
-              {choices.map((c) => (
-                <Chip
-                  key={c.value}
-                  selected={deadlineChoice === c.value}
-                  onClick={() => setDeadlineChoice(c.value)}
-                >
-                  {c.label}
-                </Chip>
-              ))}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[15px] text-muted-foreground">Prazo</span>
+              <div className="flex gap-1.5" role="group" aria-label="Prazo">
+                {choices.map((c) => (
+                  <Chip
+                    key={c.value}
+                    selected={deadlineChoice === c.value}
+                    onClick={() => setDeadlineChoice(c.value)}
+                    className={cn('h-[34px] px-3', deadlineChoice !== c.value && 'bg-card')}
+                  >
+                    {c.label}
+                  </Chip>
+                ))}
+              </div>
             </div>
             {deadlineChoice === 'pick' && (
               <>

@@ -18,7 +18,7 @@ import {
   Button,
   Drawer,
   DrawerContent,
-  DrawerDescription,
+  cn,
   DrawerFooter,
   DrawerHeader,
   DrawerScrollView,
@@ -84,28 +84,33 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
           onClose();
         }
       }}
+      snapPoints={['85%']}
     >
       <DrawerContent className="px-4">
         <DrawerHeader className="px-0">
-          <DrawerTitle>Nova meta</DrawerTitle>
-          <DrawerDescription>{goalAutoText(kind)}</DrawerDescription>
+          <DrawerTitle className="font-display text-[22px] leading-[28px]">Nova meta</DrawerTitle>
         </DrawerHeader>
-        <DrawerScrollView style={{ maxHeight: 460 }}>
+        <DrawerScrollView style={{ flex: 1 }}>
           <View className="gap-4 py-2">
-            <View className="flex-row flex-wrap gap-2">
+            {/* O `.g2` da prancha: duas colunas, o tipo escolhido no verde da marca. */}
+            <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
               {GOAL_KIND_OPTIONS.map((o) => (
-                <IconChip
-                  key={o.kind}
-                  icon={o.icon as IconName}
-                  label={o.label}
-                  selected={kind === o.kind}
-                  onPress={() => {
-                    setKind(o.kind);
-                    setTarget(String(o.initialTarget));
-                  }}
-                />
+                <View key={o.kind} style={{ width: '50%', padding: 4 }}>
+                  <IconChip
+                    icon={o.icon as IconName}
+                    label={o.label}
+                    selected={kind === o.kind}
+                    tone="lime"
+                    onPress={() => {
+                      setKind(o.kind);
+                      setTarget(String(o.initialTarget));
+                    }}
+                    className={kind === o.kind ? 'justify-start' : 'justify-start bg-card'}
+                  />
+                </View>
               ))}
             </View>
+            <Text className="-mt-2 text-[13px] text-muted-foreground">{goalAutoText(kind)}</Text>
 
             <SheetField
               label="Título"
@@ -125,8 +130,8 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
               />
             ) : null}
 
-            <View className="gap-1.5">
-              <Text className="font-sans-semibold text-sm text-foreground">Alvo</Text>
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-[15px] text-muted-foreground">Alvo</Text>
               <ValueStepper
                 label="Alvo"
                 value={target}
@@ -135,20 +140,24 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
                 decimals={option.step < 1 ? 1 : 0}
                 base={option.initialTarget}
                 unit={kind === 'custom' ? unit || option.unit : option.unit}
+                size="sm"
               />
             </View>
 
             <View className="gap-1.5">
-              <Text className="font-sans-semibold text-sm text-foreground">Prazo</Text>
-              <View className="flex-row flex-wrap gap-2">
-                {choices.map((c) => (
-                  <IconChip
-                    key={c.value}
-                    label={c.label}
-                    selected={deadlineChoice === c.value}
-                    onPress={() => setDeadlineChoice(c.value)}
-                  />
-                ))}
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="text-[15px] text-muted-foreground">Prazo</Text>
+                <View className="flex-row gap-1.5">
+                  {choices.map((c) => (
+                    <IconChip
+                      key={c.value}
+                      label={c.label}
+                      selected={deadlineChoice === c.value}
+                      onPress={() => setDeadlineChoice(c.value)}
+                      className={cn('min-h-[34px] px-3', deadlineChoice !== c.value && 'bg-card')}
+                    />
+                  ))}
+                </View>
               </View>
               {deadlineChoice === 'pick' ? (
                 <SheetField
@@ -171,7 +180,7 @@ export function NewGoalSheet({ open, onClose }: { open: boolean; onClose: () => 
             {create.isError ? <FormMessage>Não deu para criar. Tente de novo.</FormMessage> : null}
           </View>
         </DrawerScrollView>
-        <DrawerFooter className="px-0">
+        <DrawerFooter className="px-0 pb-8">
           <Button
             disabled={!valid || deadlineInvalid}
             loading={create.isPending}
