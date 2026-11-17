@@ -131,6 +131,8 @@ describe('HttpAgentAdapter.openTurn', () => {
       conversationId: CONVERSA,
       message: 'tomei 3 insulinas hoje',
       timezone: 'America/Sao_Paulo',
+      // Quem não diz não liga a busca (#384): o corpo sempre leva o modo.
+      webSearch: 'off',
       history: [{ role: 'assistant', content: 'oi, tudo bem?' }],
       memories: [],
     });

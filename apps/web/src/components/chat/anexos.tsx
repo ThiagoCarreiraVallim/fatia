@@ -14,9 +14,8 @@ import { field } from '@/components/elements/surfaces';
 
 /**
  * A miniatura de uma foto do turno: do arquivo escolhido enquanto está no
- * composer, da parte de imagem recodificada depois de enviada. Nenhuma das duas
- * sai desta aba — depois de recarregar, a fala mostra só o aviso de que a foto
- * existiu (`AVISO_DE_FOTO`).
+ * composer, da parte de imagem depois de enviada (a URL assinada da foto
+ * guardada, ADR 046). Depois de recarregar, quem desenha é `FotoDaFala`.
  */
 function Miniatura({ className }: { className?: string }) {
   const arquivo = useAuiState((s) => s.attachment.file);
@@ -81,5 +80,23 @@ export function AnexosDaMensagem() {
         )}
       </MessagePrimitive.Attachments>
     </div>
+  );
+}
+
+/**
+ * A foto guardada, de volta depois de um F5 (ADR 046). Na aba que mandou, a
+ * mesma foto aparece como anexo (`AnexosDaMensagem`), e o runtime tira a parte
+ * de imagem repetida; ao recarregar, ela volta como parte da fala.
+ */
+export function FotoDaFala({ image }: { image: string }) {
+  return (
+    <Image
+      src={image}
+      alt="Foto enviada"
+      width={96}
+      height={96}
+      unoptimized
+      className="my-1 size-24 rounded-lg object-cover"
+    />
   );
 }

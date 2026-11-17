@@ -65,8 +65,13 @@ export interface ChatUserMessage {
   role: 'user';
   id: string;
   text: string;
-  /** Quantas fotos foram junto. A foto não fica guardada (ADR 004). */
+  /** Quantas fotos foram pelo caminho antigo, que não guarda a foto (ADR 020). */
   photos: number;
+  /**
+   * As fotos guardadas (ADR 046), para desenhar: o arquivo do aparelho enquanto
+   * a conversa está aberta, a URL assinada depois de reabrir.
+   */
+  images?: string[];
 }
 
 export interface ChatAssistantMessage {
@@ -339,7 +344,7 @@ function lastAssistant(messages: ChatThreadMessage[]): ChatAssistantMessage | un
 /** A pergunta da pessoa, já na tela antes de a resposta chegar. */
 export function appendUserMessage(
   state: ChatThreadState,
-  message: { id: string; text: string; photos?: number },
+  message: { id: string; text: string; photos?: number; images?: string[] },
 ): ChatThreadState {
   return {
     ...state,
@@ -348,7 +353,13 @@ export function appendUserMessage(
     interrupt: null,
     messages: [
       ...state.messages,
-      { role: 'user', id: message.id, text: message.text, photos: message.photos ?? 0 },
+      {
+        role: 'user',
+        id: message.id,
+        text: message.text,
+        photos: message.photos ?? 0,
+        ...(message.images?.length ? { images: message.images } : {}),
+      },
     ],
   };
 }
@@ -369,6 +380,9 @@ export function threadFromHistory(rows: readonly ChatHistoryMessage[]): ChatThre
           id: row.id,
           text: row.content,
           photos: row.metadata?.photos ?? 0,
+          ...(row.photos?.some((f) => f.url)
+            ? { images: row.photos.flatMap((f) => (f.url ? [f.url] : [])) }
+            : {}),
         });
       }
       continue;

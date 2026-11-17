@@ -59,4 +59,15 @@ export class SearchExerciseTool implements McpToolDef {
   ) {
     return this.exercises.search(userId, input);
   }
+
+  /** Os exercícios achados, com o grupo muscular: é por ele que a pessoa escolhe. */
+  artifact(result: unknown) {
+    const exercicios = result as Awaited<ReturnType<ExerciseService['search']>>;
+    return {
+      kind: 'report',
+      label: 'Exercícios encontrados',
+      columns: ['Exercício', 'Grupo'],
+      rows: exercicios.map((exercicio) => [exercicio.name, exercicio.muscleGroup]),
+    };
+  }
 }

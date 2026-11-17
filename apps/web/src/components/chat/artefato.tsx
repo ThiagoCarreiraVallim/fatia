@@ -201,9 +201,9 @@ export function Artefato({ artefato }: { artefato: ChatArtifact }) {
         <LinhaDoTempo artefato={artefato} />
       ) : artefato.kind === 'comparison' ? (
         <Comparacao artefato={artefato} />
-      ) : (
+      ) : artefato.kind === 'report' ? (
         <Relatorio artefato={artefato} />
-      )}
+      ) : null}
     </figure>
   );
 }

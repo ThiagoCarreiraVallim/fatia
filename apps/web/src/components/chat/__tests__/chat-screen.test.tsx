@@ -246,6 +246,40 @@ describe('ChatScreen', () => {
     expect(await screen.findByText('Bom dia!')).toBeInTheDocument();
   });
 
+  it('citar um trecho da resposta: ele vai na frente da pergunta seguinte e aparece como citação', async () => {
+    montar();
+    const user = await enviar('quanto de proteína tem o frango?');
+    fontes[0].emitir(fragmento('ai-1', 'Frango grelhado: 31 g de proteína por 100 g.'));
+    fontes[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    const resposta = await screen.findByText('Frango grelhado: 31 g de proteína por 100 g.');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeInTheDocument(),
+    );
+
+    // Seleciona um pedaço da resposta, como o mouse faria. O jsdom não mede
+    // layout: a barra só precisa de um retângulo para se posicionar.
+    const texto = resposta.firstChild!;
+    const faixa = document.createRange();
+    faixa.getBoundingClientRect = () => new DOMRect(0, 100, 50, 10);
+    faixa.setStart(texto, 0);
+    faixa.setEnd(texto, 'Frango grelhado: 31 g'.length);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(faixa);
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    await user.click(await screen.findByRole('button', { name: 'Citar' }));
+
+    expect(await screen.findByLabelText('Trecho citado')).toHaveTextContent(
+      'Frango grelhado: 31 g',
+    );
+    await enviar('e o peixe?');
+
+    expect(corpos[1]).toMatchObject({ message: '> Frango grelhado: 31 g\n\ne o peixe?' });
+    expect(screen.queryByLabelText('Trecho citado')).not.toBeInTheDocument();
+    const citacao = await screen.findByRole('blockquote');
+    expect(citacao).toHaveTextContent('Frango grelhado: 31 g');
+  });
+
   it('o campo espera a conversa abrir, em vez de perder o que foi digitado', async () => {
     // A chegada à conversa da URL zera o composer; o que se digitasse antes sumia.
     listaLiberada = new Promise((resolve) => {

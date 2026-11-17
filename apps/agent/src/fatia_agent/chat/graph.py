@@ -84,7 +84,15 @@ from ..providers.base import ReasoningDelta, TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
 from . import app_only, events, human, web
 from .artefatos import artefato
-from .errors import McpError, McpToolArgumentsInvalid, McpToolRejected
+from .errors import (
+    McpError,
+    McpRefused,
+    McpResponseUnparseable,
+    McpTimeout,
+    McpToolArgumentsInvalid,
+    McpToolRejected,
+    McpUnreachable,
+)
 from .planejador import com_status, planejar
 from .qualidade import (
     MAX_REFLEXOES,
@@ -100,6 +108,7 @@ from .state import ContextoDoTurno, EstadoDaConversa, FotoDoTurno, estado_vazio
 from .tool_policy import (
     argumentos_do_modelo,
     camada_confirmavel,
+    camada_read_only,
     exigir_permitida,
     formato_openai,
 )
@@ -149,6 +158,31 @@ LIMITE_DE_PASSOS = (
 )
 
 GrafoDaConversa = CompiledStateGraph[EstadoDaConversa, ContextoDoTurno, Any, Any]
+
+
+# Falhas do caminho até o `/mcp` que passam sozinhas: rede, timeout, 429/5xx e
+# resposta quebrada. Viram resultado de tool com erro para o modelo tentar de
+# novo, em vez de derrubar o turno. 401/403 (`McpUnauthorized`) fica de fora: é o
+# token de quem conversa, e repetir não conserta.
+FALHAS_TEMPORARIAS = (McpTimeout, McpUnreachable, McpRefused, McpResponseUnparseable)
+
+
+def falha_temporaria(somente_leitura: bool) -> str:
+    """O que o modelo lê quando a tool não respondeu por um problema passageiro.
+
+    A escrita não é dada como falha: a gravação pode ter chegado e só a resposta
+    ter se perdido. Repetir às cegas registraria a refeição duas vezes.
+    """
+    if somente_leitura:
+        return (
+            "Falha temporária ao falar com o servidor; nada foi alterado. "
+            "Tente esta mesma chamada de novo uma vez antes de avisar a pessoa."
+        )
+    return (
+        "Falha temporária ao falar com o servidor, e não deu para confirmar se a "
+        "alteração foi gravada. Antes de tentar de novo, consulte com uma leitura "
+        "se ela já aparece; se aparecer, não repita."
+    )
 
 
 def _cortado(conteudo: str) -> str:
@@ -466,7 +500,9 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         texto: list[str] = []
         fim: TurnEnd | None = None
         async for pedaco in contexto.provider.stream_chat(
-            prompt, tools=catalogo, capacidade="vision" if contexto.fotos else "text"
+            prompt,
+            tools=catalogo,
+            capacidade="vision" if contexto.fotos else "text",
         ):
             if isinstance(pedaco, ReasoningDelta):
                 # Só para a tela: o raciocínio não entra em `texto`, então não vai
@@ -497,6 +533,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                             cached_input_units=pedaco.usage.cached_input_units,
                             reasoning_units=pedaco.usage.reasoning_units,
                             cost_usd=pedaco.usage.cost_usd,
+                            web_searches=pedaco.usage.web_searches,
                         )
                     )
 
@@ -547,6 +584,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         indice, pedido = encontrada
         respondidas = _respondidas(mensagens, indice)
         confirmaveis = {tool.name for tool in camada_confirmavel(contexto.permitidas)}
+        leituras = {tool.name for tool in camada_read_only(contexto.permitidas)}
         decisoes = state.get("decisoes") or {}
         novas: list[ToolMessage] = []
 
@@ -624,7 +662,11 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 exigir_permitida(nome, contexto.permitidas)
                 if nome in confirmaveis:
                     _exigir_argumentos_no_teto(nome, chamada["args"])
-                saida = await contexto.client.call_tool(nome, chamada["args"])
+                # Leitura repete uma vez a queda de conexão dentro do cliente
+                # (`McpClient._rpc`); escrita nunca, pelo risco de gravar duas vezes.
+                saida = await contexto.client.call_tool(
+                    nome, chamada["args"], read_only=nome in leituras
+                )
                 novas.append(
                     resultado(
                         saida.text,
@@ -637,6 +679,12 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                 # para ele ler e se corrigir — derrubar a conversa trocaria "pedi
                 # a tool errada" por "o chat caiu".
                 novas.append(resultado(exc.message, erro=True))
+            except FALHAS_TEMPORARIAS:
+                # Passageira: o modelo lê e tenta de novo na rodada seguinte. Os
+                # tetos que já existem seguram o laço — duas falhas seguidas da
+                # mesma tool viram reflexão (`LIMIAR_DE_FALHAS`), e as rodadas
+                # têm teto (`MAX_RODADAS_DE_TOOL`).
+                novas.append(resultado(falha_temporaria(nome in leituras), erro=True))
 
         if not novas:
             return {}
@@ -1019,6 +1067,9 @@ async def _search(
                 cached_input_units=achado.usage.cached_input_units,
                 reasoning_units=achado.usage.reasoning_units,
                 cost_usd=achado.usage.cost_usd,
+                # A busca em si é cobrada à parte do token, na cota da pessoa: um
+                # lançamento por busca (`leitor-do-turno.ts`).
+                web_searches=1,
             )
         )
     if not achado.sources:

@@ -89,6 +89,10 @@ class Usage:
     # LM Studio não manda, e o `apps/api` continua calculando pela tabela de preço:
     # isto é só para o eval.
     cost_usd: float | None = None
+    # Quantas buscas na web o gateway fez dentro da chamada
+    # (`usage.server_tool_use_details.web_search_requests` do OpenRouter). Cada
+    # uma é cobrada à parte do token, e o `apps/api` lança cada uma na cota.
+    web_searches: int | None = None
 
 
 @dataclass(frozen=True)

@@ -44,6 +44,21 @@ Não fazer push nem PR. Pranchas baixadas em `/home/thiago/Documentos/pessoal/fa
   busca na web — manter só UMA implementação (a melhor), com cobrança na cota se fizer sentido.
   Migrations da branch precisam ordenar depois das da main. Regenerar números do MCP depois.
 
+## Merge da `feat/chat-fotos-busca-fila-cartoes` (feito)
+
+- Busca na web: ficou a da #384 (tool local `web_search`, pergunta limpa, aceite, cartão de
+  fontes). Saiu a da branch (tool de servidor `openrouter:web_search` dentro da chamada do
+  modelo, sem aceite, com a conversa inteira no contexto e fontes em markdown no texto):
+  `WEB_SEARCH_TOOL`, `stream_chat(web_search=)`, `TurnEnd.sources`, `fontes.py`,
+  `test_busca_na_web.py`. Ficou da branch a cobrança por busca: `usage.webSearches` →
+  `leitor-do-turno.ts` → `AiUsage` `web_search`/`openrouter-web-search` (a `_search` manda 1).
+- Ficaram: retry do `/mcp` (`FALHAS_TEMPORARIAS`), fila de mensagens, citar trecho, foto do chat
+  no R2 (para a #385). Cartões da branch ficaram; `get_active_workout_session` virou Lista rica.
+- ADR da foto do chat renumerada 038 → **046** (a 038 da main é a foto da refeição); só as
+  referências que a branch criou mudaram.
+- Migration da branch renomeada 20261105120000 → **20261117030000_chat_photos_in_media_file**.
+- `reencode` do `media.service` ganhou `{ side, format }` para servir as duas fotos.
+
 ## Checklist
 
 - [x] 1. API: `card`/`appOnly` em todas as tools + spec + `GET /chat/tool-catalog`

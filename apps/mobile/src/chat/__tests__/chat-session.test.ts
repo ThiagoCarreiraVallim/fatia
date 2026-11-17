@@ -71,6 +71,7 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 const { ChatSession } = await import('../chat-session');
+const { ApiError, PHOTO_ONLY_QUESTION } = await import('@fatia/api-client');
 const respirar = () => new Promise((r) => setTimeout(r, 0));
 const fragmento = (id: string, content: string): ChatStreamFrame => ({
   event: 'messages',
@@ -85,6 +86,64 @@ beforeEach(() => {
   turnos.length = 0;
   lives.length = 0;
   conversa = null;
+});
+
+describe('ChatSession — fotos (ADR 046)', () => {
+  const foto = { uri: 'file:///prato.jpg', data: '/9j/2Q==' };
+
+  it('sobe a foto antes do turno, e o turno leva o id e não o base64', async () => {
+    const subir = vi.fn(async () => ({ id: 'foto-1', url: 'https://b/ler', width: 1, height: 1 }));
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    const id = s.startNew();
+
+    void s.send({ text: 'o que tem aqui?', photos: [foto] });
+    await respirar();
+
+    expect(subir).toHaveBeenCalledWith(foto);
+    expect(turnos[0]).toEqual({
+      conversationId: id,
+      message: 'o que tem aqui?',
+      photoIds: ['foto-1'],
+    });
+    expect(s.getSnapshot().thread.messages[0]).toMatchObject({
+      role: 'user',
+      images: ['file:///prato.jpg'],
+      photos: 0,
+    });
+  });
+
+  it('instância sem bucket (503) manda a foto em base64, sem guardar', async () => {
+    const subir = vi.fn(async () => {
+      throw new ApiError('sem bucket', 503);
+    });
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    const id = s.startNew();
+
+    void s.send({ text: '', photos: [foto] });
+    await respirar();
+
+    expect(turnos[0]).toEqual({
+      conversationId: id,
+      message: PHOTO_ONLY_QUESTION,
+      photos: [{ mediaType: 'image/jpeg', data: '/9j/2Q==' }],
+    });
+  });
+
+  it('outra falha do envio para o turno e mostra o erro', async () => {
+    const subir = vi.fn(async () => {
+      throw new ApiError('cheio', 413, { code: 'AI_UNKNOWN_ERROR' });
+    });
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    s.startNew();
+
+    await s.send({ text: 'e esta?', photos: [foto] });
+
+    expect(turnos).toHaveLength(0);
+    expect(s.getSnapshot().thread).toMatchObject({
+      running: false,
+      error: { code: 'AI_UNKNOWN_ERROR' },
+    });
+  });
 });
 
 describe('ChatSession', () => {
@@ -206,6 +265,114 @@ describe('ChatSession', () => {
       resume: { interruptId: 'p1', value: { approvals: { c1: true } } },
     });
     expect(s.getSnapshot().thread.interrupt).toBeNull();
+  });
+
+  it('fila: o que se escreve durante a resposta sai depois dela, uma por vez', async () => {
+    const s = sessao();
+    const id = s.startNew();
+    void s.send({ text: 'primeira' });
+    await respirar();
+    s.enqueue('segunda');
+    s.enqueue('  terceira  ');
+    s.enqueue('   ');
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['segunda', 'terceira']);
+
+    fontes[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['primeira', 'segunda']);
+    expect(turnos[1].conversationId).toBe(id);
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['terceira']);
+
+    fontes[1].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[1].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['primeira', 'segunda', 'terceira']);
+    expect(s.getSnapshot().queue).toEqual([]);
+  });
+
+  it('fila: com uma pausa aberta ela espera, e anda depois da resposta à pausa', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'registra 200 g de frango' });
+    await respirar();
+    s.enqueue('e o jantar?');
+    fontes[0].emitir(
+      {
+        event: 'updates',
+        data: {
+          __interrupt__: [{ id: 'p1', value: { kind: 'confirm', prompt: 'ok?', actions: [] } }],
+        },
+      },
+      { event: 'done', data: { status: 'interrupted' } },
+    );
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos).toHaveLength(1);
+    expect(s.getSnapshot().queue).toHaveLength(1);
+
+    void s.resume({ approvals: { c1: true } });
+    await respirar();
+    fontes[1].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[1].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.at(-1)).toMatchObject({ message: 'e o jantar?' });
+  });
+
+  it('fila: tirar um item e trocar de conversa descartam; parar não', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    s.enqueue('fica');
+    s.enqueue('sai');
+    s.dequeue(s.getSnapshot().queue[1].id);
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['fica']);
+
+    await s.stop();
+    await respirar();
+    expect(turnos.at(-1)).toMatchObject({ message: 'fica' });
+
+    s.enqueue('da velha');
+    s.startNew();
+    expect(s.getSnapshot().queue).toEqual([]);
+  });
+
+  it('citar: o trecho vai na frente da próxima mensagem e sai do campo', async () => {
+    const s = sessao();
+    s.startNew();
+    s.setQuote('Frango: 31 g de proteína');
+    expect(s.getSnapshot().quote).toBe('Frango: 31 g de proteína');
+
+    void s.send({ text: 'e o peixe?' });
+    await respirar();
+    expect(turnos[0].message).toBe('> Frango: 31 g de proteína\n\ne o peixe?');
+    expect(s.getSnapshot().thread.messages[0]).toMatchObject({ text: turnos[0].message });
+    expect(s.getSnapshot().quote).toBeNull();
+  });
+
+  it('citar: o item da fila leva a citação dele, e não a que estiver no campo ao sair', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    s.setQuote('trecho A');
+    s.enqueue('sobre A');
+    s.setQuote('trecho B');
+
+    fontes[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos[1].message).toBe('> trecho A\n\nsobre A');
+    expect(s.getSnapshot().quote).toBe('trecho B');
+
+    s.startNew();
+    expect(s.getSnapshot().quote).toBeNull();
   });
 
   it('trocar de conversa no meio da resposta não deixa a anterior escrever na nova', async () => {

@@ -34,9 +34,39 @@ describe('política de privacidade — reconhecimento por foto', () => {
     // A foto agora vai do aplicativo para a API do Fatia e de lá para o
     // provedor de visão. Dizer o contrário é o oposto do que acontece.
     expect(secao('O que NÃO coletamos')).not.toMatch(/nunca chega ao Fatia/i);
-    // O que continua verdade — e é o que a pessoa precisa saber — é que nada é
-    // guardado. A frase não pode simplesmente sumir junto com a mentira.
-    expect(secao('O que NÃO coletamos')).toMatch(/nenhuma imagem é armazenada/i);
+    // O que continua verdade — e é o que a pessoa precisa saber — é que a foto
+    // do reconhecimento não é guardada. A frase não pode sumir junto com a
+    // mentira.
+    expect(secao('O que NÃO coletamos')).toMatch(/não é gravada em lugar nenhum/i);
+    // "Nenhuma imagem é armazenada" ficou falsa com a foto do chat (ADR 046).
+    expect(secao('O que NÃO coletamos')).not.toMatch(/nenhuma imagem é armazenada/i);
+  });
+});
+
+describe('política de privacidade — foto do chat guardada (ADR 046)', () => {
+  it('diz que a foto do chat é guardada, sem metadado, e até quando', () => {
+    render(<PrivacyPage />);
+
+    const coletados = secao('Quais dados coletamos');
+    expect(coletados).toMatch(/fotos que você manda no chat/i);
+    expect(coletados).toMatch(/sem metadado/i);
+    expect(coletados).toMatch(/apagar a conversa apaga as fotos/i);
+  });
+
+  it('nomeia o buscador da busca na web, e diz que ele recebe só a consulta', () => {
+    render(<PrivacyPage />);
+
+    const terceiros = secao('Com quem compartilhamos');
+    expect(terceiros).toMatch(/Exa, pelo OpenRouter/);
+    expect(terceiros).toMatch(/só o texto da busca/i);
+    // A retenção zero não cobre o buscador, e a página não pode sugerir o contrário.
+    expect(terceiros).toMatch(/fora da retenção zero/i);
+  });
+
+  it('nomeia quem guarda o arquivo', () => {
+    render(<PrivacyPage />);
+
+    expect(secao('Com quem compartilhamos')).toMatch(/Cloudflare R2/);
   });
 
   it('não afirma mais que não há chave de API de LLM no servidor', () => {

@@ -7,7 +7,7 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react';
-import { ArrowUpIcon, SquareIcon } from 'lucide-react';
+import { ArrowUpIcon, ListPlusIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { field, inkButton } from './surfaces';
 
@@ -58,6 +58,8 @@ export function MobileComposer({
   onValueChange,
   onSend,
   onStop,
+  onQueue,
+  queueLabel = 'Enviar depois desta resposta',
   onFocus,
   onBlur,
   className,
@@ -97,9 +99,17 @@ export function MobileComposer({
   onValueChange?: (value: string) => void;
   onSend?: () => void;
   onStop?: () => void;
+  /**
+   * Com resposta em andamento, guarda o que foi escrito para depois dela. Sem
+   * isto, o Enter não faz nada enquanto o assistente responde.
+   */
+  onQueue?: () => void;
+  queueLabel?: string;
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
+  const temTexto = canSend ?? value.trim() !== '';
+  const enfileiravel = running && Boolean(onQueue) && temTexto;
   const proprio = useRef<HTMLTextAreaElement>(null);
   const campo = ref ?? proprio;
 
@@ -144,7 +154,9 @@ export function MobileComposer({
               // metade.
               if (event.nativeEvent.isComposing) return;
               event.preventDefault();
-              if (!disabled && !running && (canSend ?? value.trim() !== '')) onSend?.();
+              if (disabled) return;
+              if (enfileiravel) onQueue?.();
+              else if (!running && temTexto) onSend?.();
             }}
             placeholder={placeholder}
             aria-label={label}
@@ -154,6 +166,20 @@ export function MobileComposer({
           />
         </div>
 
+        {enfileiravel ? (
+          <button
+            type="button"
+            aria-label={queueLabel}
+            onClick={onQueue}
+            disabled={disabled}
+            className={cn(
+              field,
+              'flex size-9 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25',
+            )}
+          >
+            <ListPlusIcon className="size-4" aria-hidden />
+          </button>
+        ) : null}
         <button
           type="button"
           aria-label={running ? stopLabel : sendLabel}

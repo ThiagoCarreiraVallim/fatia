@@ -384,7 +384,7 @@ async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_fac
 async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_factory):
     class ProvedorQueCai:
         async def stream_chat(
-            self, messages, *, tools=(), capacidade="text"
+            self, messages, *, tools=(), capacidade="text", web_search=False
         ) -> AsyncIterator[TextDelta]:
             from fatia_agent.providers.errors import AIProviderTimeout
 
@@ -409,7 +409,7 @@ async def test_defeito_nosso_vira_evento_de_erro_e_traceback_no_log(settings_fac
     """
 
     class ProvedorComDefeito:
-        def stream_chat(self, messages, *, tools=(), capacidade="text") -> Never:
+        def stream_chat(self, messages, *, tools=(), capacidade="text", web_search=False) -> Never:
             raise ZeroDivisionError("defeito de programação")
 
     fluxo = await _fluxo(ProvedorComDefeito(), mensagem="oi")
@@ -501,6 +501,7 @@ class ProvedorComPortao:
         *,
         tools: Sequence[dict[str, object]] = (),
         capacidade: str = "text",
+        web_search: bool = False,
     ) -> AsyncIterator[TextDelta | TurnEnd]:
         self._chamadas += 1
         if self._chamadas > 1:

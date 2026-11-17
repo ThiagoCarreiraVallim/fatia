@@ -148,6 +148,6 @@ describe('textos dos aceites (#384)', () => {
 
   it('o 403 do aceite tem texto próprio', () => {
     expect(CHAT_ERROR_CODES).toContain('AI_CONSENT_REQUIRED');
-    expect(textoDeErroDoChat({ code: 'AI_CONSENT_REQUIRED', message: '' })).toMatch(/aceite/i);
+    expect(textoDeErroDoChat({ code: 'AI_CONSENT_REQUIRED' })).toMatch(/aceite/i);
   });
 });

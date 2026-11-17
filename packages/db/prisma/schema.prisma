@@ -1758,6 +1758,8 @@ model Message {
   createdAt      DateTime       @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// As fotos que a pessoa mandou nesta mensagem, guardadas no bucket (ADR 046).
+  photos       MediaFile[]  @relation("ChatPhoto")
 
   /// **Sem `userId` aqui, de propósito.** O dono é a conversa, e uma segunda
   /// coluna de dono é uma segunda verdade que pode divergir da primeira — o
@@ -2126,8 +2128,17 @@ model MediaFile {
   userAvatarOf   User?                    @relation("UserAvatar")
   mealPhotoOf    Meal?                    @relation("MealPhoto")
 
+  /// Foto do chat (ADR 046): a mensagem da pessoa que a levou, e a ordem nela.
+  /// `SetNull` e não `Cascade`: apagar a conversa apaga as mensagens no banco,
+  /// e a linha da foto precisa sobreviver até o objeto sair do bucket. Quem
+  /// varre é o `ConversationService.apagar`; a faxina de órfãos é a rede.
+  chatMessageId String?
+  chatPosition  Int?
+  chatMessage   Message? @relation("ChatPhoto", fields: [chatMessageId], references: [id], onDelete: SetNull)
+
   @@index([groupId])
   @@index([uploaderId])
+  @@index([chatMessageId])
   @@index([status, createdAt])
 }
 

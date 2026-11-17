@@ -62,6 +62,12 @@ export type TurnSummary = {
   /** `toolCallId` → a carga tipada que a tela desenha (`artifact`), já normalizada pelo agente. */
   artifacts: Record<string, Record<string, unknown>>;
   usoPorModelo: Map<string, UnidadesDoModelo>;
+  /**
+   * Quantas buscas na web o modelo fez no turno (a tool de servidor do OpenRouter,
+   * `webSearches` no `usage`). À parte do token: cada uma é um lançamento na cota,
+   * com o preço da busca.
+   */
+  buscasNaWeb: number;
   status: TurnStatus;
   pausa: PausaDoTurno | null;
   /** O id da última mensagem do assistente, como a tela a conhece. */
@@ -121,6 +127,7 @@ export function createTurnReader() {
   const toolResults = new Map<string, ToolResultRecord>();
   const artifacts: Record<string, Record<string, unknown>> = {};
   const usoPorModelo = new Map<string, UnidadesDoModelo>();
+  let buscasNaWeb = 0;
   let status: TurnStatus = 'error';
   let pausa: PausaDoTurno | null = null;
   let runId: string | null = null;
@@ -226,6 +233,8 @@ export function createTurnReader() {
             inputUnits: somarUnidade(acumulado.inputUnits, numeroOuIndefinido(dados.inputUnits)),
             outputUnits: somarUnidade(acumulado.outputUnits, numeroOuIndefinido(dados.outputUnits)),
           });
+          const buscas = numeroOuIndefinido(dados.webSearches);
+          if (buscas !== undefined && Number.isInteger(buscas) && buscas > 0) buscasNaWeb += buscas;
           return;
         }
         case 'done': {
@@ -251,6 +260,7 @@ export function createTurnReader() {
         toolResults: [...toolResults.values()],
         artifacts: { ...artifacts },
         usoPorModelo,
+        buscasNaWeb,
         status,
         pausa: status === 'interrupted' ? pausa : null,
         ultimaMensagemId: ids.at(-1) ?? null,

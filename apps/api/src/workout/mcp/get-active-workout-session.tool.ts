@@ -25,4 +25,26 @@ export class GetActiveWorkoutSessionTool implements McpToolDef {
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
     return this.sessions.findActive(userId);
   }
+
+  /** As séries do treino aberto. Sem treino aberto não há cartão. */
+  artifact(result: unknown) {
+    const sessao = result as Awaited<ReturnType<WorkoutSessionService['findActive']>>;
+    if (!sessao) return null;
+    return {
+      kind: 'list',
+      label: 'Treino em andamento',
+      items: sessao.sets.map((serie) => ({
+        title: serie.exercise.name,
+        detail: [
+          `Série ${serie.setNumber}`,
+          [serie.weightKg != null ? `${serie.weightKg} kg` : null, serie.reps ?? null]
+            .filter((x) => x != null)
+            .join(' × '),
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+      total: `${sessao.sets.length} ${sessao.sets.length === 1 ? 'série' : 'séries'}`,
+    };
+  }
 }

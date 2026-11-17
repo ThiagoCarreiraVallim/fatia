@@ -180,6 +180,28 @@ describe('threadFromHistory', () => {
     ...extra,
   });
 
+  it('a foto guardada volta como imagem na fala, e a sem URL fica de fora (ADR 046)', () => {
+    const s = threadFromHistory([
+      linha({
+        id: 'u1',
+        role: 'user',
+        content: 'o que tem aqui?',
+        photos: [
+          { id: 'f1', url: 'https://b/f1', width: 1, height: 1 },
+          { id: 'f2', url: null, width: null, height: null },
+        ],
+      }),
+    ]);
+
+    expect(s.messages[0]).toEqual({
+      role: 'user',
+      id: 'u1',
+      text: 'o que tem aqui?',
+      photos: 0,
+      images: ['https://b/f1'],
+    });
+  });
+
   it('refaz a conversa com desfechos, cartões, voto e a pausa aberta', () => {
     const s = threadFromHistory([
       linha({ id: 'u1', role: 'user', content: 'almocei', metadata: { photos: 1 } }),

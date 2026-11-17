@@ -292,7 +292,8 @@ async def test_erro_do_turno_vai_para_o_log(settings_factory, caplog):
         corpo = json.loads(request.content)
         if corpo["method"] == "tools/list":
             return duplo_do_mcp(catalogo=CATALOGO).handle_request(request)
-        return httpx.Response(503)
+        # 401: o 503 passou a voltar ao modelo como falha passageira de tool.
+        return httpx.Response(401)
 
     caplog.set_level(logging.WARNING)
     await turno(

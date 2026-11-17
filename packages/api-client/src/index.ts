@@ -24,6 +24,7 @@ export * from './chat';
 export * from './chat-thread';
 export * from './chat-cards';
 export * from './chat-markdown';
+export * from './chat-quote';
 export * from './plan';
 export * from './food-shortcuts';
 export * from './portions';

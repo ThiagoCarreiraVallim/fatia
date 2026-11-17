@@ -366,7 +366,9 @@ def test_falha_no_meio_do_fluxo_sai_como_evento_e_o_done_continua_por_ultimo(
             return sse_jsonrpc(resultado_mcp(rpc["id"], {"tools": CATALOGO}))
         if rpc["params"]["name"] == "get_me":
             return sse_jsonrpc(resultado_mcp(rpc["id"], EU))
-        raise httpx.ConnectError("apps/api caiu")
+        # 401 e não queda de rede: a queda passageira volta ao modelo como falha
+        # de tool, e o turno segue. Token recusado é o que ainda encerra o turno.
+        return httpx.Response(401)
 
     client, _, _ = app_com(
         settings_factory,
@@ -383,7 +385,7 @@ def test_falha_no_meio_do_fluxo_sai_como_evento_e_o_done_continua_por_ultimo(
     assert resposta.status_code == 200
     nomes = [nome for nome, _ in eventos_do_fluxo(resposta.text)]
     assert nomes[-2:] == ["error", "done"]
-    assert "MCP_UNREACHABLE" in resposta.text
+    assert "MCP_UNAUTHORIZED" in resposta.text
 
 
 def test_o_corpo_recusa_campo_de_identidade(settings_factory, monkeypatch):

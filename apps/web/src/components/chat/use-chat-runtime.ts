@@ -239,7 +239,8 @@ export function useChatRuntime({
         : {
             conversationId: conversa,
             message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
-            ...(anexadas.length ? { photos: anexadas } : {}),
+            ...(anexadas.photoIds.length ? { photoIds: anexadas.photoIds } : {}),
+            ...(anexadas.photos.length ? { photos: anexadas.photos } : {}),
             ...(agenteEscolhido?.current !== undefined
               ? { agentGroupId: agenteEscolhido.current }
               : {}),

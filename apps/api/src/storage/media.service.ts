@@ -68,6 +68,28 @@ export type MediaPurpose = GroupMediaPurpose | PersonalMediaPurpose;
 const isPersonal = (purpose: string): purpose is PersonalMediaPurpose =>
   purpose in PERSONAL_MEDIA_PURPOSES;
 
+/**
+ * A foto que a pessoa manda no chat (ADR 046). Fica fora de `MEDIA_PURPOSES` de
+ * propósito: aquela tabela é de arquivo **da comunidade**, exige grupo e ação, e
+ * é a lista que o `RequestUploadDto` aceita. A foto do chat é pessoal, e só nasce
+ * pela rota própria.
+ */
+export const CHAT_PHOTO_PURPOSE = 'chat_photo';
+/** As mesmas três do turno do chat (`MAX_FOTOS_POR_MENSAGEM`). */
+export const MAX_CHAT_PHOTOS_PER_MESSAGE = 3;
+/**
+ * O lado maior da foto do chat. É o mesmo `LADO_MAXIMO` do PWA: o modelo de
+ * visão não enxerga mais que isso num prato, e cada foto ainda vai ao agente em
+ * base64 a cada turno em que é enviada.
+ */
+const CHAT_PHOTO_MAX_SIDE = 1280;
+
+/** Uma foto do chat pronta para o agente: JPEG já reprocessado, em base64. */
+export interface ChatPhotoForAgent {
+  mediaType: 'image/jpeg';
+  data: string;
+}
+
 export const MEDIA_LIMITS: Record<MediaKind, { mimes: readonly string[]; maxBytes: number }> = {
   IMAGE: { mimes: ['image/jpeg', 'image/png', 'image/webp'], maxBytes: 10 * 1024 * 1024 },
   VIDEO: { mimes: ['video/mp4', 'video/quicktime'], maxBytes: 200 * 1024 * 1024 },
@@ -108,21 +130,19 @@ export interface MediaView {
  * Sai sem metadado nenhum (EXIF e GPS inclusive), girada pela orientação, no
  * máximo 1600 px, em WebP.
  */
-function reencode(input: Buffer): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+function reencode(
+  input: Buffer,
+  // A foto do chat (ADR 038) sai em JPEG de 1280 px: o formato que o turno do chat aceita.
+  opts: { side: number; format: 'webp' | 'jpeg' } = { side: IMAGE_MAX_SIDE, format: 'webp' },
+): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+  const imagem = sharp(input, { limitInputPixels: IMAGE_MAX_INPUT_PIXELS })
+    // `rotate()` sem argumento aplica a orientação do EXIF antes de ele sumir;
+    // o `sharp` não copia metadado nenhum para a saída sem `withMetadata`.
+    .rotate()
+    .resize({ width: opts.side, height: opts.side, fit: 'inside', withoutEnlargement: true });
   return (
-    sharp(input, { limitInputPixels: IMAGE_MAX_INPUT_PIXELS })
-      // `rotate()` sem argumento aplica a orientação do EXIF antes de ele sumir;
-      // o `sharp` não copia metadado nenhum para a saída sem `withMetadata`.
-      .rotate()
-      .resize({
-        width: IMAGE_MAX_SIDE,
-        height: IMAGE_MAX_SIDE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 82 })
-      .toBuffer({ resolveWithObject: true })
-  );
+    opts.format === 'jpeg' ? imagem.jpeg({ quality: 85 }) : imagem.webp({ quality: 82 })
+  ).toBuffer({ resolveWithObject: true });
 }
 
 const kindOf = (mime: string): MediaKind | null =>
@@ -240,9 +260,46 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * A URL de envio da foto do chat (ADR 046). Pessoal: não há grupo nem ação, e
+   * a chave nasce sob o prefixo de quem pede. O resto do caminho — conferir,
+   * reprocessar, tirar metadado — é o `confirm` de sempre.
+   */
+  async requestChatPhotoUpload(userId: string, input: { mime: string; bytes: number }) {
+    const store = this.requireStore();
+    if (kindOf(input.mime) !== MediaKind.IMAGE) {
+      throw new BadRequestException('Envie uma imagem JPEG, PNG ou WebP.');
+    }
+    const limite = MEDIA_LIMITS.IMAGE;
+    if (!Number.isInteger(input.bytes) || input.bytes <= 0 || input.bytes > limite.maxBytes) {
+      throw new BadRequestException(
+        `O arquivo passa do limite de ${Math.round(limite.maxBytes / 1024 / 1024)} MB.`,
+      );
+    }
+    const id = randomUUID();
+    const key = `users/${userId}/chat/${id}/original`;
+    await this.prisma.mediaFile.create({
+      data: {
+        id,
+        uploaderId: userId,
+        groupId: null,
+        purpose: CHAT_PHOTO_PURPOSE,
+        kind: MediaKind.IMAGE,
+        key,
+        mime: input.mime,
+        bytes: input.bytes,
+      },
+    });
+    const uploadUrl = await store.presignPut(key, input.mime, input.bytes, UPLOAD_URL_TTL_SEC);
+    return { fileId: id, uploadUrl, headers: { 'Content-Type': input.mime } };
+  }
+
+  /**
    * Confere o objeto enviado e, se for imagem, reprocessa: sai sem metadado
    * nenhum (EXIF e GPS inclusive), girada pela orientação, no máximo 1600 px,
    * em WebP. O original é apagado.
+   *
+   * A foto do chat sai em JPEG de 1280 px: é o formato que o turno do chat
+   * aceita e que todo modelo de visão lê.
    *
    * Só quem enviou confirma, e arquivo de outra pessoa responde como
    * inexistente (#92).
@@ -277,24 +334,30 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       return this.view(pronto);
     }
 
+    const doChat = file.purpose === CHAT_PHOTO_PURPOSE;
+    const lado = doChat ? CHAT_PHOTO_MAX_SIDE : IMAGE_MAX_SIDE;
     let saida: { data: Buffer; info: sharp.OutputInfo };
     try {
-      saida = await reencode(await store.get(file.key));
+      saida = await reencode(
+        await store.get(file.key),
+        doChat ? { side: lado, format: 'jpeg' } : undefined,
+      );
     } catch {
       await this.discard([file]);
       throw new BadRequestException('Não deu para ler esta imagem. Tente outra.');
     }
 
-    const finalKey = file.groupId
-      ? `groups/${file.groupId}/${file.id}.webp`
-      : `users/${file.uploaderId}/${file.id}.webp`;
-    await store.put(finalKey, saida.data, 'image/webp');
+    const mime = doChat ? 'image/jpeg' : 'image/webp';
+    // A chave final troca o `/original` pela extensão, sob o mesmo prefixo: o da
+    // comunidade (`groups/…`) ou o da pessoa (`users/…/chat`).
+    const finalKey = file.key.replace(/\/original$/, doChat ? '.jpg' : '.webp');
+    await store.put(finalKey, saida.data, mime);
     await store.delete([file.key]);
     const pronta = await this.prisma.mediaFile.update({
       where: { id: file.id },
       data: {
         key: finalKey,
-        mime: 'image/webp',
+        mime,
         bytes: saida.data.length,
         width: saida.info.width,
         height: saida.info.height,
@@ -374,6 +437,73 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.mediaFile.findUniqueOrThrow({ where: { id: fileId } });
   }
 
+  /**
+   * As fotos de um turno do chat, prontas para o agente. Cada id precisa ser
+   * desta pessoa, de foto do chat, pronta e ainda solta — uma foto já usada
+   * noutra mensagem não é reenviada por id (ela é da outra mensagem). Qualquer
+   * id que falhe responde como inexistente, sem dizer qual (#92).
+   *
+   * Lê os bytes do bucket: a foto vai ao agente em base64, como antes (ADR
+   * 020), e o agente não ganha um destino de rede novo.
+   */
+  async chatPhotosForTurn(userId: string, ids: string[]): Promise<ChatPhotoForAgent[]> {
+    if (ids.length === 0) return [];
+    const unicos = [...new Set(ids)];
+    if (unicos.length !== ids.length)
+      throw new BadRequestException('A mesma foto veio duas vezes.');
+    const store = this.requireStore();
+    const files = await this.prisma.mediaFile.findMany({
+      where: {
+        id: { in: unicos },
+        uploaderId: userId,
+        purpose: CHAT_PHOTO_PURPOSE,
+        status: MediaStatus.READY,
+        chatMessageId: null,
+      },
+      select: { id: true, key: true },
+    });
+    if (files.length !== unicos.length) throw new NotFoundException('Foto não encontrada.');
+    const porId = new Map(files.map((f) => [f.id, f.key]));
+    return Promise.all(
+      unicos.map(async (id) => ({
+        mediaType: 'image/jpeg' as const,
+        data: (await store.get(porId.get(id) as string)).toString('base64'),
+      })),
+    );
+  }
+
+  /**
+   * As fotos guardadas de cada mensagem, com URL assinada, na ordem em que
+   * foram mandadas. Quem chama já amarrou as mensagens à pessoa.
+   */
+  async chatPhotoViews(messageIds: string[]): Promise<Map<string, MediaView[]>> {
+    const porMensagem = new Map<string, MediaView[]>();
+    if (messageIds.length === 0) return porMensagem;
+    const files = await this.prisma.mediaFile.findMany({
+      where: { chatMessageId: { in: messageIds }, status: MediaStatus.READY },
+      orderBy: { chatPosition: 'asc' },
+    });
+    for (const file of files) {
+      const lista = porMensagem.get(file.chatMessageId as string) ?? [];
+      lista.push(await this.view(file));
+      porMensagem.set(file.chatMessageId as string, lista);
+    }
+    return porMensagem;
+  }
+
+  /**
+   * Antes de apagar a conversa: as fotos dela, objeto e linha. Depois do
+   * `delete` da conversa não daria mais para achá-las pela mensagem — o
+   * `SetNull` as solta, e só a faxina de órfãos as alcançaria.
+   */
+  async discardChatPhotosOf(userId: string, conversationId: string): Promise<void> {
+    const files = await this.prisma.mediaFile.findMany({
+      where: { chatMessage: { conversation: { id: conversationId, userId } } },
+      select: { id: true, key: true },
+    });
+    await this.discard(files);
+  }
+
   /** URL assinada para quem a rota já autorizou a ver o conteúdo. */
   async view(file: MediaFile): Promise<MediaView> {
     return {
@@ -432,6 +562,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             postImageOf: { is: null },
             userAvatarOf: { is: null },
             mealPhotoOf: { is: null },
+            chatMessageId: null,
           },
         ],
       },

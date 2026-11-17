@@ -93,7 +93,21 @@ export class SendChatMessageDto {
   @Type(() => ChatResumeDto)
   resume?: ChatResumeDto;
 
-  /** Vivem só neste turno: nada da foto é gravado (ADR 004 e 020). */
+  /**
+   * Fotos guardadas no bucket (ADR 046): os ids que `POST /media/chat-photos` e
+   * o `confirm` devolveram. Ficam ligadas à mensagem e voltam no histórico.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_FOTOS_POR_MENSAGEM)
+  @IsUUID('4', { each: true })
+  photoIds?: string[];
+
+  /**
+   * O caminho antigo, em base64, que vive só neste turno (ADR 020). Fica para o
+   * app instalado que ainda não sobe a foto ao bucket; os clientes desta versão
+   * mandam `photoIds`.
+   */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_FOTOS_POR_MENSAGEM)

@@ -822,6 +822,9 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
         reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
         cost_usd=_numero(uso.get("cost")),
+        # A documentação do OpenRouter usa os dois nomes; o medido foi o primeiro.
+        web_searches=_detalhe(uso, "server_tool_use_details", "web_search_requests")
+        or _detalhe(uso, "server_tool_use", "web_search_requests"),
     )
 
 

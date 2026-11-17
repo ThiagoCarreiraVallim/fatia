@@ -71,6 +71,7 @@ quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 | Catálogo da comunidade (`GroupExerciseGuide`, exercício da casa)          | Postgres + R2      | Enquanto a comunidade existir. Exercício da casa que alguém usa fica, sem comunidade, no plano e no histórico dessa pessoa                                                                                                                                                    |
 | Agente da comunidade (`GroupAgent`)                                       | Postgres + R2      | Enquanto a comunidade existir. A conversa guarda só qual comunidade (`agentGroupId`), que fica nula quando ela é apagada                                                                                                                                                      |
 | Desafios (`GroupChallenge`, participações, apelido)                       | Postgres           | Enquanto a comunidade existir. Sair da comunidade tira a pessoa do ranking; apagar a conta apaga as participações e o apelido                                                                                                                                                 |
+| Foto do chat (`MediaFile` com `chatMessageId` + objeto no bucket)         | Postgres + R2      | Enquanto a conversa existir ([ADR 046](./ADR/046-foto-do-chat-guardada.md)). JPEG de até 1280 px, sem metadado. Enviada e nunca usada: 24 h. Apagar a conversa apaga as fotos dela; apagar a conta apaga todas                                                                |
 | Mural (`GroupPost`, imagens, reações, comentários, denúncias)             | Postgres + bucket  | Enquanto a comunidade existir. O autor apaga o post (e as imagens); removido pela equipe fica visível só ao autor. Apagar a conta apaga tudo o que a pessoa publicou, reagiu e denunciou, com as imagens                                                                      |
 | Avisos no celular (`UserDevice`, `NotificationPreference`)                | Postgres           | O aparelho fica até a pessoa sair da conta no app, tirá-lo pela web, a Expo dizer que o token morreu, ou passar de 10 (sai o mais antigo). Apagar a conta apaga aparelhos e preferências. O export leva a plataforma e as datas, sem o token. O texto do aviso não é guardado |
 | Navegadores com avisos (`WebPushSubscription`, ADR 036)                   | Postgres           | Até a pessoa desligar, o serviço dizer que acabou (404/410), passar de 10 por conta ou a conta ser apagada. O export leva só as datas                                                                                                                                         |
@@ -138,9 +139,10 @@ papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a
   [ADR 038](./ADR/038-foto-da-refeicao-guardada.md). Backup do bucket segue o do armazenamento de
   mídia; apagar a foto, a refeição ou a conta tira o arquivo do bucket na hora. No export, a refeição
   leva os metadados da foto e, pelo link de baixar, uma URL assinada que vale 24 h.
-- **Fotos e áudio do chat.** A foto anexada a uma mensagem e o áudio do ditado vão ao provedor
-  naquele turno e somem com a requisição; do banco e do checkpoint do agente, só sai que **houve**
-  foto (quantas) e quanto o áudio durou. Ver "Chat com a IA hospedada", abaixo.
+- **Áudio do chat.** O áudio do ditado vai ao provedor naquele turno e some com a requisição; do
+  banco, só sai quanto ele durou. A **foto** do chat deixou de estar nesta lista: desde a
+  [ADR 046](./ADR/046-foto-do-chat-guardada.md) ela é guardada com a conversa (ver a tabela acima
+  e "Foto no chat", abaixo).
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
   `20260510190000_logto_auth_adr008` dropou a coluna `passwordHash`. A credencial vive no Logto.
 - **Meios de pagamento.** A instância pública é gratuita.
@@ -176,13 +178,14 @@ retenção zero (ver adiante). Ligar isso na instância oficial continua depende
 consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
 `apps/agent` e de lá ao provedor, pelo OpenRouter. É este caminho que a tabela abaixo descreve.
 
-| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                       |
-| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                           |
-| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante       |
-| Visão — rótulo (#375)       | a foto da tabela nutricional, reencodada em JPEG **sem EXIF**, e o prompt                    | **não** — só o custo em `AiUsage` (`label_photo`) |
-| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **não** — só quantas foram                        |
-| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo                |
+| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                                                                  |
+| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante                                              |
+| Visão — rótulo (#375)       | a foto da tabela nutricional, reencodada em JPEG **sem EXIF**, e o prompt                    | **não** — só o custo em `AiUsage` (`label_photo`)                                        |
+| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **sim**, no bucket, com a conversa (ADR 046)                                             |
+| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo                                                       |
+| Busca na web (chat, #384)   | só o texto da pergunta, sem e-mail, telefone, documento, nome nem nada da conversa           | fora da retenção zero: a Exa, via OpenRouter, segue a política dela; aqui, só a contagem |
 
 A linha do chat é diferente das outras, e é por isso que ela está escrita por extenso: para
 responder "o que eu comi ontem", o modelo **precisa ver** o que a pessoa comeu ontem. O resultado
@@ -501,20 +504,26 @@ confirmável). As memórias saem no `export_my_data` e vão embora com a conta p
 
 ### Foto no chat
 
-A foto que acompanha uma mensagem segue a [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)
-ponto por ponto:
+Desde a [ADR 046](./ADR/046-foto-do-chat-guardada.md), a foto que acompanha uma mensagem é
+**guardada com a conversa**:
 
 - **no aparelho**, o PWA recodifica a imagem num canvas (`apps/web/src/components/chat/foto.ts`) —
-  o JPEG que sai dali só tem pixels, sem GPS, aparelho nem horário;
-- **na API**, os metadados são removidos **de novo** (`removerMetadadosDoJpeg`, a mesma rotina do
-  registro por foto), porque a garantia não pode depender do cliente — versão antiga, `curl` de quem
-  tem token. Só JPEG, até três por mensagem e 2 MB cada;
-- **no agente**, os bytes entram só no prompt daquele turno, para o modelo de visão. O checkpoint
-  grava a fala com uma marca no lugar, e o turno seguinte não vê mais a foto;
-- **no banco**, `Message.metadata.photos` guarda **quantas** fotos a mensagem teve, e nada mais.
+  o JPEG que sai dali só tem pixels, sem GPS, aparelho nem horário — e a sobe direto ao bucket por
+  URL assinada (`POST /api/media/chat-photos`). O app sobe o JPEG do seletor, já sem EXIF;
+- **na API**, o `confirm` reprocessa no servidor (`MediaService.confirm`): gira, reduz a 1280 px e
+  regrava em JPEG sem metadado nenhum, porque a garantia não pode depender do cliente. Até três por
+  mensagem, 10 MB cada antes do reprocessamento;
+- **no banco**, `MediaFile` guarda a chave, o tamanho e a mensagem (`chatMessageId`, `chatPosition`).
+  O turno manda só os ids; a API confere que cada um é da pessoa, pronto e ainda não usado, e lê os
+  bytes do bucket;
+- **no agente**, nada muda: os bytes chegam em base64 e entram só no prompt daquele turno. O
+  checkpoint grava a fala com uma marca no lugar, e o turno seguinte não vê mais a foto;
+- **na tela**, `GET /api/chat/conversations/:id` devolve cada foto com uma URL assinada de 10 minutos.
 
-Depois de recarregar a página, a mensagem mostra "📷 Foto enviada — ela não fica guardada.", que é
-a verdade: não há o que mostrar.
+Apagar a conversa apaga as fotos dela (objeto e linha, antes das mensagens); apagar a conta apaga
+todas. Instância sem bucket (`MEDIA_S3_*` vazias) continua no caminho da
+[ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md): a foto vai em base64 no turno, não é
+guardada, e `Message.metadata.photos` registra só quantas foram.
 
 ### Ditado
 
