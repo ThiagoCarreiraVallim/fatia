@@ -198,6 +198,8 @@ export class ProgressService {
         sessionId: string;
         sessionDate: string;
         durationSeconds: number;
+        /** Só o tempo das séries com distância: é o que entra no ritmo. */
+        pacedSeconds: number;
         distanceMeters: number | null;
         kcalBurned: number | null;
       }
@@ -208,6 +210,11 @@ export class ProgressService {
         sessionId: s.session.id,
         sessionDate: s.session.startedAt.toISOString().slice(0, 10),
         durationSeconds: (cur?.durationSeconds ?? 0) + (s.durationSeconds ?? 0),
+        // Somado com várias máquinas (#382), a bike sem distância não pode alongar o ritmo da
+        // esteira. As kcal são total da sessão e continuam somando tudo.
+        pacedSeconds:
+          (cur?.pacedSeconds ?? 0) +
+          (s.distanceMeters && s.distanceMeters > 0 ? (s.durationSeconds ?? 0) : 0),
         distanceMeters:
           (cur?.distanceMeters ?? 0) + (s.distanceMeters ?? 0) || cur?.distanceMeters || null,
         kcalBurned: (cur?.kcalBurned ?? 0) + (s.kcalBurned ?? 0) || cur?.kcalBurned || null,
@@ -215,7 +222,7 @@ export class ProgressService {
       bySession.set(s.session.id, candidate);
     }
     const points = [...bySession.values()].map((p) => {
-      const paceSecondsPerKm = calculatePace(p.durationSeconds, p.distanceMeters ?? 0);
+      const paceSecondsPerKm = calculatePace(p.pacedSeconds, p.distanceMeters ?? 0);
       let value: number;
       if (metric === 'duration') value = p.durationSeconds;
       else if (metric === 'distance') value = p.distanceMeters ?? 0;

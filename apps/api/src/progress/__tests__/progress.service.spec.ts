@@ -341,6 +341,20 @@ describe('ProgressService', () => {
       expect(result.points[0].distanceMeters).toBe(5000);
     });
 
+    it('o ritmo somado usa só o tempo das séries com distância (bike sem km não puxa o ritmo)', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        makeCardioSet({ durationSeconds: 1800, distanceMeters: 4000 }),
+        makeCardioSet({ durationSeconds: 1200, distanceMeters: null }),
+      ]);
+
+      const result = await service.cardioProgress(undefined, 30, 'pace', ctx);
+
+      expect(result.points[0].paceSecondsPerKm).toBe(450);
+      expect(result.points[0].value).toBe(450);
+      // A duração da sessão continua inteira: o gráfico de tempo conta a bike.
+      expect(result.points[0].durationSeconds).toBe(3000);
+    });
+
     it('computes pace in seconds per km', async () => {
       prisma.exercise.findUnique.mockResolvedValue(cardioExercise);
       prisma.sessionSet.findMany.mockResolvedValue([

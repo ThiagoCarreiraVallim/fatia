@@ -468,6 +468,28 @@ describe('resumos dos gráficos', () => {
     expect(newBestCount([50, 52, 51, 55, 55])).toBe(2);
   });
 
+  it('cardio: sessão com bike sem distância não puxa o ritmo médio', () => {
+    const c = {
+      exercise: null,
+      metric: 'duration',
+      bestSession: null,
+      points: [
+        // 30 min de esteira em 4 km (7:30/km) + 20 min de bike sem distância.
+        {
+          sessionDate: '2026-11-01',
+          sessionId: 'a',
+          durationSeconds: 3000,
+          distanceMeters: 4000,
+          paceSecondsPerKm: 450,
+          kcalBurned: null,
+          value: 3000,
+        },
+      ],
+    };
+
+    expect(formatPace(averagePace(c))).toBe('7:30');
+  });
+
   it('cardio: ritmo médio pela soma de tempo e distância, e a maior distância', () => {
     const c = {
       exercise: null,

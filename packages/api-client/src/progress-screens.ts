@@ -748,11 +748,19 @@ export function formatPace(secondsPerKm: number | null): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** Ritmo médio do cardio no período: soma do tempo pela soma da distância. */
+/**
+ * Ritmo médio do cardio no período: tempo com distância pela distância. O tempo de cada sessão
+ * sai do ritmo dela (`pace × km`), não da duração inteira, que inclui a bike sem distância.
+ */
 export function averagePace(cardio: CardioProgress): number | null {
-  const withDistance = cardio.points.filter((p) => p.distanceMeters && p.distanceMeters > 0);
-  const meters = withDistance.reduce((a, p) => a + (p.distanceMeters ?? 0), 0);
-  const seconds = withDistance.reduce((a, p) => a + p.durationSeconds, 0);
+  const withPace = cardio.points.filter(
+    (p) => p.distanceMeters && p.distanceMeters > 0 && p.paceSecondsPerKm != null,
+  );
+  const meters = withPace.reduce((a, p) => a + (p.distanceMeters ?? 0), 0);
+  const seconds = withPace.reduce(
+    (a, p) => a + p.paceSecondsPerKm! * ((p.distanceMeters ?? 0) / 1000),
+    0,
+  );
   return meters > 0 ? seconds / (meters / 1000) : null;
 }
 
