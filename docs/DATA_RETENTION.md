@@ -435,6 +435,8 @@ do agente, na [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md).
 | Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`                  | Igual à conversa; apagado com ela e com a conta                                                                  |
 | Trace do turno no Langfuse (ADR 034)              | Langfuse Cloud (EUA), só com as chaves configuradas  | A do projeto no Langfuse (30 dias no Hobby). Texto mascarado; sem resultado de tool, foto, áudio nem id da conta |
 | Memórias (`UserMemory`)                           | Postgres                                             | Até a pessoa esquecer, ou apagar a conta                                                                         |
+| Modo da IA por categoria (`AiWriteModeSetting`)   | Postgres                                             | Até a pessoa mudar, ou apagar a conta. Entra no export                                                           |
+| Gravação automática (`AiAutoWrite`, ADR 039)      | Postgres                                             | Igual à conversa: apagada com ela e com a conta. O "antes" e o resultado somem ao desfazer. Entra no export      |
 | Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)                                                   |
 | Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`                                               |
 | Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima                                        |
@@ -500,7 +502,8 @@ memória entra em todo prompt do chat, cercada como dado; acima disso a lista de
 importa lembrar" e vira um segundo histórico pago a cada mensagem.
 
 A pessoa apaga uma memória na tela do chat ou pedindo ao assistente (`forget_memory`, também
-confirmável). As memórias saem no `export_my_data` e vão embora com a conta pelo cascade.
+confirmável), ou todas de uma vez na tela ("Apagar todas", `DELETE /chat/memories`, sem tool no MCP).
+Cada memória pode ter uma categoria (preferência, rotina, treino, hábito) e nunca é lida pela equipe. As memórias saem no `export_my_data` e vão embora com a conta pelo cascade.
 
 ### Foto no chat
 

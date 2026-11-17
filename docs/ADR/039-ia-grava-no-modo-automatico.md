@@ -79,3 +79,28 @@ A conferência do redesign confirma onde cada parte desta decisão aparece, sem 
 - A **aprovação fora da conversa** (item 6) é o cartão "Fatia · esperando você" no menu da IA e no
   topo do Hoje (`Al-H6c8-Menu-IA-ativa`, #369), com a regra da prévia completa: se a prévia não
   couber, o botão vira "Abrir conversa".
+
+## Nota — implementação (#385, 2026-11-17)
+
+- **Onde mora:** `AiWriteModeSetting` (sem linha = Perguntar antes) e `AiAutoWrite` (o "antes", o
+  resultado e o `undoneAt` de cada gravação automática), migration
+  `20261117100000_ai_write_modes_and_memory_category`. A tela é a engrenagem no topo do chat (web e
+  app), não Você → IA.
+- **Quem decide é a API.** Cada tool confirmável declara `aiCategory` (39 tools). A cada turno a API
+  manda ao agente `toolModes { auto, off }`. O agente chama a tool automática com o header
+  `x-fatia-auto-write` (`{conversationId, runId, toolCallId}`), e o `AutoWriteService` confere de
+  novo: dono da conversa, modo Automático, não apagar, até 10 itens, até 5 por resposta (por
+  `runId`), `toolCallId` repetido. Fora disso a API recusa com `AUTO_WRITE_NEEDS_OK`, e o agente
+  devolve a escrita ao cartão de confirmação. O agente também nunca torna automática `delete_*` ou
+  `forget_*`, mesmo que a lista diga.
+- **Só é automática a tool com inversa.** `AUTO_UNDO` (`chat/auto-write/undo-specs.ts`) tem retrato e
+  volta exatos para refeição, item, água, peso, passos, série, sessão iniciada (só sem séries), meta
+  e memória. Tool sem inversa numa categoria em Automático continua pedindo OK; o
+  `tool-catalog.spec.ts` amarra isso.
+- **Desfazer:** `POST /chat/auto-writes/:id/undo`, só o dono, uma vez, em até 24 h; se o registro
+  mudou depois, 409 e nada muda. O cartão "Gravado" traz o `autoWriteId`.
+- **Desligado** tira as escritas da categoria do catálogo do turno; as leituras continuam.
+- **Fora do MCP de propósito:** não há tool para ler ou mudar o modo, nem para apagar todas as
+  memórias (`DELETE /chat/memories` é só do app).
+- Os testes obrigatórios estão em `auto-write.integration.spec.ts` (API) e
+  `tests/chat/test_gravacao_automatica.py` (agente).

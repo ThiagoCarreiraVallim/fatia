@@ -53,7 +53,7 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
 - [x] 11. api-client: settings, memórias, desfazer, foto da refeição
 - [x] 12. Web: Config da IA, Memórias, Gravado com Desfazer, estados Al-M11, foto por arquivo + revisão
 - [x] 13. App: Config da IA, Memórias, Gravado, estados, câmera Al-M12 + revisão Al-M10
-- [ ] 14. Docs: ADRs (notas), DATA_RETENTION, privacy, MCP (se mudou), REDESIGN_PROGRESS
+- [x] 14. Docs: ADRs (notas), DATA_RETENTION, privacy, MCP (se mudou), REDESIGN_PROGRESS
 - [ ] 15. lint, typecheck, testes de tudo; commit final sem este arquivo
 
 ## Arquivos tocados
@@ -101,7 +101,10 @@ Se o scratchpad sumiu: `DATABASE_URL` do `.env` da raiz com `sed -E 's#/fatia(\?
   20–30% e "Gravar no…" (`recognition-mapping.ts`: `editableItems` renomeado, `stepGrams`,
   `reviewKcalTotal`), permissões da câmera e da galeria em `app.config.ts`. App: 508 testes.
 
+- Docs: notas nas ADRs 039 e 038, DATA_RETENTION (`AiWriteModeSetting`, `AiAutoWrite`, Apagar
+  todas), MOBILE_PARITY (foto no PWA), REDESIGN_PROGRESS (bloco da #385).
+
 ## Próximo passo exato
 
-Item 14: docs (ADR 039/038 notas, DATA_RETENTION com `AiAutoWrite`, MOBILE_PARITY da foto no PWA,
-REDESIGN_PROGRESS #385). Depois item 15.
+Item 15: `pnpm lint`, `pnpm typecheck`, API inteira no banco descartável (rodando), agente, web,
+app e api-client; depois o commit final sem este arquivo e o relatório.

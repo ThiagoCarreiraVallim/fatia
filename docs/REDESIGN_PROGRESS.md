@@ -212,6 +212,7 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | Issue | Título                                                 | Estado           | Superfícies                                                     |
 | ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
 | #384  | Chat com IA: conversas, cartões, estados e ferramentas | pronto na branch | api, db, agente, MCP (contrato de cartão), api-client, web, app |
+| #385  | IA: foto do prato, configurações, memórias e limites   | pronto na branch | api, db, agente, MCP (`save_memory`), api-client, web, app      |
 
 Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_consent_and_web_search` e `20261117030000_chat_photos_in_media_file`; env nova `AGENT_CHAT_PAUSE_AFTER_TOOLS`, padrão 14):
 
@@ -232,6 +233,25 @@ Pendências da #384 (branch `redesign/384-chat`, migrations `20261117022522_ai_c
   - "Agora não" do aceite sai do chat (web volta ao início, app volta uma tela).
   - O anel do progresso no app é um círculo cheio com o número, sem o arco parcial.
 - **Fora do escopo:** o "Avisando a Helena… Entregue" do CH3 e a execução do Desfazer do "Gravado" (só o componente existe; a #385 emite e executa).
+- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
+
+Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migration `20261117100000_ai_write_modes_and_memory_category`; nenhuma env nova):
+
+- **Modo por categoria (ADR 039):** Registros do dia, Treino, Metas e Memórias, padrão Perguntar antes. A API decide (`toolModes` a cada turno) e confere de novo no `/mcp` com o header `x-fatia-auto-write`: modo, até 5 gravações por resposta, até 10 itens, nunca apagar; fora disso volta ao cartão de confirmação. Cada gravação automática guarda o "antes" (`AiAutoWrite`) e tem inversa por tool; "Gravado" com Desfazer (`POST /chat/auto-writes/:id/undo`, dono, uma vez, 24 h). Desligado tira as escritas da categoria do catálogo. Cobrança, equipe e mural não têm categoria: sempre pedem OK.
+- **Config da IA (Al-M24):** engrenagem no topo do chat (web e app), com as categorias (toque gira o modo), "Nunca é automático", busca na web (a mesma preferência do globo) e Mais (memórias com "n de 50", Usar sua própria IA, Meu plano).
+- **Memórias (Al-M9):** `category` (preferência, rotina, treino, hábito) e data; "n de 50"; com 50 a IA pede para apagar uma; "Apagar todas" com confirmação (`DELETE /chat/memories`, sem tool no MCP); a equipe nunca lê.
+- **Estados (Al-M11):** cota com "volta amanhã às 00:00", "Registrar à mão" e campo "Volta amanhã"; fora do ar com "Sua mensagem ficou salva" e Tentar de novo; interrompida com Continuar; "Pode sair da tela" enquanto pensa (o aviso de pronto já existia).
+- **Foto do prato (Al-M12, Al-M10):** PWA por arquivo em `/nutrition/photo` (o menu da IA já apontava para lá); aviso do provedor (OpenRouter) com "Como tratamos seus dados" antes da primeira foto, que é o aceite do chat (o 403 `AI_CONSENT_REQUIRED` traz o aviso de volta); revisão com desmarcar, ±10 g, total, aviso de 20–30% e "Gravar no almoço"; "Vai para:" troca a refeição. Permissão da câmera e da galeria reescritas (a foto só fica com permissão).
+- **MCP:** `save_memory` ganhou `category` (opcional); números e `SHA_ENTIDADE` regerados pelos specs. Nenhuma tool lê ou muda o modo.
+- **Desvios de propósito:**
+  - Só grava sozinha a tool com inversa exata; as outras de uma categoria em Automático continuam pedindo OK (criar plano, bloco, exercício próprio, copiar dia, entre outras).
+  - O "Gravado" mostra só o valor gravado, sem o "antes → depois" das edições.
+  - A pergunta de guardar a foto vem antes do reconhecimento, não depois: é nele que a API guarda.
+  - A escolha do agente segue na conversa nova, não na Config da IA.
+  - A câmera do app não ganhou as abas Prato/Rótulo nem o "Tirar outra" depois do disparo: o rótulo continua no alimento próprio; o "Tirar outra" está no aviso do provedor.
+  - O texto da permissão da câmera inclui os códigos de barras, que a prancha não cita.
+  - O botão da IA no menu não gira com a resposta em segundo plano; fica o "Respondendo…" que já existia no PWA.
+- **Fica com a #384:** o descarte da foto do chat no fim do turno (heads-up do coordenador).
 - **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual).
 
 ## Etapas seguintes
