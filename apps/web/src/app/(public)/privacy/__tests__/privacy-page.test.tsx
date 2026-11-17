@@ -58,7 +58,10 @@ describe('política de privacidade — foto do chat guardada (ADR 046)', () => {
 
     const terceiros = secao('Com quem compartilhamos');
     expect(terceiros).toMatch(/Exa, pelo OpenRouter/);
-    expect(terceiros).toMatch(/só o texto da busca/i);
+    expect(terceiros).toMatch(/só o texto da pergunta/i);
+    // A busca da #384: só depois do aceite, e a pessoa desliga quando quiser.
+    expect(terceiros).toMatch(/depois que você concorda/i);
+    expect(terceiros).toMatch(/desligar/i);
     // A retenção zero não cobre o buscador, e a página não pode sugerir o contrário.
     expect(terceiros).toMatch(/fora da retenção zero/i);
   });

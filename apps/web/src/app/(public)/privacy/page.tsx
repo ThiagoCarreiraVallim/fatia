@@ -240,8 +240,8 @@ export default function PrivacyPage() {
             usam para treinar. Se nenhuma empresa que serve o modelo cumprir as duas, a chamada é{' '}
             <em>recusada</em>. Está no código, e não numa caixa marcada no painel de alguém: uma
             promessa que depende de configuração de painel ninguém consegue conferir, e esta some do
-            repositório se for removida. A exceção é a busca na web do chat: a frase da busca vai ao
-            buscador, que não está coberto pela retenção zero (ver a lista de quem recebe dados).
+            repositório se for removida. A exceção é a busca na web do chat: a pergunta buscada vai
+            ao buscador, que não está coberto pela retenção zero (ver a lista de quem recebe dados).
           </li>
           <li>
             <strong>Dentro do fornecedor, quem responde é a política dele.</strong> Não temos como
@@ -305,9 +305,11 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Exa, pelo OpenRouter</strong> — quando o assistente do chat busca algo na web, o
-            buscador recebe só o texto da busca que ele montou. Não recebe seu nome, e-mail, nem
-            nada da sua conta ou da conversa além dessa frase. A busca fica fora da retenção zero: o
-            buscador segue a política dele para a consulta.
+            buscador recebe só o texto da pergunta que vai ser buscada, sem e-mail, telefone ou
+            documento que tenha escapado nela. Não recebe seu nome, nem nada da sua conta ou do
+            resto da conversa. A primeira busca só acontece depois que você concorda, num cartão que
+            mostra a pergunta; dá para desligar a busca no topo do chat. A busca fica fora da
+            retenção zero: o buscador segue a política dele para a consulta.
           </li>
           <li>
             <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,

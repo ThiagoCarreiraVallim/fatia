@@ -311,7 +311,7 @@ export const AI_CONSENT_TEXTS = {
       'a busca: a Exa pode guardar a pergunta. As fontes aparecem num cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
-    footnote: 'Dá para desligar em Configurações da IA.',
+    footnote: 'Dá para desligar no globo, no topo do chat.',
   },
 } as const;
 
