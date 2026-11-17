@@ -163,7 +163,7 @@ export function MealPhotoScreen() {
   const planoNecessario = falha instanceof ApiError && falha.isPlanRequired;
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-4 pb-8">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-4 px-5 pb-8">
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">{MEAL_PHOTO_COPY.goesTo}</span>
         <label className="sr-only" htmlFor="refeicao-da-foto">
@@ -302,7 +302,10 @@ export function MealPhotoScreen() {
               type="button"
               disabled={guardarEscolha.isPending}
               onClick={() => escolherGuardar(false)}
-              className={cn(ghostButton, 'flex-1 rounded-full px-4 py-2.5 text-sm')}
+              className={cn(
+                ghostButton,
+                'flex-1 rounded-full bg-foreground/[0.08] px-4 py-2.5 text-sm font-semibold text-foreground',
+              )}
             >
               {MEAL_PHOTO_COPY.keepNo}
             </button>
