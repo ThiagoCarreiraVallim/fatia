@@ -17,15 +17,16 @@ vi.mock('@fatia/api-client', async () => {
     ...actual,
     groupsApi: {
       get: vi.fn(),
-      members: vi.fn(),
+      team: vi.fn(),
       accessLog: vi.fn(),
       setConsent: vi.fn(),
       leave: vi.fn(),
     },
+    benefitsApi: { list: vi.fn() },
   };
 });
 
-import { groupsApi } from '@fatia/api-client';
+import { benefitsApi, groupsApi, type TeamMemberView } from '@fatia/api-client';
 import CommunitySettingsPage from '../page';
 
 const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
@@ -55,12 +56,34 @@ const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   ...p,
 });
 
-function renderPage(g: MyGroup = grupo()) {
+const pessoa = (name: string, role: TeamMemberView['role'], p: Partial<TeamMemberView> = {}) => ({
+  name,
+  role,
+  sees: [] as TeamMemberView['sees'],
+  lastViewedAt: null,
+  ...p,
+});
+
+function renderPage(
+  g: MyGroup = grupo(),
+  team: TeamMemberView[] = [pessoa('Ana', 'OWNER', { sees: ['NUTRITION'] })],
+  ativos = 0,
+) {
   vi.mocked(groupsApi.get).mockResolvedValue(g);
-  vi.mocked(groupsApi.members).mockResolvedValue([
-    { membershipId: 'mo', name: 'Ana', role: 'OWNER', status: 'ACTIVE', joinedAt: null },
-    { membershipId: 'm1', name: 'Eu', role: 'MEMBER', status: 'ACTIVE', joinedAt: null },
-  ]);
+  vi.mocked(groupsApi.team).mockResolvedValue(team);
+  vi.mocked(benefitsApi.list).mockResolvedValue(
+    Array.from({ length: ativos }, (_, i) => ({
+      id: `b${i}`,
+      partnerName: `Parceiro ${i}`,
+      logoUrl: null,
+      discountText: '10% off',
+      kind: 'COUPON' as const,
+      couponCode: 'X',
+      url: null,
+      validUntil: '2026-12-31',
+      expired: false,
+    })),
+  );
   vi.mocked(groupsApi.accessLog).mockResolvedValue([
     {
       at: '2026-10-16T13:00:00Z',
@@ -79,32 +102,48 @@ function renderPage(g: MyGroup = grupo()) {
   );
 }
 
-describe('/community/[groupId]/settings', () => {
+describe('/community/[groupId]/settings (Cm-04)', () => {
   afterEach(() => vi.clearAllMocks());
 
-  it('mostra a comunidade, a equipe, o assento e quem acessou', async () => {
+  it('mostra quem é a comunidade, o PRO pago e quem olhou', async () => {
     renderPage();
-    expect(await screen.findByText('Treino e boa comida')).toBeInTheDocument();
-    // A barra diz "Sobre a comunidade" (mapa de rotas); o nome vem no corpo.
-    expect(screen.getByRole('heading', { name: 'Academia Demo' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /A comunidade paga seu PRO/ })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { name: 'Academia Demo' })).toBeInTheDocument();
+    expect(screen.getByText('Treino e boa comida · fuso São Paulo')).toBeInTheDocument();
+    expect(screen.getByText('privada')).toBeInTheDocument();
+    expect(screen.getByText('com aprovação')).toBeInTheDocument();
+    expect(screen.getByText('você é membro')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /A academia paga seu PRO/ })).toHaveAttribute(
       'href',
       '/plan',
     );
-    // Desafios e Planos e dicas são abas do mural, não moram aqui.
-    expect(
-      screen.queryByRole('navigation', { name: 'Seções da comunidade' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('A comunidade paga seu PRO')).toBeInTheDocument();
-    expect(await screen.findByText('Dono')).toBeInTheDocument();
-    expect(screen.queryByText('Eu')).not.toBeInTheDocument();
-    expect(groupsApi.accessLog).toHaveBeenCalledWith({ groupId: 'g1', limit: 20 });
-    const acessos = await screen.findByRole('region', { name: /Quem acessou/ });
-    expect(within(acessos).getByText('Ana')).toBeInTheDocument();
-    expect(within(acessos).getByText('Alimentação')).toBeInTheDocument();
+    expect(groupsApi.accessLog).toHaveBeenCalledWith({ groupId: 'g1', limit: 5 });
+    const acessos = await screen.findByRole('region', { name: 'Quem olhou seus dados' });
+    expect(await within(acessos).findByText(/Ana abriu Alimentação/)).toBeInTheDocument();
   });
 
-  it('muda o que compartilha partindo do que já tinha', async () => {
+  it('sem PRO pago pela comunidade, sem a faixa', async () => {
+    renderPage(grupo({ hasAiSeat: false }));
+    await screen.findByRole('heading', { name: 'Academia Demo' });
+    expect(screen.queryByText(/A academia paga seu PRO/)).not.toBeInTheDocument();
+  });
+
+  it('a entrada de Benefícios só com benefício valendo', async () => {
+    renderPage(grupo(), undefined, 2);
+    expect(await screen.findByRole('link', { name: /Benefícios/ })).toHaveAttribute(
+      'href',
+      '/community/g1/benefits',
+    );
+    expect(screen.getByText('2 descontos de parceiros')).toBeInTheDocument();
+  });
+
+  it('sem benefício, sem a entrada', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Quem olhou seus dados' });
+    await waitFor(() => expect(benefitsApi.list).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: /Benefícios/ })).not.toBeInTheDocument();
+  });
+
+  it('cada categoria grava na hora, partindo do que já tinha', async () => {
     vi.mocked(groupsApi.setConsent).mockResolvedValue({
       groupId: 'g1',
       scopes: ['NUTRITION', 'GOALS'],
@@ -112,16 +151,49 @@ describe('/community/[groupId]/settings', () => {
       consentAt: '2026-10-17T00:00:00Z',
     });
     renderPage();
-    expect(await screen.findByRole('checkbox', { name: /Alimentação/ })).toBeChecked();
-    await userEvent.click(screen.getByRole('checkbox', { name: /Metas/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect(await screen.findByRole('switch', { name: 'Alimentação' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await userEvent.click(screen.getByRole('switch', { name: 'Metas' }));
     expect(groupsApi.setConsent).toHaveBeenCalledWith('g1', {
       scopes: ['NUTRITION', 'GOALS'],
       statsOptIn: false,
     });
   });
 
-  it('sair pede confirmação, avisa do assento e volta à lista', async () => {
+  it('a equipe por papel, com "viu hoje" e o resto atrás de "Ver toda a equipe"', async () => {
+    const hoje = new Date().toISOString();
+    renderPage(grupo(), [
+      pessoa('Ana', 'OWNER', { sees: ['NUTRITION'], lastViewedAt: hoje }),
+      pessoa('Bia', 'PROFESSIONAL'),
+      pessoa('Caio', 'PROFESSIONAL'),
+      pessoa('Duda', 'CREATOR'),
+    ]);
+    const equipe = await screen.findByRole('region', { name: 'Equipe da comunidade' });
+    expect(await within(equipe).findByText('Ana')).toBeInTheDocument();
+    expect(within(equipe).getByText('viu hoje')).toBeInTheDocument();
+    expect(
+      within(equipe).getByText('1 pessoa pode ver o que você compartilha.'),
+    ).toBeInTheDocument();
+    expect(within(equipe).queryByText('Duda')).not.toBeInTheDocument();
+    await userEvent.click(within(equipe).getByRole('button', { name: 'Ver toda a equipe (4)' }));
+    expect(within(equipe).getByText('Duda')).toBeInTheDocument();
+  });
+
+  it('a busca filtra a equipe', async () => {
+    renderPage(grupo(), [
+      pessoa('Ana', 'OWNER'),
+      pessoa('Bia', 'PROFESSIONAL'),
+      pessoa('Caio', 'PROFESSIONAL'),
+      pessoa('Duda', 'CREATOR'),
+    ]);
+    await userEvent.type(await screen.findByLabelText('Buscar na equipe'), 'duda');
+    expect(screen.getByText('Duda')).toBeInTheDocument();
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+  });
+
+  it('sair pede confirmação, avisa do PRO e volta à lista', async () => {
     vi.mocked(groupsApi.leave).mockResolvedValue({
       membershipId: 'm1',
       groupId: 'g1',
@@ -131,7 +203,7 @@ describe('/community/[groupId]/settings', () => {
     });
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Sair da comunidade' }));
-    expect(screen.getByText(/o PRO pago pela comunidade acaba/)).toBeInTheDocument();
+    expect(screen.getByText(/o PRO pago pela academia acaba/)).toBeInTheDocument();
     expect(groupsApi.leave).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/community'));
@@ -140,8 +212,8 @@ describe('/community/[groupId]/settings', () => {
   it('pedido pendente: sem equipe nem consentimento editável, e dá para cancelar', async () => {
     renderPage(grupo({ status: 'INVITED', hasAiSeat: false }));
     expect(await screen.findByText(/aguardando o dono aprovar/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Salvar' })).not.toBeInTheDocument();
-    expect(groupsApi.members).not.toHaveBeenCalled();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(groupsApi.team).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Cancelar pedido' })).toBeInTheDocument();
   });
 
@@ -149,38 +221,29 @@ describe('/community/[groupId]/settings', () => {
     renderPage(grupo({ role: 'OWNER' }));
     expect(await screen.findByText(/transfira-a pelo painel/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sair da comunidade' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Abrir painel/ })).toHaveAttribute(
-      'href',
-      `/org/${grupo().id}`,
-    );
+    expect(screen.getByRole('link', { name: /Abrir painel/ })).toHaveAttribute('href', '/org/g1');
   });
 
   it('membro comum não vê o painel', async () => {
-    renderPage(grupo({ role: 'MEMBER' }));
+    renderPage();
     expect(await screen.findByRole('button', { name: 'Sair da comunidade' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Abrir painel/ })).not.toBeInTheDocument();
   });
 
   it('membro: o obrigatório que já compartilha fica travado, e o 409 mostra a frase da API', async () => {
     vi.mocked(groupsApi.setConsent).mockRejectedValue(
-      new ApiError(
-        'Alimentação é obrigatório nesta comunidade. Para parar de compartilhar, saia da comunidade.',
-        409,
-      ),
+      new ApiError('Metas é obrigatório nesta comunidade. Para parar de compartilhar, saia.', 409),
     );
     renderPage(grupo({ requiredSharingScopes: ['NUTRITION', 'GOALS'] }));
-    const alimentacao = await screen.findByRole('checkbox', { name: /Alimentação/ });
-    expect(alimentacao).toBeDisabled();
-    expect(screen.getByRole('checkbox', { name: /Metas/ })).toBeEnabled();
-    expect(
-      screen.getByText(/Para participar como membro: compartilhar alimentação e metas/),
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect(await screen.findByRole('switch', { name: 'Alimentação' })).toBeDisabled();
+    const metas = screen.getByRole('switch', { name: 'Metas' });
+    expect(metas).toBeEnabled();
+    await userEvent.click(metas);
     expect(await screen.findByRole('alert')).toHaveTextContent(/Para parar de compartilhar, saia/);
   });
 
   it('a equipe não tem o obrigatório travado', async () => {
     renderPage(grupo({ role: 'PROFESSIONAL', requiredSharingScopes: ['NUTRITION'] }));
-    expect(await screen.findByRole('checkbox', { name: /Alimentação/ })).toBeEnabled();
+    expect(await screen.findByRole('switch', { name: 'Alimentação' })).toBeEnabled();
   });
 });

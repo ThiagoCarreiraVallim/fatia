@@ -14,6 +14,9 @@ export const communityKeys = {
   /** O mural: a lista paginada, e cada post aberto com os comentários. */
   feed: (groupId: string) => ['community', 'feed', groupId] as const,
   post: (groupId: string, id: string) => ['community', 'feed', groupId, id] as const,
+  /** Quem da equipe vê o quê de mim (Sobre). */
+  team: (groupId: string) => ['community', 'team', groupId] as const,
+  benefits: (groupId: string) => ['community', 'benefits', groupId] as const,
 };
 /** Chaves do painel da equipe. Sob `['community', 'org', groupId]`: uma mudança invalida o painel inteiro. */
 export const orgKeys = {
@@ -31,6 +34,7 @@ export const orgKeys = {
   exercise: (groupId: string, id: number) =>
     ['community', 'org', groupId, 'exercises', id] as const,
   agent: (groupId: string) => ['community', 'org', groupId, 'agent'] as const,
+  benefits: (groupId: string) => ['community', 'org', groupId, 'benefits'] as const,
   moderation: (groupId: string) => ['community', 'org', groupId, 'moderation'] as const,
   reports: (groupId: string) => ['community', 'org', groupId, 'moderation', 'reports'] as const,
   removedPosts: (groupId: string) =>

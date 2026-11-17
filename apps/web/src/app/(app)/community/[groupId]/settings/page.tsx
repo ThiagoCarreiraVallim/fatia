@@ -1,75 +1,254 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ChevronRight, Crown, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { Check, ChevronRight, Crown, Gift, LayoutDashboard, Lock, Search } from 'lucide-react';
 import {
+  accessLogLine,
   ApiError,
+  benefitsApi,
   canOpenPanel,
   consentSummary,
+  entryPolicyView,
   groupsApi,
-  joinPolicyLabel,
+  LEAVE_COPY,
+  lockedScopes,
+  myRoleBadge,
   panelHref,
+  PRO_PAID_NOTE,
+  SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
+  SHARE_SCOPES,
   teamRoleLabel,
+  teamSections,
+  teamWhoSeesCount,
+  timezoneLabel,
+  toggleScope,
+  viewedToday,
+  VISIBILITY_WORD,
   type JoinConsent,
+  type MyGroup,
+  type ShareScope,
 } from '@fatia/api-client';
-import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { communityKeys } from '@/components/community/query-keys';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
-const formatWhen = (iso: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-    .format(new Date(iso))
-    .replace('.', '');
+/** Quantos da equipe aparecem antes do "Ver toda a equipe". */
+const TEAM_PREVIEW = 3;
+const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** "O que eu compartilho" (Cm-04): uma chave por categoria, que grava na hora. */
+function SharingSection({ g }: { g: MyGroup }) {
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: (consent: JoinConsent) => groupsApi.setConsent(g.id, consent),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: ['community'] });
+      toast(`Compartilhando: ${consentSummary(r.scopes)}.`);
+    },
+  });
+  // 409: tirar um obrigatório que já compartilha; a API diz qual.
+  const saveError = save.isError
+    ? save.error instanceof ApiError && save.error.isConflict
+      ? save.error.message
+      : 'Não deu para salvar agora. Tente de novo.'
+    : null;
+  // A exigência é de quem participa como membro; a equipe recebe.
+  const locked = lockedScopes(g.role === 'MEMBER' ? g.requiredSharingScopes : [], g.consentScopes);
+  const flip = (scope: ShareScope) =>
+    save.mutate({ scopes: toggleScope(g.consentScopes, scope), statsOptIn: g.statsOptIn });
+
+  return (
+    <section className="space-y-2.5" aria-labelledby="compartilho">
+      <div className="space-y-1 px-1">
+        <h2 id="compartilho" className="eyebrow">
+          O que eu compartilho
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          A equipe da comunidade vê só o que estiver ligado aqui.
+        </p>
+      </div>
+      <ul className="divide-y divide-border overflow-hidden rounded-card bg-card">
+        {SHARE_SCOPES.map((scope) => {
+          const on = g.consentScopes.includes(scope);
+          const lock = locked.includes(scope);
+          return (
+            <li key={scope} className="flex min-h-16 items-center gap-3 px-[18px] py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{SHARE_SCOPE_LABEL[scope]}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {lock ? `${SCOPE_DETAILS[scope]} · obrigatório aqui` : SCOPE_DETAILS[scope]}
+                </span>
+              </span>
+              {lock && <Lock size={16} className="text-muted-foreground" aria-hidden />}
+              <Switch
+                checked={on}
+                label={SHARE_SCOPE_LABEL[scope]}
+                disabled={lock || save.isPending}
+                onCheckedChange={() => flip(scope)}
+              />
+            </li>
+          );
+        })}
+      </ul>
+      <label className="flex min-h-12 cursor-pointer items-center gap-3 px-1">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          checked={g.statsOptIn}
+          disabled={save.isPending}
+          onChange={(e) => save.mutate({ scopes: g.consentScopes, statsOptIn: e.target.checked })}
+        />
+        <span
+          aria-hidden
+          className={cn(
+            'flex size-6 items-center justify-center rounded-md border border-border peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
+            g.statsOptIn && 'border-primary bg-primary text-primary-foreground',
+          )}
+        >
+          {g.statsOptIn && <Check size={16} />}
+        </span>
+        <span className="text-sm">Entrar nos números da comunidade (sem nome)</span>
+      </label>
+      {saveError && (
+        <p role="alert" className="px-1 text-sm text-danger">
+          {saveError}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** "Equipe da comunidade": quem vê o quê de mim, com busca e "viu hoje". */
+function TeamSection({ groupId }: { groupId: string }) {
+  const [q, setQ] = useState('');
+  const [all, setAll] = useState(false);
+  const team = useQuery({
+    queryKey: communityKeys.team(groupId),
+    queryFn: () => groupsApi.team(groupId),
+  });
+  const now = useMemo(() => new Date(), []);
+  if (!team.data) return team.isPending ? <Skeleton className="h-40 rounded-card bg-card" /> : null;
+
+  const termo = q.trim().toLowerCase();
+  const filtrada = termo
+    ? team.data.filter((m) => `${m.name} ${teamRoleLabel(m.role)}`.toLowerCase().includes(termo))
+    : team.data;
+  const secoes = teamSections(filtrada);
+  const limite = all || termo ? Infinity : TEAM_PREVIEW;
+  const visiveis: Array<(typeof secoes)[number] & { total: number }> = [];
+  let mostrados = 0;
+  for (const s of secoes) {
+    const members = s.members.slice(0, Math.max(0, limite - mostrados));
+    mostrados += members.length;
+    if (members.length > 0) visiveis.push({ ...s, total: s.members.length, members });
+  }
+  const veem = teamWhoSeesCount(team.data);
+
+  return (
+    <section className="space-y-2.5" aria-labelledby="equipe">
+      <div className="space-y-1 px-1">
+        <h2 id="equipe" className="eyebrow">
+          Equipe da comunidade
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          {veem === 0
+            ? 'Ninguém da equipe vê o que você compartilha agora.'
+            : `${veem} ${veem === 1 ? 'pessoa pode' : 'pessoas podem'} ver o que você compartilha.`}
+        </p>
+      </div>
+      {team.data.length > TEAM_PREVIEW && (
+        <label className="flex h-12 items-center gap-2 rounded-[14px] bg-card px-3.5">
+          <Search size={16} className="text-muted-foreground" aria-hidden />
+          <input
+            aria-label="Buscar na equipe"
+            placeholder="Buscar por nome ou função"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+        </label>
+      )}
+      {visiveis.map((s) => (
+        <div key={s.title} className="space-y-2">
+          <div className="flex justify-between px-1 pt-1 text-xs">
+            <span className="font-bold text-muted-foreground">{s.title}</span>
+            <span className="tabular-nums text-muted-foreground">{s.total}</span>
+          </div>
+          <ul className="divide-y divide-border overflow-hidden rounded-card bg-card">
+            {s.members.map((m) => (
+              <li
+                key={`${m.role}-${m.name}`}
+                className="flex min-h-[60px] items-center gap-3 px-[18px] py-3"
+              >
+                <GroupAvatar name={m.name} url={null} size={36} className="rounded-full" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{m.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {m.sees.length > 0
+                      ? `${teamRoleLabel(m.role).toLowerCase()} · vê ${consentSummary(m.sees).toLowerCase()}`
+                      : `${teamRoleLabel(m.role).toLowerCase()} · não vê seus dados`}
+                  </span>
+                </span>
+                {viewedToday(m.lastViewedAt, now, BROWSER_TZ) && (
+                  <Badge variant="pending">viu hoje</Badge>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {termo && visiveis.length === 0 && (
+        <p className="px-1 text-xs text-muted-foreground">Ninguém da equipe com esse nome.</p>
+      )}
+      {!all && !termo && team.data.length > TEAM_PREVIEW && (
+        <Button size="sm" variant="outline" className="w-full" onClick={() => setAll(true)}>
+          {`Ver toda a equipe (${team.data.length})`}
+        </Button>
+      )}
+    </section>
+  );
+}
 
 /**
- * Sobre a comunidade, do ponto de vista do membro, atrás da engrenagem do
- * mural (que é a raiz da comunidade): quem é a equipe, o painel para quem é
- * dela, o assento PRO, o que eu compartilho (e posso mudar), quem olhou meus
- * dados e sair ou cancelar o pedido. Desafios e Planos e dicas são abas do mural.
+ * Sobre a comunidade (Cm-04), atrás da engrenagem do mural: quem é, o PRO pago
+ * pela comunidade, os benefícios, o que eu compartilho (cada categoria grava
+ * na hora; a obrigatória fica travada), quem da equipe vê, quem olhou meus
+ * dados (inclusive o negado) e sair, com confirmação.
  */
 export default function CommunitySettingsPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const router = useRouter();
   const qc = useQueryClient();
   const [leaving, setLeaving] = useState(false);
+  const now = useMemo(() => new Date(), []);
 
   const group = useQuery({
     queryKey: communityKeys.group(groupId),
     queryFn: () => groupsApi.get(groupId),
   });
   const active = group.data?.status === 'ACTIVE';
-  const members = useQuery({
-    queryKey: communityKeys.members(groupId),
-    queryFn: () => groupsApi.members(groupId),
-    enabled: active,
-  });
   const log = useQuery({
     queryKey: communityKeys.accessLog(groupId),
-    queryFn: () => groupsApi.accessLog({ groupId, limit: 20 }),
+    queryFn: () => groupsApi.accessLog({ groupId, limit: 5 }),
+    enabled: active,
+  });
+  const benefits = useQuery({
+    queryKey: communityKeys.benefits(groupId),
+    queryFn: () => benefitsApi.list(groupId),
     enabled: active,
   });
 
-  const save = useMutation({
-    mutationFn: (consent: JoinConsent) => groupsApi.setConsent(groupId, consent),
-    onSuccess: (r) => {
-      void qc.invalidateQueries({ queryKey: ['community'] });
-      toast(`Compartilhando: ${consentSummary(r.scopes)}.`);
-    },
-  });
   const leave = useMutation({
     mutationFn: () => groupsApi.leave(groupId),
     onSuccess: () => {
@@ -111,42 +290,39 @@ export default function CommunitySettingsPage() {
   }
 
   const g = group.data;
-  const team = (members.data ?? []).filter((m) => m.role !== 'MEMBER');
   const isOwner = g.role === 'OWNER';
+  const entry = entryPolicyView(g.joinPolicy);
+  const ativos = (benefits.data ?? []).filter((b) => !b.expired).length;
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-5 p-4">
       <section className="flex items-start gap-3">
-        <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
-        <div className="min-w-0 space-y-1">
+        <GroupAvatar name={g.name} url={g.avatarUrl} size={56} className="rounded-[18px]" />
+        <div className="min-w-0 flex-1 space-y-1">
           {/* A barra diz "Sobre a comunidade"; o nome fica aqui. */}
-          <h2 className="text-base font-semibold">{g.name}</h2>
-          {g.description && <p className="text-sm">{g.description}</p>}
+          <h2 className="font-display text-h3 font-bold">{g.name}</h2>
           <p className="text-xs text-muted-foreground">
-            {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
+            {[g.description, timezoneLabel(g.timezone)].filter(Boolean).join(' · ')}
           </p>
-          {g.requiredSharingScopes.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {`Para participar como membro: compartilhar ${consentSummary(g.requiredSharingScopes).toLowerCase()}.`}
-            </p>
-          )}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <Badge variant="pending">{VISIBILITY_WORD[g.visibility]}</Badge>
+            <Badge
+              variant={entry.tone === 'ok' ? 'done' : entry.tone === 'warn' ? 'lite' : 'pending'}
+            >
+              {entry.badge}
+            </Badge>
+            <Badge variant="pending">{myRoleBadge(g.role)}</Badge>
+          </div>
         </div>
       </section>
 
       {canOpenPanel(g) && (
         <Link
           href={panelHref(g.id)}
-          className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4 hover:bg-accent/40"
+          className="flex min-h-14 items-center gap-3 rounded-[18px] bg-card px-4 hover:bg-accent/40"
         >
-          <LayoutDashboard size={20} className="text-primary" aria-hidden />
-          <span className="flex-1 text-sm">
-            <span className="block font-medium">Abrir painel</span>
-            <span className="block text-xs text-muted-foreground">
-              {isOwner
-                ? 'Membros, convites, planos e dicas, assentos e números da comunidade.'
-                : 'Membros, o que compartilham com você, convites, planos e dicas.'}
-            </span>
-          </span>
+          <LayoutDashboard size={18} className="text-primary" aria-hidden />
+          <span className="flex-1 text-sm font-semibold">Abrir painel</span>
           <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
         </Link>
       )}
@@ -161,96 +337,56 @@ export default function CommunitySettingsPage() {
       {g.hasAiSeat && (
         <Link
           href="/plan"
-          className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4 hover:bg-accent/40"
+          className="flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3.5 text-sm"
         >
-          <Crown size={20} className="text-primary" aria-hidden />
-          <span className="text-sm">
-            <span className="block font-medium">A comunidade paga seu PRO</span>
-            <span className="block text-xs text-muted-foreground">
-              Chat, foto e ditado com a IA. Se o assento sair, você volta ao Free sem perder nada.
-            </span>
-          </span>
+          <Crown size={16} className="shrink-0 text-primary" aria-hidden />
+          {PRO_PAID_NOTE}
         </Link>
       )}
 
-      {active && (
-        <section className="space-y-2" aria-labelledby="equipe">
-          <h2 id="equipe" className="text-sm font-semibold">
-            Equipe
-          </h2>
-          {team.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Ninguém da equipe, por enquanto.</p>
-          ) : (
-            <ul className="divide-y rounded-2xl border border-subtle bg-card">
-              {team.map((m) => (
-                <li key={m.membershipId} className="flex justify-between px-4 py-3 text-sm">
-                  <span>{m.name}</span>
-                  <span className="text-xs text-muted-foreground">{teamRoleLabel(m.role)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      {/* Sem benefício valendo, a entrada some (Pn-28b). */}
+      {ativos > 0 && (
+        <Link
+          href={`/community/${g.id}/benefits`}
+          className="flex min-h-14 items-center gap-3 rounded-[18px] bg-card px-4 hover:bg-accent/40"
+        >
+          <span className="flex size-9 items-center justify-center rounded-xl bg-brand text-brand-foreground">
+            <Gift size={16} aria-hidden />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm font-semibold">Benefícios</span>
+            <span className="block text-xs text-muted-foreground">
+              {`${ativos} ${ativos === 1 ? 'desconto' : 'descontos'} de parceiros`}
+            </span>
+          </span>
+          <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
+        </Link>
       )}
 
-      {active && (
-        <section className="space-y-2" aria-labelledby="compartilho">
-          <h2 id="compartilho" className="text-sm font-semibold">
-            O que eu compartilho
-          </h2>
-          <ConsentForm
-            key={`${g.consentScopes.join()}|${g.statsOptIn}|${g.requiredSharingScopes.join()}`}
-            initial={{ scopes: g.consentScopes, statsOptIn: g.statsOptIn }}
-            // A exigência é de quem participa como membro; a equipe recebe.
-            required={g.role === 'MEMBER' ? g.requiredSharingScopes : []}
-            team={team}
-            submitLabel="Salvar"
-            editing
-            pending={save.isPending}
-            error={
-              save.isError
-                ? // 409: tirar um obrigatório que já compartilha; a API diz qual.
-                  save.error instanceof ApiError && save.error.isConflict
-                  ? save.error.message
-                  : 'Não deu para salvar agora. Tente de novo.'
-                : null
-            }
-            onSubmit={(consent) => save.mutate(consent)}
-          />
-        </section>
-      )}
+      {active && <SharingSection g={g} />}
+      {active && <TeamSection groupId={g.id} />}
 
       {active && (
-        <section className="space-y-2" aria-labelledby="acessos">
-          <h2 id="acessos" className="flex items-center gap-2 text-sm font-semibold">
-            <ShieldCheck size={16} aria-hidden /> Quem acessou seus dados
+        <section
+          aria-labelledby="acessos"
+          className="space-y-2 rounded-card bg-surface-3 px-[18px] py-4"
+        >
+          <h2 id="acessos" className="eyebrow">
+            Quem olhou seus dados
           </h2>
           {log.data && log.data.length === 0 && (
             <p className="text-xs text-muted-foreground">
               Ninguém da equipe olhou seus dados ainda.
             </p>
           )}
-          {log.data && log.data.length > 0 && (
-            <ul className="divide-y rounded-2xl border border-subtle bg-card text-sm">
-              {log.data.map((entry, i) => (
-                <li key={`${entry.at}-${i}`} className="flex justify-between gap-3 px-4 py-3">
-                  <span className="min-w-0">
-                    <span className="block truncate">
-                      {entry.professionalName ?? 'Conta apagada'}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {entry.denied
-                        ? `${SHARE_SCOPE_LABEL[entry.scope]} · barrado`
-                        : SHARE_SCOPE_LABEL[entry.scope]}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatWhen(entry.at)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {log.data?.map((entry, i) => (
+            <p
+              key={`${entry.at}-${i}`}
+              className={entry.denied ? 'text-xs text-muted-foreground' : 'text-sm'}
+            >
+              {accessLogLine(entry, now, BROWSER_TZ)}
+            </p>
+          ))}
         </section>
       )}
 
@@ -267,10 +403,12 @@ export default function CommunitySettingsPage() {
       <ConfirmDialog
         open={leaving}
         onOpenChange={setLeaving}
-        title={active ? `Sair de ${g.name}?` : 'Cancelar o pedido?'}
+        title={active ? `Sair da ${g.name}?` : 'Cancelar o pedido?'}
         description={
           active
-            ? `A equipe perde o acesso ao que você compartilhava${g.hasAiSeat ? ', e o PRO pago pela comunidade acaba' : ''}. Seus registros continuam com você.`
+            ? g.hasAiSeat
+              ? LEAVE_COPY.bodyPro
+              : LEAVE_COPY.body
             : 'Você pode pedir de novo depois, pelo código ou por um convite.'
         }
         confirmLabel={active ? 'Sair' : 'Cancelar pedido'}
