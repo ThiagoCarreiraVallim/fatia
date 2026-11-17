@@ -170,12 +170,11 @@ quinto campo sem alguém decidir isso explicitamente.
 | `PAST_DUE` fora da carência   | `none`             |
 | `CANCELED` / sem assinatura   | `none`             |
 
-**`TRIALING` não é estado do banco.** É um valor do tipo `StatusDeAssinatura` em
-`billing/ai-tier.ts`, escrito para a `GroupSubscription` desta seção (cobrança por aluno ativo),
-que nunca foi criada e foi superada pela ADR 025. O enum que existe, `SubscriptionStatus` (PRO
-pessoal), tem cinco valores — `PENDING`, `ACTIVE`, `PAST_DUE`, `CANCELED`, `EXPIRED` — e nenhum
-"teste". O teste grátis do PRO é decisão da #386 (assinatura `ACTIVE` com período curto ou origem
-própria), e não ganha status novo sem migração e revisão desta página.
+**`TRIALING` existe, mas só no PRO pessoal.** A #386 acrescentou `TRIALING` ao enum
+`SubscriptionStatus` (`UserSubscription`, PRO pessoal) para o teste grátis; esta tabela continua
+falando do `StatusDeAssinatura` de `billing/ai-tier.ts`, escrito para a `GroupSubscription` (cobrança
+por aluno ativo), que nunca foi criada e foi superada pela ADR 025. O teste do PRO pessoal está em
+"Teste grátis", abaixo.
 
 `none` **não é bloqueio**: é o app inteiro sem a IA por conta da academia. Registro manual, PWA, app
 nativo e o MCP com a IA do próprio usuário continuam funcionando, e quem traz a própria IA (#164)
@@ -285,25 +284,89 @@ não mudam.
 
 ### O que "Meu plano" mostra em cada estado (redesign, #386)
 
-Cada valor de `SubscriptionStatus` tem um jeito de aparecer (prancha `Dados-Estados`;
-[`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md) §4):
+`GET /billing/plan` devolve `state` (`FREE`, `TRIAL`, `ACTIVE`, `PENDING`, `PAST_DUE`, `CANCELED`,
+`EXPIRED`), `paidBy` (`PERSONAL`, `SEAT`, `COMMUNITY`, `PROGRAM`), `trialEndsAt`, `trialEligible`,
+`trialDays` e `paymentMethod`. A tela não decide nada sozinha: `planStatusView(plan, { surface,
+canPurchase, now })` (`packages/api-client/src/plan-status.ts`, com teste) devolve o selo, o texto e
+os botões, igual na web e no app (pranchas Al-M13, Al-M13b/c/d e Al-M5):
 
-| Estado     | Na tela                                                    |
-| ---------- | ---------------------------------------------------------- |
-| `PENDING`  | "Aguardando pagamento" e o botão para abrir o pagamento    |
-| `ACTIVE`   | PRO com a data de renovação                                |
-| `PAST_DUE` | banner da carência: "segue até…" (`graceEndsAt`)           |
-| `CANCELED` | "Acaba em 4 dez", sem cobrar de novo (`cancelAtPeriodEnd`) |
-| `EXPIRED`  | volta ao Free, e nada se perde                             |
+| Estado     | Na web                                                                                           | No app                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `TRIAL`    | "Teste grátis até …", o preço depois, cancelar o teste                                           | "Teste grátis até …"; na loja, "cancelar nas assinaturas"   |
+| `PENDING`  | "Aguardando o pagamento" + "Abrir página de pagamento"                                           | "Você assinou fora do app. Avisamos por e-mail…", sem botão |
+| `ACTIVE`   | preço, forma de pagamento, cancelar; Pix/boleto a 3 dias do vencimento: "vence em breve" + pagar | estado e datas; na loja, "cancelar nas assinaturas da loja" |
+| `PAST_DUE` | "venceu hoje" / "faltam N dias para a IA pausar" + pagar                                         | "Pagamento não passou… mandamos por e-mail", sem botão      |
+| `CANCELED` | "PRO até …", sem cobrar de novo                                                                  | igual                                                       |
+| `EXPIRED`  | "A IA pausou" + pagar (cobrança ainda aberta) ou "Voltar ao PRO"                                 | "Seu PRO acabou" + oferta da loja ou da comunidade          |
+
+Assinatura da loja com falha de cobrança (`PAST_DUE` em `APPLE`/`GOOGLE`, Al-M13d): nas duas
+superfícies, "A loja não conseguiu cobrar", "Abrir assinaturas da App Store / do Google Play" e
+"Por que não dá para pagar aqui?". PRO pago pela comunidade (Al-M5): quem paga, "Enquanto você for
+membro" ou "Durante o <programa>" com a data e os dias que faltam, "Abrir a IA".
+
+### A regra das lojas: o app nunca vende fora da loja
+
+- No app (iOS e Android) a compra é **só** pela loja, via RevenueCat, e só com
+  `EXPO_PUBLIC_IAP_ENABLED`. Nenhum preço do Asaas, Pix, boleto, link de pagamento ou "cancelar" da
+  assinatura da web aparece no app: `planStatusView` com `surface: 'app'` nunca devolve a ação
+  `pay` nem `cancel` (teste em `plan-status.test.ts`, com mutação vista falhar).
+- Sem compra no app, a oferta é "O PRO vem pela sua comunidade" e "Tenho código" (abre a entrada por
+  código da comunidade), sem preço nem link.
+- **Assinatura feita na web, vista no app:** mostra o estado e as datas — o que a pessoa já tem —,
+  com "Fora do app" e "mandamos por e-mail como resolver", **sem botão**. É o texto da prancha
+  Al-M13 e o que as diretrizes de serviços multiplataforma permitem (acessar o que foi comprado em
+  outro lugar) sem orientar compra fora da loja. O antigo "entre no Fatia pelo navegador para
+  gerenciar" saiu.
+- O push de cobrança não leva preço, Pix, boleto nem link (ele aparece no celular); o e-mail leva
+  ao Meu plano da web.
+- O teste no app só é prometido ("Começar 7 dias grátis") quando o pacote da loja tem oferta
+  introdutória grátis (`storeTrialDays`) **e** a pessoa ainda não usou o teste no Fatia. Quem
+  decide a elegibilidade e cobra é a loja.
+
+## Teste grátis (#386)
+
+`BILLING_PRO_TRIAL_DAYS` (padrão 7; 0 desliga) dias de PRO, **uma vez por pessoa**
+(`User.proTrialStartedAt`; elegível quem nunca teve teste nem assinatura pessoal paga).
+
+- **Web:** o primeiro checkout de quem é elegível já é o teste. A reserva é atômica
+  (`updateMany` onde `proTrialStartedAt` é nulo), a linha nasce `TRIALING` com `trialEndsAt` =
+  `currentPeriodEnd` e a primeira cobrança do Asaas vence no fim do teste — nada é cobrado hoje, e a
+  tela não abre a página de pagamento. Teste que acaba sem pagamento volta ao Free **sem carência**
+  (`teste_acabou`), com as 24 h de folga da renovação.
+- **Loja:** a RevenueCat informa `period_type: TRIAL`; a linha vira `TRIALING` e marca
+  `proTrialStartedAt`. A loja converte ou não; o Fatia só lê.
+
+## Avisos de cobrança (#386, prancha Ex-03)
+
+`BillingReminderJob` (`billing/billing-reminder-job.service.ts`) roda de hora em hora e, a partir
+das 9h no fuso da pessoa, manda push (`NotificationKind.BILLING`, sem chave na tela de
+Notificações) e e-mail. Cada aviso é gravado em `BillingReminder` **antes** de sair, com unique
+`(subscriptionId, kind, dueDate)`: rodar de novo ou duas instâncias não repetem. Lê o estado
+gravado, não só o webhook.
+
+| Aviso                 | Quando                                   | Quem                               |
+| --------------------- | ---------------------------------------- | ---------------------------------- |
+| `TRIAL_ENDING`        | 2 dias antes do fim do teste             | web e loja (a loja: onde cancelar) |
+| `DUE_SOON`            | 3 dias antes do vencimento               | web, Pix e boleto                  |
+| `DUE_TODAY`           | no vencimento                            | web, Pix e boleto                  |
+| `GRACE_5_LEFT`        | 2 dias de atraso                         | web                                |
+| `GRACE_2_LEFT`        | 5 dias de atraso                         | web                                |
+| `AI_PAUSED`           | 7 dias de atraso                         | web                                |
+| `STORE_BILLING_ISSUE` | a loja não conseguiu cobrar (`PAST_DUE`) | loja: só "atualize na loja"        |
+
+Assinatura da loja **nunca** recebe cobrança nem lembrete de pagamento do Fatia; cartão não recebe
+o "vence em breve" (é automático); cancelada e cortesia não recebem nada.
 
 ## Web: Asaas
 
-1. `POST /billing/checkout { interval, cpf }` — o CPF é validado pelos dígitos, vai para o Asaas
-   (que exige CPF para emitir) e **não é gravado**; guardamos só `User.asaasCustomerId`.
-2. A API cria `POST /v3/subscriptions` com `billingType: UNDEFINED` (Pix, boleto ou cartão, a
-   pessoa escolhe na fatura), grava a linha `PENDING` com o `invoiceUrl` da primeira cobrança e
-   devolve o plano. Tocar de novo em menos de 24 h devolve o mesmo link; trocar de mensal para
-   anual cancela o pendente antes.
+1. `POST /billing/checkout { interval, cpf, paymentMethod? }` — o CPF é validado pelos dígitos, vai
+   para o Asaas (que exige CPF para emitir) e **não é gravado**; guardamos só
+   `User.asaasCustomerId`. O cartão é digitado na página do Asaas: o Fatia nunca o vê.
+2. A API cria `POST /v3/subscriptions` com `billingType` = a forma escolhida (`PIX`, `BOLETO`,
+   `CREDIT_CARD`; sem escolha, `UNDEFINED`), grava a linha `PENDING` (ou `TRIALING`, no teste) com o
+   `invoiceUrl` da primeira cobrança e a `paymentMethod`, e devolve o plano. Tocar de novo em menos
+   de 24 h com o mesmo período e a mesma forma devolve o mesmo link; trocar um dos dois cancela o
+   pendente antes. `PAYMENT_CREATED` e `PAYMENT_OVERDUE` atualizam o link da cobrança aberta.
 3. O webhook (`POST /api/billing/webhooks/asaas`, header `asaas-access-token`) é gravado primeiro
    em `BillingWebhookEvent` (`@@unique([provider, eventId])`): reentrega vira no-op. Eventos:
 
@@ -338,7 +401,7 @@ ambiente). Os testes cobrem o adapter com `fetch` simulado e o service contra o 
 ## App: RevenueCat
 
 A compra no app é obrigatoriamente pela loja. O app nunca mostra link de compra externa; quem
-assinou pela web vê o plano e é orientado a gerenciar pela web.
+assinou pela web vê o estado e as datas, sem botão (ver "A regra das lojas", acima).
 
 **A compra no app é desligável por build** (`EXPO_PUBLIC_IAP_ENABLED`, ligada só com `true` e com
 as chaves da RevenueCat no build). O piloto vai às lojas com ela **desligada**: a IA chega pelo
@@ -346,7 +409,8 @@ assento da comunidade ou pela cortesia (`billing:grant-pro`). Desligada, a Reven
 configurada, e "Meu plano" mostra o plano e diz que o PRO chega pela comunidade — sem pacote, sem
 "restaurar compras", sem preço e sem mandar gerenciar ou comprar pela web (as lojas proíbem, num app
 que não vende pela loja, apontar para a compra fora dele). A web continua vendendo pelo Asaas. A
-decisão do que aparecer está em `apps/mobile/src/billing/plan-offer.ts`, com teste.
+decisão do que aparecer está em `planStatusView` (`surface: 'app'`) e em
+`apps/mobile/src/billing/plan-offer.ts`, com teste.
 
 Configuração (uma vez, no painel da RevenueCat):
 
@@ -454,6 +518,20 @@ redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 
 
 `pnpm billing:grant-seat <email> <slug> [--seats N]` dá um assento de cortesia, sem cobrança (pool com
 `providerRef` nulo); `--purge` desfaz sem deixar rastro. É o que o E2E usa.
+
+## PRO para todos os membros e programas (#386)
+
+`GroupSeatPool.mode` = `ALL_MEMBERS` libera o PRO para **todo membro ativo com papel `MEMBER`** da
+comunidade, sem atribuir assento um a um. Um **programa** é esse pool com `programName` e data
+final (`currentPeriodEnd` + `cancelAtPeriodEnd`): a tela mostra "Durante o <programa>", a data e
+os dias que faltam (Al-M5). Quem sai da comunidade volta ao Free sem perder nada.
+
+`pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"]` liga (cortesia, pool com
+`providerRef` nulo); `--revoke` expira. Recusa pool pago. Como o `grant-seat`, é ferramenta de dev,
+seed e E2E.
+
+O painel da comunidade vê só **se** o membro tem PRO pela comunidade (`hasAiSeat`), nunca como uma
+assinatura pessoal foi paga (teste em `user-isolation.spec.ts`).
 
 ### Roteiro de sandbox dos assentos
 

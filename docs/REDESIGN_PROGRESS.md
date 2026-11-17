@@ -207,6 +207,45 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 - **Dica da constância:** é só o lado bom. O "Sábado é o que mais falha" da prancha saiu.
 - **Ainda não conferido:** as capturas contra as pranchas. O dono faz a passada visual.
 
+## Etapa 6: IA, plano e MCP (em andamento)
+
+| Issue | Título             | Estado           | Superfícies                                        |
+| ----- | ------------------ | ---------------- | -------------------------------------------------- |
+| #386  | Plano e assinatura | pronto na branch | api, db, api-client, web, app, site, e-mail e push |
+
+Pendências da #386 (branch `redesign/386-plano`, migration `20261116060000_pro_trial_reminders_community`, env nova `BILLING_PRO_TRIAL_DAYS`, padrão 7):
+
+- **Regra das lojas (o app nunca vende fora da loja):** a tela sai de `planStatusView(plan, { surface, canPurchase, now })` no api-client. Com `surface: 'app'` ela nunca devolve pagar, cancelar, preço da web, Pix, boleto nem link (teste com mutação vista falhar). Sem compra no app (`EXPO_PUBLIC_IAP_ENABLED`), a oferta é "O PRO vem pela sua comunidade" + "Tenho código", sem preço. O `webManageNote` ("entre pelo navegador") saiu.
+- **Assinatura da web vista no app:** mostra o estado e as datas, com "Fora do app" e "mandamos por e-mail como resolver", **sem botão** (o texto da prancha Al-M13). Quem resolve é o e-mail Ex-03, que leva ao Meu plano da web. O push de cobrança não leva preço, Pix nem link.
+- **Loja:** quem assina pela loja resolve na loja nas duas superfícies (Al-M13d), e nunca recebe cobrança nem lembrete de pagamento do Fatia. Só recebe o "a loja não conseguiu cobrar" e o "o teste está acabando" (onde cancelar).
+- **Teste de 7 dias, uma vez por pessoa** (`User.proTrialStartedAt`):
+  - Na web, o primeiro checkout de quem é elegível já é o teste: `TRIALING`, a primeira cobrança vence no fim, nada é cobrado hoje e a aba de pagamento não abre.
+  - Na loja, vem do `period_type: TRIAL` da RevenueCat.
+  - O app só promete o teste quando o pacote da loja tem oferta introdutória grátis **e** a pessoa é elegível. Quem decide e cobra é a loja.
+  - Teste sem pagamento volta ao Free sem carência.
+- **Forma de pagamento:** Pix, boleto ou cartão escolhidos antes (Si-04), gravados em `paymentMethod`. Trocar período ou forma cancela o pendente. O cartão não recebe "vence em breve" (é automático).
+- **Avisos (Ex-03):** `BillingReminderJob` de hora em hora, a partir das 9h no fuso da pessoa. `BillingReminder` é gravado antes do envio, com unique por assinatura, tipo e vencimento. Push com `NotificationKind.BILLING`, sem chave na tela de Notificações.
+- **PRO pela comunidade:** `GroupSeatPool.mode = ALL_MEMBERS` (só papel MEMBER). O programa é o pool com `programName` e data final. Para dev e E2E: `pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"] [--revoke]`. O painel vê só se o membro tem PRO pela comunidade, nunca como uma assinatura pessoal foi paga (`user-isolation.spec.ts`).
+- **Site (Si-04):** `fat.ia.br/pro` não tem sessão. Ele escolhe período e forma de pagamento e manda para `app/assinar`, que passa pelo login quando preciso e chega ao Meu plano com a escolha (`?periodo=&pagamento=`). O CPF é digitado na web e vai direto ao Asaas. Os preços do site saem do mesmo `BILLING_PRO_*_CENTS` (build args).
+- **Renomeados ao tocar:** `plano` → `plan`, `precos` → `prices`, `processarWebhookAsaas` → `handleAsaasWebhook`, `cancelar` → `cancel`, `sincronizar` → `sync`.
+- **Desvios do canvas:**
+  - O M3 (início do teste) é uma folha de 85% sobre o M2, não uma tela.
+  - "Tenho código" no chat leva à Comunidade com a folha do código aberta (`/community?join=1`). No Meu plano, a folha abre ali mesmo.
+  - O M2 ganhou "Restaurar compras" (exigência da loja).
+  - Na web, o Si-04 fica dentro do Meu plano: período, CPF, forma de pagamento e teste. O pendente ganhou "Trocar a forma de pagamento".
+  - O "Pagar com Pix" do M13b/c é o link da cobrança no Asaas, que mostra o Pix (o Fatia não gera QR). Só aparece na web.
+  - Os preços do M2 no app são os da loja, não os da web.
+  - O selo do Você mostra "Teste · n dias".
+- **Fora do escopo:**
+  - Cancelar no Asaas a assinatura de um teste que acabou sem pagamento: hoje ela volta ao Free, mas a recorrência segue lá até alguém pagar ou cancelar.
+  - E-mail de checkout pendente.
+  - Aviso no app quando o teste da loja converte.
+  - O "Regularizado" do M13b como estado próprio: depois do pagamento a tela volta ao "Ativa".
+- **Ainda não conferido:**
+  - Compra real na loja (exige build de desenvolvimento e contas de teste).
+  - Checkout no sandbox do Asaas.
+  - Capturas contra as pranchas (o dono faz a passada visual).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -214,7 +253,7 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
-| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
+| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |

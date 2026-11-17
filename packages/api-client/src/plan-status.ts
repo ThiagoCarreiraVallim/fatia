@@ -357,9 +357,12 @@ export function planStatusView(plan: MyPlan, ctx: PlanViewContext): PlanStatusVi
         tone: 'mute',
         via: viaOf(plan, ctx),
         title: `PRO até ${day(plan.currentPeriodEnd)}`,
-        body: store
-          ? 'Você cancelou na loja. Ela não cobra de novo; o PRO segue até o fim do período.'
-          : 'Você cancelou. Não cobramos de novo; o PRO segue até o fim do período.',
+        body:
+          plan.status === 'TRIALING'
+            ? 'Você cancelou o teste. Nada será cobrado; o PRO segue até o fim do teste.'
+            : store
+              ? 'Você cancelou na loja. Ela não cobra de novo; o PRO segue até o fim do período.'
+              : 'Você cancelou. Não cobramos de novo; o PRO segue até o fim do período.',
         actions: manage('Reativar nas assinaturas da loja'),
         featuresTitle: `Ativos até ${day(plan.currentPeriodEnd)}`,
       });

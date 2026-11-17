@@ -29,7 +29,7 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - [x] Web: `plan-screen.tsx` (Si-04 dentro do Meu plano: período, CPF, Pix/Boleto/Cartão, teste; `?periodo=&pagamento=`), `upsell-ia.tsx` (Al-M1), selo do Você
 - [x] Site: Si-04 (`apps/site/src/pages/pro.astro` → `app/assinar` → login quando preciso → `/plan?periodo=&pagamento=`)
 - [x] Envs em docker-compose.prod.yml e .env.example
-- [ ] Docs: BILLING.md, REDESIGN_PROGRESS.md
+- [x] Docs: BILLING.md, REDESIGN_PROGRESS.md
 - [ ] lint, typecheck, testes
 
 ## Decisões

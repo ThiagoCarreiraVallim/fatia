@@ -102,7 +102,8 @@ export function planState(
 ): PlanState {
   if (direito.source === 'INSTANCE') return 'ACTIVE';
   if (direito.tier === 'PRO') {
-    if (direito.motivo === 'teste') return 'TRIAL';
+    // Teste cancelado: nada será cobrado; o PRO segue até o fim do teste.
+    if (direito.motivo === 'teste') return cancelAtPeriodEnd ? 'CANCELED' : 'TRIAL';
     if (direito.motivo === 'carencia') return 'PAST_DUE';
     return cancelAtPeriodEnd ? 'CANCELED' : 'ACTIVE';
   }

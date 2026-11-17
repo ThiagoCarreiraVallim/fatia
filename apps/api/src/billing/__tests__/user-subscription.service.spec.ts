@@ -379,6 +379,32 @@ describe('UserSubscriptionService — teste grátis e forma de pagamento (banco 
     expect(Math.abs(chamada.nextDueAt.getTime() - Date.now())).toBeLessThan(60_000);
   });
 
+  it('cancelar no teste encerra a recorrência: nada é cobrado e o PRO vai até o fim do teste', async () => {
+    const { service, provedor } = montar(comTeste);
+    const u = await prisma.user.create({
+      data: {
+        logtoSub: `${stamp}-cancela-teste`,
+        email: `${stamp}-cancela-teste@test.local`,
+        name: 'cancela',
+        asaasCustomerId: `${stamp}-cus-cancela`,
+      },
+    });
+    try {
+      const teste = await service.checkout(u.id, { interval: 'MONTHLY', cpf: CPF });
+      expect(teste.state).toBe('TRIAL');
+      const plano = await service.cancel(u.id);
+      expect(provedor.cancelSubscription).toHaveBeenCalledTimes(1);
+      expect(plano).toMatchObject({
+        tier: 'PRO',
+        state: 'CANCELED',
+        cancelAtPeriodEnd: true,
+        trialEndsAt: teste.trialEndsAt,
+      });
+    } finally {
+      await prisma.user.delete({ where: { id: u.id } });
+    }
+  });
+
   it('trocar a forma de pagamento antes de pagar abre outro checkout', async () => {
     const { service, provedor } = montar(comTeste);
     const plano = await service.checkout(jaFoiPro, {

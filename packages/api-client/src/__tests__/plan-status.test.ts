@@ -485,6 +485,32 @@ describe('planStatusView: teste grátis', () => {
   });
 });
 
+describe('planStatusView: teste cancelado', () => {
+  it('nada será cobrado, o PRO vai até o fim do teste e não há o que cancelar de novo', () => {
+    const v = planStatusView(
+      plan({
+        tier: 'PRO',
+        source: 'ASAAS',
+        reason: 'teste',
+        state: 'CANCELED',
+        status: 'TRIALING',
+        cancelAtPeriodEnd: true,
+        interval: 'MONTHLY',
+        trialEndsAt: '2026-11-14T12:00:00Z',
+        currentPeriodEnd: '2026-11-14T12:00:00Z',
+        paidBy: 'PERSONAL',
+        trialEligible: false,
+      }),
+      web,
+    );
+    expect(v.title).toBe('PRO até 14 nov');
+    expect(v.body).toBe(
+      'Você cancelou o teste. Nada será cobrado; o PRO segue até o fim do teste.',
+    );
+    expect(v.actions).toEqual([]);
+  });
+});
+
 describe('planStatusView: PRO pela comunidade (M5)', () => {
   it('como membro: enquanto você for membro', () => {
     const v = planStatusView(
