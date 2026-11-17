@@ -8,6 +8,8 @@ import {
   collapsedLabel,
   isEmptyChatArtifact,
   isRenderableChatArtifact,
+  pauseDecisionCount,
+  webConsentToSaveOnSend,
   lastToolName,
   toolCallStatusOf,
   toolLineLabel,
@@ -380,5 +382,25 @@ describe('isRenderableChatArtifact', () => {
       expect(isEmptyChatArtifact(a)).toBe(false);
       expect(chatCardTitle(a)).toBe('Cartão');
     }
+  });
+});
+
+/** O lote da pausa (#384): a busca conta como decisão, e o aceite só sai no "Enviar". */
+describe('lote da pausa com a busca', () => {
+  const acoes = [
+    { kind: 'confirm', toolCallId: 'c1', tool: 'log_meal', title: 't', prompt: 'p', arguments: {} },
+    { kind: 'web_consent', toolCallId: 'w1', tool: 'web_search', prompt: 'p', query: 'q' },
+    { kind: 'question', toolCallId: 'q1', prompt: 'p', fields: [] },
+  ] as unknown as Parameters<typeof pauseDecisionCount>[0];
+
+  it('conta escritas e buscas, não perguntas', () => {
+    expect(pauseDecisionCount(acoes)).toBe(2);
+  });
+
+  it('grava o aceite só se a escolha final da busca for concordar e ainda não houver', () => {
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: true }, false)).toBe(true);
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: false }, false)).toBe(false);
+    expect(webConsentToSaveOnSend(acoes, { c1: true, w1: true }, true)).toBe(false);
+    expect(webConsentToSaveOnSend(acoes, { c1: true }, false)).toBe(false);
   });
 });

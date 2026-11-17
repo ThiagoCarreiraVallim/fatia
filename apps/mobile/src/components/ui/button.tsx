@@ -120,6 +120,7 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
     style,
     onPressIn,
     onPressOut,
+    accessibilityState,
     ...props
   },
   ref,
@@ -136,7 +137,7 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       accessibilityRole="button"
       // `disabled` no `accessibilityState` é o que faz o leitor de tela anunciar
       // "desativado" — sem ele o botão parece tocável para quem não vê a opacidade.
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      accessibilityState={{ ...accessibilityState, disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       hitSlop={size === 'xs' ? 5 : undefined}
       className={cn(buttonVariants({ variant, size, disabled: isDisabled }), className)}

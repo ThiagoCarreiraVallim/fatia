@@ -485,3 +485,23 @@ export const CHAT_FEEDBACK_REASON_LABELS = {
   slow: 'Demorou',
   other: 'Outro',
 } as const;
+
+// ---------------------------------------------------------------- lote da pausa
+
+/** Quantas decisões o lote pede: escritas e buscas (as perguntas têm campo, não botão). */
+export function pauseDecisionCount(actions: ChatInterruptValue['actions']): number {
+  return actions.filter((a) => a.kind === 'confirm' || a.kind === 'web_consent').length;
+}
+
+/**
+ * No lote, tocar "Concordo e buscar" só escolhe; o aceite da busca é gravado no "Enviar", e só
+ * se a escolha final for concordar e ainda não houver aceite. Mudar de ideia não grava nada.
+ */
+export function webConsentToSaveOnSend(
+  actions: ChatInterruptValue['actions'],
+  approvals: Record<string, boolean>,
+  alreadyAccepted: boolean,
+): boolean {
+  if (alreadyAccepted) return false;
+  return actions.some((a) => a.kind === 'web_consent' && approvals[a.toolCallId] === true);
+}

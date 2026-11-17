@@ -13,6 +13,8 @@ import {
 import {
   AI_CONSENT_TEXTS,
   aiConsentBody,
+  pauseDecisionCount,
+  webConsentToSaveOnSend,
   askFieldsOf,
   previewChatAction,
   questionAnswer,
@@ -93,8 +95,13 @@ function Acoes({
   );
   const [decisoes, setDecisoes] = useState<Record<string, boolean>>({});
   const [respostas, setRespostas] = useState<Record<string, Record<string, string>>>({});
+  const aceites = useAiConsent().data;
+  const aceitar = useAcceptAiConsent();
+  const [aceiteFalhou, setAceiteFalhou] = useState(false);
   const soUmaEscrita = escritas.length + buscas.length === 1 && perguntas.length === 0;
-  const emLote = escritas.length > 1;
+  // A busca conta como decisão: escrita + busca já é lote.
+  const decisoesNoLote = pauseDecisionCount(pausa.actions);
+  const emLote = decisoesNoLote > 1;
 
   const faltaDecidir = [...escritas, ...buscas].some((a) => decisoes[a.toolCallId] === undefined);
   const faltaResponder = perguntas.some((a) =>
@@ -114,6 +121,20 @@ function Acoes({
         ]),
       ),
     });
+
+  // No lote, o aceite da busca é gravado aqui, com a escolha final; sem ele, nada sai.
+  const enviarLote = async () => {
+    if (webConsentToSaveOnSend(pausa.actions, decisoes, aceites?.webSearch.accepted === true)) {
+      setAceiteFalhou(false);
+      try {
+        await aceitar.mutateAsync('web_search');
+      } catch {
+        setAceiteFalhou(true);
+        return;
+      }
+    }
+    enviar();
+  };
 
   const decidir = (id: string) => (aprovada: boolean) => {
     if (soUmaEscrita) enviar({ [id]: aprovada });
@@ -144,7 +165,7 @@ function Acoes({
         <Cabecalho
           icone={<Layers size={18} color={colors.primaryText} />}
           acima="Lote"
-          titulo={`${escritas.length} ações para decidir`}
+          titulo={`${decisoesNoLote} ações para decidir`}
         />
       ) : perguntas.length ? (
         <Cabecalho
@@ -158,6 +179,8 @@ function Acoes({
           key={acao.toolCallId}
           acao={acao}
           ocupado={ocupado}
+          emLote
+          decisao={decisoes[acao.toolCallId]}
           onDecidir={decidir(acao.toolCallId)}
         />
       ))}
@@ -184,10 +207,18 @@ function Acoes({
           }
         />
       ))}
+      {aceiteFalhou ? (
+        <Text accessibilityRole="alert" className="text-xs text-danger">
+          Não consegui gravar o aceite da busca. Tente de novo.
+        </Text>
+      ) : null}
       {soUmaEscrita ? null : (
-        <Button disabled={ocupado || faltaDecidir || faltaResponder} onPress={() => enviar()}>
+        <Button
+          disabled={ocupado || faltaDecidir || faltaResponder || aceitar.isPending}
+          onPress={() => void enviarLote()}
+        >
           <Text className="text-sm font-bold text-primary-foreground">
-            {emLote ? `Enviar ${escritas.length} decisões` : 'Enviar'}
+            {emLote ? `Enviar ${decisoesNoLote} decisões` : 'Enviar'}
           </Text>
         </Button>
       )}
@@ -326,14 +357,22 @@ function Escrita({
 }
 
 /** O aceite da busca na web com a pergunta à vista; concordar grava o aceite e busca. */
+/**
+ * Sozinho, concordar grava o aceite (se ainda não havia) e libera a busca. No lote, tocar só
+ * escolhe e mostra a escolha; o aceite é gravado no "Enviar" do lote.
+ */
 function AceiteDaBusca({
   acao,
   ocupado,
   onDecidir,
+  emLote = false,
+  decisao,
 }: {
   acao: ChatWebConsentAction;
   ocupado: boolean;
   onDecidir: (aprovada: boolean) => void;
+  emLote?: boolean;
+  decisao?: boolean;
 }) {
   const textos = AI_CONSENT_TEXTS.webSearch;
   const aceites = useAiConsent().data;
@@ -365,8 +404,14 @@ function AceiteDaBusca({
         </Text>
       ) : null}
       <Button
+        accessibilityState={emLote ? { selected: decisao === true } : undefined}
+        className={cn(decisao === false && 'opacity-40')}
         disabled={ocupado || aceitar.isPending || !aceites?.processor}
         onPress={async () => {
+          if (emLote) {
+            onDecidir(true);
+            return;
+          }
           setFalhou(false);
           if (!aceites?.webSearch.accepted) {
             try {
@@ -381,7 +426,13 @@ function AceiteDaBusca({
       >
         <Text className="text-sm font-bold text-primary-foreground">{textos.accept}</Text>
       </Button>
-      <Button variant="secondary" disabled={ocupado} onPress={() => onDecidir(false)}>
+      <Button
+        variant="secondary"
+        accessibilityState={emLote ? { selected: decisao === false } : undefined}
+        className={cn(decisao === true && 'opacity-40')}
+        disabled={ocupado}
+        onPress={() => onDecidir(false)}
+      >
         <Text className="text-sm text-secondary-foreground">{textos.decline}</Text>
       </Button>
       <Text className="text-[11px] text-muted-foreground">{textos.footnote}</Text>

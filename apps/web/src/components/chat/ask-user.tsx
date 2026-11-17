@@ -14,6 +14,8 @@ import type {
 import {
   AI_CONSENT_TEXTS,
   aiConsentBody,
+  pauseDecisionCount,
+  webConsentToSaveOnSend,
   askFieldsOf,
   previewChatAction,
   questionAnswer,
@@ -199,16 +201,22 @@ function Escrita({
 
 /**
  * O aceite da busca na web, no meio da conversa e com a pergunta à vista: o que sai é só
- * esse texto. Concordar grava o aceite (se ainda não havia) e libera a busca desta vez.
+ * esse texto. Sozinho, concordar grava o aceite (se ainda não havia) e libera a busca desta
+ * vez. No lote, tocar só escolhe (e mostra a escolha): o aceite é gravado no "Enviar", e só se
+ * a escolha final for concordar.
  */
 function AceiteDaBusca({
   acao,
   ocupado,
   onDecidir,
+  emLote = false,
+  decisao,
 }: {
   acao: ChatWebConsentAction;
   ocupado: boolean;
   onDecidir: (aprovada: boolean) => void;
+  emLote?: boolean;
+  decisao?: boolean;
 }) {
   const textos = AI_CONSENT_TEXTS.webSearch;
   const { data: aceites } = useAceitesDaIa();
@@ -239,8 +247,13 @@ function AceiteDaBusca({
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
+          aria-pressed={emLote ? decisao === true : undefined}
           disabled={ocupado || aceitar.isPending || !aceites?.processor}
           onClick={async () => {
+            if (emLote) {
+              onDecidir(true);
+              return;
+            }
             setFalhou(false);
             if (!aceites?.webSearch.accepted) {
               try {
@@ -258,6 +271,7 @@ function AceiteDaBusca({
         </button>
         <button
           type="button"
+          aria-pressed={emLote ? decisao === false : undefined}
           disabled={ocupado}
           onClick={() => onDecidir(false)}
           className={cn(ghostButton, 'flex-1 rounded-full px-4 py-2 text-sm')}
@@ -375,6 +389,9 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     [pausa.actions],
   );
   const [decisoes, setDecisoes] = useState<Record<string, boolean>>({});
+  const { data: aceites } = useAceitesDaIa();
+  const aceitar = useAceitar();
+  const [aceiteFalhou, setAceiteFalhou] = useState(false);
   const [respostas, setRespostas] = useState<Record<string, Record<string, string>>>({});
 
   const faltaDecidir = [...escritas, ...buscas].some(
@@ -405,14 +422,26 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     });
   }
 
-  function aoEnviar(evento: FormEvent) {
+  async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!faltaDecidir && !faltaResponder) enviar();
+    if (faltaDecidir || faltaResponder) return;
+    // A busca aprovada no lote grava o aceite agora, com a escolha final; sem ele, nada sai.
+    if (webConsentToSaveOnSend(pausa.actions, decisoes, aceites?.webSearch.accepted === true)) {
+      setAceiteFalhou(false);
+      try {
+        await aceitar.mutateAsync('web_search');
+      } catch {
+        setAceiteFalhou(true);
+        return;
+      }
+    }
+    enviar();
   }
 
-  const emLote = escritas.length > 1;
+  const decisoesNoLote = pauseDecisionCount(pausa.actions);
+  const emLote = decisoesNoLote > 1;
   const titulo = emLote
-    ? `${escritas.length} ações aguardando confirmação`
+    ? `${decisoesNoLote} ações aguardando confirmação`
     : escritas.length === 1
       ? 'Ação aguardando confirmação'
       : 'Pergunta do assistente';
@@ -433,7 +462,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     <form
       role="group"
       aria-label={titulo}
-      onSubmit={aoEnviar}
+      onSubmit={(evento) => void aoEnviar(evento)}
       className={cn(
         'w-full space-y-3',
         (emLote || perguntas.length > 0 || buscas.length > 0) &&
@@ -444,7 +473,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
         <Cabecalho
           icone={<Layers size={18} />}
           acima="Lote"
-          titulo={`${escritas.length} ações para decidir`}
+          titulo={`${decisoesNoLote} ações para decidir`}
         />
       ) : null}
 
@@ -467,6 +496,8 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
           key={acao.toolCallId}
           acao={acao}
           ocupado={ocupado}
+          emLote={emLote}
+          decisao={decisoes[acao.toolCallId]}
           onDecidir={decidir(acao)}
         />
       ))}
@@ -483,17 +514,22 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
         />
       ))}
 
+      {aceiteFalhou ? (
+        <p role="alert" className="text-xs text-danger">
+          Não consegui gravar o aceite da busca. Tente de novo.
+        </p>
+      ) : null}
       {soUmaEscrita ? null : (
         <button
           type="submit"
-          disabled={ocupado || faltaDecidir || faltaResponder}
+          disabled={ocupado || faltaDecidir || faltaResponder || aceitar.isPending}
           className={cn(
             inkButton,
             'rounded-full px-4 py-2 text-sm font-bold',
             (ocupado || faltaDecidir || faltaResponder) && 'pointer-events-none opacity-50',
           )}
         >
-          {ocupado ? 'Enviando…' : emLote ? `Enviar ${escritas.length} decisões` : 'Enviar'}
+          {ocupado ? 'Enviando…' : emLote ? `Enviar ${decisoesNoLote} decisões` : 'Enviar'}
         </button>
       )}
     </form>
