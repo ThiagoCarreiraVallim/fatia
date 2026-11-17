@@ -20,9 +20,9 @@ export DATABASE_URL=$(grep -E '^DATABASE_URL=' /home/thiago/Documentos/pessoal/f
 - [x] 8. grant-group/grant-pro/grant-seat recusam produção sem `--i-know-this-is-production`, imprimem o que muda
 - [x] 9. Reserva do teste amarrada ao Asaas (libera se falhar, compensa se o banco falhar), trava por pessoa contra duplo envio
 - [x] 10. Fuso inválido não derruba a rodada (try/catch + fallback); validar fuso no update-me.dto
-- [ ] 11. Docs: limites do "um teste por pessoa"
+- [x] 11. Docs: limites do "um teste por pessoa"
 - [ ] Docs (REDESIGN_PROGRESS #386, BILLING.md), lint, typecheck, testes, commit final sem este arquivo
 
 ## Próximo passo
 
-Item 11 (docs do "um teste por pessoa"), depois docs (inclusive a decisão do item 7) e passada final.
+Passada final: df, lint, typecheck, testes (api no fatia_t386, api-client, web, mobile), commit sem este arquivo.

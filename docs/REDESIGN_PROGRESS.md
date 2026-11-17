@@ -217,17 +217,21 @@ Pendências da #386 (branch `redesign/386-plano`, migration `20261116060000_pro_
 
 - **Regra das lojas (o app nunca vende fora da loja):** a tela sai de `planStatusView(plan, { surface, canPurchase, now })` no api-client. Com `surface: 'app'` ela nunca devolve pagar, cancelar, preço da web, Pix, boleto nem link (teste com mutação vista falhar). Sem compra no app (`EXPO_PUBLIC_IAP_ENABLED`), a oferta é "O PRO vem pela sua comunidade" + "Tenho código", sem preço. O `webManageNote` ("entre pelo navegador") saiu.
 - **Assinatura da web vista no app:** mostra o estado e as datas, com "Fora do app" e "mandamos por e-mail como resolver", **sem botão** (o texto da prancha Al-M13). Quem resolve é o e-mail Ex-03, que leva ao Meu plano da web. O push de cobrança não leva preço, Pix nem link.
-- **Loja:** quem assina pela loja resolve na loja nas duas superfícies (Al-M13d), e nunca recebe cobrança nem lembrete de pagamento do Fatia. Só recebe o "a loja não conseguiu cobrar" e o "o teste está acabando" (onde cancelar).
+- **Loja:** quem assina pela loja resolve na loja nas duas superfícies (Al-M13d), e nunca recebe cobrança nem lembrete de pagamento do Fatia. Só recebe o "a loja não conseguiu cobrar" e o "o teste está acabando".
+- **Decisão: o aviso de fim do teste da loja fica** (a prancha Al-M3 promete), mas diz só "se não quiser continuar, cancele nas assinaturas da loja", com o link da tela de assinaturas da loja. Nunca leva preço, link nem instrução de pagamento do Fatia (teste em `billing-reminders.spec.ts`).
 - **Teste de 7 dias, uma vez por pessoa** (`User.proTrialStartedAt`):
-  - Na web, o primeiro checkout de quem é elegível já é o teste: `TRIALING`, a primeira cobrança vence no fim, nada é cobrado hoje e a aba de pagamento não abre.
+  - Na web, o primeiro checkout de quem é elegível já é o teste: `TRIALING`, a primeira cobrança vence no fim e nada é cobrado hoje. Nada é cobrado sozinho, nem no cartão: a pessoa paga a primeira cobrança até o fim do teste (Pix, boleto ou cartão), na página de pagamento, que a tela mostra durante o teste.
+  - A reserva do teste é da mesma transação que grava a linha, sob uma trava por pessoa (`pg_advisory_xact_lock`): Asaas fora do ar não gasta o teste, assinatura criada no Asaas que não chega ao banco é cancelada lá, e duas abas não abrem duas assinaturas.
+  - Teste vencido há 4 dias sem pagamento: a rodada dos avisos cancela no Asaas e grava `EXPIRED`. O checkout cancela no Asaas toda assinatura viva da pessoa antes de criar a nova; webhook da antiga não mexe na nova. Teste cancelado ou vencido volta a ver o formulário ("Voltar ao PRO"; com cobrança aberta, "Pagar" e "Assinar de novo").
   - Na loja, vem do `period_type: TRIAL` da RevenueCat.
   - O app só promete o teste quando o pacote da loja tem oferta introdutória grátis **e** a pessoa é elegível. Quem decide e cobra é a loja.
   - Teste sem pagamento volta ao Free sem carência.
-- **Forma de pagamento:** Pix, boleto ou cartão escolhidos antes (Si-04), gravados em `paymentMethod`. Trocar período ou forma cancela o pendente. O cartão não recebe "vence em breve" (é automático).
-- **Avisos (Ex-03):** `BillingReminderJob` de hora em hora, a partir das 9h no fuso da pessoa. `BillingReminder` é gravado antes do envio, com unique por assinatura, tipo e vencimento. Push com `NotificationKind.BILLING`, sem chave na tela de Notificações.
-- **PRO pela comunidade:** `GroupSeatPool.mode = ALL_MEMBERS` (só papel MEMBER). O programa é o pool com `programName` e data final. Para dev e E2E: `pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"] [--revoke]`. O painel vê só se o membro tem PRO pela comunidade, nunca como uma assinatura pessoal foi paga (`user-isolation.spec.ts`).
+  - Limites (documentados em BILLING.md, sem código): a elegibilidade da oferta da loja é por conta da loja, não do Fatia; quem apaga e recria a conta volta a ser elegível na web.
+- **Forma de pagamento:** Pix, boleto ou cartão escolhidos antes (Si-04), gravados em `paymentMethod`. Trocar período ou forma cancela o pendente. O cartão recebe "vence em breve" e "vence hoje" como Pix e boleto.
+- **Avisos (Ex-03):** `BillingReminderJob` de hora em hora, a partir das 9h no fuso da pessoa; o "hoje" e o fim do teste também são do fuso dela (Cuiabá, Rio Branco e EUA testados). Fuso inválido cai em São Paulo e uma assinatura que falha não para a rodada; `PATCH /me` e o `update_timezone` do MCP recusam fuso que não existe. `BillingReminder` é gravado antes do envio, com unique por assinatura, tipo e vencimento. Push com `NotificationKind.BILLING`, sem chave na tela de Notificações.
+- **PRO pela comunidade:** `GroupSeatPool.mode = ALL_MEMBERS` (só papel MEMBER). O programa é o pool com `programName` e data final. Para dev e E2E: `pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"] [--revoke]`; o `--until` vale até 23:59:59.999 desse dia em São Paulo. `grant-group`, `grant-pro` e `grant-seat` mostram antes o que mudam e recusam produção sem `--i-know-this-is-production`. O painel vê só se o membro tem PRO pela comunidade, nunca como uma assinatura pessoal foi paga (`user-isolation.spec.ts`).
 - **Site (Si-04):** `fat.ia.br/pro` não tem sessão. Ele escolhe período e forma de pagamento e manda para `app/assinar`, que passa pelo login quando preciso e chega ao Meu plano com a escolha (`?periodo=&pagamento=`). O CPF é digitado na web e vai direto ao Asaas. Os preços do site saem do mesmo `BILLING_PRO_*_CENTS` (build args).
-- **Renomeados ao tocar:** `plano` → `plan`, `precos` → `prices`, `processarWebhookAsaas` → `handleAsaasWebhook`, `cancelar` → `cancel`, `sincronizar` → `sync`.
+- **Renomeados ao tocar:** `plano` → `plan`, `precos` → `prices`, `processarWebhookAsaas` → `handleAsaasWebhook`, `cancelar` → `cancel`, `sincronizar` → `sync`, `encerrarAntesDeApagar` → `cancelBeforeAccountDeletion` (agora também no meio do teste).
 - **Desvios do canvas:**
   - O M3 (início do teste) é uma folha de 85% sobre o M2, não uma tela.
   - "Tenho código" no chat leva à Comunidade com a folha do código aberta (`/community?join=1`). No Meu plano, a folha abre ali mesmo.
@@ -237,7 +241,6 @@ Pendências da #386 (branch `redesign/386-plano`, migration `20261116060000_pro_
   - Os preços do M2 no app são os da loja, não os da web.
   - O selo do Você mostra "Teste · n dias".
 - **Fora do escopo:**
-  - Cancelar no Asaas a assinatura de um teste que acabou sem pagamento: hoje ela volta ao Free, mas a recorrência segue lá até alguém pagar ou cancelar.
   - E-mail de checkout pendente.
   - Aviso no app quando o teste da loja converte.
   - O "Regularizado" do M13b como estado próprio: depois do pagamento a tela volta ao "Ativa".

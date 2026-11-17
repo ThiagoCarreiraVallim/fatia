@@ -259,7 +259,9 @@ nunca em `/users/me` (os domínios do aluno não importam `billing/`).
 ## Uma tabela, quatro origens
 
 `UserSubscription` guarda a assinatura de qualquer origem; o direito sai da **leitura** das datas
-(`billing/ai-entitlement.ts`, função pura), sem job de expiração:
+(`billing/ai-entitlement.ts`, função pura), sem job de expiração. A única exceção é o teste da web
+que acabou sem pagamento: o direito já cai sozinho no fim do teste, e o job dos avisos só fecha a
+recorrência no Asaas (abaixo).
 
 | Origem   | Como entra                                                  | Como sai                                      |
 | -------- | ----------------------------------------------------------- | --------------------------------------------- |
@@ -290,14 +292,14 @@ não mudam.
 canPurchase, now })` (`packages/api-client/src/plan-status.ts`, com teste) devolve o selo, o texto e
 os botões, igual na web e no app (pranchas Al-M13, Al-M13b/c/d e Al-M5):
 
-| Estado     | Na web                                                                                           | No app                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `TRIAL`    | "Teste grátis até …", o preço depois, cancelar o teste                                           | "Teste grátis até …"; na loja, "cancelar nas assinaturas"   |
-| `PENDING`  | "Aguardando o pagamento" + "Abrir página de pagamento"                                           | "Você assinou fora do app. Avisamos por e-mail…", sem botão |
-| `ACTIVE`   | preço, forma de pagamento, cancelar; Pix/boleto a 3 dias do vencimento: "vence em breve" + pagar | estado e datas; na loja, "cancelar nas assinaturas da loja" |
-| `PAST_DUE` | "venceu hoje" / "faltam N dias para a IA pausar" + pagar                                         | "Pagamento não passou… mandamos por e-mail", sem botão      |
-| `CANCELED` | "PRO até …", sem cobrar de novo                                                                  | igual                                                       |
-| `EXPIRED`  | "A IA pausou" + pagar (cobrança ainda aberta) ou "Voltar ao PRO"                                 | "Seu PRO acabou" + oferta da loja ou da comunidade          |
+| Estado     | Na web                                                                                             | No app                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `TRIAL`    | "Teste grátis até …", pagar a 1ª cobrança até o fim (página de pagamento), cancelar o teste        | "Teste grátis até …"; na loja, "cancelar nas assinaturas"   |
+| `PENDING`  | "Aguardando o pagamento" + "Abrir página de pagamento"                                             | "Você assinou fora do app. Avisamos por e-mail…", sem botão |
+| `ACTIVE`   | preço, forma de pagamento, cancelar; a 3 dias do vencimento (toda forma): "vence em breve" + pagar | estado e datas; na loja, "cancelar nas assinaturas da loja" |
+| `PAST_DUE` | "venceu hoje" / "faltam N dias para a IA pausar" + pagar                                           | "Pagamento não passou… mandamos por e-mail", sem botão      |
+| `CANCELED` | "PRO até …", sem cobrar de novo                                                                    | igual                                                       |
+| `EXPIRED`  | "A IA pausou" + pagar e "Assinar de novo" (cobrança aberta) ou "Voltar ao PRO" com o formulário    | "Seu PRO acabou" + oferta da loja ou da comunidade          |
 
 Assinatura da loja com falha de cobrança (`PAST_DUE` em `APPLE`/`GOOGLE`, Al-M13d): nas duas
 superfícies, "A loja não conseguiu cobrar", "Abrir assinaturas da App Store / do Google Play" e
@@ -328,13 +330,39 @@ membro" ou "Durante o <programa>" com a data e os dias que faltam, "Abrir a IA".
 `BILLING_PRO_TRIAL_DAYS` (padrão 7; 0 desliga) dias de PRO, **uma vez por pessoa**
 (`User.proTrialStartedAt`; elegível quem nunca teve teste nem assinatura pessoal paga).
 
-- **Web:** o primeiro checkout de quem é elegível já é o teste. A reserva é atômica
-  (`updateMany` onde `proTrialStartedAt` é nulo), a linha nasce `TRIALING` com `trialEndsAt` =
-  `currentPeriodEnd` e a primeira cobrança do Asaas vence no fim do teste — nada é cobrado hoje, e a
-  tela não abre a página de pagamento. Teste que acaba sem pagamento volta ao Free **sem carência**
-  (`teste_acabou`), com as 24 h de folga da renovação.
+- **Web:** o primeiro checkout de quem é elegível já é o teste. A linha nasce `TRIALING` com
+  `trialEndsAt` = `currentPeriodEnd` e a primeira cobrança do Asaas vence no fim do teste — nada é
+  cobrado hoje. **Nada é cobrado sozinho, nem no cartão:** o Fatia nunca recebe o cartão, então a
+  pessoa paga a primeira cobrança até o fim do teste (Pix, boleto ou cartão, na página de pagamento
+  do Asaas, que a tela mostra durante o teste). Teste que acaba sem pagamento volta ao Free **sem
+  carência** (`teste_acabou`), com as 24 h de folga da renovação.
+- **Reserva amarrada ao Asaas:** o checkout roda sob uma trava por pessoa
+  (`pg_advisory_xact_lock`) e reserva o teste (`proTrialStartedAt`) na mesma transação que grava a
+  linha. Asaas fora do ar → rollback, o teste não é gasto. Assinatura criada no Asaas que não chega
+  ao banco (link, insert ou commit falhou) é cancelada lá (compensação, log
+  `checkout_compensado`). Duas abas enviando juntas: a segunda espera a trava, relê o direito e
+  recebe 409 (ou, sem teste, reaproveita o checkout aberto).
+- **Teste vencido sem pagamento:** 4 dias depois do fim (o boleto ainda pode compensar nesse
+  intervalo), a rodada do `BillingReminderJob` cancela a assinatura no Asaas e grava `EXPIRED`
+  (`expireUnpaidTrials`, idempotente; Asaas fora do ar tenta na próxima rodada).
+- **Assinar de novo:** o checkout cancela no Asaas **toda** assinatura ainda viva da pessoa
+  (`PENDING`, `TRIALING`, `ACTIVE` ou `PAST_DUE` vencidas — quem chega ao checkout é Free), e o
+  webhook acha a linha pelo `providerRef`: evento da assinatura antiga nunca mexe na nova. Teste
+  cancelado ou `EXPIRED` volta a ver o formulário ("Voltar ao PRO"; com cobrança aberta, "Pagar" e
+  "Assinar de novo"); cancelar limpa o link de pagamento, e assinatura cancelada não mostra link
+  velho.
 - **Loja:** a RevenueCat informa `period_type: TRIAL`; a linha vira `TRIALING` e marca
   `proTrialStartedAt`. A loja converte ou não; o Fatia só lê.
+
+**Limites do "um teste por pessoa"** (decisão da revisão da #386, sem código a mais):
+
+- A elegibilidade da oferta introdutória da loja é **por conta da loja** (Apple ID, conta Google),
+  não por conta do Fatia. O app só _promete_ o teste a quem o Fatia acha elegível, mas quem decide e
+  cobra é a loja: quem já testou pela web pode ganhar o teste da loja, e vice-versa quando a mesma
+  conta da loja é usada por outra pessoa.
+- Apagar a conta apaga o `proTrialStartedAt`: quem apaga e cria a conta de novo volta a ser elegível
+  na web. Guardar um rastro (e-mail, CPF) para impedir isso contraria a exclusão de verdade (o CPF
+  nem é gravado).
 
 ## Avisos de cobrança (#386, prancha Ex-03)
 
@@ -347,15 +375,27 @@ gravado, não só o webhook.
 | Aviso                 | Quando                                   | Quem                               |
 | --------------------- | ---------------------------------------- | ---------------------------------- |
 | `TRIAL_ENDING`        | 2 dias antes do fim do teste             | web e loja (a loja: onde cancelar) |
-| `DUE_SOON`            | 3 dias antes do vencimento               | web, Pix e boleto                  |
-| `DUE_TODAY`           | no vencimento                            | web, Pix e boleto                  |
+| `DUE_SOON`            | 3 dias antes do vencimento               | web, Pix, boleto e cartão          |
+| `DUE_TODAY`           | no vencimento e no último dia do teste   | web, Pix, boleto e cartão          |
 | `GRACE_5_LEFT`        | 2 dias de atraso                         | web                                |
 | `GRACE_2_LEFT`        | 5 dias de atraso                         | web                                |
 | `AI_PAUSED`           | 7 dias de atraso                         | web                                |
 | `STORE_BILLING_ISSUE` | a loja não conseguiu cobrar (`PAST_DUE`) | loja: só "atualize na loja"        |
 
-Assinatura da loja **nunca** recebe cobrança nem lembrete de pagamento do Fatia; cartão não recebe
-o "vence em breve" (é automático); cancelada e cortesia não recebem nada.
+Assinatura da loja **nunca** recebe cobrança nem lembrete de pagamento do Fatia; cancelada e
+cortesia não recebem nada. O cartão recebe o "vence em breve" e o "vence hoje" como Pix e boleto: o
+Fatia não sabe se o cartão ficou salvo no Asaas, e no teste ele nunca foi pedido.
+
+**Aviso de fim do teste da loja (decisão da revisão da #386): fica**, porque a prancha Al-M3
+promete, mas é da loja. Push e e-mail dizem só "se não quiser continuar, cancele nas assinaturas da
+loja", com o link da tela de assinaturas da App Store ou do Google Play. Nunca levam preço, link nem
+instrução de pagamento do Fatia (teste em `billing-reminders.spec.ts`).
+
+**Fuso:** o "hoje" do aviso e o dia do fim do teste são os do fuso da pessoa (`User.timezone`):
+Cuiabá, Rio Branco e quem mora fora recebem às 9h locais, não na véspera. As datas de vencimento do
+Asaas seguem em São Paulo, que é como o Asaas as grava. Fuso inválido cai em `America/Sao_Paulo`, e
+uma assinatura que falha vai para o log (`aviso_de_cobranca_falhou`) sem parar a rodada. `PATCH
+/me` e o `update_timezone` do MCP recusam fuso que não existe.
 
 ## Web: Asaas
 
@@ -365,8 +405,9 @@ o "vence em breve" (é automático); cancelada e cortesia não recebem nada.
 2. A API cria `POST /v3/subscriptions` com `billingType` = a forma escolhida (`PIX`, `BOLETO`,
    `CREDIT_CARD`; sem escolha, `UNDEFINED`), grava a linha `PENDING` (ou `TRIALING`, no teste) com o
    `invoiceUrl` da primeira cobrança e a `paymentMethod`, e devolve o plano. Tocar de novo em menos
-   de 24 h com o mesmo período e a mesma forma devolve o mesmo link; trocar um dos dois cancela o
-   pendente antes. `PAYMENT_CREATED` e `PAYMENT_OVERDUE` atualizam o link da cobrança aberta.
+   de 24 h com o mesmo período e a mesma forma devolve o mesmo link; trocar um dos dois cancela antes,
+   no Asaas, toda assinatura ainda viva da pessoa. Um checkout por pessoa por vez (trava no
+   Postgres). `PAYMENT_CREATED` e `PAYMENT_OVERDUE` atualizam o link da cobrança aberta.
 3. O webhook (`POST /api/billing/webhooks/asaas`, header `asaas-access-token`) é gravado primeiro
    em `BillingWebhookEvent` (`@@unique([provider, eventId])`): reentrega vira no-op. Eventos:
 
@@ -379,7 +420,7 @@ o "vence em breve" (é automático); cancelada e cortesia não recebem nada.
    | assinatura que não é nossa                          | evento gravado com `error`, responde 200           |
 
 4. Apagar a conta cancela a recorrência no Asaas **antes** de apagar o usuário
-   (`ACCOUNT_DELETION_HOOKS`). Se o Asaas falhar, a exclusão aborta: ninguém é cobrado depois de
+   (`ACCOUNT_DELETION_HOOKS`, `cancelBeforeAccountDeletion`), inclusive no meio do teste grátis. Se o Asaas falhar, a exclusão aborta: ninguém é cobrado depois de
    sair.
 
 ### Roteiro de sandbox do PRO
@@ -519,6 +560,12 @@ redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 
 `pnpm billing:grant-seat <email> <slug> [--seats N]` dá um assento de cortesia, sem cobrança (pool com
 `providerRef` nulo); `--purge` desfaz sem deixar rastro. É o que o E2E usa.
 
+**Trava de produção** (`billing/production-guard.ts`): `billing:grant-group`, `billing:grant-pro` e
+`billing:grant-seat` mostram antes o que vão mudar e em qual banco (`host:porta/banco`, sem senha) e
+recusam quando o ambiente parece produção — `NODE_ENV=production`, "prod" no host ou no nome do
+banco, ou banco fora da máquina (qualquer host além de `localhost`, `127.0.0.1`, `::1`, `postgres`,
+`db` e `host.docker.internal`) — a não ser com `--i-know-this-is-production`.
+
 ## PRO para todos os membros e programas (#386)
 
 `GroupSeatPool.mode` = `ALL_MEMBERS` libera o PRO para **todo membro ativo com papel `MEMBER`** da
@@ -527,7 +574,8 @@ final (`currentPeriodEnd` + `cancelAtPeriodEnd`): a tela mostra "Durante o <prog
 os dias que faltam (Al-M5). Quem sai da comunidade volta ao Free sem perder nada.
 
 `pnpm billing:grant-group <slug> [--until AAAA-MM-DD] [--program "Nome"]` liga (cortesia, pool com
-`providerRef` nulo); `--revoke` expira. Recusa pool pago. Como o `grant-seat`, é ferramenta de dev,
+`providerRef` nulo); `--revoke` expira. O `--until` vale o dia inteiro: o pool acaba às 23:59:59.999
+desse dia em São Paulo, e é esse o dia que a tela mostra. Recusa pool pago. Como o `grant-seat`, é ferramenta de dev,
 seed e E2E.
 
 O painel da comunidade vê só **se** o membro tem PRO pela comunidade (`hasAiSeat`), nunca como uma
