@@ -23,8 +23,8 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - [x] API: RevenueCat lê teste (period_type TRIAL)
 - [x] API: job de lembretes (push + e-mail Ex-03), idempotente
 - [x] API: billing:grant-group
-- [ ] API: isolamento (user-isolation.spec.ts)
-- [ ] api-client: tipos e visão pura das telas (regra das lojas) + testes
+- [x] API: isolamento (user-isolation.spec.ts) + export (proTrialStartedAt, paymentMethod, trialEndsAt, reminders)
+- [x] api-client: tipos e visão pura das telas (regra das lojas) + testes (`plan-status.ts`)
 - [ ] App: Al-M1 (chat bloqueado), Al-M2/M3 (assinar, teste), M5, M13/b/c/d
 - [ ] Web: idem, com Asaas
 - [ ] Site: Si-04
@@ -42,7 +42,14 @@ Pranchas baixadas do artifact em `.canvas/project/` (fora do git) neste worktree
 - Avisos: `BillingReminderJob` de hora em hora, a partir das 9h no fuso da pessoa; `BillingReminder` com unique (sub, kind, dueDate) gravado antes do envio.
   Push sem preço/Pix/link (regra das lojas); e-mail Ex-03 leva a `${WEB_ORIGIN}/plan`. Loja: só STORE_BILLING_ISSUE e TRIAL_ENDING.
 - `NotificationKind.BILLING` (sem chave na tela; entra na central).
+- Painel da comunidade: `hasAiSeat` só para assento/ALL_MEMBERS; nunca campo de pagamento.
+- Renomeados: plano→plan, precos→prices, processarWebhookAsaas→handleAsaasWebhook, cancelar→cancel, sincronizar→sync.
+
+- Regra das lojas na tela: `planStatusView(plan, {surface, canPurchase, now})` em `packages/api-client/src/plan-status.ts`.
+  App: nunca `pay`/`cancel`/preço/Pix; assinatura da web vista no app mostra estado e datas ("Fora do app", "Mandamos por e-mail"), sem botão.
+  Loja PAST_DUE: M13d nas duas superfícies. Free no app sem IAP: `offer: 'community'` + "Tenho código".
+- `proBlockCopy`: "free" diz "sem cobrar nada hoje" (não "sem cobrança no fim"); pending-grace → "Ver o plano".
 
 ## Próximo passo
 
-api-client: tipos novos de MyPlan (state, trialEndsAt, trialEligible, trialDays, paymentMethod, paidBy, programName), `BILLING` em NotificationKind, e a visão pura das telas (regra das lojas).
+App: `plan.tsx` com `planStatusView` (surface app) + oferta da loja (M2/M3, termos via `storeTermsText`, trial só se o pacote tem intro grátis), "Tenho código" abre `JoinByCodeDrawer`; Al-M1 no chat (`apps/mobile/app/(app)/chat/index.tsx`) como componente próprio; selo "Teste · n dias" no Você.

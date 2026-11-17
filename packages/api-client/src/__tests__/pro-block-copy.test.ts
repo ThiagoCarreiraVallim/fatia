@@ -49,4 +49,21 @@ describe('proBlockCopy', () => {
     );
     expect(proBlockCopy({ kind: 'lite-ending', remaining: 1, limit: 10 }).tone).toBe('attention');
   });
+
+  it('o teste não promete "sem cobrança no fim": a assinatura renova sozinha (#386)', () => {
+    const c = proBlockCopy({ kind: 'free', trialDays: 7 });
+    expect(c.body).toBe('7 dias grátis, sem cobrar nada hoje.');
+    expect(c.body).not.toMatch(/sem cobrança no fim/);
+  });
+
+  it('quem já usou o teste vê assinar, não "0 dias"', () => {
+    const c = proBlockCopy({ kind: 'free', trialDays: 0 });
+    expect(c.body).not.toMatch(/0 dias/);
+    expect(c.action).toBe('Assinar o PRO');
+  });
+
+  it('pagamento pendente leva ao plano, não manda "pagar agora" (o app não cobra fora da loja)', () => {
+    const c = proBlockCopy({ kind: 'pending-grace', aiUntil: null, graceDaysLeft: 2 });
+    expect(c.action).toBe('Ver o plano');
+  });
 });
