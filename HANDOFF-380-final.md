@@ -4,7 +4,7 @@
 
 - [x] 1. Merge origin/main (c494fcd4) na redesign/380-circuitos — commit acdf4aa6
 - [x] 2. Hooks WORKOUT_FINISHED_HOOKS no fim/log do circuito (vermelho: 3 falhas "Received array: []")
-- [ ] 3. lint, typecheck, testes (api em fatia_t380)
+- [x] 3. lint ok, typecheck ok; api 3056/193 suites (community-panel flaky, passa sozinho 12/12), api-client 883, design 228, web 935, mobile 497
 - [ ] 4. Passe visual (T22, T4, T4b/T4d, T4c/T4e, T6, T11c, Al-T10)
 - [ ] 5. Commit final no checkout principal, sem este HANDOFF
 
@@ -26,4 +26,6 @@
 
 ## Próximo passo
 
-Rodar pnpm lint, pnpm typecheck e os testes de cada pacote.
+Passe visual. As pranchas T22/T4/T4b/T4c/T4d/T4e não estavam em .canvas/project; copiadas de
+/tmp/claude-1000/-home-thiago-Documentos-pessoal-fatia/0bd027d0-f0c2-42a3-b37f-2f6dd993fad5/scratchpad/artifact-files/80eb4942-0fa7-48ac-acc0-5067fbe6e8b2/project.
+Checkout principal: `git -C .claude/worktrees/380-circuitos checkout --detach` e `git checkout redesign/380-circuitos` na raiz; migrate deploy no banco dev; touch apps/api/src/main.ts; Metro -c.
