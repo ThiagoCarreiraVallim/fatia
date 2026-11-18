@@ -15,12 +15,12 @@ Worktree `.claude/worktrees/394-mural`, branch `redesign/394-mural`. Banco de te
 - [x] 7. Testes: bloqueado sem aviso de verdade; runDue em paralelo
 - [x] 8. Para você: respeita ocultar; próprio comunicado não é não lido
 - [x] 9. Posts automáticos: unique + P2002; existentes desligados (migration 20261118100100)
-- [ ] 10. Prévia do chat: opcaoDaEnquete com filtro de bloqueio
+- [x] 10. Prévia do chat: opcaoDaEnquete com filtro de bloqueio
 - [ ] 11. lint, typecheck, testes; REDESIGN_PROGRESS; apagar HANDOFF
 
 ## Próximo passo
 
-Item 10 (opcaoDaEnquete com filtro de bloqueio); depois docs e verificação final.
+Item 11: REDESIGN_PROGRESS, lint, typecheck, suites; apagar HANDOFF.
 
 ## Notas
 

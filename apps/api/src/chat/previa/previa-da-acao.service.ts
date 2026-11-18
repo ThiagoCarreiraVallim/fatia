@@ -298,6 +298,9 @@ export class PreviaDaAcaoService {
         return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha;
       }
       case 'opcaoDaEnquete': {
+        // Mesmo filtro do `postDaComunidade`: a opção da enquete de quem tem
+        // bloqueio com a pessoa não ganha rótulo no cartão.
+        const escondidos = await blockedUserIds(this.prisma, userId);
         const opcao = await this.prisma.groupPollOption.findFirst({
           where: {
             id,
@@ -305,6 +308,11 @@ export class PreviaDaAcaoService {
               post: {
                 removedAt: null,
                 group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+                ...(escondidos.length > 0
+                  ? {
+                      OR: [{ publishedAs: 'GROUP' }, { author: { userId: { notIn: escondidos } } }],
+                    }
+                  : {}),
               },
             },
           },

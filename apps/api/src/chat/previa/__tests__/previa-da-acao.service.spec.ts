@@ -772,6 +772,7 @@ describe('PreviaDaAcaoService', () => {
     const daGabi = await prisma.groupPost.create({
       data: { groupId: comunidade, membershipId: mg.id, body: 'Recorde no agachamento' },
     });
+    const extras: string[] = [];
     try {
       await expect(
         previas.previa(dono, 'vote_group_poll', {
@@ -812,8 +813,42 @@ describe('PreviaDaAcaoService', () => {
         blockId: b.id,
       });
       expect(alheio.valida).toBe(false);
+
+      // A opção da enquete de quem tem bloqueio também não aparece no cartão,
+      // nem quando o post pedido é outro, visível (o modelo pode trocar ids).
+      const enqueteDaGabi = await prisma.groupPost.create({
+        data: {
+          groupId: comunidade,
+          membershipId: mg.id,
+          kind: 'POLL',
+          body: '',
+          poll: {
+            create: {
+              question: 'Treino de sábado?',
+              closesAt: new Date(Date.now() + 86_400_000),
+              options: {
+                create: [
+                  { label: 'Corrida no parque', order: 0 },
+                  { label: 'Funcional', order: 1 },
+                ],
+              },
+            },
+          },
+        },
+        include: { poll: { include: { options: true } } },
+      });
+      extras.push(enqueteDaGabi.id);
+      const voto = await previas.previa(dono, 'vote_group_poll', {
+        groupId: comunidade,
+        postId: enquete.id,
+        optionId: enqueteDaGabi.poll!.options[0]!.id,
+      });
+      expect(voto.valida).toBe(false);
+      expect(JSON.stringify(voto)).not.toContain('Corrida no parque');
     } finally {
-      await prisma.groupPost.deleteMany({ where: { id: { in: [enquete.id, daGabi.id] } } });
+      await prisma.groupPost.deleteMany({
+        where: { id: { in: [enquete.id, daGabi.id, ...extras] } },
+      });
       await prisma.user.delete({ where: { id: gabi.id } });
     }
   });
