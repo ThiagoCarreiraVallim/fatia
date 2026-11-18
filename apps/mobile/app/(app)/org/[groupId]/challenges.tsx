@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Image, Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CHALLENGE_DESCRIPTION_MAX,
   CHALLENGE_KINDS,
@@ -550,18 +550,23 @@ function ReviewCard({ g, item }: { g: MyGroup; item: ReviewItem }) {
 }
 
 function ReviewQueue({ g }: { g: MyGroup }) {
-  const queue = useQuery({
+  // Paginada (#395 M5): a fila junta os desafios da comunidade e passa do teto de um.
+  const queue = useInfiniteQuery({
     queryKey: ['community', 'challenges', g.id, 'review'],
-    queryFn: () => challengesApi.reviewQueue(g.id),
+    queryFn: ({ pageParam }) => challengesApi.reviewQueue(g.id, undefined, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
-  const open = queue.data?.open ?? 0;
+  const first = queue.data?.pages[0];
+  const items = queue.data?.pages.flatMap((p) => p.items) ?? [];
+  const open = first?.open ?? 0;
   return (
     <PanelCard>
       <View className="flex-row items-center justify-between gap-2">
         <Text accessibilityRole="header" className="font-sans-bold text-sm text-foreground">
           Para revisar
         </Text>
-        {queue.data ? (
+        {first ? (
           <Badge variant={open ? 'lite' : 'done'}>
             {open ? `${open} para decidir` : 'fila vazia'}
           </Badge>
@@ -577,13 +582,17 @@ function ReviewQueue({ g }: { g: MyGroup }) {
           {apiMessage(queue.error, 'Não deu para carregar a fila agora.')}
         </Text>
       ) : null}
-      {queue.data?.items.map((item) => (
+      {items.map((item) => (
         <ReviewCard key={item.id} g={g} item={item} />
       ))}
-      {queue.data && open >= queue.data.limit ? (
-        <Text className="text-xs text-warning">
-          A fila chegou ao limite: novas sinalizações de membros esperam até vocês decidirem.
-        </Text>
+      {queue.hasNextPage ? (
+        <Button
+          variant="secondary"
+          disabled={queue.isFetchingNextPage}
+          onPress={() => void queue.fetchNextPage()}
+        >
+          Ver mais
+        </Button>
       ) : null}
     </PanelCard>
   );

@@ -203,7 +203,9 @@ export type CheckinBlock =
   | 'no_workout'
   | 'too_short'
   | 'late_logged'
-  | 'already_today';
+  | 'already_today'
+  /** O treino já liberou um check-in neste desafio (#395). */
+  | 'workout_used';
 
 export interface CheckinWorkout {
   id: string;
@@ -244,8 +246,12 @@ export interface ReviewItem {
 
 export interface ReviewQueue {
   items: ReviewItem[];
+  /** Quantos esperam ao todo, em todas as páginas. */
   open: number;
+  /** O teto de sinalizações de membros abertas por desafio. */
   limit: number;
+  /** A próxima página (#395); nulo quando acabou. */
+  nextCursor: string | null;
 }
 
 /** Frases da prancha Cm-18 para cada motivo de não liberar o check-in. */
@@ -257,6 +263,7 @@ export const CHECKIN_BLOCK_TEXT: Record<CheckinBlock, string> = {
   too_short: 'O desafio pede pelo menos 20 min de treino. Este não conta.',
   late_logged: 'Treino lançado depois de feito não conta para o check-in.',
   already_today: 'Um check-in por dia. Volte amanhã depois do treino.',
+  workout_used: 'Este treino já valeu um check-in neste desafio. Faça o próximo treino.',
 };
 
 /** O selo curto do treino na câmera (Cm-18): "conta", "curto demais"… */
@@ -268,6 +275,7 @@ export const CHECKIN_BLOCK_TAG: Record<CheckinBlock, string> = {
   too_short: 'curto demais',
   late_logged: 'lançado depois',
   already_today: 'já contou hoje',
+  workout_used: 'já valeu',
 };
 
 /** Versão do texto de aceite mostrado na entrada (a API grava a dela). */
@@ -329,10 +337,13 @@ export const challengesApi = {
       `${base(groupId)}/${id}/checkins/${checkinId}/flag`,
       json('POST'),
     ),
-  reviewQueue: (groupId: string, challengeId?: string) =>
-    apiFetch<ReviewQueue>(
-      `${base(groupId)}/review${challengeId ? `?challengeId=${encodeURIComponent(challengeId)}` : ''}`,
-    ),
+  reviewQueue: (groupId: string, challengeId?: string, cursor?: string) => {
+    const q = new URLSearchParams();
+    if (challengeId) q.set('challengeId', challengeId);
+    if (cursor) q.set('cursor', cursor);
+    const query = q.toString();
+    return apiFetch<ReviewQueue>(`${base(groupId)}/review${query ? `?${query}` : ''}`);
+  },
   resolve: (
     groupId: string,
     id: string,

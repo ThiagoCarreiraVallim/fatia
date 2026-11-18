@@ -609,11 +609,19 @@ export function kindShort(c: Pick<Challenge, 'kind' | 'metric' | 'rules'>): stri
 // ---------------------------------------------------------------------------
 // Pódio (Cm-11).
 
-/** Prata, ouro e bronze, nessa ordem na tela; com menos de 3, só quem tem. */
+/**
+ * Prata, ouro e bronze, nessa ordem na tela; com menos de 3, só quem tem. Sobe
+ * quem tem medalha e pontos (a API só dá a medalha com o resultado fechado), e
+ * o empate divide o degrau: dois em 1º ficam lado a lado no meio (#395 M7).
+ */
 export function podiumOrder(entries: LeaderboardEntry[]): LeaderboardEntry[] {
-  const top = entries.filter((e) => e.rank <= 3).slice(0, 3);
-  const [a, b, c] = top;
-  return [b, a, c].filter((e): e is LeaderboardEntry => Boolean(e));
+  const com = entries.filter((e) => e.medal !== null && e.score > 0 && e.rank <= 3);
+  return [2, 1, 3].flatMap((rank) => com.filter((e) => e.rank === rank));
+}
+
+/** O troféu do 1º: âmbar escuro no claro (contraste ≥ 3:1), dourado no escuro. */
+export function trophyColor(theme: 'light' | 'dark'): string {
+  return theme === 'light' ? '#b45309' : '#fbbf24';
 }
 
 // ---------------------------------------------------------------------------

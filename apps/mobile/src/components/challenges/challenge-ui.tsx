@@ -14,12 +14,14 @@ import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui/utils';
 import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/theme-provider';
 import {
   cardSubtitle,
   kindShort,
   listNeedsCheckin,
   participantSummary,
   podiumOrder,
+  trophyColor,
   rankScore,
 } from './challenge-view';
 
@@ -329,6 +331,7 @@ function initials(name: string): string {
 
 /** O pódio do encerrado (Cm-11): prata, ouro, bronze. */
 export function Podium({ entries }: { entries: LeaderboardEntry[] }) {
+  const { theme } = useTheme();
   const ordem = podiumOrder(entries);
   if (ordem.length === 0) return null;
   return (
@@ -340,12 +343,12 @@ export function Podium({ entries }: { entries: LeaderboardEntry[] }) {
       className="mt-2 flex-row items-end justify-center gap-2.5"
     >
       {ordem.map((e) => {
-        const medal: Medal = e.rank === 1 ? 'gold' : e.rank === 2 ? 'silver' : 'bronze';
+        const medal = e.medal as Medal;
         const first = e.rank === 1;
         const size = first ? 56 : 44;
         return (
           <View key={`${e.displayName}-${e.rank}`} className="items-center gap-1.5">
-            {first ? <Icon name="trophy" size={24} color={MEDAL_BG.gold} /> : null}
+            {first ? <Icon name="trophy" size={24} color={trophyColor(theme)} /> : null}
             <View
               className="items-center justify-center rounded-full"
               style={{ width: size, height: size, backgroundColor: MEDAL_BG[medal] }}
