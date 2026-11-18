@@ -101,8 +101,8 @@ describe('resumo do participante (Cm-08 e herói do Cm-17)', () => {
 
   it('pontos mostram o total, sem barra', () => {
     const s = participantSummary(pontos());
-    expect(s.progress).toBe('86 pts');
-    expect(s.pct).toBeNull();
+    expect(s?.progress).toBe('86 pts');
+    expect(s?.pct).toBeNull();
   });
 
   it('quem não participa não tem resumo', () => {
