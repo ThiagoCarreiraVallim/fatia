@@ -42,8 +42,9 @@ describe('mural #394: enquete, avisos, comunicados e abas', () => {
 
   it('resultado só com 5 votos: a amostra pequena tem recado próprio', () => {
     expect(pollResultNote(poll())).toBe('Vote para ver o resultado');
+    // Quem votou precisa de 5 votos dos outros: senão deduziria a distribuição deles.
     expect(pollResultNote(poll({ myOptionId: 'a' }))).toBe(
-      'Amostra pequena demais para mostrar · o resultado aparece com 5 votos',
+      'Amostra pequena demais para mostrar · o resultado aparece com 5 votos além do seu',
     );
     expect(pollResultNote(poll({ closed: true }))).toBe(
       'Amostra pequena demais para mostrar · o resultado aparece com 5 votos',

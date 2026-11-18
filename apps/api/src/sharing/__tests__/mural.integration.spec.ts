@@ -13,6 +13,7 @@ import { BlockService } from '../block.service';
 import { publishAutoPost } from '../auto-post';
 import { ForYouService } from '../for-you.service';
 import { GroupService } from '../group.service';
+import { PostController } from '../post.controller';
 import { POLL_MIN_VOTES, PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 
@@ -363,10 +364,11 @@ describe('mural do redesign (integração)', () => {
       });
     }
 
-    it('o resultado só sai com 5 votos e depois de votar; o voto é anônimo', async () => {
+    it('o resultado só sai com 5 votos dos outros e depois de votar; o voto é anônimo', async () => {
       expect(POLL_MIN_VOTES).toBe(5);
       const a = await comunidade();
       const extras = [
+        await entra(a.groupId, 'MEMBER'),
         await entra(a.groupId, 'MEMBER'),
         await entra(a.groupId, 'MEMBER'),
         await entra(a.groupId, 'MEMBER'),
@@ -389,17 +391,46 @@ describe('mural do redesign (integração)', () => {
       expect((await posts.polls(a.dono, a.groupId))[0]!.totalVotes).toBeNull();
 
       await posts.vote(extras[2]!, a.groupId, p.id, o8!.id);
+      // Cinco votos, mas só quatro dos outros: quem votou deduziria a distribuição deles
+      // tirando o próprio voto. Continua escondido para quem votou.
+      expect((await posts.get(a.ana, a.groupId, p.id)).poll!.totalVotes).toBeNull();
+      // O painel de quem não votou já vê os 5.
+      expect((await posts.polls(a.dono, a.groupId))[0]!.totalVotes).toBe(5);
+
+      await posts.vote(extras[3]!, a.groupId, p.id, o9!.id);
       const ana = await posts.get(a.ana, a.groupId, p.id);
-      expect(ana.poll!.totalVotes).toBe(5);
-      expect(ana.poll!.options.map((o) => o.percent)).toEqual([60, 40, 0]);
+      expect(ana.poll!.totalVotes).toBe(6);
+      expect(ana.poll!.options.map((o) => o.percent)).toEqual([50, 50, 0]);
       // Quem não votou ainda não vê (prancha Cm-21): vota primeiro.
       const prof = await posts.get(a.prof, a.groupId, p.id);
       expect(prof.poll!.totalVotes).toBeNull();
       expect(prof.poll!.myOptionId).toBeNull();
       // O painel da equipe vê o total e as %, nunca quem votou.
       const painel = await posts.polls(a.dono, a.groupId);
-      expect(painel[0]).toMatchObject({ totalVotes: 5, question: 'Qual horário do aulão?' });
+      expect(painel[0]).toMatchObject({ totalVotes: 6, question: 'Qual horário do aulão?' });
       expect(JSON.stringify(painel)).not.toContain(a.ana);
+    });
+
+    it('no painel, quem votou também precisa de 5 votos dos outros', async () => {
+      const a = await comunidade();
+      const outros = await Promise.all([1, 2, 3, 4].map(() => entra(a.groupId, 'MEMBER')));
+      const p = await enquete(a);
+      const [o8] = p.poll!.options;
+      await posts.vote(a.dono, a.groupId, p.id, o8!.id);
+      for (const m of outros) await posts.vote(m, a.groupId, p.id, o8!.id);
+      expect((await posts.polls(a.dono, a.groupId))[0]!.totalVotes).toBeNull();
+      expect((await posts.polls(a.prof, a.groupId))[0]!.totalVotes).toBe(5);
+    });
+
+    it('o voto não se apaga: só troca de opção (sem rota de tirar o voto)', async () => {
+      expect(
+        (PostController.prototype as unknown as Record<string, unknown>).unvote,
+      ).toBeUndefined();
+      const a = await comunidade();
+      const p = await enquete(a);
+      await expect(
+        posts.vote(a.ana, a.groupId, p.id, null as unknown as string),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('muda o voto até o prazo; encerrada não aceita voto e mostra o resultado', async () => {

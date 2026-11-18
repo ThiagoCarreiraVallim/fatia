@@ -330,13 +330,18 @@ function pollClosed(p: { closesAt: Date; closedAt: Date | null }, now = new Date
 /**
  * As % da enquete, só quando pode mostrar. Arredondadas, cada uma por si: a
  * soma pode dar 99 ou 101, como em qualquer enquete.
+ *
+ * Quem votou conhece o próprio voto: tirando-o do total, sobram os dos outros.
+ * Por isso, para quem votou, são os **votos dos outros** que precisam chegar a
+ * `POLL_MIN_VOTES` (total − 1 ≥ 5); para quem não votou, o total.
  */
 function pollResults(
   options: { _count: { votes: number } }[],
-  show: (total: number) => boolean,
+  viewer: { voted: boolean; allowed: boolean },
 ): { total: number | null; percents: (number | null)[] } {
   const total = options.reduce((s, o) => s + o._count.votes, 0);
-  if (total < POLL_MIN_VOTES || !show(total)) {
+  const outros = viewer.voted ? total - 1 : total;
+  if (!viewer.allowed || outros < POLL_MIN_VOTES) {
     return { total: null, percents: options.map(() => null) };
   }
   return { total, percents: options.map((o) => Math.round((o._count.votes / total) * 100)) };
@@ -718,15 +723,12 @@ export class PostService {
   // ---------------------------------------------------------------- enquetes
 
   /**
-   * Votar, ou mudar o voto, até o prazo. `null` tira o voto ("Mudar voto").
-   * Opção de outra enquete responde como inexistente.
+   * Votar, ou trocar de opção, até o prazo. O voto não se apaga: tirar e pôr
+   * de novo deixaria comparar o resultado com e sem ele. Opção de outra
+   * enquete responde como inexistente.
    */
-  async vote(
-    userId: string,
-    groupId: string,
-    postId: string,
-    optionId: string | null,
-  ): Promise<PostView> {
+  async vote(userId: string, groupId: string, postId: string, optionId: string): Promise<PostView> {
+    if (!optionId) throw new BadRequestException('Escolha uma opção');
     const eu = await this.me(userId, groupId, 'post.read');
     const row = await this.findLive(groupId, postId, eu);
     const poll = await this.prisma.groupPoll.findUnique({
@@ -735,22 +737,16 @@ export class PostService {
     });
     if (!poll) throw new NotFoundException('Poll not found');
     if (pollClosed(poll)) throw new ConflictException('A enquete já encerrou');
-    if (optionId) {
-      const opcao = await this.prisma.groupPollOption.findFirst({
-        where: { id: optionId, pollId: poll.id },
-        select: { id: true },
-      });
-      if (!opcao) throw new NotFoundException('Option not found');
-      await this.prisma.groupPollVote.upsert({
-        where: { pollId_membershipId: { pollId: poll.id, membershipId: eu.membershipId } },
-        create: { pollId: poll.id, optionId: opcao.id, membershipId: eu.membershipId },
-        update: { optionId: opcao.id },
-      });
-    } else {
-      await this.prisma.groupPollVote.deleteMany({
-        where: { pollId: poll.id, membershipId: eu.membershipId },
-      });
-    }
+    const opcao = await this.prisma.groupPollOption.findFirst({
+      where: { id: optionId, pollId: poll.id },
+      select: { id: true },
+    });
+    if (!opcao) throw new NotFoundException('Option not found');
+    await this.prisma.groupPollVote.upsert({
+      where: { pollId_membershipId: { pollId: poll.id, membershipId: eu.membershipId } },
+      create: { pollId: poll.id, optionId: opcao.id, membershipId: eu.membershipId },
+      update: { optionId: opcao.id },
+    });
     return this.viewOne(groupId, postId, eu);
   }
 
@@ -780,20 +776,34 @@ export class PostService {
    * com o resultado só a partir de `POLL_MIN_VOTES`, como para o membro.
    */
   async polls(userId: string, groupId: string): Promise<PanelPollView[]> {
-    await this.me(userId, groupId, 'content.publish');
+    const eu = await this.me(userId, groupId, 'content.publish');
     const rows = await this.prisma.groupPost.findMany({
       where: { groupId, kind: PostKind.POLL, removedAt: null, poll: { isNot: null } },
       include: { author: AUTOR, poll: INCLUIR.poll },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+    const meus = new Set(
+      (
+        await this.prisma.groupPollVote.findMany({
+          where: {
+            membershipId: eu.membershipId,
+            pollId: { in: rows.map((r) => r.poll!.id) },
+          },
+          select: { pollId: true },
+        })
+      ).map((v) => v.pollId),
+    );
     const grupo = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
       select: { name: true },
     });
     return rows.map((r) => {
       const poll = r.poll!;
-      const { total, percents } = pollResults(poll.options, () => true);
+      const { total, percents } = pollResults(poll.options, {
+        voted: meus.has(poll.id),
+        allowed: true,
+      });
       let top: string | null = null;
       if (total !== null) {
         const maior = [...poll.options].sort((a, b) => b._count.votes - a._count.votes)[0];
@@ -1459,7 +1469,10 @@ export class PostService {
 
   private pollView(poll: PollRow, myOptionId: string | null, eu: Eu, authorId: string): PollView {
     const closed = pollClosed(poll);
-    const { total, percents } = pollResults(poll.options, () => myOptionId !== null || closed);
+    const { total, percents } = pollResults(poll.options, {
+      voted: myOptionId !== null,
+      allowed: myOptionId !== null || closed,
+    });
     return {
       question: poll.question,
       closesAt: poll.closesAt,

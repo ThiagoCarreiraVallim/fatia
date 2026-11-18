@@ -346,8 +346,8 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**148,2 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(124,3 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**148,3 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(124,4 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
     text: '**8.762 são os exemplos**',
@@ -355,10 +355,10 @@ const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => 
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**148,2 k caracteres**',
+    text: '**148,3 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 124,3 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 124,4 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
     text: '**8.762 caracteres**',

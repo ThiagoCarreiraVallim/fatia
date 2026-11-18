@@ -70,7 +70,7 @@ import {
  * `filter` e o bloqueio em `list_group_posts`: muda o braço A.
  */
 
-const SHA_ENTIDADE = '3c3f0f1f259bf4d4a6a20696fbfe6447f42863a14e688d73b43e5c2329a92b92';
+const SHA_ENTIDADE = '4d4c231b998f768b0849e8d7cb3a8cbb2d1360701776a354c6d908c466a37b06';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

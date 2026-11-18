@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 159 tools): **148,2 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 159 tools): **148,3 k caracteres**
 hoje, dos quais **8.762 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (124,3 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (124,4 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -3540,9 +3540,10 @@ ou é de alguém com bloqueio.
 ### `get_group_poll`
 
 Uma enquete do mural (#394). O voto é anônimo: ninguém, nem a equipe, sabe em quê os outros
-votaram. O resultado só sai com **5 votos ou mais** e, para o membro, depois de votar ou com a
-enquete encerrada; antes disso `totalVotes` e cada `percent` vêm `null` (a API não manda a
-contagem).
+votaram. O resultado só sai com **5 votos de outras pessoas** (para quem votou, o total menos o
+próprio voto, senão daria para deduzir os votos dos outros) e, para o membro, depois de votar ou
+com a enquete encerrada; antes disso `totalVotes` e cada `percent` vêm `null` (a API não manda
+a contagem). O voto não se apaga: `vote_group_poll` só troca de opção.
 
 **Input:**
 

@@ -32,7 +32,7 @@ export function PollBlock({
   const qc = useQueryClient();
   const recarregar = () => void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId) });
   const votar = useMutation({
-    mutationFn: (optionId: string | null) => feedApi.vote(groupId, post.id, optionId),
+    mutationFn: (optionId: string) => feedApi.vote(groupId, post.id, optionId),
     onSuccess: recarregar,
     onError: (err) => toast(apiMessage(err, 'Não deu para votar agora.')),
   });
@@ -47,6 +47,28 @@ export function PollBlock({
 
   const votando = !poll.closed && !poll.myOptionId;
   const ocupado = votar.isPending || encerrar.isPending;
+
+  /** Uma opção com a barra da %, quando a API manda. */
+  const linha = (o: PollView['options'][number], minha: boolean) => (
+    <>
+      {o.percent !== null && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 bg-primary/15"
+          style={{ width: `${o.percent}%` }}
+        />
+      )}
+      <span className="relative flex w-full items-center justify-between gap-2">
+        <span className={cn(minha && 'font-semibold')}>
+          {o.label}
+          {minha && <span className="sr-only"> (seu voto)</span>}
+        </span>
+        {o.percent !== null && (
+          <span className="tabular-nums text-muted-foreground">{o.percent}%</span>
+        )}
+      </span>
+    </>
+  );
 
   return (
     <section aria-label={`Enquete: ${poll.question}`} className="space-y-3">
@@ -65,38 +87,43 @@ export function PollBlock({
             </Button>
           ))}
         </div>
-      ) : (
+      ) : poll.closed ? (
         <ul aria-label="Resultado" className="grid gap-2">
+          {poll.options.map((o) => (
+            <li
+              key={o.id}
+              className={cn(
+                'relative overflow-hidden rounded-xl border px-3 py-2 text-sm',
+                poll.myOptionId === o.id ? 'border-primary' : 'border-subtle',
+              )}
+            >
+              {linha(o, poll.myOptionId === o.id)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        // Votou e a enquete está aberta: tocar em outra opção troca o voto. O voto
+        // não se apaga, para não dar para comparar o resultado com e sem ele.
+        <div role="group" aria-label="Resultado" className="grid gap-2">
           {poll.options.map((o) => {
             const minha = poll.myOptionId === o.id;
             return (
-              <li
+              <button
                 key={o.id}
+                type="button"
+                aria-pressed={minha}
+                disabled={ocupado || minha}
+                onClick={() => votar.mutate(o.id)}
                 className={cn(
-                  'relative overflow-hidden rounded-xl border px-3 py-2 text-sm',
-                  minha ? 'border-primary' : 'border-subtle',
+                  'relative flex min-h-[40px] overflow-hidden rounded-xl border px-3 py-2 text-left text-sm',
+                  minha ? 'border-primary' : 'border-subtle hover:bg-accent/30',
                 )}
               >
-                {o.percent !== null && (
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 bg-primary/15"
-                    style={{ width: `${o.percent}%` }}
-                  />
-                )}
-                <span className="relative flex items-center justify-between gap-2">
-                  <span className={cn(minha && 'font-semibold')}>
-                    {o.label}
-                    {minha && <span className="sr-only"> (seu voto)</span>}
-                  </span>
-                  {o.percent !== null && (
-                    <span className="tabular-nums text-muted-foreground">{o.percent}%</span>
-                  )}
-                </span>
-              </li>
+                {linha(o, minha)}
+              </button>
             );
           })}
-        </ul>
+        </div>
       )}
       <p className="text-xs text-muted-foreground">
         {pollResultNote(poll)} · {pollClosesLabel(poll)}
@@ -105,20 +132,14 @@ export function PollBlock({
         <Lock size={12} aria-hidden />
         Seu voto é anônimo · Ninguém vê em quem você votou, nem a equipe.
       </p>
-      {(poll.myOptionId && !poll.closed) || (poll.canClose && !poll.closed) ? (
-        <div className="flex flex-wrap gap-2">
-          {poll.myOptionId && !poll.closed && (
-            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => votar.mutate(null)}>
-              Mudar voto
-            </Button>
-          )}
-          {poll.canClose && !poll.closed && (
-            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => encerrar.mutate()}>
-              Encerrar enquete
-            </Button>
-          )}
-        </div>
-      ) : null}
+      {poll.myOptionId && !poll.closed && (
+        <p className="text-xs text-muted-foreground">Para mudar o voto, toque em outra opção.</p>
+      )}
+      {poll.canClose && !poll.closed && (
+        <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => encerrar.mutate()}>
+          Encerrar enquete
+        </Button>
+      )}
     </section>
   );
 }

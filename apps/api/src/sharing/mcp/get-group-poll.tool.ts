@@ -19,8 +19,9 @@ export class GetGroupPollTool implements McpToolDef {
   readonly description =
     'Lê uma enquete do mural de uma comunidade de que o usuário faz parte: a pergunta, as ' +
     'opções, o prazo, em qual opção o próprio usuário votou e, se já der para mostrar, as %. O ' +
-    'resultado só aparece com 5 votos ou mais, e só depois de o usuário votar ou de a enquete ' +
-    'encerrar; antes disso percent e totalVotes vêm nulos. Ninguém sabe em quê os outros ' +
+    'resultado só aparece com 5 votos de outras pessoas (fora o do usuário), e só depois de o ' +
+    'usuário votar ou de a enquete encerrar; antes disso percent e totalVotes vêm nulos. ' +
+    'Ninguém sabe em quê os outros ' +
     'votaram. Exemplo: {"groupId":"11111111-2222-4333-8444-555555555555",' +
     '"postId":"66666666-7777-4888-9999-000000000000"}';
   readonly inputSchema = {

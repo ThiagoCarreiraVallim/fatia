@@ -16,7 +16,10 @@ export const REPORT_NOTE_MAX = 500;
 export const MAX_PINNED = 3;
 /** Aviso fixado fica no topo no máximo isto. */
 export const PIN_MAX_DAYS = 90;
-/** Votos mínimos para qualquer resultado de enquete (a API não manda antes). */
+/**
+ * Votos mínimos para qualquer resultado de enquete (a API não manda antes). Para
+ * quem votou, são os votos dos outros: total − 1 ≥ 5.
+ */
 export const POLL_MIN_VOTES = 5;
 export const POLL_MIN_OPTIONS = 2;
 export const POLL_MAX_OPTIONS = 4;
@@ -269,10 +272,9 @@ export const feedApi = {
     apiFetch<{ seenAt: string }>(`${posts(groupId)}/seen`, json('POST')),
   hide: (groupId: string, id: string) =>
     apiFetch<{ hidden: boolean }>(`${posts(groupId)}/${id}/hide`, json('POST')),
-  vote: (groupId: string, id: string, optionId: string | null) =>
-    optionId
-      ? apiFetch<Post>(`${posts(groupId)}/${id}/poll/vote`, json('PUT', { optionId }))
-      : apiFetch<Post>(`${posts(groupId)}/${id}/poll/vote`, json('DELETE')),
+  /** Vota ou troca de opção. O voto não se apaga (a API não tem a rota). */
+  vote: (groupId: string, id: string, optionId: string) =>
+    apiFetch<Post>(`${posts(groupId)}/${id}/poll/vote`, json('PUT', { optionId })),
   closePoll: (groupId: string, id: string) =>
     apiFetch<Post>(`${posts(groupId)}/${id}/poll/close`, json('POST')),
   get: (groupId: string, id: string) => apiFetch<PostDetail>(`${posts(groupId)}/${id}`),
@@ -463,7 +465,10 @@ export function pollResultNote(
     return poll.closed ? `${n} · encerrada` : n;
   }
   if (!poll.closed && !poll.myOptionId) return 'Vote para ver o resultado';
-  return `Amostra pequena demais para mostrar · o resultado aparece com ${POLL_MIN_VOTES} votos`;
+  // Quem votou conhece o próprio voto: contam os votos dos outros.
+  return `Amostra pequena demais para mostrar · o resultado aparece com ${POLL_MIN_VOTES} votos${
+    poll.myOptionId ? ' além do seu' : ''
+  }`;
 }
 
 const inicioDoDia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();

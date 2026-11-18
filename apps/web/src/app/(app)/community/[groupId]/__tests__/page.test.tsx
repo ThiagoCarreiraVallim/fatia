@@ -443,7 +443,7 @@ describe('/community/[groupId] (o mural)', () => {
     expect(feedApi.vote).toHaveBeenCalledWith('g1', 'p1', 'o2');
   });
 
-  it('enquete votada com 5 votos ou mais mostra as % e deixa mudar o voto', async () => {
+  it('enquete votada com 5 votos dos outros mostra as % e troca de opção, sem apagar o voto', async () => {
     const user = userEvent.setup();
     vi.mocked(feedApi.vote).mockResolvedValue(post());
     renderPage(
@@ -467,11 +467,16 @@ describe('/community/[groupId] (o mural)', () => {
         ],
       }),
     );
-    const resultado = await screen.findByRole('list', { name: 'Resultado' });
+    const resultado = await screen.findByRole('group', { name: 'Resultado' });
     expect(within(resultado).getByText('75%')).toBeInTheDocument();
+    expect(within(resultado).getByRole('button', { name: /Manhã/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByText(/8 votos/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Mudar voto' }));
-    expect(feedApi.vote).toHaveBeenCalledWith('g1', 'p1', null);
+    expect(screen.queryByRole('button', { name: 'Mudar voto' })).toBeNull();
+    await user.click(within(resultado).getByRole('button', { name: /Noite/ }));
+    expect(feedApi.vote).toHaveBeenCalledWith('g1', 'p1', 'o2');
   });
 
   it('enquete pelo composer: pergunta, opções e prazo', async () => {

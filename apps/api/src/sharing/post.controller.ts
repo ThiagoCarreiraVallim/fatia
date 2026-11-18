@@ -121,12 +121,6 @@ export class PostController {
     return this.posts.vote(user.id, p.groupId, p.id, dto.optionId);
   }
 
-  @Delete(':id/poll/vote')
-  @RequireGroupAction('post.read')
-  unvote(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto) {
-    return this.posts.vote(user.id, p.groupId, p.id, null);
-  }
-
   @Post(':id/poll/close')
   @HttpCode(200)
   @RequireGroupAction('post.read')

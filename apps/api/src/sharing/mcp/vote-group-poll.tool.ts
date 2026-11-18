@@ -19,7 +19,7 @@ export class VoteGroupPollTool implements McpToolDef {
   readonly description =
     'Vota, ou muda o voto, numa enquete do mural de uma comunidade de que o usuário faz parte, ' +
     'até o prazo. O voto é anônimo. Vote só na opção que o usuário escolheu. Devolve a enquete ' +
-    'com o resultado, se já houver 5 votos. Exemplo: ' +
+    'com o resultado quando houver 5 votos além do seu. O voto não se apaga: só troca de opção. Exemplo: ' +
     '{"groupId":"11111111-2222-4333-8444-555555555555",' +
     '"postId":"66666666-7777-4888-9999-000000000000","optionId":"77777777-8888-4999-aaaa-bbbbbbbbbbbb"}';
   readonly inputSchema = {

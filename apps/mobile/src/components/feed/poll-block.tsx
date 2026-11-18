@@ -33,7 +33,7 @@ export function PollBlock({
   const toast = useToast();
   const recarregar = () => void qc.invalidateQueries({ queryKey: feedKey(groupId) });
   const votar = useMutation({
-    mutationFn: (optionId: string | null) => feedApi.vote(groupId, post.id, optionId),
+    mutationFn: (optionId: string) => feedApi.vote(groupId, post.id, optionId),
     onSuccess: recarregar,
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para votar agora.') }),
   });
@@ -67,9 +67,15 @@ export function PollBlock({
               </Pressable>
             );
           }
+          // Votou e está aberta: tocar em outra opção troca o voto (o voto não se apaga).
+          const troca = !poll.closed && !minha;
           return (
-            <View
+            <Pressable
               key={o.id}
+              accessibilityRole={poll.closed ? undefined : 'button'}
+              accessibilityState={poll.closed ? undefined : { selected: minha }}
+              disabled={!troca || ocupado}
+              onPress={() => troca && votar.mutate(o.id)}
               accessibilityLabel={`${o.label}${o.percent !== null ? `, ${o.percent}%` : ''}${minha ? ', seu voto' : ''}`}
               className={cn(
                 'min-h-[44px] justify-center overflow-hidden rounded-xl border px-3',
@@ -90,7 +96,7 @@ export function PollBlock({
                   <Text className="text-sm text-muted-foreground">{`${o.percent}%`}</Text>
                 ) : null}
               </View>
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -103,19 +109,15 @@ export function PollBlock({
           Seu voto é anônimo · Ninguém vê em quem você votou, nem a equipe.
         </Text>
       </View>
-      {!poll.closed && (poll.myOptionId || poll.canClose) ? (
-        <View className="flex-row flex-wrap gap-2">
-          {poll.myOptionId ? (
-            <Button size="sm" variant="ghost" disabled={ocupado} onPress={() => votar.mutate(null)}>
-              Mudar voto
-            </Button>
-          ) : null}
-          {poll.canClose ? (
-            <Button size="sm" variant="ghost" disabled={ocupado} onPress={() => encerrar.mutate()}>
-              Encerrar enquete
-            </Button>
-          ) : null}
-        </View>
+      {!poll.closed && poll.myOptionId ? (
+        <Text className="text-xs text-muted-foreground">
+          Para mudar o voto, toque em outra opção.
+        </Text>
+      ) : null}
+      {!poll.closed && poll.canClose ? (
+        <Button size="sm" variant="ghost" disabled={ocupado} onPress={() => encerrar.mutate()}>
+          Encerrar enquete
+        </Button>
       ) : null}
     </View>
   );
