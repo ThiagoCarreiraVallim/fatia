@@ -35,6 +35,9 @@ export const orgKeys = {
     ['community', 'org', groupId, 'exercises', id] as const,
   agent: (groupId: string) => ['community', 'org', groupId, 'agent'] as const,
   benefits: (groupId: string) => ['community', 'org', groupId, 'benefits'] as const,
+  /** A fila "Para revisar" dos desafios (Pn-13): só a equipe que revisa. */
+  challengeReview: (groupId: string) =>
+    ['community', 'org', groupId, 'challenges', 'review'] as const,
   moderation: (groupId: string) => ['community', 'org', groupId, 'moderation'] as const,
   reports: (groupId: string) => ['community', 'org', groupId, 'moderation', 'reports'] as const,
   removedPosts: (groupId: string) =>
