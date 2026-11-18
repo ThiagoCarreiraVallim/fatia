@@ -188,13 +188,20 @@ export class ScoreboardService {
       request.water
         ? this.prisma.waterLog.findMany({
             where,
-            select: { userId: true, date: true, ml: true, loggedAt: true },
+            select: { userId: true, date: true, ml: true, loggedAt: true, editedAt: true },
           })
         : Promise.resolve<Array<{ userId: string } & WaterEntry>>([]),
       request.steps
         ? this.prisma.stepLog.findMany({
             where,
-            select: { userId: true, date: true, steps: true, source: true, loggedAt: true },
+            select: {
+              userId: true,
+              date: true,
+              steps: true,
+              source: true,
+              loggedAt: true,
+              editedAt: true,
+            },
           })
         : Promise.resolve<Array<{ userId: string } & StepEntry>>([]),
       request.nutrition

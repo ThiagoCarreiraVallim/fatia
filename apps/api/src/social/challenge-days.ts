@@ -48,6 +48,8 @@ export interface WaterEntry {
   date: string;
   ml: number;
   loggedAt: Date;
+  /** Última edição (#395): o registro vale pelo instante em que ficou como está. */
+  editedAt?: Date | null;
 }
 
 export interface StepEntry {
@@ -55,6 +57,17 @@ export interface StepEntry {
   steps: number;
   source: StepSource;
   loggedAt: Date;
+  /** Última edição (#395): o registro vale pelo instante em que ficou como está. */
+  editedAt?: Date | null;
+}
+
+/**
+ * O instante que vale de um registro: a última edição, se houve. Editar depois
+ * do prazo do dia é o mesmo que lançar depois (#395 I4), e os detectores de
+ * rajada e salto olham a hora em que o valor ficou como está.
+ */
+function effectiveAt(log: { loggedAt: Date; editedAt?: Date | null }): Date {
+  return log.editedAt && log.editedAt > log.loggedAt ? log.editedAt : log.loggedAt;
 }
 
 export interface DayFacts {
@@ -161,7 +174,7 @@ export function waterDays(
 ): DayFacts {
   const porDia = new Map<string, WaterEntry[]>();
   for (const log of logs) {
-    if (log.loggedAt > dayDeadline(log.date, opts.timezone)) continue;
+    if (effectiveAt(log) > dayDeadline(log.date, opts.timezone)) continue;
     const lista = porDia.get(log.date) ?? [];
     lista.push(log);
     porDia.set(log.date, lista);
@@ -176,7 +189,7 @@ export function waterDays(
     if (total < opts.goal) continue;
     met.add(dia);
     const deUmaVez = lista.some((l) => {
-      const h = localHour(l.loggedAt, opts.timezone);
+      const h = localHour(effectiveAt(l), opts.timezone);
       return l.ml >= opts.goal * WATER_BURST_SHARE && (h >= 23 || h < 3);
     });
     if (deUmaVez) rajadas.push(dia);
@@ -208,7 +221,7 @@ export function stepDays(
   const porDia = new Map<string, StepEntry[]>();
   for (const log of logs) {
     if (!acceptedStepSource(log.source, opts.allowed)) continue;
-    if (log.loggedAt > dayDeadline(log.date, opts.timezone)) continue;
+    if (effectiveAt(log) > dayDeadline(log.date, opts.timezone)) continue;
     const lista = porDia.get(log.date) ?? [];
     lista.push(log);
     porDia.set(log.date, lista);
@@ -219,10 +232,10 @@ export function stepDays(
     const maior = Math.max(...lista.map((l) => l.steps));
     if (maior < opts.goal) continue;
     met.add(dia);
-    const ordem = [...lista].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime());
+    const ordem = [...lista].sort((a, b) => effectiveAt(a).getTime() - effectiveAt(b).getTime());
     for (let i = 1; i < ordem.length; i++) {
       const salto = ordem[i]!.steps - ordem[i - 1]!.steps;
-      const tempo = ordem[i]!.loggedAt.getTime() - ordem[i - 1]!.loggedAt.getTime();
+      const tempo = effectiveAt(ordem[i]!).getTime() - effectiveAt(ordem[i - 1]!).getTime();
       if (salto >= STEPS_JUMP && tempo <= STEPS_JUMP_WINDOW_MS) {
         suspicious.set(dia, 'Salto grande de passos em poucos minutos');
         break;

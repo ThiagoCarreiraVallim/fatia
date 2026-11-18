@@ -43,6 +43,8 @@ export class StepLogService {
         ...(dto.steps !== undefined && { steps: dto.steps }),
         ...(dto.date && { date: dto.date }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
+        // A edição tem hora (#395 I4): editado depois do prazo do dia não conta em desafio.
+        ...((dto.date !== undefined || dto.steps !== undefined) && { editedAt: new Date() }),
       },
     });
   }

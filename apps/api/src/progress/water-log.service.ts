@@ -40,6 +40,8 @@ export class WaterLogService {
         ...(dto.ml !== undefined && { ml: dto.ml }),
         ...(dto.date && { date: dto.date }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
+        // A edição tem hora (#395 I4): editado depois do prazo do dia não conta em desafio.
+        ...((dto.date !== undefined || dto.ml !== undefined) && { editedAt: new Date() }),
       },
     });
   }
