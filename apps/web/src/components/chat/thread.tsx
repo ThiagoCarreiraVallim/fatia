@@ -253,12 +253,27 @@ function AnswerFooter() {
   const stopped = useIsStopped(id);
   const stats = timingStats(useTurnTiming(id));
   if (running) return null;
-  if (stopped) return <ContinuarParada />;
+  if (stopped) return <StoppedLine />;
   return <MessageTiming stats={stats} />;
 }
 
+/**
+ * Parada antes do primeiro token: não sobra mensagem do assistente onde pendurar a etiqueta, então
+ * ela fica no fim da conversa, logo abaixo da pergunta — como o `TurnErrorNotice`. Se a resposta
+ * chegou a existir, a última mensagem é ela e quem mostra é o `AnswerFooter`.
+ */
+function StoppedBeforeAnswer() {
+  const pergunta = useAuiState((s) => {
+    const ultima = s.thread.messages.at(-1);
+    return !s.thread.isRunning && ultima?.role === 'user' ? ultima.id : '';
+  });
+  const stopped = useIsStopped(pergunta);
+  if (!pergunta || !stopped) return null;
+  return <StoppedLine />;
+}
+
 /** Prancha Al-M11, "Interrompida": a etiqueta e o "Continuar", que pede o resto da resposta. */
-function ContinuarParada() {
+function StoppedLine() {
   const aui = useAui();
   const rodando = useAuiState((s) => s.thread.isRunning);
   return (
@@ -678,8 +693,13 @@ function Composer() {
         onStop={() => {
           // Marcada antes de cancelar: o runtime não diferencia "parou" de
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
-          const ultima = aui.thread().getState().messages.at(-1);
+          const mensagens = aui.thread().getState().messages;
+          const ultima = mensagens.at(-1);
           if (ultima?.role === 'assistant') markStopped(ultima.id);
+          // Antes do primeiro token a resposta é só o "pensando" otimista, que some ao cancelar:
+          // a etiqueta fica presa à pergunta (ver `StoppedBeforeAnswer`).
+          const pergunta = mensagens.findLast((m) => m.role === 'user');
+          if (pergunta) markStopped(pergunta.id);
           // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno. A fila
           // espera o servidor responder (ele responde depois de o turno fechar).
           if (aberta) {
@@ -715,6 +735,7 @@ export function ChatThread() {
           {/* No fim do fluxo, e dentro da rolagem: a decisão é sobre a mensagem
               logo acima, e é lá que a pessoa relê "200 g de frango". */}
           <TurnErrorNotice />
+          <StoppedBeforeAnswer />
           <PlanoDoTurno />
           <PausaDoAgente />
           <MotivoDoVoto />

@@ -65,6 +65,7 @@ import { BodyLogSheet, LogWaterDrawer } from '@/components/progress';
 import { inAppPurchaseAvailable } from '@/billing/purchases';
 import { useChatSession } from '@/chat/chat-provider';
 import { useDictation } from '@/chat/dictation';
+import { useKeyboardOverlap } from '@/chat/use-keyboard-overlap';
 import { colors } from '@/theme/colors';
 import { AI_MENU_MOTION, menuBackdrop, navChrome, notchLayout } from './ai-menu-frame';
 import { aiLocked, aiUsable, useChatAvailability, useDrawerConversations } from './use-ai-state';
@@ -417,6 +418,9 @@ function AiMenuPanel({
 }) {
   const { close, go, pick } = useContext(AiMenuContext);
   const insets = useSafeAreaInsets();
+  const { ref: areaDoTeclado, overlap: tecladoCobre } = useKeyboardOverlap(
+    Platform.OS === 'android',
+  );
   // O cabeçalho (e o corpo, 60 px abaixo) sobem com o notch no teclado (Al-H6c7).
   const headerTop = useAnimatedStyle(() => ({ top: from + (to - from) * kb.value }));
   const bodyTop = useAnimatedStyle(() => ({ top: from + 60 + (to - from) * kb.value }));
@@ -523,8 +527,17 @@ function AiMenuPanel({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      enabled={Platform.OS === 'ios'}
       style={styles.fill}
     >
+      {/* No Android edge-to-edge a janela não encolhe com o teclado: esta View só serve de régua
+          para saber quanto ele cobre do menu; a doca fica 22 dp acima dele, como fica da área segura. */}
+      <View
+        ref={areaDoTeclado}
+        collapsable={false}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <Animated.View
         style={[styles.header, headerTop]}
         className="flex-row items-center gap-2 pl-3 pr-4"
@@ -550,7 +563,9 @@ function AiMenuPanel({
         ) : null}
       </Animated.View>
 
-      <Animated.View style={[styles.body, { paddingBottom: insets.bottom + 22 }, bodyTop]}>
+      <Animated.View
+        style={[styles.body, { paddingBottom: (tecladoCobre || insets.bottom) + 22 }, bodyTop]}
+      >
         <View style={styles.fill}>
           {keyboard ? (
             // Tocar no vazio entre o cabeçalho e a doca esconde o teclado.

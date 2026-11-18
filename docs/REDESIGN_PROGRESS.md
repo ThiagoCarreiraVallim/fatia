@@ -361,6 +361,13 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
 - **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
 - **Passada visual (Al-M12, Al-M10, Al-M24, Al-M9, Al-M11):** web e app conferidos contra as pranchas; cota e fora do ar do app conferidos com estado forçado (a cota fica desligada no dev).
 
+Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migration nem env nova):
+
+- **Cartão de barras:** até 7 barras, um rótulo por barra; acima disso, início, meio e fim, como a linha do tempo. "2026-10-19" e "19/10" saem como "19 out".
+- **Teclado no Android:** o chat e o menu da IA sobem pelo quanto o teclado cobre (`useKeyboardOverlap`, sem módulo nativo). O iOS segue no `KeyboardAvoidingView`.
+- **Parar antes do primeiro token:** mostra "Resposta interrompida" com Continuar, no web e no app.
+- **Pendência:** essa linha não volta ao recarregar a conversa. A API não grava turno vazio (`completeTurn`), e as duas telas descartam linha vazia do histórico. Parar no meio da resposta volta normalmente.
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
