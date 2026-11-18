@@ -20,6 +20,7 @@ import {
   heroTitle,
   participantSummary,
   podiumOrder,
+  trophyColor,
   privacyLine,
   reviewReasonProblem,
   todayRows,
@@ -320,19 +321,33 @@ describe('atividade', () => {
 });
 
 describe('pódio (Cm-11)', () => {
+  const MEDALHA = { 1: 'gold', 2: 'silver', 3: 'bronze' } as const;
+  const e = (n: string, rank: number, score = 10 - rank) => ({
+    displayName: n,
+    score,
+    rank,
+    isMe: false,
+    medal: score > 0 && rank <= 3 ? MEDALHA[rank as 1 | 2 | 3] : null,
+    streak: 0,
+  });
+
   it('prata, ouro e bronze nessa ordem; menos de 3, só quem tem', () => {
-    const e = (n: string, rank: number) => ({
-      displayName: n,
-      score: 10 - rank,
-      rank,
-      isMe: false,
-      medal: null,
-      streak: 0,
-    });
     expect(
       podiumOrder([e('A', 1), e('B', 2), e('C', 3), e('D', 4)]).map((x) => x.displayName),
     ).toEqual(['B', 'A', 'C']);
     expect(podiumOrder([e('A', 1)]).map((x) => x.displayName)).toEqual(['A']);
+  });
+
+  it('quem fez 0 não sobe, e o empate divide o degrau (#395 M7)', () => {
+    expect(podiumOrder([e('A', 1, 4), e('B', 2, 0)]).map((x) => x.displayName)).toEqual(['A']);
+    expect(
+      podiumOrder([e('A', 1, 4), e('B', 1, 4), e('C', 3, 2)]).map((x) => x.displayName),
+    ).toEqual(['A', 'B', 'C']);
+  });
+
+  it('o troféu tem contraste no tema claro', () => {
+    expect(trophyColor('light')).toBe('#b45309');
+    expect(trophyColor('dark')).toBe('#fbbf24');
   });
 });
 
