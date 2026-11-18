@@ -15,7 +15,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 from fatia_agent.chat.graph import GrafoDaConversa, montar_grafo, stream_chat_events
 from fatia_agent.chat.mcp_client import McpClient
 from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
-from fatia_agent.chat.tool_policy import camada_restrita, todas_permitidas
+from fatia_agent.chat.tool_policy import (
+    automaticas,
+    camada_restrita,
+    sem_desligadas,
+    todas_permitidas,
+)
 from fatia_agent.chat.web import QueryWriter, WebSearcher, WebSearchMode
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
@@ -139,16 +144,24 @@ async def turno(
     search_web: WebSearcher | None = None,
     write_search_query: QueryWriter | None = None,
     pause_after_tools: int = 14,
+    auto_write: Sequence[str] = (),
+    off: Sequence[str] = (),
+    run_token: str | None = "token-1",
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
     provider = build_provider(settings_factory(), transport=provider_transport)
     transporte_mcp = mcp_transport if mcp_transport is not None else duplo_do_mcp(catalogo=catalogo)
-    client = McpClient(base_url="http://localhost:3000/mcp", bearer=token, transport=transporte_mcp)
+    client = McpClient(
+        base_url="http://localhost:3000/mcp",
+        bearer=token,
+        transport=transporte_mcp,
+        agent_key="chave-do-agente",
+    )
     compilado = grafo if grafo is not None else montar_grafo(InMemorySaver())
 
     anunciadas = await client.list_tools()
-    permitidas = todas_permitidas(anunciadas)
+    permitidas = sem_desligadas(todas_permitidas(anunciadas), off)
     client.tool_tracer = trace.tool
     contexto = ContextoDoTurno(
         provider=provider if trace is NOOP_TRACE else TracedProvider(provider, trace, model="m"),
@@ -168,6 +181,9 @@ async def turno(
         # Por padrão, o redator devolve a própria fala: os testes leem a pergunta direto.
         write_search_query=write_search_query or _eco,
         pause_after_tools=pause_after_tools,
+        conversation_id=CONVERSA,
+        auto_write=automaticas(permitidas, auto_write),
+        run_token=run_token,
     )
     brutos = [
         quadro

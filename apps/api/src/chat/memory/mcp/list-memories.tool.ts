@@ -19,6 +19,6 @@ export class ListMemoriesTool implements McpToolDef {
     'Lista o que o usuário pediu para o assistente lembrar, da mais antiga para a mais nova.';
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
-    return this.memorias.listar(userId);
+    return this.memorias.list(userId);
   }
 }

@@ -613,7 +613,7 @@ describe('ChatScreen', () => {
 
     await enviar('quanto comi hoje?');
     fontes[1].emitir(
-      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED', message: 'cota' } },
+      { event: 'error', data: { code: 'AI_RESPONSE_UNPARSEABLE', message: 'cota' } },
       { event: 'done', data: { status: 'error' } },
     );
     fontes[1].fechar();
@@ -722,7 +722,7 @@ describe('ChatScreen', () => {
     montar();
     await enviar('oi');
     fontes[0].emitir(
-      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED', message: 'cota' } },
+      { event: 'error', data: { code: 'AI_RESPONSE_UNPARSEABLE', message: 'cota' } },
       { event: 'done', data: { status: 'error' } },
     );
     fontes[0].fechar();
@@ -780,7 +780,7 @@ describe('ChatScreen', () => {
       { event: 'done', data: { status: 'error' } },
     );
     fontes[0].fechar();
-    expect(await screen.findByText('A resposta falhou')).toBeInTheDocument();
+    expect(await screen.findByText('A IA está fora do ar')).toBeInTheDocument();
     const user = await enviar('e de proteína?');
     fontes[1].emitir(fragmento('ai-2', 'Bastante.'), {
       event: 'done',
@@ -1198,19 +1198,83 @@ describe('ChatScreen', () => {
     cota = { ...cota, limitMicros: 100_000, spentMicros: 100_000, usedRatio: 1, allowed: false };
     montar();
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'O limite do assistente por hoje acabou',
+    // Prancha Al-M11, "Cota": o cartão no lugar do aviso, com o registro manual a um toque.
+    const cartao = await screen.findByRole('status');
+    expect(cartao).toHaveTextContent('Limite de hoje atingido');
+    expect(cartao).toHaveTextContent('O registro manual segue normal.');
+    expect(within(cartao).getByRole('link', { name: 'Registrar à mão' })).toHaveAttribute(
+      'href',
+      '/nutrition',
     );
+    expect(screen.getByRole('textbox', { name: 'Mensagem para o Fatia' })).toHaveAttribute(
+      'placeholder',
+      'Volta amanhã',
+    );
+  });
+
+  it('a cota que acaba no meio da conversa vira o cartão da Al-M11, sem "tentar de novo"', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED', message: 'cota' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText('Limite de hoje atingido')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Registrar à mão' })[0]).toHaveAttribute(
+      'href',
+      '/nutrition',
+    );
+    expect(screen.queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument();
+  });
+
+  it('IA fora do ar: a mensagem ficou salva, e "Tentar de novo" reenvia', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_PROVIDER_UNREACHABLE', message: 'fora' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText('A IA está fora do ar')).toBeInTheDocument();
+    expect(
+      screen.getByText('Sua mensagem ficou salva. O resto do app funciona normalmente.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+  });
+
+  it('enquanto pensa, diz que dá para sair da tela (Al-M11, segundo plano)', async () => {
+    montar();
+    await enviar('oi');
+
+    expect(await screen.findByText(/Pode sair da tela/)).toBeInTheDocument();
+  });
+
+  it('a resposta parada oferece "Continuar"', async () => {
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve 42 g de'));
+    expect(await screen.findByText('Seu almoço teve 42 g de')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+
+    expect(await screen.findByRole('button', { name: 'Continuar' })).toBeInTheDocument();
   });
 
   it('a gaveta de memórias lista e esquece com dois toques', async () => {
     memorias = [
-      { id: 'm-1', content: 'Não come carne nem ovo.', createdAt: '2026-09-25T12:00:00Z' },
+      {
+        id: 'm-1',
+        content: 'Não come carne nem ovo.',
+        category: null,
+        createdAt: '2026-09-25T12:00:00Z',
+      },
     ];
     const user = userEvent.setup();
     montar();
 
-    await user.click(await screen.findByRole('button', { name: 'Memórias do assistente' }));
+    await user.click(await screen.findByRole('button', { name: 'O que a IA lembra' }));
     expect(await screen.findByText('Não come carne nem ovo.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Esquecer: Não come carne nem ovo.' }));
@@ -1218,7 +1282,7 @@ describe('ChatScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar: esquecer' }));
 
     await waitFor(() => expect(deleteChatMemoryMock).toHaveBeenCalledWith('m-1'));
-    expect(await screen.findByText('Nada guardado ainda.')).toBeInTheDocument();
+    expect(await screen.findByText('Nada guardado')).toBeInTheDocument();
   });
 
   it('sem visão nem ditado na instância, o composer não mostra câmera nem microfone', async () => {

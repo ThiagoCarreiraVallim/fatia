@@ -1,9 +1,24 @@
 import 'reflect-metadata';
+import type { AiWriteCategory } from '@prisma/client';
 import type { ZodRawShape, z } from 'zod';
+
+/**
+ * A gravação automática que o agente pede (ADR 039, #385): a conversa, a volta do agente e a
+ * chamada. Vem do header `x-fatia-auto-write` e só é aceita depois de a API conferir que a
+ * conversa é de quem chama e que a categoria da tool está em Automático.
+ */
+export interface McpAutoWriteRequest {
+  conversationId: string;
+  runId: string;
+  toolCallId: string;
+  /** Só consulta o que esta chamada gravou; nunca executa (timeout do agente, #385). */
+  lookup?: true;
+}
 
 export interface McpToolContext {
   userId: string;
   timezone: string;
+  autoWrite?: McpAutoWriteRequest;
 }
 
 /**
@@ -140,6 +155,15 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   card?: ChatCardFormat;
   /** Só nas restritas (nunca feitas pela IA): a tela que a pessoa abre para fazer. */
   appOnly?: ChatAppOnly;
+  /**
+   * A categoria do modo da IA (ADR 039, tela Configurações da IA, #385): Registros do dia,
+   * Treino, Metas ou Memórias. Só nas confirmáveis. "Desligado" tira a tool do catálogo do
+   * modelo; "Automático" a executa sem pausa **se** ela tiver operação inversa
+   * (`chat/auto-write/undo-specs.ts`). Sem categoria, a escrita sempre pede o OK — é o caso de
+   * compartilhar, publicar no mural e o resto do que "nunca é automático". Não vai no fio do
+   * MCP: o conector usa a confirmação do cliente (ADR 039, item 8).
+   */
+  aiCategory?: AiWriteCategory;
   /**
    * Ausente é `entidade`: as 100 e tantas tools do catálogo não declaram nada, e o
    * recorte de sempre continua sendo o default. Só as tools de intenção declaram.

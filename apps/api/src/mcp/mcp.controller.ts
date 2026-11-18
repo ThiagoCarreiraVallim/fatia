@@ -8,6 +8,8 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 import { HEADER_SUPERFICIE, superficieDoHeader } from './intent/superficie';
+import { ConfigService } from '@nestjs/config';
+import { autoWriteFromRequest } from './auto-write-header';
 
 @UseGuards(McpThrottlerGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
@@ -16,6 +18,7 @@ export class McpController {
   constructor(
     private readonly registry: McpToolRegistry,
     private readonly connections: McpConnectionService,
+    private readonly config: ConfigService,
   ) {}
 
   @All()
@@ -32,11 +35,20 @@ export class McpController {
         `${HEADER_SUPERFICIE}: intencao exige MCP_SUPERFICIE_INTENCAO ligada nesta instância.`,
       );
     }
+    // Gravação automática só do agente hospedado, com a credencial de serviço dele (#385).
+    const autoWrite = autoWriteFromRequest(
+      req.headers,
+      this.config.get<string>('AGENT_API_KEY', ''),
+    );
     const server = new McpServer(
       { name: 'fatia-mcp', version: '0.1.0' },
       { capabilities: { tools: {} } },
     );
-    this.registry.bindAll(server, { userId: user.id, timezone: user.timezone }, superficie);
+    this.registry.bindAll(
+      server,
+      { userId: user.id, timezone: user.timezone, ...(autoWrite ? { autoWrite } : {}) },
+      superficie,
+    );
 
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {

@@ -22,6 +22,7 @@ export class CloneExerciseTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Cria (ou reaproveita) uma CÓPIA editável de um exercício base para o usuário, já que ' +
     'exercícios base são só-leitura. A partir daí a base some das listagens do usuário e ' +

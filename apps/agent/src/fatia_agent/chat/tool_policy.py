@@ -50,6 +50,7 @@ descarta.
 """
 
 import json
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -94,6 +95,34 @@ def todas_permitidas(catalogo: Iterable[McpToolInfo]) -> list[McpToolInfo]:
     read_only = camada_read_only(catalogo)
     vistas = {tool.name for tool in read_only}
     return read_only + [tool for tool in camada_confirmavel(catalogo) if tool.name not in vistas]
+
+
+# Apagar nunca é automático (ADR 039), nem que a lista do `apps/api` diga o contrário: a
+# lista é dado, e o "nunca" é regra. O `/mcp` recusa também — aqui é a segunda trava.
+_NUNCA_AUTOMATICA = re.compile(r"^(delete|forget)_")
+
+
+def sem_desligadas(
+    permitidas: Iterable[McpToolInfo], desligadas: Iterable[str]
+) -> list[McpToolInfo]:
+    """O catálogo sem as escritas das categorias **Desligadas** (ADR 039, #385).
+
+    Fora do catálogo, e não "recusada quando pedida": o modelo não oferece o que não vê, e
+    um pedido mesmo assim cai em `exigir_permitida`, como qualquer tool desconhecida.
+    """
+    fora = set(desligadas)
+    return [tool for tool in permitidas if tool.name not in fora]
+
+
+def automaticas(permitidas: Iterable[McpToolInfo], nomes: Iterable[str]) -> frozenset[str]:
+    """Das tools que o `apps/api` marcou como automáticas, as que podem sê-lo aqui.
+
+    Só confirmável oferecida neste turno, e nunca uma de apagar.
+    """
+    confirmaveis = {tool.name for tool in camada_confirmavel(permitidas)}
+    return frozenset(
+        nome for nome in nomes if nome in confirmaveis and not _NUNCA_AUTOMATICA.match(nome)
+    )
 
 
 def formato_openai(catalogo: Iterable[McpToolInfo]) -> list[dict[str, Any]]:
@@ -228,11 +257,13 @@ def classificar_tools(catalogo: Iterable[McpToolInfo]) -> dict[str, list[McpTool
 
 __all__ = [
     "argumentos_do_modelo",
+    "automaticas",
     "camada_confirmavel",
     "camada_read_only",
     "camada_restrita",
     "classificar_tools",
     "exigir_permitida",
     "formato_openai",
+    "sem_desligadas",
     "todas_permitidas",
 ]

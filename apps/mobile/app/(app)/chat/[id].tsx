@@ -3,13 +3,18 @@ import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Brain, List, SquarePen } from 'lucide-react-native';
+import { List, Settings2, SquarePen } from 'lucide-react-native';
 import {
+  AI_SETTINGS_COPY,
+  AI_STATES_COPY,
+  aiTurnState,
+  quotaResetLabel,
   FATIA_AGENT_NAME,
   getChatAvailability,
   getChatQuota,
   listChatAgents,
   type ChatThreadMessage,
+  CHAT_CONTINUE_MESSAGE,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
@@ -21,6 +26,7 @@ import {
   TurnError,
   UserBubble,
 } from '@/components/chat/message-list';
+import { AiStateCard } from '@/components/chat/ai-state-card';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
 import {
@@ -87,6 +93,7 @@ export default function ConversationScreen() {
   const pensando =
     thread.running &&
     (!ultima || ultima.role === 'user' || (!ultima.text && ultima.tools.length === 0));
+  const continuar = () => void sessao.send({ text: CHAT_CONTINUE_MESSAGE });
 
   useEffect(() => {
     if (thread.messages.length)
@@ -107,11 +114,11 @@ export default function ConversationScreen() {
           <WebSearchSwitch />
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Memórias do assistente"
-            onPress={() => router.push('/chat/memories')}
+            accessibilityLabel={AI_SETTINGS_COPY.title}
+            onPress={() => router.push('/chat/settings')}
             className={TOP_BAR_ACTION}
           >
-            <Brain size={20} color={colors.primaryText} />
+            <Settings2 size={20} color={colors.primaryText} />
           </Pressable>
           <Pressable
             accessibilityRole="link"
@@ -210,6 +217,7 @@ export default function ConversationScreen() {
                   onExplain={(rowId, reasons) =>
                     void sessao.explainVote(rowId, reasons).catch(() => undefined)
                   }
+                  onContinue={continuar}
                 />
               )
             }
@@ -229,13 +237,21 @@ export default function ConversationScreen() {
                     error={thread.error}
                     // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
                     onRetry={() => void sessao.retry()}
+                    onContinue={continuar}
                   />
                 ) : null}
-                {cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
+                {cota.data && !cota.data.allowed && !thread.error ? (
+                  // Prancha Al-M11, "Cota": a hora da volta e o registro manual a um toque.
+                  <AiStateCard
+                    tone="warning"
+                    title={AI_STATES_COPY.quotaTitle}
+                    body={`${quotaResetLabel(cota.data.resetsAt)} ${AI_STATES_COPY.quotaManual}`}
+                    actionLabel={AI_STATES_COPY.quotaAction}
+                    onAction={() => router.push('/nutrition')}
+                  />
+                ) : cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
                   <Text className="text-center text-xs text-muted-foreground">
-                    {cota.data.allowed
-                      ? `Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`
-                      : 'Você chegou ao limite de uso do assistente por hoje.'}
+                    {`Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`}
                   </Text>
                 ) : null}
               </View>
@@ -247,7 +263,15 @@ export default function ConversationScreen() {
             <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
             <Composer
               running={thread.running}
-              disabled={!aberta || loading}
+              disabled={!aberta || loading || cota.data?.allowed === false}
+              blockedPlaceholder={
+                cota.data?.allowed === false
+                  ? AI_STATES_COPY.quotaPlaceholder
+                  : // Fora do ar o campo segue ligado (a mensagem fica salva), só avisa.
+                    thread.error && aiTurnState(thread.error.code) === 'down'
+                    ? AI_STATES_COPY.downPlaceholder
+                    : undefined
+              }
               photosEnabled={disponibilidade.data?.photos ?? false}
               dictationEnabled={disponibilidade.data?.dictation ?? false}
               onSend={(text, photos) =>

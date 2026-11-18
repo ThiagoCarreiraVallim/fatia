@@ -1,4 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { AUTO_UNDO } from '../../chat/auto-write/undo-specs';
+import { autoEligible } from '../../chat/auto-write/auto-write.service';
 import { join, resolve } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -344,22 +346,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**143,9 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(120,6 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**144,2 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(120,9 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**8.356 são os exemplos**',
+    text: '**8.380 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**143,9 k caracteres**',
+    text: '**144,2 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 120,6 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 120,9 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**8.356 caracteres**',
+    text: '**8.380 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -1148,5 +1150,57 @@ describe('cartão de cada tool no chat (#384)', () => {
       }
     }
     expect(errados).toEqual([]);
+  });
+});
+
+describe('modo da IA por categoria (ADR 039, #385)', () => {
+  const entidade = tools.filter(({ tool }) => (tool.surface ?? 'entidade') === 'entidade');
+  // O que "nunca é automático" pela prancha Al-M24: apagar, cobrança e assinatura,
+  // compartilhar com a equipe e publicar no mural. Nenhuma dessas pode ter categoria de
+  // Automático — sem categoria, a escrita sempre pede o OK.
+  const NUNCA_AUTOMATICO =
+    /^(delete|forget_all|share|stop_sharing|revoke|set_group_sharing|create_group_post|comment_on|accept_group_invite|join_group|adopt_group|accept_plan_offer|decline_plan_offer|.*subscription|.*billing|.*checkout)/;
+
+  it('só confirmável tem categoria, e nenhuma do que nunca é automático', () => {
+    const errados = entidade
+      .filter(({ tool }) => tool.aiCategory)
+      .filter(
+        ({ tool }) =>
+          tool.annotations.confirmableHint !== true ||
+          tool.annotations.destructiveHint === true ||
+          NUNCA_AUTOMATICO.test(tool.name),
+      )
+      .map(({ tool }) => tool.name);
+    expect(errados).toEqual([]);
+  });
+
+  it('as do compartilhamento e do mural continuam confirmáveis sem categoria', () => {
+    const errados = entidade
+      .filter(({ file }) => /[\\/]sharing[\\/]/.test(file))
+      .filter(({ tool }) => tool.aiCategory)
+      .map(({ tool }) => tool.name);
+    expect(errados).toEqual([]);
+  });
+
+  it('toda operação inversa é de uma tool que existe, com categoria, confirmável e que não apaga', () => {
+    const porNome = new Map(entidade.map(({ tool }) => [tool.name, tool]));
+    const errados = Object.keys(AUTO_UNDO).filter((nome) => {
+      const tool = porNome.get(nome);
+      return !tool || !autoEligible(tool) || tool.annotations.destructiveHint === true;
+    });
+    expect(errados).toEqual([]);
+  });
+
+  it('nenhuma tool lê ou muda o modo por categoria (ADR 039, item 8)', () => {
+    const errados = entidade
+      .filter(({ tool }) =>
+        /(ai_mode|write_mode|ai_settings|auto_write|category_mode)/.test(tool.name),
+      )
+      .map(({ tool }) => tool.name);
+    expect(errados).toEqual([]);
+  });
+
+  it('"Apagar todas" as memórias é só no app: não existe forget_all_memories', () => {
+    expect(entidade.map(({ tool }) => tool.name)).not.toContain('forget_all_memories');
   });
 });

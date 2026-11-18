@@ -27,12 +27,14 @@ from .graph import (
 from .mcp_client import McpClient, McpToolInfo, McpToolResult, build_mcp_client
 from .state import ContextoDoTurno, EstadoDaConversa
 from .tool_policy import (
+    automaticas,
     camada_confirmavel,
     camada_read_only,
     camada_restrita,
     classificar_tools,
     exigir_permitida,
     formato_openai,
+    sem_desligadas,
     todas_permitidas,
 )
 
@@ -60,6 +62,7 @@ __all__ = [
     "McpUnauthenticated",
     "McpUnauthorized",
     "McpUnreachable",
+    "automaticas",
     "build_mcp_client",
     "camada_confirmavel",
     "camada_read_only",
@@ -69,6 +72,7 @@ __all__ = [
     "formato_openai",
     "interrupcao_pendente",
     "montar_grafo",
+    "sem_desligadas",
     "stream_chat_events",
     "thread_da_conversa",
     "todas_permitidas",

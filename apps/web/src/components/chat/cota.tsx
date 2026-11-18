@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { getChatQuota, type ChatQuota } from '@fatia/api-client';
+import { AI_STATES_COPY, getChatQuota, quotaResetLabel, type ChatQuota } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { CHAVE_DA_COTA } from './chat-runtime-provider';
+import { AiStateCard } from './ai-state-card';
 
 /**
  * O aviso do limite de uso do dia, só quando ele importa: perto do fim ou esgotado.
@@ -27,12 +28,30 @@ export function avisoDaCota(cota: ChatQuota | undefined): string | null {
   return null;
 }
 
+function useCota() {
+  return useQuery({ queryKey: CHAVE_DA_COTA, queryFn: getChatQuota, staleTime: 60_000 }).data;
+}
+
+/** A cota do dia acabou: o campo diz "Volta amanhã" (prancha Al-M11). */
+export function useCotaEsgotada(): boolean {
+  return useCota()?.allowed === false;
+}
+
 export function AvisoDeCota() {
-  const { data: cota } = useQuery({
-    queryKey: CHAVE_DA_COTA,
-    queryFn: getChatQuota,
-    staleTime: 60_000,
-  });
+  const cota = useCota();
+  // Prancha Al-M11, "Cota": o cartão com a hora da volta e o registro manual a um toque.
+  if (cota && !cota.allowed) {
+    return (
+      <AiStateCard
+        role="status"
+        tone="warning"
+        title={AI_STATES_COPY.quotaTitle}
+        body={`${quotaResetLabel(cota.resetsAt)} ${AI_STATES_COPY.quotaManual}`}
+        action={{ label: AI_STATES_COPY.quotaAction, href: '/nutrition' }}
+        className="mx-3 mb-2 w-auto shrink-0"
+      />
+    );
+  }
   const aviso = avisoDaCota(cota);
   if (!aviso) return null;
   const ratio = cota?.usedRatio ?? 1;
