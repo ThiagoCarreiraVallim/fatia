@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { configureApiClient, resetApiClient } from '../http';
 import {
   CHALLENGE_KINDS,
   challengeKindProblem,
   challengeScoreLabel,
   challengeSections,
+  CHECKIN_BLOCK_TAG,
   CHECKIN_BLOCK_TEXT,
+  challengesApi,
   KIND_INFO,
   POINT_ITEMS,
   POINT_ITEM_INFO,
@@ -108,5 +111,36 @@ describe('desafios do redesign (#395): tipos e textos', () => {
     expect(CHECKIN_BLOCK_TEXT.too_short).toMatch(/20 min/);
     expect(CHECKIN_BLOCK_TEXT.already_today).toMatch(/Um check-in por dia/);
     expect(CHECKIN_BLOCK_TEXT.no_workout).toMatch(/2 h/);
+  });
+
+  it('o treino já usado no desafio tem frase e selo (#395 B2)', () => {
+    expect(CHECKIN_BLOCK_TEXT.workout_used).toMatch(/já valeu um check-in/);
+    expect(CHECKIN_BLOCK_TAG.workout_used).toBe('já valeu');
+  });
+});
+
+describe('fila de revisão paginada (#395 M5)', () => {
+  const fetch = vi.fn();
+  beforeEach(() => {
+    fetch.mockReset();
+    fetch.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ items: [], open: 0, limit: 50, nextCursor: null }), {
+          status: 200,
+        }),
+    );
+    configureApiClient({
+      resolveUrl: (path) => path,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+  });
+  afterEach(() => resetApiClient());
+
+  it('manda o desafio e o cursor da próxima página', async () => {
+    await challengesApi.reviewQueue('g1', undefined, 'c-50');
+    await challengesApi.reviewQueue('g1', 'd1', 'c-50');
+    const urls = fetch.mock.calls.map((c) => String(c[0]));
+    expect(urls[0]).toMatch(/\/review\?cursor=c-50$/);
+    expect(urls[1]).toMatch(/\/review\?challengeId=d1&cursor=c-50$/);
   });
 });
