@@ -36,6 +36,7 @@ import {
   undoFailureState,
   type SavedCardState,
   isRenderableChatArtifact,
+  barAxisLabels,
   timelineAxisLabels,
   timelinePeriodLabel,
   type ChatArtifact,
@@ -167,7 +168,7 @@ function CardContent({ artifact }: { artifact: ChatArtifact }) {
     case 'metric':
       return <Metrica artifact={artifact} />;
     case 'bars':
-      return <Barras artifact={artifact} />;
+      return <BarsCard artifact={artifact} />;
     case 'timeline':
       return <LinhaDoTempo artifact={artifact} />;
     case 'list':
@@ -243,9 +244,10 @@ function Metrica({ artifact }: De<'metric'>) {
 }
 
 /** Uma barra por dia; a meta é a linha tracejada e o verde marca quem bateu. */
-function Barras({ artifact }: De<'bars'>) {
+function BarsCard({ artifact }: De<'bars'>) {
   if (artifact.bars.length === 0) return <Vazio texto="Sem registros no período." />;
   const maior = Math.max(artifact.goal ?? 0, ...artifact.bars.map((b) => b.value), 1);
+  const eixo = barAxisLabels(artifact.bars);
   return (
     <View className="gap-2">
       <View className="h-24 flex-row items-end gap-1.5">
@@ -264,14 +266,14 @@ function Barras({ artifact }: De<'bars'>) {
           />
         ))}
       </View>
-      <View className="flex-row gap-1.5">
-        {artifact.bars.map((barra, i) => (
+      <View className={cn('flex-row', eixo.perBar ? 'gap-1.5' : 'justify-between')}>
+        {eixo.labels.map((rotulo, i) => (
           <Text
-            key={`${barra.label}-${i}`}
+            key={`${rotulo}-${i}`}
             numberOfLines={1}
-            className="flex-1 text-center text-[11px] text-muted-foreground"
+            className={cn('text-[11px] text-muted-foreground', eixo.perBar && 'flex-1 text-center')}
           >
-            {barra.label}
+            {rotulo}
           </Text>
         ))}
       </View>
