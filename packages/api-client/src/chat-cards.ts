@@ -339,7 +339,8 @@ export function cardEyebrow(kind: string, toolTitle: string | undefined): string
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 /** "2026-10-06" → "6 out". Lê só a data, sem fuso: o dia é o que a tool gravou. */
-function diaCurto(iso: string): string {
+function shortDay(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso;
   const [, mes, dia] = iso.slice(0, 10).split('-').map(Number);
   return mes && dia ? `${dia} ${MESES[mes - 1]}` : iso;
 }
@@ -357,9 +358,31 @@ export function timelinePeriodLabel(events: readonly { date: string }[]): string
 
 /** As datas embaixo da curva da linha do tempo: a primeira, a do meio e a última. */
 export function timelineAxisLabels(events: readonly { date: string }[]): string[] {
-  if (events.length === 0) return [];
-  const indices = [...new Set([0, Math.floor((events.length - 1) / 2), events.length - 1])];
-  return indices.map((i) => diaCurto(events[i]!.date));
+  return axisIndices(events.length).map((i) => shortDay(events[i]!.date));
+}
+
+/** Primeiro, do meio e último, sem repetir quando há um ou dois. */
+function axisIndices(n: number): number[] {
+  if (n === 0) return [];
+  return [...new Set([0, Math.floor((n - 1) / 2), n - 1])];
+}
+
+/** Até quantas barras cabe um rótulo embaixo de cada uma, no celular estreito. */
+const MAX_BAR_LABELS = 7;
+
+/**
+ * Os rótulos embaixo do cartão de barras. Com poucas barras, um por barra (`perBar`); com muitas,
+ * só início, meio e fim, como na linha do tempo — um rótulo por barra em 30 dias vira "1 2 2 …".
+ * Data ISO sai como "19 out"; rótulo que não é data ("Sem 3", "19 out") passa como está.
+ */
+export function barAxisLabels(bars: readonly { label: string }[]): {
+  perBar: boolean;
+  labels: string[];
+} {
+  if (bars.length <= MAX_BAR_LABELS) {
+    return { perBar: true, labels: bars.map((b) => shortDay(b.label)) };
+  }
+  return { perBar: false, labels: axisIndices(bars.length).map((i) => shortDay(bars[i]!.label)) };
 }
 
 /** A última tool da última resposta, para as respostas rápidas; nada se a pessoa falou por último. */
