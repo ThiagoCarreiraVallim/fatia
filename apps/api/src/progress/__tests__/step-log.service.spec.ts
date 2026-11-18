@@ -82,13 +82,18 @@ describe('StepLogService', () => {
       expect(callArg.data.date).toBe('2025-01-10');
     });
 
-    it('use the source provided in the DTO, if available', async () => {
-      prisma.stepLog.create.mockResolvedValue(makeLog({ source: StepSource.GOOGLE_FIT }));
+    it('grava MANUAL mesmo quando o cliente declara uma fonte automática (#395, ADR 047)', async () => {
+      // A fonte vinda do corpo é palavra do cliente: aceitá-la faria "passos à mão
+      // não contam" no desafio virar enfeite. Fonte automática só pela rota de sync.
+      prisma.stepLog.create.mockResolvedValue(makeLog());
 
-      await service.create({ steps: 10000, source: StepSource.GOOGLE_FIT }, userId, timezone);
+      for (const source of [StepSource.GOOGLE_FIT, StepSource.APPLE_HEALTH, StepSource.GARMIN]) {
+        await service.create({ steps: 10000, source }, userId, timezone);
+      }
 
-      const callArg = prisma.stepLog.create.mock.calls[0][0];
-      expect(callArg.data.source).toBe(StepSource.GOOGLE_FIT);
+      for (const [arg] of prisma.stepLog.create.mock.calls) {
+        expect(arg.data.source).toBe(StepSource.MANUAL);
+      }
     });
   });
 
