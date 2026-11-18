@@ -116,7 +116,12 @@ describe('avisos no celular (integração)', () => {
 
   async function comunidade(joinPolicy: 'OPEN' | 'APPROVAL' = 'APPROVAL') {
     const dono = await pessoa('Dona');
-    const g = await groups.create(dono, { type: 'SPONSORED', name: 'Academia', joinPolicy });
+    const g = await groups.create(dono, {
+      type: 'SPONSORED',
+      name: 'Academia',
+      joinPolicy,
+      visibility: 'PUBLIC',
+    });
     grupos.push(g.id);
     return {
       groupId: g.id,

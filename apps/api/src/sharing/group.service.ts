@@ -12,6 +12,7 @@ import {
   GroupType,
   MembershipStatus,
   type Group,
+  type GroupAiMode,
   type GroupMembership,
   type GroupVisibility,
   type JoinPolicy,
@@ -24,7 +25,7 @@ import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { normalizarEscopos } from './consent-scopes';
-import { findGroupByEntryCode, groupHasFreeSeat } from './entry-code';
+import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import { canReceiveLink, TEAM_ROLES } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -129,8 +130,11 @@ export interface GroupPreview {
   id: string;
   type: GroupType;
   name: string;
-  slug: string;
-  /** O que mandar de volta ao entrar (`POST /groups/join`): o código normalizado ou o slug. */
+  /**
+   * O que mandar de volta ao entrar (`POST /groups/join`): o código normalizado,
+   * ou o slug quando a comunidade é pública. Sem `slug` à parte: o slug não se
+   * revoga, e quem chegou por código não pode levar a porta permanente.
+   */
   code: string;
   memberCount: number;
   description: string | null;
@@ -140,8 +144,11 @@ export interface GroupPreview {
   team: { name: string; role: GroupRole }[];
   /** O que é obrigatório compartilhar para entrar pelo código (sempre como membro). */
   requiredSharingScopes: ShareScope[];
-  /** A comunidade tem assento livre (ou dá a todos): "A academia libera o PRO". */
-  proOffer: boolean;
+  /**
+   * `ALL_MEMBERS`: "A academia libera o PRO"; `SEATS` com vaga: "pode liberar";
+   * `null`: sem oferta (`groupProOffer`).
+   */
+  proOffer: GroupAiMode | null;
 }
 
 const INCLUIR = {
@@ -403,14 +410,13 @@ export class GroupService {
         select: { role: true, user: { select: { name: true } } },
         orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
       }),
-      groupHasFreeSeat(this.prisma, group.id),
+      groupProOffer(this.prisma, group.id),
     ]);
 
     return {
       id: group.id,
       type: group.type,
       name: group.name,
-      slug: group.slug,
       code: entrada.code,
       memberCount,
       description: group.description,

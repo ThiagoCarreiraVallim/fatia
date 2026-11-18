@@ -24,10 +24,16 @@ const CODE = /^[A-Za-z0-9_-]{3,60}$/;
 export function parseCommunityEntry(raw: string): CommunityEntry | null {
   const text = raw.trim();
   if (!text) return null;
-  if (INVITE_TOKEN.test(text)) return { kind: 'invite', token: text };
+  // Digitado da parede ("AD7K 3Q9P"): sem barra nem dois-pontos, o espaço não conta.
+  if (!/[/:]/.test(text)) {
+    const compact = text.replace(/\s+/g, '');
+    // Código primeiro; só o tamanho exato do token (43) é convite.
+    if (compact.length !== 43 && CODE.test(compact)) return { kind: 'code', code: compact };
+    if (INVITE_TOKEN.test(compact)) return { kind: 'invite', token: compact };
+    return null;
+  }
   const convite = /(?:^|\/)c\/([^/?#]+)\/?(?:[?#].*)?$/.exec(text);
   if (convite && INVITE_TOKEN.test(convite[1])) return { kind: 'invite', token: convite[1] };
-  if (CODE.test(text)) return { kind: 'code', code: text };
   try {
     const url = new URL(text);
     const param = url.searchParams.get('code') ?? url.searchParams.get('codigo');
@@ -65,7 +71,15 @@ export function entryPolicyView(policy: JoinPolicy): EntryPolicyView {
   }
 }
 
-export const PRO_OFFER_NOTE = 'A academia libera o PRO para membros com assento.';
+/** O PRO que a comunidade oferece a quem entra (`GroupPreview.proOffer`). */
+export type ProOffer = 'ALL_MEMBERS' | 'SEATS' | null;
+
+/** Todos os membros: libera. Por assento: só pode liberar (a equipe distribui). */
+export function proOfferNote(offer: ProOffer): string | null {
+  if (offer === 'ALL_MEMBERS') return 'A academia libera o PRO para todos os membros.';
+  if (offer === 'SEATS') return 'A academia pode liberar o PRO: a equipe distribui os assentos.';
+  return null;
+}
 export const CAMERA_NOTE =
   'Na primeira vez, o celular pede acesso à câmera. A imagem não sai do aparelho: o app só lê o código.';
 

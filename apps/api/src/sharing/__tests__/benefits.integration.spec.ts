@@ -42,6 +42,7 @@ describe('benefícios de parceiros (integração)', () => {
   async function comunidade() {
     const dono = await pessoa('Dona');
     const grupo = await groups.create(dono, {
+      visibility: 'PUBLIC',
       type: 'SPONSORED',
       name: 'Academia',
       joinPolicy: 'OPEN',

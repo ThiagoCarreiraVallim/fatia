@@ -37,6 +37,7 @@ describe('minhas comunidades (integração)', () => {
   async function comunidade() {
     const dono = await pessoa('Dona');
     const grupo = await groups.create(dono, {
+      visibility: 'PUBLIC',
       type: 'SPONSORED',
       name: 'Academia',
       joinPolicy: 'OPEN',
@@ -64,7 +65,7 @@ describe('minhas comunidades (integração)', () => {
     const { aluna, grupo } = await comunidade();
     expect(await minha(aluna, grupo.id)).toMatchObject({
       memberCount: 2,
-      visibility: 'PRIVATE',
+      visibility: 'PUBLIC',
       timezone: 'America/Cuiaba',
     });
   });

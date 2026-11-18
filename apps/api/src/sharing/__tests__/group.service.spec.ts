@@ -210,7 +210,7 @@ describe('GroupService', () => {
         slug: 'academia-x',
         description: null,
         joinPolicy: 'APPROVAL',
-        visibility: 'PRIVATE',
+        visibility: 'PUBLIC',
         requiredSharingScopes: [],
       });
       prisma.groupMembership.count.mockResolvedValue(12);
@@ -227,19 +227,27 @@ describe('GroupService', () => {
         id: 'g1',
         type: GroupType.SPONSORED,
         name: 'Academia X',
-        slug: 'academia-x',
         description: null,
         code: 'academia-x',
         joinPolicy: 'APPROVAL',
-        visibility: 'PRIVATE',
+        visibility: 'PUBLIC',
         memberCount: 12,
         team: [{ name: 'Dona', role: GroupRole.OWNER }],
         requiredSharingScopes: [],
-        proOffer: false,
+        proOffer: null,
       });
       expect(prisma.groupMembership.findMany.mock.calls[0][0].where.role).toEqual({
         in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
       });
+    });
+
+    it('o slug de comunidade privada não abre a porta: só código gerado ou convite', async () => {
+      prisma.group.findUnique.mockResolvedValue({
+        id: 'g1',
+        joinPolicy: 'OPEN',
+        visibility: 'PRIVATE',
+      });
+      await expect(service.previewByCode('academia-x')).rejects.toThrow(NotFoundException);
     });
 
     it('comunidade só por convite não aparece pelo código', async () => {

@@ -84,7 +84,6 @@ const preview = (p: Partial<GroupPreview> = {}): GroupPreview => ({
   id: 'g1',
   type: 'SPONSORED',
   name: 'Academia Demo',
-  slug: 'academia-demo',
   code: 'academia-demo',
   memberCount: 124,
   description: null,
@@ -92,7 +91,7 @@ const preview = (p: Partial<GroupPreview> = {}): GroupPreview => ({
   visibility: 'PRIVATE',
   team: [{ name: 'Ana', role: 'OWNER' }],
   requiredSharingScopes: [],
-  proOffer: false,
+  proOffer: null,
   ...p,
 });
 
@@ -190,16 +189,26 @@ describe('/community', () => {
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/quando o dono aprovar/));
   });
 
-  it('o aviso de PRO só com assento livre', async () => {
+  it('o aviso de PRO: todos os membros libera; por assento, só pode liberar', async () => {
     vi.mocked(groupsApi.mine).mockResolvedValue([]);
     vi.mocked(groupsApi.previewByCode).mockResolvedValue(
-      preview({ joinPolicy: 'OPEN', proOffer: true }),
+      preview({ joinPolicy: 'OPEN', proOffer: 'ALL_MEMBERS' }),
     );
     renderPage();
     await abrirEProcurar('academia-demo');
     const cartao = await screen.findByRole('region', { name: 'Comunidade encontrada' });
-    expect(cartao).toHaveTextContent('A academia libera o PRO para membros com assento.');
+    expect(cartao).toHaveTextContent('A academia libera o PRO para todos os membros.');
     expect(cartao).toHaveTextContent('aberta');
+  });
+
+  it('por assento, o cartão não promete o PRO', async () => {
+    vi.mocked(groupsApi.mine).mockResolvedValue([]);
+    vi.mocked(groupsApi.previewByCode).mockResolvedValue(preview({ proOffer: 'SEATS' }));
+    renderPage();
+    await abrirEProcurar('academia-demo');
+    const cartao = await screen.findByRole('region', { name: 'Comunidade encontrada' });
+    expect(cartao).toHaveTextContent('A academia pode liberar o PRO');
+    expect(cartao).not.toHaveTextContent('libera o PRO para');
   });
 
   it('código inválido, vencido ou revogado: "Peça um novo à equipe"', async () => {

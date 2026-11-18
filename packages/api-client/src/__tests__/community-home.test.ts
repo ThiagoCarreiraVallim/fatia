@@ -5,6 +5,7 @@ import {
   communityCardMeta,
   entryPolicyView,
   parseCommunityEntry,
+  proOfferNote,
   teamSections,
   timezoneLabel,
   viewedToday,
@@ -37,6 +38,11 @@ describe('parseCommunityEntry', () => {
     });
     expect(parseCommunityEntry(`fatia://c/${TOKEN}?x=1`)).toEqual({ kind: 'invite', token: TOKEN });
     expect(parseCommunityEntry(TOKEN)).toEqual({ kind: 'invite', token: TOKEN });
+  });
+
+  it('código digitado com espaço no meio continua sendo código', () => {
+    expect(parseCommunityEntry('AD7K 3Q9P')).toEqual({ kind: 'code', code: 'AD7K3Q9P' });
+    expect(parseCommunityEntry(' ad7k  3q9p\n')).toEqual({ kind: 'code', code: 'ad7k3q9p' });
   });
 
   it('curto demais ou sem nada legível é null', () => {
@@ -98,6 +104,16 @@ describe('cartão de Minhas comunidades (Cm-01)', () => {
       { label: '1 post novo', tone: 'muted' },
       { label: 'pública', tone: 'muted' },
     ]);
+  });
+});
+
+describe('proOfferNote', () => {
+  it('todos os membros libera; por assento só pode liberar; sem oferta, nada', () => {
+    expect(proOfferNote('ALL_MEMBERS')).toBe('A academia libera o PRO para todos os membros.');
+    expect(proOfferNote('SEATS')).toBe(
+      'A academia pode liberar o PRO: a equipe distribui os assentos.',
+    );
+    expect(proOfferNote(null)).toBeNull();
   });
 });
 

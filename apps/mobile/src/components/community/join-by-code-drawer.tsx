@@ -10,10 +10,11 @@ import {
   groupsApi,
   joinResultMessage,
   parseCommunityEntry,
-  PRO_OFFER_NOTE,
+  proOfferNote,
   VISIBILITY_WORD,
   type CommunityEntry,
   type JoinConsent,
+  type ProOffer,
   type ShareScope,
   type TeamMember,
 } from '@fatia/api-client';
@@ -44,7 +45,7 @@ interface Found {
   tone: 'done' | 'lite' | 'pending';
   text: string;
   cta: string;
-  proOffer: boolean;
+  proOffer: ProOffer;
   team: TeamMember[];
   required: ShareScope[];
 }
@@ -64,7 +65,7 @@ async function lookup(entry: CommunityEntry): Promise<Found> {
       tone: 'done',
       text: c.invitedBy ? `Convite de ${c.invitedBy}: entra na hora` : 'O convite já é a aprovação',
       cta: 'Entrar',
-      proOffer: false,
+      proOffer: null,
       team: c.team,
       required: c.requiredSharingScopes,
     };
@@ -249,10 +250,12 @@ export function JoinByCodeDrawer({
                     <Badge variant={found.tone}>{found.badge}</Badge>
                     <Text className="text-xs text-muted-foreground">{found.text}</Text>
                   </View>
-                  {found.proOffer ? (
+                  {proOfferNote(found.proOffer) ? (
                     <View className="flex-row items-center gap-2 rounded-xl bg-primary/10 px-3 py-2">
                       <Crown size={16} color={colors.primaryText} />
-                      <Text className="flex-1 text-sm text-foreground">{PRO_OFFER_NOTE}</Text>
+                      <Text className="flex-1 text-sm text-foreground">
+                        {proOfferNote(found.proOffer)}
+                      </Text>
                     </View>
                   ) : null}
                 </View>

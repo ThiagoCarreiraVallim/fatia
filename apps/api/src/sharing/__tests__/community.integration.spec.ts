@@ -56,7 +56,12 @@ describe('comunidade (integração)', () => {
   /** Dono + profissional ativos, numa comunidade com a política pedida. */
   async function comunidade(joinPolicy: JoinPolicy = 'APPROVAL') {
     const dono = await pessoa('Dona');
-    const grupo = await groups.create(dono, { type: 'SPONSORED', name: 'Academia', joinPolicy });
+    const grupo = await groups.create(dono, {
+      type: 'SPONSORED',
+      name: 'Academia',
+      joinPolicy,
+      visibility: 'PUBLIC',
+    });
     grupos.push(grupo.id);
     const pro = await pessoa('Pro');
     await prisma.groupMembership.create({
@@ -346,6 +351,7 @@ describe('comunidade (integração)', () => {
     async function exigente(joinPolicy: JoinPolicy = 'OPEN') {
       const dono = await pessoa('Dona');
       const grupo = await groups.create(dono, {
+        visibility: 'PUBLIC',
         type: 'SPONSORED',
         name: 'Academia',
         joinPolicy,

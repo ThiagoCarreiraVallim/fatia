@@ -2250,6 +2250,7 @@ describe('isolamento entre usuários', () => {
 
     it('entrar no grupo, em qualquer papel, não cria vínculo nem abre leitura', async () => {
       const grupo = await groups.create(owned.userB, {
+        visibility: 'PUBLIC',
         type: GroupType.SPONSORED,
         name: 'Academia Nova',
       });
