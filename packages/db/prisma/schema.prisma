@@ -2329,10 +2329,6 @@ model GroupTip {
   @@index([groupId, publishedAt])
 }
 
-/// O tutorial da comunidade para um exercício (Fase 7b, ADR 030): vídeo,
-/// fotos e dicas dela por cima do exercício, seja do catálogo geral ou da
-/// própria comunidade. É sobreposição, não cópia: o plano e o histórico de
-/// quem treina continuam apontando para o mesmo `exerciseId`.
 /// Cupom ou link do parceiro (#393).
 enum PartnerBenefitKind {
   COUPON
@@ -2366,6 +2362,10 @@ model GroupPartnerBenefit {
   @@index([groupId, validUntil])
 }
 
+/// O tutorial da comunidade para um exercício (Fase 7b, ADR 030): vídeo,
+/// fotos e dicas dela por cima do exercício, seja do catálogo geral ou da
+/// própria comunidade. É sobreposição, não cópia: o plano e o histórico de
+/// quem treina continuam apontando para o mesmo `exerciseId`.
 model GroupExerciseGuide {
   id          String   @id @default(uuid())
   groupId     String

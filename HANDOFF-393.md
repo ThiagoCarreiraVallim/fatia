@@ -14,10 +14,10 @@ DB de teste: fatia_t393 (URL no scratchpad `turl`).
 - [x] m4 cupom só trim
 - [x] m5 proOffer só ALL_MEMBERS; SEATS "pode liberar"
 - [x] m6 parseCommunityEntry normaliza espaços, código antes de token
-- [ ] m7 contraste do vencido
-- [ ] m8 doc-comment GroupExerciseGuide
+- [x] m7 contraste do vencido
+- [x] m8 doc-comment GroupExerciseGuide
 - [x] m9 testes maxUses esgotado e corrida
 
 ## Próximo passo
 
-m7 (contraste do vencido), m8 (doc-comment do schema), depois docs e checagens finais.
+docs (REDESIGN_PROGRESS) e checagens finais; apagar o HANDOFF.

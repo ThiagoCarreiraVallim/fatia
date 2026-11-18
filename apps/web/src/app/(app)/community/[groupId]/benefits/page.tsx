@@ -47,15 +47,15 @@ function BenefitCard({
   onCopy: () => void;
 }) {
   return (
-    <li
-      className={cn('space-y-3 rounded-card bg-card p-[18px]', b.expired && 'opacity-50')}
-      aria-label={b.partnerName}
-    >
+    <li className="space-y-3 rounded-card bg-card p-[18px]" aria-label={b.partnerName}>
       <div className="flex items-center gap-3">
-        <Logo b={b} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{b.partnerName}</p>
-          <p className="text-sm text-muted-foreground">{b.discountText}</p>
+        {/* Vencido: apaga só logo e título; selo e nota ficam com contraste cheio. */}
+        <div className={cn('flex min-w-0 flex-1 items-center gap-3', b.expired && 'opacity-50')}>
+          <Logo b={b} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold">{b.partnerName}</p>
+            <p className="text-sm text-muted-foreground">{b.discountText}</p>
+          </div>
         </div>
         <Badge variant={b.expired ? 'pending' : 'done'}>{benefitValidity(b)}</Badge>
       </div>

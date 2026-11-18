@@ -89,7 +89,10 @@ describe('/community/[groupId]/benefits (Cm-22)', () => {
 
     const corre = screen.getByRole('listitem', { name: 'Corre+ Tênis' });
     expect(within(corre).getByText('venceu')).toBeInTheDocument();
-    expect(within(corre).getByText('Venceu em 31 out. Sai da lista amanhã.')).toBeInTheDocument();
+    const nota = within(corre).getByText('Venceu em 31 out. Sai da lista amanhã.');
+    // Contraste: o apagado é só logo e título; a nota fica legível.
+    expect(nota.closest('[class*="opacity-"]')).toBeNull();
+    expect(within(corre).getByText('Corre+ Tênis').closest('[class*="opacity-"]')).not.toBeNull();
     expect(within(corre).queryByRole('button')).not.toBeInTheDocument();
     expect(within(corre).queryByRole('link')).not.toBeInTheDocument();
 

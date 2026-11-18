@@ -91,15 +91,23 @@ export default function CommunityBenefitsScreen() {
           <View
             key={b.id}
             accessibilityLabel={b.partnerName}
-            className={cn('gap-3 rounded-card bg-card p-[18px]', b.expired && 'opacity-50')}
+            className="gap-3 rounded-card bg-card p-[18px]"
           >
             <View className="flex-row items-center gap-3">
-              <Logo b={b} />
-              <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className="font-sans-bold text-foreground">
-                  {b.partnerName}
-                </Text>
-                <Text className="text-sm text-muted-foreground">{b.discountText}</Text>
+              {/* Vencido: apaga só logo e título; selo e nota ficam com contraste cheio. */}
+              <View
+                className={cn(
+                  'min-w-0 flex-1 flex-row items-center gap-3',
+                  b.expired && 'opacity-50',
+                )}
+              >
+                <Logo b={b} />
+                <View className="min-w-0 flex-1">
+                  <Text numberOfLines={1} className="font-sans-bold text-foreground">
+                    {b.partnerName}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">{b.discountText}</Text>
+                </View>
               </View>
               <Badge variant={b.expired ? 'pending' : 'done'}>{benefitValidity(b)}</Badge>
             </View>
