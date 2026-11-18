@@ -37,7 +37,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 11. Web aluno (composer Post/Enquete/Prévia/toolbar/publicar como/fixar; poll-block; block-dialog; menu copiar/ocultar/bloquear/denunciar; fixar com prazo; carrossel; filtros; novos+markSeen; for-you; /you/blocked; testes vistos vermelhos: 13 falhas com os arquivos antigos)
 - [x] 12. Web painel: seção nova `announcements` (Comunicados e enquetes, dono+profissional: novo comunicado agora/agendado 15 min/repetir/fixar com prazo/push, agendados com cancelar, enquetes Pn-26 com nova enquete); Moderação (dono) ganhou avisos fixados (subir/desafixar) e posts automáticos. Testes vermelhos vistos (3 falhas com a página antiga).
 - [x] 13. App: composer.tsx, poll-block.tsx, feed-ui (menu copiar/ocultar/bloquear/fixar com prazo via action sheet, tipos), mural com carrossel/filtros/novos, community-tabs com contador, for-you.tsx, you/blocked.tsx, org/announcements.tsx, moderação com fixados e automáticos. Sem gaveta nova (usa action sheet e confirm existentes). Lógica testada no api-client.
-- [ ] 14. ADR 032, PERMISSIONS, REDESIGN_PROGRESS, lint/typecheck/testes
+- [~] 14. ADR 032 emenda feita; REDESIGN_PROGRESS Etapa 7 feito; lint ok; typecheck ok; api-client 1031, web 1050, mobile 525. FALTA: suíte da api inteira e commit final sem o HANDOFF.
 
 ## Próximo passo
 

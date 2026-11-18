@@ -361,6 +361,40 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
 - **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
 - **Passada visual (Al-M12, Al-M10, Al-M24, Al-M9, Al-M11):** web e app conferidos contra as pranchas; cota e fora do ar do app conferidos com estado forçado (a cota fica desligada no dev).
 
+## Etapa 7: Comunidade no app (em andamento)
+
+| Issue | Título                                                              | Estado           | Superfícies                              |
+| ----- | ------------------------------------------------------------------- | ---------------- | ---------------------------------------- |
+| #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você | pronto na branch | api, db, MCP, api-client, web, app, docs |
+
+Pendências da #394 (branch `redesign/394-mural`, migration `20261118100000_mural_polls_blocks`; nenhuma env nova):
+
+- **Bloqueio global (ADR 032, emenda):** `UserBlock`, nos dois sentidos e em todas as comunidades. Some post, comentário, reação (e a contagem), comunicado em nome da pessoa, Para você e os avisos de comentário, reação e comunicado entre os dois. O post em nome da comunidade continua visível, mas comentar ou reagir nele não avisa o autor bloqueado. Quem foi bloqueado não é avisado. O id que vem no corpo (`postId`, `commentId`) é amarrado à comunidade do pedido. Lista com Desbloquear em Você > Conta > Pessoas bloqueadas (web e app). O export LGPD leva os bloqueios feitos, não os recebidos. Coberto em `mural.integration.spec.ts` e `user-isolation.spec.ts`.
+- **Ocultar post** (só para mim), **filtros** (Tudo, Equipe, Conteúdo novo, Membros) e **posts novos** desde a última visita (`feedSeenAt`; abrir o mural marca a visita).
+- **Avisos fixados em carrossel:** `pinOrder` (o novo entra na frente) e prazo de 3 dias, 7 dias ou sem prazo (até 90). Teto de 3; o comunicado agendado com o carrossel cheio tira o último. A ordem e o desafixar ficam na Moderação.
+- **Enquetes:** de 2 a 4 opções, prazo de 1 dia, 3 dias ou 1 semana (a API aceita até 30), voto anônimo e mudável até o prazo. **Nada de resultado com menos de 5 votos, para ninguém, inclusive a equipe**: a API não manda nem o total nem as %. Com 5 ou mais, o membro vê depois de votar ou com a enquete encerrada; o painel vê desde o quinto voto. Quem fecha: o autor, quem modera e quem comunica.
+- **Comunicados** (`announcement.publish`: dono e profissional, em `PERMISSIONS.md`): agora ou agendado em blocos de 15 minutos (até 365 dias à frente), repetir todo dia, toda semana ou todo mês, fixar com prazo e notificação (`ANNOUNCEMENTS`, que a pessoa desliga nas preferências de notificação). Job de minuto com reivindicação condicional, sem disparo duplo entre instâncias. Agendados com Cancelar.
+- **Posts automáticos:** plano publicado, dica nova, exercício novo e desafio criado viram post `AUTO` com botão para o conteúdo, sem duplicar. Ligam e desligam por tipo na Moderação (`Group.autoPosts`).
+- **Para você** (`GET groups/:id/for-you`): plano de treino e plano alimentar mandados só para a pessoa (para fazer e já resolvido, levando às telas que já existem), comunicados dos últimos 30 dias com "não lido", e o conteúdo publicado mais novo. A aba mostra o número do que falta.
+- **Composer:** Post ou Enquete, Escrever ou Prévia, barra de formatação, e o markdown-lite ganhou título (`#`) e citação (`>`). A equipe escolhe publicar como ela ou como a comunidade e fixar como aviso (por 7 dias). Some quando a política é "só a equipe" e a pessoa não é da equipe.
+- **Menu do post:** Copiar link, Ocultar, Bloquear (com o texto da prancha Cm-07) e Denunciar; os motivos seguem a prancha ("Desinformação de saúde"). A denúncia vai para a fila da equipe, como já era.
+- **MCP:** `get_group_poll`, `vote_group_poll`, `list_blocked_users`, `block_user` e `unblock_user`, todas com cartão (lista com `artifact()` ou confirmação) e rótulo de prévia. `create_group_post` aceita enquete e `list_group_posts` aceita `filter`. Comunicar, criar enquete como equipe e moderar ficam só no painel. Números regenerados pelos specs (159 tools, 148,2 k, 124,3 k, 8.762) e `SHA_ENTIDADE` novo.
+- **Desvios de propósito:**
+  - Comunicados e enquetes ganharam a seção **Comunicados e enquetes** no painel, para dono e profissional. A Moderação, que é só do dono, ficou com os avisos fixados, os posts automáticos, quem publica, as denúncias, os removidos e os banidos. A prancha Pn-14 junta tudo em "Mural e avisos", mas o profissional comunica e não modera.
+  - A aba **Agenda** da Cm-03 não aparece até a #397. A aba "Planos e dicas" virou **Conteúdo**, como na prancha.
+  - O painel "Recomendado para você" da Cm-20 mostra os dois modelos e a dica mais novos da comunidade, sem personalização ("combina com a sua meta").
+  - Comentários abrem sob o post (web e app), em vez da tela Cm-05 separada.
+  - No app, a barra de formatação acrescenta no fim do texto (como o script da prancha); na web, insere no cursor. O horário do comunicado no app é escolhido em chips de dia e de horário, sem seletor nativo.
+  - Copiar link no app copia o link do app (`expo-linking`), que abre o mural.
+  - O "Fixar como aviso" do composer fixa por 7 dias; outros prazos pelo menu do post ou pelo comunicado.
+- **Falta (fora do escopo, registrado):**
+  - **E-mail do comunicado:** não há descadastro com link na comunidade. Só notificação e mural.
+  - Partes da #315 sem prancha: segmentar o comunicado por grupo de membros, imagem e link interno no comunicado, limite semanal e métricas de abertura.
+  - Para você: avaliação pedida (#383) e questionário (#391) entram quando essas issues criarem os dados. "Também aparece no Hoje" fica para a issue do Hoje.
+  - Posts automáticos de resultado de desafio e de membro novo (prancha Pn-14) dependem de dado que ainda não existe (pódio fechado e consentimento do apelido).
+  - Aba Agenda (#397).
+  - Prints lado a lado com as pranchas: não feitos nesta issue (o brief pediu sem screenshots). Falta a passada visual de web e app contra Cm-03 a Cm-21d, Pn-14 e Pn-26.
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -369,7 +403,7 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
-| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
+| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | em andamento |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
 | 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
