@@ -2793,6 +2793,11 @@ model GroupAnnouncement {
   repeat       AnnouncementRepeat @default(NONE)
   /// Próximo disparo; nulo quando não há mais nenhum (feito ou cancelado).
   nextRunAt    DateTime?
+  /// O primeiro horário marcado. As repetições contam dele, no fuso da
+  /// comunidade (o dia 31 volta a ser 31 depois de fevereiro).
+  anchorAt     DateTime?
+  /// Falhas seguidas do disparo atual; zera quando sai. No teto, cancela.
+  attempts     Int                @default(0)
   lastRunAt    DateTime?
   canceledAt   DateTime?
   createdAt    DateTime           @default(now())

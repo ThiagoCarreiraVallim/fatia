@@ -17,7 +17,14 @@ import { PrismaService } from '../common/prisma.service';
 import { NotificationService, type Notice } from '../notifications/notification.service';
 import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
-import { ANNOUNCEMENT_TITLE_MAX, PIN_MAX_DAYS, POST_BODY_MAX, PostService } from './post.service';
+import { dueOccurrence } from './announcement-schedule';
+import {
+  ANNOUNCEMENT_TITLE_MAX,
+  AnnouncementAuthorGone,
+  PIN_MAX_DAYS,
+  POST_BODY_MAX,
+  PostService,
+} from './post.service';
 
 /** O horário do comunicado anda em blocos de 15 minutos (prancha Pn-14). */
 export const ANNOUNCEMENT_SLOT_MINUTES = 15;
@@ -28,6 +35,8 @@ export const ANNOUNCEMENT_REPEATS = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'] as co
 const EVERY_MS = 60_000;
 const DIA_MS = 86_400_000;
 const NOTICE_BODY_MAX = 140;
+/** Falhas seguidas no mesmo disparo antes de desistir do comunicado. */
+export const ANNOUNCEMENT_MAX_ATTEMPTS = 5;
 
 export interface AnnouncementInput {
   title: string;
@@ -55,23 +64,6 @@ export interface AnnouncementView {
   lastRunAt: Date | null;
   createdAt: Date;
   author: string;
-}
-
-/** O próximo disparo de um comunicado que repete, a partir do que acabou de sair. */
-export function nextOccurrence(from: Date, repeat: AnnouncementRepeat): Date | null {
-  if (repeat === AnnouncementRepeat.DAILY) return new Date(from.getTime() + DIA_MS);
-  if (repeat === AnnouncementRepeat.WEEKLY) return new Date(from.getTime() + 7 * DIA_MS);
-  if (repeat === AnnouncementRepeat.MONTHLY) {
-    // Mesmo dia do mês; dia 31 em mês curto cai no último dia dele.
-    const d = new Date(from);
-    const dia = d.getUTCDate();
-    d.setUTCDate(1);
-    d.setUTCMonth(d.getUTCMonth() + 1);
-    const ultimo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-    d.setUTCDate(Math.min(dia, ultimo));
-    return d;
-  }
-  return null;
 }
 
 /** O aviso na tela bloqueada: o título e o começo do texto, sem markdown. */
@@ -103,6 +95,12 @@ export function announcementNotice(p: {
  * Cada disparo vira um post kind ANNOUNCEMENT no mural. O job reivindica o
  * disparo trocando `nextRunAt` numa escrita condicional antes de publicar:
  * duas instâncias da API não publicam o mesmo comunicado duas vezes.
+ *
+ * As repetições contam da âncora (`anchorAt`, o primeiro horário) no fuso da
+ * comunidade. Depois de uma queda, os atrasados viram um disparo só. Erro
+ * passageiro devolve o `nextRunAt` ao horário previsto e conta a tentativa
+ * (até `ANNOUNCEMENT_MAX_ATTEMPTS`); só quem agendou ter saído ou perdido o
+ * papel cancela de vez.
  *
  * O aviso vai para todo membro ativo menos quem publicou; quem desligou
  * "Comunicados da comunidade" (`ANNOUNCEMENTS`) fica de fora pelo
@@ -187,6 +185,7 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         push: input.push,
         repeat: input.repeat,
         nextRunAt: at,
+        anchorAt: at,
       },
       include: { membership: { select: AUTOR } },
     });
@@ -225,36 +224,75 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
   async runDue(now: Date): Promise<number> {
     const devidos = await this.prisma.groupAnnouncement.findMany({
       where: { nextRunAt: { lte: now }, canceledAt: null },
+      include: { group: { select: { timezone: true } } },
       orderBy: { nextRunAt: 'asc' },
       take: 100,
     });
     let saiu = 0;
-    for (const a of devidos) {
+    for (const { group, ...a } of devidos) {
       const previsto = a.nextRunAt!;
+      const { at, next } = dueOccurrence(
+        a.anchorAt ?? previsto,
+        previsto,
+        now,
+        a.repeat,
+        group.timezone,
+      );
       // Reivindica: só quem trocar o `nextRunAt` de fato publica.
-      const proximo = nextOccurrence(previsto, a.repeat);
       const pego = await this.prisma.groupAnnouncement.updateMany({
         where: { id: a.id, nextRunAt: previsto, canceledAt: null },
-        data: { nextRunAt: proximo, lastRunAt: now },
+        data: { nextRunAt: next },
       });
       if (pego.count === 0) continue;
       try {
-        await this.fire(a, previsto);
-        saiu += 1;
+        await this.posts.publishAnnouncement(a, at);
       } catch (err) {
-        // Quem agendou saiu da comunidade: os próximos não saem mais.
-        await this.prisma.groupAnnouncement.update({
-          where: { id: a.id },
-          data: { nextRunAt: null, canceledAt: now },
-        });
+        await this.failed(a, previsto, next, now, err);
+        continue;
+      }
+      saiu += 1;
+      await this.prisma.groupAnnouncement.update({
+        where: { id: a.id },
+        data: { lastRunAt: at, attempts: 0 },
+      });
+      // O post já saiu: falha no aviso não volta o disparo (sairia duplicado).
+      await this.notify(a).catch((err: unknown) =>
         this.logger.warn({
-          event: 'comunicado_nao_publicado',
+          event: 'comunicado_sem_aviso',
           announcementId: a.id,
           err: err instanceof Error ? err.message : String(err),
-        });
-      }
+        }),
+      );
     }
     return saiu;
+  }
+
+  /**
+   * O disparo não saiu. Quem agendou saiu ou perdeu o papel: cancela. Outro
+   * erro: volta ao horário previsto e tenta na próxima rodada, até o teto.
+   */
+  private async failed(
+    a: GroupAnnouncement,
+    previsto: Date,
+    next: Date | null,
+    now: Date,
+    err: unknown,
+  ): Promise<void> {
+    const tentativas = a.attempts + 1;
+    const desiste =
+      err instanceof AnnouncementAuthorGone || tentativas >= ANNOUNCEMENT_MAX_ATTEMPTS;
+    await this.prisma.groupAnnouncement.updateMany({
+      where: { id: a.id, nextRunAt: next, canceledAt: null },
+      data: desiste
+        ? { nextRunAt: null, canceledAt: now, attempts: tentativas }
+        : { nextRunAt: previsto, attempts: tentativas },
+    });
+    this.logger.warn({
+      event: desiste ? 'comunicado_cancelado' : 'comunicado_tenta_de_novo',
+      announcementId: a.id,
+      attempts: tentativas,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   private async fire(a: GroupAnnouncement, at: Date): Promise<void> {
@@ -263,6 +301,11 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
       where: { id: a.id },
       data: { lastRunAt: at },
     });
+    await this.notify(a);
+  }
+
+  /** O aviso do comunicado que acabou de sair, se pediu push. */
+  private async notify(a: GroupAnnouncement): Promise<void> {
     if (!a.push) return;
     const [grupo, membros, autor] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({ where: { id: a.groupId }, select: { name: true } }),

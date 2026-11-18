@@ -37,6 +37,9 @@ import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
 
+/** Quem agendou saiu ou perdeu o papel: os próximos disparos não saem mais. */
+export class AnnouncementAuthorGone extends ConflictException {}
+
 export const POST_BODY_MAX = 2000;
 export const POST_MAX_IMAGES = 4;
 export const COMMENT_BODY_MAX = 500;
@@ -998,11 +1001,14 @@ export class PostService {
    * horário marcado não pode falhar por falta de espaço.
    */
   async publishAnnouncement(a: GroupAnnouncement, now: Date): Promise<{ postId: string }> {
-    const ativa = await this.prisma.groupMembership.findFirst({
+    const autor = await this.prisma.groupMembership.findFirst({
       where: { id: a.membershipId, status: MembershipStatus.ACTIVE },
-      select: { id: true },
+      select: { role: true },
     });
-    if (!ativa) throw new ConflictException('Quem agendou não está mais na comunidade');
+    if (!autor) throw new AnnouncementAuthorGone('Quem agendou não está mais na comunidade');
+    if (!can(autor.role, 'announcement.publish')) {
+      throw new AnnouncementAuthorGone('Quem agendou não manda mais comunicados');
+    }
     const publicar = async (db: Prisma.TransactionClient | PrismaService) => {
       if (a.pin) {
         const fixados = await db.groupPost.findMany({

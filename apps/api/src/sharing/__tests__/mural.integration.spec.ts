@@ -13,6 +13,7 @@ import { BlockService } from '../block.service';
 import { publishAutoPost } from '../auto-post';
 import { ForYouService } from '../for-you.service';
 import { GroupService } from '../group.service';
+import { MembershipService } from '../membership.service';
 import { PostController } from '../post.controller';
 import { POLL_MIN_VOTES, PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
@@ -41,6 +42,7 @@ describe('mural do redesign (integração)', () => {
   const forYou = new ForYouService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const groups = new GroupService(prisma, links, [], media);
+  const memberships = new MembershipService(prisma, links, notifications);
 
   const stamp = `mural394-${Date.now()}`;
   const criados: string[] = [];
@@ -177,16 +179,29 @@ describe('mural do redesign (integração)', () => {
       expect(devolta.posts.map((p) => p.id)).toContain(daGabi.id);
     });
 
-    it('bloqueado não gera aviso para quem bloqueou', async () => {
+    it('bloqueado comenta e reage no post da comunidade e quem bloqueou não é avisado', async () => {
       const a = await comunidade();
       const daAna = await posts.create(a.ana, a.groupId, { body: 'Post da Ana' });
-      const daGabi = await posts.create(a.gabi, a.groupId, { body: 'Post da Gabi' });
-      await blocks.block(a.gabi, { groupId: a.groupId, postId: daAna.id });
-      // A Gabi não acha mais o post da Ana; a Ana também não acha o dela.
-      await expect(
-        posts.comment(a.ana, a.groupId, daGabi.id, { body: 'x' }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-      expect(agrupados).toHaveLength(0);
+      const daComunidade = await posts.create(a.prof, a.groupId, {
+        body: 'Aviso geral',
+        publishedAs: 'GROUP',
+      });
+      // Quem bloqueia é o autor do post da comunidade.
+      await blocks.block(a.prof, { groupId: a.groupId, postId: daAna.id });
+      enviados.length = 0;
+      agrupados.length = 0;
+
+      // A ação acontece de verdade: o post da comunidade é visível para a Ana.
+      const c = await posts.comment(a.ana, a.groupId, daComunidade.id, { body: 'Valeu' });
+      await posts.react(a.ana, a.groupId, daComunidade.id, 'HEART');
+      const visto = await posts.get(a.gabi, a.groupId, daComunidade.id);
+      expect(visto.comments.map((x) => x.id)).toContain(c.id);
+      expect(visto.reactions.counts.HEART).toBe(1);
+      const paraProf = [
+        ...enviados.filter((e) => e.userIds.includes(a.prof)),
+        ...agrupados.filter((e) => e.userId === a.prof),
+      ];
+      expect(paraProf).toEqual([]);
     });
 
     it('post publicado como a comunidade não some por bloqueio', async () => {
@@ -694,6 +709,141 @@ describe('mural do redesign (integração)', () => {
       const aviso = enviados.find((e) => e.notice.kind === 'ANNOUNCEMENTS');
       expect(aviso!.userIds).not.toContain(a.ana);
       expect(aviso!.userIds).toContain(a.gabi);
+    });
+
+    /** Um horário agendável (bloco de 15 min) daqui a `min` minutos. */
+    function slot(min: number): Date {
+      const at = new Date(Date.now() + min * 60_000);
+      at.setUTCMinutes(Math.ceil(at.getUTCMinutes() / 15) * 15, 0, 0);
+      return at;
+    }
+    const agendado = (repeat: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY', at: Date) => ({
+      title: 'Agendado',
+      body: 'Texto.',
+      publishedAs: 'GROUP' as const,
+      pin: false,
+      pinDays: null,
+      push: false,
+      at: at.toISOString(),
+      repeat,
+    });
+    const saidos = (announcementId: string) =>
+      prisma.groupPost.count({ where: { announcementId } });
+
+    it('volta de uma queda: os atrasados saem uma vez só e o próximo fica no futuro', async () => {
+      const a = await comunidade();
+      const at = slot(60);
+      const c = await announcements.create(a.dono, a.groupId, agendado('DAILY', at));
+      const volta = new Date(at.getTime() + 3 * 86_400_000 + 60 * 60_000);
+      await announcements.runDue(volta);
+      await announcements.runDue(volta);
+      expect(await saidos(c.id)).toBe(1);
+      const [depois] = await announcements.list(a.dono, a.groupId);
+      expect(new Date(depois!.nextRunAt!).getTime()).toBe(at.getTime() + 4 * 86_400_000);
+    });
+
+    it('todo mês conta do dia marcado, no fuso da comunidade', async () => {
+      const a = await comunidade();
+      const c = await announcements.create(a.dono, a.groupId, agendado('MONTHLY', slot(60)));
+      // 30/abr 22h em São Paulo já é 1º/mai em UTC.
+      const ancora = new Date('2027-05-01T01:00:00Z');
+      await prisma.groupAnnouncement.update({
+        where: { id: c.id },
+        data: { anchorAt: ancora, nextRunAt: ancora },
+      });
+      await announcements.runDue(ancora);
+      expect(await saidos(c.id)).toBe(1);
+      let [r] = await announcements.list(a.dono, a.groupId);
+      expect(new Date(r!.nextRunAt!).toISOString()).toBe('2027-05-31T01:00:00.000Z');
+
+      // Em outro fuso, o mesmo instante é outro dia do mês.
+      await prisma.group.update({ where: { id: a.groupId }, data: { timezone: 'UTC' } });
+      await prisma.groupAnnouncement.update({
+        where: { id: c.id },
+        data: { anchorAt: ancora, nextRunAt: ancora },
+      });
+      await announcements.runDue(ancora);
+      expect(await saidos(c.id)).toBe(2);
+      [r] = await announcements.list(a.dono, a.groupId);
+      expect(new Date(r!.nextRunAt!).toISOString()).toBe('2027-06-01T01:00:00.000Z');
+    });
+
+    it('duas rodadas do job ao mesmo tempo publicam uma vez só', async () => {
+      const a = await comunidade();
+      const at = slot(60);
+      const c = await announcements.create(a.dono, a.groupId, agendado('DAILY', at));
+      await Promise.all([1, 2, 3, 4].map(() => announcements.runDue(at)));
+      expect(await saidos(c.id)).toBe(1);
+    });
+
+    it('erro passageiro tenta de novo no mesmo horário, até um limite', async () => {
+      const a = await comunidade();
+      const at = slot(60);
+      const c = await announcements.create(a.dono, a.groupId, agendado('NONE', at));
+      const falha = jest
+        .spyOn(posts, 'publishAnnouncement')
+        .mockRejectedValueOnce(new Error('conexão caiu'));
+      await announcements.runDue(at);
+      expect(await saidos(c.id)).toBe(0);
+      let row = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
+      expect(row).toMatchObject({ canceledAt: null, attempts: 1 });
+      expect(row.nextRunAt!.getTime()).toBe(at.getTime());
+
+      await announcements.runDue(new Date(at.getTime() + 60_000));
+      row = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
+      expect(row).toMatchObject({ attempts: 0, nextRunAt: null, canceledAt: null });
+      expect(await saidos(c.id)).toBe(1);
+
+      // Falhando sempre, desiste no teto.
+      const d = await announcements.create(a.dono, a.groupId, agendado('DAILY', at));
+      falha.mockRejectedValue(new Error('fora do ar'));
+      for (let i = 0; i < 10; i += 1) await announcements.runDue(at);
+      falha.mockRestore();
+      row = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: d.id } });
+      expect(row.canceledAt).not.toBeNull();
+      expect(row.nextRunAt).toBeNull();
+    });
+
+    it('quem perdeu o papel não publica: confere no disparo', async () => {
+      const a = await comunidade();
+      const at = slot(60);
+      const c = await announcements.create(a.prof, a.groupId, agendado('DAILY', at));
+      await prisma.groupMembership.update({
+        where: { groupId_userId: { groupId: a.groupId, userId: a.prof } },
+        data: { role: 'MEMBER' },
+      });
+      await announcements.runDue(at);
+      expect(await saidos(c.id)).toBe(0);
+      const row = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
+      expect(row.canceledAt).not.toBeNull();
+    });
+
+    it('mudar o papel, banir ou sair cancela os agendados da pessoa', async () => {
+      const a = await comunidade();
+      const at = slot(60);
+      const prof2 = await entra(a.groupId, 'PROFESSIONAL');
+      const prof3 = await entra(a.groupId, 'PROFESSIONAL');
+      const mid = async (userId: string) =>
+        (
+          await prisma.groupMembership.findUniqueOrThrow({
+            where: { groupId_userId: { groupId: a.groupId, userId } },
+          })
+        ).id;
+      const doProf = await announcements.create(a.prof, a.groupId, agendado('DAILY', at));
+      const doProf2 = await announcements.create(prof2, a.groupId, agendado('DAILY', at));
+      const doProf3 = await announcements.create(prof3, a.groupId, agendado('DAILY', at));
+      const doDono = await announcements.create(a.dono, a.groupId, agendado('DAILY', at));
+
+      await memberships.changeRole(a.dono, a.groupId, await mid(a.prof), 'MEMBER');
+      await memberships.ban(a.dono, a.groupId, await mid(prof2));
+      await memberships.leave(prof3, a.groupId);
+
+      const ativos = await announcements.list(a.dono, a.groupId);
+      expect(ativos.map((x) => x.id)).toEqual([doDono.id]);
+      for (const id of [doProf.id, doProf2.id, doProf3.id]) {
+        const row = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id } });
+        expect(row.canceledAt).not.toBeNull();
+      }
     });
   });
 
