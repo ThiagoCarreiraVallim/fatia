@@ -634,9 +634,7 @@ function ChallengeForm({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium">Quanto vale cada coisa</p>
-            <p className="text-xs text-muted-foreground">
-              máximo por dia: <b className="text-foreground">{`${sum} pts`}</b>
-            </p>
+            <p className="text-xs font-semibold">{`máximo por dia: ${sum} pts`}</p>
           </div>
           <ul className="divide-y divide-subtle rounded-xl border border-subtle">
             {POINT_ITEMS.map((i) => (

@@ -709,4 +709,44 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
       );
     });
   });
+
+  describe('o meu progresso (get_my_challenge_progress)', () => {
+    it('traz só os desafios em que a pessoa está e não acabaram, com o hoje dela', async () => {
+      const a = await comunidade();
+      const agua = await emAndamento(a.groupId, a.dono, { kind: 'WATER', waterGoalMl: 2000 });
+      await emAndamento(a.groupId, a.dono, { kind: 'STEPS' });
+      const acabou = await emAndamento(a.groupId, a.dono, { kind: 'WATER' });
+      await prisma.waterLog.create({ data: { userId: a.membro, date: hoje(), ml: 2200 } });
+      await challenges.join(a.membro, a.groupId, agua, 'Ana');
+      await challenges.join(a.membro, a.groupId, acabou, 'Ana');
+      await prisma.groupChallenge.update({
+        where: { id: acabou },
+        data: {
+          endsAt: new Date(Date.now() - 48 * 3600_000),
+          startsAt: new Date(Date.now() - 96 * 3600_000),
+        },
+      });
+
+      const meus = await challenges.myProgress(a.membro, a.groupId);
+      expect(meus).toEqual([
+        expect.objectContaining({
+          id: agua,
+          kind: 'WATER',
+          status: 'running',
+          score: 1,
+          rank: 1,
+          streak: 1,
+          totalDays: expect.any(Number),
+          pendingReview: 0,
+          today: expect.objectContaining({ points: 1 }),
+        }),
+      ]);
+      // Quem não participa de nada recebe lista vazia; quem é de fora, 404.
+      expect(await challenges.myProgress(a.prof, a.groupId)).toEqual([]);
+      const b = await comunidade();
+      await expect(challenges.myProgress(a.membro, b.groupId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
 });

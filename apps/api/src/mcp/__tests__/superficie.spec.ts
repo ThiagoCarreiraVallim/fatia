@@ -66,9 +66,11 @@ import {
  * braço A. As duas chegaram juntas no merge da main na #382.
  * O merge da main (#382) na #380 juntou os dois braços A acima.
  * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
+ * A #395 acrescentou `get_my_challenge_progress` (só leitura, sem intenção) e reescreveu as
+ * descrições das tools de desafio: muda o braço A.
  */
 
-const SHA_ENTIDADE = '5033e508a1cf010959ef285d97a3be8e570a8da33d99193b30e929e2b5af5dbd';
+const SHA_ENTIDADE = 'cc43a265159c2f4ac1a23c22c18f7085598d929c05fd2aca286c473742f87dca';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

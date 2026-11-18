@@ -162,6 +162,26 @@ export interface ChallengeView {
   me: MyParticipation | null;
 }
 
+/** Uma linha de `get_my_challenge_progress`: o desafio e como a pessoa vai nele. */
+export interface MyChallengeProgress {
+  id: string;
+  title: string;
+  kind: ChallengeKindName;
+  metric: ChallengeMetric;
+  status: ChallengeStatus;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  participants: number;
+  displayName: string;
+  score: number;
+  rank: number | null;
+  streak: number;
+  pendingReview: number;
+  /** Só nos em andamento: o hoje da própria pessoa. */
+  today: ChallengeToday | null;
+}
+
 export interface ChallengeList {
   /** Hoje no fuso da comunidade: o primeiro dia que um desafio novo pode ter. */
   today: string;
@@ -355,6 +375,44 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
           : b.startDate.localeCompare(a.startDate)),
     );
     return { today: todayInTz(group.timezone), challenges: views };
+  }
+
+  /**
+   * "Como estou nos desafios?" (`get_my_challenge_progress`): só os desafios em
+   * que a pessoa está e que não acabaram, com a pontuação, a posição, a
+   * sequência e o hoje dela. Nada de outra pessoa além da posição.
+   */
+  async myProgress(
+    userId: string,
+    groupId: string,
+    now = new Date(),
+  ): Promise<MyChallengeProgress[]> {
+    const { challenges } = await this.list(userId, groupId, now);
+    const meus = challenges.filter((c) => c.me !== null && c.status !== 'ended');
+    return Promise.all(
+      meus.map(async (c) => {
+        const me = c.me!;
+        const today =
+          c.status === 'running' ? (await this.get(userId, groupId, c.id, now)).today : null;
+        return {
+          id: c.id,
+          title: c.title,
+          kind: c.kind,
+          metric: c.metric,
+          status: c.status,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          totalDays: c.totalDays,
+          participants: c.participants,
+          displayName: me.displayName,
+          score: me.score,
+          rank: me.rank,
+          streak: me.streak,
+          pendingReview: me.pendingReview,
+          today,
+        };
+      }),
+    );
   }
 
   async get(

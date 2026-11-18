@@ -6,18 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
-import type { ChallengeMetric } from '../../social/challenge-metric';
-
-/** A unidade do placar de cada métrica; as de dias contam dias. */
-const CHALLENGE_UNIT: Record<ChallengeMetric, string> = {
-  WORKOUT_SESSIONS: 'treinos',
-  STEPS: 'passos',
-  WATER_ML: 'ml',
-  ACTIVE_DAYS: 'dias',
-  KCAL_IN_RANGE_DAYS: 'dias',
-  PROTEIN_TARGET_DAYS: 'dias',
-  STREAK_DAYS: 'dias',
-};
+import { challengeUnit } from './challenge-unit';
 
 @Injectable()
 @McpTool()
@@ -29,9 +18,11 @@ export class GetChallengeLeaderboardTool implements McpToolDef {
   readonly hostedInference = false;
   readonly card = 'scoreboard' as const;
   readonly description =
-    'Mostra um desafio da comunidade e o ranking: apelido, pontuação e posição de cada ' +
-    'participante, com a linha do usuário marcada (isMe). O ranking só vem para quem participa; ' +
-    'para os outros, leaderboard é null e dá para entrar com join_group_challenge. ' +
+    'Mostra um desafio da comunidade e o ranking: apelido, pontuação (dias na meta, ou pontos ' +
+    'no tipo POINTS), sequência e posição de cada participante, com a linha do usuário marcada ' +
+    '(isMe). Quem é da comunidade vê o ranking mesmo sem participar (leaderboard null só nos ' +
+    'desafios antigos que somavam ml ou passos). today traz o hoje do próprio usuário. Fotos de ' +
+    'check-in nunca vêm: só a pessoa e a equipe as veem. ' +
     'Exemplo: {"groupId":"11111111-2222-4333-8444-555555555555",' +
     '"challengeId":"66666666-7777-4888-9999-000000000000"}';
   readonly inputSchema = {
@@ -46,13 +37,13 @@ export class GetChallengeLeaderboardTool implements McpToolDef {
   }
 
   /**
-   * As posições do desafio, com a sua linha marcada (prancha IA-Cartoes, #384). Quem não
-   * entrou no desafio não vê o placar, e fica sem cartão.
+   * As posições do desafio, com a sua linha marcada (prancha IA-Cartoes, #384). Sem placar
+   * (desafio antigo de ml ou passos, visto de fora), fica sem cartão.
    */
   artifact(result: unknown) {
     const desafio = result as Awaited<ReturnType<ChallengeService['get']>>;
     if (!desafio.leaderboard) return null;
-    const unit = CHALLENGE_UNIT[desafio.metric];
+    const unit = challengeUnit(desafio.kind, desafio.metric);
     return {
       kind: 'scoreboard',
       label: desafio.title,

@@ -49,6 +49,7 @@ import type { ListGroupPlansTool } from '../../../sharing/mcp/list-group-plans.t
 import type { ListGroupPostsTool } from '../../../sharing/mcp/list-group-posts.tool';
 import type { ListGroupTipsTool } from '../../../sharing/mcp/list-group-tips.tool';
 import type { ListGroupBenefitsTool } from '../../../sharing/mcp/list-group-benefits.tool';
+import type { GetMyChallengeProgressTool } from '../../../sharing/mcp/get-my-challenge-progress.tool';
 import type { ListMyGroupsTool } from '../../../sharing/mcp/list-my-groups.tool';
 import type { ListMyStudentsTool } from '../../../sharing/mcp/list-my-students.tool';
 import type { ListPlanOffersTool } from '../../../sharing/mcp/list-plan-offers.tool';
@@ -322,14 +323,44 @@ const desafio = {
   id: 'ch1',
   title: 'Mais passos de novembro',
   description: null,
+  kind: 'STEPS' as const,
   metric: 'STEPS' as const,
   startDate: '2026-11-01',
   endDate: '2026-11-30',
+  totalDays: 30,
   status: 'running' as const,
   endedEarly: false,
+  resultPending: false,
   participants: 12,
+  rules: {
+    pointsTable: null,
+    maxPointsPerDay: null,
+    waterGoalMl: null,
+    dailyCap: null,
+    stepsGoal: 10000,
+    allowedStepSources: ['APPLE_HEALTH' as const, 'HEALTH_CONNECT' as const],
+    checkin: null,
+  },
+  needsPhotoConsent: false,
+  watching: false,
   canManage: false,
-  me: { displayName: 'Thi', score: 81234, rank: 2, medal: 'silver' as const },
+  canReview: false,
+  me: {
+    displayName: 'Thi',
+    score: 12,
+    rank: 2,
+    medal: null,
+    streak: 4,
+    pendingReview: 0,
+  },
+};
+
+const hojeNoDesafio = {
+  date: '2026-11-16',
+  points: 1,
+  maxPoints: null,
+  items: [{ item: 'steps' as const, points: 1, done: true, value: 10_480, goal: 10_000 }],
+  checkedInAt: null,
 };
 
 const pontosDePassos = [
@@ -696,11 +727,35 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
       ...desafio,
       suggestedDisplayName: 'Thi',
       leaderboard: [
-        { displayName: 'Ana', score: 90210, rank: 1, isMe: false, medal: 'gold' },
-        { displayName: 'Thi', score: 81234, rank: 2, isMe: true, medal: 'silver' },
+        { displayName: 'Ana', score: 14, rank: 1, isMe: false, medal: null, streak: 6 },
+        { displayName: 'Thi', score: 12, rank: 2, isMe: true, medal: null, streak: 4 },
       ],
+      today: hojeNoDesafio,
+      activity: [],
     },
     { groupId: 'gr1', challengeId: 'ch1' },
+  ),
+  get_my_challenge_progress: sample<GetMyChallengeProgressTool>(
+    [
+      {
+        id: 'ch1',
+        title: 'Mais passos de novembro',
+        kind: 'STEPS',
+        metric: 'STEPS',
+        status: 'running',
+        startDate: '2026-11-01',
+        endDate: '2026-11-30',
+        totalDays: 30,
+        participants: 12,
+        displayName: 'Thi',
+        score: 12,
+        rank: 2,
+        streak: 4,
+        pendingReview: 0,
+        today: hojeNoDesafio,
+      },
+    ],
+    { groupId: 'gr1' },
   ),
 
   // ------------------------------------------------------------------ badges

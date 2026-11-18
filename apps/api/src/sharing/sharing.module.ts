@@ -40,6 +40,7 @@ import { StudentViewService } from './student-view.service';
 import { ConsentController } from './consent.controller';
 import { ProfessionalController } from './professional.controller';
 import { ListGroupBenefitsTool } from './mcp/list-group-benefits.tool';
+import { GetMyChallengeProgressTool } from './mcp/get-my-challenge-progress.tool';
 import { BenefitController } from './benefit.controller';
 import { BenefitService } from './benefit.service';
 import { SharingController } from './sharing.controller';
@@ -160,6 +161,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ListGroupBenefitsTool,
     ListGroupChallengesTool,
     GetChallengeLeaderboardTool,
+    GetMyChallengeProgressTool,
     JoinGroupChallengeTool,
     ListGroupPostsTool,
     CreateGroupPostTool,

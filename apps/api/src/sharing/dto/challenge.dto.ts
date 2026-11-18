@@ -43,6 +43,15 @@ export class ChallengeParamDto {
 }
 
 /** Um desafio como a equipe marca: as datas são dias no fuso da comunidade. */
+/** Antes do `ChallengeDto`: o metadado do tipo é lido na hora em que a classe nasce. */
+export class PointsTableDto {
+  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) workout?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) water?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) steps?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) protein?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) kcal?: number;
+}
+
 export class ChallengeDto {
   @Transform(trim)
   @IsString()
@@ -110,14 +119,6 @@ export class ChallengeDto {
   @ArrayMaxSize(8)
   @IsIn(Object.values(StepSource), { each: true })
   allowedStepSources?: StepSource[];
-}
-
-export class PointsTableDto {
-  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) workout?: number;
-  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) water?: number;
-  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) steps?: number;
-  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) protein?: number;
-  @IsOptional() @IsInt() @Min(0) @Max(POINT_VALUE_MAX) kcal?: number;
 }
 
 export class JoinChallengeDto {
