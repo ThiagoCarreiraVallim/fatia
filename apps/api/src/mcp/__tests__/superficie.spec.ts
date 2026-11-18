@@ -65,9 +65,11 @@ import {
  * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
  * braço A. As duas chegaram juntas no merge da main na #382.
  * O merge da main (#382) na #380 juntou os dois braços A acima.
+ * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
+ * O merge da main (#385, `save_memory` com `category`) na #393 juntou os dois: braço A novo, braço B o da #385.
  */
 
-const SHA_ENTIDADE = 'e74ab3047058d368e6aacb4b39f91f7fb49725f4e48517da81add23eb553feb7';
+const SHA_ENTIDADE = 'ecc26c067f354e5f5ae0c38ed395ffe02072333d9a55d31f5e8d8072c483ba33';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

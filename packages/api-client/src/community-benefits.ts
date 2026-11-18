@@ -1,0 +1,218 @@
+import { apiFetch } from './http';
+
+/**
+ * Benefícios de parceiros da comunidade (#393): a vitrine do membro (Cm-22) e
+ * o cadastro do dono no painel (Pn-28). O Fatia só guarda o texto, o cupom e
+ * o link; não rastreia a compra nem passa dado ao parceiro.
+ */
+
+export type BenefitKind = 'COUPON' | 'LINK';
+
+/** O que o membro vê. Vencido (ontem) vem sem cupom nem link e sai amanhã. */
+export interface MemberBenefit {
+  id: string;
+  partnerName: string;
+  logoUrl: string | null;
+  discountText: string;
+  kind: BenefitKind;
+  couponCode: string | null;
+  url: string | null;
+  /** `YYYY-MM-DD`, último dia em que vale, no fuso da comunidade. */
+  validUntil: string;
+  expired: boolean;
+}
+
+/** O que o painel vê. */
+export interface TeamBenefit extends Omit<MemberBenefit, 'expired'> {
+  logoFileId: string | null;
+  status: 'active' | 'expired';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BenefitInput {
+  partnerName: string;
+  discountText: string;
+  kind: BenefitKind;
+  couponCode: string | null;
+  url: string | null;
+  validUntil: string;
+  logoFileId: string | null;
+}
+
+const base = (groupId: string) => `/api/groups/${groupId}/benefits`;
+const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+
+export const benefitsApi = {
+  list: (groupId: string) => apiFetch<MemberBenefit[]>(base(groupId)),
+  manage: (groupId: string) => apiFetch<TeamBenefit[]>(`${base(groupId)}/manage`),
+  create: (groupId: string, input: BenefitInput) =>
+    apiFetch<TeamBenefit>(base(groupId), json('POST', input)),
+  update: (groupId: string, id: string, input: Partial<BenefitInput>) =>
+    apiFetch<TeamBenefit>(`${base(groupId)}/${id}`, json('PATCH', input)),
+  remove: (groupId: string, id: string) =>
+    apiFetch<{ id: string }>(`${base(groupId)}/${id}`, json('DELETE')),
+};
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** "31 dez". */
+function benefitDay(ymd: string): string {
+  const [, m, d] = ymd.split('-').map(Number);
+  return `${d} ${MESES[m - 1]}`;
+}
+
+/** O selo da validade: "até 31 dez", ou "venceu". */
+export function benefitValidity(b: Pick<MemberBenefit, 'validUntil' | 'expired'>): string {
+  return b.expired ? 'venceu' : `até ${benefitDay(b.validUntil)}`;
+}
+
+/** "Venceu em 31 out. Sai da lista amanhã." */
+export function benefitExpiredNote(b: Pick<MemberBenefit, 'validUntil'>): string {
+  return `Venceu em ${benefitDay(b.validUntil)}. Sai da lista amanhã.`;
+}
+
+/** As iniciais no lugar do logo: duas letras. */
+export function benefitInitials(name: string): string {
+  const palavras = name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  if (palavras.length >= 2) return (palavras[0][0] + palavras[1][0]).toUpperCase();
+  return (palavras[0] ?? '?').slice(0, 2).toUpperCase();
+}
+
+/** Último dia do mês `meses` à frente de `ymd`, em `YYYY-MM-DD`. */
+function endOfMonthAhead(ymd: string, meses: number): string {
+  const [y, m] = ymd.split('-').map(Number);
+  // Dia 0 do mês seguinte = último dia do mês alvo (UTC, sem fuso no meio).
+  const d = new Date(Date.UTC(y, m - 1 + meses + 1, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A validade em escolhas prontas no app (o painel da web tem o calendário):
+ * fim do mês que vem e fim do mês daqui a 3, 6 e 12 meses.
+ */
+export function benefitValidUntilOptions(today: string): { value: string; label: string }[] {
+  return [1, 3, 6, 12].map((n) => {
+    const value = endOfMonthAhead(today, n);
+    return { value, label: `até ${benefitDay(value)}` };
+  });
+}
+
+export const BENEFITS_PRIVACY_NOTE =
+  'Abre fora do app. O Fatia não recebe dado da compra e não passa seus dados ao parceiro.';
+
+export const benefitCopiedToast = (code: string) => `Código ${code} copiado`;
+
+// ---------------------------------------------------------------- painel
+
+export interface BenefitDraft {
+  partnerName: string;
+  discountText: string;
+  kind: BenefitKind;
+  couponCode: string;
+  url: string;
+  validUntil: string;
+  logoFileId: string | null;
+}
+
+export function emptyBenefitDraft(today: string): BenefitDraft {
+  return {
+    partnerName: '',
+    discountText: '',
+    kind: 'COUPON',
+    couponCode: '',
+    url: '',
+    validUntil: today,
+    logoFileId: null,
+  };
+}
+
+export function benefitToDraft(b: TeamBenefit): BenefitDraft {
+  return {
+    partnerName: b.partnerName,
+    discountText: b.discountText,
+    kind: b.kind,
+    couponCode: b.couponCode ?? '',
+    url: b.url ?? '',
+    validUntil: b.validUntil,
+    logoFileId: b.logoFileId,
+  };
+}
+
+export type BenefitDraftErrors = Partial<Record<keyof BenefitDraft, string>>;
+
+function isHttps(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** Confere o formulário com as mesmas regras da API e devolve o corpo pronto (cadastro). */
+export function benefitDraftToInput(
+  d: BenefitDraft,
+  today: string,
+): { ok: true; input: BenefitInput } | { ok: false; errors: BenefitDraftErrors } {
+  return checkDraft(d, today, true);
+}
+
+/**
+ * O corpo do PATCH: a validade só vai quando mudou (e só aí é cobrada contra
+ * hoje), para dar para corrigir o texto de um benefício vencido.
+ */
+export function benefitDraftToPatch(
+  d: BenefitDraft,
+  today: string,
+  original: Pick<TeamBenefit, 'validUntil'>,
+): { ok: true; input: Partial<BenefitInput> } | { ok: false; errors: BenefitDraftErrors } {
+  const mudou = d.validUntil !== original.validUntil;
+  const r = checkDraft(d, today, mudou);
+  if (!r.ok || mudou) return r;
+  const { validUntil: _mesma, ...resto } = r.input;
+  void _mesma;
+  return { ok: true, input: resto };
+}
+
+function checkDraft(
+  d: BenefitDraft,
+  today: string,
+  checkDate: boolean,
+): { ok: true; input: BenefitInput } | { ok: false; errors: BenefitDraftErrors } {
+  const errors: BenefitDraftErrors = {};
+  const partnerName = d.partnerName.trim();
+  const discountText = d.discountText.trim();
+  // Como foi digitado: o parceiro pode diferenciar maiúscula de minúscula.
+  const couponCode = d.couponCode.trim();
+  const url = d.url.trim();
+  if (!partnerName) errors.partnerName = 'Diga o parceiro';
+  if (!discountText) errors.discountText = 'Diga o desconto';
+  if (d.kind === 'COUPON' && !/^[A-Za-z0-9_-]{2,40}$/.test(couponCode)) {
+    errors.couponCode = couponCode ? 'Use letras, números, - e _' : 'Digite o código do cupom';
+  }
+  if (d.kind === 'LINK' && !isHttps(url)) errors.url = 'O link precisa começar com https://';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.validUntil)) errors.validUntil = 'Escolha a validade';
+  else if (checkDate && d.validUntil < today) {
+    errors.validUntil = 'A validade não pode estar no passado';
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    input: {
+      partnerName,
+      discountText,
+      kind: d.kind,
+      couponCode: d.kind === 'COUPON' ? couponCode : null,
+      url: d.kind === 'LINK' ? url : null,
+      validUntil: d.validUntil,
+      logoFileId: d.logoFileId,
+    },
+  };
+}

@@ -11,13 +11,20 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
-import { GroupRole, MembershipStatus, type GroupMembership, type ShareScope } from '@fatia/db';
+import {
+  GroupRole,
+  JoinPolicy,
+  MembershipStatus,
+  type GroupMembership,
+  type ShareScope,
+} from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
 import { NotificationService } from '../notifications/notification.service';
 import { inviteNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes } from './consent-scopes';
+import { newEntryCode } from './entry-code';
 import { can, TEAM_ROLES, type GroupAction } from './permissions';
 import {
   assertNotBanned,
@@ -50,10 +57,20 @@ export interface CreateInviteInput {
   email?: string;
   maxUses?: number;
   expiresInDays?: number;
+  /**
+   * Gera um código de entrada legível (#393) em vez de link: reutilizável,
+   * revogável e sujeito à `joinPolicy`. Só de membro, sem e-mail.
+   */
+  code?: boolean;
 }
+
+/** O código da recepção vale mais que o link: fica num cartaz. */
+export const ENTRY_CODE_DEFAULT_DAYS = 365;
 
 export interface InviteView {
   id: string;
+  /** Código de entrada legível, quando o convite é um código (#393). */
+  code: string | null;
   role: GroupRole;
   email: string | null;
   maxUses: number | null;
@@ -117,6 +134,7 @@ function novoToken(): string {
 
 function view(i: {
   id: string;
+  code: string | null;
   role: GroupRole;
   email: string | null;
   maxUses: number | null;
@@ -127,6 +145,7 @@ function view(i: {
 }): InviteView {
   return {
     id: i.id,
+    code: i.code,
     role: i.role,
     email: i.email,
     maxUses: i.maxUses,
@@ -187,6 +206,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     if ((input.role as GroupRole) === GroupRole.OWNER) {
       throw new ForbiddenException('Ninguém é convidado como dono');
     }
+    if (input.code) return this.createEntryCode(actorId, groupId, input);
 
     const agora = new Date();
     await this.assertDailyRoom(groupId, 1, agora);
@@ -211,6 +231,57 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const url = this.url(token);
     const emailSent = email ? await this.enviar(invite, url, actorId) : false;
     return { invite: view(invite), url, emailSent };
+  }
+
+  /**
+   * Código de entrada legível (#393): o que vai no QR da recepção. Não é
+   * aprovação — quem entra por ele segue a `joinPolicy` —, por isso só existe
+   * para membro e não em comunidade só por convite. O token aleatório do
+   * convite nunca sai daqui: o código não abre o caminho do link.
+   */
+  private async createEntryCode(
+    actorId: string,
+    groupId: string,
+    input: CreateInviteInput,
+  ): Promise<CreatedInvite> {
+    if (input.role !== GroupRole.MEMBER || input.email) {
+      throw new ConflictException('O código de entrada é só para membros, sem e-mail');
+    }
+    const { joinPolicy } = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { joinPolicy: true },
+    });
+    if (joinPolicy === JoinPolicy.INVITE_ONLY) {
+      throw new ConflictException(
+        'Comunidade só por convite não usa código: mande convites ou mude a forma de entrada',
+      );
+    }
+    const agora = new Date();
+    await this.assertDailyRoom(groupId, 1, agora);
+    const dias = Math.min(
+      Math.max(input.expiresInDays ?? ENTRY_CODE_DEFAULT_DAYS, 1),
+      ENTRY_CODE_DEFAULT_DAYS,
+    );
+    // Colisão é rara (31^8), mas o unique decide: tenta de novo com outro.
+    for (let tentativa = 0; ; tentativa += 1) {
+      const code = newEntryCode();
+      try {
+        const invite = await this.prisma.groupInvite.create({
+          data: {
+            groupId,
+            tokenHash: hashInviteToken(novoToken()),
+            code,
+            role: GroupRole.MEMBER,
+            createdById: actorId,
+            maxUses: input.maxUses ?? null,
+            expiresAt: new Date(agora.getTime() + dias * DAY_MS),
+          },
+        });
+        return { invite: view(invite), url: this.codeUrl(code), emailSent: false };
+      } catch (err) {
+        if ((err as { code?: string })?.code !== 'P2002' || tentativa >= 4) throw err;
+      }
+    }
   }
 
   /**
@@ -543,6 +614,15 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+  }
+
+  /** O link do QR: abre a folha de entrar já com o código (`codeFromQr` lê o `?code=`). */
+  private codeUrl(code: string): string {
+    return `${this.origin()}/community?join=1&code=${code}`;
+  }
+
+  private origin(): string {
+    return (this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030').replace(/\/$/, '');
   }
 
   private url(token: string): string {

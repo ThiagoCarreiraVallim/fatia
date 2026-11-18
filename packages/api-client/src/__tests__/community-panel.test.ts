@@ -53,6 +53,7 @@ describe('quem abre o painel e com que seções', () => {
       'moderation',
       'agent',
       'seats',
+      'benefits',
       'settings',
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([
@@ -120,6 +121,7 @@ describe('parseInviteEmails', () => {
 describe('convites e assentos', () => {
   const convite = (extra: Partial<InviteView>): InviteView => ({
     id: 'i1',
+    code: null,
     role: 'MEMBER',
     email: null,
     maxUses: null,
@@ -137,6 +139,9 @@ describe('convites e assentos', () => {
     expect(inviteSummary(convite({ uses: 1 }))).toBe('Link · 1 uso · vence 24 out');
     expect(inviteSummary(convite({ email: 'ana@x.com', maxUses: 1 }))).toBe(
       'ana@x.com · vence 24 out',
+    );
+    expect(inviteSummary(convite({ code: 'AD7K3Q9P', uses: 12 }))).toBe(
+      'Código AD7K3Q9P · 12 usos · vence 24 out',
     );
   });
 

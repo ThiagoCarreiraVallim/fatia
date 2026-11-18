@@ -40,12 +40,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-154 tools: **143,4 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 120,2 k e subestima o
+155 tools: **144,2 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 120,9 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 84 tools de escrita
-valem **8.321 caracteres** — média de **90** caracteres por tool, algo em torno de 6% do
+valem **8.380 caracteres** — média de **90** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -61,7 +61,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **154** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **155** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -80,14 +80,15 @@ O campo é interno e não vai no fio, então o tamanho do catálogo servido, med
 
 ### Fica fora do MCP — administração de grupo (#154, #155)
 
-O domínio Sharing entra com **24 tools**. Vinte e duas são do lado do aluno: `list_my_groups`,
+O domínio Sharing entra com **25 tools**. Vinte e três são do lado do aluno: `list_my_groups`,
 `join_group`, `get_group_invite`, `accept_group_invite`, `leave_group`, `set_group_sharing`,
 `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing`, `list_data_access_log` e as
 três do conteúdo da comunidade (Fase 7): `list_group_plans`, `adopt_group_plan` e
 `list_group_tips`, e as três dos desafios (Fase 8a): `list_group_challenges`,
 `get_challenge_leaderboard` e `join_group_challenge`, e as três do mural (Fase 8b): `list_group_posts`,
 `create_group_post` e `comment_on_group_post`, e as três do plano de treino recebido (#379):
-`list_plan_offers`, `accept_plan_offer` e `decline_plan_offer`. As outras duas são o painel do profissional da #157 — `list_my_students` e
+`list_plan_offers`, `accept_plan_offer` e `decline_plan_offer`, e os benefícios de parceiros
+(#393): `list_group_benefits`. As outras duas são o painel do profissional da #157 — `list_my_students` e
 `get_student_progress` —, e as duas **só leem**. Publicar plano pronto e dica é da equipe e
 fica só em REST, como o resto do painel. Criar comunidade, editá-la ou apagá-la, aprovar
 entrada, remover membro, convidar, revogar convite, transferir a comunidade e comprar ou

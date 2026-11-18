@@ -56,7 +56,12 @@ describe('comunidade (integração)', () => {
   /** Dono + profissional ativos, numa comunidade com a política pedida. */
   async function comunidade(joinPolicy: JoinPolicy = 'APPROVAL') {
     const dono = await pessoa('Dona');
-    const grupo = await groups.create(dono, { type: 'SPONSORED', name: 'Academia', joinPolicy });
+    const grupo = await groups.create(dono, {
+      type: 'SPONSORED',
+      name: 'Academia',
+      joinPolicy,
+      visibility: 'PUBLIC',
+    });
     grupos.push(grupo.id);
     const pro = await pessoa('Pro');
     await prisma.groupMembership.create({
@@ -299,7 +304,7 @@ describe('comunidade (integração)', () => {
       const { grupo } = await comunidade('INVITE_ONLY');
       const aluno = await pessoa('Aluno');
       await expect(memberships.requestJoin(aluno, grupo.slug)).rejects.toThrow(NotFoundException);
-      await expect(groups.previewBySlug(grupo.slug)).rejects.toThrow(NotFoundException);
+      await expect(groups.previewByCode(grupo.slug)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -346,6 +351,7 @@ describe('comunidade (integração)', () => {
     async function exigente(joinPolicy: JoinPolicy = 'OPEN') {
       const dono = await pessoa('Dona');
       const grupo = await groups.create(dono, {
+        visibility: 'PUBLIC',
         type: 'SPONSORED',
         name: 'Academia',
         joinPolicy,
@@ -358,7 +364,7 @@ describe('comunidade (integração)', () => {
     it('nasce normalizada e aparece no cartão do código e na leitura do dono', async () => {
       const { dono, grupo } = await exigente();
       expect(grupo.requiredSharingScopes).toEqual(['WORKOUT']);
-      expect((await groups.previewBySlug(grupo.slug)).requiredSharingScopes).toEqual(['WORKOUT']);
+      expect((await groups.previewByCode(grupo.slug)).requiredSharingScopes).toEqual(['WORKOUT']);
       expect((await groups.findByIdForMember(dono, grupo.id)).requiredSharingScopes).toEqual([
         'WORKOUT',
       ]);

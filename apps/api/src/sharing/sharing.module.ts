@@ -38,6 +38,9 @@ import { ProfessionalLinkService } from './professional-link.service';
 import { StudentViewService } from './student-view.service';
 import { ConsentController } from './consent.controller';
 import { ProfessionalController } from './professional.controller';
+import { ListGroupBenefitsTool } from './mcp/list-group-benefits.tool';
+import { BenefitController } from './benefit.controller';
+import { BenefitService } from './benefit.service';
 import { SharingController } from './sharing.controller';
 import { GroupRoleGuard } from './guards/group-role.guard';
 import { GetStudentProgressTool } from './mcp/get-student-progress.tool';
@@ -117,6 +120,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PostController,
     ModerationController,
     PlanOfferController,
+    BenefitController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -134,6 +138,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupAgentService,
     ChallengeService,
     PostService,
+    BenefitService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -150,6 +155,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ListGroupPlansTool,
     AdoptGroupPlanTool,
     ListGroupTipsTool,
+    ListGroupBenefitsTool,
     ListGroupChallengesTool,
     GetChallengeLeaderboardTool,
     JoinGroupChallengeTool,

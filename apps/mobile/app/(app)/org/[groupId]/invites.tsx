@@ -36,6 +36,7 @@ function Convites({ g }: { g: MyGroup }) {
   const [papelLink, setPapelLink] = useState<GrantableRole>('MEMBER');
   const [usos, setUsos] = useState('');
   const [link, setLink] = useState<string | null>(null);
+  const [entrada, setEntrada] = useState<{ code: string; url: string } | null>(null);
   const [papelEmail, setPapelEmail] = useState<GrantableRole>('MEMBER');
   const [email, setEmail] = useState('');
   const [lote, setLote] = useState('');
@@ -58,6 +59,14 @@ function Convites({ g }: { g: MyGroup }) {
       refrescar();
     },
     onError: falhou('Não deu para criar o link agora.'),
+  });
+  const criarCodigo = useMutation({
+    mutationFn: () => orgApi.createInvite(g.id, { role: 'MEMBER', code: true }),
+    onSuccess: (r) => {
+      if (r.invite.code) setEntrada({ code: r.invite.code, url: r.url });
+      refrescar();
+    },
+    onError: falhou('Não deu para gerar o código agora.'),
   });
   const convidarEmail = useMutation({
     mutationFn: () => orgApi.createInvite(g.id, { role: papelEmail, email: email.trim() }),
@@ -101,6 +110,51 @@ function Convites({ g }: { g: MyGroup }) {
 
   return (
     <>
+      <PanelCard title="Código de entrada (recepção)">
+        {g.joinPolicy === 'INVITE_ONLY' ? (
+          <Text className="text-sm text-muted-foreground">
+            Esta comunidade entra só por convite: o código de entrada fica desligado.
+          </Text>
+        ) : (
+          <>
+            <Text className="text-xs text-muted-foreground">
+              {`Um código curto para o cartaz ou o QR da recepção. Quem usa entra como membro${g.joinPolicy === 'APPROVAL' ? ' e você aprova o pedido' : ''}. Vale 1 ano.`}
+            </Text>
+            <Button
+              variant="outline"
+              loading={criarCodigo.isPending}
+              onPress={() => criarCodigo.mutate()}
+            >
+              Gerar código de entrada
+            </Button>
+            {entrada ? (
+              <View className="gap-2 rounded-xl bg-muted/50 p-3">
+                <Text
+                  selectable
+                  className="text-center font-display text-h2 tracking-[4px] text-foreground"
+                >
+                  {entrada.code}
+                </Text>
+                <Text selectable className="text-xs text-muted-foreground">
+                  {entrada.url}
+                </Text>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPress={() =>
+                    void Clipboard.setStringAsync(entrada.url).then(() =>
+                      toast.show({ message: 'Link do QR copiado.' }),
+                    )
+                  }
+                >
+                  Copiar link do QR
+                </Button>
+              </View>
+            ) : null}
+          </>
+        )}
+      </PanelCard>
+
       <PanelCard title="Link de convite">
         {papeis.length > 1 ? (
           <Choice label="Entra como" options={papeis} value={papelLink} onChange={setPapelLink} />

@@ -121,20 +121,22 @@ model User {
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
   nutritionPlansAuthored NutritionPlan[]    @relation("NutritionPlanAuthor")
 
-  conversations  Conversation[]
-  memories       UserMemory[]
-  aiConsents     AiConsent[]
+  conversations   Conversation[]
+  memories        UserMemory[]
+  aiConsents      AiConsent[]
   /// O que a IA do chat faz sozinha, por categoria (ADR 039, #385). Sem linha = Perguntar antes.
-  aiWriteModes   AiWriteModeSetting[]
+  aiWriteModes    AiWriteModeSetting[]
   /// As gravações automáticas da IA, com o retrato para o Desfazer (ADR 039, #385).
-  aiAutoWrites   AiAutoWrite[]
-  aiUsage        AiUsage[]
-  subscriptions  UserSubscription[]
-  invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
-  mediaFiles     MediaFile[]          @relation("MediaUploader")
-  planTemplates  GroupPlanTemplate[]  @relation("PlanTemplateAuthor")
-  tipsAuthored   GroupTip[]           @relation("TipAuthor")
-  guidesAuthored GroupExerciseGuide[] @relation("GuideAuthor")
+  aiAutoWrites    AiAutoWrite[]
+  aiUsage         AiUsage[]
+  subscriptions   UserSubscription[]
+  invitesCreated  GroupInvite[]         @relation("GroupInviteCreator")
+  mediaFiles      MediaFile[]           @relation("MediaUploader")
+  planTemplates   GroupPlanTemplate[]   @relation("PlanTemplateAuthor")
+  tipsAuthored    GroupTip[]            @relation("TipAuthor")
+  /// Benefícios de parceiros que a pessoa cadastrou para uma comunidade (#393).
+  benefitsCreated GroupPartnerBenefit[] @relation("BenefitCreator")
+  guidesAuthored  GroupExerciseGuide[]  @relation("GuideAuthor")
 
   // Avisos no celular (ADR 033).
   devices                 UserDevice[]
@@ -1585,30 +1587,30 @@ model Group {
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner                 User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner                 User                  @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   memberships           GroupMembership[]
   links                 ProfessionalLink[]
   aiUsage               AiUsage[]
   invites               GroupInvite[]
   seatPool              GroupSeatPool?
   /// Avatar da comunidade (ADR 028).
-  avatarFileId          String?              @unique
-  avatarFile            MediaFile?           @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
-  mediaFiles            MediaFile[]          @relation("GroupMedia")
+  avatarFileId          String?               @unique
+  avatarFile            MediaFile?            @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles            MediaFile[]           @relation("GroupMedia")
   planTemplates         GroupPlanTemplate[]
   tips                  GroupTip[]
   /// Equipamentos que a academia tem (Fase 7b), da lista do catálogo. Serve
   /// ao filtro "Na minha academia".
-  equipment             String[]             @default([])
+  equipment             String[]              @default([])
   /// Equipamentos que a academia nomeou por conta própria ("Hack 45° da casa"),
   /// fora da lista. Valem no filtro "Na minha academia" contra o equipamento
   /// gravado no exercício, e aparecem no editor de exercício.
-  customEquipment       String[]             @default([])
-  exercises             Exercise[]           @relation("GroupExercises")
+  customEquipment       String[]              @default([])
+  exercises             Exercise[]            @relation("GroupExercises")
   exerciseGuides        GroupExerciseGuide[]
   /// O agente da comunidade no chat (Fase 7c, ADR 031).
   agent                 GroupAgent?
-  agentChats            Conversation[]       @relation("ConversationAgent")
+  agentChats            Conversation[]        @relation("ConversationAgent")
   /// Desafios da comunidade (Fase 8a, ADR 027).
   challenges            GroupChallenge[]
   /// Planos alimentares que a equipe mandou a alunos (#376).
@@ -1616,12 +1618,14 @@ model Group {
   /// Planos de treino que a equipe mandou a alunos (#379).
   planOffers            PlanOffer[]
   /// Quem publica no mural (Fase 8b, ADR 032).
-  postPolicy            PostPolicy           @default(ALL_MEMBERS)
+  postPolicy            PostPolicy            @default(ALL_MEMBERS)
   posts                 GroupPost[]
+  /// Descontos de parceiros para os membros (#393).
+  partnerBenefits       GroupPartnerBenefit[]
   /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
   /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
   /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
-  requiredSharingScopes ShareScope[]         @default([])
+  requiredSharingScopes ShareScope[]          @default([])
 
   @@index([ownerId])
   @@index([type])
@@ -1645,6 +1649,9 @@ model GroupMembership {
   /// Apelido na comunidade: como a pessoa aparece no ranking dos desafios
   /// (Fase 8a). Nulo até a primeira vez que ela entra num desafio.
   displayName   String?
+  /// Última vez que a pessoa abriu o mural desta comunidade (#393): conta os
+  /// "posts novos" da lista. Nulo = nunca abriu; conta desde a entrada.
+  feedSeenAt    DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -2138,6 +2145,10 @@ model GroupInvite {
   groupId     String
   /// sha256 do token, em hex.
   tokenHash   String    @unique
+  /// Código de entrada legível (#393, "AD7K3Q9P"): reutilizável e revogável,
+  /// para o QR da recepção. Diferente do link, **não** é aprovação: quem entra
+  /// por ele segue a `joinPolicy` da comunidade. Nulo = convite por link.
+  code        String?   @unique
   /// Apagado 30 dias depois do uso ou da expiração (DATA_RETENTION.md).
   email       String?
   role        GroupRole
@@ -2319,6 +2330,7 @@ model MediaFile {
   guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
   guidePhotoOf   GroupExerciseGuidePhoto?
   postImageOf    GroupPostImage?          @relation("PostImage")
+  benefitLogoOf  GroupPartnerBenefit?     @relation("BenefitLogo")
   userAvatarOf   User?                    @relation("UserAvatar")
   mealPhotoOf    Meal?                    @relation("MealPhoto")
 
@@ -2401,6 +2413,39 @@ model GroupTip {
   image  MediaFile? @relation("TipImage", fields: [imageFileId], references: [id], onDelete: SetNull)
 
   @@index([groupId, publishedAt])
+}
+
+/// Cupom ou link do parceiro (#393).
+enum PartnerBenefitKind {
+  COUPON
+  LINK
+}
+
+/// Desconto que a comunidade combinou com um parceiro (#393, Cm-22/Pn-28).
+/// O Fatia não rastreia a compra nem passa dado de membro ao parceiro: o membro
+/// só copia o cupom ou abre o link fora do app.
+model GroupPartnerBenefit {
+  id           String             @id @default(uuid())
+  groupId      String
+  partnerName  String
+  logoFileId   String?            @unique
+  /// "15% em suplementos".
+  discountText String
+  kind         PartnerBenefitKind
+  couponCode   String?
+  url          String?
+  /// Último dia em que vale, no fuso da comunidade. Vencido aparece apagado no
+  /// dia seguinte e some depois.
+  validUntil   DateTime           @db.Date
+  createdById  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  logo      MediaFile? @relation("BenefitLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  createdBy User?      @relation("BenefitCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, validUntil])
 }
 
 /// O tutorial da comunidade para um exercício (Fase 7b, ADR 030): vídeo,

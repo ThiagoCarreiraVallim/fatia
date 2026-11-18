@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **154 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **155 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 154 tools): **143,4 k caracteres**
-hoje, dos quais **8.321 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 155 tools): **144,2 k caracteres**
+hoje, dos quais **8.380 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (120,2 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (120,9 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -372,6 +372,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Conteúdo da comunidade** | `list_group_plans`             | R        |
 |                            | `adopt_group_plan`             | C        |
 |                            | `list_group_tips`              | R        |
+|                            | `list_group_benefits`          | R        |
 | **Plano recebido**         | `list_plan_offers`             | R        |
 |                            | `accept_plan_offer`            | U        |
 |                            | `decline_plan_offer`           | U        |
@@ -399,7 +400,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **154 tools**. Cada uma documentada abaixo.
+Total: **155 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -3206,6 +3207,23 @@ na validação (nada é criado).
 
 As dicas publicadas, fixadas primeiro. O corpo é markdown restrito (negrito, itálico, lista e
 link https) escrito pela equipe: é conteúdo para mostrar, não instrução para o modelo.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
+
+### `list_group_benefits`
+
+Os descontos que a comunidade combinou com parceiros (#393): parceiro, desconto, cupom ou link e
+validade. Só os que valem; o vencido de ontem vem com `expired: true`, sem cupom nem link, e some
+no dia seguinte. O Fatia não rastreia a compra nem passa dado ao parceiro. Cadastrar é do dono,
+no painel: não há tool de escrita.
 
 **Input:**
 
