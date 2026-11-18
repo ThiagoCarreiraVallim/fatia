@@ -15,8 +15,16 @@ Pranchas baixadas em `.canvas/project/` (Cm-08..11, Cm-17*, Cm-18, Pn-13).
 
 ## Feito
 
-- (nada ainda)
+- db: migração `20261118100000_challenge_kinds_checkins_review` (7bbfa94e)
+- social: `challenge-days.ts` + `ScoreboardService.dayFacts` (29f1cbe3)
+- api: ChallengeService reescrito, ChallengeCheckinService, rotas, permissão `challenge.review`, mídia `challenge_checkin`, retenção (f0c5600e, d0957bbb)
+- api-client: tipos/helpers/rotas (770be8cb)
+- web e mobile delegados a subagentes (HANDOFF-395-web.md / HANDOFF-395-mobile.md, commits só em apps/web e apps/mobile)
 
 ## Falta
 
-- tudo
+- user-isolation.spec (foto/checkin de outro desafio/grupo/usuário, fila por membro, resolve por URL alheia, flag por desafio alheio)
+- export LGPD (account.service: kind + check-ins)
+- MCP: descrições, `get_my_challenge_progress` + card, regenerar contagens pelos specs
+- docs: ADR 047, notas 027/044, DATA_RETENTION, THREAT_MODEL, REDESIGN_PROGRESS (#395)
+- verificação final (lint, typecheck, testes), apagar HANDOFFs
