@@ -66,7 +66,11 @@ describe('mural da comunidade (integração)', () => {
 
   async function comunidade() {
     const dono = await pessoa('Dona');
-    const g = await groups.create(dono, { type: 'SPONSORED', name: 'Academia' });
+    const g = await groups.create(dono, {
+      type: 'SPONSORED',
+      name: 'Academia',
+      visibility: 'PUBLIC',
+    });
     grupos.push(g.id);
     return {
       groupId: g.id,

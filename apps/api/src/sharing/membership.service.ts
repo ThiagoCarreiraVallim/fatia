@@ -18,6 +18,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
 import { cancelScheduledAnnouncementsOp } from './announcement-schedule';
+import { findGroupByEntryCode } from './entry-code';
 import { can, canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -88,6 +89,22 @@ export interface MembershipResult {
  *    `groupId`, na mesma transação da mudança de status — senão existe uma
  *    janela em que a membership já acabou e a permissão ainda vale.
  */
+/** O código revogado entre a leitura e o commit responde como código inexistente. */
+function codigoEsgotado(err: unknown): never {
+  if ((err as { code?: string })?.code === 'P2025') throw new NotFoundException(NOT_FOUND);
+  throw err;
+}
+
+/** Uma pessoa da equipe, como o membro a vê no Cm-04. */
+export interface TeamMemberView {
+  name: string;
+  role: GroupRole;
+  /** O que ela vê de quem pergunta (vazio = nada). */
+  sees: ShareScope[];
+  /** A última vez que ela abriu algo de quem pergunta (acesso não negado). */
+  lastViewedAt: Date | null;
+}
+
 @Injectable()
 export class MembershipService {
   constructor(
@@ -112,13 +129,27 @@ export class MembershipService {
    */
   async requestJoin(
     userId: string,
-    slug: string,
+    code: string,
     consent: JoinConsent = { scopes: [], statsOptIn: false },
   ): Promise<MembershipResult> {
-    const group = await this.prisma.group.findUnique({ where: { slug } });
-    if (!group || group.joinPolicy === JoinPolicy.INVITE_ONLY) {
-      throw new NotFoundException(NOT_FOUND);
-    }
+    // Código legível da equipe ou slug (#393); só por convite não abre a porta.
+    const entrada = await findGroupByEntryCode(this.prisma, code);
+    if (!entrada) throw new NotFoundException(NOT_FOUND);
+    const { group } = entrada;
+    // Conta o uso do código no mesmo commit da entrada; o filtro de `maxUses`
+    // faz o último uso disputado falhar inteiro (P2025 → 404).
+    const usoDoCodigo = entrada.inviteId
+      ? [
+          this.prisma.groupInvite.update({
+            where: {
+              id: entrada.inviteId,
+              revokedAt: null,
+              ...(entrada.inviteMaxUses !== null ? { uses: { lt: entrada.inviteMaxUses } } : {}),
+            },
+            data: { uses: { increment: 1 } },
+          }),
+        ]
+      : [];
 
     const existente = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: group.id, userId } },
@@ -147,7 +178,9 @@ export class MembershipService {
         consent,
         at: new Date(),
       });
-      const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
+      const [membership] = (await this.prisma
+        .$transaction([...ops, ...usoDoCodigo])
+        .catch(codigoEsgotado)) as [GroupMembership];
       return {
         membershipId: membership.id,
         groupId: group.id,
@@ -165,11 +198,16 @@ export class MembershipService {
       consentAt: new Date(),
       statsOptIn: consent.statsOptIn,
     };
-    const membership = existente
-      ? await this.prisma.groupMembership.update({ where: { id: existente.id }, data: pedido })
-      : await this.prisma.groupMembership.create({
-          data: { groupId: group.id, userId, ...pedido },
-        });
+    const [membership] = (await this.prisma
+      .$transaction([
+        existente
+          ? this.prisma.groupMembership.update({ where: { id: existente.id }, data: pedido })
+          : this.prisma.groupMembership.create({
+              data: { groupId: group.id, userId, ...pedido },
+            }),
+        ...usoDoCodigo,
+      ])
+      .catch(codigoEsgotado)) as [GroupMembership];
 
     const quem = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -297,6 +335,56 @@ export class MembershipService {
       );
     }
     return ops;
+  }
+
+  /**
+   * A equipe vista pelo membro (#393, Cm-04 "Equipe da academia"): quem da
+   * equipe ativa existe, o que cada um vê **de quem pergunta** (os vínculos
+   * vivos dele neste grupo) e quando olhou por último (acesso não negado, na
+   * trilha dele). Outros alunos nunca aparecem, e o dado de outra pessoa
+   * também não: tudo parte de `subjectUserId = userId`.
+   */
+  async teamForMember(userId: string, groupId: string): Promise<TeamMemberView[]> {
+    const eu = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { status: true },
+    });
+    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+
+    const [equipe, vinculos] = await Promise.all([
+      this.prisma.groupMembership.findMany({
+        where: {
+          groupId,
+          status: MembershipStatus.ACTIVE,
+          role: { in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR] },
+          userId: { not: userId },
+        },
+        select: { userId: true, role: true, user: { select: { name: true } } },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.professionalLink.findMany({
+        where: { groupId, subjectUserId: userId, revokedAt: null },
+        select: { professionalId: true, scopes: true },
+      }),
+    ]);
+    const vistos = await this.prisma.professionalAccessLog.groupBy({
+      by: ['professionalId'],
+      where: {
+        subjectUserId: userId,
+        denied: false,
+        professionalId: { in: equipe.map((m) => m.userId) },
+        link: { groupId },
+      },
+      _max: { at: true },
+    });
+    const escopos = new Map(vinculos.map((v) => [v.professionalId, v.scopes]));
+    const ultimo = new Map(vistos.map((v) => [v.professionalId, v._max.at]));
+    return equipe.map((m) => ({
+      name: m.user.name,
+      role: m.role,
+      sees: normalizarEscopos(escopos.get(m.userId) ?? []),
+      lastViewedAt: ultimo.get(m.userId) ?? null,
+    }));
   }
 
   /**

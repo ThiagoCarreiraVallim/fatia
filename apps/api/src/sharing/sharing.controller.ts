@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { UserThrottlerGuard } from '../common/user-throttler.guard';
 import { ConsentService } from './consent.service';
 import { ContentService } from './content.service';
 import { GroupService } from './group.service';
@@ -90,15 +91,20 @@ export class SharingController {
   }
 
   /**
-   * Preview pelo slug, antes de pedir para entrar. Só metadado do grupo.
+   * Preview pelo código (o legível da equipe ou o slug, #393), antes de pedir
+   * para entrar. Só metadado do grupo. Throttle: o código é curto, e a rota
+   * não pode virar máquina de adivinhar.
    *
    * `@Query()` com DTO, e não `@Query('slug')`: primitivo avulso escapa do
    * `ValidationPipe` global e a chamada sem slug morria em 500 no Prisma.
    */
   @Get('preview')
   @SelfOnly()
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
   preview(@Query() q: PreviewGroupDto) {
-    return this.groups.previewBySlug(q.slug);
+    return this.groups.previewByCode(q.code ?? q.slug ?? '');
   }
 
   /**
@@ -110,6 +116,8 @@ export class SharingController {
   @Get('invites/:token')
   @InvitePreview()
   @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
   previewInvite(@Param() p: InviteTokenParamDto) {
     return this.invites.preview(p.token);
   }
@@ -118,6 +126,8 @@ export class SharingController {
   @Post('invites/:token/accept')
   @SelfOnly()
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
   acceptInvite(
     @CurrentUser() user: CurrentUserPayload,
     @Param() p: InviteTokenParamDto,
@@ -141,11 +151,24 @@ export class SharingController {
     return this.memberships.listMembers(user.id, groupId);
   }
 
+  /**
+   * A equipe vista por quem pergunta (#393, Cm-04): o que cada um vê dele e
+   * quando olhou por último. Nunca outros alunos, nunca o dado de outra pessoa.
+   */
+  @Get(':groupId/team')
+  @RequireGroupAction('group.read')
+  team(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
+    return this.memberships.teamForMember(user.id, groupId);
+  }
+
   /** Pedido de entrada do próprio usuário. Quem entra é sempre quem chamou. */
   @Post('join')
   @SelfOnly()
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
   join(@CurrentUser() user: CurrentUserPayload, @Body() dto: JoinGroupDto) {
-    return this.memberships.requestJoin(user.id, dto.slug, {
+    return this.memberships.requestJoin(user.id, dto.code ?? dto.slug ?? '', {
       scopes: dto.scopes ?? [],
       statsOptIn: dto.statsOptIn ?? false,
     });
@@ -217,6 +240,8 @@ export class SharingController {
   @Post(':groupId/invites/batch')
   @RequireGroupAction('invite.create')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
   createInviteBatch(
     @CurrentUser() user: CurrentUserPayload,
     @Param('groupId') groupId: string,

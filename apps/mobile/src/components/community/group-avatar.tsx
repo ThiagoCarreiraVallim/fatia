@@ -1,15 +1,22 @@
 import { Image, View } from 'react-native';
+import { cn } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 
-/** Avatar da comunidade (ADR 028), ou as iniciais quando ela não tem imagem. */
+/**
+ * Avatar da comunidade (ADR 028), ou as iniciais quando ela não tem imagem.
+ * `brand`: iniciais sobre a cor da comunidade, cheia (a patrocinada, como na
+ * web); sem ele, o verde a 10%.
+ */
 export function GroupAvatar({
   name,
   url,
   size = 40,
+  brand = false,
 }: {
   name: string;
   url: string | null | undefined;
   size?: number;
+  brand?: boolean;
 }) {
   if (url) {
     return (
@@ -32,9 +39,11 @@ export function GroupAvatar({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={{ width: size, height: size }}
-      className="items-center justify-center rounded-xl bg-primary/10"
+      className={cn('items-center justify-center rounded-xl', brand ? 'bg-brand' : 'bg-primary/10')}
     >
-      <Text className="text-sm font-bold text-primary">{iniciais}</Text>
+      <Text className={cn('text-sm font-bold', brand ? 'text-brand-foreground' : 'text-primary')}>
+        {iniciais}
+      </Text>
     </View>
   );
 }

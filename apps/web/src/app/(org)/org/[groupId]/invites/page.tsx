@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Link2, Mail, Upload } from 'lucide-react';
+import { Copy, Link2, Mail, ScanLine, Upload } from 'lucide-react';
 import {
   ApiError,
   batchResultMessage,
@@ -113,6 +113,8 @@ export default function OrgInvitesPage() {
   const [dias, setDias] = useState('7');
   const [link, setLink] = useState<string | null>(null);
 
+  const [entrada, setEntrada] = useState<{ code: string; url: string } | null>(null);
+
   const [papelEmail, setPapelEmail] = useState<GrantableRole>('MEMBER');
   const [email, setEmail] = useState('');
 
@@ -138,6 +140,14 @@ export default function OrgInvitesPage() {
       refrescar();
     },
     onError: (err) => toast(erroDaApi(err, 'Não deu para criar o link agora.')),
+  });
+  const criarCodigo = useMutation({
+    mutationFn: () => orgApi.createInvite(g.id, { role: 'MEMBER', code: true }),
+    onSuccess: (r) => {
+      if (r.invite.code) setEntrada({ code: r.invite.code, url: r.url });
+      refrescar();
+    },
+    onError: (err) => toast(erroDaApi(err, 'Não deu para gerar o código agora.')),
   });
   const convidarEmail = useMutation({
     mutationFn: () => orgApi.createInvite(g.id, { role: papelEmail, email: email.trim() }),
@@ -242,6 +252,57 @@ export default function OrgInvitesPage() {
               O link aparece só agora. Se perder, crie outro e revogue este na lista.
             </p>
           </div>
+        )}
+      </Secao>
+
+      <Secao id="codigo" titulo="Código de entrada (recepção)" icone={ScanLine}>
+        {g.joinPolicy === 'INVITE_ONLY' ? (
+          <p className="text-sm text-muted-foreground">
+            Esta comunidade entra só por convite: o código de entrada fica desligado. Mude a forma
+            de entrada em Configurações para usar o código.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Um código curto para o cartaz ou o QR da recepção. Quem usa entra como membro e segue
+              a forma de entrada da comunidade
+              {g.joinPolicy === 'APPROVAL' ? ' (você aprova cada pedido)' : ''}. Vale 1 ano; revogue
+              na lista quando quiser trocar.
+            </p>
+            <Button
+              variant="outline"
+              disabled={criarCodigo.isPending}
+              onClick={() => criarCodigo.mutate()}
+            >
+              {criarCodigo.isPending ? 'Gerando...' : 'Gerar código de entrada'}
+            </Button>
+            {entrada && (
+              <div className="space-y-2 rounded-xl bg-muted/50 p-3">
+                <p
+                  className="text-center font-display text-2xl font-bold tracking-[0.2em]"
+                  data-testid="entry-code"
+                >
+                  {entrada.code}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Link para o QR (o app lê e já abre a comunidade):
+                </p>
+                <p className="break-all font-mono text-xs" data-testid="entry-code-url">
+                  {entrada.url}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1"
+                    onClick={() => copyLink(entrada.url)}
+                  >
+                    <Copy size={14} aria-hidden /> Copiar link do QR
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Secao>
 

@@ -77,7 +77,11 @@ describe('MembershipService', () => {
 
   describe('requestJoin', () => {
     it('entra sempre como MEMBER e aguardando aprovação', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
+      prisma.group.findUnique.mockResolvedValue({
+        id: GROUP,
+        visibility: 'PUBLIC',
+        requiredSharingScopes: [],
+      });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -98,7 +102,11 @@ describe('MembershipService', () => {
     });
 
     it('não cria nenhum ProfessionalLink ao entrar', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
+      prisma.group.findUnique.mockResolvedValue({
+        id: GROUP,
+        visibility: 'PUBLIC',
+        requiredSharingScopes: [],
+      });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -120,7 +128,11 @@ describe('MembershipService', () => {
     });
 
     it('pedido repetido responde CONFLICT', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
+      prisma.group.findUnique.mockResolvedValue({
+        id: GROUP,
+        visibility: 'PUBLIC',
+        requiredSharingScopes: [],
+      });
       prisma.groupMembership.findUnique.mockResolvedValue({
         id: 'm1',
         status: MembershipStatus.ACTIVE,
@@ -136,6 +148,7 @@ describe('MembershipService', () => {
           ownerId: DONO,
           name: 'Academia',
           joinPolicy,
+          visibility: 'PUBLIC',
           requiredSharingScopes: [ShareScope.WORKOUT, ShareScope.GOALS],
         });
 

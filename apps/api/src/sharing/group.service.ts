@@ -13,6 +13,7 @@ import {
   MembershipStatus,
   type Group,
   type AutoPostKind,
+  type GroupAiMode,
   type GroupMembership,
   type GroupVisibility,
   type JoinPolicy,
@@ -20,11 +21,15 @@ import {
   type PostPolicy,
   type ShareScope,
 } from '@fatia/db';
-import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
+import {
+  membershipsWithEffectiveSeat,
+  proPayerGroupOf,
+} from '../billing/subscription-entitlements.service';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { normalizarEscopos } from './consent-scopes';
+import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import { canReceiveLink, TEAM_ROLES } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -89,8 +94,15 @@ export interface GroupSummary {
   /** O que a própria pessoa escolheu compartilhar com a equipe (ADR 026). */
   consentScopes: ShareScope[];
   statsOptIn: boolean;
-  /** Se a comunidade paga o PRO desta pessoa (ADR 025). */
+  /** Se a comunidade dá o PRO a esta pessoa (assento valendo ou todos os membros, ADR 025). */
   hasAiSeat: boolean;
+  /**
+   * O PRO que vale agora é pago **por esta** comunidade (#393): a fonte do
+   * direito é `GROUP` e o pool é deste grupo. Com assinatura própria valendo,
+   * `false` mesmo com assento. É o selo "PRO pago pela academia" e o "se sair,
+   * volta ao Free".
+   */
+  proPaidByThisGroup: boolean;
   /** Avatar da comunidade, por URL assinada de curta duração (ADR 028). */
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
@@ -99,21 +111,59 @@ export interface GroupSummary {
   autoPosts: AutoPostKind[];
   /** O que a comunidade exige que membros compartilhem para entrar. */
   requiredSharingScopes: ShareScope[];
+  /** Pública ou privada (Cm-01, Cm-04). */
+  visibility: GroupVisibility;
+  /** Fuso da comunidade ("fuso Cuiabá" no Cm-04). */
+  timezone: string;
+  /** Pessoas ativas na comunidade. */
+  memberCount: number;
+  /** Posts dos outros desde a última visita ao mural (`feedSeenAt`). */
+  newPostCount: number;
+  /** O que a equipe mandou e espera resposta desta pessoa ("3 para você"). */
+  forYouCount: number;
+  /** A posição desta pessoa no desafio em andamento em que ela entrou. */
+  challenge: { id: string; title: string; rank: number } | null;
 }
+
+/** O que o cartão de "Minhas comunidades" conta, por associação (#393). */
+interface MembershipExtras {
+  memberCount: number;
+  newPostCount: number;
+  forYouCount: number;
+  challenge: GroupSummary['challenge'];
+}
+
+const SEM_EXTRAS: MembershipExtras = {
+  memberCount: 0,
+  newPostCount: 0,
+  forYouCount: 0,
+  challenge: null,
+};
 
 /** Preview mostrado a quem foi convidado, ANTES de decidir entrar. */
 export interface GroupPreview {
   id: string;
   type: GroupType;
   name: string;
-  slug: string;
+  /**
+   * O que mandar de volta ao entrar (`POST /groups/join`): o código normalizado,
+   * ou o slug quando a comunidade é pública. Sem `slug` à parte: o slug não se
+   * revoga, e quem chegou por código não pode levar a porta permanente.
+   */
+  code: string;
   memberCount: number;
   description: string | null;
   joinPolicy: JoinPolicy;
+  visibility: GroupVisibility;
   /** Quem vai receber o que a pessoa escolher compartilhar. Só nome e papel. */
   team: { name: string; role: GroupRole }[];
   /** O que é obrigatório compartilhar para entrar pelo código (sempre como membro). */
   requiredSharingScopes: ShareScope[];
+  /**
+   * `ALL_MEMBERS`: "A academia libera o PRO"; `SEATS` com vaga: "pode liberar";
+   * `null`: sem oferta (`groupProOffer`).
+   */
+  proOffer: GroupAiMode | null;
 }
 
 const INCLUIR = {
@@ -124,6 +174,8 @@ function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
   hasAiSeat: boolean,
+  proPaidByThisGroup: boolean,
+  extras: MembershipExtras,
 ): GroupSummary {
   return {
     id: m.group.id,
@@ -140,10 +192,14 @@ function toSummary(
     consentScopes: m.consentScopes,
     statsOptIn: m.statsOptIn,
     hasAiSeat,
+    proPaidByThisGroup,
     avatarUrl,
     postPolicy: m.group.postPolicy,
     autoPosts: m.group.autoPosts,
     requiredSharingScopes: m.group.requiredSharingScopes,
+    visibility: m.group.visibility,
+    timezone: m.group.timezone,
+    ...extras,
   };
 }
 
@@ -168,9 +224,93 @@ export class GroupService {
   private async summaryOf(
     m: GroupMembership & { group: Group & { avatarFile: MediaFile | null } },
     withSeat: ReadonlySet<string>,
+    payer: string | null,
+    extras: ReadonlyMap<string, MembershipExtras>,
   ): Promise<GroupSummary> {
     const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
-    return toSummary(m, avatar?.url ?? null, withSeat.has(m.id));
+    return toSummary(
+      m,
+      avatar?.url ?? null,
+      withSeat.has(m.id),
+      payer === m.groupId,
+      extras.get(m.id) ?? SEM_EXTRAS,
+    );
+  }
+
+  /**
+   * As contagens do cartão (#393, Cm-01), só das associações ativas: o pedido
+   * que espera aprovação ainda não lê o mural nem recebe plano. Uma consulta
+   * por associação: a pessoa está em poucas comunidades.
+   */
+  private async extrasOf(
+    memberships: readonly GroupMembership[],
+    now: Date = new Date(),
+  ): Promise<Map<string, MembershipExtras>> {
+    const ativas = memberships.filter((m) => m.status === MembershipStatus.ACTIVE);
+    const out = new Map<string, MembershipExtras>();
+    if (ativas.length === 0) return out;
+    const pessoas = await this.prisma.groupMembership.groupBy({
+      by: ['groupId'],
+      where: {
+        groupId: { in: ativas.map((m) => m.groupId) },
+        status: MembershipStatus.ACTIVE,
+      },
+      _count: { _all: true },
+    });
+    const porGrupo = new Map(pessoas.map((p) => [p.groupId, p._count._all]));
+    await Promise.all(
+      ativas.map(async (m) => {
+        const desde = m.feedSeenAt ?? m.joinedAt ?? m.createdAt;
+        const [newPostCount, forYouCount, participacao] = await Promise.all([
+          this.prisma.groupPost.count({
+            where: {
+              groupId: m.groupId,
+              removedAt: null,
+              createdAt: { gt: desde },
+              membershipId: { not: m.id },
+            },
+          }),
+          this.prisma.planOfferVersion.count({
+            where: { status: 'PENDING', offer: { userId: m.userId, groupId: m.groupId } },
+          }),
+          this.prisma.groupChallengeParticipant.findFirst({
+            where: {
+              membershipId: m.id,
+              challenge: {
+                groupId: m.groupId,
+                startsAt: { lte: now },
+                endsAt: { gt: now },
+                endedEarlyAt: null,
+              },
+            },
+            orderBy: { challenge: { endsAt: 'asc' } },
+            select: { score: true, challenge: { select: { id: true, title: true } } },
+          }),
+        ]);
+        // Empate divide a posição (1, 1, 3), como no placar do desafio.
+        const challenge = participacao
+          ? {
+              ...participacao.challenge,
+              rank:
+                1 +
+                (await this.prisma.groupChallengeParticipant.count({
+                  where: {
+                    challengeId: participacao.challenge.id,
+                    score: { gt: participacao.score },
+                    membership: { status: MembershipStatus.ACTIVE },
+                  },
+                })),
+            }
+          : null;
+        out.set(m.id, {
+          memberCount: porGrupo.get(m.groupId) ?? 0,
+          newPostCount,
+          forYouCount,
+          challenge,
+        });
+      }),
+    );
+    return out;
   }
 
   /**
@@ -230,11 +370,15 @@ export class GroupService {
     });
 
     // O assento que vale, pela regra do portão da IA — e não só "atribuído".
-    const withSeat = await membershipsWithEffectiveSeat(
-      this.prisma,
-      memberships.map((m) => m.id),
-    );
-    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat)));
+    const [withSeat, payer, extras] = await Promise.all([
+      membershipsWithEffectiveSeat(
+        this.prisma,
+        memberships.map((m) => m.id),
+      ),
+      proPayerGroupOf(this.prisma, userId),
+      this.extrasOf(memberships),
+    ]);
+    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat, payer, extras)));
   }
 
   /**
@@ -257,25 +401,30 @@ export class GroupService {
       throw new NotFoundException(NOT_FOUND);
     }
 
-    return this.summaryOf(
-      membership,
-      await membershipsWithEffectiveSeat(this.prisma, [membership.id]),
-    );
+    const [withSeat, payer, extras] = await Promise.all([
+      membershipsWithEffectiveSeat(this.prisma, [membership.id]),
+      proPayerGroupOf(this.prisma, userId),
+      this.extrasOf([membership]),
+    ]);
+    return this.summaryOf(membership, withSeat, payer, extras);
   }
 
   /**
-   * Preview pelo slug — o que a pessoa vê antes de pedir para entrar.
+   * Preview pelo código (#393, Cm-02) — o que a pessoa vê antes de pedir para
+   * entrar. Vale o código legível da equipe ou o slug (`entry-code.ts`).
    *
    * Exige autenticação (não é `@Public()`) e devolve só metadado do grupo:
-   * nome, tipo e quantos membros. **Nunca** a lista de membros — quem está numa
-   * academia é informação sobre pessoas, não sobre o grupo.
+   * nome, tipo e quantos membros, e a equipe que receberá o que for
+   * compartilhado. **Nunca** a lista de membros — quem está numa academia é
+   * informação sobre pessoas, não sobre o grupo.
    */
-  async previewBySlug(slug: string): Promise<GroupPreview> {
-    const group = await this.prisma.group.findUnique({ where: { slug } });
-    // Só convite abre a porta: o código não revela nem que a comunidade existe.
-    if (!group || group.joinPolicy === 'INVITE_ONLY') throw new NotFoundException(NOT_FOUND);
+  async previewByCode(raw: string): Promise<GroupPreview> {
+    const entrada = await findGroupByEntryCode(this.prisma, raw);
+    // Inválido, vencido, revogado e só por convite: o mesmo 404.
+    if (!entrada) throw new NotFoundException(NOT_FOUND);
+    const { group } = entrada;
 
-    const [memberCount, equipe] = await Promise.all([
+    const [memberCount, equipe, proOffer] = await Promise.all([
       this.prisma.groupMembership.count({
         where: { groupId: group.id, status: MembershipStatus.ACTIVE },
       }),
@@ -288,18 +437,21 @@ export class GroupService {
         select: { role: true, user: { select: { name: true } } },
         orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
       }),
+      groupProOffer(this.prisma, group.id),
     ]);
 
     return {
       id: group.id,
       type: group.type,
       name: group.name,
-      slug: group.slug,
+      code: entrada.code,
       memberCount,
       description: group.description,
       joinPolicy: group.joinPolicy,
+      visibility: group.visibility,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
       requiredSharingScopes: group.requiredSharingScopes,
+      proOffer,
     };
   }
 

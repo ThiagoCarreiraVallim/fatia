@@ -74,6 +74,8 @@ export interface PanelMember {
 
 export interface InviteView {
   id: string;
+  /** Código de entrada legível (#393); `null` = convite por link. */
+  code: string | null;
   role: GroupRole;
   email: string | null;
   maxUses: number | null;
@@ -88,6 +90,8 @@ export interface CreateInviteInput {
   email?: string;
   maxUses?: number;
   expiresInDays?: number;
+  /** Gera um código de entrada (QR da recepção) em vez de link. Só de membro. */
+  code?: boolean;
 }
 
 /** O link aparece só nesta resposta: o banco guarda o hash do token. */

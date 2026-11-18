@@ -422,7 +422,7 @@ export default function OnboardingScreen() {
     }
     setLookup({ code, status: 'searching' });
     groupsApi
-      .previewBySlug(normalizeCommunityCode(code))
+      .previewByCode(normalizeCommunityCode(code))
       .then((g) => {
         if (seq !== lookupSeq.current) return;
         setFound(g);
@@ -442,7 +442,7 @@ export default function OnboardingScreen() {
     setPending(true);
     setError(null);
     try {
-      await groupsApi.join(found.slug, consent);
+      await groupsApi.join(found.code, consent);
     } catch (err) {
       if (!alreadyMemberGroupId(err)) {
         setError(

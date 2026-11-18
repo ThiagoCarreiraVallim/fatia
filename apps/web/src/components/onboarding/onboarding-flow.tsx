@@ -399,7 +399,7 @@ export function OnboardingFlow({
     }
     setLookup({ code, status: 'searching' });
     groupsApi
-      .previewBySlug(normalizeCommunityCode(code))
+      .previewByCode(normalizeCommunityCode(code))
       .then((g) => {
         if (seq !== lookupSeq.current) return;
         setFound(g);
@@ -419,7 +419,7 @@ export function OnboardingFlow({
     setPending(true);
     setError(null);
     try {
-      await groupsApi.join(found.slug, consent);
+      await groupsApi.join(found.code, consent);
     } catch (err) {
       if (!alreadyMemberGroupId(err)) {
         setError(

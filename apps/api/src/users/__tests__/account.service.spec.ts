@@ -156,6 +156,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   blocksReceived:
     'Quem bloqueou a pessoa (#394): o bloqueio é invisível para quem foi bloqueado, e contar ' +
     'quem foi seria dizer. Apaga com a conta (cascata dos dois lados).',
+  benefitsCreated:
+    'Benefícios de parceiros que o dono cadastrou para a comunidade (#393): texto, cupom e ' +
+    'link do parceiro, conteúdo B2B do grupo, nada do titular. Apagar a conta só zera o autor.',
   pendingNotices:
     'Contagem de avisos esperando o fim de uma janela de 10 minutos (Fase 9g): estado de ' +
     'entrega que some sozinho, sem nada do conteúdo — e apaga com a conta.',

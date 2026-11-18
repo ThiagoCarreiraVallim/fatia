@@ -50,6 +50,7 @@ import type { ListGroupPostsTool } from '../../../sharing/mcp/list-group-posts.t
 import type { GetGroupPollTool } from '../../../sharing/mcp/get-group-poll.tool';
 import type { ListBlockedUsersTool } from '../../../sharing/mcp/list-blocked-users.tool';
 import type { ListGroupTipsTool } from '../../../sharing/mcp/list-group-tips.tool';
+import type { ListGroupBenefitsTool } from '../../../sharing/mcp/list-group-benefits.tool';
 import type { ListMyGroupsTool } from '../../../sharing/mcp/list-my-groups.tool';
 import type { ListMyStudentsTool } from '../../../sharing/mcp/list-my-students.tool';
 import type { ListPlanOffersTool } from '../../../sharing/mcp/list-plan-offers.tool';
@@ -930,6 +931,33 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
       },
     ],
     {},
+  ),
+  list_group_benefits: sample<ListGroupBenefitsTool>(
+    [
+      {
+        id: 'b1',
+        partnerName: 'Suplementa',
+        logoUrl: null,
+        discountText: '15% em suplementos',
+        kind: 'COUPON',
+        couponCode: 'DEMO15',
+        url: null,
+        validUntil: '2026-12-31',
+        expired: false,
+      },
+      {
+        id: 'b2',
+        partnerName: 'Fisio Movimento',
+        logoUrl: null,
+        discountText: '1ª avaliação grátis',
+        kind: 'LINK',
+        couponCode: null,
+        url: 'https://fisio.example',
+        validUntil: '2026-11-30',
+        expired: false,
+      },
+    ],
+    { groupId: 'gr1' },
   ),
   list_group_tips: sample<ListGroupTipsTool>(
     [

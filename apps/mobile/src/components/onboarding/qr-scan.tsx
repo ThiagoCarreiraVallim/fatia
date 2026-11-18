@@ -13,10 +13,15 @@ export function QrScanModal({
   open,
   onClose,
   onCode,
+  parse = codeFromQr,
+  title = 'Ler QR da recepção',
 }: {
   open: boolean;
   onClose: () => void;
   onCode: (code: string) => void;
+  /** O que o QR precisa trazer; `null` = não serve. Na comunidade, aceita também o link de convite. */
+  parse?: (raw: string) => string | null;
+  title?: string;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [invalid, setInvalid] = useState(false);
@@ -26,7 +31,7 @@ export function QrScanModal({
     <Modal visible={open} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-black" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center justify-between px-5 py-3">
-          <Text className="text-base font-bold text-white">Ler QR da recepção</Text>
+          <Text className="text-base font-bold text-white">{title}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Fechar" onPress={onClose}>
             <Icon name="x" color="#fff" />
           </Pressable>
@@ -53,7 +58,7 @@ export function QrScanModal({
               onBarcodeScanned={
                 open
                   ? ({ data }) => {
-                      const code = codeFromQr(data);
+                      const code = parse(data);
                       if (code) onCode(code);
                       else setInvalid(true);
                     }

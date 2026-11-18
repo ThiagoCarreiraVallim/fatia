@@ -88,6 +88,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `announcement.publish` | sim   | sim          | não     | não    |
 | `member.ban`           | sim   | não          | não     | não    |
 | `insights.read`        | sim   | não          | não     | não    |
+| `benefit.read`         | sim   | sim          | sim     | sim    |
+| `benefit.manage`       | sim   | não          | não     | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
 futura:
@@ -140,6 +142,9 @@ futura:
   "recepção" das pranchas não é papel do Fatia; quando for, entra aqui como quem comunica sem
   moderar. No mural, a equipe toda (`TEAM_ROLES`) publica em nome da comunidade e fixa o próprio
   post como aviso; o painel de enquetes é `content.publish`.
+- **Benefícios de parceiros (#393): `benefit.read` de todos, `benefit.manage` só do dono.** O
+  desconto é acordo comercial da comunidade, como a cobrança. O membro vê só os que valem (e o
+  vencido de ontem, sem o cupom); o Fatia não rastreia compra nem passa dado ao parceiro.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -184,6 +189,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `announcement.publish` | não                  |
 | `member.ban`           | não                  |
 | `insights.read`        | não                  |
+| `benefit.read`         | não                  |
+| `benefit.manage`       | não                  |
 
 `group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de
 `group.service.ts` inclui `INVITED`): é a tela "aguardando aprovação". Fechá-lo no guarda faria o

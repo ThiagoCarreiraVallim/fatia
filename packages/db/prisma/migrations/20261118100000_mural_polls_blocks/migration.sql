@@ -14,7 +14,8 @@ CREATE TYPE "AutoPostKind" AS ENUM ('PLAN', 'TIP', 'EXERCISE', 'CHALLENGE');
 ALTER TABLE "Group" ADD COLUMN     "autoPosts" "AutoPostKind"[] DEFAULT ARRAY['PLAN', 'TIP', 'EXERCISE', 'CHALLENGE']::"AutoPostKind"[];
 
 -- AlterTable
-ALTER TABLE "GroupMembership" ADD COLUMN     "feedSeenAt" TIMESTAMP(3);
+-- A #393 cria a mesma coluna na migration dela, que roda antes (ordem alfabética).
+ALTER TABLE "GroupMembership" ADD COLUMN IF NOT EXISTS "feedSeenAt" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "GroupPost" ADD COLUMN     "announcementId" TEXT,

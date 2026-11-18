@@ -26,6 +26,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   UNKNOWN_CHAT_ARTIFACT_TEXT,
   appOnlyHref,
+  barAxisLabels,
   cardEyebrow,
   chatCardTitle,
   getAutoWriteStatus,
@@ -129,9 +130,10 @@ function Metrica({ artefato }: De<'metric'>) {
 }
 
 /** Uma barra por dia; a meta é a linha tracejada e o verde marca quem bateu. */
-function Barras({ artefato }: De<'bars'>) {
+function BarsCard({ artefato }: De<'bars'>) {
   if (artefato.bars.length === 0) return vazio('Sem registros no período.');
   const maior = Math.max(artefato.goal ?? 0, ...artefato.bars.map((b) => b.value), 1);
+  const eixo = barAxisLabels(artefato.bars);
   return (
     <div className="flex flex-col gap-2">
       <div className="relative flex h-24 items-end gap-1.5">
@@ -151,10 +153,17 @@ function Barras({ artefato }: De<'bars'>) {
           />
         ))}
       </div>
-      <div className="flex gap-1.5 text-center text-[11px] text-muted-foreground" aria-hidden>
-        {artefato.bars.map((barra, indice) => (
-          <span key={`${barra.label}-${indice}`} className="flex-1 truncate">
-            {barra.label}
+      <div
+        data-testid="bars-axis"
+        className={cn(
+          'flex text-[11px] text-muted-foreground',
+          eixo.perBar ? 'gap-1.5 text-center' : 'justify-between',
+        )}
+        aria-hidden
+      >
+        {eixo.labels.map((rotulo, indice) => (
+          <span key={`${rotulo}-${indice}`} className={eixo.perBar ? 'flex-1 truncate' : undefined}>
+            {rotulo}
           </span>
         ))}
       </div>
@@ -750,7 +759,7 @@ function CardBody({ artefato }: { artefato: ChatArtifact }): ReactNode {
     case 'metric':
       return <Metrica artefato={artefato} />;
     case 'bars':
-      return <Barras artefato={artefato} />;
+      return <BarsCard artefato={artefato} />;
     case 'timeline':
       return <LinhaDoTempo artefato={artefato} />;
     case 'list':

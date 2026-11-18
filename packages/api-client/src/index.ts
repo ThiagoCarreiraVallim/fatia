@@ -51,6 +51,8 @@ export * from './community-exercises';
 export * from './community-agent';
 export * from './community-challenges';
 export * from './community-feed';
+export * from './community-home';
+export * from './community-benefits';
 export * from './content-panel';
 export * from './markdown-lite';
 export * from './users';

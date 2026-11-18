@@ -22,7 +22,7 @@
 | **Comida brasileira de verdade**          | Os **597 alimentos da TACO** (NEPA/Unicamp) com macros e micronutrientes, medidas caseiras ("1 concha", "1 fatia") e produto embalado pelo código de barras (Open Food Facts). Mais **873 exercícios** com músculos e instruções. |
 | **Constância, não comparação de corpo**   | Desafios e rankings medem a aderência de cada um à **própria** meta — dias treinando, dias na faixa de calorias, sequência —, nunca peso ou medida ([ADR 027](docs/ADR/027-desafios-por-aderencia-a-propria-meta.md)).            |
 | **O dado é do aluno**                     | A equipe da comunidade só lê o que ele consentiu, por categoria, e cada acesso fica registrado. `export_my_data` devolve tudo e `delete_my_account` apaga tudo. Falta de pagamento tira a IA, nunca o app nem o histórico.        |
-| **MCP-first, não "com integração de IA"** | As **159 tools** MCP cobrem o CRUD inteiro. Não existe operação de registro que o app faça e o MCP não faça ([ADR 006](docs/ADR/006-mcp-first.md)).                                                                               |
+| **MCP-first, não "com integração de IA"** | As **160 tools** MCP cobrem o CRUD inteiro. Não existe operação de registro que o app faça e o MCP não faça ([ADR 006](docs/ADR/006-mcp-first.md)).                                                                               |
 | **A foto é sua escolha**                  | A IA analisa a imagem e devolve **dados estruturados**; a foto do prato só fica guardada se você aceitar ([ADR 038](docs/ADR/038-foto-da-refeicao-guardada.md)).                                                                  |
 | **Open source e self-hostable**           | Licença MIT. `infra/docker-compose.prod.yml` sobe API, web, site e Logto atrás do Traefik com SSL automático; `AI_REQUIRES_PLAN=false` libera a IA para a sua instância sem gateway de pagamento.                                 |
 
@@ -32,7 +32,7 @@ O que o produto faz, para quem e o que ele se recusa a fazer: [`docs/PRD.md`](do
 
 ```mermaid
 flowchart TD
-    claude["Assistente de IA do usuário<br/>(MCP · 159 tools)"]
+    claude["Assistente de IA do usuário<br/>(MCP · 160 tools)"]
     pwa["Web Next.js<br/>aluno e painel da equipe"]
     mobile["App Expo<br/>iOS / Android"]
     agent["Agente Python<br/>IA hospedada (PRO)"]
@@ -125,9 +125,9 @@ Contribuição gerada por IA é aceita nas mesmas condições de qualquer outra:
 
 ## Eval da fronteira de tools
 
-As 159 tools são o CRUD inteiro, e um agente que paga por token talvez pedisse outra fronteira. O
+As 160 tools são o CRUD inteiro, e um agente que paga por token talvez pedisse outra fronteira. O
 [eval da fronteira](docs/eval-fronteira-de-tools.md) mede isso com uma variável só: o mesmo agente, o
-mesmo prompt e as mesmas 31 tarefas contra o catálogo de entidade (**A**, hoje 159 tools) e contra um de
+mesmo prompt e as mesmas 31 tarefas contra o catálogo de entidade (**A**, hoje 160 tools) e contra um de
 intenção (**B**, hoje 44 tools, das quais 18 compõem as de entidade sem lógica própria), escolhido por um
 header no `/mcp`. A medição publicada é de antes das Fases 3 a 5, com 106 e 40. A superfície de intenção é instrumento de medição: só sobe com
 `MCP_SUPERFICIE_INTENCAO=1` e é recusada em produção.

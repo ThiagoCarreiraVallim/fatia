@@ -99,6 +99,13 @@ export const GROUP_PERMISSIONS = {
    * informação com regras diferentes.
    */
   'insights.read': [GroupRole.OWNER],
+  /** Ver os descontos de parceiros da comunidade (#393). */
+  'benefit.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /**
+   * Cadastrar, mudar e tirar benefício de parceiro (#393). Só o dono: é acordo
+   * comercial da comunidade, como a cobrança.
+   */
+  'benefit.manage': [GroupRole.OWNER],
 } as const satisfies Record<string, readonly GroupRole[]>;
 
 /**
