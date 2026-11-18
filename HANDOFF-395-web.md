@@ -4,7 +4,8 @@ Agente da parte web. Só mexe em `apps/web/**` (e `e2e/**` se um teste citar alg
 
 ## Feito
 
-- (nada ainda)
+- testes vermelhos (f365bb19)
+- challenge-ui.tsx, lista Cm-08, desafio Cm-17/09/10/11 (testes verdes)
 
 ## Falta
 
