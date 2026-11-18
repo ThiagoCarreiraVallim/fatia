@@ -342,6 +342,50 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
       expect(deNovo.exercises[1]).toMatchObject({ hasGuide: false });
     });
 
+    it.each(['INVITED', 'REMOVED', 'BANNED'] as const)(
+      'membro %s não abre a dica publicada',
+      async (status) => {
+        const { groupId, prof, membro } = await comunidade();
+        const d = await content.createTip(prof, groupId, {
+          title: 'Dica',
+          body: 'x',
+          category: 'HABITS',
+        });
+        await content.setTipState(prof, groupId, d.id, { published: true });
+        await prisma.groupMembership.update({
+          where: { groupId_userId: { groupId, userId: membro } },
+          data: { status },
+        });
+        await expect(content.getTipForMember(membro, groupId, d.id)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      },
+    );
+
+    it('a lista busca o papel dos autores uma vez, e não uma por item', async () => {
+      const { groupId, dono, prof, membro } = await comunidade();
+      const criador = await entra(groupId, 'CREATOR');
+      for (const autor of [dono, prof, criador]) {
+        const d = await content.createTip(autor, groupId, {
+          title: `Dica ${autor}`,
+          body: 'x',
+          category: 'HABITS',
+        });
+        await content.setTipState(dono, groupId, d.id, { published: true });
+      }
+      const papeis = jest.spyOn(prisma.groupMembership, 'findMany');
+      try {
+        const lista = await content.listTipsForMember(membro, groupId);
+        expect(lista.map((t) => t.authorRole).sort()).toEqual(['CREATOR', 'OWNER', 'PROFESSIONAL']);
+        expect(papeis).toHaveBeenCalledTimes(1);
+        papeis.mockClear();
+        await content.listTipsForTeam(dono, groupId);
+        expect(papeis).toHaveBeenCalledTimes(1);
+      } finally {
+        papeis.mockRestore();
+      }
+    });
+
     it('a dica abre pelo id: só publicada, só desta comunidade, com o papel do autor', async () => {
       const { groupId, prof, membro } = await comunidade();
       const outra = await comunidade();

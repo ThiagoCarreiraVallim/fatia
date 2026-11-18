@@ -231,7 +231,12 @@ export class ContentService {
       include: TEMPLATE_INCLUDE,
       orderBy: [{ publishedAt: { sort: 'desc', nulls: 'first' } }, { updatedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.templateView(r, userId, eu)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.templateView(r, userId, eu, papeis)));
   }
 
   async getTemplateForTeam(userId: string, groupId: string, id: string): Promise<TemplateView> {
@@ -392,7 +397,12 @@ export class ContentService {
       include: TIP_INCLUDE,
       orderBy: [{ publishedAt: { sort: 'desc', nulls: 'first' } }, { updatedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.tipView(r, userId, eu)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.tipView(r, userId, eu, papeis)));
   }
 
   async createTip(userId: string, groupId: string, input: TipInput): Promise<TipView> {
@@ -481,7 +491,12 @@ export class ContentService {
       include: TEMPLATE_INCLUDE,
       orderBy: { publishedAt: 'desc' },
     });
-    return Promise.all(rows.map((r) => this.templateView(r, userId, null)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.templateView(r, userId, null, papeis)));
   }
 
   /**
@@ -545,7 +560,12 @@ export class ContentService {
       include: TIP_INCLUDE,
       orderBy: [{ pinned: 'desc' }, { publishedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.tipView(r, userId, null)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.tipView(r, userId, null, papeis)));
   }
 
   /** Uma dica publicada (Cm-15, #396), buscada com o `groupId` da URL. */
@@ -689,8 +709,13 @@ export class ContentService {
     return row;
   }
 
-  private async authorRole(groupId: string, authorId: string | null): Promise<GroupRole | null> {
+  private async authorRole(
+    groupId: string,
+    authorId: string | null,
+    papeis?: Map<string, GroupRole>,
+  ): Promise<GroupRole | null> {
     if (!authorId) return null;
+    if (papeis) return papeis.get(authorId) ?? null;
     return (await authorRoles(this.prisma, groupId, [authorId])).get(authorId) ?? null;
   }
 
@@ -811,10 +836,12 @@ export class ContentService {
     }));
   }
 
+  /** `papeis`: os papéis dos autores já buscados em lote pela lista (#396). */
   private async templateView(
     row: TemplateRow,
     userId: string,
     teamRole: GroupRole | null,
+    papeis?: Map<string, GroupRole>,
   ): Promise<TemplateView> {
     const base = {
       id: row.id,
@@ -824,7 +851,7 @@ export class ContentService {
       level: row.level,
       cover: await this.media.viewOrNull(row.cover),
       authorName: row.author?.name ?? TEAM_AUTHOR,
-      authorRole: await this.authorRole(row.groupId, row.authorId),
+      authorRole: await this.authorRole(row.groupId, row.authorId, papeis),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole
@@ -915,7 +942,12 @@ export class ContentService {
       });
   }
 
-  private async tipView(row: TipRow, userId: string, teamRole: GroupRole | null): Promise<TipView> {
+  private async tipView(
+    row: TipRow,
+    userId: string,
+    teamRole: GroupRole | null,
+    papeis?: Map<string, GroupRole>,
+  ): Promise<TipView> {
     return {
       id: row.id,
       title: row.title,
@@ -924,7 +956,7 @@ export class ContentService {
       image: await this.media.viewOrNull(row.image),
       pinned: row.pinned,
       authorName: row.author?.name ?? TEAM_AUTHOR,
-      authorRole: await this.authorRole(row.groupId, row.authorId),
+      authorRole: await this.authorRole(row.groupId, row.authorId, papeis),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole ? { canEdit: this.canEdit(teamRole, userId, row.authorId) } : {}),

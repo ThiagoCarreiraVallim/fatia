@@ -569,6 +569,24 @@ describe('catálogo de exercícios da comunidade (integração)', () => {
       );
     });
 
+    it.each(['INVITED', 'REMOVED', 'BANNED'] as const)(
+      'membro %s não abre guia nem equipamentos',
+      async (status) => {
+        const a = await comunidade();
+        await catalog.setGuide(a.prof, a.groupId, halteres.id, { tips: 'Comece leve.' });
+        await prisma.groupMembership.update({
+          where: { groupId_userId: { groupId: a.groupId, userId: a.membro } },
+          data: { status },
+        });
+        await expect(catalog.getForMember(a.membro, a.groupId, halteres.id)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+        await expect(catalog.equipmentForMember(a.membro, a.groupId)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      },
+    );
+
     it('quem saiu da comunidade não vê mais guia, vídeo nem fotos', async () => {
       const a = await comunidade();
       const video = await envia(a.dono, a.groupId, 'exercise_video', 'video/mp4', MP4);
