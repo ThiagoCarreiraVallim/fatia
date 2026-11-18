@@ -531,7 +531,7 @@ function AiMenuPanel({
       style={styles.fill}
     >
       {/* No Android edge-to-edge a janela não encolhe com o teclado: esta View só serve de régua
-          para saber quanto ele cobre do menu, e a doca sobe por esse tanto (como o padding do iOS). */}
+          para saber quanto ele cobre do menu; a doca fica 22 dp acima dele, como fica da área segura. */}
       <View
         ref={areaDoTeclado}
         collapsable={false}
@@ -564,7 +564,7 @@ function AiMenuPanel({
       </Animated.View>
 
       <Animated.View
-        style={[styles.body, { paddingBottom: insets.bottom + 22 + tecladoCobre }, bodyTop]}
+        style={[styles.body, { paddingBottom: (tecladoCobre || insets.bottom) + 22 }, bodyTop]}
       >
         <View style={styles.fill}>
           {keyboard ? (
