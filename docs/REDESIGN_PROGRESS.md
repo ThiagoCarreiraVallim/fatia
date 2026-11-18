@@ -382,7 +382,14 @@ Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `
   - O cartão do convite (link `/c/…`) não mostra a oferta do PRO: o preview do convite não traz o pool.
   - A tool `join_group` do MCP manteve a descrição, mas aceita código.
   - O consentimento de entrada segue o `ConsentForm` atual (#371 não mexeu nele).
-- **Falta:** passada visual (prints lado a lado com Cm-01, Cm-02, Cm-04, Cm-22, Cm-22b, Pn-28, Pn-28b, Pn-28c, web e app, escuro e claro); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção).
+  - Cm-02: o QR não abre dentro da folha (a prancha tem as abas QR Code/Código com o visor); no app é o botão "Ler QR Code", que abre a câmera em tela cheia, e o campo do código fica sempre à vista. Na web não há QR.
+  - Cm-02: código de uma comunidade em que a pessoa já está (ou já pediu) mostra "você é membro"/"aguardando aprovação" e "Abrir a comunidade"/"Ver o pedido", em vez de pedir de novo (`alreadyInView`). A prancha não tem esse caso.
+  - Cm-22: "Copiado" fica no contorno neutro com o check, não no verde suave da prancha (o verde sobre verde a 10% não passa contraste no tema claro). Os benefícios vêm por validade, o que vence antes primeiro.
+  - Pn-28c: com o editor aberto a tabela fica só com parceiro, validade e "Editar" (a prancha espreme as seis colunas; em 1440 px o link quebrava letra a letra e o "Editar" saía da tela).
+  - Pn-28/28b: a moldura do painel (barra lateral com grupos, busca, "Ver no app") é a do `/org` atual, que é de outra issue; o "Benefício" fica ao lado do título, não na barra do topo.
+  - Capa do cartão patrocinado no app é a cor chapada, sem o degradê da web (sem `expo-linear-gradient` no projeto).
+- **Passada visual (2026-11-18):** prints lado a lado em `~/.cache/fatia-vis/393/cmp-*.png` (escuro; Pn-28 só web: o app estava logado como membro). Corrigido nela: cor da comunidade nos botões dos benefícios e não no monograma do parceiro, título repetido em Benefícios, cupom em fonte fixa no app, link cortado e colunas do painel com o editor aberto, avatar da patrocinada na cor dela (o do app deixava a capa vazar), quem já é membro não refaz o pedido, erro e "Sair" em `text-danger` no app (o `text-destructive` escuro é #93000a), texto do checkbox de estatísticas em Sobre no app.
+- **Falta:** prints no tema claro e do painel de benefícios no app (logado como dono); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção). Fora da #393: `text-destructive` em texto continua em ~50 lugares do app (escuro ilegível) e o `Checkbox` do app não mostra o `label`.
 
 ## Etapas seguintes
 
