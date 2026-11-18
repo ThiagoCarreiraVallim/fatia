@@ -948,5 +948,35 @@ describe('mural do redesign (integração)', () => {
       expect(depois.count).toBe(0);
       await expect(forYou.get(b.ana, a.groupId)).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('comunicado que a pessoa ocultou some; o que ela mesma mandou não conta como não lido', async () => {
+      const a = await comunidade();
+      const base = {
+        body: 'Texto.',
+        publishedAs: 'GROUP' as const,
+        pin: false,
+        pinDays: null,
+        push: false,
+        at: null,
+        repeat: 'NONE' as const,
+      };
+      await announcements.create(a.prof, a.groupId, { ...base, title: 'Do prof' });
+      await announcements.create(a.dono, a.groupId, { ...base, title: 'Da dona' });
+      const doProf = await prisma.groupPost.findFirstOrThrow({
+        where: { groupId: a.groupId, title: 'Do prof' },
+      });
+      await posts.hide(a.ana, a.groupId, doProf.id);
+
+      const ana = await forYou.get(a.ana, a.groupId);
+      expect(ana.fromTeam.map((c) => c.title)).toEqual(['Da dona']);
+      expect(ana.count).toBe(1);
+
+      const prof = await forYou.get(a.prof, a.groupId);
+      expect(prof.fromTeam).toEqual([
+        expect.objectContaining({ title: 'Da dona', unread: true }),
+        expect.objectContaining({ title: 'Do prof', unread: false }),
+      ]);
+      expect(prof.count).toBe(1);
+    });
   });
 });

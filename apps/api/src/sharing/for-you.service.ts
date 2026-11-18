@@ -56,7 +56,8 @@ const NOTICE_DAYS = 30;
  * A aba "Para você" da comunidade (#394, prancha Cm-20): o que a equipe desta
  * comunidade mandou **só para a pessoa** (plano de treino e plano alimentar
  * esperando resposta), os comunicados recentes (não lidos = depois da última
- * visita ao mural), o conteúdo publicado mais novo e o que já foi resolvido.
+ * visita ao mural e de outra pessoa; os ocultados ficam de fora), o conteúdo
+ * publicado mais novo e o que já foi resolvido.
  *
  * Tudo é da própria pessoa (`userId`) e da comunidade da URL. Avaliação
  * pedida (#383) e questionário (#391) entram quando as issues deles criarem os
@@ -71,6 +72,7 @@ export class ForYouService {
     const m = await this.prisma.groupMembership.findUniqueOrThrow({
       where: { groupId_userId: { groupId, userId } },
       select: {
+        id: true,
         feedSeenAt: true,
         joinedAt: true,
         createdAt: true,
@@ -102,6 +104,8 @@ export class ForYouService {
           kind: PostKind.ANNOUNCEMENT,
           removedAt: null,
           createdAt: { gte: new Date(Date.now() - NOTICE_DAYS * 86_400_000) },
+          // O que a pessoa ocultou do mural também não aparece aqui.
+          hides: { none: { membershipId: m.id } },
           ...(escondidos.length > 0
             ? {
                 OR: [
@@ -116,7 +120,9 @@ export class ForYouService {
           title: true,
           createdAt: true,
           publishedAs: true,
-          author: { select: { displayName: true, user: { select: { name: true } } } },
+          author: {
+            select: { userId: true, displayName: true, user: { select: { name: true } } },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -175,7 +181,8 @@ export class ForYouService {
           ? m.group.name
           : (c.author.displayName ?? primeiro(c.author.user.name) ?? ''),
       at: c.createdAt,
-      unread: c.createdAt > vistoAte,
+      // O comunicado que a própria pessoa mandou não é novidade para ela.
+      unread: c.createdAt > vistoAte && c.author.userId !== userId,
     }));
     const recommended: ForYouRecommendation[] = [
       ...modelos.map((t) => ({
