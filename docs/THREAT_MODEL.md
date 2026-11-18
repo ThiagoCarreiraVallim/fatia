@@ -556,8 +556,18 @@ corpo. Mitigações exigidas na #395:
 - Foto anulada é apagada na decisão; as outras, 30 dias depois do fim do desafio; sair da
   comunidade ou apagar a conta apaga na hora.
 - A sinalização "Não parece válido" não mostra a foto a quem sinaliza, só vale para check-in do
-  mesmo desafio (pelo par da URL), tem limite de 3 por pessoa a cada 24 h e a fila tem teto de 50
-  itens abertos por desafio ([ADR 047](./ADR/047-checkin-com-foto-aceite-e-fila.md)).
+  mesmo desafio (pelo par da URL) e em andamento, tem limite de 3 por pessoa a cada 24 h (sob
+  trava), responde sempre igual (sem revelar anulado ou fila cheia) e o teto de 50 itens abertos
+  por desafio vale só para sinalizações de membros; o detector sempre entra
+  ([ADR 047](./ADR/047-checkin-com-foto-aceite-e-fila.md)).
+- Fraude no check-in: o dia é o do fuso do desafio, um treino vale um check-in, a duração é pelo
+  relógio do servidor (`createdAt` → `serverCompletedAt`) e o fim reescrito não libera; quem revisa
+  não decide o próprio check-in. Passos gravados pelo app, pela web e pelo `log_steps` são sempre
+  `MANUAL`.
+
+**Não mitigado:** quando a sincronização com Apple Saúde/Health Connect existir, a fonte automática
+dos passos ainda será palavra do aparelho; o servidor não tem como atestar.
+
 - A foto do corpo do check-in (`photoFileId`) precisa ser da própria pessoa, desta comunidade,
   com propósito `challenge_checkin` e sem uso; o treino do corpo só é achado entre os da própria
   pessoa. A fila e a decisão exigem `challenge.review` e buscam o check-in pelo desafio da URL.

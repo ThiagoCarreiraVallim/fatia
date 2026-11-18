@@ -31,19 +31,31 @@ para visitante e dizia que "entrar é o aceite". Esta ADR concilia as duas.
    cria desafios sem mexer nas rotas. É o "equipe com `challenge.manage`" da ADR 044.
 4. **Sinais e fila.** Entram na fila (`ChallengeCheckin.status = FLAGGED`):
    - **Membro sinaliza** "Não parece válido" no check-in de outra pessoa do mesmo desafio, sem ver
-     a foto: até **3 sinalizações por pessoa a cada 24 h** (`429` depois), uma por check-in.
+     a foto, só com o desafio em andamento: até **3 sinalizações por pessoa a cada 24 h** (`429`
+     depois), uma por check-in. A resposta é sempre a mesma (`{ flagged: true }`): quem sinaliza
+     não descobre se o check-in já foi anulado, revisado ou se a fila encheu. Limite e teto são
+     conferidos sob `pg_advisory_xact_lock` (por pessoa e por desafio).
    - **Sinais do servidor:** treino editado depois do check-in (impressão de início, fim e séries
      mudou); água com a meta lançada de uma vez entre 23 h e 3 h em 3 dias ou mais; passos com
      salto de 10 mil em até 15 min. O motivo do sistema nunca leva número (ml, passos) de ninguém.
-   - **Teto:** no máximo **50 itens abertos por desafio**; com a fila cheia a sinalização de
-     membro responde `409`.
+   - **Teto:** no máximo **50 itens abertos por desafio vindos de membros**; com esse teto cheio a
+     sinalização fica guardada, mas o check-in segue valendo. O detector do servidor **sempre**
+     entra: um dia fora do padrão nunca conta sem a equipe olhar.
    - O ponto fica pendente até "Vale" ou "Anular"; anular exige motivo (3 a 280 caracteres),
-     apaga a foto na hora e avisa a pessoa.
+     apaga a foto na hora e avisa a pessoa. Quem revisa não vê nem decide o próprio check-in
+     (`403`); duas decisões ao mesmo tempo, só a primeira vale. "Vale" aceita o treino como está
+     (regrava o retrato), e a fila da comunidade é paginada.
 5. **Regras do check-in no servidor:** participante de desafio em andamento com check-in; treino
-   da própria pessoa concluído nas últimas 2 h, com 20 min ou mais, gravado até 60 s depois do fim
-   (treino lançado depois não conta); um por dia local (índice único); foto da própria pessoa,
-   desta comunidade, com propósito `challenge_checkin`, ainda sem uso; a mesma imagem (SHA-256
+   da própria pessoa que o **servidor** viu terminar nas últimas 2 h (`serverCompletedAt`), com
+   20 min ou mais **pelo relógio do servidor** (de `createdAt` a `serverCompletedAt`; o `startedAt`
+   e o `completedAt` são do aparelho); treino lançado depois, ou com o `completedAt` reescrito
+   (mais de 60 s longe do fim visto pelo servidor), não conta; **um treino vale um check-in** no
+   desafio (índice único participante + treino); um por dia **no fuso do desafio** (trocar o fuso
+   do aparelho não abre outro dia); foto da própria pessoa, desta comunidade, com propósito
+   `challenge_checkin`, ainda sem uso e pedida depois de o treino abrir; a mesma imagem (SHA-256
    depois de reencodar e tirar o EXIF) não vale duas vezes no desafio; carimbo de hora do servidor.
+   Água e passos editados depois do prazo do dia (`editedAt`) não contam, e os detectores olham a
+   hora da edição.
 6. **Resultado e retenção.** O pódio espera a fila do desafio esvaziar ou 24 h depois do fim
    (`resultPending`). A foto é apagada 30 dias depois de `finalizedAt`, ao anular, ao sair do
    desafio, ao sair da comunidade ou ao apagar a conta (ADR 044 §7). A limpeza de órfãos da mídia
@@ -69,7 +81,8 @@ para visitante e dizia que "entrar é o aceite". Esta ADR concilia as duas.
 
 ### Negativas
 
-- Fila cheia trava a sinalização de membros até a equipe decidir; o painel mostra "N para decidir".
+- Com o teto de membros cheio, as sinalizações novas ficam guardadas sem ir para a fila até a equipe
+  decidir; o painel mostra "N para decidir".
 - Os limites (3/24 h, 50, 23 h–3 h, 10 mil em 15 min) são palpites do primeiro ciclo.
 
 ### Neutras
