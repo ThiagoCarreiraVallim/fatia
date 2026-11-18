@@ -54,25 +54,44 @@ describe('/org/[groupId]/benefits (Pn-28)', () => {
     renderPage([]);
     await userEvent.click(await screen.findByRole('button', { name: /Adicionar benefício/ }));
     const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
+    expect(within(form).getByLabelText('Parceiro')).toHaveAttribute('maxLength', '60');
     await userEvent.type(within(form).getByLabelText('Parceiro'), 'Suplementa');
     await userEvent.type(within(form).getByLabelText('Desconto'), '15% em suplementos');
-    await userEvent.type(within(form).getByLabelText('Código do cupom'), 'demo15');
+    await userEvent.type(within(form).getByLabelText('Código do cupom'), 'Demo15');
     await userEvent.clear(within(form).getByLabelText('Validade'));
     await userEvent.type(within(form).getByLabelText('Validade'), '2099-12-31');
     // A prévia mostra o que o membro vai ver.
-    expect(within(form).getByText('Copiar código DEMO15')).toBeInTheDocument();
+    expect(within(form).getByText('Copiar código Demo15')).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Salvar' }));
     await waitFor(() =>
       expect(benefitsApi.create).toHaveBeenCalledWith('g1', {
         partnerName: 'Suplementa',
         discountText: '15% em suplementos',
         kind: 'COUPON',
-        couponCode: 'DEMO15',
+        couponCode: 'Demo15',
         url: null,
         validUntil: '2099-12-31',
         logoFileId: null,
       }),
     );
+  });
+
+  it('vencido: corrige o texto sem mexer na validade, e o PATCH não leva a data', async () => {
+    vi.mocked(benefitsApi.update).mockResolvedValue(tb());
+    renderPage([
+      tb({ id: 'b2', partnerName: 'Corre+', validUntil: '2026-10-31', status: 'expired' }),
+    ]);
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar Corre+' }));
+    const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
+    const desconto = within(form).getByLabelText('Desconto');
+    await userEvent.clear(desconto);
+    await userEvent.type(desconto, '20% em tênis');
+    await userEvent.click(within(form).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(benefitsApi.update).toHaveBeenCalled());
+    const [, id, corpo] = vi.mocked(benefitsApi.update).mock.calls[0];
+    expect(id).toBe('b2');
+    expect(corpo).toMatchObject({ discountText: '20% em tênis' });
+    expect(corpo).not.toHaveProperty('validUntil');
   });
 
   it('link sem https não salva e diz por quê', async () => {

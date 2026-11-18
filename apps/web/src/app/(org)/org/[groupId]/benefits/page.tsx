@@ -7,6 +7,7 @@ import { Copy, Gift, Plus, X } from 'lucide-react';
 import {
   ApiError,
   benefitDraftToInput,
+  benefitDraftToPatch,
   benefitInitials,
   benefitsApi,
   benefitToDraft,
@@ -78,9 +79,12 @@ function BenefitForm({
   draft,
   setDraft,
   setLogo,
+  original,
 }: {
   groupId: string;
   edicao: Edicao;
+  /** O benefício como está salvo, ao editar: a validade só é cobrada se mudar. */
+  original: TeamBenefit | null;
   today: string;
   pending: boolean;
   onCancel: () => void;
@@ -106,7 +110,9 @@ function BenefitForm({
       className="space-y-4 rounded-card bg-card p-5"
       onSubmit={(e) => {
         e.preventDefault();
-        const r = benefitDraftToInput(draft, today);
+        const r = original
+          ? benefitDraftToPatch(draft, today, original)
+          : benefitDraftToInput(draft, today);
         setErrors(r.ok ? {} : r.errors);
         onSave(r.ok ? null : r.errors);
       }}
@@ -136,7 +142,7 @@ function BenefitForm({
         <Label htmlFor="b-parceiro">Parceiro</Label>
         <Input
           id="b-parceiro"
-          maxLength={80}
+          maxLength={60}
           value={draft.partnerName}
           onChange={(e) => set('partnerName', e.target.value)}
           aria-invalid={!!errors.partnerName}
@@ -173,8 +179,9 @@ function BenefitForm({
           <Input
             id="b-cupom"
             maxLength={40}
-            autoCapitalize="characters"
-            className="font-mono uppercase"
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="font-mono"
             value={draft.couponCode}
             onChange={(e) => set('couponCode', e.target.value)}
             aria-invalid={!!errors.couponCode}
@@ -201,7 +208,8 @@ function BenefitForm({
         <Input
           id="b-validade"
           type="date"
-          min={today}
+          // Vencido intocado não pode travar o envio: o mínimo só vale para data nova.
+          min={original?.validUntil === draft.validUntil ? undefined : today}
           value={draft.validUntil}
           onChange={(e) => set('validUntil', e.target.value)}
           aria-invalid={!!errors.validUntil}
@@ -230,7 +238,7 @@ function BenefitForm({
           {draft.kind === 'COUPON' ? (
             <p className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-brand text-sm font-semibold text-brand-foreground">
               <Copy size={14} aria-hidden />
-              {`Copiar código ${draft.couponCode.trim().toUpperCase() || '…'}`}
+              {`Copiar código ${draft.couponCode.trim() || '…'}`}
             </p>
           ) : (
             <p className="flex h-10 items-center justify-center rounded-xl border border-border text-sm font-semibold">
@@ -282,13 +290,19 @@ export default function OrgBenefitsPage() {
     void qc.invalidateQueries({ queryKey: ['community', 'benefits', g.id] });
   };
 
+  const emEdicao = lista.data?.find((b) => b.id === edicao?.id) ?? null;
+
   const salvar = useMutation({
     mutationFn: async () => {
+      if (edicao?.id && emEdicao) {
+        // PATCH: a validade só vai se mudou (corrigir o texto de um vencido pode).
+        const p = benefitDraftToPatch(draft, today, emEdicao);
+        if (!p.ok) throw new Error('invalid');
+        return benefitsApi.update(g.id, edicao.id, p.input);
+      }
       const r = benefitDraftToInput(draft, today);
       if (!r.ok) throw new Error('invalid');
-      return edicao?.id
-        ? benefitsApi.update(g.id, edicao.id, r.input)
-        : benefitsApi.create(g.id, r.input);
+      return benefitsApi.create(g.id, r.input);
     },
     onSuccess: () => {
       setEdicao(null);
@@ -316,8 +330,6 @@ export default function OrgBenefitsPage() {
     setDraft(benefitToDraft(b));
     setEdicao({ id: b.id, logo: b.logoFileId ? { fileId: b.logoFileId, url: b.logoUrl } : null });
   }
-
-  const emEdicao = lista.data?.find((b) => b.id === edicao?.id) ?? null;
 
   return (
     <div className="space-y-4">
@@ -431,6 +443,7 @@ export default function OrgBenefitsPage() {
             draft={draft}
             setDraft={setDraft}
             setLogo={(logo) => setEdicao({ ...edicao, logo })}
+            original={emEdicao}
             onCancel={() => setEdicao(null)}
             onSave={(errors) => {
               if (!errors) salvar.mutate();

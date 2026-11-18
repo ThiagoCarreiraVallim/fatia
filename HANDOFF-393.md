@@ -9,9 +9,9 @@ DB de teste: fatia_t393 (URL no scratchpad `turl`).
 - [x] I1 throttle real (UserThrottlerGuard) em preview/join + teste 429 + teto no join_group MCP
 - [x] I2 proPaidByThisGroup no GroupSummary e nos 4 pontos
 - [x] m1 ValidateIf code == null
-- [ ] m2 maxLength 60 parceiro
-- [ ] m3 PATCH validUntil só se mudou
-- [ ] m4 cupom só trim
+- [x] m2 maxLength 60 parceiro
+- [x] m3 PATCH validUntil só se mudou
+- [x] m4 cupom só trim
 - [x] m5 proOffer só ALL_MEMBERS; SEATS "pode liberar"
 - [x] m6 parseCommunityEntry normaliza espaços, código antes de token
 - [ ] m7 contraste do vencido
@@ -20,4 +20,4 @@ DB de teste: fatia_t393 (URL no scratchpad `turl`).
 
 ## Próximo passo
 
-menores m2, m3, m4, m7, m8.
+m7 (contraste do vencido), m8 (doc-comment do schema), depois docs e checagens finais.
