@@ -49,6 +49,7 @@ import type { ListGroupPlansTool } from '../../../sharing/mcp/list-group-plans.t
 import type { ListGroupPostsTool } from '../../../sharing/mcp/list-group-posts.tool';
 import type { ListGroupTipsTool } from '../../../sharing/mcp/list-group-tips.tool';
 import type { ListGroupBenefitsTool } from '../../../sharing/mcp/list-group-benefits.tool';
+import type { ListGroupExerciseGuidesTool } from '../../../sharing/mcp/list-group-exercise-guides.tool';
 import type { ListMyGroupsTool } from '../../../sharing/mcp/list-my-groups.tool';
 import type { ListMyStudentsTool } from '../../../sharing/mcp/list-my-students.tool';
 import type { ListPlanOffersTool } from '../../../sharing/mcp/list-plan-offers.tool';
@@ -911,6 +912,23 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
     ],
     { groupId: 'gr1' },
   ),
+  list_group_exercise_guides: sample<ListGroupExerciseGuidesTool>(
+    [
+      {
+        exerciseId: 101,
+        name: 'Leg press 45° da casa',
+        muscleGroup: 'pernas',
+        equipment: 'máquina',
+        ownedByCommunity: true,
+        tips: 'Comece com dois discos de cada lado.',
+        authorName: 'Helena',
+        authorRole: 'PROFESSIONAL',
+        hasVideo: true,
+        photoCount: 3,
+      },
+    ],
+    { groupId: 'gr1' },
+  ),
   list_group_tips: sample<ListGroupTipsTool>(
     [
       {
@@ -921,6 +939,7 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
         image: null,
         pinned: true,
         authorName: 'Helena',
+        authorRole: 'PROFESSIONAL',
         publishedAt: dia('2026-11-01T12:00:00Z'),
         updatedAt: dia('2026-11-01T12:00:00Z'),
       },
