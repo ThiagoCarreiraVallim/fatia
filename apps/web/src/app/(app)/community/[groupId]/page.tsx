@@ -18,7 +18,7 @@ import {
 } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
-import { Composer } from '@/components/feed/composer';
+import { ComposerEntry } from '@/components/feed/composer';
 import { PostCard } from '@/components/feed/feed-ui';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
@@ -179,7 +179,7 @@ export default function CommunityFeedPage() {
           )}
 
           {firstPage.canPost ? (
-            <Composer
+            <ComposerEntry
               groupId={groupId}
               me={me}
               team={

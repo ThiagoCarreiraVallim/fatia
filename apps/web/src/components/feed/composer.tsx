@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, X } from 'lucide-react';
+import { ImagePlus, Plus, X } from 'lucide-react';
 import {
   displayNameProblem,
   feedApi,
@@ -61,10 +61,13 @@ export function Composer({
   groupId,
   me,
   team,
+  onClose,
 }: {
   groupId: string;
   me: MyName;
   team?: ComposerTeam | null;
+  /** Aberto pela linha "Escreva para a comunidade…": Cancelar e publicar fecham. */
+  onClose?: () => void;
 }) {
   const qc = useQueryClient();
   const area = useRef<HTMLTextAreaElement>(null);
@@ -116,6 +119,7 @@ export function Composer({
       limpar();
       toast(tipo === 'POLL' ? 'Enquete publicada no mural.' : 'Publicado no mural.');
       void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId) });
+      onClose?.();
     },
     onError: (err) => toast(apiMessage(err, 'Não deu para publicar agora.')),
   });
@@ -145,6 +149,11 @@ export function Composer({
     setTexto(novo.slice(0, POST_BODY_MAX));
     requestAnimationFrame(() => el?.focus());
   };
+
+  // Aberto pela linha do mural: o cursor já vai para o texto.
+  useEffect(() => {
+    if (onClose) area.current?.focus();
+  }, [onClose]);
 
   return (
     <form
@@ -320,11 +329,35 @@ export function Composer({
           {problema}
         </p>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {onClose && (
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+        )}
         <Button type="submit" disabled={Boolean(problema) || publicar.isPending}>
           {publicar.isPending ? 'Publicando…' : 'Publicar'}
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * A linha "Escreva para a comunidade…" do topo do mural (prancha Cm-03): o
+ * composer só abre quando a pessoa vai escrever, e o mural fica à vista.
+ */
+export function ComposerEntry(props: { groupId: string; me: MyName; team?: ComposerTeam | null }) {
+  const [aberto, setAberto] = useState(false);
+  if (aberto) return <Composer {...props} onClose={() => setAberto(false)} />;
+  return (
+    <button
+      type="button"
+      onClick={() => setAberto(true)}
+      className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-subtle bg-card px-4 text-left text-sm text-muted-foreground transition-colors hover:bg-muted"
+    >
+      <span className="flex-1">Escreva para a comunidade…</span>
+      <ImagePlus className="size-4 shrink-0" aria-hidden />
+    </button>
   );
 }

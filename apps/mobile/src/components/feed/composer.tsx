@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react-native';
+import { ImagePlus, X } from 'lucide-react-native';
 import {
   displayNameProblem,
   feedApi,
@@ -52,10 +52,13 @@ export function Composer({
   groupId,
   me,
   team,
+  onClose,
 }: {
   groupId: string;
   me: MyName;
   team?: { groupName: string } | null;
+  /** Aberto pela linha "Escreva para a comunidade…": Cancelar e publicar fecham. */
+  onClose?: () => void;
 }) {
   const qc = useQueryClient();
   const toast = useToast();
@@ -105,6 +108,7 @@ export function Composer({
         message: tipo === 'POLL' ? 'Enquete publicada no mural.' : 'Publicado no mural.',
       });
       void qc.invalidateQueries({ queryKey: feedKey(groupId) });
+      onClose?.();
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para publicar agora.') }),
   });
@@ -277,17 +281,48 @@ export function Composer({
 
       {!me.displayName && escreveu ? <NicknameField value={apelido} onChange={setApelido} /> : null}
       {problema && escreveu ? (
-        <Text accessibilityRole="alert" className="text-sm text-destructive">
+        <Text accessibilityRole="alert" className="text-sm text-danger">
           {problema}
         </Text>
       ) : null}
-      <Button
-        disabled={Boolean(problema)}
-        loading={publicar.isPending}
-        onPress={() => publicar.mutate()}
-      >
-        Publicar
-      </Button>
+      <View className="flex-row justify-end gap-2">
+        {onClose ? (
+          <Button variant="ghost" onPress={onClose}>
+            Cancelar
+          </Button>
+        ) : null}
+        <Button
+          disabled={Boolean(problema)}
+          loading={publicar.isPending}
+          onPress={() => publicar.mutate()}
+        >
+          Publicar
+        </Button>
+      </View>
     </View>
+  );
+}
+
+/**
+ * A linha "Escreva para a comunidade…" do topo do mural (prancha Cm-03): o
+ * composer só abre quando a pessoa vai escrever, e o mural fica à vista.
+ */
+export function ComposerEntry(props: {
+  groupId: string;
+  me: MyName;
+  team?: { groupName: string } | null;
+}) {
+  const [aberto, setAberto] = useState(false);
+  if (aberto) return <Composer {...props} onClose={() => setAberto(false)} />;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Escreva para a comunidade…"
+      onPress={() => setAberto(true)}
+      className="min-h-14 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 active:opacity-80"
+    >
+      <Text className="flex-1 text-sm text-muted-foreground">Escreva para a comunidade…</Text>
+      <ImagePlus size={16} color={colors.mutedForeground} />
+    </Pressable>
   );
 }

@@ -46,12 +46,8 @@ import { useToast } from '@/components/ui/toast';
 import { colors } from '@/theme/colors';
 import { PollBlock } from './poll-block';
 
-export const feedKey = (groupId: string) => ['community', 'feed', groupId] as const;
-/** A lista do mural com um filtro. Sob `feedKey`: invalidar o mural recarrega todos. */
-export const feedListKey = (groupId: string, filter: string) =>
-  ['community', 'feed', groupId, 'list', filter] as const;
-export const forYouKey = (groupId: string) => ['community', 'for-you', groupId] as const;
-export const postKey = (groupId: string, id: string) => ['community', 'feed', groupId, id] as const;
+import { feedKey, postKey } from './feed-keys';
+export { feedKey, feedListKey, forYouKey, postKey } from './feed-keys';
 
 /** Como a pessoa aparece no mural: pedido na primeira vez que ela escreve. */
 export interface MyName {

@@ -13,7 +13,7 @@ import { Button, cn } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { colors } from '@/theme/colors';
-import { feedKey } from './feed-ui';
+import { feedKey } from './feed-keys';
 
 /**
  * A enquete no mural (pranchas Cm-21 a 21d) — equivalente de

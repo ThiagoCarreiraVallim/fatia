@@ -198,6 +198,7 @@ describe('/community/[groupId] (o mural)', () => {
     vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
     renderPage(pagina({ displayName: null, suggestedDisplayName: 'Carla', posts: [] }));
     expect(await screen.findByText('O mural está vazio')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await user.type(
       screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
       'Oi, gente',
@@ -220,8 +221,9 @@ describe('/community/[groupId] (o mural)', () => {
     const user = userEvent.setup();
     vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
     renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await user.type(
-      await screen.findByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
+      screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
       'Treino feito',
     );
     expect(screen.queryByRole('textbox', { name: 'Seu apelido no mural' })).not.toBeInTheDocument();
@@ -235,6 +237,29 @@ describe('/community/[groupId] (o mural)', () => {
     renderPage(pagina({ canPost: false, policy: 'TEAM_ONLY' }));
     expect(await screen.findByText(/só a equipe publica no mural/)).toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Novo post' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Escreva para a comunidade…' })).toBeNull();
+  });
+
+  it('o composer começa fechado, como na prancha: abre pela linha e fecha no Cancelar e ao publicar', async () => {
+    const user = userEvent.setup();
+    vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
+    renderPage();
+    await screen.findByRole('article', { name: 'Post de Bia' });
+    expect(screen.queryByRole('form', { name: 'Novo post' })).toBeNull();
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
+    expect(
+      screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
+    ).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('form', { name: 'Novo post' })).toBeNull();
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
+      'Bom dia',
+    );
+    await user.click(screen.getByRole('button', { name: 'Publicar' }));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Novo post' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Escreva para a comunidade…' })).toBeInTheDocument();
   });
 
   it('o autor vê o aviso do post removido, sem reações nem comentários', async () => {
@@ -491,6 +516,7 @@ describe('/community/[groupId] (o mural)', () => {
     vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
     renderPage();
     await screen.findByRole('article', { name: 'Post de Bia' });
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await user.click(screen.getByRole('radio', { name: 'Enquete' }));
     await user.type(screen.getByRole('textbox', { name: 'Pergunta' }), 'Treino de sábado?');
     await user.type(screen.getByRole('textbox', { name: 'Opção 1' }), '8h');
@@ -508,7 +534,8 @@ describe('/community/[groupId] (o mural)', () => {
   it('a prévia desenha o markdown, com título e citação', async () => {
     const user = userEvent.setup();
     renderPage();
-    const caixa = await screen.findByRole('textbox', {
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
+    const caixa = screen.getByRole('textbox', {
       name: 'O que você quer contar para a comunidade?',
     });
     await user.type(caixa, '# Sábado{enter}> Se chover, sala 2');
@@ -519,7 +546,9 @@ describe('/community/[groupId] (o mural)', () => {
   });
 
   it('membro comum não vê "Publicar como" nem "Fixar como aviso"', async () => {
+    const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await screen.findByRole('form', { name: 'Novo post' });
     expect(screen.queryByRole('radiogroup', { name: 'Publicar como' })).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Fixar como aviso' })).toBeNull();
@@ -529,8 +558,9 @@ describe('/community/[groupId] (o mural)', () => {
     const user = userEvent.setup();
     vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
     renderPage(pagina({ isTeam: true, groupName: 'Academia Demo', canModerate: true }));
+    await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await user.type(
-      await screen.findByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
+      screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
       'Feriado na sexta',
     );
     await user.click(screen.getByRole('radio', { name: 'Academia Demo' }));

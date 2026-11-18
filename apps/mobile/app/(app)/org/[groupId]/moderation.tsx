@@ -228,7 +228,7 @@ function Moderacao({ g }: { g: MyGroup }) {
       ) : (
         (fila.data ?? []).map((item) => (
           <PanelCard key={item.reportId}>
-            <Text className="text-xs font-semibold text-destructive">{reportSummary(item)}</Text>
+            <Text className="text-xs font-semibold text-danger">{reportSummary(item)}</Text>
             <Text className="text-xs text-muted-foreground">
               {`${item.commentId ? 'Comentário' : 'Post'} de ${item.author.displayName}${
                 item.author.team ? ' (equipe)' : ''

@@ -16,7 +16,7 @@ import {
   type FeedFilter,
 } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
-import { Composer } from '@/components/feed/composer';
+import { ComposerEntry } from '@/components/feed/composer';
 import { feedListKey, forYouKey, PostCard } from '@/components/feed/feed-ui';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
@@ -158,7 +158,7 @@ export default function CommunityFeedScreen() {
               </ScrollView>
             ) : null}
             {primeira.canPost ? (
-              <Composer
+              <ComposerEntry
                 groupId={groupId}
                 me={me}
                 team={
