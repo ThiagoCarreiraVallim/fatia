@@ -17,7 +17,12 @@ import {
   OTHER_EQUIPMENT,
 } from '../workout/helpers/equipment';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
-import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
+import {
+  assertCanEditContent,
+  authorRoles,
+  canEditContent,
+  requireContentRole,
+} from './content-roles';
 import { planSnapshotSchema } from './plan-snapshot';
 
 export const MAX_GUIDE_PHOTOS = 4;
@@ -57,6 +62,8 @@ export interface GroupExerciseView {
   photos: MediaView[];
   tips: string | null;
   authorName: string;
+  /** O papel de hoje de quem escreveu, nesta comunidade (#396); `null` se saiu. */
+  authorRole: GroupRole | null;
   updatedAt: Date;
   /** Só para a equipe. */
   canEdit?: boolean;
@@ -376,7 +383,36 @@ export class GroupExerciseService {
       include: GUIDE_INCLUDE,
       orderBy: { exercise: { name: 'asc' } },
     });
-    return Promise.all(guias.map((g) => this.view(g, userId, null)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      guias.map((g) => g.authorId),
+    );
+    return Promise.all(guias.map((g) => this.view(g, userId, null, papeis)));
+  }
+
+  /** Um guia da academia (Cm-16), só para quem é da comunidade e só desta comunidade. */
+  async getForMember(
+    userId: string,
+    groupId: string,
+    exerciseId: number,
+  ): Promise<GroupExerciseView> {
+    await requireContentRole(this.prisma, userId, groupId, 'content.read', 'Forbidden');
+    const guia = await this.findGuide(groupId, exerciseId);
+    const papeis = await authorRoles(this.prisma, groupId, [guia.authorId]);
+    return this.view(guia, userId, null, papeis);
+  }
+
+  /** "Equipamentos da academia" (Cm-12): o marcado da lista e o próprio dela. */
+  async equipmentForMember(
+    userId: string,
+    groupId: string,
+  ): Promise<{ equipment: string[]; customEquipment: string[] }> {
+    await requireContentRole(this.prisma, userId, groupId, 'content.read', 'Forbidden');
+    return this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { equipment: true, customEquipment: true },
+    });
   }
 
   // ---------------------------------------------------------------- apoio
@@ -496,7 +532,9 @@ export class GroupExerciseService {
     g: GuideRow,
     userId: string,
     teamRole: GroupRole | null,
+    papeis?: Map<string, GroupRole>,
   ): Promise<GroupExerciseView> {
+    const roles = papeis ?? (await authorRoles(this.prisma, g.groupId, [g.authorId]));
     const ex = g.exercise;
     return {
       exerciseId: ex.id,
@@ -513,6 +551,7 @@ export class GroupExerciseService {
       photos: await Promise.all(g.photos.map((p) => this.media.view(p.file))),
       tips: g.tips,
       authorName: g.author?.name ?? TEAM_AUTHOR,
+      authorRole: g.authorId ? (roles.get(g.authorId) ?? null) : null,
       updatedAt: g.updatedAt,
       ...(teamRole ? { canEdit: canEditContent(teamRole, userId, g.authorId) } : {}),
     };

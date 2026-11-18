@@ -26,7 +26,12 @@ import {
   type NutritionSnapshot,
   type SuggestedMealItem,
 } from './nutrition-snapshot';
-import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
+import {
+  assertCanEditContent,
+  authorRoles,
+  canEditContent,
+  requireContentRole,
+} from './content-roles';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION, planSnapshotSchema } from './plan-snapshot';
@@ -77,6 +82,13 @@ export interface AdoptInput {
 
 /** Resumo de exercício no retrato, com o nome resolvido para a prévia. */
 export interface TemplateExerciseView {
+  /**
+   * O exercício do catálogo geral ou da comunidade, para o atalho "guia" (#396).
+   * `null` no exercício próprio do autor: o membro não abre o de outra pessoa.
+   */
+  exerciseId: number | null;
+  /** A comunidade tem guia dela (vídeo, fotos, dica) para este exercício. */
+  hasGuide: boolean;
   name: string;
   muscleGroup: string | null;
   targetSets: number;
@@ -91,6 +103,8 @@ export interface TemplateView {
   level: string | null;
   cover: MediaView | null;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396): "Bruno (dono)". `null` se saiu. */
+  authorRole: GroupRole | null;
   publishedAt: Date | null;
   updatedAt: Date;
   /** Treino: os exercícios na ordem. Nutrição: vazio. */
@@ -127,6 +141,8 @@ export interface TipView {
   image: MediaView | null;
   pinned: boolean;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396). `null` se saiu. */
+  authorRole: GroupRole | null;
   publishedAt: Date | null;
   updatedAt: Date;
   canEdit?: boolean;
@@ -530,6 +546,17 @@ export class ContentService {
     return Promise.all(rows.map((r) => this.tipView(r, userId, null)));
   }
 
+  /** Uma dica publicada (Cm-15, #396), buscada com o `groupId` da URL. */
+  async getTipForMember(userId: string, groupId: string, id: string): Promise<TipView> {
+    await this.assertMember(userId, groupId);
+    const row = await this.prisma.groupTip.findFirst({
+      where: { id, groupId, publishedAt: { not: null } },
+      include: TIP_INCLUDE,
+    });
+    if (!row) throw new NotFoundException('Tip not found');
+    return this.tipView(row, userId, null);
+  }
+
   /**
    * Adota um plano publicado. Treino vira plano da pessoa (uma vez só: a
    * segunda tentativa responde 409 com o plano que ela já tem). Nutrição aplica
@@ -654,6 +681,11 @@ export class ContentService {
     });
     if (!row) throw new NotFoundException('Tip not found');
     return row;
+  }
+
+  private async authorRole(groupId: string, authorId: string | null): Promise<GroupRole | null> {
+    if (!authorId) return null;
+    return (await authorRoles(this.prisma, groupId, [authorId])).get(authorId) ?? null;
   }
 
   private async resolveCover(groupId: string, fileId: string | null | undefined) {
@@ -786,6 +818,7 @@ export class ContentService {
       level: row.level,
       cover: await this.media.viewOrNull(row.cover),
       authorName: row.author?.name ?? TEAM_AUTHOR,
+      authorRole: await this.authorRole(row.groupId, row.authorId),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole
@@ -845,6 +878,16 @@ export class ContentService {
           })
         : [];
     const porId = new Map(catalogo.map((e) => [e.id, e]));
+    const comGuia = new Set(
+      catalogo.length
+        ? (
+            await this.prisma.groupExerciseGuide.findMany({
+              where: { groupId, exerciseId: { in: catalogo.map((e) => e.id) } },
+              select: { exerciseId: true },
+            })
+          ).map((g) => g.exerciseId)
+        : [],
+    );
     return [...parsed.data.exercises]
       .sort((a, b) => a.order - b.order)
       .map((e) => {
@@ -853,8 +896,11 @@ export class ContentService {
             ? porId.get(e.catalogExerciseId)
             : e.source === 'group'
               ? porId.get(e.groupExerciseId)
-              : { name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+              : { id: null, name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+        const exerciseId = ex?.id ?? null;
         return {
+          exerciseId,
+          hasGuide: exerciseId !== null && comGuia.has(exerciseId),
           name: ex?.name ?? 'Exercício',
           muscleGroup: ex?.muscleGroup ?? null,
           targetSets: e.targetSets,
@@ -872,6 +918,7 @@ export class ContentService {
       image: await this.media.viewOrNull(row.image),
       pinned: row.pinned,
       authorName: row.author?.name ?? TEAM_AUTHOR,
+      authorRole: await this.authorRole(row.groupId, row.authorId),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole ? { canEdit: this.canEdit(teamRole, userId, row.authorId) } : {}),

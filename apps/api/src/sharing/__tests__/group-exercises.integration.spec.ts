@@ -534,4 +534,58 @@ describe('catálogo de exercícios da comunidade (integração)', () => {
       NotFoundException,
     );
   });
+
+  describe('guia da academia para o membro (#396)', () => {
+    it('abre um guia pelo id, com o papel de quem escreveu; de outra comunidade é 404', async () => {
+      const a = await comunidade();
+      const b = await comunidade('Outra');
+      await catalog.setGuide(a.prof, a.groupId, halteres.id, { tips: 'Comece leve.' });
+      await expect(catalog.getForMember(a.membro, a.groupId, halteres.id)).resolves.toMatchObject({
+        exerciseId: halteres.id,
+        tips: 'Comece leve.',
+        authorRole: 'PROFESSIONAL',
+      });
+      // O guia é da comunidade A: pela URL da B (onde o membro da B está), não existe.
+      await catalog.setGuide(b.dono, b.groupId, barra.id, { tips: 'y' });
+      await expect(catalog.getForMember(b.membro, b.groupId, halteres.id)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      // E quem é de fora não abre o da A.
+      await expect(catalog.getForMember(b.membro, a.groupId, halteres.id)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('o membro vê os equipamentos da academia, com os próprios dela', async () => {
+      const a = await comunidade();
+      await catalog.setEquipment(a.dono, a.groupId, ['halteres', 'barra'], ['Remo da casa']);
+      await expect(catalog.equipmentForMember(a.membro, a.groupId)).resolves.toEqual({
+        equipment: ['halteres', 'barra'],
+        customEquipment: ['Remo da casa'],
+      });
+      const b = await comunidade('Outra');
+      await expect(catalog.equipmentForMember(b.membro, a.groupId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('quem saiu da comunidade não vê mais guia, vídeo nem fotos', async () => {
+      const a = await comunidade();
+      const video = await envia(a.dono, a.groupId, 'exercise_video', 'video/mp4', MP4);
+      await catalog.setGuide(a.dono, a.groupId, halteres.id, { videoFileId: video });
+      await expect(catalog.getForMember(a.membro, a.groupId, halteres.id)).resolves.toMatchObject({
+        video: expect.objectContaining({ id: video }),
+      });
+      await prisma.groupMembership.update({
+        where: { groupId_userId: { groupId: a.groupId, userId: a.membro } },
+        data: { status: 'LEFT' },
+      });
+      await expect(catalog.getForMember(a.membro, a.groupId, halteres.id)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(catalog.listForMember(a.membro, a.groupId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
 });

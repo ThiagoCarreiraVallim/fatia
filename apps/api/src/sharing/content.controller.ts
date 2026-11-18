@@ -188,4 +188,11 @@ export class ContentController {
   tips(@CurrentUser() user: CurrentUserPayload, @Param('groupId', ParseUUIDPipe) groupId: string) {
     return this.content.listTipsForMember(user.id, groupId);
   }
+
+  /** A dica aberta (Cm-15, #396): só publicada e desta comunidade. */
+  @Get('tips/:id')
+  @RequireGroupAction('content.read')
+  tip(@CurrentUser() user: CurrentUserPayload, @Param() p: ContentParamDto) {
+    return this.content.getTipForMember(user.id, p.groupId, p.id);
+  }
 }
