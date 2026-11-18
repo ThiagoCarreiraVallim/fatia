@@ -39,6 +39,8 @@ export interface UpdateGroupInput {
   visibility?: GroupVisibility;
   timezone?: string;
   postPolicy?: PostPolicy;
+  /** Os posts automáticos ligados (#394). */
+  autoPosts?: ('PLAN' | 'TIP' | 'EXERCISE' | 'CHALLENGE')[];
   /** Vale para quem entrar dali em diante: quem já está dentro não passa a dever nada. */
   requiredSharingScopes?: ShareScope[];
 }

@@ -535,6 +535,15 @@ export function repeatOptions(first: Date): { value: AnnouncementRepeat; label: 
   ];
 }
 
+/** Os posts automáticos que a equipe liga e desliga (prancha Pn-14). */
+export const AUTO_POST_KINDS: AutoPostKind[] = ['PLAN', 'TIP', 'EXERCISE', 'CHALLENGE'];
+export const AUTO_POST_LABEL: Record<AutoPostKind, { label: string; hint: string }> = {
+  PLAN: { label: 'Plano novo publicado', hint: 'Com o botão Ver o plano' },
+  TIP: { label: 'Dica nova', hint: 'Com o título e o botão Ver a dica' },
+  EXERCISE: { label: 'Exercício novo no guia', hint: 'Com o botão Ver o exercício' },
+  CHALLENGE: { label: 'Desafio começa', hint: 'Com o botão Ver o desafio' },
+};
+
 export type CommunityTab = 'feed' | 'for-you' | 'challenges' | 'content';
 
 /**

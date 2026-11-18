@@ -35,12 +35,12 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 - [x] 9. MCP (list/create aceitam enquete; vote/get poll; blocks) + chat cards
 - [x] 10. api-client (community-feed.ts: tipos, feedApi/moderationApi/announcementsApi/blocksApi/forYouApi, helpers de enquete/horário/repetir; abas Mural/Para você/Desafios/Conteúdo, Agenda escondida até #397; markdown-lite título e citação + renderers web/app)
 - [x] 11. Web aluno (composer Post/Enquete/Prévia/toolbar/publicar como/fixar; poll-block; block-dialog; menu copiar/ocultar/bloquear/denunciar; fixar com prazo; carrossel; filtros; novos+markSeen; for-you; /you/blocked; testes vistos vermelhos: 13 falhas com os arquivos antigos)
-- [ ] 12. Web painel (Pn-14, Pn-26)
+- [x] 12. Web painel: seção nova `announcements` (Comunicados e enquetes, dono+profissional: novo comunicado agora/agendado 15 min/repetir/fixar com prazo/push, agendados com cancelar, enquetes Pn-26 com nova enquete); Moderação (dono) ganhou avisos fixados (subir/desafixar) e posts automáticos. Testes vermelhos vistos (3 falhas com a página antiga).
 - [ ] 13. App (Cm-03/05/06/07/20/21) + bloqueados
 - [ ] 14. ADR 032, PERMISSIONS, REDESIGN_PROGRESS, lint/typecheck/testes
 
 ## Próximo passo
 
-Item 12 web painel: apps/web/src/app/(app)/org/[groupId]/moderation (Pn-14: pins ordem/desafixar, comunicado novo com horário 15 min/repetir/prazo do fixado/push, agendados com cancelar, quem posta, posts automáticos; Pn-26: enquetes). Depois 13 app.
+Item 13 app (Expo): apps/mobile mural (composer, poll, menu copiar/ocultar/bloquear, fixar com prazo, carrossel, filtros, novos), for-you, you/blocked, org announcements (o org-panel do app já lista a seção nova: precisa da rota). Gavetas snapPoints 85% + rodapé pb-8. Banco de teste: o scratchpad sumiu no reinício; recriar o env com DATABASE_URL de fatia_t394 (mesmo host/credenciais do .env da api).
 
 Arquivos: sharing/{block,announcement}.{service,controller}.ts, post.service.ts (reescrito: pins/posts separados no FeedPage, visibleWhere com bloqueio e ocultar), dto/post.dto.ts, permissions.ts + docs/PERMISSIONS.md (`announcement.publish`), users/account.service.ts (export), testes mural.integration.spec.ts, user-isolation (#394).

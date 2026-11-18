@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUTO_POST_LABEL,
   FEED_FILTER_LABEL,
   activeCommunityTab,
   announcementSlots,
@@ -111,5 +112,30 @@ describe('mural #394: enquete, avisos, comunicados e abas', () => {
       ['content', 'Conteúdo', '/community/g1/content'],
     ]);
     expect(activeCommunityTab('/community/g1/for-you')).toBe('for-you');
+  });
+});
+
+describe('painel: Comunicados e enquetes (#394)', () => {
+  it('é do dono e do profissional, que comunicam (announcement.publish)', async () => {
+    const { panelSections, panelHref, activePanelSection } = await import('../community-panel');
+    for (const role of ['OWNER', 'PROFESSIONAL'] as const) {
+      expect(panelSections(role).find((s) => s.section === 'announcements')).toMatchObject({
+        label: 'Comunicados e enquetes',
+        path: '/announcements',
+      });
+    }
+    expect(panelHref('g1', 'announcements')).toBe('/org/g1/announcements');
+    expect(activePanelSection('/org/g1/announcements')).toBe('announcements');
+  });
+
+  it('posts automáticos: os quatro tipos com o nome da prancha Pn-14', () => {
+    expect(
+      Object.fromEntries(Object.entries(AUTO_POST_LABEL).map(([k, v]) => [k, v.label])),
+    ).toEqual({
+      PLAN: 'Plano novo publicado',
+      TIP: 'Dica nova',
+      EXERCISE: 'Exercício novo no guia',
+      CHALLENGE: 'Desafio começa',
+    });
   });
 });

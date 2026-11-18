@@ -51,6 +51,7 @@ describe('quem abre o painel e com que seções', () => {
       'exercises',
       'challenges',
       'moderation',
+      'announcements',
       'agent',
       'seats',
       'settings',
@@ -62,6 +63,7 @@ describe('quem abre o painel e com que seções', () => {
       'content',
       'exercises',
       'challenges',
+      'announcements',
     ]);
     expect(panelSections('CREATOR')).toEqual([]);
     expect(panelSections('MEMBER')).toEqual([]);

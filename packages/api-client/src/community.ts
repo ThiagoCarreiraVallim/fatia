@@ -46,6 +46,8 @@ export interface MyGroup {
   postPolicy: PostPolicy;
   /** O que a comunidade exige que membros compartilhem (vale para quem entra como membro). */
   requiredSharingScopes: ShareScope[];
+  /** Os posts automáticos ligados (#394). */
+  autoPosts?: ('PLAN' | 'TIP' | 'EXERCISE' | 'CHALLENGE')[];
 }
 
 /** Quem da equipe recebe o que a pessoa compartilhar. Só nome e papel. */

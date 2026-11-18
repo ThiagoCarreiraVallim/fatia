@@ -3,15 +3,20 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ShieldCheck } from 'lucide-react';
+import { ArrowUp, ShieldCheck } from 'lucide-react';
 import {
   ApiError,
+  AUTO_POST_KINDS,
+  AUTO_POST_LABEL,
+  feedApi,
   moderationApi,
+  pinDeadlineLabel,
   orgApi,
   POST_POLICY_LABEL,
   relativeTime,
   REPORT_REASON_LABEL,
   reportSummary,
+  type AutoPostKind,
   type PostPolicy,
   type ReportQueueItem,
 } from '@fatia/api-client';
@@ -21,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 
 function erroDaApi(err: unknown, padrao: string): string {
   return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
@@ -29,8 +35,10 @@ function erroDaApi(err: unknown, padrao: string): string {
 const POLITICAS: PostPolicy[] = ['ALL_MEMBERS', 'TEAM_ONLY'];
 
 /**
- * Moderação do mural (Fase 8b, ADR 032): quem publica, a fila de denúncias, os
- * removidos dos últimos 30 dias e os banidos. Só o dono abre esta seção.
+ * Moderação do mural (Fase 8b, ADR 032; #394, prancha Pn-14): os avisos
+ * fixados na ordem do carrossel, os posts automáticos, quem publica, a fila de
+ * denúncias, os removidos dos últimos 30 dias e os banidos. Só o dono abre
+ * esta seção; comunicados e enquetes ficam em "Comunicados e enquetes".
  */
 export default function OrgModerationPage() {
   const g = useOrgGroup();
@@ -49,6 +57,11 @@ export default function OrgModerationPage() {
     queryKey: orgKeys.bans(g.id),
     queryFn: () => moderationApi.bans(g.id),
   });
+  const mural = useQuery({
+    queryKey: [...orgKeys.moderation(g.id), 'pins'],
+    queryFn: () => feedApi.list(g.id),
+  });
+  const fixados = mural.data?.pins ?? [];
   const recarregar = () => {
     void qc.invalidateQueries({ queryKey: orgKeys.moderation(g.id) });
     void qc.invalidateQueries({ queryKey: communityKeys.feed(g.id) });
@@ -63,6 +76,31 @@ export default function OrgModerationPage() {
     },
     onError: (err) => toast(erroDaApi(err, 'Não deu para salvar agora.')),
   });
+  const ordem = useMutation({
+    mutationFn: (postIds: string[]) => moderationApi.reorderPins(g.id, postIds),
+    onSuccess: recarregar,
+    onError: (err) => toast(erroDaApi(err, 'Não deu para mudar a ordem agora.')),
+  });
+  const desafixar = useMutation({
+    mutationFn: (id: string) => moderationApi.unpin(g.id, id),
+    onSuccess: () => {
+      toast('Aviso saiu do topo. Continua no mural.');
+      recarregar();
+    },
+    onError: (err) => toast(erroDaApi(err, 'Não deu para desafixar agora.')),
+  });
+  const autos = g.autoPosts ?? AUTO_POST_KINDS;
+  const automaticos = useMutation({
+    mutationFn: (autoPosts: AutoPostKind[]) => orgApi.update(g.id, { autoPosts }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orgKeys.group(g.id) }),
+    onError: (err) => toast(erroDaApi(err, 'Não deu para salvar agora.')),
+  });
+  const subir = (i: number) => {
+    const ids = fixados.map((p) => p.id);
+    [ids[i - 1], ids[i]] = [ids[i]!, ids[i - 1]!];
+    ordem.mutate(ids);
+  };
+
   const resolver = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'remove' | 'dismiss' }) =>
       moderationApi.resolve(g.id, id, action),
@@ -101,6 +139,93 @@ export default function OrgModerationPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
+      <section className="space-y-2" aria-labelledby="fixados">
+        <h2 id="fixados" className="text-sm font-semibold">
+          Avisos fixados
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Viram um carrossel no topo do mural, nesta ordem.
+        </p>
+        {mural.isPending ? (
+          <Skeleton className="h-16 rounded-2xl" />
+        ) : fixados.length ? (
+          <ol
+            aria-label="Avisos fixados"
+            className="divide-y rounded-2xl border border-subtle bg-card"
+          >
+            {fixados.map((p, i) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span className="min-w-0 text-sm">
+                  <span className="block truncate font-semibold">
+                    {`${i + 1}. ${p.title ?? p.body.split('\n')[0] ?? ''}`}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {`${p.author.displayName} · ${pinDeadlineLabel(p.pinnedUntil).toLowerCase()}`}
+                  </span>
+                </span>
+                <span className="flex shrink-0 gap-1">
+                  {i > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Subir ${p.title ?? 'aviso'} na ordem`}
+                      disabled={ordem.isPending}
+                      onClick={() => subir(i)}
+                    >
+                      <ArrowUp size={14} aria-hidden />
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={desafixar.isPending}
+                    onClick={() => desafixar.mutate(p.id)}
+                  >
+                    Desafixar
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Nenhum aviso fixado. O mural começa direto nos posts.
+          </p>
+        )}
+      </section>
+
+      <section className="space-y-2" aria-labelledby="automaticos">
+        <h2 id="automaticos" className="text-sm font-semibold">
+          Posts automáticos
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Saem como post da equipe, no nome de quem publicou. Dá para apagar depois.
+        </p>
+        <ul className="divide-y rounded-2xl border border-subtle bg-card">
+          {AUTO_POST_KINDS.map((k) => {
+            const on = autos.includes(k);
+            return (
+              <li key={k} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span>
+                  <span className="block font-medium">{AUTO_POST_LABEL[k].label}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {AUTO_POST_LABEL[k].hint}
+                  </span>
+                </span>
+                <Switch
+                  checked={on}
+                  disabled={automaticos.isPending}
+                  label={AUTO_POST_LABEL[k].label}
+                  onCheckedChange={(v) =>
+                    automaticos.mutate(v ? [...autos, k] : autos.filter((x) => x !== k))
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
       <section className="space-y-2" aria-labelledby="quem-publica">
         <h2 id="quem-publica" className="text-sm font-semibold">
           Quem publica no mural

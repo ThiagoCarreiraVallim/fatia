@@ -35,6 +35,7 @@ export type PanelSection =
   | 'exercises'
   | 'challenges'
   | 'moderation'
+  | 'announcements'
   | 'agent'
   | 'seats'
   | 'settings';
@@ -54,6 +55,11 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
   challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
   moderation: { section: 'moderation', label: 'Moderação', path: '/moderation' },
+  announcements: {
+    section: 'announcements',
+    label: 'Comunicados e enquetes',
+    path: '/announcements',
+  },
   agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
@@ -78,6 +84,8 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.content,
       SECTIONS.exercises,
       SECTIONS.challenges,
+      // Comunicar é do dono e do profissional (`announcement.publish`, #394).
+      SECTIONS.announcements,
     ];
   }
   return [];

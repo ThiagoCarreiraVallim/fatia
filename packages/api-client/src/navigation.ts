@@ -460,6 +460,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/exercises/:exerciseId', title: 'Exercício', parent: '/org/:id/exercises' },
   { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
   { pattern: '/org/:id/moderation', title: 'Moderação', parent: '/org/:id' },
+  { pattern: '/org/:id/announcements', title: 'Comunicados e enquetes', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
