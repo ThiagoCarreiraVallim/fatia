@@ -599,6 +599,7 @@ export class PostService {
           (groupName) => reactionNotice({ groupId, groupName, author }),
           `${REACTION_KEY_PREFIX}${row.id}`,
           author,
+          eu.hidden,
         );
       }
     } else {
@@ -633,6 +634,8 @@ export class PostService {
         row.membershipId,
         (groupName) => commentNotice({ groupId, groupName, author: nome }),
         `comment:${row.id}`,
+        undefined,
+        eu.hidden,
       );
     }
     return {
@@ -1130,12 +1133,17 @@ export class PostService {
     notice: (groupName: string) => Notice,
     groupKey?: string,
     actor?: string,
+    /**
+     * Quem tem bloqueio com quem agiu (#394). O post em nome da comunidade
+     * continua visível para os dois, mas o autor não fica sabendo da pessoa.
+     */
+    blocked: readonly string[] = [],
   ): Promise<void> {
     const autor = await this.prisma.groupMembership.findFirst({
       where: { id: membershipId, status: MembershipStatus.ACTIVE },
       select: { userId: true, group: { select: { name: true } } },
     });
-    if (!autor) return;
+    if (!autor || blocked.includes(autor.userId)) return;
     const aviso = notice(autor.group.name);
     if (groupKey) {
       this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name, actor);

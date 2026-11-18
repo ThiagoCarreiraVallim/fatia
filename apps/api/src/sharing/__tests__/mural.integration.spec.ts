@@ -88,6 +88,35 @@ describe('mural do redesign (integração)', () => {
   });
 
   describe('bloquear pessoa', () => {
+    it('comentário e reação num post em nome da comunidade não avisam quem tem bloqueio', async () => {
+      const a = await comunidade();
+      const doProf = await posts.create(a.prof, a.groupId, { body: 'Post do prof' });
+      const daComunidade = await posts.create(a.prof, a.groupId, {
+        body: 'Aviso geral',
+        publishedAs: 'GROUP',
+      });
+      await blocks.block(a.ana, { groupId: a.groupId, postId: doProf.id });
+      enviados.length = 0;
+      agrupados.length = 0;
+
+      // O post da comunidade continua visível para a Ana, mas o prof não fica sabendo dela.
+      await posts.comment(a.ana, a.groupId, daComunidade.id, { body: 'Valeu' });
+      await posts.react(a.ana, a.groupId, daComunidade.id, 'FIRE');
+      const paraProf = [
+        ...enviados.filter((e) => e.userIds.includes(a.prof)),
+        ...agrupados.filter((e) => e.userId === a.prof),
+      ];
+      expect(paraProf).toEqual([]);
+
+      // Sem bloqueio, o aviso sai normalmente.
+      await posts.comment(a.gabi, a.groupId, daComunidade.id, { body: 'Show' });
+      expect(
+        [...enviados, ...agrupados.map((g) => ({ userIds: [g.userId] }))].some((e) =>
+          e.userIds.includes(a.prof),
+        ),
+      ).toBe(true);
+    });
+
     it('posts, comentários e reações somem dos dois lados, em todas as comunidades', async () => {
       const a = await comunidade();
       const b = await comunidade();
