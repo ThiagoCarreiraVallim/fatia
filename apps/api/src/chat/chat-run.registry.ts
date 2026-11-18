@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 /**
  * As respostas do chat em andamento, desacopladas da requisição que as pediu (ADR 035).
@@ -52,9 +53,17 @@ export class ChatRun {
     this.markClosed = resolve;
   });
 
+  /**
+   * O token deste turno, que vai ao agente e volta no header da gravação automática (ADR 039):
+   * sem um turno ativo com este token, desta conversa e desta pessoa, nada grava sozinho.
+   */
+  readonly token = randomUUID();
+
   constructor(
     readonly userId: string,
     readonly conversationId: string,
+    /** A resposta à mesma mensagem da pessoa: atravessa a retomada e o "Continuar". */
+    readonly answerKey: string = randomUUID(),
   ) {}
 
   /** Comentário SSE periódico para quem assina; não é guardado nem numerado. */
@@ -136,6 +145,8 @@ export class ChatRun {
 @Injectable()
 export class ChatRunRegistry implements OnModuleDestroy {
   private readonly runs = new Map<string, ChatRun>();
+  /** A resposta corrente de cada conversa. Memória do processo: reiniciar começa outra. */
+  private readonly answers = new Map<string, string>();
   private readonly timers = new Set<NodeJS.Timeout>();
 
   /** 409 quando a conversa já está respondendo: dois turnos na mesma thread se atropelam. */
@@ -149,9 +160,15 @@ export class ChatRunRegistry implements OnModuleDestroy {
     }
   }
 
-  start(userId: string, conversationId: string): ChatRun {
+  /**
+   * `continues`: a retomada de uma pausa ou o "Continuar" — a mesma resposta, e o teto de
+   * gravações automáticas segue contando dela.
+   */
+  start(userId: string, conversationId: string, opts: { continues?: boolean } = {}): ChatRun {
     this.assertIdle(conversationId);
-    const run = new ChatRun(userId, conversationId);
+    const anterior = opts.continues ? this.answers.get(conversationId) : undefined;
+    const run = new ChatRun(userId, conversationId, anterior ?? randomUUID());
+    this.answers.set(conversationId, run.answerKey);
     run.startHeartbeat(HEARTBEAT_MS);
     this.runs.set(conversationId, run);
     return run;
@@ -178,6 +195,12 @@ export class ChatRunRegistry implements OnModuleDestroy {
   find(userId: string, conversationId: string): ChatRun | null {
     const run = this.runs.get(conversationId);
     return run && run.userId === userId ? run : null;
+  }
+
+  /** O turno em andamento com este token, desta pessoa e desta conversa. */
+  active(userId: string, conversationId: string, token: string): ChatRun | null {
+    const run = this.find(userId, conversationId);
+    return run && !run.done && run.token === token ? run : null;
   }
 
   isRunning(userId: string, conversationId: string): boolean {

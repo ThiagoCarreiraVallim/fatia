@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import type { McpConnectionService } from '../../auth/mcp-connection.service';
 import { McpController } from '../mcp.controller';
@@ -33,7 +34,11 @@ const user = { id: 'user-a', email: 'a@test.local', role: 'USER' as const, timez
 describe('McpController: último acesso', () => {
   it('toca a conexão pelo Bearer de quem chamou', async () => {
     const connections = { touch: jest.fn().mockResolvedValue(undefined) };
-    const controller = new McpController(registry, connections as unknown as McpConnectionService);
+    const controller = new McpController(
+      registry,
+      connections as unknown as McpConnectionService,
+      new ConfigService({}),
+    );
     const req = { headers: { authorization: 'Bearer token-do-claude' }, body: {} } as Request;
 
     await controller.handle(req, res, user);
@@ -43,7 +48,11 @@ describe('McpController: último acesso', () => {
 
   it('a falha do toque não derruba a chamada da ferramenta', async () => {
     const connections = { touch: jest.fn().mockRejectedValue(new Error('banco fora')) };
-    const controller = new McpController(registry, connections as unknown as McpConnectionService);
+    const controller = new McpController(
+      registry,
+      connections as unknown as McpConnectionService,
+      new ConfigService({}),
+    );
     const req = { headers: { authorization: 'Bearer x' }, body: {} } as Request;
 
     await expect(controller.handle(req, res, user)).resolves.toBeUndefined();

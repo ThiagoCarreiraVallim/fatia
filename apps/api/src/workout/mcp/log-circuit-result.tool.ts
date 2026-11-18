@@ -21,6 +21,7 @@ export class LogCircuitResultTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Registra o resultado de um circuito (plano com circuit, de create_workout_plan): rounds e ' +
     'exercícios do round incompleto (AMRAP e For Time), tempo final (For Time terminado), ' +

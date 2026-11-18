@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { MemoryCategory } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
 
 /**
@@ -16,15 +17,20 @@ export const TETO_DA_MEMORIA = 500;
 export class MemoryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listar(userId: string) {
+  async list(userId: string) {
     return this.prisma.userMemory.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, content: true, createdAt: true },
+      select: { id: true, content: true, category: true, createdAt: true },
     });
   }
 
-  async lembrar(userId: string, conteudo: string) {
+  /** O "n de 50" da tela (Al-M9). */
+  count(userId: string): Promise<number> {
+    return this.prisma.userMemory.count({ where: { userId } });
+  }
+
+  async remember(userId: string, conteudo: string, category?: MemoryCategory) {
     const texto = conteudo.replace(/\s+/g, ' ').trim();
     if (!texto) throw new BadRequestException('A memória não pode ser vazia.');
     if (texto.length > TETO_DA_MEMORIA) {
@@ -35,19 +41,26 @@ export class MemoryService {
     const total = await this.prisma.userMemory.count({ where: { userId } });
     if (total >= TETO_DE_MEMORIAS) {
       throw new BadRequestException(
-        `Já há ${TETO_DE_MEMORIAS} memórias guardadas. Esqueça uma antes de guardar outra.`,
+        `Já há ${TETO_DE_MEMORIAS} memórias guardadas, o limite. Pergunte à pessoa qual apagar ` +
+          '(forget_memory) antes de guardar outra; não apague por conta própria.',
       );
     }
     return this.prisma.userMemory.create({
-      data: { userId, content: texto },
-      select: { id: true, content: true, createdAt: true },
+      data: { userId, content: texto, ...(category ? { category } : {}) },
+      select: { id: true, content: true, category: true, createdAt: true },
     });
   }
 
   /** Pelo par, e não pelo id sozinho: o id vem do modelo, ou da URL. */
-  async esquecer(userId: string, id: string): Promise<{ forgotten: true }> {
+  async forget(userId: string, id: string): Promise<{ forgotten: true }> {
     const { count } = await this.prisma.userMemory.deleteMany({ where: { id, userId } });
     if (count === 0) throw new NotFoundException('Memória não encontrada.');
     return { forgotten: true };
+  }
+
+  /** "Apagar todas" (Al-M9). Só pela tela: não há tool que faça isso (#385). */
+  async forgetAll(userId: string): Promise<{ forgotten: number }> {
+    const { count } = await this.prisma.userMemory.deleteMany({ where: { userId } });
+    return { forgotten: count };
   }
 }

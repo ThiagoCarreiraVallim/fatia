@@ -87,6 +87,15 @@ class ContextoDoTurno:
     write_search_query: QueryWriter | None = None
     # Quantas consultas no turno antes de perguntar "Continuo?" (`AGENT_CHAT_PAUSE_AFTER_TOOLS`).
     pause_after_tools: int = 14
+    # A conversa deste turno: vai no header da gravação automática, para o `apps/api` amarrar a
+    # gravação (e o Desfazer) à conversa da pessoa.
+    conversation_id: str | None = None
+    # As confirmáveis que gravam sem cartão (modo "Automático" da categoria, ADR 039). Já
+    # filtradas por `automaticas` em `tool_policy.py`.
+    auto_write: frozenset[str] = frozenset()
+    # O token do turno que o `apps/api` abriu (#385). Vai como `runId` no header da gravação
+    # automática, e o `/mcp` só aceita se for de um turno ativo desta conversa. Sem ele, pede o OK.
+    run_token: str | None = None
 
 
 class EstadoDaConversa(TypedDict, total=False):

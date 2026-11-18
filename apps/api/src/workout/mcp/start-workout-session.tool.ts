@@ -21,6 +21,7 @@ export class StartWorkoutSessionTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Inicia uma sessão de treino. Sem planId é treino livre: monte na hora registrando séries ' +
     'de qualquer exercício (cardio é exercício como os outros; uma sessão só de esteira é um ' +

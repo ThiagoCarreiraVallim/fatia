@@ -70,8 +70,8 @@ import {
  * `filter` e o bloqueio em `list_group_posts`: muda o braço A.
  */
 
-const SHA_ENTIDADE = '05327d9c94a66d48849b491e479f403f86f771c44ae1c16a003ae0114f85b6fc';
-const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
+const SHA_ENTIDADE = '3c3f0f1f259bf4d4a6a20696fbfe6447f42863a14e688d73b43e5c2329a92b92';
+const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
@@ -161,7 +161,11 @@ describe('superfície do /mcp', () => {
 
     it('com a flag desligada, o controller responde 400 antes de abrir o servidor MCP', async () => {
       const registry = { intencaoHabilitada: () => false } as unknown as McpToolRegistry;
-      const controller = new McpController(registry, { touch: async () => undefined } as never);
+      const controller = new McpController(
+        registry,
+        { touch: async () => undefined } as never,
+        config({}),
+      );
       const req = { headers: { [HEADER_SUPERFICIE]: 'intencao' } } as unknown as Request;
       await expect(
         controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),

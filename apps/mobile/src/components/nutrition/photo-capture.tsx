@@ -81,8 +81,8 @@ export function PhotoCapture({ onCapturada, ativo }: Props) {
           O registro por foto precisa da câmera
         </Text>
         <Text className="text-center text-sm text-muted-foreground">
-          A foto é analisada e descartada: ela não é salva no Fatia nem aparece no seu histórico.
-          Você revisa o que a IA entendeu antes de qualquer coisa ser registrada.
+          A foto vai para a IA reconhecer os alimentos e só fica guardada com a refeição se você
+          permitir. Você revisa o que a IA entendeu antes de qualquer coisa ser registrada.
         </Text>
         {permissao.canAskAgain ? (
           <Button onPress={() => void pedirPermissao()}>Permitir câmera</Button>

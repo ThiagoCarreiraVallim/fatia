@@ -24,7 +24,7 @@ cd apps/api && npx jest src/sharing/__tests__/post.integration.spec.ts
 
 ## Checklist
 
-- [x] 1. Schema + migration (`20261117200000_mural_polls_blocks`)
+- [x] 1. Schema + migration (`20261118100000_mural_polls_blocks`)
 - [x] 2. API bloqueio (UserBlock) + filtros + testes + user-isolation
 - [x] 3. API ocultar post, filtros do mural, pins com ordem/prazo, publicar como, não vistos
 - [x] 4. API enquetes

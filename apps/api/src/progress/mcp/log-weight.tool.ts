@@ -16,6 +16,7 @@ export class LogWeightTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Registra uma medição de peso corporal. ' +
     'Exemplo: {"weightKg":78.4,"loggedAt":"2026-07-29T07:10:00-03:00","notes":"em jejum, pela manhã"}';

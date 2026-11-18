@@ -152,6 +152,14 @@ const ORIGEM_DOS_PASSOS: Record<string, string> = {
   WEBHOOK: 'Integração',
 };
 
+/** A categoria da memória (prancha Al-M9, #385). */
+const CATEGORIA_DA_MEMORIA: Record<string, string> = {
+  PREFERENCE: 'Preferência',
+  ROUTINE: 'Rotina',
+  TRAINING: 'Treino',
+  HABIT: 'Hábito',
+};
+
 const FOCO_DO_BLOCO: Record<string, string> = { strength: 'Força', hypertrophy: 'Hipertrofia' };
 /** Os tipos de lembrete (#389), como a prancha Al-V3 os chama. */
 const TIPO_DE_LEMBRETE: Record<string, string> = {
@@ -387,6 +395,7 @@ export const CAMPOS: Record<string, Campo> = {
   poll: { rotulo: 'Enquete', formato: (valor) => pollSummary(valor) },
   description: { rotulo: 'Descrição', formato: texto },
   content: { rotulo: 'O que lembrar', formato: texto },
+  category: { rotulo: 'Categoria', formato: deMapa(CATEGORIA_DA_MEMORIA) },
   kcalPer100g: { rotulo: 'Calorias em 100 g', formato: comUnidade('kcal', 0) },
   proteinPer100g: { rotulo: 'Proteína em 100 g', formato: comUnidade('g') },
   carbsPer100g: { rotulo: 'Carboidrato em 100 g', formato: comUnidade('g') },

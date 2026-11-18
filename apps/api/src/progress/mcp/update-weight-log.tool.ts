@@ -16,6 +16,7 @@ export class UpdateWeightLogTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Atualiza um log de peso existente. ' +
     'Exemplo: {"weightLogId":"11111111-2222-4333-8444-555555555555","weightKg":77.9}';

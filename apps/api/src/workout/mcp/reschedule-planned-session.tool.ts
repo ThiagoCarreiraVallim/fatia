@@ -16,6 +16,7 @@ export class ReschedulePlannedSessionTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Move uma sessão da agenda de treinos para outro dia, de hoje até o último dia do plano ' +
     '(nunca depois). É só a agenda do usuário: não reserva nada e não avisa ninguém. ' +

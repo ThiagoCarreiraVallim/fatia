@@ -64,6 +64,18 @@ ACCEPT = "application/json, text/event-stream"
 # saísse da lista.
 
 
+# A gravação automática (ADR 039, #385): com este header o `/mcp` confere o modo da categoria
+# e os tetos, guarda o "antes" e devolve o cartão "Gravado". Sem ele, executa como sempre.
+HEADER_AUTO_WRITE = "x-fatia-auto-write"
+# A credencial de serviço do agente (`AGENT_API_KEY`), que só acompanha o header acima: o `/mcp`
+# recusa com 403 a gravação automática pedida por quem não a tem (cliente OAuth, token de API).
+HEADER_AGENT_KEY = "x-fatia-agent-key"
+
+# O começo do texto com que o `/mcp` recusa uma gravação automática que precisa do OK da
+# pessoa (teto da resposta, itens demais, modo trocado). A escrita volta ao cartão.
+AUTO_WRITE_NEEDS_OK = "AUTO_WRITE_NEEDS_OK"
+
+
 @dataclass(frozen=True)
 class McpToolInfo:
     """Uma tool como o `/mcp` a anuncia. `annotations` é o que decide o recorte."""
@@ -88,6 +100,7 @@ class McpClient:
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
         headers: Mapping[str, str] | None = None,
+        agent_key: str = "",
     ) -> None:
         # `headers` existe para o eval da fronteira escolher a superfície de tools
         # (`x-fatia-superficie`). Os três de baixo vêm depois e não são
@@ -103,6 +116,7 @@ class McpClient:
             transport=transport,
         )
         self._url = base_url
+        self._agent_key = agent_key.strip()
         self._proximo_id = 0
         # Abre o span de cada tool no Langfuse (ADR 034). `None` fora do chat.
         self.tool_tracer: Callable[[str], ToolTrace] | None = None
@@ -139,7 +153,12 @@ class McpClient:
         raise McpResponseUnparseable("'tools/list' não parou de paginar depois de 20 páginas.")
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        read_only: bool = False,
+        auto_write: Mapping[str, Any] | None = None,
     ) -> "McpToolResult":
         """Executa a tool e devolve o texto que ela produziu.
 
@@ -151,7 +170,17 @@ class McpClient:
         trace = self.tool_tracer(name) if self.tool_tracer is not None else None
         try:
             resultado = await self._rpc(
-                "tools/call", {"name": name, "arguments": arguments}, read_only=read_only
+                "tools/call",
+                {"name": name, "arguments": arguments},
+                read_only=read_only,
+                # Um header só, montado aqui: quem chama não escolhe header nenhum, e o
+                # Bearer continua sendo só o da construção.
+                headers={
+                    HEADER_AUTO_WRITE: json.dumps(dict(auto_write)),
+                    HEADER_AGENT_KEY: self._agent_key,
+                }
+                if auto_write is not None
+                else None,
             )
         except McpError as exc:
             if trace is not None:
@@ -168,7 +197,12 @@ class McpClient:
         return saida
 
     async def _rpc(
-        self, method: str, params: dict[str, Any], *, read_only: bool = False
+        self,
+        method: str,
+        params: dict[str, Any],
+        *,
+        read_only: bool = False,
+        headers: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         """Uma chamada JSON-RPC.
 
@@ -187,11 +221,11 @@ class McpClient:
 
         try:
             try:
-                response = await self._client.post(self._url, json=corpo)
+                response = await self._client.post(self._url, json=corpo, headers=headers)
             except httpx.TransportError:
                 if not read_only:
                     raise
-                response = await self._client.post(self._url, json=corpo)
+                response = await self._client.post(self._url, json=corpo, headers=headers)
         except httpx.TimeoutException as exc:
             raise McpTimeout(
                 f"O /mcp não respondeu '{method}' dentro de MCP_TIMEOUT_S ({exc})."
@@ -249,6 +283,7 @@ def build_mcp_client(
         bearer=bearer,
         timeout_s=settings.mcp_timeout_s,
         transport=transport,
+        agent_key=settings.agent_api_key,
     )
 
 

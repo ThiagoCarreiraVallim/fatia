@@ -124,6 +124,10 @@ model User {
   conversations  Conversation[]
   memories       UserMemory[]
   aiConsents     AiConsent[]
+  /// O que a IA do chat faz sozinha, por categoria (ADR 039, #385). Sem linha = Perguntar antes.
+  aiWriteModes   AiWriteModeSetting[]
+  /// As gravações automáticas da IA, com o retrato para o Desfazer (ADR 039, #385).
+  aiAutoWrites   AiAutoWrite[]
   aiUsage        AiUsage[]
   subscriptions  UserSubscription[]
   invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
@@ -1762,9 +1766,11 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agentGroup Group?    @relation("ConversationAgent", fields: [agentGroupId], references: [id], onDelete: SetNull)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentGroup Group?        @relation("ConversationAgent", fields: [agentGroupId], references: [id], onDelete: SetNull)
   messages   Message[]
+  /// As gravações automáticas feitas nesta conversa (#385). Somem com ela.
+  autoWrites AiAutoWrite[]
 
   /// A listagem é sempre "minhas conversas, mais recente primeiro".
   @@index([userId, updatedAt])
@@ -1834,14 +1840,94 @@ model Message {
 /// apagada pela `forget_memory` ou pela gaveta de memórias do chat. Vai no `export_my_data` e
 /// morre com a conta pelo cascade.
 model UserMemory {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   userId    String
   content   String
-  createdAt DateTime @default(now())
+  /// Preferência, rotina, treino ou hábito (prancha Al-M9, #385). Nulo nas memórias de antes
+  /// da categoria: a tela mostra só a data, sem chutar uma categoria.
+  category  MemoryCategory?
+  createdAt DateTime        @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// Do que é a memória (prancha Al-M9). Nunca vista pela equipe.
+enum MemoryCategory {
+  PREFERENCE
+  ROUTINE
+  TRAINING
+  HABIT
+}
+
+/// As categorias do modo automático (ADR 039, item 1).
+enum AiWriteCategory {
+  /// Refeição, água, peso e passos.
+  DAY_LOG
+  /// Sessão, séries e plano.
+  WORKOUT
+  GOALS
+  MEMORIES
+}
+
+/// Perguntar antes (padrão) · Automático · Desligado.
+enum AiWriteMode {
+  ASK
+  AUTO
+  OFF
+}
+
+/// O modo de uma categoria para uma pessoa (Al-M24, #385). Sem linha é `ASK`: o padrão nunca é
+/// gravado, para mudar o padrão não exigir migration de dado.
+model AiWriteModeSetting {
+  userId    String
+  category  AiWriteCategory
+  mode      AiWriteMode
+  updatedAt DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, category])
+}
+
+/// Uma gravação que a IA fez sozinha (modo Automático, ADR 039 item 3), com o que é preciso para
+/// o Desfazer: os argumentos, o resultado e o retrato de antes. É uma segunda cópia de dado de
+/// saúde, e por isso vive só enquanto a conversa vive (cascata) e o Desfazer vale por pouco tempo
+/// (`AUTO_WRITE_UNDO_MS`); o retrato sai da linha quando ela é desfeita.
+model AiAutoWrite {
+  id             String           @id @default(uuid())
+  userId         String
+  conversationId String
+  /// O turno do chat que pediu (o token do `ChatRun` da API, mandado ao agente).
+  runId          String
+  /// A resposta à mesma mensagem da pessoa, atravessando retomadas e "Continuar": o teto de
+  /// gravações por resposta conta por ela (ADR 039, item 4).
+  answerKey      String
+  toolCallId     String
+  tool           String
+  /// Fica depois da limpeza: é metadado, não dado de saúde.
+  category       AiWriteCategory?
+  /// Argumentos, resultado, retrato de antes, estado logo depois e as linhas do cartão. Cópias de
+  /// dado de saúde: somem no Desfazer, quando o registro some e quando o prazo do Desfazer acaba.
+  input          Json?
+  result         Json?
+  before         Json?
+  after          Json?
+  card           Json?
+  createdAt      DateTime         @default(now())
+  /// `null` = gravação em andamento (a linha nasce antes da escrita, como trava e prova).
+  doneAt         DateTime?
+  undoneAt       DateTime?
+  /// Quando as cópias acima foram apagadas.
+  clearedAt      DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, toolCallId])
+  @@index([conversationId, answerKey])
+  @@index([createdAt])
 }
 
 /// O que a pessoa aceitou antes de a IA hospedada mandar algo a terceiros (#384, Apple 5.1.2).
