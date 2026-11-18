@@ -9,12 +9,19 @@ import {
 import { panelHref, panelSections, activePanelSection } from '../community-panel';
 import {
   adoptResultMessage,
+  authorWithRole,
   contentStatusLabel,
+  gymEquipmentLabels,
   goalsProblem,
+  memberTemplateLine,
   nutritionDiff,
   sortTips,
   planTemplateSummary,
+  tipByline,
+  tipEyebrow,
+  tipShortcut,
 } from '../content-panel';
+import { groupExerciseApi } from '../community-exercises';
 import { configureApiClient, resetApiClient } from '../http';
 import { markdownLitePlainText, parseInline, parseMarkdownLite, safeHref } from '../markdown-lite';
 import { routeInfo } from '../navigation';
@@ -226,6 +233,7 @@ describe('regras do conteúdo', () => {
         goalsApplied: true,
         mealsSaved: 2,
         mealsAlreadySaved: false,
+        previousGoals: null,
       }),
     ).toBe('2 refeições salvas, metas atualizadas.');
     expect(
@@ -235,8 +243,20 @@ describe('regras do conteúdo', () => {
         goalsApplied: false,
         mealsSaved: 0,
         mealsAlreadySaved: true,
+        previousGoals: null,
       }),
     ).toBe('As refeições já estavam salvas.');
+    // #396: com metas de antes, avisa que elas ficaram guardadas.
+    expect(
+      adoptResultMessage({
+        kind: 'NUTRITION',
+        planId: null,
+        goalsApplied: true,
+        mealsSaved: 0,
+        mealsAlreadySaved: false,
+        previousGoals: metas,
+      }),
+    ).toBe('Metas atualizadas. As de antes ficaram no histórico.');
   });
 
   it('fixadas primeiro', () => {
@@ -273,10 +293,143 @@ describe('regras do conteúdo', () => {
       title: 'Plano pronto',
       parent: '/community/g1/content',
     });
-    expect(routeInfo('/community/g1/content')).toMatchObject({ parent: '/community/g1' });
+    expect(routeInfo('/community/g1/content')).toMatchObject({
+      title: 'Conteúdo',
+      parent: '/community/g1',
+    });
+    // #396: a dica e o guia da academia voltam para a aba Conteúdo.
+    expect(routeInfo('/community/g1/content/tips/d1')).toMatchObject({
+      title: 'Dica',
+      parent: '/community/g1/content',
+    });
+    expect(routeInfo('/community/g1/content/exercises/42')).toMatchObject({
+      title: 'Guia da academia',
+      parent: '/community/g1/content',
+    });
     expect(routeInfo('/org/g1/content/tips/d1')).toMatchObject({
       title: 'Dica',
       parent: '/org/g1/content',
     });
+  });
+});
+
+describe('vitrine do membro no desenho novo (#396)', () => {
+  const fetchMock2 = vi.fn();
+  beforeEach(() => {
+    configureApiClient({
+      resolveUrl: (path) => path,
+      fetch: fetchMock2 as unknown as typeof fetch,
+    });
+    fetchMock2.mockImplementation(() => Promise.resolve(new Response('{}', { status: 200 })));
+  });
+  afterEach(() => {
+    fetchMock2.mockReset();
+    resetApiClient();
+  });
+
+  it('abre a dica, o guia e os equipamentos pela comunidade da URL', async () => {
+    await groupContentApi.tip('g1', 'd1');
+    await groupExerciseApi.memberGuide('g1', 42);
+    await groupExerciseApi.memberEquipment('g1');
+    expect(fetchMock2.mock.calls.map((c) => c[0])).toEqual([
+      '/api/groups/g1/tips/d1',
+      '/api/groups/g1/exercises/42',
+      '/api/groups/g1/equipment',
+    ]);
+  });
+
+  it('a linha do plano na lista: tipo, tamanho, nível e autor, em minúsculas (Cm-12)', () => {
+    expect(
+      memberTemplateLine({
+        kind: 'WORKOUT',
+        exercises: [{}, {}, {}, {}] as never,
+        meals: [],
+        level: 'intermediate',
+        authorName: 'Bruno',
+      }),
+    ).toBe('treino · 4 exercícios · intermediário · Bruno');
+    expect(
+      memberTemplateLine({
+        kind: 'NUTRITION',
+        exercises: [],
+        meals: [{}, {}] as never,
+        level: 'beginner',
+        authorName: 'Helena',
+      }),
+    ).toBe('alimentação · 2 refeições · iniciante · Helena');
+    // Autor que apagou a conta vira "Equipe" na API: não repete o óbvio.
+    expect(
+      memberTemplateLine({
+        kind: 'WORKOUT',
+        exercises: [{}] as never,
+        meals: [],
+        level: null,
+        authorName: 'Equipe',
+      }),
+    ).toBe('treino · 1 exercício');
+  });
+
+  it('o autor com o papel de hoje: dono, profissional; membro e quem saiu, só o nome', () => {
+    expect(authorWithRole('Bruno', 'OWNER')).toBe('Bruno (dono)');
+    expect(authorWithRole('Helena', 'PROFESSIONAL')).toBe('Helena (profissional)');
+    expect(authorWithRole('Ana', 'MEMBER')).toBe('Ana');
+    expect(authorWithRole('Ana', null)).toBe('Ana');
+  });
+
+  it('o cartão da dica: fixada com a categoria, ou a categoria com o autor (Cm-12)', () => {
+    expect(tipEyebrow({ pinned: true, category: 'HABITS', authorName: 'Bruno' })).toBe(
+      'Fixada · hábitos',
+    );
+    expect(tipEyebrow({ pinned: false, category: 'NUTRITION', authorName: 'Helena' })).toBe(
+      'nutrição · Helena',
+    );
+  });
+
+  it('quem escreveu a dica e quando, no fuso da pessoa (Cm-15)', () => {
+    expect(
+      tipByline(
+        {
+          authorName: 'Bruno',
+          authorRole: 'OWNER',
+          publishedAt: '2026-11-03T12:00:00.000Z',
+        },
+        'America/Sao_Paulo',
+      ),
+    ).toBe('Bruno · dono · 3 nov');
+    // 01:00 UTC do dia 4 ainda é dia 3 em São Paulo.
+    expect(
+      tipByline(
+        { authorName: 'Ana', authorRole: null, publishedAt: '2026-11-04T01:00:00.000Z' },
+        'America/Sao_Paulo',
+      ),
+    ).toBe('Ana · 3 nov');
+  });
+
+  it('o atalho da dica: água quando fala de água, treino na dica de treino', () => {
+    expect(
+      tipShortcut({ category: 'HABITS', title: 'Água antes do treino', body: 'Beba 500 ml.' }),
+    ).toBe('water');
+    expect(
+      tipShortcut({
+        category: 'NUTRITION',
+        title: 'Hidratação',
+        body: 'Distribua ao longo do dia.',
+      }),
+    ).toBe('water');
+    expect(tipShortcut({ category: 'WORKOUT', title: 'Aqueça', body: 'Cinco minutos.' })).toBe(
+      'workout',
+    );
+    expect(
+      tipShortcut({ category: 'NUTRITION', title: 'Proteína', body: 'Em cada refeição.' }),
+    ).toBe(null);
+    expect(tipShortcut({ category: 'GENERAL', title: 'Aguarde', body: 'A aula começa já.' })).toBe(
+      null,
+    );
+  });
+
+  it('os equipamentos da academia em rótulo, os da lista e os próprios', () => {
+    expect(
+      gymEquipmentLabels({ equipment: ['halteres'], customEquipment: ['Remo da casa'] }),
+    ).toEqual(['Halteres', 'Remo da casa']);
   });
 });

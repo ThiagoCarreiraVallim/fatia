@@ -59,7 +59,7 @@ describe('mural da comunidade (helpers)', () => {
     expect(communityTabs('g1').map((t) => [t.tab, t.label, t.href])).toEqual([
       ['feed', 'Mural', '/community/g1'],
       ['challenges', 'Desafios', '/community/g1/challenges'],
-      ['content', 'Planos e dicas', '/community/g1/content'],
+      ['content', 'Conteúdo', '/community/g1/content'],
     ]);
     expect(activeCommunityTab('/community/g1')).toBe('feed');
     // O caminho antigo do mural (avisos, links salvos) ainda conta como mural.

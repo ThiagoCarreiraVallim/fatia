@@ -270,7 +270,8 @@ export function communityTabs(
   return [
     { tab: 'feed', label: 'Mural', href: base },
     { tab: 'challenges', label: 'Desafios', href: `${base}/challenges` },
-    { tab: 'content', label: 'Planos e dicas', href: `${base}/content` },
+    // Cm-12 (#396): a aba se chama Conteúdo (planos, dicas e guias de exercício).
+    { tab: 'content', label: 'Conteúdo', href: `${base}/content` },
   ];
 }
 

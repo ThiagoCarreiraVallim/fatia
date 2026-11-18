@@ -123,7 +123,7 @@ describe('/community/[groupId] (o mural)', () => {
     ).toEqual([
       ['Mural', '/community/g1'],
       ['Desafios', '/community/g1/challenges'],
-      ['Planos e dicas', '/community/g1/content'],
+      ['Conteúdo', '/community/g1/content'],
     ]);
   });
 

@@ -419,7 +419,7 @@ export const ROUTES: readonly RouteDef[] = [
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
-  { pattern: '/community/:id/content', title: 'Planos e dicas', parent: '/community/:id' },
+  { pattern: '/community/:id/content', title: 'Conteúdo', parent: '/community/:id' },
   // O mural é o próprio `/community/:id`, na web e no app; este caminho (que os
   // avisos do mural usam) só redireciona para lá.
   { pattern: '/community/:id/feed', title: 'Mural', parent: '/community/:id' },
@@ -440,6 +440,17 @@ export const ROUTES: readonly RouteDef[] = [
   {
     pattern: '/community/:id/content/:templateId',
     title: 'Plano pronto',
+    parent: '/community/:id/content',
+  },
+  // A dica e o guia da academia (Cm-15, Cm-16, #396) voltam para a aba Conteúdo.
+  {
+    pattern: '/community/:id/content/tips/:tipId',
+    title: 'Dica',
+    parent: '/community/:id/content',
+  },
+  {
+    pattern: '/community/:id/content/exercises/:exerciseId',
+    title: 'Guia da academia',
     parent: '/community/:id/content',
   },
   // O painel da equipe: voltar sai do painel para a comunidade, e a seção

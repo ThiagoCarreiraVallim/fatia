@@ -115,7 +115,7 @@ test.describe('planos prontos e dicas', () => {
       await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
       await page
         .getByRole('navigation', { name: 'Seções da comunidade' })
-        .getByRole('link', { name: 'Planos e dicas' })
+        .getByRole('link', { name: 'Conteúdo' })
         .click();
       await page.waitForURL(/\/community\/[0-9a-f-]{36}\/content$/);
 
