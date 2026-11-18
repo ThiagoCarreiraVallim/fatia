@@ -705,7 +705,13 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
 
     it('a faxina de órfãos não leva a foto que está num check-in', async () => {
       const a = await comFoto();
-      await media.purgeOrphans(new Date(Date.now() + 48 * 60 * 60_000));
+      // A foto envelhece, não o relógio: adiantar o `now` da faxina levaria os
+      // uploads pendentes de outros specs rodando ao mesmo tempo.
+      await prisma.mediaFile.update({
+        where: { id: a.fileId },
+        data: { createdAt: new Date(Date.now() - 48 * 60 * 60_000) },
+      });
+      await media.purgeOrphans(new Date());
       expect(store.objects.has(a.key)).toBe(true);
     });
   });
