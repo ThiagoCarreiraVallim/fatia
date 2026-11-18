@@ -59,8 +59,8 @@ function SponsoredCard({ g, onPress }: { g: MyGroup; onPress: () => void }) {
         ) : null}
       </View>
       <View className="-mt-7 px-[18px]">
-        <View className="self-start rounded-[20px] border-4 border-card">
-          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} />
+        <View className="self-start rounded-[20px] border-4 border-card bg-card">
+          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} brand />
         </View>
       </View>
       <View className="gap-3 px-[18px] pb-[18px] pt-2">

@@ -71,6 +71,35 @@ export function entryPolicyView(policy: JoinPolicy): EntryPolicyView {
   }
 }
 
+/**
+ * Quem já está na comunidade (ativo ou com pedido esperando) não refaz o pedido:
+ * o cartão do Cm-02 avisa e o botão leva até ela. Sem isso, a pessoa escolhia o
+ * que compartilhar e só então tomava o 409. `null` = segue o fluxo de entrada.
+ */
+export function alreadyInView(
+  mine: readonly Pick<MyGroup, 'id' | 'status'>[] | undefined,
+  groupId: string,
+): EntryPolicyView | null {
+  const m = mine?.find((g) => g.id === groupId);
+  if (m?.status === 'ACTIVE') {
+    return {
+      badge: 'você é membro',
+      tone: 'ok',
+      text: 'Você já faz parte desta comunidade',
+      cta: 'Abrir a comunidade',
+    };
+  }
+  if (m?.status === 'INVITED') {
+    return {
+      badge: 'aguardando aprovação',
+      tone: 'warn',
+      text: 'Seu pedido já está com o dono',
+      cta: 'Ver o pedido',
+    };
+  }
+  return null;
+}
+
 /** O PRO que a comunidade oferece a quem entra (`GroupPreview.proOffer`). */
 export type ProOffer = 'ALL_MEMBERS' | 'SEATS' | null;
 

@@ -120,6 +120,8 @@ describe('/community/[groupId]/settings (Cm-04)', () => {
     expect(groupsApi.accessLog).toHaveBeenCalledWith({ groupId: 'g1', limit: 5 });
     const acessos = await screen.findByRole('region', { name: 'Quem olhou seus dados' });
     expect(await within(acessos).findByText(/Ana abriu Alimentação/)).toBeInTheDocument();
+    // Patrocinada: o avatar na cor da comunidade, igual ao cartão da lista.
+    expect(screen.getByText('AD').className).toMatch(/bg-brand/);
   });
 
   it('sem PRO pago pela comunidade, sem a faixa', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   accessLogLine,
+  alreadyInView,
   communityCardBadges,
   communityCardMeta,
   entryPolicyView,
@@ -199,5 +200,35 @@ describe('Sobre (Cm-04)', () => {
         'America/Sao_Paulo',
       ),
     ).toBe('Alguém que saiu do Fatia tentou ver Alimentação · negado · ontem 18:40');
+  });
+});
+
+describe('alreadyInView (Cm-02, quem já está na comunidade)', () => {
+  const mine = [
+    { id: 'g1', status: 'ACTIVE' as const },
+    { id: 'g2', status: 'INVITED' as const },
+  ];
+
+  it('membro ativo: avisa e leva até a comunidade, sem refazer o pedido', () => {
+    expect(alreadyInView(mine, 'g1')).toEqual({
+      badge: 'você é membro',
+      tone: 'ok',
+      text: 'Você já faz parte desta comunidade',
+      cta: 'Abrir a comunidade',
+    });
+  });
+
+  it('pedido esperando: diz que já foi e leva até ele', () => {
+    expect(alreadyInView(mine, 'g2')).toEqual({
+      badge: 'aguardando aprovação',
+      tone: 'warn',
+      text: 'Seu pedido já está com o dono',
+      cta: 'Ver o pedido',
+    });
+  });
+
+  it('fora da comunidade, ou lista ainda carregando: segue o fluxo de entrada', () => {
+    expect(alreadyInView(mine, 'g3')).toBeNull();
+    expect(alreadyInView(undefined, 'g1')).toBeNull();
   });
 });

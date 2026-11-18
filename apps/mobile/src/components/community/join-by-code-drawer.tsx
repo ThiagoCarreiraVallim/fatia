@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crown } from 'lucide-react-native';
 import {
+  alreadyInView,
   ApiError,
   CAMERA_NOTE,
   ENTRY_INVALID,
@@ -39,6 +40,9 @@ import { GroupAvatar } from './group-avatar';
 /** A comunidade achada, venha de código ou de convite: o cartão do Cm-02. */
 interface Found {
   entry: CommunityEntry;
+  groupId: string;
+  /** Patrocinada: o avatar leva a cor da comunidade, como no cartão da lista. */
+  sponsored: boolean;
   name: string;
   meta: string;
   badge: string;
@@ -59,6 +63,8 @@ async function lookup(entry: CommunityEntry): Promise<Found> {
     const c = await groupsApi.previewInvite(entry.token);
     return {
       entry,
+      groupId: c.group.id,
+      sponsored: c.group.type === 'SPONSORED',
       name: c.group.name,
       meta: `${TYPE_WORD[c.group.type]} · ${membros(c.memberCount)}`,
       badge: 'convite',
@@ -74,6 +80,8 @@ async function lookup(entry: CommunityEntry): Promise<Found> {
   const policy = entryPolicyView(g.joinPolicy);
   return {
     entry: { kind: 'code', code: g.code },
+    groupId: g.id,
+    sponsored: g.type === 'SPONSORED',
     name: g.name,
     meta: `${TYPE_WORD[g.type]} · ${VISIBILITY_WORD[g.visibility]} · ${membros(g.memberCount)}`,
     badge: policy.badge,
@@ -111,6 +119,8 @@ export function JoinByCodeDrawer({
   const [sharing, setSharing] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [scanning, setScanning] = useState(false);
+  // A lista da tela de trás (já em cache): quem já está na comunidade não refaz o pedido.
+  const mine = useQuery({ queryKey: ['community', 'mine'], queryFn: () => groupsApi.mine() });
 
   const look = useMutation({
     mutationFn: lookup,
@@ -176,6 +186,13 @@ export function JoinByCodeDrawer({
       : 'Não deu para entrar agora. Tente de novo.'
     : null;
 
+  const already = found ? alreadyInView(mine.data, found.groupId) : null;
+  const card = found
+    ? already
+      ? { badge: already.badge, tone: TONE[already.tone], text: already.text }
+      : { badge: found.badge, tone: found.tone, text: found.text }
+    : null;
+
   return (
     <>
       <Drawer open={open} onOpenChange={reset} snapPoints={['85%']}>
@@ -228,7 +245,7 @@ export function JoinByCodeDrawer({
                 onSubmitEditing={() => search(code)}
               />
               {lookError ? (
-                <Text accessibilityRole="alert" className="text-sm text-destructive">
+                <Text accessibilityRole="alert" className="text-sm text-danger">
                   {lookError}
                 </Text>
               ) : null}
@@ -238,7 +255,7 @@ export function JoinByCodeDrawer({
                   className="gap-3 rounded-2xl bg-card p-4"
                 >
                   <View className="flex-row items-center gap-3">
-                    <GroupAvatar name={found.name} url={null} />
+                    <GroupAvatar name={found.name} url={null} brand={found.sponsored} />
                     <View className="min-w-0 flex-1">
                       <Text numberOfLines={1} className="font-sans-bold text-foreground">
                         {found.name}
@@ -247,10 +264,10 @@ export function JoinByCodeDrawer({
                     </View>
                   </View>
                   <View className="flex-row flex-wrap items-center gap-2">
-                    <Badge variant={found.tone}>{found.badge}</Badge>
-                    <Text className="text-xs text-muted-foreground">{found.text}</Text>
+                    <Badge variant={card!.tone}>{card!.badge}</Badge>
+                    <Text className="text-xs text-muted-foreground">{card!.text}</Text>
                   </View>
-                  {proOfferNote(found.proOffer) ? (
+                  {!already && proOfferNote(found.proOffer) ? (
                     <View className="flex-row items-center gap-2 rounded-xl bg-primary/10 px-3 py-2">
                       <Crown size={16} color={colors.primaryText} />
                       <Text className="flex-1 text-sm text-foreground">
@@ -262,7 +279,17 @@ export function JoinByCodeDrawer({
               ) : null}
             </DrawerScrollView>
             <DrawerFooter className="pb-8">
-              {found ? (
+              {found && already ? (
+                <Button
+                  onPress={() => {
+                    const id = found.groupId;
+                    reset(false);
+                    onJoined(id);
+                  }}
+                >
+                  {already.cta}
+                </Button>
+              ) : found ? (
                 <Button onPress={() => setSharing(true)}>{found.cta}</Button>
               ) : (
                 <Button

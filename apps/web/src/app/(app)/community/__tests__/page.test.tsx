@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -201,6 +201,29 @@ describe('/community', () => {
     });
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/community/g1'));
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/quando o dono aprovar/));
+  });
+
+  it('quem já é membro não refaz o pedido: o cartão avisa e abre a comunidade', async () => {
+    vi.mocked(groupsApi.mine).mockResolvedValue([grupo({ id: 'g1', status: 'ACTIVE' })]);
+    vi.mocked(groupsApi.previewByCode).mockResolvedValue(preview({ code: 'DEMO2026' }));
+    renderPage();
+    await abrirEProcurar('DEMO2026');
+    const cartao = await screen.findByRole('region', { name: 'Comunidade encontrada' });
+    expect(cartao).toHaveTextContent('você é membro');
+    expect(cartao).toHaveTextContent('Você já faz parte desta comunidade');
+    expect(screen.queryByRole('button', { name: 'Pedir para entrar' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir a comunidade' }));
+    expect(nav.push).toHaveBeenCalledWith('/community/g1');
+    expect(groupsApi.join).not.toHaveBeenCalled();
+  });
+
+  it('a comunidade achada patrocinada leva a cor dela no avatar', async () => {
+    vi.mocked(groupsApi.mine).mockResolvedValue([]);
+    vi.mocked(groupsApi.previewByCode).mockResolvedValue(preview({}));
+    renderPage();
+    await abrirEProcurar('DEMO2026');
+    const cartao = await screen.findByRole('region', { name: 'Comunidade encontrada' });
+    expect(within(cartao).getByText('AD').className).toMatch(/bg-brand/);
   });
 
   it('o aviso de PRO: todos os membros libera; por assento, só pode liberar', async () => {
