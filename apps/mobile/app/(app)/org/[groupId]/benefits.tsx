@@ -29,7 +29,7 @@ function todayIn(tz: string): string {
 }
 
 function FieldError({ text }: { text?: string }) {
-  return text ? <Text className="text-xs text-destructive">{text}</Text> : null;
+  return text ? <Text className="text-xs text-danger">{text}</Text> : null;
 }
 
 /**
@@ -187,7 +187,7 @@ function BenefitForm({
       {editing ? (
         <Button
           variant="ghost"
-          textClassName="text-destructive"
+          textClassName="text-danger"
           loading={remover.isPending}
           onPress={() =>
             confirm({
