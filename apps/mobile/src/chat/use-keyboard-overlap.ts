@@ -4,7 +4,7 @@ import { keyboardOverlap } from './keyboard-overlap';
 
 /**
  * O quanto o teclado cobre a `View` do `ref`, para virar `paddingBottom` dela. Só com
- * `Keyboard` e `measureInWindow`, sem módulo nativo (roda no Expo Go). No Android só há os
+ * `Keyboard` e `measure`, sem módulo nativo (roda no Expo Go). No Android só há os
  * eventos `Did`; abrir as sugestões ou trocar de teclado dispara outro `keyboardDidShow`.
  */
 export function useKeyboardOverlap(enabled: boolean) {
@@ -14,8 +14,10 @@ export function useKeyboardOverlap(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const show = Keyboard.addListener('keyboardDidShow', (e) => {
-      ref.current?.measureInWindow((_x, y, _width, height) =>
-        setOverlap(keyboardOverlap({ y, height }, e.endCoordinates.screenY)),
+      // `measure`, e não `measureInWindow`: no Android este desconta a barra de status, e o
+      // campo ficava atrás do teclado por essa altura; o `pageY` é da raiz, como o `screenY`.
+      ref.current?.measure((_x, _y, _width, height, _pageX, pageY) =>
+        setOverlap(keyboardOverlap({ y: pageY, height }, e.endCoordinates.screenY)),
       );
     });
     const hide = Keyboard.addListener('keyboardDidHide', () => setOverlap(0));
