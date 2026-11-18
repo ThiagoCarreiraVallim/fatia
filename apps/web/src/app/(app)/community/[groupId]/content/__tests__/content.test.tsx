@@ -229,6 +229,24 @@ describe('comunidade › plano pronto', () => {
   });
 });
 
+describe('comunidade › plano pronto sem metas atuais', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it('sem metas agora, marcar a troca não fala em histórico', async () => {
+    vi.mocked(groupContentApi.plan).mockResolvedValue(
+      modelo({ kind: 'NUTRITION', exercises: [], goals: metas, meals: [] }),
+    );
+    vi.mocked(nutritionApi.goals).mockResolvedValue(null);
+    renderWithClient(<CommunityTemplatePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Adotar plano' }));
+    const trocar = await screen.findByRole('checkbox', { name: /Trocar minhas metas/ });
+    await waitFor(() => expect(nutritionApi.goals).toHaveBeenCalled());
+    fireEvent.click(trocar);
+    expect(trocar).toBeChecked();
+    expect(screen.queryByText('Suas metas de agora ficam no histórico.')).toBeNull();
+  });
+});
+
 describe('envio de imagem', () => {
   afterEach(() => {
     vi.clearAllMocks();

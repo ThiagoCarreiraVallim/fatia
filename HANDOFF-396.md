@@ -7,10 +7,10 @@ Branch `redesign/396-conteudo-equipe`; só commits novos (sem rebase). Banco `fa
 1. [x] upsertWithHistory(db, userId, dto, origin) — onboarding (manual) e plano da IA (nutrition_plan); teste vermelho cada.
 2. [x] histórico em $transaction com SELECT … FOR UPDATE; teste concorrente = 1 linha.
 3. [x] upsert devolve { goals, previous, historyWritten }; adotar usa; mensagem só com historyWritten; sem leitura dupla.
-4. [ ] aviso "ficam no histórico" só com metas atuais (web e app).
-5. [ ] "Dica de {nome}" (web e app).
+4. [x] aviso "ficam no histórico" só com metas atuais (web e app).
+5. [x] "Dica de {nome}" (web e app).
 6. [x] authorRole em lote por lista.
-7. [ ] web: guia com vídeo mostra a 1ª foto ao tocar nela.
+7. [x] web: guia com vídeo mostra a 1ª foto ao tocar nela.
 8. [x] (não existe PENDING em MembershipStatus: testado INVITED, REMOVED, BANNED) testes PENDING/BANNED em getTipForMember/getForMember/equipmentForMember; "sem mudança" sem atalho do mock.
 
 Fim: merge de origin/redesign/393-comunidades se existir; lint, typecheck, testes; apagar este arquivo.

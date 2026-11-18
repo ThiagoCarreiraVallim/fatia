@@ -36,7 +36,8 @@ import { cn } from '@/lib/utils';
 export default function CommunityGuidePage() {
   const { groupId, exerciseId } = useParams<{ groupId: string; exerciseId: string }>();
   const id = Number(exerciseId);
-  const [foto, setFoto] = useState(0);
+  // Foto escolhida na fileira; `null` = nenhuma (com vídeo, o vídeo fica em cima sozinho).
+  const [foto, setFoto] = useState<number | null>(null);
   const [howTo, setHowTo] = useState(false);
   const [picking, setPicking] = useState(false);
   const guide = useQuery({
@@ -64,7 +65,12 @@ export default function CommunityGuidePage() {
   }
   const g = guide.data;
   const fotos = g.photos;
-  const destaque = fotos[foto] ?? fotos[0];
+  const temVideo = Boolean(g.video?.url);
+  // Sem vídeo, a primeira foto já ocupa o topo; com vídeo, a foto tocada abre embaixo dele.
+  const escolhida = foto ?? (temVideo ? null : 0);
+  const destaque = escolhida === null ? undefined : fotos[escolhida];
+  // Com vídeo, até uma foto só precisa da miniatura para ser vista.
+  const mostraFileira = temVideo ? fotos.length > 0 : fotos.length > 1;
 
   return (
     <div className="flex min-h-full flex-col gap-3 p-4">
@@ -85,18 +91,18 @@ export default function CommunityGuidePage() {
           className="aspect-video w-full rounded-3xl object-cover"
         />
       ) : null}
-      {fotos.length > 1 && (
+      {mostraFileira && (
         <div className="flex gap-2">
           {fotos.map((f, i) => (
             <button
               key={f.id}
               type="button"
               aria-label={`Foto ${i + 1} de ${fotos.length}`}
-              aria-pressed={i === foto}
+              aria-pressed={i === escolhida}
               onClick={() => setFoto(i)}
               className={cn(
                 'h-16 w-16 overflow-hidden rounded-xl ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                i === foto && 'ring-2 ring-primary',
+                i === escolhida && 'ring-2 ring-primary',
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta */}
@@ -105,11 +111,11 @@ export default function CommunityGuidePage() {
           ))}
         </div>
       )}
-      {g.video?.url && destaque && foto > 0 && (
+      {temVideo && destaque && escolhida !== null && (
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
         <img
           src={destaque.url ?? undefined}
-          alt={`Foto ${foto + 1} de ${g.name}`}
+          alt={`Foto ${escolhida + 1} de ${g.name}`}
           className="w-full rounded-2xl object-cover"
         />
       )}
@@ -120,7 +126,7 @@ export default function CommunityGuidePage() {
       {g.tips && (
         <section className="space-y-1 rounded-2xl bg-card p-4">
           <h2 className="text-xs font-bold uppercase tracking-wide text-primary">
-            Dica da {g.authorName}
+            Dica de {g.authorName}
           </h2>
           <p className="whitespace-pre-line text-sm leading-relaxed">{g.tips}</p>
           <p className="text-xs text-muted-foreground">

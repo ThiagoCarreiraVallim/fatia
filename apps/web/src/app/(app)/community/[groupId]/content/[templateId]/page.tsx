@@ -324,7 +324,8 @@ function AdoptNutritionDialog({
                     ))}
                   </tbody>
                 </table>
-                {metas && (
+                {/* Só há o que guardar se a pessoa já tinha metas. */}
+                {metas && atuais.data && (
                   <span className="mt-1 block text-xs text-muted-foreground">
                     Suas metas de agora ficam no histórico.
                   </span>

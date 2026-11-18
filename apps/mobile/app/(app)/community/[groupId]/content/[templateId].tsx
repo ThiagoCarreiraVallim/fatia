@@ -136,7 +136,8 @@ function AdoptNutritionDrawer({
                   </Text>
                 </View>
               ))}
-              {metas ? (
+              {/* Só há o que guardar se a pessoa já tinha metas. */}
+              {metas && atuais.data ? (
                 <Text className="pl-8 pt-1 text-xs text-muted-foreground">
                   Suas metas de agora ficam no histórico.
                 </Text>

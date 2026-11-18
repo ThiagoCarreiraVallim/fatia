@@ -265,7 +265,7 @@ function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: numbe
           {g.tips ? (
             <View className="gap-1 rounded-2xl bg-card p-4">
               <Text className="text-xs font-bold uppercase tracking-wide text-primary">
-                {`Dica da ${g.authorName}`}
+                {`Dica de ${g.authorName}`}
               </Text>
               <Text className="text-sm leading-relaxed text-foreground">{g.tips}</Text>
               <Text className="text-xs text-muted-foreground">

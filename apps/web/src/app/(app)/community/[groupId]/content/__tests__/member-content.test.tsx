@@ -268,7 +268,18 @@ describe('comunidade › guia da academia (Cm-16)', () => {
       'https://b/v',
     );
     expect(groupExerciseApi.memberGuide).toHaveBeenCalledWith('g1', 42);
-    expect(screen.getByText('Dica da Helena')).toBeInTheDocument();
+    expect(screen.getByText('Dica de Helena')).toBeInTheDocument();
+    // Com vídeo, a primeira foto também abre ao tocar na miniatura dela.
+    expect(screen.queryByRole('img', { name: 'Foto 1 de Leg press 45° da casa' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Foto 1 de 2' }));
+    expect(screen.getByRole('img', { name: 'Foto 1 de Leg press 45° da casa' })).toHaveAttribute(
+      'src',
+      'https://b/f1',
+    );
+    expect(screen.getByRole('button', { name: 'Foto 1 de 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     // Tocar na segunda foto a põe em destaque.
     fireEvent.click(screen.getByRole('button', { name: 'Foto 2 de 2' }));
     expect(screen.getByRole('button', { name: 'Foto 2 de 2' })).toHaveAttribute(
