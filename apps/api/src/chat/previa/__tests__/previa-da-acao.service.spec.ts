@@ -21,6 +21,7 @@ import { SwapPlanItemTool } from '../../../nutrition/mcp/swap-plan-item.tool';
 import { UndoPlanSwapTool } from '../../../nutrition/mcp/undo-plan-swap.tool';
 import { AcceptPlanOfferTool } from '../../../sharing/mcp/accept-plan-offer.tool';
 import { DeclinePlanOfferTool } from '../../../sharing/mcp/decline-plan-offer.tool';
+import { AdoptGroupPlanTool } from '../../../sharing/mcp/adopt-group-plan.tool';
 import { ReschedulePlannedSessionTool } from '../../../workout/mcp/reschedule-planned-session.tool';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
@@ -57,6 +58,7 @@ describe('PreviaDaAcaoService', () => {
     AcceptPlanOfferTool,
     DeclinePlanOfferTool,
     ReschedulePlannedSessionTool,
+    AdoptGroupPlanTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -664,6 +666,73 @@ describe('PreviaDaAcaoService', () => {
       expect(JSON.stringify(deFora)).not.toContain('Outubro ativo');
     } finally {
       await prisma.user.delete({ where: { id: estranho.id } });
+    }
+  });
+
+  it('adotar plano da comunidade (#396): trocar as metas mostra o antes e o depois', async () => {
+    const metasDoPlano = {
+      kcalMin: 1700,
+      kcalMax: 1900,
+      proteinMinG: 130,
+      proteinMaxG: 160,
+      carbsMinG: 150,
+      carbsMaxG: 200,
+      fatMinG: 45,
+      fatMaxG: 65,
+    };
+    const modelo = await prisma.groupPlanTemplate.create({
+      data: {
+        groupId: comunidade,
+        authorId: outro.id,
+        kind: 'NUTRITION',
+        title: 'Cutting 1.800 kcal',
+        snapshot: { version: 1, goals: metasDoPlano, meals: [] },
+        snapshotVersion: 1,
+        publishedAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+    await prisma.userGoals.upsert({
+      where: { userId: dono.id },
+      create: {
+        userId: dono.id,
+        kcalMin: 1800,
+        kcalMax: 2200,
+        proteinMinG: 120,
+        proteinMaxG: 160,
+        carbsMinG: 150,
+        carbsMaxG: 200,
+        fatMinG: 50,
+        fatMaxG: 75,
+      },
+      update: {},
+    });
+    try {
+      const comMetas = await previas.previa(dono, 'adopt_group_plan', {
+        groupId: comunidade,
+        templateId: modelo.id,
+        applyGoals: true,
+        saveMeals: false,
+      });
+      expect(comMetas).toEqual({
+        valida: true,
+        linhas: expect.arrayContaining([
+          { rotulo: 'Plano da comunidade', valor: 'Cutting 1.800 kcal' },
+          { rotulo: 'Calorias', valor: '1.800–2.200 kcal → 1.700–1.900 kcal' },
+          { rotulo: 'Proteína', valor: '120–160 g → 130–160 g' },
+          { rotulo: 'Carboidrato', valor: '150–200 g (igual)' },
+          { rotulo: 'Gordura', valor: '50–75 g → 45–65 g' },
+        ]),
+      });
+      // Sem trocar as metas, nada de antes e depois.
+      const semMetas = await previas.previa(dono, 'adopt_group_plan', {
+        groupId: comunidade,
+        templateId: modelo.id,
+        applyGoals: false,
+      });
+      expect(JSON.stringify(semMetas)).not.toContain('→');
+    } finally {
+      await prisma.groupPlanTemplate.delete({ where: { id: modelo.id } });
+      await prisma.userGoals.deleteMany({ where: { userId: dono.id } });
     }
   });
 
