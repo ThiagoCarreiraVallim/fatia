@@ -745,6 +745,15 @@ describe('ChatScreen', () => {
     expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
   });
 
+  it('parar antes do primeiro token também deixa a etiqueta de interrompida', async () => {
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    await user.click(await screen.findByRole('button', { name: 'Parar resposta' }));
+
+    expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeInTheDocument();
+  });
+
   async function enfileirar(user: ReturnType<typeof userEvent.setup>, texto: string) {
     await user.type(screen.getByRole('textbox', { name: 'Mensagem para o Fatia' }), texto);
     await user.click(screen.getByRole('button', { name: 'Enviar depois desta resposta' }));
