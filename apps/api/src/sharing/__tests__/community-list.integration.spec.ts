@@ -98,7 +98,11 @@ describe('minhas comunidades (integração)', () => {
     });
     expect((await minha(aluna, grupo.id)).newPostCount).toBe(2);
 
+    // Ler o mural não zera (a faixa "posts novos" do mural precisa da contagem);
+    // abrir a tela chama o `markSeen` (#394), como a web e o app fazem.
     await posts.list(aluna, grupo.id);
+    expect((await minha(aluna, grupo.id)).newPostCount).toBe(2);
+    await posts.markSeen(aluna, grupo.id);
     expect((await minha(aluna, grupo.id)).newPostCount).toBe(0);
   });
 

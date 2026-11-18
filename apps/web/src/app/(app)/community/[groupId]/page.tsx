@@ -72,7 +72,11 @@ export default function CommunityFeedPage() {
   const marcou = useRef(false);
   const visto = useMutation({
     mutationFn: () => feedApi.markSeen(groupId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: communityKeys.forYou(groupId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: communityKeys.forYou(groupId) });
+      // O cartão de Minhas comunidades conta os posts novos desde a visita (#393).
+      void qc.invalidateQueries({ queryKey: communityKeys.mine });
+    },
   });
   useEffect(() => {
     if (!firstPage || marcou.current || filter !== 'all') return;
