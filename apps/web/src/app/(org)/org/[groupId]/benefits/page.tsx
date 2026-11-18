@@ -43,7 +43,18 @@ function todayIn(tz: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, dateStyle: 'short' }).format(new Date());
 }
 
-function Initials({ name, url, size = 40 }: { name: string; url: string | null; size?: number }) {
+/** Monograma neutro: o parceiro não é a academia, então não leva a cor dela (Pn-28). */
+function Initials({
+  name,
+  url,
+  size = 40,
+  className,
+}: {
+  name: string;
+  url: string | null;
+  size?: number;
+  className?: string;
+}) {
   if (url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- URL assinada do storage, sem otimizador.
@@ -59,7 +70,10 @@ function Initials({ name, url, size = 40 }: { name: string; url: string | null; 
     <span
       aria-hidden
       style={{ width: size, height: size }}
-      className="flex shrink-0 items-center justify-center rounded-xl bg-brand font-display text-xs font-bold text-brand-foreground"
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-xl bg-surface-3 font-display text-xs font-bold text-foreground',
+        className,
+      )}
     >
       {benefitInitials(name || '?')}
     </span>
@@ -227,7 +241,7 @@ function BenefitForm({
         <p className="eyebrow">Prévia no app</p>
         <div aria-label="Prévia no app" className="space-y-3 rounded-2xl bg-surface-3 p-4">
           <div className="flex items-center gap-3">
-            <Initials name={draft.partnerName} url={edicao.logo?.url ?? null} />
+            <Initials name={draft.partnerName} url={edicao.logo?.url ?? null} className="bg-card" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{draft.partnerName || 'Parceiro'}</p>
               <p className="text-xs text-muted-foreground">
@@ -372,14 +386,16 @@ export default function OrgBenefitsPage() {
           )}
           {lista.data && lista.data.length > 0 && (
             <div className="overflow-x-auto rounded-card bg-card">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className={cn('w-full text-sm', !edicao && 'min-w-[640px]')}>
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
                     <th className="px-4 py-3 font-medium">Parceiro</th>
-                    <th className="px-4 py-3 font-medium">Desconto</th>
-                    <th className="px-4 py-3 font-medium">Cupom ou link</th>
+                    {/* Com o editor ao lado, ficam parceiro, validade (que já diz
+                        "venceu") e o "Editar" das outras linhas, sem rolagem. */}
+                    {!edicao && <th className="px-4 py-3 font-medium">Desconto</th>}
+                    {!edicao && <th className="px-4 py-3 font-medium">Cupom ou link</th>}
                     <th className="px-4 py-3 font-medium">Validade</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    {!edicao && <th className="px-4 py-3 font-medium">Status</th>}
                     <th className="px-4 py-3">
                       <span className="sr-only">Ações</span>
                     </th>
@@ -388,6 +404,10 @@ export default function OrgBenefitsPage() {
                 <tbody className="divide-y divide-border">
                   {lista.data.map((b) => {
                     const ativo = b.status === 'active';
+                    const valor =
+                      b.kind === 'COUPON'
+                        ? b.couponCode
+                        : (b.url?.replace(/^https:\/\//, '') ?? null);
                     return (
                       <tr key={b.id} className={cn(!ativo && 'opacity-55')}>
                         <td className="px-4 py-3">
@@ -396,23 +416,35 @@ export default function OrgBenefitsPage() {
                             <span className="font-semibold">{b.partnerName}</span>
                           </span>
                         </td>
-                        <td className="px-4 py-3">{b.discountText}</td>
-                        <td className="max-w-[220px] px-4 py-3">
-                          <span className="text-xs text-muted-foreground">
-                            {b.kind === 'COUPON' ? 'cupom' : 'link'}
-                          </span>{' '}
-                          <span className="break-all font-mono text-xs">
-                            {b.kind === 'COUPON' ? b.couponCode : b.url?.replace(/^https:\/\//, '')}
+                        {!edicao && <td className="px-4 py-3">{b.discountText}</td>}
+                        {!edicao && (
+                          <td className="max-w-[220px] px-4 py-3">
+                            {/* Cortado com reticências: com o editor aberto a coluna aperta. */}
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {b.kind === 'COUPON' ? 'cupom' : 'link'}
+                              </span>
+                              <span
+                                title={valor ?? undefined}
+                                className="min-w-0 truncate font-mono text-xs"
+                              >
+                                {valor}
+                              </span>
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <span className="whitespace-nowrap">
+                            {benefitValidity({ validUntil: b.validUntil, expired: !ativo })}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          {benefitValidity({ validUntil: b.validUntil, expired: !ativo })}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={ativo ? 'done' : 'pending'}>
-                            {ativo ? 'ativo' : 'expirado'}
-                          </Badge>
-                        </td>
+                        {!edicao && (
+                          <td className="px-4 py-3">
+                            <Badge variant={ativo ? 'done' : 'pending'}>
+                              {ativo ? 'ativo' : 'expirado'}
+                            </Badge>
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-right">
                           <Button
                             size="sm"

@@ -99,6 +99,31 @@ describe('/community/[groupId]/benefits (Cm-22)', () => {
     expect(screen.getByText(/O Fatia não recebe dado da compra/)).toBeInTheDocument();
   });
 
+  it('ação na cor da comunidade, monograma do parceiro neutro e um título só (Cm-22)', async () => {
+    renderPage([
+      b({}),
+      b({
+        id: 'b2',
+        partnerName: 'Fisio Movimento',
+        kind: 'LINK',
+        couponCode: null,
+        url: 'https://f.example.com',
+      }),
+    ]);
+    const sup = await screen.findByRole('listitem', { name: 'Suplementa' });
+    // O parceiro não é a academia: a cor dela fica no botão, não no logo do parceiro.
+    expect(within(sup).getByText('SU').className).not.toMatch(/bg-brand/);
+    expect(within(sup).getByRole('button', { name: 'Copiar código' }).className).toMatch(
+      /bg-brand/,
+    );
+    const fisio = screen.getByRole('listitem', { name: 'Fisio Movimento' });
+    expect(within(fisio).getByRole('link', { name: 'Visitar o site' }).className).toMatch(
+      /bg-brand/,
+    );
+    // O título já está na barra do topo.
+    expect(screen.queryByRole('heading', { name: 'Benefícios' })).not.toBeInTheDocument();
+  });
+
   it('sem benefício, diz que não há', async () => {
     renderPage([]);
     expect(await screen.findByText('Nenhum benefício agora')).toBeInTheDocument();

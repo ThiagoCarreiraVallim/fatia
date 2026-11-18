@@ -127,9 +127,36 @@ describe('/org/[groupId]/benefits (Pn-28)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Editar Suplementa' }));
     const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
     expect(within(form).getByLabelText('Parceiro')).toHaveValue('Suplementa');
+    // Com o editor ao lado a tabela aperta: ficam parceiro, validade (que já diz
+    // "venceu") e o "Editar" das outras linhas, que não pode sumir na rolagem.
+    expect(within(tabela).queryByRole('columnheader', { name: 'Desconto' })).toBeNull();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Cupom ou link' })).toBeNull();
+    expect(within(tabela).getByRole('columnheader', { name: 'Validade' })).toBeInTheDocument();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Status' })).toBeNull();
+    expect(within(tabela).getByRole('button', { name: 'Editar Corre+ Tênis' })).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Remover' }));
     expect(benefitsApi.remove).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(benefitsApi.remove).toHaveBeenCalledWith('g1', 'b1'));
+  });
+
+  it('tabela: monograma neutro, link cortado com o endereço inteiro no title, validade numa linha', async () => {
+    renderPage([
+      tb(),
+      tb({
+        id: 'b2',
+        partnerName: 'Fisio Movimento',
+        kind: 'LINK',
+        couponCode: null,
+        url: 'https://fisiomovimento.com.br/demo',
+      }),
+    ]);
+    const tabela = await screen.findByRole('table');
+    expect(within(tabela).getByText('SU').className).not.toMatch(/bg-brand/);
+    const link = within(tabela).getByText('fisiomovimento.com.br/demo');
+    expect(link.className).toMatch(/truncate/);
+    expect(link.className).not.toMatch(/break-all/);
+    expect(link).toHaveAttribute('title', 'fisiomovimento.com.br/demo');
+    expect(within(tabela).getAllByText('até 31 dez')[0]!.className).toMatch(/whitespace-nowrap/);
   });
 });
