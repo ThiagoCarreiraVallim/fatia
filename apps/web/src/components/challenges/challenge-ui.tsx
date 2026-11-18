@@ -376,46 +376,61 @@ const initials = (name: string) =>
     .map((p) => p[0]?.toUpperCase())
     .join('');
 
-/** O pódio do encerrado (Cm-11): prata, ouro, bronze, nessa ordem na tela. */
+/**
+ * O pódio do encerrado (Cm-11): prata, ouro, bronze, nessa ordem na tela. Sobe
+ * quem tem medalha (a API só dá com pontos e com o resultado fechado), e o
+ * empate divide o degrau: dois em 1º ficam lado a lado no do meio (#395 M7).
+ */
 export function Podium({ entries }: { entries: LeaderboardEntry[] }) {
-  const top = entries.filter((e) => e.rank <= 3).slice(0, 3);
-  if (top.length === 0) return null;
-  const order = [top.find((e) => e.rank === 2), top[0], top.find((e) => e.rank === 3)].filter(
-    (e, i, all): e is LeaderboardEntry => !!e && all.indexOf(e) === i,
-  );
+  const comMedalha = entries.filter((e) => e.medal !== null && e.score > 0 && e.rank <= 3);
+  if (comMedalha.length === 0) return null;
+  const degrau = (rank: number) => comMedalha.filter((e) => e.rank === rank);
+  const ordem = [2, 1, 3]
+    .map((rank) => ({ rank, linhas: degrau(rank) }))
+    .filter((d) => d.linhas.length);
   const height = (rank: number) => (rank === 1 ? 'h-28' : rank === 2 ? 'h-20' : 'h-14');
   return (
     <ol aria-label="Pódio" className="flex items-end justify-center gap-2.5 pt-2">
-      {order.map((e) => {
-        const medal: Medal = e.rank === 1 ? 'gold' : e.rank === 2 ? 'silver' : 'bronze';
-        return (
-          <li key={`${e.displayName}-${e.rank}`} className="flex flex-col items-center gap-1.5">
-            {e.rank === 1 && <Icon name="trophy" size={24} className="text-[#fbbf24]" />}
-            <span
-              aria-hidden
-              className={cn(
-                'flex items-center justify-center rounded-full font-bold',
-                e.rank === 1 ? 'size-14 text-base' : 'size-10 text-sm',
-                MEDAL_STYLE[medal],
+      {ordem.flatMap(({ rank, linhas }) =>
+        linhas.map((e) => {
+          const medal = e.medal as Medal;
+          return (
+            <li key={`${e.displayName}-${rank}`} className="flex flex-col items-center gap-1.5">
+              {rank === 1 && (
+                <Icon
+                  name="trophy"
+                  size={24}
+                  // Âmbar escuro no claro (contraste ≥ 3:1 sobre o cartão), o dourado no escuro.
+                  className="text-[#b45309] dark:text-[#fbbf24]"
+                  data-podium-trophy=""
+                />
               )}
-            >
-              {initials(e.displayName)}
-            </span>
-            <span className="max-w-24 truncate text-sm font-semibold">
-              {e.isMe ? `${e.displayName} (você)` : e.displayName}
-            </span>
-            <span
-              className={cn(
-                'flex w-24 items-center justify-center rounded-t-[14px] font-display text-h2',
-                height(e.rank),
-                e.rank === 1 ? 'bg-primary/15' : 'bg-muted',
-              )}
-            >
-              {`${e.rank}º`}
-            </span>
-          </li>
-        );
-      })}
+              <span
+                aria-hidden
+                className={cn(
+                  'flex items-center justify-center rounded-full font-bold',
+                  rank === 1 ? 'size-14 text-base' : 'size-10 text-sm',
+                  MEDAL_STYLE[medal],
+                )}
+              >
+                {initials(e.displayName)}
+              </span>
+              <span className="max-w-24 truncate text-sm font-semibold">
+                {e.isMe ? `${e.displayName} (você)` : e.displayName}
+              </span>
+              <span
+                className={cn(
+                  'flex w-24 items-center justify-center rounded-t-[14px] font-display text-h2',
+                  height(rank),
+                  rank === 1 ? 'bg-primary/15' : 'bg-muted',
+                )}
+              >
+                {`${rank}º`}
+              </span>
+            </li>
+          );
+        }),
+      )}
     </ol>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trophy } from 'lucide-react';
 import {
@@ -937,22 +937,27 @@ function ReviewRow({
 /** A fila "Para revisar" (Pn-13): só a equipe que revisa vê; foto só aqui. */
 function ReviewQueue({ groupId }: { groupId: string }) {
   const qc = useQueryClient();
-  const queue = useQuery({
+  // Paginada (#395 M5): a fila da comunidade junta vários desafios e passa do teto de um.
+  const queue = useInfiniteQuery({
     queryKey: orgKeys.challengeReview(groupId),
-    queryFn: () => challengesApi.reviewQueue(groupId),
+    queryFn: ({ pageParam }) => challengesApi.reviewQueue(groupId, undefined, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
+  const first = queue.data?.pages[0];
+  const items = queue.data?.pages.flatMap((p) => p.items) ?? [];
   const done = () => {
     void qc.invalidateQueries({ queryKey: orgKeys.challengeReview(groupId) });
     void qc.invalidateQueries({ queryKey: communityKeys.challenges(groupId), exact: true });
   };
-  const open = queue.data?.open ?? 0;
+  const open = first?.open ?? 0;
   return (
     <section aria-labelledby="para-revisar" className="space-y-3 rounded-card bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h2 id="para-revisar" className="font-semibold">
           Para revisar
         </h2>
-        {queue.data && (
+        {first && (
           <Badge variant={open ? 'lite' : 'done'}>
             {open ? `${open} para decidir` : 'fila vazia'}
           </Badge>
@@ -971,17 +976,22 @@ function ReviewQueue({ groupId }: { groupId: string }) {
           </button>
         </p>
       )}
-      {queue.data && queue.data.open >= queue.data.limit && (
-        <p className="text-xs text-warning">
-          {`A fila chegou a ${queue.data.limit}. Novas sinalizações esperam até a equipe decidir as que estão aqui.`}
-        </p>
-      )}
-      {queue.data && queue.data.items.length > 0 && (
+      {items.length > 0 && (
         <ul className="space-y-3">
-          {queue.data.items.map((item) => (
+          {items.map((item) => (
             <ReviewRow key={item.id} groupId={groupId} item={item} onDone={done} />
           ))}
         </ul>
+      )}
+      {queue.hasNextPage && (
+        <button
+          type="button"
+          className="inline-flex h-11 w-full items-center justify-center rounded-field bg-muted text-sm font-semibold hover:bg-accent disabled:opacity-60"
+          disabled={queue.isFetchingNextPage}
+          onClick={() => queue.fetchNextPage()}
+        >
+          Ver mais
+        </button>
       )}
     </section>
   );
