@@ -3423,9 +3423,10 @@ Um desafio com o ranking. O placar é recalculado quando tem mais de 5 minutos.
 **Output:** o mesmo objeto de `list_group_challenges`, mais
 `leaderboard: Array<{ displayName; score; rank; isMe; medal; streak }> | null` (null só no desafio
 antigo de ml ou passos, para quem não participa), `today` (o hoje do próprio usuário: pontos e
-cada item feito ou não, com o valor dele; null para quem não participa), `activity` (os dias e
-check-ins recentes, com foto e motivo só nas linhas do próprio usuário) e `suggestedDisplayName`
-(o apelido que a pessoa já usa na comunidade, ou o primeiro nome).
+cada item feito ou não, com o valor dele; null para quem não participa) e `suggestedDisplayName`
+(o apelido que a pessoa já usa na comunidade, ou o primeiro nome). A atividade do desafio (ids de
+check-in, horários, o link da própria foto) não vem pelo MCP (#395, ADR 044 §10). A medalha só
+aparece com o resultado fechado.
 
 ### `get_my_challenge_progress`
 
