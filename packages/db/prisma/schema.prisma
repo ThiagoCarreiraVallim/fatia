@@ -1027,20 +1027,23 @@ model FavoriteExercise {
 }
 
 model WorkoutSession {
-  id          String    @id @default(uuid())
-  userId      String
-  planId      String? // null = treino livre (ou o plano foi apagado: ver `fromPlan`)
+  id                String    @id @default(uuid())
+  userId            String
+  planId            String? // null = treino livre (ou o plano foi apagado: ver `fromPlan`)
   /// Retrato do plano ao começar (#381): o plano pode ser apagado depois (a FK
   /// vira nula), e a sessão segue sendo "de plano", com o nome que tinha.
-  fromPlan    Boolean   @default(false)
-  planName    String?
-  startedAt   DateTime
-  completedAt DateTime?
-  notes       String?
+  fromPlan          Boolean   @default(false)
+  planName          String?
+  startedAt         DateTime
+  completedAt       DateTime?
+  notes             String?
   /// Quando a sessão foi gravada (#395). Treino lançado depois do fim (gravado
   /// depois de `completedAt`) não libera check-in de desafio. As sessões de
   /// antes da migration ficam com o instante da migration.
-  createdAt   DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  /// Quando o servidor fechou a sessão (#395), qualquer que seja o `completedAt`
+  /// pedido. A duração que vale no desafio é de `createdAt` até aqui.
+  serverCompletedAt DateTime?
 
   // Ajustes desta sessão sobre o plano, sem mexer no plano: a ordem em que a
   // pessoa decidiu fazer os exercícios (ids, na ordem; vazio = a do plano) e os
@@ -1341,6 +1344,8 @@ model StepLog {
   steps    Int
   source   StepSource @default(MANUAL)
   loggedAt DateTime   @default(now())
+  /// Última edição (#395): editado depois do prazo do dia não conta em desafio.
+  editedAt DateTime?
   notes    String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1383,12 +1388,14 @@ model WeightLog {
 // Hidratação. Múltiplos logs por dia esperados (cada copo é um log).
 // Política do "valor do dia" = SOMA (diferente de StepLog, que é MAX).
 model WaterLog {
-  id       String   @id @default(uuid())
+  id       String    @id @default(uuid())
   userId   String
   // YYYY-MM-DD no fuso do usuário.
   date     String
   ml       Int
-  loggedAt DateTime @default(now())
+  loggedAt DateTime  @default(now())
+  /// Última edição (#395): editado depois do prazo do dia não conta em desafio.
+  editedAt DateTime?
   notes    String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2606,6 +2613,8 @@ model ChallengeCheckin {
   flags          ChallengeCheckinFlag[]
 
   @@unique([participantId, type, date])
+  /// Um treino vale um check-in no desafio (#395 B2).
+  @@unique([participantId, workoutSessionId])
   @@index([status])
   @@index([workoutSessionId])
 }
