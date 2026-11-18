@@ -79,6 +79,11 @@ export const GROUP_PERMISSIONS = {
   'challenge.manage': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
   /** Ver os desafios e entrar ou sair com um apelido (opt-in, ADR 027). */
   'challenge.join': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /**
+   * A fila "Para revisar" dos desafios (#395, ADR 044 e 047): ver a foto de prova
+   * e decidir "Vale" ou "Anular" com motivo. Só a equipe; sinalizar é `challenge.join`.
+   */
+  'challenge.review': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
   /** Ler o mural, reagir, comentar e denunciar (Fase 8b, ADR 032). */
   'post.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   /**

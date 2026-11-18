@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   GroupRole,
@@ -14,6 +15,7 @@ import {
 } from '@fatia/db';
 import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
 import { PrismaService } from '../common/prisma.service';
+import { ChallengeService } from './challenge.service';
 import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
@@ -110,6 +112,7 @@ export class MembershipService {
     private readonly prisma: PrismaService,
     private readonly links: ProfessionalLinkService,
     private readonly notifications: NotificationService,
+    @Optional() private readonly challenges?: ChallengeService,
   ) {}
 
   /**
@@ -690,6 +693,9 @@ export class MembershipService {
         data: { revokedAt: agora },
       }),
     ]);
+
+    // As fotos de prova dos check-ins dela nesta comunidade saem na hora (ADR 044 §7).
+    await this.challenges?.afterMembershipEnded(membership.id);
 
     return {
       membershipId: membership.id,

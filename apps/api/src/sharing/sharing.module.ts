@@ -9,6 +9,7 @@ import { SocialModule } from '../social/social.module';
 import { StorageModule } from '../storage/storage.module';
 import { ChallengeController } from './challenge.controller';
 import { ChallengeService } from './challenge.service';
+import { ChallengeCheckinService } from './challenge-checkin.service';
 import { ModerationController } from './moderation.controller';
 import { PostController } from './post.controller';
 import { PostService } from './post.service';
@@ -137,6 +138,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupExerciseService,
     GroupAgentService,
     ChallengeService,
+    ChallengeCheckinService,
     PostService,
     BenefitService,
     GroupRoleGuard,

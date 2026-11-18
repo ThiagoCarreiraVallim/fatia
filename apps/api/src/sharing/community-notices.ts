@@ -67,6 +67,36 @@ export function challengeEndedNotice(p: {
   };
 }
 
+/** O desafio começou: para quem pediu "Me avise" e para quem já entrou (#395). */
+export function challengeStartedNotice(p: {
+  groupId: string;
+  groupName: string;
+  challengeId: string;
+  title: string;
+}): Notice {
+  return {
+    kind: NotificationKind.CHALLENGES,
+    title: `${p.title} começou`,
+    body: `O desafio de ${p.groupName} está valendo a partir de hoje.`,
+    url: `/community/${p.groupId}/challenges/${p.challengeId}`,
+  };
+}
+
+/** A equipe anulou um check-in ou um dia: o motivo vai para a pessoa (#395, ADR 044). */
+export function checkinVoidedNotice(p: {
+  groupId: string;
+  challengeId: string;
+  title: string;
+  reason: string;
+}): Notice {
+  return {
+    kind: NotificationKind.CHALLENGES,
+    title: `Check-in anulado em ${p.title}`,
+    body: `Motivo da equipe: ${p.reason}`,
+    url: `/community/${p.groupId}/challenges/${p.challengeId}`,
+  };
+}
+
 export function commentNotice(p: { groupId: string; groupName: string; author: string }): Notice {
   return {
     kind: NotificationKind.FEED,
