@@ -157,7 +157,7 @@ Regras:
   indentação do source dentro da description servida, gasta token à toa e deixa o exemplo à
   mercê de quem reflui ou trunca o texto do catálogo.
 - **Só os campos que importam.** Obrigatórios sempre; opcionais apenas quando o campo é o
-  ponto do exemplo (`loggedAt` em `log_weight`, `source` em `log_steps`).
+  ponto do exemplo (`loggedAt` em `log_weight`).
 - **IDs são fictícios e óbvios** (`11111111-2222-4333-8444-555555555555`). O exemplo mostra
   o formato do argumento, não um registro que existe — o ID real vem de um `search_`/`list_`.
 - **Tool somente-leitura é isenta.** Input curto, raramente ambíguo, e o custo em token é
@@ -2290,11 +2290,12 @@ Registra uma contagem de passos para um dia. Pode ser chamada múltiplas vezes �
 {
   date?: string;        // ISO date YYYY-MM-DD; default: hoje no fuso do user
   steps: number;        // inteiro >= 0
-  source?: "MANUAL" | "GOOGLE_FIT" | "APPLE_HEALTH" | "HEALTH_CONNECT"
-         | "STRAVA" | "GARMIN" | "FITBIT" | "WEBHOOK";  // default MANUAL
   notes?: string;
 }
 ```
+
+O registro fica sempre com a fonte `MANUAL` (#395, ADR 047): a fonte não é palavra do cliente,
+e passos à mão não contam em desafio de passos.
 
 **Output:**
 

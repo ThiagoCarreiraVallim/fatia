@@ -48,7 +48,15 @@ para visitante e dizia que "entrar é o aceite". Esta ADR concilia as duas.
    (`resultPending`). A foto é apagada 30 dias depois de `finalizedAt`, ao anular, ao sair do
    desafio, ao sair da comunidade ou ao apagar a conta (ADR 044 §7). A limpeza de órfãos da mídia
    não toca foto ligada a check-in.
-7. **MCP.** Continua sem check-in, sinalização ou revisão (ADR 044 §10).
+7. **Fonte dos passos.** A rota de registro (`POST /steps`, app e web) e o `log_steps` gravam
+   sempre `MANUAL`, seja qual for o `source` do corpo (campo aceito e ignorado, para não quebrar
+   cliente antigo; o `log_steps` nem o oferece). Hoje o app **não sincroniza** Apple Saúde nem
+   Health Connect (`apps/mobile/src/health/health-steps.ts` é só o ponto de extensão), então
+   nenhum passo conta em desafio `STEPS` até a sincronização existir. Quando ela chegar, terá rota
+   própria, a única que grava fonte automática — e mesmo assim **a fonte automática continua
+   dependendo do cliente** (o app declara que leu do Saúde); o servidor não tem como atestar.
+   O detector de salto e o prazo do dia são o que resta contra a fraude.
+8. **MCP.** Continua sem check-in, sinalização ou revisão (ADR 044 §10).
    `get_my_challenge_progress` lê só o progresso do próprio usuário.
 
 ## Consequências

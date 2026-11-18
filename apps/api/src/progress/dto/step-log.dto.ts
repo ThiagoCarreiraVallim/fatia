@@ -11,6 +11,10 @@ export class CreateStepLogDto {
   @Min(0)
   steps!: number;
 
+  /**
+   * Ignorada: o registro por esta rota é sempre `MANUAL` (#395, ADR 047). Aceita
+   * só para não quebrar cliente antigo que ainda manda o campo.
+   */
   @IsOptional()
   @IsEnum(StepSource)
   source?: StepSource;

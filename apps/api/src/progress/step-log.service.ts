@@ -20,7 +20,9 @@ export class StepLogService {
         userId,
         date,
         steps: dto.steps,
-        source: dto.source ?? StepSource.MANUAL,
+        // A fonte nunca vem do corpo (#395, ADR 047): esta é a rota de registro à
+        // mão (app, web e `log_steps`). Fonte automática só por uma rota de sync.
+        source: StepSource.MANUAL,
         notes: dto.notes ?? null,
       },
     });
