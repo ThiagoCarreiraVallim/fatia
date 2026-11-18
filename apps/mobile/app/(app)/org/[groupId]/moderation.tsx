@@ -3,18 +3,23 @@ import { Text } from '@/components/ui/text';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AUTO_POST_KINDS,
+  AUTO_POST_LABEL,
+  feedApi,
   moderationApi,
+  pinDeadlineLabel,
   orgApi,
   POST_POLICY_LABEL,
   relativeTime,
   REPORT_REASON_LABEL,
   reportSummary,
+  type AutoPostKind,
   type MyGroup,
   type PostPolicy,
   type ReportQueueItem,
 } from '@fatia/api-client';
 import { apiMessage, Choice, OrgPanel, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, LoadingState, useConfirm } from '@/components/ui';
+import { Button, EmptyState, LoadingState, Switch, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 const chave = (groupId: string) => ['community', 'org', groupId, 'moderation'] as const;
@@ -35,6 +40,11 @@ function Moderacao({ g }: { g: MyGroup }) {
     queryKey: [...chave(g.id), 'bans'],
     queryFn: () => moderationApi.bans(g.id),
   });
+  const mural = useQuery({
+    queryKey: [...chave(g.id), 'pins'],
+    queryFn: () => feedApi.list(g.id),
+  });
+  const fixados = mural.data?.pins ?? [];
   const recarregar = () => {
     void qc.invalidateQueries({ queryKey: chave(g.id) });
     void qc.invalidateQueries({ queryKey: ['community', 'feed', g.id] });
@@ -51,6 +61,31 @@ function Moderacao({ g }: { g: MyGroup }) {
     },
     onError: erro('Não deu para salvar agora.'),
   });
+  const ordem = useMutation({
+    mutationFn: (postIds: string[]) => moderationApi.reorderPins(g.id, postIds),
+    onSuccess: recarregar,
+    onError: erro('Não deu para mudar a ordem agora.'),
+  });
+  const desafixar = useMutation({
+    mutationFn: (id: string) => moderationApi.unpin(g.id, id),
+    onSuccess: () => {
+      toast.show({ message: 'Aviso saiu do topo. Continua no mural.' });
+      recarregar();
+    },
+    onError: erro('Não deu para desafixar agora.'),
+  });
+  const autos = g.autoPosts ?? AUTO_POST_KINDS;
+  const automaticos = useMutation({
+    mutationFn: (autoPosts: AutoPostKind[]) => orgApi.update(g.id, { autoPosts }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['community', 'group', g.id] }),
+    onError: erro('Não deu para salvar agora.'),
+  });
+  const subir = (i: number) => {
+    const ids = fixados.map((p) => p.id);
+    [ids[i - 1], ids[i]] = [ids[i]!, ids[i - 1]!];
+    ordem.mutate(ids);
+  };
+
   const resolver = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'remove' | 'dismiss' }) =>
       moderationApi.resolve(g.id, id, action),
@@ -102,6 +137,71 @@ function Moderacao({ g }: { g: MyGroup }) {
 
   return (
     <>
+      <PanelCard title="Avisos fixados">
+        <Text className="text-xs text-muted-foreground">
+          Viram um carrossel no topo do mural, nesta ordem.
+        </Text>
+        {fixados.length === 0 ? (
+          <Text className="text-xs text-muted-foreground">
+            Nenhum aviso fixado. O mural começa direto nos posts.
+          </Text>
+        ) : (
+          fixados.map((p, i) => (
+            <View key={p.id} className="gap-2 border-t border-border pt-2">
+              <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
+                {`${i + 1}. ${p.title ?? p.body.split('\n')[0] ?? ''}`}
+              </Text>
+              <Text className="text-xs text-muted-foreground">
+                {`${p.author.displayName} · ${pinDeadlineLabel(p.pinnedUntil).toLowerCase()}`}
+              </Text>
+              <View className="flex-row gap-2">
+                {i > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={ordem.isPending}
+                    onPress={() => subir(i)}
+                  >
+                    Subir
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={desafixar.isPending}
+                  onPress={() => desafixar.mutate(p.id)}
+                >
+                  Desafixar
+                </Button>
+              </View>
+            </View>
+          ))
+        )}
+      </PanelCard>
+
+      <PanelCard title="Posts automáticos">
+        <Text className="text-xs text-muted-foreground">
+          Saem como post da equipe, no nome de quem publicou. Dá para apagar depois.
+        </Text>
+        {AUTO_POST_KINDS.map((k) => (
+          <View key={k} className="flex-row items-center justify-between gap-3">
+            <View className="flex-1">
+              <Text className="text-sm font-medium text-foreground">
+                {AUTO_POST_LABEL[k].label}
+              </Text>
+              <Text className="text-xs text-muted-foreground">{AUTO_POST_LABEL[k].hint}</Text>
+            </View>
+            <Switch
+              checked={autos.includes(k)}
+              label={AUTO_POST_LABEL[k].label}
+              onCheckedChange={(v) =>
+                automaticos.mutate(v ? [...autos, k] : autos.filter((x) => x !== k))
+              }
+            />
+          </View>
+        ))}
+      </PanelCard>
+
       <PanelCard title="Quem publica no mural">
         <Choice
           label=""
