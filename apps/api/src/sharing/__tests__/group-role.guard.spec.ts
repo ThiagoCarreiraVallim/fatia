@@ -20,6 +20,7 @@ describe('GroupRoleGuard', () => {
     groupMembership: { findUnique: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
     groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
     groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
+    userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     // Os números do cartão (#393): contagens que não mudam a decisão de acesso.
     groupPost: { count: jest.fn().mockResolvedValue(0) },
     planOfferVersion: { count: jest.fn().mockResolvedValue(0) },

@@ -20,7 +20,10 @@ import {
   type PostPolicy,
   type ShareScope,
 } from '@fatia/db';
-import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
+import {
+  membershipsWithEffectiveSeat,
+  proPayerGroupOf,
+} from '../billing/subscription-entitlements.service';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
@@ -88,8 +91,15 @@ export interface GroupSummary {
   /** O que a própria pessoa escolheu compartilhar com a equipe (ADR 026). */
   consentScopes: ShareScope[];
   statsOptIn: boolean;
-  /** Se a comunidade paga o PRO desta pessoa (ADR 025). */
+  /** Se a comunidade dá o PRO a esta pessoa (assento valendo ou todos os membros, ADR 025). */
   hasAiSeat: boolean;
+  /**
+   * O PRO que vale agora é pago **por esta** comunidade (#393): a fonte do
+   * direito é `GROUP` e o pool é deste grupo. Com assinatura própria valendo,
+   * `false` mesmo com assento. É o selo "PRO pago pela academia" e o "se sair,
+   * volta ao Free".
+   */
+  proPaidByThisGroup: boolean;
   /** Avatar da comunidade, por URL assinada de curta duração (ADR 028). */
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
@@ -159,6 +169,7 @@ function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
   hasAiSeat: boolean,
+  proPaidByThisGroup: boolean,
   extras: MembershipExtras,
 ): GroupSummary {
   return {
@@ -176,6 +187,7 @@ function toSummary(
     consentScopes: m.consentScopes,
     statsOptIn: m.statsOptIn,
     hasAiSeat,
+    proPaidByThisGroup,
     avatarUrl,
     postPolicy: m.group.postPolicy,
     requiredSharingScopes: m.group.requiredSharingScopes,
@@ -206,10 +218,17 @@ export class GroupService {
   private async summaryOf(
     m: GroupMembership & { group: Group & { avatarFile: MediaFile | null } },
     withSeat: ReadonlySet<string>,
+    payer: string | null,
     extras: ReadonlyMap<string, MembershipExtras>,
   ): Promise<GroupSummary> {
     const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
-    return toSummary(m, avatar?.url ?? null, withSeat.has(m.id), extras.get(m.id) ?? SEM_EXTRAS);
+    return toSummary(
+      m,
+      avatar?.url ?? null,
+      withSeat.has(m.id),
+      payer === m.groupId,
+      extras.get(m.id) ?? SEM_EXTRAS,
+    );
   }
 
   /**
@@ -345,14 +364,15 @@ export class GroupService {
     });
 
     // O assento que vale, pela regra do portão da IA — e não só "atribuído".
-    const [withSeat, extras] = await Promise.all([
+    const [withSeat, payer, extras] = await Promise.all([
       membershipsWithEffectiveSeat(
         this.prisma,
         memberships.map((m) => m.id),
       ),
+      proPayerGroupOf(this.prisma, userId),
       this.extrasOf(memberships),
     ]);
-    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat, extras)));
+    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat, payer, extras)));
   }
 
   /**
@@ -375,11 +395,12 @@ export class GroupService {
       throw new NotFoundException(NOT_FOUND);
     }
 
-    const [withSeat, extras] = await Promise.all([
+    const [withSeat, payer, extras] = await Promise.all([
       membershipsWithEffectiveSeat(this.prisma, [membership.id]),
+      proPayerGroupOf(this.prisma, userId),
       this.extrasOf([membership]),
     ]);
-    return this.summaryOf(membership, withSeat, extras);
+    return this.summaryOf(membership, withSeat, payer, extras);
   }
 
   /**

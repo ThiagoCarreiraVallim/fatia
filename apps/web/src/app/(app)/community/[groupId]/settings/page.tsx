@@ -334,7 +334,7 @@ export default function CommunitySettingsPage() {
         </p>
       )}
 
-      {g.hasAiSeat && (
+      {g.proPaidByThisGroup && (
         <Link
           href="/plan"
           className="flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3.5 text-sm"
@@ -406,7 +406,7 @@ export default function CommunitySettingsPage() {
         title={active ? `Sair da ${g.name}?` : 'Cancelar o pedido?'}
         description={
           active
-            ? g.hasAiSeat
+            ? g.proPaidByThisGroup
               ? LEAVE_COPY.bodyPro
               : LEAVE_COPY.body
             : 'Você pode pedir de novo depois, pelo código ou por um convite.'

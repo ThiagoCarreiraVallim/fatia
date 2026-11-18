@@ -17,6 +17,7 @@ type MockPrisma = {
   groupChallengeParticipant: { findFirst: jest.Mock; count: jest.Mock };
   groupSeatPool: { findMany: jest.Mock; findUnique: jest.Mock };
   groupSeatAssignment: { findMany: jest.Mock };
+  userSubscription: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -38,6 +39,7 @@ const makePrisma = (): MockPrisma => ({
     findUnique: jest.fn().mockResolvedValue(null),
   },
   groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
+  userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const OWNER = 'dono-1';

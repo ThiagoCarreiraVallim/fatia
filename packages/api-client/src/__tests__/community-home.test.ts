@@ -67,6 +67,7 @@ const grupo = (over: Partial<MyGroup> = {}): MyGroup => ({
   consentScopes: [],
   statsOptIn: false,
   hasAiSeat: true,
+  proPaidByThisGroup: true,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
   requiredSharingScopes: [],

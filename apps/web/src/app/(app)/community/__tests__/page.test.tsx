@@ -59,6 +59,7 @@ const grupo = (p: Partial<MyGroup>): MyGroup => ({
   consentScopes: [],
   statsOptIn: false,
   hasAiSeat: false,
+  proPaidByThisGroup: false,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
   requiredSharingScopes: [],
@@ -119,6 +120,7 @@ describe('/community', () => {
     vi.mocked(groupsApi.mine).mockResolvedValue([
       grupo({
         hasAiSeat: true,
+        proPaidByThisGroup: true,
         memberCount: 124,
         forYouCount: 3,
         newPostCount: 2,
@@ -154,8 +156,20 @@ describe('/community', () => {
     );
   });
 
+  it('assento aqui, mas o PRO valendo é a assinatura da pessoa: sem o selo da academia', async () => {
+    vi.mocked(groupsApi.mine).mockResolvedValue([
+      grupo({ hasAiSeat: true, proPaidByThisGroup: false }),
+    ]);
+    renderPage();
+    expect(await screen.findByRole('link', { name: /Academia Demo/ })).not.toHaveTextContent(
+      'PRO pago',
+    );
+  });
+
   it('sem PRO pago pela comunidade, sem o selo', async () => {
-    vi.mocked(groupsApi.mine).mockResolvedValue([grupo({ hasAiSeat: false })]);
+    vi.mocked(groupsApi.mine).mockResolvedValue([
+      grupo({ hasAiSeat: false, proPaidByThisGroup: false }),
+    ]);
     renderPage();
     expect(await screen.findByRole('link', { name: /Academia Demo/ })).not.toHaveTextContent(
       'PRO pago',

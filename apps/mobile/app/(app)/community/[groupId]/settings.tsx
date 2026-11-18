@@ -330,7 +330,7 @@ export default function CommunitySettingsScreen() {
     confirm({
       title: ativo ? `Sair da ${g.name}?` : 'Cancelar o pedido?',
       description: ativo
-        ? g.hasAiSeat
+        ? g.proPaidByThisGroup
           ? LEAVE_COPY.bodyPro
           : LEAVE_COPY.body
         : 'Você pode pedir de novo depois, pelo código ou por um convite.',
@@ -381,7 +381,7 @@ export default function CommunitySettingsScreen() {
           </Text>
         ) : null}
 
-        {g.hasAiSeat ? (
+        {g.proPaidByThisGroup ? (
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push('/plan')}

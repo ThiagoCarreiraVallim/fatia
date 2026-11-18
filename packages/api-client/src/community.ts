@@ -42,6 +42,11 @@ export interface MyGroup {
   statsOptIn: boolean;
   /** A comunidade paga o PRO desta pessoa. */
   hasAiSeat: boolean;
+  /**
+   * O PRO valendo agora é pago por esta comunidade (assinatura própria vence o
+   * assento). É o selo "PRO pago pela academia" e o "se sair, volta ao Free".
+   */
+  proPaidByThisGroup: boolean;
   /** Avatar da comunidade, URL assinada de curta duração. */
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
