@@ -1013,14 +1013,10 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       }
     }
     if (novos.length === 0) return;
-    const abertos = await this.prisma.challengeCheckin.count({
-      where: { participant: { challengeId }, status: ChallengeCheckinStatus.FLAGGED },
-    });
-    // A fila tem teto (ADR 047): cheia, o dia conta como veio e não entra nela.
-    const cabem = Math.max(0, REVIEW_QUEUE_MAX - abertos);
-    if (cabem === 0) return;
+    // O detector sempre entra (#395 I6): o teto da fila é das sinalizações de
+    // membros; um dia fora do padrão nunca conta sem a equipe olhar.
     await this.prisma.challengeCheckin.createMany({
-      data: novos.slice(0, cabem).map((n) => ({
+      data: novos.map((n) => ({
         participantId: n.participantId,
         type: n.type,
         date: n.date,
@@ -1199,7 +1195,12 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         reason: meu ? (c.status === 'VOIDED' ? c.reason : c.flagReason) : null,
         photoUrl:
           meu && this.media && c.photoFile ? (await this.media.view(c.photoFile)).url : null,
-        canFlag: meuId !== null && !meu && c.status === 'VALID' && c.reviewedAt === null,
+        canFlag:
+          meuId !== null &&
+          !meu &&
+          c.status === 'VALID' &&
+          c.reviewedAt === null &&
+          statusOf(row, new Date()) === 'running',
         flaggedByMe: c.flags.length > 0,
       });
     }

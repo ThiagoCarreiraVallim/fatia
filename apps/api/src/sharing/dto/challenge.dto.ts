@@ -191,4 +191,15 @@ export class ReviewQueryDto {
   @IsOptional()
   @IsUUID()
   challengeId?: string;
+
+  /** A próxima página da fila (`nextCursor` da anterior, #395 M5). */
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
+}
+
+export class ReviewPageDto {
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
 }

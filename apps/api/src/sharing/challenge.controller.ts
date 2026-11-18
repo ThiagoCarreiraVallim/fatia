@@ -24,6 +24,7 @@ import {
   CreateCheckinDto,
   JoinChallengeDto,
   ResolveCheckinDto,
+  ReviewPageDto,
   ReviewQueryDto,
   WatchChallengeDto,
 } from './dto/challenge.dto';
@@ -53,7 +54,7 @@ export class ChallengeController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Query() q: ReviewQueryDto,
   ) {
-    return this.checkins.queue(user.id, groupId, q.challengeId);
+    return this.checkins.queue(user.id, groupId, q.challengeId, q.cursor);
   }
 
   @Get()
@@ -166,8 +167,12 @@ export class ChallengeController {
 
   @Get(':id/review')
   @RequireGroupAction('challenge.review')
-  challengeReview(@CurrentUser() user: CurrentUserPayload, @Param() p: ChallengeParamDto) {
-    return this.checkins.queue(user.id, p.groupId, p.id);
+  challengeReview(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param() p: ChallengeParamDto,
+    @Query() q: ReviewPageDto,
+  ) {
+    return this.checkins.queue(user.id, p.groupId, p.id, q.cursor);
   }
 
   /** "Vale" ou "Anular" com motivo (Pn-13). */

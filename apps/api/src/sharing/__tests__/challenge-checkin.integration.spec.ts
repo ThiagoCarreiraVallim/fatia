@@ -128,7 +128,14 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
   async function foto(userId: string, groupId: string) {
     cor += 1;
     const body = await sharp({
-      create: { width: 64, height: 64, channels: 3, background: { r: cor % 255, g: 20, b: 30 } },
+      // Cada foto com um tamanho: cores vizinhas viram a mesma imagem depois de
+      // reencodada, e o desafio a recusaria como repetida.
+      create: {
+        width: 32 + cor,
+        height: 32,
+        channels: 3,
+        background: { r: cor % 255, g: 20, b: 30 },
+      },
     })
       .jpeg()
       .toBuffer();
@@ -148,6 +155,7 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
   async function treino(userId: string, duracao = 52, minutosAtras = 5, gravadoDepois = false) {
     const fim = new Date(Date.now() - minutosAtras * 60_000);
     const inicio = new Date(fim.getTime() - duracao * 60_000);
+    const gravado = new Date(Math.min(fim.getTime() + 30 * 60_000, Date.now()));
     return prisma.workoutSession.create({
       data: {
         userId,
@@ -155,9 +163,9 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
         fromPlan: true,
         startedAt: inicio,
         completedAt: fim,
-        createdAt: gravadoDepois ? new Date(fim.getTime() + 30 * 60_000) : inicio,
+        createdAt: gravadoDepois ? gravado : inicio,
         // Lançado depois: o servidor fechou na hora em que gravou.
-        serverCompletedAt: gravadoDepois ? new Date(fim.getTime() + 30 * 60_000) : fim,
+        serverCompletedAt: gravadoDepois ? gravado : fim,
       },
     });
   }
@@ -259,7 +267,9 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
         { displayName: 'Ana', score: 2, rank: 1, isMe: false, medal: null, streak: 2 },
       ]);
       // A atividade fala de dias, nunca de quanto.
-      expect(JSON.stringify(visitante.activity)).not.toMatch(/2100|1200|900|2000/);
+      // (Sem os ids: um uuid pode conter "900" por acaso.)
+      const semIds = visitante.activity.map(({ id: _id, ...resto }) => resto);
+      expect(JSON.stringify(semIds)).not.toMatch(/2100|1200|900|2000/);
       expect(visitante.activity.every((i) => i.parts.every((p) => p === 'water'))).toBe(true);
 
       const eu = await challenges.get(a.membro, a.groupId, id);
@@ -592,6 +602,7 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
           type: 'WATER' as const,
           date: `2000-01-${String((i % 28) + 1).padStart(2, '0')}`,
           status: 'FLAGGED' as const,
+          flagSource: 'MEMBER' as const,
         })).filter((_, i) => i < 28),
         skipDuplicates: true,
       });
@@ -601,6 +612,7 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
           type: 'STEPS' as const,
           date: `2000-02-${String(i + 1).padStart(2, '0')}`,
           status: 'FLAGGED' as const,
+          flagSource: 'MEMBER' as const,
         })),
       });
       // Resposta neutra (#395 M3): quem sinaliza não descobre que a fila encheu. O
@@ -1012,6 +1024,7 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
           },
         ],
       });
+      await velho(id);
       const r = await challenges.get(a.membro, a.groupId, id);
       expect(r.me).toMatchObject({ score: 0, pendingReview: 1 });
     });

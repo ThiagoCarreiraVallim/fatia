@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -43,7 +44,9 @@ export type CheckinBlock =
   | 'no_workout'
   | 'too_short'
   | 'late_logged'
-  | 'already_today';
+  | 'already_today'
+  /** Este treino já liberou um check-in neste desafio (#395 B2). */
+  | 'workout_used';
 
 export interface CheckinWorkout {
   id: string;
@@ -89,8 +92,12 @@ export interface ReviewItem {
 
 export interface ReviewQueue {
   items: ReviewItem[];
+  /** Quantos esperam ao todo (todas as páginas). */
   open: number;
+  /** O teto de sinalizações de membros abertas por desafio. */
   limit: number;
+  /** A próxima página da fila (#395 M5); nulo quando acabou. */
+  nextCursor: string | null;
 }
 
 const NOME_DO_TREINO = (s: { planName: string | null; fromPlan: boolean }) =>
@@ -176,8 +183,20 @@ export class ChallengeCheckinService {
 
     const sessao = await this.prisma.workoutSession.findUniqueOrThrow({
       where: { id: e.workout!.id },
-      select: { startedAt: true, completedAt: true, _count: { select: { sets: true } } },
+      select: {
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        _count: { select: { sets: true } },
+      },
     });
+    // A foto tem de ser deste treino (#395 M4): pedida depois de a sessão abrir.
+    if (pronta.createdAt < sessao.createdAt) {
+      throw new ConflictException({
+        message: 'Esta foto é de antes do treino. Tire uma foto nova.',
+        code: 'photo_before_workout',
+      });
+    }
     try {
       await this.prisma.challengeCheckin.create({
         data: {
@@ -193,12 +212,14 @@ export class ChallengeCheckinService {
         },
       });
     } catch (err) {
-      // Dois toques ao mesmo tempo: o índice único (pessoa, tipo, dia) segura.
+      // Dois toques ao mesmo tempo: os índices únicos (pessoa, tipo, dia) e
+      // (pessoa, treino) seguram.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException({
-          message: blockMessage('already_today'),
-          code: 'already_today',
-        });
+        const alvo = JSON.stringify(err.meta?.target ?? '');
+        const code: CheckinBlock = alvo.includes('workoutSessionId')
+          ? 'workout_used'
+          : 'already_today';
+        throw new ConflictException({ message: blockMessage(code), code });
       }
       throw err;
     }
@@ -209,7 +230,16 @@ export class ChallengeCheckinService {
     return this.challenges.get(userId, groupId, challengeId, now);
   }
 
-  /** "Não parece válido" (Cm-17): quem participa, sem ver a foto, no check-in de outra pessoa. */
+  /**
+   * "Não parece válido" (Cm-17): quem participa, sem ver a foto, no check-in de
+   * outra pessoa, com o desafio em andamento (#395 I5).
+   *
+   * A resposta é sempre a mesma (#395 M3): quem sinaliza não fica sabendo se o
+   * check-in já foi anulado, revisado ou se a fila de membros encheu. A
+   * sinalização fica guardada (e conta no limite de 3 por 24 h); o check-in só
+   * vai para a fila se ainda vale, não foi revisado e cabe no teto de
+   * sinalizações de membros. Limite e teto são conferidos sob trava (#395 M2).
+   */
   async flag(
     userId: string,
     groupId: string,
@@ -221,7 +251,10 @@ export class ChallengeCheckinService {
     if (!ctx.participant) {
       throw new ConflictException('Só quem participa do desafio sinaliza check-in');
     }
-    const checkin = await this.prisma.challengeCheckin.findFirst({
+    if (statusOf(ctx.challenge, now) !== 'running') {
+      throw new ConflictException('Só dá para sinalizar enquanto o desafio está em andamento');
+    }
+    const alvo = await this.prisma.challengeCheckin.findFirst({
       where: {
         id: checkinId,
         type: ChallengeCheckinType.PHOTO,
@@ -230,93 +263,112 @@ export class ChallengeCheckinService {
           membership: { status: MembershipStatus.ACTIVE },
         },
       },
-      select: { id: true, participantId: true, status: true, reviewedAt: true },
+      select: { id: true, participantId: true },
     });
-    if (!checkin) throw new NotFoundException('Check-in não encontrado');
-    if (checkin.participantId === ctx.participant.id) {
+    if (!alvo) throw new NotFoundException('Check-in não encontrado');
+    if (alvo.participantId === ctx.participant.id) {
       throw new BadRequestException('Não dá para sinalizar o próprio check-in');
     }
-    const jaFiz = await this.prisma.challengeCheckinFlag.findUnique({
-      where: { checkinId_membershipId: { checkinId, membershipId: ctx.membershipId } },
-    });
-    if (jaFiz) return { flagged: true };
-    if (checkin.status === ChallengeCheckinStatus.VOIDED) {
-      throw new ConflictException('Este check-in já foi anulado');
-    }
-    if (checkin.status === ChallengeCheckinStatus.VALID && checkin.reviewedAt !== null) {
-      throw new ConflictException('A equipe já revisou este check-in');
-    }
-    const hoje = await this.prisma.challengeCheckinFlag.count({
-      where: {
-        membershipId: ctx.membershipId,
-        createdAt: { gt: new Date(now.getTime() - 24 * 60 * 60_000) },
-      },
-    });
-    if (hoje >= MEMBER_FLAGS_PER_DAY) {
-      throw new HttpException(
-        `Você já sinalizou ${MEMBER_FLAGS_PER_DAY} check-ins nas últimas 24 h. A equipe já está olhando.`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    if (checkin.status === ChallengeCheckinStatus.VALID) {
-      const abertos = await this.openCount(ctx.challenge.id);
-      if (abertos >= REVIEW_QUEUE_MAX) {
-        throw new ConflictException(
-          'A fila de revisão deste desafio está cheia. A equipe precisa decidir os que já estão lá.',
+    const neutro = { flagged: true } as const;
+    const mudou = await this.prisma.$transaction(async (tx) => {
+      // Mesma ordem sempre (pessoa, depois desafio): duas travas sem deadlock.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`challenge-flag:${ctx.membershipId}`}))::text`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`challenge-queue:${ctx.challenge.id}`}))::text`;
+      const jaFiz = await tx.challengeCheckinFlag.findUnique({
+        where: { checkinId_membershipId: { checkinId, membershipId: ctx.membershipId } },
+      });
+      if (jaFiz) return false;
+      const nas24h = await tx.challengeCheckinFlag.count({
+        where: {
+          membershipId: ctx.membershipId,
+          createdAt: { gt: new Date(now.getTime() - 24 * 60 * 60_000) },
+        },
+      });
+      if (nas24h >= MEMBER_FLAGS_PER_DAY) {
+        throw new HttpException(
+          `Você já sinalizou ${MEMBER_FLAGS_PER_DAY} check-ins nas últimas 24 h. A equipe já está olhando.`,
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
-    }
-    await this.prisma.challengeCheckinFlag.create({
-      data: { checkinId, membershipId: ctx.membershipId, createdAt: now },
+      await tx.challengeCheckinFlag.create({
+        data: { checkinId, membershipId: ctx.membershipId, createdAt: now },
+      });
+      const checkin = await tx.challengeCheckin.findUniqueOrThrow({
+        where: { id: checkinId },
+        select: { status: true, reviewedAt: true, flagSource: true },
+      });
+      const total = await tx.challengeCheckinFlag.count({ where: { checkinId } });
+      const motivo = `Sinalizado por ${total} participante${total > 1 ? 's' : ''}`;
+      if (checkin.status === ChallengeCheckinStatus.FLAGGED) {
+        // Já na fila: a contagem atualiza o motivo se ele era de membro.
+        if (checkin.flagSource === ChallengeFlagSource.MEMBER) {
+          await tx.challengeCheckin.update({
+            where: { id: checkinId },
+            data: { flagReason: motivo },
+          });
+        }
+        return false;
+      }
+      if (checkin.status !== ChallengeCheckinStatus.VALID || checkin.reviewedAt !== null) {
+        return false;
+      }
+      // O teto vale só para o que membros puseram na fila (#395 I6).
+      const deMembros = await tx.challengeCheckin.count({
+        where: {
+          participant: { challengeId: ctx.challenge.id },
+          status: ChallengeCheckinStatus.FLAGGED,
+          flagSource: ChallengeFlagSource.MEMBER,
+        },
+      });
+      if (deMembros >= REVIEW_QUEUE_MAX) return false;
+      await tx.challengeCheckin.update({
+        where: { id: checkinId },
+        data: {
+          status: ChallengeCheckinStatus.FLAGGED,
+          flagSource: ChallengeFlagSource.MEMBER,
+          flagReason: motivo,
+          flaggedAt: now,
+        },
+      });
+      return true;
     });
-    const total = await this.prisma.challengeCheckinFlag.count({ where: { checkinId } });
-    await this.prisma.challengeCheckin.update({
-      where: { id: checkinId },
-      data: {
-        status: ChallengeCheckinStatus.FLAGGED,
-        flagSource:
-          checkin.status === ChallengeCheckinStatus.FLAGGED
-            ? undefined
-            : ChallengeFlagSource.MEMBER,
-        flagReason:
-          checkin.status === ChallengeCheckinStatus.FLAGGED
-            ? undefined
-            : `Sinalizado por ${total} participante${total > 1 ? 's' : ''}`,
-        flaggedAt: checkin.status === ChallengeCheckinStatus.FLAGGED ? undefined : now,
-      },
-    });
-    if (checkin.status === ChallengeCheckinStatus.FLAGGED) {
-      // Já estava na fila: a contagem atualiza o motivo se ele era de membro.
-      await this.prisma.challengeCheckin.updateMany({
-        where: { id: checkinId, flagSource: ChallengeFlagSource.MEMBER },
-        data: { flagReason: `Sinalizado por ${total} participantes` },
+    if (mudou) {
+      await this.prisma.groupChallenge.update({
+        where: { id: ctx.challenge.id },
+        data: { scoredAt: null },
       });
     }
-    await this.prisma.groupChallenge.update({
-      where: { id: ctx.challenge.id },
-      data: { scoredAt: null },
-    });
-    return { flagged: true };
+    return neutro;
   }
 
   /**
    * A fila "Para revisar" (Pn-13): os itens sinalizados dos desafios da
    * comunidade que ainda não fecharam. Só a equipe (`challenge.review`).
    */
-  async queue(userId: string, groupId: string, challengeId?: string): Promise<ReviewQueue> {
+  async queue(
+    userId: string,
+    groupId: string,
+    challengeId?: string,
+    cursor?: string,
+  ): Promise<ReviewQueue> {
     await this.challenges.member(userId, groupId, 'challenge.review');
     if (challengeId) await this.challenges.find(groupId, challengeId);
     const where: Prisma.ChallengeCheckinWhereInput = {
       status: ChallengeCheckinStatus.FLAGGED,
       participant: {
         challenge: { groupId, finalizedAt: null, ...(challengeId ? { id: challengeId } : {}) },
+        // Quem revisa não vê (nem decide) o próprio check-in (#395 I1).
+        membership: { userId: { not: userId } },
       },
     };
-    const [linhas, open] = await Promise.all([
+    const [pagina, open] = await Promise.all([
       this.prisma.challengeCheckin.findMany({
         where,
-        orderBy: { flaggedAt: 'asc' },
-        take: REVIEW_QUEUE_MAX,
+        // Paginada (#395 M5): a fila da comunidade junta vários desafios e pode
+        // passar do teto de um.
+        orderBy: [{ flaggedAt: 'asc' }, { id: 'asc' }],
+        take: REVIEW_QUEUE_MAX + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         include: {
           photoFile: true,
           _count: { select: { flags: true } },
@@ -330,6 +382,8 @@ export class ChallengeCheckinService {
       }),
       this.prisma.challengeCheckin.count({ where }),
     ]);
+    const linhas = pagina.slice(0, REVIEW_QUEUE_MAX);
+    const nextCursor = pagina.length > REVIEW_QUEUE_MAX ? linhas.at(-1)!.id : null;
     const items: ReviewItem[] = [];
     for (const c of linhas) {
       const ch = c.participant.challenge;
@@ -353,7 +407,7 @@ export class ChallengeCheckinService {
         points: ch.kind === 'POINTS' ? (tabela[item] ?? 0) : 1,
       });
     }
-    return { items, open, limit: REVIEW_QUEUE_MAX };
+    return { items, open, limit: REVIEW_QUEUE_MAX, nextCursor };
   }
 
   /**
@@ -381,6 +435,9 @@ export class ChallengeCheckinService {
       },
     });
     if (!checkin) throw new NotFoundException('Check-in não encontrado');
+    if (checkin.participant.membership.userId === userId) {
+      throw new ForbiddenException('Quem revisa não decide o próprio check-in');
+    }
     if (checkin.status !== ChallengeCheckinStatus.FLAGGED) {
       throw new ConflictException('Este item não está esperando revisão');
     }
@@ -389,8 +446,18 @@ export class ChallengeCheckinService {
       throw new BadRequestException('Anular pede o motivo, que vai para a pessoa');
     }
     const anulado = input.decision === 'void';
-    await this.prisma.challengeCheckin.update({
-      where: { id: checkin.id },
+    // "Vale" aceita o treino como está agora (#395 I2): o retrato é regravado,
+    // e a próxima conferência não devolve o item à fila pela mesma edição.
+    const retrato =
+      !anulado && checkin.workoutSessionId
+        ? await this.prisma.workoutSession.findUnique({
+            where: { id: checkin.workoutSessionId },
+            select: { startedAt: true, completedAt: true, _count: { select: { sets: true } } },
+          })
+        : null;
+    // Só decide quem chega primeiro (#395 M1): o `where` com o status fecha a corrida.
+    const { count } = await this.prisma.challengeCheckin.updateMany({
+      where: { id: checkin.id, status: ChallengeCheckinStatus.FLAGGED },
       data: {
         status: anulado ? ChallengeCheckinStatus.VOIDED : ChallengeCheckinStatus.VALID,
         reviewedById: userId,
@@ -398,8 +465,12 @@ export class ChallengeCheckinService {
         reason: anulado ? motivo : null,
         // A foto anulada sai na decisão (ADR 044 §3); o `SetNull` solta a linha.
         ...(anulado ? { photoFileId: null } : {}),
+        ...(!anulado && checkin.type === ChallengeCheckinType.PHOTO
+          ? { workoutFingerprint: retrato ? workoutFingerprint(retrato) : null }
+          : {}),
       },
     });
+    if (count === 0) throw new ConflictException('Este item não está esperando revisão');
     if (anulado && checkin.photoFile) await this.media.discard([checkin.photoFile]);
     if (anulado) {
       this.notifications.notify(
@@ -425,21 +496,20 @@ export class ChallengeCheckinService {
   private async context(userId: string, groupId: string, challengeId: string) {
     const m = await this.challenges.member(userId, groupId, 'challenge.join');
     const challenge = await this.challenges.find(groupId, challengeId);
-    const [participant, user] = await Promise.all([
-      this.prisma.groupChallengeParticipant.findUnique({
-        where: {
-          challengeId_membershipId: { challengeId: challenge.id, membershipId: m.membershipId },
-        },
-        select: { id: true },
-      }),
-      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } }),
-    ]);
+    const participant = await this.prisma.groupChallengeParticipant.findUnique({
+      where: {
+        challengeId_membershipId: { challengeId: challenge.id, membershipId: m.membershipId },
+      },
+      select: { id: true },
+    });
     return {
       userId,
       membershipId: m.membershipId,
       challenge,
       participant,
-      timezone: user.timezone,
+      // O dia do check-in é o do desafio, não o da pessoa (#395 B2): trocar o
+      // fuso do aparelho não abre um segundo dia.
+      timezone: challenge.timezone,
     };
   }
 
@@ -473,15 +543,18 @@ export class ChallengeCheckinService {
       select: { capturedAt: true },
     });
 
-    // O treino: o pedido (se for da pessoa) ou o último concluído na janela.
+    // O treino: o pedido (se for da pessoa) ou o último que o servidor viu
+    // terminar na janela. Tudo pelo relógio do servidor (#395 I3): `createdAt`
+    // (abriu) e `serverCompletedAt` (fechou); o `startedAt` e o `completedAt`
+    // vêm do aparelho.
     const desde = new Date(now.getTime() - CHECKIN_WINDOW_HOURS * 60 * 60_000);
     const sessao = await this.prisma.workoutSession.findFirst({
       where: {
         userId: ctx.userId,
         ...(workoutSessionId ? { id: workoutSessionId } : {}),
-        completedAt: { gte: desde, lte: new Date(now.getTime() + 5 * 60_000) },
+        serverCompletedAt: { gte: desde, lte: new Date(now.getTime() + 5 * 60_000) },
       },
-      orderBy: { completedAt: 'desc' },
+      orderBy: { serverCompletedAt: 'desc' },
       select: {
         id: true,
         planName: true,
@@ -489,34 +562,47 @@ export class ChallengeCheckinService {
         startedAt: true,
         completedAt: true,
         createdAt: true,
+        serverCompletedAt: true,
         _count: { select: { sets: true } },
       },
     });
-    if (!sessao || !sessao.completedAt) {
+    if (!sessao || !sessao.completedAt || !sessao.serverCompletedAt) {
       return nao(feito ? 'already_today' : 'no_workout', {
         checkedInAt: feito?.capturedAt.toISOString() ?? null,
       });
     }
-    const minutos = Math.floor(
-      (sessao.completedAt.getTime() - sessao.startedAt.getTime()) / 60_000,
-    );
+    const fim = sessao.serverCompletedAt;
+    const minutos = Math.max(0, Math.floor((fim.getTime() - sessao.createdAt.getTime()) / 60_000));
     const workout: CheckinWorkout = {
       id: sessao.id,
       name: NOME_DO_TREINO(sessao),
-      startedAt: sessao.startedAt.toISOString(),
-      endedAt: sessao.completedAt.toISOString(),
+      startedAt: sessao.createdAt.toISOString(),
+      endedAt: fim.toISOString(),
       minutes: minutos,
       sets: sessao._count.sets,
-      deadline: new Date(
-        sessao.completedAt.getTime() + CHECKIN_WINDOW_HOURS * 60 * 60_000,
-      ).toISOString(),
+      deadline: new Date(fim.getTime() + CHECKIN_WINDOW_HOURS * 60 * 60_000).toISOString(),
     };
     if (feito) {
       return nao('already_today', { workout, checkedInAt: feito.capturedAt.toISOString() });
     }
-    // Treino lançado depois: gravado só depois de ter terminado ("treino
-    // retroativo não conta", Pn-13).
-    if (sessao.createdAt.getTime() > sessao.completedAt.getTime() + LATE_LOG_SLACK_MS) {
+    // Um treino, um check-in no desafio (#395 B2): o de ontem às 23h10 não vale
+    // de novo às 00h10.
+    const usado = await this.prisma.challengeCheckin.findUnique({
+      where: {
+        participantId_workoutSessionId: {
+          participantId: ctx.participant.id,
+          workoutSessionId: sessao.id,
+        },
+      },
+      select: { id: true },
+    });
+    if (usado) return nao('workout_used', { workout });
+    // Treino lançado depois (gravado só depois de ter terminado, "treino
+    // retroativo não conta", Pn-13) ou com o fim reescrito à mão (#395 I3).
+    if (
+      sessao.createdAt.getTime() > sessao.completedAt.getTime() + LATE_LOG_SLACK_MS ||
+      Math.abs(sessao.completedAt.getTime() - fim.getTime()) > LATE_LOG_SLACK_MS
+    ) {
       return nao('late_logged', { workout });
     }
     if (minutos < MIN_WORKOUT_MINUTES) return nao('too_short', { workout });
@@ -552,6 +638,8 @@ export function blockMessage(reason: CheckinBlock | null): string {
       return 'Treino lançado depois de feito não conta para o check-in.';
     case 'already_today':
       return 'Um check-in por dia. Volte amanhã depois do treino.';
+    case 'workout_used':
+      return 'Este treino já valeu um check-in neste desafio. Faça o próximo treino.';
     default:
       return 'Não dá para fazer check-in agora.';
   }
