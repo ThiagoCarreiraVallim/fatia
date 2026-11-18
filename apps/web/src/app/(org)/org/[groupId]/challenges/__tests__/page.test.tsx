@@ -37,6 +37,7 @@ function open(challenges: Challenge[] = [], queue: ReviewItem[] = []) {
     items: queue,
     open: queue.length,
     limit: 50,
+    nextCursor: null,
   });
   return renderWithClient(<OrgChallengesPage />);
 }
@@ -193,6 +194,34 @@ describe('painel › desafios (Pn-13)', () => {
     await screen.findByText('Outubro ativo');
     expect(screen.queryByRole('heading', { name: 'Para revisar' })).not.toBeInTheDocument();
     expect(challengesApi.reviewQueue).not.toHaveBeenCalled();
+  });
+
+  it('fila "Para revisar" paginada: "Ver mais" busca a próxima página (#395 M5)', async () => {
+    open([c({ canReview: true })]);
+    vi.mocked(challengesApi.reviewQueue)
+      .mockReset()
+      .mockResolvedValueOnce({
+        items: [reviewItem({ id: 'k1', displayName: 'Marina N.' })],
+        open: 2,
+        limit: 50,
+        nextCursor: 'k1',
+      })
+      .mockResolvedValueOnce({
+        items: [reviewItem({ id: 'k2', displayName: 'Lia P.' })],
+        open: 2,
+        limit: 50,
+        nextCursor: null,
+      });
+    const fila = within(
+      (await screen.findByRole('heading', { name: 'Para revisar' })).closest(
+        'section',
+      ) as HTMLElement,
+    );
+    expect(await fila.findByText(/Marina N\./)).toBeInTheDocument();
+    await userEvent.click(fila.getByRole('button', { name: 'Ver mais' }));
+    expect(await fila.findByText(/Lia P\./)).toBeInTheDocument();
+    expect(challengesApi.reviewQueue).toHaveBeenLastCalledWith('g1', undefined, 'k1');
+    expect(fila.queryByRole('button', { name: 'Ver mais' })).not.toBeInTheDocument();
   });
 
   it('fila "Para revisar": vale direto; anular exige um motivo de 3 a 280 letras', async () => {
