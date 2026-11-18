@@ -458,6 +458,12 @@ describe('barAxisLabels — os rótulos embaixo das barras', () => {
     const r = barAxisLabels(bars(Array.from({ length: 10 }, (_, i) => `${i + 1} out`)));
     expect(r).toEqual({ perBar: false, labels: ['1 out', '5 out', '10 out'] });
   });
+  it('"20/10" da API sai como "20 out", igual à linha do tempo', () => {
+    const r = barAxisLabels(
+      bars(Array.from({ length: 10 }, (_, i) => `${String(i + 1).padStart(2, '0')}/11`)),
+    );
+    expect(r).toEqual({ perBar: false, labels: ['1 nov', '5 nov', '10 nov'] });
+  });
   it('com poucas barras, um rótulo por barra', () => {
     expect(barAxisLabels(bars(['2026-11-10', '2026-11-11', 'Sem 3']))).toEqual({
       perBar: true,

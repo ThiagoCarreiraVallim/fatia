@@ -373,16 +373,26 @@ const MAX_BAR_LABELS = 7;
 /**
  * Os rótulos embaixo do cartão de barras. Com poucas barras, um por barra (`perBar`); com muitas,
  * só início, meio e fim, como na linha do tempo — um rótulo por barra em 30 dias vira "1 2 2 …".
- * Data ISO sai como "19 out"; rótulo que não é data ("Sem 3", "19 out") passa como está.
+ * Data ISO ou "19/10" sai como "19 out"; o que não é data ("Sem 3") passa como está.
  */
 export function barAxisLabels(bars: readonly { label: string }[]): {
   perBar: boolean;
   labels: string[];
 } {
   if (bars.length <= MAX_BAR_LABELS) {
-    return { perBar: true, labels: bars.map((b) => shortDay(b.label)) };
+    return { perBar: true, labels: bars.map((b) => barLabel(b.label)) };
   }
-  return { perBar: false, labels: axisIndices(bars.length).map((i) => shortDay(bars[i]!.label)) };
+  return { perBar: false, labels: axisIndices(bars.length).map((i) => barLabel(bars[i]!.label)) };
+}
+
+/** Data ISO ou "20/10" (o `dayMonth` da API) → "20 out"; o resto passa como está. */
+function barLabel(label: string): string {
+  const diaMes = /^(\d{1,2})\/(\d{1,2})$/.exec(label);
+  if (diaMes) {
+    const mes = MESES[Number(diaMes[2]) - 1];
+    return mes ? `${Number(diaMes[1])} ${mes}` : label;
+  }
+  return shortDay(label);
 }
 
 /** A última tool da última resposta, para as respostas rápidas; nada se a pessoa falou por último. */
