@@ -517,37 +517,71 @@ export class PostService {
       throw new BadRequestException('Escreva algo ou envie uma imagem');
     }
     const pinUntil = input.pin ? this.pinDeadline(input.pinDays ?? null) : undefined;
-    if (input.pin) await this.assertPinRoom(groupId);
 
     const arquivos = await this.ownImages(userId, groupId, ids);
     const nome = await this.ensureDisplayName(eu, input.displayName);
     const agora = new Date();
-    const row = await this.prisma.groupPost.create({
-      data: {
-        groupId,
-        membershipId: eu.membershipId,
-        kind,
-        body,
-        publishedAs: comoGrupo ? PostAuthorAs.GROUP : PostAuthorAs.PERSON,
-        ...(input.pin
-          ? { pinnedAt: agora, pinOrder: await this.frontPinOrder(groupId), pinnedUntil: pinUntil }
-          : {}),
-        images: { create: arquivos.map((f, order) => ({ fileId: f.id, order })) },
-        ...(poll
-          ? {
-              poll: {
-                create: {
-                  question: poll.question,
-                  closesAt: new Date(agora.getTime() + poll.days * DIA_MS),
-                  options: { create: poll.options.map((label, order) => ({ label, order })) },
-                },
-              },
-            }
-          : {}),
-      },
-      include: INCLUIR,
-    });
+    const criar = async (db: Prisma.TransactionClient | PrismaService) => {
+      let fixado: { pinnedAt?: Date; pinOrder?: number; pinnedUntil?: Date | null } = {};
+      if (input.pin) {
+        await this.assertPinRoom(db, groupId);
+        fixado = {
+          pinnedAt: agora,
+          pinOrder: await this.frontPinOrder(db, groupId),
+          pinnedUntil: pinUntil,
+        };
+      }
+      return db.groupPost.create({
+        data: this.postData({
+          groupId,
+          membershipId: eu.membershipId,
+          kind,
+          body,
+          publishedAs: comoGrupo ? PostAuthorAs.GROUP : PostAuthorAs.PERSON,
+          fixado,
+          arquivos,
+          poll,
+          agora,
+        }),
+        include: INCLUIR,
+      });
+    };
+    const row = input.pin ? await this.withPinLock(groupId, criar) : await criar(this.prisma);
     return this.view({ ...row, comments: 0, myOptionId: null }, { ...eu, displayName: nome });
+  }
+
+  private postData(p: {
+    groupId: string;
+    membershipId: string;
+    kind: PostKind;
+    body: string;
+    publishedAs: PostAuthorAs;
+    fixado: { pinnedAt?: Date; pinOrder?: number; pinnedUntil?: Date | null };
+    arquivos: { id: string }[];
+    poll: PollInput | null;
+    agora: Date;
+  }): Prisma.GroupPostUncheckedCreateInput {
+    const { arquivos, poll, agora } = p;
+    return {
+      groupId: p.groupId,
+      membershipId: p.membershipId,
+      kind: p.kind,
+      body: p.body,
+      publishedAs: p.publishedAs,
+      ...p.fixado,
+      images: { create: arquivos.map((f, order) => ({ fileId: f.id, order })) },
+      ...(poll
+        ? {
+            poll: {
+              create: {
+                question: poll.question,
+                closesAt: new Date(agora.getTime() + poll.days * DIA_MS),
+                options: { create: poll.options.map((label, order) => ({ label, order })) },
+              },
+            },
+          }
+        : {}),
+    };
   }
 
   /** O autor apaga o próprio post, com as imagens. Moderação remove, não apaga. */
@@ -902,46 +936,60 @@ export class PostService {
     if (!row) throw new NotFoundException('Post not found');
     if (row.removedAt) throw new ConflictException('Post removido não fica fixado');
     const pinnedUntil = this.pinDeadline(days);
-    const jaNoTopo = await this.prisma.groupPost.count({
-      where: { id: row.id, ...activePin(agora) },
-    });
-    if (jaNoTopo) {
-      await this.prisma.groupPost.update({ where: { id: row.id }, data: { pinnedUntil } });
-    } else {
-      await this.assertPinRoom(groupId);
-      await this.prisma.groupPost.update({
-        where: { id: row.id },
-        data: { pinnedAt: agora, pinnedUntil, pinOrder: await this.frontPinOrder(groupId) },
+    await this.withPinLock(groupId, async (tx) => {
+      const jaNoTopo = await tx.groupPost.count({
+        where: { id: row.id, ...activePin(agora) },
       });
-    }
+      if (jaNoTopo) {
+        await tx.groupPost.update({ where: { id: row.id }, data: { pinnedUntil } });
+        return;
+      }
+      await this.assertPinRoom(tx, groupId);
+      await tx.groupPost.update({
+        where: { id: row.id },
+        data: { pinnedAt: agora, pinnedUntil, pinOrder: await this.frontPinOrder(tx, groupId) },
+      });
+    });
     return { id: row.id, pinnedUntil };
   }
 
-  /** A ordem do carrossel, como a equipe arrastou. Precisa trazer todos os avisos. */
+  /**
+   * A ordem do carrossel, como a equipe arrastou. Precisa trazer todos os avisos.
+   * Se o topo tiver mais que `MAX_PINNED` (estado de antes da trava), os que
+   * passarem do teto no fim da nova ordem voltam a ser post comum.
+   */
   async reorderPins(
     userId: string,
     groupId: string,
     postIds: string[],
   ): Promise<{ order: string[] }> {
     await this.me(userId, groupId, 'content.moderate');
-    const atuais = await this.prisma.groupPost.findMany({
-      where: { groupId, ...activePin(new Date()) },
-      select: { id: true },
+    return this.withPinLock(groupId, async (tx) => {
+      const atuais = await tx.groupPost.findMany({
+        where: { groupId, ...activePin(new Date()) },
+        select: { id: true },
+      });
+      const ids = new Set(atuais.map((p) => p.id));
+      if (
+        postIds.length !== ids.size ||
+        new Set(postIds).size !== postIds.length ||
+        postIds.some((id) => !ids.has(id))
+      ) {
+        throw new BadRequestException('A nova ordem precisa ter todos os avisos fixados');
+      }
+      const ficam = postIds.slice(0, MAX_PINNED);
+      const saem = postIds.slice(MAX_PINNED);
+      for (const [pinOrder, id] of ficam.entries()) {
+        await tx.groupPost.update({ where: { id }, data: { pinOrder } });
+      }
+      if (saem.length > 0) {
+        await tx.groupPost.updateMany({
+          where: { id: { in: saem } },
+          data: { pinnedAt: null, pinOrder: null, pinnedUntil: null },
+        });
+      }
+      return { order: ficam };
     });
-    const ids = new Set(atuais.map((p) => p.id));
-    if (
-      postIds.length !== ids.size ||
-      new Set(postIds).size !== postIds.length ||
-      postIds.some((id) => !ids.has(id))
-    ) {
-      throw new BadRequestException('A nova ordem precisa ter todos os avisos fixados');
-    }
-    await this.prisma.$transaction(
-      postIds.map((id, pinOrder) =>
-        this.prisma.groupPost.update({ where: { id }, data: { pinOrder } }),
-      ),
-    );
-    return { order: postIds };
   }
 
   /**
@@ -955,40 +1003,43 @@ export class PostService {
       select: { id: true },
     });
     if (!ativa) throw new ConflictException('Quem agendou não está mais na comunidade');
-    if (a.pin) {
-      const fixados = await this.prisma.groupPost.findMany({
-        where: { groupId: a.groupId, ...activePin(now) },
-        orderBy: [{ pinOrder: { sort: 'asc', nulls: 'last' } }, { pinnedAt: 'desc' }],
+    const publicar = async (db: Prisma.TransactionClient | PrismaService) => {
+      if (a.pin) {
+        const fixados = await db.groupPost.findMany({
+          where: { groupId: a.groupId, ...activePin(now) },
+          orderBy: [{ pinOrder: { sort: 'asc', nulls: 'last' } }, { pinnedAt: 'desc' }],
+          select: { id: true },
+        });
+        const sobra = fixados.slice(MAX_PINNED - 1);
+        if (sobra.length > 0) {
+          await db.groupPost.updateMany({
+            where: { id: { in: sobra.map((p) => p.id) } },
+            data: { pinnedAt: null, pinOrder: null, pinnedUntil: null },
+          });
+        }
+      }
+      return db.groupPost.create({
+        data: {
+          groupId: a.groupId,
+          membershipId: a.membershipId,
+          kind: PostKind.ANNOUNCEMENT,
+          title: a.title,
+          body: a.body,
+          publishedAs: a.publishedAs,
+          announcementId: a.id,
+          createdAt: now,
+          ...(a.pin
+            ? {
+                pinnedAt: now,
+                pinOrder: await this.frontPinOrder(db, a.groupId),
+                pinnedUntil: a.pinDays ? new Date(now.getTime() + a.pinDays * DIA_MS) : null,
+              }
+            : {}),
+        },
         select: { id: true },
       });
-      const sobra = fixados.slice(MAX_PINNED - 1);
-      if (sobra.length > 0) {
-        await this.prisma.groupPost.updateMany({
-          where: { id: { in: sobra.map((p) => p.id) } },
-          data: { pinnedAt: null, pinOrder: null, pinnedUntil: null },
-        });
-      }
-    }
-    const post = await this.prisma.groupPost.create({
-      data: {
-        groupId: a.groupId,
-        membershipId: a.membershipId,
-        kind: PostKind.ANNOUNCEMENT,
-        title: a.title,
-        body: a.body,
-        publishedAs: a.publishedAs,
-        announcementId: a.id,
-        createdAt: now,
-        ...(a.pin
-          ? {
-              pinnedAt: now,
-              pinOrder: await this.frontPinOrder(a.groupId),
-              pinnedUntil: a.pinDays ? new Date(now.getTime() + a.pinDays * DIA_MS) : null,
-            }
-          : {}),
-      },
-      select: { id: true },
-    });
+    };
+    const post = a.pin ? await this.withPinLock(a.groupId, publicar) : await publicar(this.prisma);
     return { postId: post.id };
   }
 
@@ -1284,8 +1335,26 @@ export class PostService {
     return new Date(Date.now() + days * DIA_MS);
   }
 
-  private async assertPinRoom(groupId: string): Promise<void> {
-    const fixados = await this.prisma.groupPost.count({
+  /**
+   * Tudo o que põe aviso no topo passa por aqui: uma transação com a trava
+   * `pg_advisory_xact_lock` da comunidade. Dois pedidos ao mesmo tempo não
+   * contam o mesmo topo e furam o teto de `MAX_PINNED`.
+   */
+  private withPinLock<T>(
+    groupId: string,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${`pins:${groupId}`}))`;
+      return fn(tx);
+    });
+  }
+
+  private async assertPinRoom(
+    db: Prisma.TransactionClient | PrismaService,
+    groupId: string,
+  ): Promise<void> {
+    const fixados = await db.groupPost.count({
       where: { groupId, ...activePin(new Date()) },
     });
     if (fixados >= MAX_PINNED) {
@@ -1294,8 +1363,11 @@ export class PostService {
   }
 
   /** A posição da frente do carrossel: uma antes do primeiro aviso. */
-  private async frontPinOrder(groupId: string): Promise<number> {
-    const r = await this.prisma.groupPost.aggregate({
+  private async frontPinOrder(
+    db: Prisma.TransactionClient | PrismaService,
+    groupId: string,
+  ): Promise<number> {
+    const r = await db.groupPost.aggregate({
       where: { groupId, ...activePin(new Date()) },
       _min: { pinOrder: true },
     });

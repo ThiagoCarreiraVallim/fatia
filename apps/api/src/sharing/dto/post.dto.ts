@@ -23,7 +23,6 @@ import {
   ANNOUNCEMENT_TITLE_MAX,
   COMMENT_BODY_MAX,
   FEED_FILTERS,
-  MAX_PINNED,
   PIN_MAX_DAYS,
   POLL_MAX_DAYS,
   POLL_MAX_OPTIONS,
@@ -141,7 +140,7 @@ export class PinDto {
 
 export class PinOrderDto {
   @IsArray()
-  @ArrayMaxSize(MAX_PINNED)
+  @ArrayMaxSize(20)
   @IsUUID('4', { each: true })
   postIds!: string[];
 }

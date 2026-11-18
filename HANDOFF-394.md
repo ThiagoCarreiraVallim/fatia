@@ -7,7 +7,7 @@ Worktree `.claude/worktrees/394-mural`, branch `redesign/394-mural`. Banco de te
 ## Itens
 
 - [x] 1. Enquete: % só com total-1 >= 5 para quem votou; voto não se apaga (só troca); UI web/app/MCP
-- [ ] 2. Corrida no teto de 3 fixados (advisory lock por grupo) + reorder tolera > 3
+- [x] 2. Corrida no teto de 3 fixados (advisory lock por grupo) + reorder tolera > 3
 - [ ] 3. Recorrência no fuso do grupo, mensal ancorada no dia original
 - [ ] 4. Atrasados: avança até passar de now, publica uma vez
 - [ ] 5. Erro transitório tenta de novo com contador; só cancela autor inativo/sem permissão
@@ -20,4 +20,4 @@ Worktree `.claude/worktrees/394-mural`, branch `redesign/394-mural`. Banco de te
 
 ## Próximo passo
 
-Item 2 (advisory lock no teto de fixados).
+Item 3 (recorrência no fuso do grupo).

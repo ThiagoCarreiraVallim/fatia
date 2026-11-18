@@ -345,6 +345,65 @@ describe('mural do redesign (integração)', () => {
       expect((await posts.list(a.ana, a.groupId)).pins).toHaveLength(3);
     });
 
+    it('fixar em paralelo não passa do teto de 3 (pin, post fixado e comunicado)', async () => {
+      const a = await comunidade();
+      const soltos = await Promise.all(
+        [1, 2, 3, 4, 5].map((i) => posts.create(a.dono, a.groupId, { body: `p${i}` })),
+      );
+      const tentativas = await Promise.allSettled([
+        ...soltos.map((p) => posts.pin(a.dono, a.groupId, p.id, null)),
+        ...[1, 2, 3].map((i) => posts.create(a.dono, a.groupId, { body: `novo ${i}`, pin: true })),
+      ]);
+      const ok = tentativas.filter((t) => t.status === 'fulfilled').length;
+      const ativos = () =>
+        prisma.groupPost.count({
+          where: {
+            groupId: a.groupId,
+            pinnedAt: { not: null },
+            OR: [{ pinnedUntil: null }, { pinnedUntil: { gt: new Date() } }],
+          },
+        });
+      expect(ok).toBe(3);
+      expect(await ativos()).toBe(3);
+      for (const t of tentativas) {
+        if (t.status === 'rejected') expect(t.reason).toBeInstanceOf(ConflictException);
+      }
+
+      // Comunicados fixados em paralelo com o topo cheio: tiram o último, sem passar de 3.
+      await Promise.all(
+        [1, 2, 3].map((i) =>
+          announcements.create(a.dono, a.groupId, {
+            title: `Aviso ${i}`,
+            body: 'texto',
+            publishedAs: 'GROUP',
+            pin: true,
+            pinDays: null,
+            push: false,
+            at: null,
+            repeat: 'NONE',
+          }),
+        ),
+      );
+      expect(await ativos()).toBe(3);
+    });
+
+    it('reordenar tolera mais de 3 fixados de antes e devolve o topo ao teto', async () => {
+      const a = await comunidade();
+      const ps = await Promise.all(
+        [1, 2, 3, 4].map((i) => posts.create(a.dono, a.groupId, { body: `p${i}` })),
+      );
+      // Estado antigo, de antes da trava: 4 fixados.
+      await prisma.groupPost.updateMany({
+        where: { id: { in: ps.map((p) => p.id) } },
+        data: { pinnedAt: new Date() },
+      });
+      const ordem = [ps[3]!.id, ps[0]!.id, ps[1]!.id, ps[2]!.id];
+      await posts.reorderPins(a.dono, a.groupId, ordem);
+      const mural = await posts.list(a.ana, a.groupId);
+      expect(mural.pins.map((p) => p.id)).toEqual(ordem.slice(0, 3));
+      expect(mural.posts.map((p) => p.id)).toContain(ps[2]!.id);
+    });
+
     it('membro não fixa nem publica como a comunidade', async () => {
       const a = await comunidade();
       await expect(
