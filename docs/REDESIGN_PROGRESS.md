@@ -352,7 +352,7 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - O consentimento de entrada segue o `ConsentForm` atual (#371 não mexeu nele).
 - **Falta:** passada visual (prints lado a lado com Cm-01, Cm-02, Cm-04, Cm-22, Cm-22b, Pn-28, Pn-28b, Pn-28c, web e app, escuro e claro); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção).
 
-#395 (branch `redesign/395-desafios`, parte da `redesign/393-comunidades`; migration `20261118100000_challenge_kinds_checkins_review`; nenhuma env nova):
+#395 (branch `redesign/395-desafios`, parte da `redesign/393-comunidades`; migration `20261118300000_challenge_kinds_checkins_review`; nenhuma env nova):
 
 - **Decisões (orquestrador, conciliadas com a ADR 044 que o dono já tinha aceitado):**
   - **ADR nova [047](./ADR/047-checkin-com-foto-aceite-e-fila.md)**, que complementa a 044. Foto de check-in é prova: só a pessoa e a equipe com `challenge.review` (mesmos papéis de `challenge.manage`) a veem; nada de "Também postar no mural".
