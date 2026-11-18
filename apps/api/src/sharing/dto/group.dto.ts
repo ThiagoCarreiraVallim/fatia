@@ -121,7 +121,7 @@ export class JoinConsentDto {
  * nome antigo do campo, e o app instalado ainda manda; um dos dois basta.
  */
 export class JoinGroupDto extends JoinConsentDto {
-  @ValidateIf((o: JoinGroupDto) => o.code === undefined)
+  @ValidateIf((o: JoinGroupDto) => o.code == null)
   @IsString()
   @MinLength(3)
   @MaxLength(60)
@@ -185,7 +185,7 @@ export class InviteTokenParamDto {
  */
 /** `?code=` (código legível ou slug, #393) ou `?slug=`, o nome antigo. */
 export class PreviewGroupDto {
-  @ValidateIf((o: PreviewGroupDto) => o.code === undefined)
+  @ValidateIf((o: PreviewGroupDto) => o.code == null)
   @IsString()
   @MinLength(3)
   @MaxLength(60)

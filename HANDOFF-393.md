@@ -6,9 +6,9 @@ DB de teste: fatia_t393 (URL no scratchpad `turl`).
 ## Itens
 
 - [x] B1 slug só em comunidade PUBLIC; preview por código sem slug
-- [ ] I1 throttle real (UserThrottlerGuard) em preview/join + teste 429 + teto no join_group MCP
+- [x] I1 throttle real (UserThrottlerGuard) em preview/join + teste 429 + teto no join_group MCP
 - [ ] I2 proPaidByThisGroup no GroupSummary e nos 4 pontos
-- [ ] m1 ValidateIf code == null
+- [x] m1 ValidateIf code == null
 - [ ] m2 maxLength 60 parceiro
 - [ ] m3 PATCH validUntil só se mudou
 - [ ] m4 cupom só trim
@@ -20,4 +20,4 @@ DB de teste: fatia_t393 (URL no scratchpad `turl`).
 
 ## Próximo passo
 
-I1 (throttle).
+I2 (proPaidByThisGroup).
