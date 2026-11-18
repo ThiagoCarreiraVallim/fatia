@@ -49,9 +49,10 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [041](./041-tema-claro.md)                                             | Tema claro (Sistema, Escuro, Claro) e contraste da cor da comunidade | Accepted                               |
 | [042](./042-agenda-da-comunidade.md)                                   | Agenda da comunidade: informativa, sem reserva, vaga ou presença     | Accepted                               |
 | [043](./043-papeis-da-equipe.md)                                       | Papéis da equipe e consentimento por papel                           | Accepted                               |
-| [044](./044-desafios-com-revisao.md)                                   | Desafios com pontos e check-in por foto, revisado só pela equipe     | Accepted                               |
+| [044](./044-desafios-com-revisao.md)                                   | Desafios com pontos e check-in por foto, revisado só pela equipe     | Accepted (implementação: 047)          |
 | [045](./045-plano-alimentar-autoral.md)                                | Plano alimentar e receitas autorais, nunca sugeridos pela IA         | Accepted                               |
 | [046](./046-foto-do-chat-guardada.md)                                  | A foto do chat é guardada, enquanto a conversa existir               | Accepted                               |
+| [047](./047-checkin-com-foto-aceite-e-fila.md)                         | Check-in com foto: aceite próprio, sinais do servidor e fila         | Accepted (complementa 044)             |
 
 ## Template
 

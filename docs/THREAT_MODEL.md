@@ -525,9 +525,12 @@ métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
   (`no-body-comparison.spec.ts`); a aderência vem de `nutrition/daily-adherence.service.ts` como
   conjunto de datas, e toda métrica de nutrição é contagem de dias na própria meta (sufixo `_DAYS`,
   conferido no spec). Não há métrica de corpo.
-- **Ranking só para quem participa.** O detalhe devolve `leaderboard: null` a quem não entrou; a
-  linha do ranking tem `displayName`, `score`, `rank`, `isMe` e `medal`, e nada que identifique a
-  conta. Quem sai da comunidade some do placar.
+- **Ranking para quem é da comunidade, só de dias ou pontos (#395).** A linha do ranking tem
+  `displayName`, `score` (dias na meta ou pontos), `streak`, `rank`, `isMe` e `medal`, e nada que
+  identifique a conta. Quem não participa vê o ranking dos tipos novos; nos desafios antigos que
+  somam ml ou passos (`METRIC` com `WATER_ML`/`STEPS`) continua recebendo `leaderboard: null`, e
+  esses não podem mais ser criados. O valor de hoje (`today`: ml, passos) só vai à própria pessoa,
+  e o motivo de um item na fila nunca leva número. Quem sai da comunidade some do placar.
 - **Isolamento pelo par da URL.** O desafio é buscado com `{ id, groupId }` da rota, e os
   participantes que o `ScoreboardService` pontua saem desse desafio, com o `userId` lido da
   associação — nunca de id vindo do corpo. Desafio de outra comunidade é 404, inclusive no cartão
@@ -535,9 +538,10 @@ métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
 - **Apelido.** Até 30 caracteres, sem quebra de linha nem `<`/`>`; é o único texto da pessoa que
   os outros participantes leem.
 
-**Não mitigado:** `STEPS` e `WATER_ML` pontuam pelo valor somado (decisão da #161, anterior à ADR
-027): num desafio de um dia, a pontuação de água **é** a água daquele dia, visível a quem participa.
-A pessoa entra sabendo o que conta (o texto da métrica está na tela de entrada).
+**Não mitigado:** os desafios antigos de `STEPS` e `WATER_ML` pontuam pelo valor somado (decisão da
+#161, anterior à ADR 027): num desafio de um dia, a pontuação de água **é** a água daquele dia,
+visível a quem participa. Desde a #395 não se cria mais desafio assim; os tipos `WATER` e `STEPS`
+contam dias na meta.
 
 **Foto de check-in — dado novo ([ADR 044](./ADR/044-desafios-com-revisao.md), #395).** O que um
 atacante ganharia: como participante, ver a foto de outra pessoa (a casa, o corpo, a rotina); como
@@ -551,7 +555,15 @@ corpo. Mitigações exigidas na #395:
   privado e URL assinada curta (ADR 028).
 - Foto anulada é apagada na decisão; as outras, 30 dias depois do fim do desafio; sair da
   comunidade ou apagar a conta apaga na hora.
-- A sinalização "Não parece válido" não mostra a foto a quem sinaliza.
+- A sinalização "Não parece válido" não mostra a foto a quem sinaliza, só vale para check-in do
+  mesmo desafio (pelo par da URL), tem limite de 3 por pessoa a cada 24 h e a fila tem teto de 50
+  itens abertos por desafio ([ADR 047](./ADR/047-checkin-com-foto-aceite-e-fila.md)).
+- A foto do corpo do check-in (`photoFileId`) precisa ser da própria pessoa, desta comunidade,
+  com propósito `challenge_checkin` e sem uso; o treino do corpo só é achado entre os da própria
+  pessoa. A fila e a decisão exigem `challenge.review` e buscam o check-in pelo desafio da URL.
+  Tudo coberto em `user-isolation.spec.ts` (bloco #395), com a prova de vermelho de cada filtro.
+- Entrar em desafio com foto exige o aceite próprio (`photoConsentAt`/`photoConsentVersion`,
+  ADR 047), inclusive pelo MCP, que não tem tool de check-in nem de revisão.
 
 **Não mitigado:** a equipe que revisa vê a foto inteira. É o preço da prova; a regra de não
 fotografar o corpo e a anulação com motivo são o que limita o que ela vê.
@@ -706,7 +718,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Mídia                    | `storage/media.service.ts`                                                | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade                      |
 | Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável     |
 | Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno      |
-| Desafios da comunidade   | `sharing/challenge.service.ts`, `social/scoreboard.service.ts`            | `{ groupId, id }` da URL; ranking só para participante ativo; placar só recebe datas de aderência   |
+| Desafios da comunidade   | `sharing/challenge.service.ts`, `social/scoreboard.service.ts`            | `{ groupId, id }` da URL; ranking de dias/pontos; foto e fila só pela URL e `challenge.review`      |
 | Mural da comunidade      | `sharing/post.service.ts`, `storage/media.service.ts`                     | `{ groupId, id }` da URL; removido só para o autor; imagem só do próprio autor e da comunidade      |
 | Avisos no celular        | `notifications/notification.service.ts`                                   | `where: { id, userId }` para apagar; token único passa à conta que registra; preferência por pessoa |
 
