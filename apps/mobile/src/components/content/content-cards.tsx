@@ -1,15 +1,9 @@
 import { Image, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { Dumbbell, Pin, Salad } from 'lucide-react-native';
-import {
-  planTemplateSummary,
-  TIP_CATEGORY_LABEL,
-  type GroupTip,
-  type PlanTemplate,
-} from '@fatia/api-client';
+import { Dumbbell, Salad } from 'lucide-react-native';
+import { planTemplateSummary, type PlanTemplate } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 import { RowChevron, StatusBadge } from './content-ui';
-import { MarkdownLite } from './markdown-lite';
 
 /** Cartão de plano pronto, como na web. */
 export function TemplateCard({
@@ -63,37 +57,5 @@ export function TemplateCard({
       </View>
       <RowChevron />
     </Pressable>
-  );
-}
-
-/** Dica inteira, como o membro lê. */
-export function TipCard({ tip }: { tip: GroupTip }) {
-  return (
-    <View className="gap-3 rounded-2xl border border-border bg-card p-4">
-      {tip.image?.url ? (
-        <Image
-          source={{ uri: tip.image.url }}
-          accessibilityIgnoresInvertColors
-          className="aspect-video w-full rounded-xl"
-        />
-      ) : null}
-      <View className="gap-1">
-        <View className="flex-row items-center gap-2">
-          {tip.pinned ? (
-            <View className="flex-row items-center gap-1">
-              <Pin size={14} color={colors.primaryText} />
-              <Text className="text-xs font-semibold text-primary">Fixada</Text>
-            </View>
-          ) : null}
-          <Text className="text-xs text-muted-foreground">
-            {`${TIP_CATEGORY_LABEL[tip.category]} · ${tip.authorName}`}
-          </Text>
-        </View>
-        <Text accessibilityRole="header" className="text-base font-semibold text-foreground">
-          {tip.title}
-        </Text>
-      </View>
-      <MarkdownLite source={tip.body} />
-    </View>
   );
 }
