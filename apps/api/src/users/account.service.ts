@@ -398,16 +398,61 @@ export class AccountService {
           displayName: true,
           seatAssignments: { select: { assignedAt: true, revokedAt: true } },
           // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
-          // e a posição dela. O ranking dos outros é dado de terceiro.
+          // e a posição dela. O ranking dos outros é dado de terceiro. Desde a
+          // #395, também o aceite da foto e os check-ins dela, com a foto como
+          // dados do arquivo (e o link no arquivo baixado, ADR 047).
           challengeEntries: {
             select: {
               displayName: true,
               score: true,
+              streak: true,
               finalRank: true,
               joinedAt: true,
-              challenge: { select: { title: true, metric: true, startsAt: true, endsAt: true } },
+              photoConsentAt: true,
+              photoConsentVersion: true,
+              challenge: {
+                select: { title: true, kind: true, metric: true, startsAt: true, endsAt: true },
+              },
+              checkins: {
+                select: {
+                  type: true,
+                  date: true,
+                  capturedAt: true,
+                  caption: true,
+                  status: true,
+                  flagReason: true,
+                  reviewedAt: true,
+                  reason: true,
+                  photoFile: {
+                    select: {
+                      mime: true,
+                      bytes: true,
+                      width: true,
+                      height: true,
+                      key: true,
+                      status: true,
+                    },
+                  },
+                },
+                orderBy: { date: 'asc' },
+              },
             },
             orderBy: { joinedAt: 'asc' },
+          },
+          // O que a pessoa sinalizou ("não parece válido") e os desafios em que
+          // pediu aviso. Quem foi sinalizado é dado de terceiro e não sai.
+          checkinFlags: {
+            select: {
+              createdAt: true,
+              checkin: {
+                select: { participant: { select: { challenge: { select: { title: true } } } } },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          challengeWatches: {
+            select: { createdAt: true, challenge: { select: { title: true } } },
+            orderBy: { createdAt: 'asc' },
           },
           // O mural (Fase 8b): o que a pessoa escreveu, como reagiu e o que
           // denunciou. Os posts e comentários dos outros são dado de terceiro.
@@ -653,7 +698,9 @@ export class AccountService {
       ),
       memories,
       subscriptions,
-      communityMemberships,
+      communityMemberships: await Promise.all(
+        communityMemberships.map((m) => this.exportMembership(m, opts.photoLinks === true)),
+      ),
       invitesCreated,
       contentPublished,
       mediaUploaded,
@@ -767,6 +814,57 @@ export class AccountService {
           ),
         })),
       ),
+    };
+  }
+
+  /**
+   * A associação no export: cada check-in com a foto como dados do arquivo e,
+   * no arquivo baixado, o link assinado (ADR 047). A sinalização sai só como
+   * "quando, em qual desafio", sem quem foi sinalizado.
+   */
+  private async exportMembership<
+    M extends {
+      challengeEntries: {
+        checkins: {
+          photoFile: Pick<
+            MediaFile,
+            'mime' | 'bytes' | 'width' | 'height' | 'key' | 'status'
+          > | null;
+        }[];
+      }[];
+      checkinFlags: {
+        createdAt: Date;
+        checkin: { participant: { challenge: { title: string } } };
+      }[];
+    },
+  >(membership: M, photoLinks: boolean) {
+    const { checkinFlags, ...rest } = membership;
+    return {
+      ...rest,
+      challengeEntries: await Promise.all(
+        membership.challengeEntries.map(async (entry) => ({
+          ...entry,
+          checkins: await Promise.all(
+            entry.checkins.map(async ({ photoFile, ...checkin }) => {
+              if (!photoFile) return { ...checkin, photo: null };
+              const { key, status, ...foto } = photoFile;
+              return {
+                ...checkin,
+                photo: {
+                  ...foto,
+                  ...(photoLinks && this.media
+                    ? { url: await this.media.exportUrl({ key, status }) }
+                    : {}),
+                },
+              };
+            }),
+          ),
+        })),
+      ),
+      checkinFlags: checkinFlags.map((f) => ({
+        createdAt: f.createdAt,
+        challenge: f.checkin.participant.challenge.title,
+      })),
     };
   }
 

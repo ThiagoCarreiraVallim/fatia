@@ -135,6 +135,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
 const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
+  reviewedCheckins:
+    'Check-ins de desafio que a pessoa revisou como equipe (#395): cada um é dado de quem fez ' +
+    'o check-in e sai no export DELE. Apagar a conta de quem revisou só zera o revisor.',
   nutritionPlansAuthored:
     'Planos alimentares que a pessoa escreveu como profissional (#376): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
