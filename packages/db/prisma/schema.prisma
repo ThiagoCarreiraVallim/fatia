@@ -1624,6 +1624,8 @@ model Group {
   /// Comunicados agendados ou repetidos (#394).
   announcements         GroupAnnouncement[]
   /// Que conteúdo novo vira post automático no mural (#394, prancha Pn-14).
+  /// Liga por padrão só nas comunidades criadas depois da 20261118100100; as
+  /// que já existiam começam desligadas (opt-in na tela de mural).
   autoPosts             AutoPostKind[]       @default([PLAN, TIP, EXERCISE, CHALLENGE])
   blocksFrom            UserBlock[]
   /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
@@ -2612,6 +2614,8 @@ model GroupPost {
   @@index([announcementId])
   @@index([groupId, pinnedAt])
   @@index([membershipId])
+  /// Um post automático por conteúdo (nulos não colidem: posts comuns ficam de fora).
+  @@unique([groupId, autoKind, autoRefId])
 }
 
 /// Até quatro imagens por post (mídia `post_image`, ADR 028).

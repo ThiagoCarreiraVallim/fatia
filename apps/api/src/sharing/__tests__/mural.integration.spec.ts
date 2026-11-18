@@ -848,6 +848,41 @@ describe('mural do redesign (integração)', () => {
   });
 
   describe('posts automáticos', () => {
+    it('o mesmo conteúdo publicado em paralelo vira um post só', async () => {
+      const a = await comunidade();
+      const entrada = {
+        groupId: a.groupId,
+        actorUserId: a.prof,
+        kind: 'PLAN' as const,
+        refId: 'plano-paralelo',
+        title: 'Plano novo',
+      };
+      const ids = await Promise.all([1, 2, 3, 4, 5].map(() => publishAutoPost(prisma, entrada)));
+      expect(ids.filter((id) => id !== null)).toHaveLength(1);
+      expect(
+        await prisma.groupPost.count({
+          where: { groupId: a.groupId, autoKind: 'PLAN', autoRefId: 'plano-paralelo' },
+        }),
+      ).toBe(1);
+      // Quem garante é o banco: a checagem antes de criar sozinha deixa a corrida passar.
+      const autor = await prisma.groupMembership.findUniqueOrThrow({
+        where: { groupId_userId: { groupId: a.groupId, userId: a.prof } },
+      });
+      await expect(
+        prisma.groupPost.create({
+          data: {
+            groupId: a.groupId,
+            membershipId: autor.id,
+            kind: 'AUTO',
+            autoKind: 'PLAN',
+            autoRefId: 'plano-paralelo',
+            title: 'Plano novo',
+            body: '',
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'P2002' });
+    });
+
     it('conteúdo novo vira post uma vez só, só nos tipos ligados', async () => {
       const a = await comunidade();
       const entrada = {

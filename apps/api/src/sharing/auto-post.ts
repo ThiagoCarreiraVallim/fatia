@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { AutoPostKind, MembershipStatus, PostKind, type Prisma } from '@fatia/db';
+import { AutoPostKind, MembershipStatus, PostKind, Prisma } from '@fatia/db';
 import type { PrismaService } from '../common/prisma.service';
 
 export const AUTO_POST_KINDS = Object.values(AutoPostKind);
@@ -24,7 +24,9 @@ const logger = new Logger('AutoPost');
  *
  * Função e não service: quem chama já tem o Prisma, e o post é um efeito
  * colateral que **nunca** derruba a publicação do conteúdo — erro aqui vira
- * log. Republicar o mesmo conteúdo não repete o post (`autoKind` + `autoRefId`).
+ * log. Republicar o mesmo conteúdo não repete o post: o banco tem o unique
+ * (`groupId`, `autoKind`, `autoRefId`) e a corrida que passar da checagem
+ * cai no P2002, tratado como "já existe".
  */
 export async function publishAutoPost(
   prisma: Pick<PrismaService, 'group' | 'groupMembership' | 'groupPost'>,
@@ -58,6 +60,7 @@ export async function publishAutoPost(
     const post = await prisma.groupPost.create({ data, select: { id: true } });
     return post.id;
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return null;
     logger.warn(`Post automático não saiu: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
