@@ -21,6 +21,7 @@ export class UpdateSetTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Corrige os dados de uma série já registrada. ' +
     'Exemplo: {"setId":"11111111-2222-4333-8444-555555555555","weightKg":82.5,"reps":6}';

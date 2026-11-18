@@ -32,10 +32,13 @@ import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
 import { MediaService } from '../storage/media.service';
 import { AiConsentService } from './consent/ai-consent.service';
+import { AutoWriteService } from './auto-write/auto-write.service';
+import { TETO_DE_MEMORIAS } from './memory/memory.service';
 import {
   AcceptAiConsentDto,
   ChatActionPreviewDto,
   ChatPreferencesDto,
+  SetAiWriteModeDto,
   ListConversationsQueryDto,
   MessageFeedbackDto,
   RenameConversationDto,
@@ -78,6 +81,7 @@ export class ChatController {
     private readonly registry: McpToolRegistry,
     private readonly midia: MediaService,
     private readonly aceites: AiConsentService,
+    private readonly autoWrites: AutoWriteService,
   ) {}
 
   /**
@@ -289,6 +293,42 @@ export class ChatController {
     return this.aceites.setWebSearch(user.id, dto.webSearchEnabled);
   }
 
+  /**
+   * A tela Configurações da IA (Al-M24, #385): o modo de cada categoria, a busca na web (a mesma
+   * preferência da chave do chat, `PATCH /chat/preferences`) e o "n de 50" das memórias.
+   */
+  @Get('settings')
+  async settings(@CurrentUser() user: CurrentUserPayload) {
+    const [modes, consent, memories] = await Promise.all([
+      this.autoWrites.modes(user.id),
+      this.aceites.status(user.id),
+      this.memorias.count(user.id),
+    ]);
+    return {
+      modes,
+      webSearchEnabled: consent.webSearchEnabled,
+      memories: { count: memories, limit: TETO_DE_MEMORIAS },
+    };
+  }
+
+  @Patch('settings/modes')
+  setMode(@CurrentUser() user: CurrentUserPayload, @Body() dto: SetAiWriteModeDto) {
+    return this.autoWrites.setMode(user.id, dto.category, dto.mode);
+  }
+
+  /** O estado do Desfazer de uma gravação: o cartão recarregado mostra "Desfeito" ou vencido. */
+  @Get('auto-writes/:id')
+  autoWriteStatus(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.autoWrites.status(user.id, id);
+  }
+
+  /** O "Desfazer" do cartão "Gravado" (ADR 039, item 3). Só o dono, uma vez. */
+  @Post('auto-writes/:id/undo')
+  @HttpCode(200)
+  undoAutoWrite(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.autoWrites.undo(user.id, id);
+  }
+
   /** Quanto da cota diária de IA desta pessoa já foi — o medidor da tela do chat. */
   @Get('quota')
   quota(@CurrentUser() user: CurrentUserPayload) {
@@ -298,7 +338,13 @@ export class ChatController {
   /** O que o assistente guardou sobre a pessoa. A mesma lista que `list_memories` devolve. */
   @Get('memories')
   listMemories(@CurrentUser() user: CurrentUserPayload) {
-    return this.memorias.listar(user.id);
+    return this.memorias.list(user.id);
+  }
+
+  /** "Apagar todas", com a confirmação na tela (Al-M9). Não há tool MCP que faça isso. */
+  @Delete('memories')
+  forgetAllMemories(@CurrentUser() user: CurrentUserPayload) {
+    return this.memorias.forgetAll(user.id);
   }
 
   @Delete('memories/:id')
@@ -307,7 +353,7 @@ export class ChatController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.memorias.esquecer(user.id, id);
+    await this.memorias.forget(user.id, id);
   }
 
   @Patch('conversations/:id/messages/:messageId/feedback')

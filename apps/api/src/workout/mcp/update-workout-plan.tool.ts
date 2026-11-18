@@ -21,6 +21,7 @@ export class UpdateWorkoutPlanTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Atualiza o nome de um plano de treino. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","name":"Treino A - peito e ombro"}';

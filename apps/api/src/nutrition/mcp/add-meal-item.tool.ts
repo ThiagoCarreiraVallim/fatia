@@ -18,6 +18,7 @@ export class AddMealItemTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Adiciona um item a uma refeição existente. `nutrients` aceita micronutrientes opcionais por chave (ex.: { "sodium_mg": 412, "sugar_g": 9 }) para metas personalizadas. ' +
     'Exemplo: {"mealId":"11111111-2222-4333-8444-555555555555","foodId":312,"grams":120}';

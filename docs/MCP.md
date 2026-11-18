@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 154 tools): **143,1 k caracteres**
-hoje, dos quais **8.297 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 154 tools): **143,4 k caracteres**
+hoje, dos quais **8.321 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (119,9 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (120,2 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -3915,22 +3915,24 @@ anotação do assistente não apaga dado de saúde nem histórico — dizer de n
 
 Lista as memórias, da mais antiga para a mais nova.
 
-**Output:** `Array<{ id: string; content: string; createdAt: string }>`
+**Output:** `Array<{ id: string; content: string; category: string | null; createdAt: string }>`
 
 ### `save_memory`
 
-Guarda uma memória: uma frase curta, na terceira pessoa.
+Guarda uma memória: uma frase curta, na terceira pessoa, com a categoria (#385).
 
 **Input:**
 
 ```typescript
 {
   content: string; // 1–500 caracteres
+  category?: 'PREFERENCE' | 'ROUTINE' | 'TRAINING' | 'HABIT';
 }
 ```
 
-**Output:** `{ id: string; content: string; createdAt: string }`. Recusa (`INVALID_INPUT`) acima de
-50 memórias.
+**Output:** `{ id: string; content: string; category: string | null; createdAt: string }`. Recusa
+(`INVALID_INPUT`) com 50 memórias guardadas, pedindo ao modelo que pergunte à pessoa qual apagar.
+"Apagar todas" é só no app (`DELETE /api/chat/memories`): não há `forget_all_memories`.
 
 ### `forget_memory`
 

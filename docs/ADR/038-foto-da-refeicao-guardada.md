@@ -116,3 +116,14 @@ O que entrou, sem mudar a decisão:
   bucket ao apagar a foto, a refeição ou a conta.
 - `MealItem.source` (`MANUAL`, `AI`, `PLAN`, `BARCODE`) pinta o selo "IA". As tools MCP de refeição
   gravam `AI` quando a origem não vem.
+
+## Nota — #385 (2026-11-17)
+
+- O PWA ganhou a foto do prato (`/nutrition/photo`): o arquivo faz o papel da câmera (`capture`), e
+  o canvas recodifica em JPEG sem EXIF antes de sair do navegador.
+- **Antes da primeira foto**, web e app mostram o aviso com o nome do provedor (OpenRouter) e o link
+  "Como tratamos seus dados". O aviso é o aceite do chat da #384: sem ele, o reconhecimento responde
+  403 `AI_CONSENT_REQUIRED`, e a tela traz o aviso de volta com a mesma foto.
+- A pergunta "Guardar as fotos das refeições?" vem **antes** do reconhecimento quando a preferência
+  é `null` (a prancha a desenha depois), porque é no reconhecimento que a API guarda ou não a foto.
+- O texto da permissão da câmera e da galeria diz que a foto só fica guardada se a pessoa permitir.

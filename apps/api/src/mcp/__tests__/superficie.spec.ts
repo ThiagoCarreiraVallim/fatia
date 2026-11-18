@@ -67,8 +67,8 @@ import {
  * O merge da main (#382) na #380 juntou os dois braços A acima.
  */
 
-const SHA_ENTIDADE = 'fae2798cb2d5f3b3b4e9848e70fa89e3e52a760e5312cfd2a4829f23be583078';
-const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
+const SHA_ENTIDADE = 'e74ab3047058d368e6aacb4b39f91f7fb49725f4e48517da81add23eb553feb7';
+const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
@@ -158,7 +158,11 @@ describe('superfície do /mcp', () => {
 
     it('com a flag desligada, o controller responde 400 antes de abrir o servidor MCP', async () => {
       const registry = { intencaoHabilitada: () => false } as unknown as McpToolRegistry;
-      const controller = new McpController(registry, { touch: async () => undefined } as never);
+      const controller = new McpController(
+        registry,
+        { touch: async () => undefined } as never,
+        config({}),
+      );
       const req = { headers: { [HEADER_SUPERFICIE]: 'intencao' } } as unknown as Request;
       await expect(
         controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),

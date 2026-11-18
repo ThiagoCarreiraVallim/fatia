@@ -22,6 +22,7 @@ export class CreateCustomExerciseTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Creates a custom exercise for the user. ' +
     'Exemplo: {"name":"Agachamento búlgaro com halteres","muscleGroup":"pernas"}';

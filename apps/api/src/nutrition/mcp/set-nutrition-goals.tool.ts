@@ -16,6 +16,7 @@ export class SetNutritionGoalsTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'GOALS' as const;
   readonly description =
     'Cria/atualiza as metas nutricionais do usuário. ' +
     'Exemplo: {"kcalMin":2100,"kcalMax":2400,"proteinMinG":140,"proteinMaxG":180,"carbsMinG":220,"carbsMaxG":280,"fatMinG":60,"fatMaxG":80}';

@@ -17,6 +17,8 @@ import { ConversationService } from '../conversation.service';
 import { GroupAgentService } from '../../sharing/group-agent.service';
 import { MemoryService } from '../memory/memory.service';
 import { AiConsentService } from '../consent/ai-consent.service';
+import { AutoWriteService } from '../auto-write/auto-write.service';
+import { MemoryService as MemoryServiceDaTela } from '../memory/memory.service';
 import { registrarCorposDoChat, TETO_DO_AUDIO } from '../corpos-do-chat';
 import { JPEG_COM_EXIF_GPS } from '../../nutrition/helpers/jpeg-com-exif.fixture';
 
@@ -199,7 +201,24 @@ async function subirApp(): Promise<Cenario> {
     .overrideProvider(CheckpointPurgeService)
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
     .overrideProvider(MemoryService)
-    .useValue({ listar: jest.fn(async () => []) })
+    .useValue({
+      list: jest.fn(async () => []),
+      count: jest.fn(async () => 3),
+      forgetAll: jest.fn(async () => ({ forgotten: 3 })),
+    })
+    .overrideProvider(AutoWriteService)
+    .useValue({
+      turnModes: jest.fn(async () => ({ auto: [], off: [] })),
+      modes: jest.fn(async () => ({
+        DAY_LOG: 'AUTO',
+        WORKOUT: 'ASK',
+        GOALS: 'ASK',
+        MEMORIES: 'OFF',
+      })),
+      setMode: jest.fn(async () => ({})),
+      undo: jest.fn(async () => ({ undone: true })),
+      status: jest.fn(async () => ({ state: 'undone' })),
+    })
     // O aceite da primeira conversa (#384) está dado: os testes daqui são da fiação HTTP.
     .overrideProvider(AiConsentService)
     .useValue({
@@ -879,5 +898,60 @@ describe('aceites da IA e preferência da busca (#384)', () => {
     expect(resposta.status).toBe(200);
     expect(aceites().setWebSearch).toHaveBeenCalledWith(USER, false);
     expect((await pedir('/preferences', 'PATCH', { webSearchEnabled: 'sim' })).status).toBe(400);
+  });
+
+  const autoWrites = () =>
+    cenario.app.get(AutoWriteService) as unknown as Record<string, jest.Mock>;
+  const memorias = () =>
+    cenario.app.get(MemoryServiceDaTela) as unknown as Record<string, jest.Mock>;
+
+  it('Configurações da IA: os modos, a busca e o "n de 50", do usuário do token (#385)', async () => {
+    const resposta = await pedir('/settings');
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({
+      modes: { DAY_LOG: 'AUTO', WORKOUT: 'ASK', GOALS: 'ASK', MEMORIES: 'OFF' },
+      webSearchEnabled: undefined,
+      memories: { count: 3, limit: 50 },
+    });
+    expect(autoWrites().modes).toHaveBeenCalledWith(USER);
+    expect(memorias().count).toHaveBeenCalledWith(USER);
+  });
+
+  it('muda o modo de uma categoria só com valores da lista (#385)', async () => {
+    const ok = await pedir('/settings/modes', 'PATCH', {
+      category: 'DAY_LOG',
+      mode: 'AUTO',
+      userId: OUTRO_USER,
+    });
+    expect(ok.status).toBe(200);
+    expect(autoWrites().setMode).toHaveBeenCalledWith(USER, 'DAY_LOG', 'AUTO');
+    expect(
+      (await pedir('/settings/modes', 'PATCH', { category: 'BILLING', mode: 'AUTO' })).status,
+    ).toBe(400);
+    expect(
+      (await pedir('/settings/modes', 'PATCH', { category: 'GOALS', mode: 'SEMPRE' })).status,
+    ).toBe(400);
+  });
+
+  it('o Desfazer vai com o usuário do token e só aceita uuid (#385)', async () => {
+    const id = '7f0c2d2e-2f4c-4b8a-9a77-5f1c2b3d4e5f';
+    expect((await pedir(`/auto-writes/${id}/undo`, 'POST')).status).toBe(200);
+    expect(autoWrites().undo).toHaveBeenCalledWith(USER, id);
+    expect((await pedir('/auto-writes/nao-e-uuid/undo', 'POST')).status).toBe(400);
+  });
+
+  it('o estado do Desfazer é lido do servidor, com o usuário do token (#385)', async () => {
+    const id = '7f0c2d2e-2f4c-4b8a-9a77-5f1c2b3d4e5f';
+    const resposta = await pedir(`/auto-writes/${id}`, 'GET');
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({ state: 'undone' });
+    expect(autoWrites().status).toHaveBeenCalledWith(USER, id);
+    expect((await pedir('/auto-writes/nao-e-uuid', 'GET')).status).toBe(400);
+  });
+
+  it('"Apagar todas" as memórias é do usuário do token (#385)', async () => {
+    const resposta = await pedir('/memories', 'DELETE');
+    expect(resposta.status).toBe(200);
+    expect(memorias().forgetAll).toHaveBeenCalledWith(USER);
   });
 });

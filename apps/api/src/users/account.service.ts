@@ -137,6 +137,8 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      aiWriteModes,
+      aiAutoWrites,
       mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
@@ -351,7 +353,7 @@ export class AccountService {
       // aprovou, e entra em toda conversa — a portabilidade cobre os dois.
       this.prisma.userMemory.findMany({
         where: { userId },
-        select: { content: true, createdAt: true },
+        select: { content: true, category: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       // Histórico do plano (ADR 024) e da cobrança (#386): teste, forma de
@@ -596,6 +598,31 @@ export class AccountService {
         select: { kind: true, version: true, acceptedAt: true },
         orderBy: { acceptedAt: 'asc' },
       }),
+      // Configurações da IA (#385): o modo de cada categoria (sem linha = Perguntar antes).
+      this.prisma.aiWriteModeSetting.findMany({
+        where: { userId },
+        select: { category: true, mode: true, updatedAt: true },
+      }),
+      // As gravações automáticas (ADR 039). O pedido, os retratos e o cartão só existem durante a
+      // janela de 24 h do Desfazer (#385): depois voltam nulos, e ficam os metadados.
+      this.prisma.aiAutoWrite.findMany({
+        where: { userId },
+        select: {
+          conversationId: true,
+          tool: true,
+          category: true,
+          input: true,
+          result: true,
+          before: true,
+          after: true,
+          card: true,
+          createdAt: true,
+          doneAt: true,
+          undoneAt: true,
+          clearedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
       // Conectar sua IA (#388): o app e as datas. O hash do token fica de fora.
       this.prisma.mcpOAuthConnection.findMany({
         where: { userId },
@@ -667,6 +694,8 @@ export class AccountService {
       inboxNotices,
       reminders,
       aiConsents,
+      aiWriteModes,
+      aiAutoWrites,
       mcpConnections: mcpConnections.map((c) => ({
         clientName: c.client.clientName,
         connectedAt: c.createdAt,
@@ -700,6 +729,7 @@ export class AccountService {
         inboxNotices: inboxNotices.length,
         reminders: reminders.length,
         aiConsents: aiConsents.length,
+        aiAutoWrites: aiAutoWrites.length,
         mcpConnections: mcpConnections.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,

@@ -25,6 +25,7 @@ export class AddExerciseToPlanTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Adiciona um exercício a um plano de treino, com séries, reps, descanso, técnica, carga inicial ' +
     'e, no cardio, meta por tempo ou distância. Exercício que já está no plano responde CONFLICT. ' +
