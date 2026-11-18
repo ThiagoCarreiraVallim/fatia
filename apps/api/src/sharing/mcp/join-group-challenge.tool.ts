@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { ChallengeService } from '../challenge.service';
+import { challengeForAi } from './challenge-unit';
 import {
   McpTool,
   type McpToolContext,
@@ -36,6 +37,8 @@ export class JoinGroupChallengeTool implements McpToolDef {
     input: { groupId: string; challengeId: string; displayName?: string },
     { userId }: McpToolContext,
   ) {
-    return this.challenges.join(userId, input.groupId, input.challengeId, input.displayName);
+    return challengeForAi(
+      await this.challenges.join(userId, input.groupId, input.challengeId, input.displayName),
+    );
   }
 }

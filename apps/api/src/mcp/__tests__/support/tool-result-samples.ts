@@ -731,7 +731,6 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
         { displayName: 'Thi', score: 12, rank: 2, isMe: true, medal: null, streak: 4 },
       ],
       today: hojeNoDesafio,
-      activity: [],
     },
     { groupId: 'gr1', challengeId: 'ch1' },
   ),

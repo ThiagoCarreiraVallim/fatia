@@ -6,7 +6,7 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
-import { challengeUnit } from './challenge-unit';
+import { challengeForAi, challengeUnit } from './challenge-unit';
 
 @Injectable()
 @McpTool()
@@ -33,7 +33,7 @@ export class GetChallengeLeaderboardTool implements McpToolDef {
     { groupId, challengeId }: { groupId: string; challengeId: string },
     { userId }: McpToolContext,
   ) {
-    return this.challenges.get(userId, groupId, challengeId);
+    return challengeForAi(await this.challenges.get(userId, groupId, challengeId));
   }
 
   /**
@@ -41,7 +41,7 @@ export class GetChallengeLeaderboardTool implements McpToolDef {
    * (desafio antigo de ml ou passos, visto de fora), fica sem cartão.
    */
   artifact(result: unknown) {
-    const desafio = result as Awaited<ReturnType<ChallengeService['get']>>;
+    const desafio = result as ReturnType<typeof challengeForAi>;
     if (!desafio.leaderboard) return null;
     const unit = challengeUnit(desafio.kind, desafio.metric);
     return {

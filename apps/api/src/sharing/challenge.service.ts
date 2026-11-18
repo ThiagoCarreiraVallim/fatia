@@ -457,7 +457,9 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       meu !== null || atual.kind !== 'METRIC' || !RAW_AMOUNT_METRICS.includes(atual.metric);
     return {
       ...view,
-      leaderboard: verRanking ? this.leaderboard(view.status, linhas, membershipId) : null,
+      leaderboard: verRanking
+        ? this.leaderboard(view.status, atual.finalizedAt, linhas, membershipId)
+        : null,
       suggestedDisplayName: displayName ?? firstName(userName),
       today:
         meu && view.status === 'running' && atual.kind !== 'METRIC'
@@ -613,7 +615,14 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     if (statusOf(row, now) !== 'upcoming') {
       throw new ConflictException('O desafio já começou: dá para encerrar, não para mudar');
     }
-    const regras = normalizeRules(input);
+    // O desafio antigo que soma ml ou passos (#395 M8) não se cria mais, mas o
+    // que já existe se edita antes de começar, sem trocar o que mede.
+    const antigo =
+      row.kind === 'METRIC' &&
+      RAW_AMOUNT_METRICS.includes(row.metric) &&
+      (input.kind ?? 'METRIC') === 'METRIC' &&
+      input.metric === row.metric;
+    const regras = antigo ? legacyRules(row) : normalizeRules(input);
     const viraFoto = usesPhotoCheckin({
       kind: regras.kind,
       pointsTable:
@@ -1030,6 +1039,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
    */
   private leaderboard(
     status: ChallengeStatus,
+    finalizedAt: Date | null,
     linhas: ReadonlyArray<{
       membershipId: string;
       displayName: string;
@@ -1047,7 +1057,9 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         streak: l.streak,
       })),
     );
-    if (status !== 'ended') return placar.map((e) => ({ ...e, medal: null }));
+    // Medalha só com o resultado fechado (#395 B3): encerrado com a fila aberta,
+    // o pódio ainda pode mudar.
+    if (status !== 'ended' || !finalizedAt) return placar.map((e) => ({ ...e, medal: null }));
     // `buildScoreboard` não recebe id de propósito; a posição gravada volta pela
     // ordem, que é a mesma (pontuação, depois apelido).
     const ordenadas = [...linhas].sort(
@@ -1179,7 +1191,8 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         displayName: nome(c.participantId),
         isMe: meu,
         date: c.date,
-        at: c.capturedAt.toISOString(),
+        // O horário é rotina: só na própria linha; os outros veem o dia (#395 M6).
+        at: meu ? c.capturedAt.toISOString() : null,
         points: row.kind === 'POINTS' ? (table.workout ?? 0) : 1,
         parts: ['workout'],
         status: c.status === 'VALID' ? 'valid' : c.status === 'FLAGGED' ? 'review' : 'voided',
@@ -1488,6 +1501,20 @@ const intEntre = (v: number | null | undefined, min: number, max: number, campo:
  * Nunca peso nem medida; nutrição só como dia na própria meta; passos à mão
  * nunca contam.
  */
+/** As regras de um desafio antigo de ml ou passos, como estão (#395 M8). */
+function legacyRules(row: GroupChallenge): ReturnType<typeof normalizeRules> {
+  return {
+    kind: 'METRIC',
+    metric: row.metric,
+    pointsTable: Prisma.DbNull as Prisma.InputJsonValue | typeof Prisma.DbNull,
+    maxPointsPerDay: null,
+    waterGoalMl: null,
+    stepsGoal: null,
+    dailyCap: null,
+    allowedStepSources: [],
+  };
+}
+
 export function normalizeRules(input: ChallengeInput) {
   const kind: ChallengeKindName = input.kind ?? 'METRIC';
   const vazio = {
