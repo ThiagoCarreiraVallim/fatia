@@ -45,6 +45,29 @@ export function assertGoalsValid(dto: UpsertGoalsDto): void {
   }
 }
 
+/** De onde veio a troca das metas, para o histórico (#396). */
+export interface GoalsChangeOrigin {
+  source: 'manual' | 'group_plan';
+  templateId?: string | null;
+  templateTitle?: string | null;
+}
+
+const CAMPOS_DAS_METAS = [
+  'kcalMin',
+  'kcalMax',
+  'proteinMinG',
+  'proteinMaxG',
+  'carbsMinG',
+  'carbsMaxG',
+  'fatMinG',
+  'fatMaxG',
+  'weeklyWorkouts',
+  'dailyStepsTarget',
+  'dailyWaterTargetMl',
+] as const;
+
+type GoalsRow = Record<(typeof CAMPOS_DAS_METAS)[number], number>;
+
 @Injectable()
 export class UserGoalsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -53,13 +76,44 @@ export class UserGoalsService {
     return this.prisma.userGoals.findUnique({ where: { userId } });
   }
 
-  async upsert(userId: string, dto: UpsertGoalsDto) {
+  /**
+   * Grava as metas. Se já havia metas e alguma muda, o "antes" vai para
+   * `UserGoalsHistory` (#396): trocar pelas de um plano da comunidade
+   * sobrescreve as pessoais, e a pessoa não perde de onde partiu.
+   */
+  async upsert(
+    userId: string,
+    dto: UpsertGoalsDto,
+    origin: GoalsChangeOrigin = { source: 'manual' },
+  ) {
     assertGoalsValid(dto);
+    const antes = await this.prisma.userGoals.findUnique({ where: { userId } });
     const goals = await this.prisma.userGoals.upsert({
       where: { userId },
       create: { userId, ...dto },
       update: dto,
     });
+    if (antes && mudou(antes, goals)) {
+      await this.prisma.userGoalsHistory.create({
+        data: {
+          userId,
+          kcalMin: antes.kcalMin,
+          kcalMax: antes.kcalMax,
+          proteinMinG: antes.proteinMinG,
+          proteinMaxG: antes.proteinMaxG,
+          carbsMinG: antes.carbsMinG,
+          carbsMaxG: antes.carbsMaxG,
+          fatMinG: antes.fatMinG,
+          fatMaxG: antes.fatMaxG,
+          weeklyWorkouts: antes.weeklyWorkouts,
+          dailyStepsTarget: antes.dailyStepsTarget,
+          dailyWaterTargetMl: antes.dailyWaterTargetMl,
+          source: origin.source,
+          templateId: origin.templateId ?? null,
+          templateTitle: origin.templateTitle ?? null,
+        },
+      });
+    }
     // Quem definiu metas por outro caminho (MCP, tela de metas) já passou da
     // primeira vez: o app não deve mandá-lo ao assistente.
     await this.prisma.user.updateMany({
@@ -68,4 +122,10 @@ export class UserGoalsService {
     });
     return goals;
   }
+}
+
+function mudou(antes: GoalsRow, depois: GoalsRow | null | undefined): boolean {
+  // O upsert mockado nos testes pode não devolver a linha: sem ela, conta como mudança.
+  if (!depois) return true;
+  return CAMPOS_DAS_METAS.some((c) => antes[c] !== depois[c]);
 }

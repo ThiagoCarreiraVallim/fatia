@@ -400,6 +400,57 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
       expect(await prisma.mealTemplate.count({ where: { userId: membro } })).toBe(1);
     });
 
+    it('#396: trocar as metas guarda as anteriores no histórico e devolve o antes', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      const minhas = { ...metas, kcalMin: 2500, kcalMax: 2800 };
+      await goals.upsert(membro, minhas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Cutting 1.800',
+        goals: metas,
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: true, saveMeals: false });
+      expect(r).toMatchObject({
+        goalsApplied: true,
+        mealsSaved: 0,
+        previousGoals: expect.objectContaining({ kcalMin: 2500, kcalMax: 2800 }),
+      });
+      // Só as metas: nenhuma refeição entrou.
+      expect(await prisma.mealTemplate.count({ where: { userId: membro } })).toBe(0);
+      const historico = await prisma.userGoalsHistory.findMany({ where: { userId: membro } });
+      expect(historico).toEqual([
+        expect.objectContaining({
+          kcalMin: 2500,
+          kcalMax: 2800,
+          source: 'group_plan',
+          templateId: t.id,
+          templateTitle: 'Cutting 1.800',
+        }),
+      ]);
+      // O modelo some, o histórico fica (sem o vínculo).
+      await content.deleteTemplate(dono, groupId, t.id);
+      expect(
+        await prisma.userGoalsHistory.findFirstOrThrow({ where: { userId: membro } }),
+      ).toMatchObject({ templateId: null, templateTitle: 'Cutting 1.800' });
+    });
+
+    it('#396: só as refeições não mexe nas metas nem cria histórico', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      await goals.upsert(membro, metas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Base',
+        goals: { ...metas, kcalMin: 1500, kcalMax: 1700 },
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: false, saveMeals: true });
+      expect(r).toMatchObject({ goalsApplied: false, mealsSaved: 1, previousGoals: null });
+      expect(await goals.get(membro)).toMatchObject({ kcalMin: 1800, kcalMax: 2100 });
+      expect(await prisma.userGoalsHistory.count({ where: { userId: membro } })).toBe(0);
+    });
+
     it('nome de refeição que a pessoa já tem ganha o sufixo da comunidade', async () => {
       const { groupId, dono, membro } = await comunidade();
       await refeicaoSalvaDe(membro, null);

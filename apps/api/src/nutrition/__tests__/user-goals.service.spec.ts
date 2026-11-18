@@ -4,11 +4,13 @@ import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
   userGoals: { findUnique: jest.Mock; upsert: jest.Mock };
+  userGoalsHistory: { create: jest.Mock };
   user: { updateMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   userGoals: { findUnique: jest.fn(), upsert: jest.fn() },
+  userGoalsHistory: { create: jest.fn().mockResolvedValue({}) },
   user: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
 });
 
@@ -85,6 +87,77 @@ describe('UserGoalsService', () => {
       });
     });
   });
+  describe('upsert — histórico (#396)', () => {
+    const atuais = {
+      userId,
+      kcalMin: 2500,
+      kcalMax: 2800,
+      proteinMinG: 120,
+      proteinMaxG: 160,
+      carbsMinG: 200,
+      carbsMaxG: 280,
+      fatMinG: 50,
+      fatMaxG: 80,
+      weeklyWorkouts: 3,
+      dailyStepsTarget: 8000,
+      dailyWaterTargetMl: 2500,
+      updatedAt: new Date(),
+    };
+    const novas = { ...atuais, kcalMin: 1800, kcalMax: 2100 };
+    const dto = {
+      kcalMin: 1800,
+      kcalMax: 2100,
+      proteinMinG: 120,
+      proteinMaxG: 160,
+      carbsMinG: 200,
+      carbsMaxG: 280,
+      fatMinG: 50,
+      fatMaxG: 80,
+      weeklyWorkouts: 3,
+      dailyStepsTarget: 8000,
+      dailyWaterTargetMl: 2500,
+    };
+
+    it('guarda as metas de antes quando alguma muda, com a origem', async () => {
+      prisma.userGoals.findUnique.mockResolvedValue(atuais);
+      prisma.userGoals.upsert.mockResolvedValue(novas);
+      await service.upsert(userId, dto, {
+        source: 'group_plan',
+        templateId: 'tpl-1',
+        templateTitle: 'Cutting',
+      });
+      expect(prisma.userGoalsHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId,
+          kcalMin: 2500,
+          kcalMax: 2800,
+          dailyWaterTargetMl: 2500,
+          source: 'group_plan',
+          templateId: 'tpl-1',
+          templateTitle: 'Cutting',
+        }),
+      });
+    });
+
+    it('sem metas antes, ou sem mudança, não grava histórico', async () => {
+      prisma.userGoals.findUnique.mockResolvedValue(null);
+      prisma.userGoals.upsert.mockResolvedValue(novas);
+      await service.upsert(userId, dto);
+      prisma.userGoals.findUnique.mockResolvedValue(novas);
+      await service.upsert(userId, dto);
+      expect(prisma.userGoalsHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('a troca à mão vira source manual', async () => {
+      prisma.userGoals.findUnique.mockResolvedValue(atuais);
+      prisma.userGoals.upsert.mockResolvedValue(novas);
+      await service.upsert(userId, dto);
+      expect(prisma.userGoalsHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ source: 'manual', templateId: null }),
+      });
+    });
+  });
+
   describe('upsert — limites', () => {
     const valid = {
       kcalMin: 1800,

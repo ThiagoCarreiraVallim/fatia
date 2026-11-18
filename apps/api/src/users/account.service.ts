@@ -99,6 +99,7 @@ export class AccountService {
 
     const [
       nutritionGoals,
+      nutritionGoalsHistory,
       nutrientTargets,
       personalGoals,
       meals,
@@ -140,6 +141,9 @@ export class AccountService {
       mcpConnections,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
+      // As metas de antes de cada troca (#396): de onde a pessoa partiu, e se a
+      // troca veio de um plano da comunidade (com o título do modelo).
+      this.prisma.userGoalsHistory.findMany({ where: { userId }, orderBy: { replacedAt: 'asc' } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
       this.prisma.goal.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       this.prisma.meal.findMany({
@@ -626,6 +630,7 @@ export class AccountService {
       format: 'fatia-export-v1',
       user,
       nutritionGoals,
+      nutritionGoalsHistory,
       nutrientTargets,
       personalGoals,
       meals: await Promise.all(

@@ -9,6 +9,7 @@ import { AccountService, DELETE_CONFIRMATION } from '../account.service';
 const makePrisma = () => ({
   user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   userGoals: { findUnique: jest.fn().mockResolvedValue(null) },
+  userGoalsHistory: { findMany: jest.fn().mockResolvedValue([]) },
   nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
   goal: { findMany: jest.fn().mockResolvedValue([]) },
   meal: { findMany: jest.fn().mockResolvedValue([]) },
@@ -66,6 +67,8 @@ const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.pris
  */
 const CHAVE_NO_EXPORT: Record<string, string> = {
   goals: 'nutritionGoals',
+  // As metas de antes de cada troca (#396), inclusive a troca por um plano da comunidade.
+  goalsHistory: 'nutritionGoalsHistory',
   personalGoals: 'personalGoals',
   meals: 'meals',
   workoutPlans: 'workoutPlans',

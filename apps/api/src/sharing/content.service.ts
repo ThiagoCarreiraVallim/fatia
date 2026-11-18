@@ -141,6 +141,11 @@ export interface AdoptResult {
   mealsSaved: number;
   /** Já havia cópias das refeições deste plano; nada foi duplicado. */
   mealsAlreadySaved: boolean;
+  /**
+   * As metas que valiam antes da troca (#396), para o "antes → depois" de quem
+   * confirmou. Ficam também no histórico de metas. `null` sem troca ou sem metas antes.
+   */
+  previousGoals: NutritionGoals | null;
 }
 
 const TEMPLATE_INCLUDE = {
@@ -155,6 +160,20 @@ const TIP_INCLUDE = {
 
 type TemplateRow = GroupPlanTemplate & { cover: MediaFile | null; author: { name: string } | null };
 type TipRow = GroupTip & { image: MediaFile | null; author: { name: string } | null };
+
+/** As oito faixas de macro das metas, sem água, passos e treinos. */
+function macrosOf(g: NutritionGoals): NutritionGoals {
+  return {
+    kcalMin: g.kcalMin,
+    kcalMax: g.kcalMax,
+    proteinMinG: g.proteinMinG,
+    proteinMaxG: g.proteinMaxG,
+    carbsMinG: g.carbsMinG,
+    carbsMaxG: g.carbsMaxG,
+    fatMinG: g.fatMinG,
+    fatMaxG: g.fatMaxG,
+  };
+}
 
 /** Autor que apagou a conta aparece como a equipe: o conteúdo é da comunidade. */
 const TEAM_AUTHOR = 'Equipe';
@@ -549,6 +568,7 @@ export class ContentService {
         goalsApplied: false,
         mealsSaved: 0,
         mealsAlreadySaved: false,
+        previousGoals: null,
       };
     }
 
@@ -579,7 +599,16 @@ export class ContentService {
         }
       }
     }
-    if (applyGoals && snap.goals) await this.goals.upsert(userId, snap.goals);
+    let previousGoals: NutritionGoals | null = null;
+    if (applyGoals && snap.goals) {
+      const antes = await this.goals.get(userId);
+      previousGoals = antes ? macrosOf(antes) : null;
+      await this.goals.upsert(userId, snap.goals, {
+        source: 'group_plan',
+        templateId: modelo.id,
+        templateTitle: modelo.title,
+      });
+    }
 
     return {
       kind: modelo.kind,
@@ -587,6 +616,7 @@ export class ContentService {
       goalsApplied: applyGoals,
       mealsSaved,
       mealsAlreadySaved,
+      previousGoals,
     };
   }
 
