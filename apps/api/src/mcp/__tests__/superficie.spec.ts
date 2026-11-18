@@ -67,10 +67,11 @@ import {
  * O merge da main (#382) na #380 juntou os dois braços A acima.
  * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
  * A #395 acrescentou `get_my_challenge_progress` (só leitura, sem intenção) e reescreveu as
- * descrições das tools de desafio: muda o braço A.
+ * descrições das tools de desafio: muda o braço A. Na revisão, `log_steps` perdeu o `source`
+ * (a fonte não vem do cliente): muda de novo.
  */
 
-const SHA_ENTIDADE = 'cc43a265159c2f4ac1a23c22c18f7085598d929c05fd2aca286c473742f87dca';
+const SHA_ENTIDADE = '10a14492153346925ddb1603b59048ad0aba05a8e74e9968bfff8a2485306d26';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
