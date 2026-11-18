@@ -46,9 +46,8 @@ import { colors } from '@/theme/colors';
 /**
  * A foto de check-in vai ao bucket com este propósito; a API confirma,
  * reencoda, tira o EXIF e carimba a hora do servidor ao receber o check-in.
- * (O tipo `MediaPurpose` do api-client ainda não lista `challenge_checkin`.)
  */
-const CHECKIN_PURPOSE = 'challenge_checkin' as MediaPurpose;
+const CHECKIN_PURPOSE: MediaPurpose = 'challenge_checkin';
 
 const TAG_VARIANT: Record<Tone, 'done' | 'lite' | 'risk'> = {
   ok: 'done',

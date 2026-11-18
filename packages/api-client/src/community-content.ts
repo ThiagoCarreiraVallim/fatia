@@ -21,7 +21,9 @@ export type MediaPurpose =
   /** Logo do parceiro num benefício (#393). */
   | 'benefit_logo'
   /** Foto de perfil (#387): pessoal, sem comunidade. */
-  | 'user_avatar';
+  | 'user_avatar'
+  /** Foto de prova do check-in de desafio (#395, ADR 044): só a pessoa e a equipe veem. */
+  | 'challenge_checkin';
 
 export interface MediaView {
   id: string;
