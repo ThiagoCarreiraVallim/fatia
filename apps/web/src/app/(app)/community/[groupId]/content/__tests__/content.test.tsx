@@ -111,6 +111,7 @@ describe('comunidade › plano pronto', () => {
       mealsSaved: 0,
       mealsAlreadySaved: false,
       previousGoals: null,
+      goalsHistoryWritten: false,
     });
     renderWithClient(<CommunityTemplatePage />);
     expect(await screen.findByText('2. Remada no aparelho da casa')).toBeInTheDocument();
@@ -203,6 +204,7 @@ describe('comunidade › plano pronto', () => {
       mealsSaved: 1,
       mealsAlreadySaved: false,
       previousGoals: null,
+      goalsHistoryWritten: false,
     });
     renderWithClient(<CommunityTemplatePage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Adotar plano' }));

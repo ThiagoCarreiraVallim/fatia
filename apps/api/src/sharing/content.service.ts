@@ -162,6 +162,8 @@ export interface AdoptResult {
    * confirmou. Ficam também no histórico de metas. `null` sem troca ou sem metas antes.
    */
   previousGoals: NutritionGoals | null;
+  /** As metas de antes foram para o histórico (havia metas e alguma mudou). */
+  goalsHistoryWritten: boolean;
 }
 
 const TEMPLATE_INCLUDE = {
@@ -596,6 +598,7 @@ export class ContentService {
         mealsSaved: 0,
         mealsAlreadySaved: false,
         previousGoals: null,
+        goalsHistoryWritten: false,
       };
     }
 
@@ -627,14 +630,16 @@ export class ContentService {
       }
     }
     let previousGoals: NutritionGoals | null = null;
+    let goalsHistoryWritten = false;
     if (applyGoals && snap.goals) {
-      const antes = await this.goals.get(userId);
-      previousGoals = antes ? macrosOf(antes) : null;
-      await this.goals.upsert(userId, snap.goals, {
+      // O "antes" vem da mesma transação que troca e grava o histórico.
+      const r = await this.goals.upsert(userId, snap.goals, {
         source: 'group_plan',
         templateId: modelo.id,
         templateTitle: modelo.title,
       });
+      previousGoals = r.previous ? macrosOf(r.previous) : null;
+      goalsHistoryWritten = r.historyWritten;
     }
 
     return {
@@ -644,6 +649,7 @@ export class ContentService {
       mealsSaved,
       mealsAlreadySaved,
       previousGoals,
+      goalsHistoryWritten,
     };
   }
 

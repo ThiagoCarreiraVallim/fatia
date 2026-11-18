@@ -234,6 +234,7 @@ describe('regras do conteúdo', () => {
         mealsSaved: 2,
         mealsAlreadySaved: false,
         previousGoals: null,
+        goalsHistoryWritten: false,
       }),
     ).toBe('2 refeições salvas, metas atualizadas.');
     expect(
@@ -244,6 +245,7 @@ describe('regras do conteúdo', () => {
         mealsSaved: 0,
         mealsAlreadySaved: true,
         previousGoals: null,
+        goalsHistoryWritten: false,
       }),
     ).toBe('As refeições já estavam salvas.');
     // #396: com metas de antes, avisa que elas ficaram guardadas.
@@ -255,8 +257,21 @@ describe('regras do conteúdo', () => {
         mealsSaved: 0,
         mealsAlreadySaved: false,
         previousGoals: metas,
+        goalsHistoryWritten: true,
       }),
     ).toBe('Metas atualizadas. As de antes ficaram no histórico.');
+    // Metas iguais às do plano: nada foi para o histórico, e a frase não promete.
+    expect(
+      adoptResultMessage({
+        kind: 'NUTRITION',
+        planId: null,
+        goalsApplied: true,
+        mealsSaved: 0,
+        mealsAlreadySaved: false,
+        previousGoals: metas,
+        goalsHistoryWritten: false,
+      }),
+    ).toBe('Metas atualizadas.');
   });
 
   it('fixadas primeiro', () => {

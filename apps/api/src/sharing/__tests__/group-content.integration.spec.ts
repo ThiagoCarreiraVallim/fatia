@@ -468,6 +468,7 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
         goalsApplied: true,
         mealsSaved: 0,
         previousGoals: expect.objectContaining({ kcalMin: 2500, kcalMax: 2800 }),
+        goalsHistoryWritten: true,
       });
       // Só as metas: nenhuma refeição entrou.
       expect(await prisma.mealTemplate.count({ where: { userId: membro } })).toBe(0);
@@ -498,8 +499,28 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
       });
       await content.setTemplatePublished(dono, groupId, t.id, true);
       const r = await content.adopt(membro, groupId, t.id, { applyGoals: false, saveMeals: true });
-      expect(r).toMatchObject({ goalsApplied: false, mealsSaved: 1, previousGoals: null });
+      expect(r).toMatchObject({
+        goalsApplied: false,
+        mealsSaved: 1,
+        previousGoals: null,
+        goalsHistoryWritten: false,
+      });
       expect(await goals.get(membro)).toMatchObject({ kcalMin: 1800, kcalMax: 2100 });
+      expect(await prisma.userGoalsHistory.count({ where: { userId: membro } })).toBe(0);
+    });
+
+    it('#396: metas iguais às do plano não vão para o histórico', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      await goals.upsert(membro, metas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Igual',
+        goals: metas,
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: true, saveMeals: false });
+      expect(r).toMatchObject({ goalsApplied: true, goalsHistoryWritten: false });
+      expect(r.previousGoals).toMatchObject({ kcalMin: metas.kcalMin });
       expect(await prisma.userGoalsHistory.count({ where: { userId: membro } })).toBe(0);
     });
 

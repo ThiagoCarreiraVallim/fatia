@@ -19,7 +19,7 @@ import { TEAM_ROLES } from '../sharing/permissions';
 import { SharedWithService } from '../sharing/shared-with.service';
 import { MealService, type ResolvedItem } from './meal.service';
 import { DailyAdherenceService } from './daily-adherence.service';
-import { assertGoalsValid } from './user-goals.service';
+import { assertGoalsValid, upsertWithHistory } from './user-goals.service';
 import { calcMacrosFromFood, calcNutrientsFromFood } from './helpers/calc-macros';
 import { snapshotOf, type ItemSnapshotSource } from './helpers/meal-snapshot';
 import {
@@ -458,11 +458,8 @@ export class NutritionPlanService {
 
       if (plan.applyGoals) {
         const goals = goalsOf(plan);
-        await db.userGoals.upsert({
-          where: { userId },
-          create: { userId, ...goals },
-          update: goals,
-        });
+        // As metas de antes ficam no histórico (#396).
+        await upsertWithHistory(db, userId, goals, { source: 'nutrition_plan' });
       }
 
       let room = MAX_TEMPLATES_PER_USER - (await db.mealTemplate.count({ where: { userId } }));

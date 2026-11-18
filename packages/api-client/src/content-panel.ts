@@ -106,7 +106,7 @@ export function adoptResultMessage(r: AdoptResult): string {
   const texto = partes.join(', ');
   const frase = `${texto.charAt(0).toUpperCase()}${texto.slice(1)}.`;
   // #396: trocar as metas não apaga as de antes.
-  return r.goalsApplied && r.previousGoals ? `${frase} As de antes ficaram no histórico.` : frase;
+  return r.goalsHistoryWritten ? `${frase} As de antes ficaram no histórico.` : frase;
 }
 
 /** Dicas para a vitrine do membro: fixadas primeiro, depois as mais novas. */

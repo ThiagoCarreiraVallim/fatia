@@ -47,7 +47,7 @@ export class SetNutritionGoalsTool implements McpToolDef {
       .optional()
       .describe('Meta diária de hidratação em mL (default 2500)'),
   } as const;
-  execute(
+  async execute(
     input: {
       kcalMin: number;
       kcalMax: number;
@@ -63,6 +63,6 @@ export class SetNutritionGoalsTool implements McpToolDef {
     },
     { userId }: McpToolContext,
   ) {
-    return this.goals.upsert(userId, input);
+    return (await this.goals.upsert(userId, input)).goals;
   }
 }

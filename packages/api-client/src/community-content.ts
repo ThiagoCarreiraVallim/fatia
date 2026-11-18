@@ -145,6 +145,8 @@ export interface AdoptResult {
   mealsAlreadySaved: boolean;
   /** As metas que valiam antes da troca (#396); ficam também no histórico de metas. */
   previousGoals: NutritionGoalsInput | null;
+  /** As metas de antes foram para o histórico (havia metas e alguma mudou). */
+  goalsHistoryWritten: boolean;
 }
 
 const base = '/api/groups';

@@ -6,13 +6,22 @@ type MockPrisma = {
   userGoals: { findUnique: jest.Mock; upsert: jest.Mock };
   userGoalsHistory: { create: jest.Mock };
   user: { updateMany: jest.Mock };
+  $queryRaw: jest.Mock;
+  $transaction: jest.Mock;
 };
 
-const makePrisma = (): MockPrisma => ({
-  userGoals: { findUnique: jest.fn(), upsert: jest.fn() },
-  userGoalsHistory: { create: jest.fn().mockResolvedValue({}) },
-  user: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-});
+const makePrisma = (): MockPrisma => {
+  const prisma = {
+    userGoals: { findUnique: jest.fn(), upsert: jest.fn() },
+    userGoalsHistory: { create: jest.fn().mockResolvedValue({}) },
+    user: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    // A trava da linha das metas (#396); a transação roda o callback com o mesmo mock.
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn(),
+  } as MockPrisma;
+  prisma.$transaction.mockImplementation((fn: (tx: MockPrisma) => unknown) => fn(prisma));
+  return prisma;
+};
 
 describe('UserGoalsService', () => {
   let prisma: MockPrisma;
@@ -140,12 +149,39 @@ describe('UserGoalsService', () => {
     });
 
     it('sem metas antes, ou sem mudança, não grava histórico', async () => {
+      // O upsert do mock não devolve a linha: a decisão vem do "antes" contra o
+      // que foi enviado, e não do que o banco devolveu.
+      prisma.userGoals.upsert.mockResolvedValue(undefined);
       prisma.userGoals.findUnique.mockResolvedValue(null);
-      prisma.userGoals.upsert.mockResolvedValue(novas);
-      await service.upsert(userId, dto);
+      const primeira = await service.upsert(userId, dto);
       prisma.userGoals.findUnique.mockResolvedValue(novas);
-      await service.upsert(userId, dto);
+      const igual = await service.upsert(userId, dto);
       expect(prisma.userGoalsHistory.create).not.toHaveBeenCalled();
+      expect(primeira).toMatchObject({ previous: null, historyWritten: false });
+      expect(igual).toMatchObject({ previous: novas, historyWritten: false });
+    });
+
+    it('campo ausente no envio não conta como mudança', async () => {
+      prisma.userGoals.upsert.mockResolvedValue(undefined);
+      prisma.userGoals.findUnique.mockResolvedValue(novas);
+      const { dailyWaterTargetMl: _agua, ...semAgua } = dto;
+      void _agua;
+      const r = await service.upsert(userId, semAgua);
+      expect(r.historyWritten).toBe(false);
+      expect(prisma.userGoalsHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('lê o antes com a linha travada, dentro da transação', async () => {
+      prisma.userGoals.findUnique.mockResolvedValue(atuais);
+      prisma.userGoals.upsert.mockResolvedValue(novas);
+      const r = await service.upsert(userId, dto);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const sql = (prisma.$queryRaw.mock.calls[0][0] as TemplateStringsArray).join('?');
+      expect(sql).toMatch(/FOR UPDATE/);
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.userGoals.findUnique.mock.invocationCallOrder[0],
+      );
+      expect(r).toEqual({ goals: novas, previous: atuais, historyWritten: true });
     });
 
     it('a troca à mão vira source manual', async () => {
