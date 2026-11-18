@@ -330,9 +330,10 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
 
 ## Etapa 7: Comunidade no app (em andamento)
 
-| Issue | Título                                                                | Estado           | Superfícies                                      |
-| ----- | --------------------------------------------------------------------- | ---------------- | ------------------------------------------------ |
-| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
+| Issue | Título                                                                | Estado           | Superfícies                                              |
+| ----- | --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app         |
+| #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
 
 #393 (branch `redesign/393-comunidades`, migration `20261117200000_community_entry_code_benefits`; nenhuma env nova):
 
@@ -350,6 +351,22 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - A tool `join_group` do MCP manteve a descrição, mas aceita código.
   - O consentimento de entrada segue o `ConsentForm` atual (#371 não mexeu nele).
 - **Falta:** passada visual (prints lado a lado com Cm-01, Cm-02, Cm-04, Cm-22, Cm-22b, Pn-28, Pn-28b, Pn-28c, web e app, escuro e claro); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção).
+
+#396 (branch `redesign/396-conteudo-equipe`, sai de `redesign/393-comunidades`; migration `20261118200000_user_goals_history`; nenhuma env nova; nenhuma permissão nova):
+
+- **Decisão: aplicar plano da equipe pede confirmação com o antes e o depois.** Na tela, a folha "O que entra na sua conta?" (Cm-14) mostra as metas de agora ao lado das do plano, e as metas só mudam se a pessoa marcar; marcando, avisa "Suas metas de agora ficam no histórico.". No chat, o cartão de confirmação do `adopt_group_plan` com `applyGoals` traz uma linha por faixa ("Calorias: 2500–2800 → 1800–2000", "(igual)", "sem meta → …"). O modo automático da ADR 039 ainda não existe no código, então a tool continua sempre confirmável.
+- **Decisão: o histórico de metas é mantido.** Tabela nova `UserGoalsHistory` com a linha anterior inteira, gravada em todo `UserGoalsService.upsert` que muda alguma coisa, com `source` (`manual` ou `group_plan`), o plano de origem (`templateId`, SetNull se o plano for apagado) e o título. A adoção devolve `previousGoals` e a mensagem diz "As de antes ficaram no histórico.". Entra no export LGPD (`nutritionGoalsHistory`) e em `DATA_RETENTION.md`. Não há tela do histórico ainda.
+- **Aba Conteúdo (Cm-12):** "Planos e dicas" virou "Conteúdo" nas abas da comunidade, com título igual ao nome da comunidade e o (i) para Sobre. Plano: "treino · 4 exercícios · intermediário · Bruno". Dica: "Fixada · hábitos", título e o começo do texto; a dica inteira saiu da lista e abre na própria tela. Exercícios: guia com foto, "pernas · máquina · guia da academia", e embaixo "Equipamentos da academia" (só leitura).
+- **Plano (Cm-13):** "Por Bruno (dono)" com o papel de hoje de quem fez (`authorRole`, `null` se saiu). Exercício com guia da mesma comunidade ganha o selo "guia", que abre o guia da academia (`exerciseId`/`hasGuide` em cada exercício do plano). Adotar treino não sai da tela: aparece "Em Meus planos" com "Abrir" (também no 409 de quem já tinha adotado).
+- **Dica (Cm-15):** `GET /groups/:id/tips/:tipId` (só publicada, da comunidade da URL). Byline "Bruno · dono · 3 nov" no fuso do aparelho. Atalho pelo assunto (`tipShortcut`): água/hidratação abre o registro de água ali mesmo; dica de treino leva ao Treino; o resto não tem botão.
+- **Guia da academia (Cm-16):** `GET /groups/:id/exercises/:exerciseId` e `GET /groups/:id/equipment` (`content.read`). Vídeo (no app, abre no navegador, como no resto do app: sem player nativo para não quebrar o Expo Go), fotos em miniatura, "Dica da Helena", "Como fazer" (o detalhe do Fatia) e "Pôr num treino".
+- **MCP:** `list_group_exercise_guides` (leitura, cartão lista, nunca devolve URL de mídia) — 156 tools, `SHA_ENTIDADE` novo. O prompt do chat cita a tool; a descrição do `adopt_group_plan` diz que as partes são separadas e que as metas antigas ficam no histórico.
+- **Isolamento:** tudo buscado pelo `groupId` da URL com membro ativo; id de dica, guia ou plano de outra comunidade dá 404 pela URL da sua. `user-isolation.spec.ts` cobre quem é de fora, ids cruzados e quem saiu (perde mídia e guia, fica com as cópias de plano e refeições e com o export).
+- **Desvios de propósito:**
+  - "Pôr num treino" abre um seletor dos meus planos (o que já tem o exercício aparece desligado com "já tem"), e não o fluxo Al-T8 da prancha: é um toque a menos e evita repetir o exercício.
+  - O antes e depois mostra quatro faixas (com carboidrato); a prancha mostra três.
+  - O botão Adotar continua logo depois da descrição (decisão anterior de usabilidade), e não preso ao pé da tela.
+- **Falta:** passada visual (prints lado a lado com Cm-12 a Cm-16, web e app, escuro e claro); tela do histórico de metas; o e2e `content.spec.ts` foi ajustado à dica em tela própria e ao aviso "Em Meus planos", mas não rodou aqui (sem servidores).
 
 ## Etapas seguintes
 
