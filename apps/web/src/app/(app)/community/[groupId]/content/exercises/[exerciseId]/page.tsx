@@ -80,7 +80,7 @@ export default function CommunityGuidePage() {
       ) : destaque ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
         <img
-          src={destaque.url}
+          src={destaque.url ?? undefined}
           alt={`Foto de ${g.name}`}
           className="aspect-video w-full rounded-3xl object-cover"
         />
@@ -100,7 +100,7 @@ export default function CommunityGuidePage() {
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta */}
-              <img src={f.url} alt="" className="h-full w-full object-cover" />
+              <img src={f.url ?? undefined} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
@@ -108,7 +108,7 @@ export default function CommunityGuidePage() {
       {g.video?.url && destaque && foto > 0 && (
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
         <img
-          src={destaque.url}
+          src={destaque.url ?? undefined}
           alt={`Foto ${foto + 1} de ${g.name}`}
           className="w-full rounded-2xl object-cover"
         />

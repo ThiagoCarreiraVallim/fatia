@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Dumbbell, Salad } from 'lucide-react';
+import { BookOpen, Check, Dumbbell, Salad } from 'lucide-react';
 import {
   adoptResultMessage,
   ApiError,
+  authorWithRole,
   groupContentApi,
   nutritionApi,
   nutritionDiff,
@@ -32,14 +33,17 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Um plano pronto da comunidade, antes de adopt. Treino vira plano seu num
- * toque; nutrição pergunta o que entra — as metas só mudam se você marcar.
+ * Um plano pronto da comunidade, antes de adotar (Cm-13/Cm-14, #396). Treino
+ * vira plano seu num toque e a tela avisa que está em Meus planos, sem sair
+ * daqui; nutrição pergunta o que entra, com as metas de agora ao lado das do
+ * plano — e as de agora ficam no histórico se a pessoa trocar.
  */
 export default function CommunityTemplatePage() {
   const { groupId, templateId } = useParams<{ groupId: string; templateId: string }>();
-  const router = useRouter();
   const qc = useQueryClient();
   const [choosing, setChoosing] = useState(false);
+  // O plano que acabou de virar seu (ou o que o 409 diz que você já tinha).
+  const [adoptedNow, setAdoptedNow] = useState<string | null>(null);
 
   const template = useQuery({
     queryKey: communityKeys.plan(groupId, templateId),
@@ -56,7 +60,7 @@ export default function CommunityTemplatePage() {
       void qc.invalidateQueries({ queryKey: communityKeys.plans(groupId) });
       void qc.invalidateQueries({ queryKey: ['workout'] });
       void qc.invalidateQueries({ queryKey: ['nutrition'] });
-      if (r.planId) router.push(`/workout/plans/${r.planId}`);
+      if (r.planId) setAdoptedNow(r.planId);
     },
     onError: (err) => {
       const planId =
@@ -64,14 +68,13 @@ export default function CommunityTemplatePage() {
           ? (err.body as { planId?: string } | undefined)?.planId
           : undefined;
       if (planId) {
-        toast('Você já adotou este plano.');
-        router.push(`/workout/plans/${planId}`);
+        setAdoptedNow(planId);
         return;
       }
       toast(
         err instanceof ApiError && err.status < 500 && err.message
           ? err.message
-          : 'Não deu para adopt agora.',
+          : 'Não deu para adotar agora.',
       );
     },
   });
@@ -89,6 +92,7 @@ export default function CommunityTemplatePage() {
   }
   const t = template.data;
   const KindIcon = t.kind === 'WORKOUT' ? Dumbbell : Salad;
+  const meuPlano = adoptedNow ?? t.adoptedPlanId;
 
   return (
     <div className="space-y-4 p-4">
@@ -102,17 +106,38 @@ export default function CommunityTemplatePage() {
           {planTemplateSummary(t)}
         </p>
         <h2 className="text-lg font-semibold">{t.title}</h2>
-        <p className="text-xs text-muted-foreground">Por {t.authorName}</p>
+        <p className="text-xs text-muted-foreground">
+          Por {authorWithRole(t.authorName, t.authorRole)}
+        </p>
       </header>
       {t.description && <p className="whitespace-pre-line text-sm">{t.description}</p>}
 
       {/* A ação principal logo depois da descrição, como no app, e não presa
           ao pé da tela por cima de uma lista que podia passar de uma página. */}
-      {t.adoptedPlanId ? (
+      {adoptedNow ? (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-2xl bg-primary/10 p-3 text-sm"
+        >
+          <Check className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Em Meus planos</span>
+            <span className="block text-xs text-muted-foreground">
+              A cópia é sua: muda só quando você mudar.
+            </span>
+          </span>
+          <Link
+            href={`/workout/plans/${adoptedNow}`}
+            className={buttonVariants({ size: 'sm', variant: 'outline' })}
+          >
+            Abrir
+          </Link>
+        </div>
+      ) : meuPlano ? (
         <section aria-label="Plano adotado" className="space-y-2">
           <p className="text-sm">Você já adotou este plano.</p>
           <Link
-            href={`/workout/plans/${t.adoptedPlanId}`}
+            href={`/workout/plans/${meuPlano}`}
             className={buttonVariants({ className: 'w-full sm:w-auto' })}
           >
             Abrir meu plano
@@ -133,7 +158,11 @@ export default function CommunityTemplatePage() {
         </div>
       )}
 
-      {t.kind === 'WORKOUT' ? <WorkoutPreview t={t} /> : <NutritionPreview t={t} />}
+      {t.kind === 'WORKOUT' ? (
+        <WorkoutPreview t={t} groupId={groupId} />
+      ) : (
+        <NutritionPreview t={t} />
+      )}
 
       {t.kind === 'NUTRITION' && (
         <AdoptNutritionDialog
@@ -148,7 +177,7 @@ export default function CommunityTemplatePage() {
   );
 }
 
-function WorkoutPreview({ t }: { t: PlanTemplate }) {
+function WorkoutPreview({ t, groupId }: { t: PlanTemplate; groupId: string }) {
   return (
     <section aria-labelledby="exercicios" className="space-y-2">
       <h3 id="exercicios" className="text-sm font-semibold">
@@ -156,9 +185,21 @@ function WorkoutPreview({ t }: { t: PlanTemplate }) {
       </h3>
       <ol className="divide-y rounded-2xl border border-subtle bg-card text-sm">
         {t.exercises.map((e, i) => (
-          <li key={i} className="flex justify-between gap-3 px-4 py-3">
+          <li key={i} className="flex items-center justify-between gap-3 px-4 py-3">
             <span className="min-w-0 truncate">{`${i + 1}. ${e.name}`}</span>
-            <span className="shrink-0 text-muted-foreground">{`${e.targetSets} × ${e.targetReps || '—'}`}</span>
+            <span className="flex shrink-0 items-center gap-2">
+              {e.hasGuide && e.exerciseId !== null && (
+                <Link
+                  href={`/community/${groupId}/content/exercises/${e.exerciseId}`}
+                  aria-label={`Guia da academia: ${e.name}`}
+                  className="flex min-h-8 items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                  guia
+                </Link>
+              )}
+              <span className="text-muted-foreground">{`${e.targetSets} × ${e.targetReps || '—'}`}</span>
+            </span>
           </li>
         ))}
       </ol>
@@ -283,6 +324,11 @@ function AdoptNutritionDialog({
                     ))}
                   </tbody>
                 </table>
+                {metas && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Suas metas de agora ficam no histórico.
+                  </span>
+                )}
               </span>
             </CheckableRow>
           )}

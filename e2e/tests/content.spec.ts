@@ -119,16 +119,27 @@ test.describe('planos prontos e dicas', () => {
         .click();
       await page.waitForURL(/\/community\/[0-9a-f-]{36}\/content$/);
 
+      // A lista mostra o começo; a dica inteira (texto e imagem) abre na própria tela (#396).
       await page.goto(`/community/${id}/content?tab=tips`);
-      const artigo = page.getByRole('article').filter({ hasText: titulo });
-      await expect(artigo.locator('strong')).toHaveText('5 minutos');
+      await page.getByRole('link', { name: new RegExp(titulo) }).click();
+      await page.waitForURL(/\/content\/tips\/[0-9a-f-]{36}$/);
+      await expect(page.getByRole('heading', { name: titulo })).toBeVisible();
+      await expect(page.locator('main strong')).toHaveText('5 minutos');
       await expect
-        .poll(() => artigo.locator('img').evaluate((el: HTMLImageElement) => el.naturalWidth))
+        .poll(() =>
+          page
+            .locator('main img')
+            .first()
+            .evaluate((el: HTMLImageElement) => el.naturalWidth),
+        )
         .toBeGreaterThan(0);
 
       await page.goto(`/community/${id}/content`);
       await page.getByRole('link', { name: DRAFT }).click();
       await page.getByRole('button', { name: 'Adotar plano' }).click();
+      // Adotar avisa que está em Meus planos, sem sair da tela (#396).
+      const aviso = page.getByRole('status').filter({ hasText: 'Em Meus planos' });
+      await aviso.getByRole('link', { name: 'Abrir' }).click();
       await page.waitForURL(/\/workout\/plans\/[0-9a-f-]{36}$/);
       planoAdotado = page.url().split('/').pop()!;
       await expect(page.getByText('Rosca Scott')).toBeVisible();

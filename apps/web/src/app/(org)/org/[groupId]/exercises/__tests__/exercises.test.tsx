@@ -74,6 +74,7 @@ const item = (p: Partial<GroupExercise> = {}): GroupExercise => ({
   photos: [],
   tips: null,
   authorName: 'Helena',
+  authorRole: 'PROFESSIONAL',
   updatedAt: '2026-10-17T00:00:00Z',
   canEdit: true,
   ...p,

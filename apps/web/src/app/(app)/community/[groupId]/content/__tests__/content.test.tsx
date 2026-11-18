@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -61,11 +61,21 @@ const modelo = (p: Partial<PlanTemplate> = {}): PlanTemplate => ({
   level: 'beginner',
   cover: null,
   authorName: 'Helena',
+  authorRole: 'PROFESSIONAL',
   publishedAt: '2026-10-10T00:00:00Z',
   updatedAt: '2026-10-10T00:00:00Z',
   exercises: [
-    { name: 'Supino', muscleGroup: 'peito', targetSets: 3, targetReps: '10' },
     {
+      exerciseId: 1,
+      hasGuide: false,
+      name: 'Supino',
+      muscleGroup: 'peito',
+      targetSets: 3,
+      targetReps: '10',
+    },
+    {
+      exerciseId: 77,
+      hasGuide: true,
       name: 'Remada no aparelho da casa',
       muscleGroup: 'costas',
       targetSets: 4,
@@ -81,7 +91,18 @@ const modelo = (p: Partial<PlanTemplate> = {}): PlanTemplate => ({
 describe('comunidade › plano pronto', () => {
   afterEach(() => vi.clearAllMocks());
 
-  it('adotar um treino leva ao plano copiado', async () => {
+  it('mostra quem fez com o papel, e o exercício com guia abre o guia da academia', async () => {
+    vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
+    renderWithClient(<CommunityTemplatePage />);
+    expect(await screen.findByText('Por Helena (profissional)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Guia da academia: Remada/ })).toHaveAttribute(
+      'href',
+      '/community/g1/content/exercises/77',
+    );
+    expect(screen.queryByRole('link', { name: /Guia da academia: Supino/ })).toBeNull();
+  });
+
+  it('adotar um treino avisa que está em Meus planos, sem sair da tela', async () => {
     vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
     vi.mocked(groupContentApi.adopt).mockResolvedValue({
       kind: 'WORKOUT',
@@ -89,11 +110,19 @@ describe('comunidade › plano pronto', () => {
       goalsApplied: false,
       mealsSaved: 0,
       mealsAlreadySaved: false,
+      previousGoals: null,
     });
     renderWithClient(<CommunityTemplatePage />);
     expect(await screen.findByText('2. Remada no aparelho da casa')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Adotar plano' }));
-    await waitFor(() => expect(ctx.router.push).toHaveBeenCalledWith('/workout/plans/meu'));
+    const banner = await screen.findByRole('status');
+    expect(within(banner).getByText('Em Meus planos')).toBeInTheDocument();
+    expect(within(banner).getByRole('link', { name: 'Abrir' })).toHaveAttribute(
+      'href',
+      '/workout/plans/meu',
+    );
+    expect(ctx.router.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Adotar plano' })).toBeNull();
     expect(groupContentApi.adopt).toHaveBeenCalledWith('g1', 't1', {});
   });
 
@@ -116,14 +145,18 @@ describe('comunidade › plano pronto', () => {
     expect(screen.queryByRole('button', { name: 'Adotar plano' })).toBeNull();
   });
 
-  it('se já adotou, a API responde 409 com o plano e a tela abre o que a pessoa tem', async () => {
+  it('se já adotou, a API responde 409 com o plano e a tela aponta o que a pessoa tem', async () => {
     vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
     vi.mocked(groupContentApi.adopt).mockRejectedValue(
       new ApiError('Você já adotou este plano.', 409, { planId: 'antigo' }),
     );
     renderWithClient(<CommunityTemplatePage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Adotar plano' }));
-    await waitFor(() => expect(ctx.router.push).toHaveBeenCalledWith('/workout/plans/antigo'));
+    const banner = await screen.findByRole('status');
+    expect(within(banner).getByRole('link', { name: 'Abrir' })).toHaveAttribute(
+      'href',
+      '/workout/plans/antigo',
+    );
   });
 
   it('nutrição: as metas só mudam se a pessoa marcar, e a tela mostra a diferença antes', async () => {
@@ -169,6 +202,7 @@ describe('comunidade › plano pronto', () => {
       goalsApplied: false,
       mealsSaved: 1,
       mealsAlreadySaved: false,
+      previousGoals: null,
     });
     renderWithClient(<CommunityTemplatePage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Adotar plano' }));
@@ -176,6 +210,11 @@ describe('comunidade › plano pronto', () => {
     expect(await screen.findByText('2500–2800 kcal')).toBeInTheDocument();
     const trocar = screen.getByRole('checkbox', { name: /Trocar minhas metas/ });
     expect(trocar).not.toBeChecked();
+    // Marcar a troca avisa que as metas de agora não se perdem.
+    expect(screen.queryByText('Suas metas de agora ficam no histórico.')).toBeNull();
+    fireEvent.click(trocar);
+    expect(screen.getByText('Suas metas de agora ficam no histórico.')).toBeInTheDocument();
+    fireEvent.click(trocar);
     fireEvent.click(screen.getByRole('button', { name: 'Adotar' }));
     await waitFor(() =>
       expect(groupContentApi.adopt).toHaveBeenCalledWith('g1', 't1', {
