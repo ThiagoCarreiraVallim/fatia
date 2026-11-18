@@ -23,6 +23,8 @@ import {
   type ChallengeInput,
 } from '../challenge.service';
 import { GroupService } from '../group.service';
+import { GetChallengeLeaderboardTool } from '../mcp/get-challenge-leaderboard.tool';
+import { WaterLogService } from '../../progress/water-log.service';
 import { MembershipService } from '../membership.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 
@@ -154,6 +156,8 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
         startedAt: inicio,
         completedAt: fim,
         createdAt: gravadoDepois ? new Date(fim.getTime() + 30 * 60_000) : inicio,
+        // Lançado depois: o servidor fechou na hora em que gravou.
+        serverCompletedAt: gravadoDepois ? new Date(fim.getTime() + 30 * 60_000) : fim,
       },
     });
   }
@@ -500,8 +504,17 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
       await velho(a.id);
       const dela = await challenges.get(a.membro, a.groupId, a.id);
       expect(dela.me).toMatchObject({ score: 0, pendingReview: 1 });
-      // Quem foi sinalizado não sabe quem sinalizou.
-      expect(JSON.stringify(dela)).not.toContain('Bia\\",\\"isMe\\":false,\\"canFlag');
+      // Quem foi sinalizado não sabe quem sinalizou: a linha dela não cita ninguém, e
+      // nada na resposta leva o id de quem sinalizou ou o vínculo dele com a sinalização.
+      const minha = dela.activity.find((i) => i.id === a.checkinId)!;
+      expect(minha).toMatchObject({ status: 'review', reason: 'Sinalizado por 1 participante' });
+      expect(JSON.stringify(minha)).not.toContain('Bia');
+      const membershipDaBia = await prisma.groupMembership.findFirstOrThrow({
+        where: { groupId: a.groupId, userId: a.outro },
+      });
+      for (const segredo of [a.outro, membershipDaBia.id]) {
+        expect(JSON.stringify(dela)).not.toContain(segredo);
+      }
 
       // A fila é da equipe: o membro não abre.
       await expect(checkins.queue(a.outro, a.groupId)).rejects.toBeInstanceOf(ForbiddenException);
@@ -590,9 +603,15 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
           status: 'FLAGGED' as const,
         })),
       });
-      await expect(checkins.flag(terceiro, a.groupId, a.id, a.checkinId)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      // Resposta neutra (#395 M3): quem sinaliza não descobre que a fila encheu. O
+      // check-in segue valendo e a sinalização fica guardada.
+      await expect(checkins.flag(terceiro, a.groupId, a.id, a.checkinId)).resolves.toEqual({
+        flagged: true,
+      });
+      const segue = await prisma.challengeCheckin.findUniqueOrThrow({
+        where: { id: a.checkinId },
+      });
+      expect(segue.status).toBe('VALID');
     });
 
     it('o check-in de outro desafio não se resolve pela URL deste', async () => {
@@ -747,6 +766,384 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
       await expect(challenges.myProgress(a.membro, b.groupId)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('correções da revisão adversarial', () => {
+    async function desafioDeFoto(input: Partial<ChallengeInput> = {}) {
+      const a = await comunidade();
+      const id = await emAndamento(a.groupId, a.dono, { kind: 'PHOTO', ...input });
+      await challenges.join(a.membro, a.groupId, id, 'Ana', { acceptPhotoTerms: true });
+      return { ...a, id };
+    }
+    const virada = () => dayBoundsInTz(hoje(), SP).start;
+    /** Um treino gravado e fechado pelo servidor nos instantes dados. */
+    const treinoEm = (userId: string, criado: Date, fim: Date, inicio = criado) =>
+      prisma.workoutSession.create({
+        data: {
+          userId,
+          planName: 'Push',
+          fromPlan: true,
+          startedAt: inicio,
+          completedAt: fim,
+          createdAt: criado,
+          serverCompletedAt: fim,
+        },
+      });
+
+    it('B2: o mesmo treino não vale dois dias (23h10 e 00h10)', async () => {
+      const a = await desafioDeFoto();
+      const t = await treinoEm(
+        a.membro,
+        new Date(virada().getTime() - 2 * 3600_000),
+        new Date(virada().getTime() - 3600_000),
+      );
+      const as2310 = new Date(virada().getTime() - 50 * 60_000);
+      const as0010 = new Date(virada().getTime() + 10 * 60_000);
+      await checkins.create(
+        a.membro,
+        a.groupId,
+        a.id,
+        { photoFileId: await foto(a.membro, a.groupId) },
+        as2310,
+      );
+      expect(await checkins.eligibility(a.membro, a.groupId, a.id, t.id, as0010)).toMatchObject({
+        eligible: false,
+        reason: 'workout_used',
+      });
+      await expect(
+        checkins.create(
+          a.membro,
+          a.groupId,
+          a.id,
+          { photoFileId: await foto(a.membro, a.groupId), workoutSessionId: t.id },
+          as0010,
+        ),
+      ).rejects.toMatchObject({ response: { code: 'workout_used' } });
+    });
+
+    it('B2: o dia do check-in é o do fuso do desafio, não o da pessoa', async () => {
+      const a = await desafioDeFoto();
+      await prisma.user.update({ where: { id: a.membro }, data: { timezone: 'Asia/Tokyo' } });
+      // Ontem às 13h30 em SP: em Tóquio já é hoje, 01h30.
+      const ontem = addDaysIso(hoje(), -1);
+      const agora = new Date(dayBoundsInTz(ontem, SP).start.getTime() + 13.5 * 3600_000);
+      await treinoEm(
+        a.membro,
+        new Date(agora.getTime() - 60 * 60_000),
+        new Date(agora.getTime() - 10 * 60_000),
+      );
+      await checkins.create(
+        a.membro,
+        a.groupId,
+        a.id,
+        { photoFileId: await foto(a.membro, a.groupId) },
+        agora,
+      );
+      const c = await prisma.challengeCheckin.findFirstOrThrow({
+        where: { participant: { challengeId: a.id } },
+      });
+      expect(c.date).toBe(ontem);
+    });
+
+    it('B3/I7: sem medalha antes do resultado, nem no ranking nem no MCP; o MCP não leva a atividade', async () => {
+      const a = await desafioDeFoto();
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, a.id, 'Bia', { acceptPhotoTerms: true });
+      await treino(a.membro);
+      const r = await checkins.create(a.membro, a.groupId, a.id, {
+        photoFileId: await foto(a.membro, a.groupId),
+      });
+      await checkins.flag(outro, a.groupId, a.id, r.activity.find((i) => i.isMe)!.id);
+      await treino(outro);
+      await checkins.create(outro, a.groupId, a.id, { photoFileId: await foto(outro, a.groupId) });
+      await challenges.end(a.dono, a.groupId, a.id);
+
+      const esperando = await challenges.get(a.membro, a.groupId, a.id);
+      expect(esperando).toMatchObject({ status: 'ended', resultPending: true });
+      expect(esperando.leaderboard!.map((l) => l.medal)).toEqual([null, null]);
+
+      const tool = new GetChallengeLeaderboardTool(challenges);
+      const pelaIa = (await tool.execute({ groupId: a.groupId, challengeId: a.id }, {
+        userId: outro,
+      } as never)) as unknown as Record<string, unknown> & {
+        leaderboard: Array<{ medal: unknown }>;
+      };
+      expect(pelaIa.leaderboard.map((l) => l.medal)).toEqual([null, null]);
+      expect(pelaIa).not.toHaveProperty('activity');
+      expect(JSON.stringify(pelaIa)).not.toMatch(/photoUrl|"at":/);
+    });
+
+    it('I1: quem revisa não decide o próprio check-in, e ele nem aparece na fila dele', async () => {
+      const a = await desafioDeFoto();
+      await challenges.join(a.prof, a.groupId, a.id, 'Prof', { acceptPhotoTerms: true });
+      await treino(a.prof);
+      const r = await checkins.create(a.prof, a.groupId, a.id, {
+        photoFileId: await foto(a.prof, a.groupId),
+      });
+      const id = r.activity.find((i) => i.isMe)!.id;
+      await checkins.flag(a.membro, a.groupId, a.id, id);
+
+      expect((await checkins.queue(a.prof, a.groupId)).items).toEqual([]);
+      await expect(
+        checkins.resolve(a.prof, a.groupId, a.id, id, { decision: 'valid' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect((await checkins.queue(a.dono, a.groupId)).items.map((i) => i.id)).toEqual([id]);
+      await checkins.resolve(a.dono, a.groupId, a.id, id, { decision: 'valid' });
+    });
+
+    it('I2: o "Vale" da equipe se mantém quando o servidor reconfere o treino', async () => {
+      const a = await desafioDeFoto();
+      const t = await treino(a.membro);
+      const r = await checkins.create(a.membro, a.groupId, a.id, {
+        photoFileId: await foto(a.membro, a.groupId),
+      });
+      const id = r.activity.find((i) => i.isMe)!.id;
+      await prisma.workoutSession.update({
+        where: { id: t.id },
+        data: { notes: 'séries a mais', startedAt: new Date(t.startedAt.getTime() - 60_000) },
+      });
+      await velho(a.id);
+      expect((await challenges.get(a.membro, a.groupId, a.id)).me).toMatchObject({ score: 0 });
+
+      await checkins.resolve(a.dono, a.groupId, a.id, id, { decision: 'valid' });
+      await velho(a.id);
+      const depois = await challenges.get(a.membro, a.groupId, a.id);
+      expect(depois.me).toMatchObject({ score: 1, pendingReview: 0 });
+      expect((await prisma.challengeCheckin.findUniqueOrThrow({ where: { id } })).status).toBe(
+        'VALID',
+      );
+    });
+
+    it('I3: a duração vale pelo relógio do servidor, e o fim reescrito não libera', async () => {
+      const a = await desafioDeFoto();
+      // O servidor viu 10 min de treino; o cliente diz que começou 50 min antes.
+      const fim = new Date(Date.now() - 5 * 60_000);
+      await treinoEm(
+        a.membro,
+        new Date(fim.getTime() - 10 * 60_000),
+        fim,
+        new Date(fim.getTime() - 60 * 60_000),
+      );
+      expect(await checkins.eligibility(a.membro, a.groupId, a.id)).toMatchObject({
+        eligible: false,
+        reason: 'too_short',
+        workout: { minutes: 10 },
+      });
+
+      await prisma.workoutSession.deleteMany({ where: { userId: a.membro } });
+      // 52 min de servidor, mas o `completedAt` foi reescrito para 30 min depois.
+      const t = await treinoEm(a.membro, new Date(fim.getTime() - 52 * 60_000), fim);
+      await prisma.workoutSession.update({
+        where: { id: t.id },
+        data: { completedAt: new Date(fim.getTime() - 30 * 60_000) },
+      });
+      expect(await checkins.eligibility(a.membro, a.groupId, a.id)).toMatchObject({
+        eligible: false,
+        reason: 'late_logged',
+      });
+    });
+
+    it('I4: a água editada depois do prazo do dia não conta no desafio', async () => {
+      const a = await comunidade();
+      const id = await emAndamento(a.groupId, a.dono, { kind: 'WATER', waterGoalMl: 2000 });
+      await challenges.join(a.membro, a.groupId, id, 'Ana');
+      const ontem = addDaysIso(hoje(), -1);
+      const log = await prisma.waterLog.create({
+        data: {
+          userId: a.membro,
+          date: ontem,
+          ml: 500,
+          loggedAt: new Date(dayBoundsInTz(ontem, SP).start.getTime() + 12 * 3600_000),
+        },
+      });
+      // Hoje, bem depois do prazo de ontem, a pessoa edita o registro para a meta.
+      await new WaterLogService(prisma).update(log.id, { ml: 2500 }, a.membro, SP);
+      expect(
+        (await prisma.waterLog.findUniqueOrThrow({ where: { id: log.id } })).editedAt,
+      ).not.toBeNull();
+      await velho(id);
+      expect((await challenges.get(a.membro, a.groupId, id)).me).toMatchObject({ score: 0 });
+    });
+
+    it('I5: só se sinaliza com o desafio em andamento', async () => {
+      const a = await desafioDeFoto();
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, a.id, 'Bia', { acceptPhotoTerms: true });
+      await treino(a.membro);
+      const r = await checkins.create(a.membro, a.groupId, a.id, {
+        photoFileId: await foto(a.membro, a.groupId),
+      });
+      await challenges.end(a.dono, a.groupId, a.id);
+      await expect(
+        checkins.flag(outro, a.groupId, a.id, r.activity.find((i) => i.isMe)!.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('I6: com a fila cheia de sinalizações, o detector ainda entra e o dia não conta', async () => {
+      const a = await comunidade();
+      const id = await emAndamento(a.groupId, a.dono, { kind: 'STEPS', stepsGoal: 10_000 });
+      await challenges.join(a.membro, a.groupId, id, 'Ana');
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, id, 'Bia');
+      const p = await prisma.groupChallengeParticipant.findFirstOrThrow({
+        where: { challengeId: id, displayName: 'Bia' },
+      });
+      await prisma.challengeCheckin.createMany({
+        data: Array.from({ length: REVIEW_QUEUE_MAX }, (_, i) => ({
+          participantId: p.id,
+          type: 'PHOTO' as const,
+          date: addDaysIso('2000-01-01', i),
+          status: 'FLAGGED' as const,
+          flagSource: 'MEMBER' as const,
+        })),
+      });
+      const meioDia = (min: number) =>
+        new Date(dayBoundsInTz(hoje(), SP).start.getTime() + (12 * 60 + min) * 60_000);
+      await prisma.stepLog.createMany({
+        data: [
+          { userId: a.membro, date: hoje(), steps: 1_000, source: 'GARMIN', loggedAt: meioDia(0) },
+          {
+            userId: a.membro,
+            date: hoje(),
+            steps: 15_000,
+            source: 'GARMIN',
+            loggedAt: meioDia(10),
+          },
+        ],
+      });
+      const r = await challenges.get(a.membro, a.groupId, id);
+      expect(r.me).toMatchObject({ score: 0, pendingReview: 1 });
+    });
+
+    it('M1: duas decisões ao mesmo tempo, só uma vale', async () => {
+      const a = await desafioDeFoto();
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, a.id, 'Bia', { acceptPhotoTerms: true });
+      await treino(a.membro);
+      const r = await checkins.create(a.membro, a.groupId, a.id, {
+        photoFileId: await foto(a.membro, a.groupId),
+      });
+      const id = r.activity.find((i) => i.isMe)!.id;
+      await checkins.flag(outro, a.groupId, a.id, id);
+      const [x, y] = await Promise.allSettled([
+        checkins.resolve(a.dono, a.groupId, a.id, id, { decision: 'valid' }),
+        checkins.resolve(a.prof, a.groupId, a.id, id, {
+          decision: 'void',
+          reason: 'Foto do corpo',
+        }),
+      ]);
+      expect([x.status, y.status].sort()).toEqual(['fulfilled', 'rejected']);
+      const rejeitado = [x, y].find((v) => v.status === 'rejected') as PromiseRejectedResult;
+      expect(rejeitado.reason).toBeInstanceOf(ConflictException);
+    });
+
+    it('M2: as sinalizações em paralelo respeitam o limite de 3', async () => {
+      const a = await desafioDeFoto();
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, a.id, 'Bia', { acceptPhotoTerms: true });
+      const p = await prisma.groupChallengeParticipant.findFirstOrThrow({
+        where: { challengeId: a.id, displayName: 'Ana' },
+      });
+      const ids: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const c = await prisma.challengeCheckin.create({
+          data: { participantId: p.id, type: 'PHOTO', date: addDaysIso(hoje(), -(i + 1)) },
+        });
+        ids.push(c.id);
+      }
+      await Promise.allSettled(ids.map((id) => checkins.flag(outro, a.groupId, a.id, id)));
+      const membership = await prisma.groupMembership.findFirstOrThrow({
+        where: { groupId: a.groupId, userId: outro },
+      });
+      expect(
+        await prisma.challengeCheckinFlag.count({ where: { membershipId: membership.id } }),
+      ).toBe(MEMBER_FLAGS_PER_DAY);
+    });
+
+    it('M3: sinalizar check-in anulado responde igual, sem dizer que foi anulado', async () => {
+      const a = await desafioDeFoto();
+      const outro = await entra(a.groupId, 'MEMBER');
+      await challenges.join(outro, a.groupId, a.id, 'Bia', { acceptPhotoTerms: true });
+      const p = await prisma.groupChallengeParticipant.findFirstOrThrow({
+        where: { challengeId: a.id, displayName: 'Ana' },
+      });
+      const c = await prisma.challengeCheckin.create({
+        data: { participantId: p.id, type: 'PHOTO', date: hoje(), status: 'VOIDED' },
+      });
+      await expect(checkins.flag(outro, a.groupId, a.id, c.id)).resolves.toEqual({
+        flagged: true,
+      });
+    });
+
+    it('M4: a foto tirada antes de o treino começar não vale', async () => {
+      const a = await desafioDeFoto();
+      const t = await treino(a.membro);
+      const f = await foto(a.membro, a.groupId);
+      await prisma.mediaFile.update({
+        where: { id: f },
+        data: { createdAt: new Date(t.createdAt.getTime() - 5 * 60_000) },
+      });
+      await expect(
+        checkins.create(a.membro, a.groupId, a.id, { photoFileId: f }),
+      ).rejects.toMatchObject({ response: { code: 'photo_before_workout' } });
+    });
+
+    it('M5: a fila da comunidade pagina, sem esconder o que passa do 50º', async () => {
+      const a = await desafioDeFoto();
+      const p = await prisma.groupChallengeParticipant.findFirstOrThrow({
+        where: { challengeId: a.id },
+      });
+      await prisma.challengeCheckin.createMany({
+        data: Array.from({ length: REVIEW_QUEUE_MAX + 5 }, (_, i) => ({
+          participantId: p.id,
+          type: 'PHOTO' as const,
+          date: addDaysIso('2000-01-01', i),
+          status: 'FLAGGED' as const,
+          flagSource: 'SYSTEM' as const,
+          flaggedAt: new Date(Date.now() - (100 - i) * 60_000),
+        })),
+      });
+      const primeira = await checkins.queue(a.dono, a.groupId);
+      expect(primeira.items).toHaveLength(REVIEW_QUEUE_MAX);
+      expect(primeira.open).toBe(REVIEW_QUEUE_MAX + 5);
+      expect(primeira.nextCursor).toBeTruthy();
+      const segunda = await checkins.queue(a.dono, a.groupId, undefined, primeira.nextCursor!);
+      expect(segunda.items).toHaveLength(5);
+      expect(segunda.nextCursor).toBeNull();
+      const todos = new Set([...primeira.items, ...segunda.items].map((i) => i.id));
+      expect(todos.size).toBe(REVIEW_QUEUE_MAX + 5);
+    });
+
+    it('M6: na atividade de outra pessoa vem só o dia, sem o horário', async () => {
+      const a = await desafioDeFoto();
+      await treino(a.membro);
+      await checkins.create(a.membro, a.groupId, a.id, {
+        photoFileId: await foto(a.membro, a.groupId),
+      });
+      const visitante = await challenges.get(a.prof, a.groupId, a.id);
+      expect(visitante.activity.length).toBeGreaterThan(0);
+      expect(visitante.activity.every((i) => i.at === null)).toBe(true);
+      const dela = await challenges.get(a.membro, a.groupId, a.id);
+      expect(dela.activity.find((i) => i.isMe)!.at).toBeTruthy();
+    });
+
+    it('M8: o desafio antigo de água somada ainda se edita antes de começar', async () => {
+      const a = await comunidade();
+      const c = await challenges.create(a.dono, a.groupId, {
+        title: 'Antigo',
+        startDate: addDaysIso(hoje(), 2),
+        endDate: addDaysIso(hoje(), 9),
+        metric: 'ACTIVE_DAYS',
+      });
+      await prisma.groupChallenge.update({ where: { id: c.id }, data: { metric: 'WATER_ML' } });
+      const r = await challenges.update(a.dono, a.groupId, c.id, {
+        title: 'Antigo, renomeado',
+        startDate: addDaysIso(hoje(), 3),
+        endDate: addDaysIso(hoje(), 9),
+        metric: 'WATER_ML',
+      });
+      expect(r).toMatchObject({ title: 'Antigo, renomeado', kind: 'METRIC', metric: 'WATER_ML' });
     });
   });
 });

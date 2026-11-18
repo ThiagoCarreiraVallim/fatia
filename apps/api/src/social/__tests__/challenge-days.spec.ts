@@ -132,4 +132,61 @@ describe('dias e pontos dos desafios do redesign (#395)', () => {
       for (const motivo of r.suspicious.values()) expect(motivo).not.toMatch(/\d/);
     });
   });
+
+  describe('edição depois do prazo (#395 I4)', () => {
+    it('o registro editado depois do prazo do dia não conta, nem na água nem nos passos', () => {
+      const agua: WaterEntry[] = [
+        {
+          date: '2026-11-02',
+          ml: 2600,
+          loggedAt: at('2026-11-02T15:00:00Z'),
+          // Editado no dia 05: depois do prazo do dia 02.
+          editedAt: at('2026-11-05T15:00:00Z'),
+        },
+      ];
+      expect(waterDays(agua, { goal: 2500, cap: 4000, timezone: SP }).met.size).toBe(0);
+      const passos: StepEntry[] = [
+        {
+          date: '2026-11-02',
+          steps: 12_000,
+          source: 'GARMIN',
+          loggedAt: at('2026-11-02T20:00Z'),
+          editedAt: at('2026-11-04T20:00Z'),
+        },
+      ];
+      expect(stepDays(passos, { goal: 10_000, allowed: [], timezone: SP }).met.size).toBe(0);
+    });
+
+    it('a rajada de água e o salto de passos olham a hora da edição', () => {
+      // Lançado de tarde com pouco e editado para a meta às 23:40 de SP, em 3 dias.
+      const editado = (d: string): WaterEntry => ({
+        date: d,
+        ml: 2500,
+        loggedAt: new Date(`${d}T15:00:00Z`),
+        editedAt: new Date(new Date(`${d}T02:40:00Z`).getTime() + 86_400_000),
+      });
+      const r = waterDays([editado('2026-11-02'), editado('2026-11-03'), editado('2026-11-04')], {
+        goal: 2500,
+        cap: 4000,
+        timezone: SP,
+      });
+      expect(r.suspicious.size).toBe(3);
+
+      // Duas leituras longe uma da outra, mas a segunda editada 5 min depois da primeira.
+      const salto = stepDays(
+        [
+          { date: '2026-11-02', steps: 1_000, source: 'GARMIN', loggedAt: at('2026-11-02T12:00Z') },
+          {
+            date: '2026-11-02',
+            steps: 15_000,
+            source: 'GARMIN',
+            loggedAt: at('2026-11-02T08:00Z'),
+            editedAt: at('2026-11-02T12:05Z'),
+          },
+        ],
+        { goal: 10_000, allowed: [], timezone: SP },
+      );
+      expect(salto.suspicious.has('2026-11-02')).toBe(true);
+    });
+  });
 });

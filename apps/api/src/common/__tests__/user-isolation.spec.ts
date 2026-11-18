@@ -4343,7 +4343,13 @@ describe('isolamento entre usuários', () => {
       const fim = new Date(Date.now() - 5 * 60_000);
       const inicio = new Date(fim.getTime() - 50 * 60_000);
       return prisma.workoutSession.create({
-        data: { userId, startedAt: inicio, completedAt: fim, createdAt: inicio },
+        data: {
+          userId,
+          startedAt: inicio,
+          completedAt: fim,
+          createdAt: inicio,
+          serverCompletedAt: fim,
+        },
       });
     }
 

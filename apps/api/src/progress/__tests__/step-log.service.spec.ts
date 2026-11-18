@@ -129,7 +129,7 @@ describe('StepLogService', () => {
 
       expect(prisma.stepLog.update).toHaveBeenCalledWith({
         where: { id: 'log-1' },
-        data: { steps: 12000 },
+        data: { steps: 12000, editedAt: expect.any(Date) },
       });
       expect(result.steps).toBe(12000);
     });
