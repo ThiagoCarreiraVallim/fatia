@@ -51,6 +51,16 @@ export const orgKeys = {
   polls: (groupId: string) => ['community', 'org', groupId, 'moderation', 'polls'] as const,
   announcements: (groupId: string) =>
     ['community', 'org', groupId, 'moderation', 'announcements'] as const,
+  /** O painel base (#398): contadores do menu, visão geral e busca. */
+  panelCounts: (groupId: string) => ['community', 'org', groupId, 'panel', 'counts'] as const,
+  overview: (groupId: string, days: number) =>
+    ['community', 'org', groupId, 'panel', 'overview', days] as const,
+  panelSearch: (groupId: string, q: string) =>
+    ['community', 'org', groupId, 'panel', 'search', q] as const,
+  announcementSettings: (groupId: string) =>
+    ['community', 'org', groupId, 'moderation', 'announcements', 'settings'] as const,
+  announcementsRecent: (groupId: string) =>
+    ['community', 'org', groupId, 'moderation', 'announcements', 'recent'] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,
