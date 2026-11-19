@@ -100,43 +100,48 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  goals                  UserGoals?
+  goals                   UserGoals?
   /// As metas do dia anteriores a cada troca (#396). É dado da pessoa.
-  goalsHistory           UserGoalsHistory[]
-  authoredChallenges     GroupChallenge[]   @relation("ChallengeAuthor")
+  goalsHistory            UserGoalsHistory[]
+  authoredChallenges      GroupChallenge[]   @relation("ChallengeAuthor")
   /// Check-ins de desafio que a pessoa revisou como equipe (#395).
-  reviewedCheckins       ChallengeCheckin[] @relation("CheckinReviewer")
-  personalGoals          Goal[]
-  meals                  Meal[]
-  workoutPlans           WorkoutPlan[]
-  workoutSessions        WorkoutSession[]
-  workoutCheckins        WorkoutCheckin[]
-  weightLogs             WeightLog[]
-  stepLogs               StepLog[]
-  waterLogs              WaterLog[]
-  customFoods            Food[]             @relation("UserCustomFoods")
-  favoriteFoods          FavoriteFood[]
-  foodPortions           FoodPortion[]
-  mealTemplates          MealTemplate[]
-  customExercises        Exercise[]         @relation("UserCustomExercises")
-  favoriteExercises      FavoriteExercise[]
-  nutrientTargets        NutrientTarget[]
-  achievements           UserAchievement[]
-  trainingBlocks         TrainingBlock[]
+  reviewedCheckins        ChallengeCheckin[] @relation("CheckinReviewer")
+  personalGoals           Goal[]
+  meals                   Meal[]
+  workoutPlans            WorkoutPlan[]
+  workoutSessions         WorkoutSession[]
+  workoutCheckins         WorkoutCheckin[]
+  weightLogs              WeightLog[]
+  stepLogs                StepLog[]
+  waterLogs               WaterLog[]
+  customFoods             Food[]             @relation("UserCustomFoods")
+  favoriteFoods           FavoriteFood[]
+  foodPortions            FoodPortion[]
+  mealTemplates           MealTemplate[]
+  customExercises         Exercise[]         @relation("UserCustomExercises")
+  favoriteExercises       FavoriteExercise[]
+  nutrientTargets         NutrientTarget[]
+  achievements            UserAchievement[]
+  trainingBlocks          TrainingBlock[]
   /// Planos de treino que a equipe mandou para a pessoa (#379). É dado dela.
-  planOffers             PlanOffer[]        @relation("PlanOfferSubject")
+  planOffers              PlanOffer[]        @relation("PlanOfferSubject")
   /// Ofertas que a pessoa, como profissional, mandou para alunos (#379).
-  planOffersAuthored     PlanOffer[]        @relation("PlanOfferAuthor")
+  planOffersAuthored      PlanOffer[]        @relation("PlanOfferAuthor")
   /// A agenda de treinos (#379): as sessões dos planos de calendário.
-  plannedSessions        PlannedSession[]
+  plannedSessions         PlannedSession[]
   /// Plano alimentar que a equipe mandou para a pessoa (#376). É dado dela.
-  nutritionPlans         NutritionPlan[]    @relation("NutritionPlanSubject")
+  nutritionPlans          NutritionPlan[]    @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
-  nutritionPlansAuthored NutritionPlan[]    @relation("NutritionPlanAuthor")
+  nutritionPlansAuthored  NutritionPlan[]    @relation("NutritionPlanAuthor")
   /// Anotações da equipe sobre a pessoa (#402). Ela vê, só leitura.
-  memberNotes            MemberNote[]       @relation("MemberNoteSubject")
+  memberNotes             MemberNote[]       @relation("MemberNoteSubject")
   /// Anotações que a pessoa, como equipe, escreveu sobre membros (#402).
-  memberNotesAuthored    MemberNote[]       @relation("MemberNoteAuthor")
+  memberNotesAuthored     MemberNote[]       @relation("MemberNoteAuthor")
+  /// O que a equipe já viu em "Para revisar" (#399): o de quem viu e o sobre quem é.
+  reviewSeen              ReviewSeen[]       @relation("ReviewSeenBy")
+  reviewSeenAbout         ReviewSeen[]       @relation("ReviewSeenSubject")
+  /// Reações e comentários que a pessoa deixou em treinos de alunos (#399).
+  sessionFeedbackAuthored SessionFeedback[]  @relation("SessionFeedbackAuthor")
 
   conversations   Conversation[]
   memories        UserMemory[]
@@ -1129,6 +1134,8 @@ model WorkoutSession {
   savedPlans        WorkoutPlan[]      @relation("PlanFromSession")
   /// Check-ins de desafio ligados a este treino (#395).
   challengeCheckins ChallengeCheckin[]
+  /// Reação e comentário da equipe nesta sessão (#399).
+  feedback          SessionFeedback[]
   // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
   // aberta por pessoa (#350). O Prisma não o descreve: está na migration
   // 20261026120000_one_open_workout_session.
@@ -1362,6 +1369,75 @@ model MemberNote {
 
   @@index([groupId, subjectUserId, createdAt])
   @@index([subjectUserId])
+  @@index([authorId])
+}
+
+/// O que entra na fila "Para revisar" do painel (#399).
+enum ReviewKind {
+  /// Treino concluído (precisa de Treino liberado para quem olha).
+  WORKOUT
+  /// Meta concluída (precisa de Metas liberado).
+  GOAL
+  /// Resposta a um plano que a equipe mandou (aceitou ou recusou).
+  PLAN_RESPONSE
+}
+
+/// "Visto" na fila "Para revisar" (#399): por pessoa da equipe e por item. O
+/// item é referido pelo id (`refId`: sessão, meta ou versão da oferta), sem FK,
+/// porque são três tabelas; some quando a pessoa sai da comunidade (os dois
+/// lados) ou apaga a conta.
+model ReviewSeen {
+  id            String     @id @default(uuid())
+  groupId       String
+  /// Quem viu: alguém da equipe.
+  userId        String
+  /// De quem é o item.
+  subjectUserId String
+  kind          ReviewKind
+  refId         String
+  seenAt        DateTime   @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User  @relation("ReviewSeenBy", fields: [userId], references: [id], onDelete: Cascade)
+  subject User  @relation("ReviewSeenSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId, kind, refId])
+  @@index([groupId, subjectUserId])
+  @@index([subjectUserId])
+}
+
+/// As reações da prancha Pn-35: 💪 🔥 👏 ❤️.
+enum SessionReaction {
+  STRONG
+  FIRE
+  CLAP
+  HEART
+}
+
+/// Reação e comentário curto da equipe num treino feito (#399, parte da #303).
+/// Vai do profissional para o aluno, e só: o aluno não responde no app (a
+/// conversa é pelo WhatsApp, ADR 048). Um por pessoa da equipe e sessão;
+/// mandar de novo substitui. A linha é do ALUNO: entra no export dele e some
+/// com a sessão, com a conta dele ou quando ele sai da comunidade.
+model SessionFeedback {
+  id        String           @id @default(uuid())
+  sessionId String
+  /// A comunidade em que a equipe comentou: sair dela apaga o comentário.
+  groupId   String
+  /// Nulo quando quem comentou apagou a conta: o comentário fica, sem o nome.
+  authorId  String?
+  reaction  SessionReaction?
+  /// Texto puro, até 500 caracteres (CHECK na migration).
+  body      String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  session WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  group   Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author  User?          @relation("SessionFeedbackAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, authorId])
+  @@index([groupId])
   @@index([authorId])
 }
 
@@ -1744,6 +1820,11 @@ model Group {
   /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
   /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
   requiredSharingScopes  ShareScope[]           @default([])
+  /// "Em risco" (#399): dias sem registrar que põem a pessoa na lista; o
+  /// dobro vira "sumiu". Entre 3 e 60 (CHECK na migration).
+  riskDays               Int                    @default(7)
+  reviewSeen             ReviewSeen[]
+  sessionFeedback        SessionFeedback[]
 
   @@index([ownerId])
   @@index([type])
@@ -1784,6 +1865,11 @@ model GroupMembership {
   /// entrada ou a página da comunidade. Nulo = entrou antes de existir o campo,
   /// ou é quem criou a comunidade.
   joinVia       JoinVia?
+  /// Aviso diário "N alunos precisam de atenção" (#399), da equipe. Opcional:
+  /// nasce desligado. Sem nomes no texto.
+  riskDigest    Boolean          @default(false)
+  /// O dia (YYYY-MM-DD, fuso da comunidade) do último aviso diário: um por dia.
+  riskDigestOn  String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -1856,7 +1942,7 @@ model ProfessionalLink {
 /// inclusive nas negativas — "tentou ver o que não podia" é o registro que mais
 /// importa.
 model ProfessionalAccessLog {
-  id             String     @id @default(uuid())
+  id             String      @id @default(uuid())
   /// Nulo quando não havia vínculo (negativa) ou quando o vínculo sumiu junto
   /// com a conta do profissional. A trilha do titular sobrevive aos dois casos.
   linkId         String?
@@ -1872,8 +1958,8 @@ model ProfessionalAccessLog {
   groupId        String?
   /// Vocabulário do produto: "list_workout_sessions", "get_student_progress".
   action         String
-  denied         Boolean    @default(false)
-  at             DateTime   @default(now())
+  denied         Boolean     @default(false)
+  at             DateTime    @default(now())
 
   link    ProfessionalLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
   subject User              @relation("AccessLogSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
