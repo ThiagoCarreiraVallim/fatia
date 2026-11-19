@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ShareScope } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
 import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
@@ -11,11 +16,14 @@ import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
 import { AccountService } from '../../users/account.service';
 import { ExerciseService } from '../../workout/exercise.service';
+import { AgendaService } from '../../workout/agenda.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { AccessAuditService } from '../access-audit.service';
+import { ForYouService } from '../for-you.service';
 import { MemberFileService } from '../member-file.service';
 import { MemberNoteService } from '../member-note.service';
 import { MembershipService } from '../membership.service';
+import { PanelService } from '../panel.service';
 import { PlanMaterializerService } from '../plan-materializer.service';
 import { PlanOfferService } from '../plan-offer.service';
 import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION } from '../plan-snapshot';
@@ -56,6 +64,9 @@ describe('ficha da pessoa (integração, #402)', () => {
     new ProfessionalLinkService(prisma),
     notifications,
   );
+  const forYou = new ForYouService(prisma);
+  const panel = new PanelService(prisma);
+  const agendaDaPessoa = new AgendaService(prisma);
   const TZ = 'America/Sao_Paulo';
   const today = todayInTz(TZ);
 
@@ -72,6 +83,13 @@ describe('ficha da pessoa (integração, #402)', () => {
     anaM: '',
     colegaM: '',
     deOutroGrupoM: '',
+    ex: '',
+    saiuM: '',
+    banidaM: '',
+    convidadaM: '',
+    ruiM: '',
+    biaM: '',
+    exNoOutroM: '',
   };
   const t = { hipertrofia: '', deOutroGrupo: '', glúteo: '' };
   let planoDaHelena = '';
@@ -124,6 +142,12 @@ describe('ficha da pessoa (integração, #402)', () => {
     ids.bruno = await pessoa('Bruno Lima');
     ids.colega = await pessoa('Colega');
     const deFora = await pessoa('Dona de fora');
+    ids.ex = await pessoa('Ex da equipe');
+    const saiu = await pessoa('Saiu');
+    const banida = await pessoa('Banida');
+    const convidada = await pessoa('Convidada');
+    const rui = await pessoa('Rui');
+    const bia = await pessoa('Bia');
 
     g.id = (
       await prisma.group.create({
@@ -150,8 +174,22 @@ describe('ficha da pessoa (integração, #402)', () => {
         { groupId: g.id, userId: ids.colega, role: 'MEMBER', status: 'ACTIVE' },
         { groupId: g.outro, userId: deFora, role: 'OWNER', status: 'ACTIVE' },
         { groupId: g.outro, userId: ids.colega, role: 'MEMBER', status: 'ACTIVE' },
+        // Ex-equipe daqui que segue na equipe da outra comunidade.
+        { groupId: g.id, userId: ids.ex, role: 'PROFESSIONAL', status: 'LEFT' },
+        { groupId: g.outro, userId: ids.ex, role: 'PROFESSIONAL', status: 'ACTIVE' },
+        { groupId: g.id, userId: saiu, role: 'MEMBER', status: 'LEFT' },
+        { groupId: g.id, userId: banida, role: 'MEMBER', status: 'BANNED' },
+        { groupId: g.id, userId: convidada, role: 'MEMBER', status: 'INVITED' },
+        { groupId: g.id, userId: rui, role: 'MEMBER', status: 'ACTIVE' },
+        { groupId: g.id, userId: bia, role: 'MEMBER', status: 'ACTIVE' },
       ],
     });
+    ids.saiuM = await membershipOf(g.id, saiu);
+    ids.banidaM = await membershipOf(g.id, banida);
+    ids.convidadaM = await membershipOf(g.id, convidada);
+    ids.ruiM = await membershipOf(g.id, rui);
+    ids.biaM = await membershipOf(g.id, bia);
+    ids.exNoOutroM = await membershipOf(g.outro, ids.ex);
     ids.anaM = await membershipOf(g.id, ids.ana);
     ids.colegaM = await membershipOf(g.id, ids.colega);
     ids.deOutroGrupoM = await membershipOf(g.outro, ids.colega);
@@ -243,6 +281,24 @@ describe('ficha da pessoa (integração, #402)', () => {
         NotFoundException,
       );
     });
+
+    it('quem saiu, foi banida ou só foi convidada não tem ficha nem agenda', async () => {
+      for (const m of [ids.saiuM, ids.banidaM, ids.convidadaM]) {
+        await expect(file.file(ids.helena, g.id, m)).rejects.toThrow(NotFoundException);
+        await expect(file.agenda(ids.helena, g.id, m)).rejects.toThrow(NotFoundException);
+      }
+    });
+
+    it('ex-equipe não abre a ficha', async () => {
+      await expect(file.file(ids.ex, g.id, ids.anaM)).rejects.toThrow();
+      await expect(file.agenda(ids.ex, g.id, ids.anaM)).rejects.toThrow();
+    });
+
+    it('a agenda não passa de 42 dias por vez', async () => {
+      await expect(
+        file.agenda(ids.helena, g.id, ids.anaM, today, addDaysIso(today, 42)),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('resumo', () => {
@@ -258,23 +314,73 @@ describe('ficha da pessoa (integração, #402)', () => {
       expect(f.week.nutrition?.daysLogged).toBeGreaterThanOrEqual(1);
       expect(f.week.body?.currentWeightKg).toBe(70.2);
 
-      // Uma linha por categoria lida, com o nome da operação.
-      expect((await logsOf(ids.helena)) - antes).toBe(3);
+      // A abertura e uma linha por categoria lida, com o nome da operação.
+      expect((await logsOf(ids.helena)) - antes).toBe(4);
+      const abertura = await prisma.professionalAccessLog.findFirstOrThrow({
+        where: { professionalId: ids.helena, subjectUserId: ids.ana, action: 'open_member_file' },
+        orderBy: { at: 'desc' },
+      });
+      expect(abertura).toMatchObject({ scope: null, denied: false, groupId: g.id });
       const linhas = await prisma.professionalAccessLog.findMany({
         where: { professionalId: ids.helena, subjectUserId: ids.ana, action: 'get_member_file' },
         select: { scope: true, denied: true },
       });
       expect(linhas.map((l) => l.scope).sort()).toEqual(['BODY', 'NUTRITION', 'WORKOUT']);
       expect(linhas.every((l) => !l.denied)).toBe(true);
+      const comGrupo = await prisma.professionalAccessLog.count({
+        where: { professionalId: ids.helena, subjectUserId: ids.ana, groupId: g.id },
+      });
+      expect(comGrupo).toBe((await logsOf(ids.helena)) - antes);
     });
 
-    it('sem vínculo, o dono vê a ficha sem nenhum número e não gera leitura na trilha', async () => {
-      const antes = await logsOf(ids.bruno);
+    it('sem vínculo, o dono vê a ficha sem nenhum número; a abertura e cada categoria trancada ficam na trilha', async () => {
+      const desde = new Date(Date.now() - 1000);
       const f = await file.file(ids.bruno, g.id, ids.anaM);
       expect(f.grantedToMe).toEqual([]);
       expect(f.week).toEqual({ workouts: null, nutrition: null, body: null });
       expect(f.canSendPlans).toBe(false);
-      expect(await logsOf(ids.bruno)).toBe(antes);
+      const linhas = await prisma.professionalAccessLog.findMany({
+        where: { professionalId: ids.bruno, subjectUserId: ids.ana, at: { gte: desde } },
+        select: { scope: true, denied: true, action: true, groupId: true },
+      });
+      expect(linhas).toContainEqual({
+        scope: null,
+        denied: false,
+        action: 'open_member_file',
+        groupId: g.id,
+      });
+      const negadas = linhas.filter((l) => l.denied);
+      expect(negadas.map((l) => l.scope).sort()).toEqual(['BODY', 'NUTRITION', 'WORKOUT']);
+      expect(negadas.every((l) => l.groupId === g.id && l.action === 'get_member_file')).toBe(true);
+    });
+
+    it('o histórico da ficha é só desta comunidade: nem ex-equipe de fora, nem linha antiga sem comunidade', async () => {
+      // O Ex saiu da equipe daqui e tenta ler a colega pela outra comunidade.
+      await access
+        .assertReadable(
+          ids.ex,
+          ids.deOutroGrupoM,
+          'NUTRITION' as ShareScope,
+          'get_student_progress',
+        )
+        .catch(() => undefined);
+      const link = await prisma.professionalLink.findFirstOrThrow({
+        where: { subjectUserId: ids.colega, professionalId: ids.helena, groupId: g.id },
+      });
+      // Linha de antes da coluna `groupId`.
+      await prisma.professionalAccessLog.create({
+        data: {
+          linkId: link.id,
+          professionalId: ids.helena,
+          subjectUserId: ids.colega,
+          scope: 'GOALS',
+          action: 'linha_antiga',
+        },
+      });
+      const f = await file.file(ids.helena, g.id, ids.colegaM);
+      expect(f.accessLog.some((l) => l.professionalName === 'Ex da equipe')).toBe(false);
+      expect(f.accessLog.some((l) => l.action === 'linha_antiga')).toBe(false);
+      expect(f.accessLog.some((l) => l.isMe && l.action === 'open_member_file')).toBe(true);
     });
 
     it('histórico de acesso traz a tentativa negada de quem é da equipe', async () => {
@@ -364,6 +470,13 @@ describe('ficha da pessoa (integração, #402)', () => {
       segunda = sent.id;
       await offers.accept(ids.ana, segunda, sent.versionId, TZ);
 
+      // A ficha manda a lista inteira, sem repetir.
+      await expect(offers.reorderForMember(ids.helena, g.id, ids.anaM, [segunda])).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(
+        offers.reorderForMember(ids.helena, g.id, ids.anaM, [segunda, primeira, segunda]),
+      ).rejects.toThrow(BadRequestException);
       await expect(
         offers.reorderForMember(ids.helena, g.id, ids.anaM, [segunda, primeira]),
       ).resolves.toEqual({ offerIds: [segunda, primeira] });
@@ -388,6 +501,22 @@ describe('ficha da pessoa (integração, #402)', () => {
       expect((await file.file(ids.helena, g.id, ids.anaM)).plans.reorderedBySubject).toBe(true);
     });
 
+    it('envios ao mesmo tempo não repetem a posição', async () => {
+      await Promise.all(
+        [0, 1, 2, 3].map(() =>
+          offers.sendToMember(ids.helena, g.id, ids.colegaM, {
+            templateId: t.hipertrofia,
+            schedule: 'FLEXIBLE',
+          }),
+        ),
+      );
+      const rows = await prisma.planOffer.findMany({
+        where: { userId: ids.colega, groupId: g.id, removedAt: null },
+        select: { position: true },
+      });
+      expect(new Set(rows.map((r) => r.position)).size).toBe(rows.length);
+    });
+
     it('reordenar não aceita id de outra pessoa', async () => {
       const daColega = await offers.sendToMember(ids.helena, g.id, ids.colegaM, {
         templateId: t.hipertrofia,
@@ -401,11 +530,21 @@ describe('ficha da pessoa (integração, #402)', () => {
     });
 
     it('a agenda da ficha traz o treino planejado; "feito" e pesagem só com a categoria liberada', async () => {
+      // A Ana renomeia a cópia e remarca o primeiro dia: é dado de Treino dela.
+      const copia = await prisma.workoutPlan.findFirstOrThrow({
+        where: { userId: ids.ana, fromOfferId: segunda },
+      });
+      await prisma.workoutPlan.update({ where: { id: copia.id }, data: { name: 'Nome só meu' } });
+      await prisma.plannedSession.updateMany({
+        where: { planId: copia.id, date: today },
+        data: { date: addDaysIso(today, 1), originalDate: today },
+      });
       const daHelena = await file.agenda(ids.helena, g.id, ids.anaM, today, addDaysIso(today, 6));
       const itens = daHelena.days.flatMap((d) => d.items);
       expect(daHelena.showsDone).toBe(true);
       expect(daHelena.showsWeighins).toBe(true);
       expect(itens.filter((i) => i.kind === 'planned').length).toBe(7);
+      expect(itens.some((i) => i.title === 'Nome só meu')).toBe(true);
       expect(itens.find((i) => i.kind === 'weighin')?.weightKg).toBe(70.2);
 
       const doBruno = await file.agenda(ids.bruno, g.id, ids.anaM, today, addDaysIso(today, 6));
@@ -414,9 +553,26 @@ describe('ficha da pessoa (integração, #402)', () => {
       expect(deles.filter((i) => i.kind === 'planned').length).toBe(7);
       expect(deles.some((i) => i.kind === 'weighin')).toBe(false);
       expect(deles.every((i) => i.state === 'planned')).toBe(true);
+      // Sem Treino: o título e os dias são os da versão que a equipe mandou.
+      expect(deles.some((i) => i.title === 'Nome só meu')).toBe(false);
+      expect(doBruno.days.map((d) => d.items.filter((i) => i.kind === 'planned').length)).toEqual([
+        1, 1, 1, 1, 1, 1, 1,
+      ]);
+      expect(deles.every((i) => i.kind !== 'planned' || i.title === 'Glúteos e posterior')).toBe(
+        true,
+      );
+      const f = await file.file(ids.bruno, g.id, ids.anaM);
+      expect(f.nextDays.flatMap((d) => d.items).some((i) => i.title === 'Nome só meu')).toBe(false);
     });
 
     it('"Terminar hoje" tira a agenda de amanhã em diante e deixa a cópia com a Ana', async () => {
+      // Uma linha de outra pessoa que aponta para a mesma oferta não é tocada.
+      const alheio = await prisma.workoutPlan.create({
+        data: { userId: ids.colega, name: 'Da colega', fromOfferId: segunda },
+      });
+      await prisma.plannedSession.create({
+        data: { userId: ids.colega, planId: alheio.id, date: addDaysIso(today, 3), order: 1 },
+      });
       await expect(
         offers.removeForMember(ids.nina, g.id, ids.anaM, segunda, {
           notify: false,
@@ -438,9 +594,33 @@ describe('ficha da pessoa (integração, #402)', () => {
       const f = await file.file(ids.helena, g.id, ids.anaM);
       expect(f.plans.workout.find((p) => p.offerId === segunda)?.status).toBe('ENDED');
       expect(notify).not.toHaveBeenCalled();
+      expect(await prisma.plannedSession.count({ where: { planId: alheio.id } })).toBe(1);
+      await prisma.workoutPlan.delete({ where: { id: alheio.id } });
+
+      // Terminada não recebe versão nova.
+      await expect(
+        offers.update(ids.helena, ids.anaM, segunda, {
+          planId: planoDaHelena,
+          schedule: 'FLEXIBLE',
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      // No app da Ana o plano aparece terminado hoje, não vigente.
+      const agenda = await agendaDaPessoa.range(ids.ana, TZ);
+      expect(agenda.calendarPlan?.planId).not.toBe(copia.id);
+      expect(
+        agenda.days
+          .flatMap((d) => d.items)
+          .every((i) => i.planId !== copia.id || i.endDate === today),
+      ).toBe(true);
     });
 
     it('"Apagar da Ana" tira a cópia e a oferta, mas o treino que ela registrou fica', async () => {
+      const jsonParaVoce = async () => JSON.stringify(await forYou.get(ids.ana, g.id));
+      const enviados = async () =>
+        (await panel.overview(ids.helena, g.id, 7)).items.sent.map((i) => i.id);
+      expect(await jsonParaVoce()).toContain(primeira);
+      expect(await enviados()).toContain(primeira);
       const copia = await prisma.workoutPlan.findFirstOrThrow({
         where: { userId: ids.ana, fromOfferId: primeira },
       });
@@ -473,6 +653,15 @@ describe('ficha da pessoa (integração, #402)', () => {
       await expect(offers.get(ids.ana, primeira)).rejects.toThrow(NotFoundException);
       // A linha fica para o export dela.
       expect(await prisma.planOffer.count({ where: { id: primeira } })).toBe(1);
+      expect(await jsonParaVoce()).not.toContain(primeira);
+      expect(await enviados()).not.toContain(primeira);
+      // Apagada não recebe versão nova.
+      await expect(
+        offers.update(ids.helena, ids.anaM, primeira, {
+          planId: planoDaHelena,
+          schedule: 'FLEXIBLE',
+        }),
+      ).rejects.toThrow(NotFoundException);
       // Apagar de novo é 404.
       await expect(
         offers.removeForMember(ids.helena, g.id, ids.anaM, primeira, {
@@ -555,6 +744,18 @@ describe('ficha da pessoa (integração, #402)', () => {
         expect.objectContaining({ text: 'Joelho melhorou.', authorName: 'Helena Prado' }),
       ]);
       expect(exp.counts.memberNotes).toBe(1);
+    });
+
+    it('remover e banir também apagam as notas', async () => {
+      await notes.create(ids.helena, g.id, ids.ruiM, 'Nota do Rui');
+      await notes.create(ids.helena, g.id, ids.biaM, 'Nota da Bia');
+      await memberships.removeMember(ids.bruno, g.id, ids.ruiM);
+      await memberships.ban(ids.bruno, g.id, ids.biaM);
+      expect(
+        await prisma.memberNote.count({
+          where: { groupId: g.id, text: { in: ['Nota do Rui', 'Nota da Bia'] } },
+        }),
+      ).toBe(0);
     });
 
     it('sair da comunidade apaga as notas e encerra os planos que esperavam aceite', async () => {
