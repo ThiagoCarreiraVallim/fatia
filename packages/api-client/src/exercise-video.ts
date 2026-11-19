@@ -79,3 +79,22 @@ export function howToMeta(exercise: Pick<Exercise, 'equipment' | 'level' | 'mech
 export function exerciseDetailPath(exerciseId: number): string {
   return `/workout/exercise/${exerciseId}`;
 }
+
+/**
+ * A WebView do player só carrega o próprio embed. Tocar no logo do YouTube ou
+ * num vídeo sugerido tentaria abrir o site inteiro dentro do app: essa
+ * navegação vai para o navegador do sistema, e a WebView fica no vídeo.
+ */
+export function isYoutubeEmbedNavigation(url: string): boolean {
+  if (url === 'about:blank') return true;
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'www.youtube-nocookie.com' &&
+      u.pathname.startsWith('/embed/')
+    );
+  } catch {
+    return false;
+  }
+}
