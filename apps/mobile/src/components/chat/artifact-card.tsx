@@ -2,7 +2,7 @@ import { useState, type ComponentType } from 'react';
 import { Linking, Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -28,7 +28,15 @@ import {
   cardEyebrow,
   chatCardTitle,
   getChatToolCatalog,
+  getAutoWriteStatus,
+  SAVED_CARD_COPY,
+  savedStateFromStatus,
+  savedUndoId,
+  undoAutoWrite,
+  undoFailureState,
+  type SavedCardState,
   isRenderableChatArtifact,
+  barAxisLabels,
   timelineAxisLabels,
   timelinePeriodLabel,
   type ChatArtifact,
@@ -160,7 +168,7 @@ function CardContent({ artifact }: { artifact: ChatArtifact }) {
     case 'metric':
       return <Metrica artifact={artifact} />;
     case 'bars':
-      return <Barras artifact={artifact} />;
+      return <BarsCard artifact={artifact} />;
     case 'timeline':
       return <LinhaDoTempo artifact={artifact} />;
     case 'list':
@@ -186,7 +194,7 @@ function CardContent({ artifact }: { artifact: ChatArtifact }) {
     case 'app_only':
       return <SoNoApp artifact={artifact} />;
     case 'saved':
-      return <Gravado artifact={artifact} />;
+      return <GravadoComDesfazer artifact={artifact} />;
   }
 }
 
@@ -236,9 +244,10 @@ function Metrica({ artifact }: De<'metric'>) {
 }
 
 /** Uma barra por dia; a meta é a linha tracejada e o verde marca quem bateu. */
-function Barras({ artifact }: De<'bars'>) {
+function BarsCard({ artifact }: De<'bars'>) {
   if (artifact.bars.length === 0) return <Vazio texto="Sem registros no período." />;
   const maior = Math.max(artifact.goal ?? 0, ...artifact.bars.map((b) => b.value), 1);
+  const eixo = barAxisLabels(artifact.bars);
   return (
     <View className="gap-2">
       <View className="h-24 flex-row items-end gap-1.5">
@@ -257,14 +266,14 @@ function Barras({ artifact }: De<'bars'>) {
           />
         ))}
       </View>
-      <View className="flex-row gap-1.5">
-        {artifact.bars.map((barra, i) => (
+      <View className={cn('flex-row', eixo.perBar ? 'gap-1.5' : 'justify-between')}>
+        {eixo.labels.map((rotulo, i) => (
           <Text
-            key={`${barra.label}-${i}`}
+            key={`${rotulo}-${i}`}
             numberOfLines={1}
-            className="flex-1 text-center text-[11px] text-muted-foreground"
+            className={cn('text-[11px] text-muted-foreground', eixo.perBar && 'flex-1 text-center')}
           >
-            {barra.label}
+            {rotulo}
           </Text>
         ))}
       </View>
@@ -714,15 +723,52 @@ function SoNoApp({ artifact }: De<'app_only'>) {
   );
 }
 
+/** O Desfazer de verdade (ADR 039): pela API, e depois relê tudo — o registro sai das telas. */
+function GravadoComDesfazer({ artifact }: De<'saved'>) {
+  const queryClient = useQueryClient();
+  const id = savedUndoId(artifact);
+  // O estado guardado no servidor: reabrir a conversa não oferece de novo o que já foi desfeito,
+  // nem um Desfazer vencido (#385).
+  const status = useQuery({
+    queryKey: ['chat', 'auto-write', id],
+    queryFn: () => getAutoWriteStatus(id as string),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+  return (
+    <Gravado
+      artifact={artifact}
+      fromServer={status.data ? savedStateFromStatus(status.data.state) : undefined}
+      onUndo={
+        id
+          ? async () => {
+              await undoAutoWrite(id);
+              void queryClient.invalidateQueries();
+            }
+          : undefined
+      }
+    />
+  );
+}
+
 /**
- * "Gravado", com Desfazer. Só o componente nesta issue: quem emite e executa o desfazer é a
- * #385 — sem `onUndo`, o botão não aparece.
+ * "Gravado", com Desfazer (ADR 039): o `/mcp` emite na gravação automática. Sem `onUndo`, o
+ * botão não aparece. Numa alteração, cada linha mostra antes → depois; os motivos de não desfazer
+ * vêm de `undoFailureState`, iguais aos do PWA.
  */
 export function Gravado({
   artifact,
   onUndo,
-}: De<'saved'> & { onUndo?: () => Promise<void> | void }) {
-  const [estado, setEstado] = useState<'gravado' | 'desfazendo' | 'desfeito'>('gravado');
+  fromServer,
+}: De<'saved'> & { onUndo?: () => Promise<void> | void; fromServer?: SavedCardState }) {
+  // O que aconteceu nesta tela vale mais que o lido do servidor; sem nada local, vale o servidor.
+  const [local, setEstado] = useState<SavedCardState | null>(null);
+  const estado: SavedCardState = local ?? fromServer ?? 'saved';
+  const comBotao = estado === 'saved' || estado === 'undoing' || estado === 'failed';
+  const aviso =
+    estado === 'undone' || estado === 'expired' || estado === 'changed' || estado === 'failed'
+      ? SAVED_CARD_COPY[estado]
+      : null;
   return (
     <View className="gap-2.5">
       {artifact.lines.length ? (
@@ -737,30 +783,29 @@ export function Gravado({
             >
               <Text className="flex-1 text-sm text-muted-foreground">{linha.label}</Text>
               {linha.before ? (
-                <Text className="text-sm text-muted-foreground line-through">{linha.before}</Text>
+                <Text className="text-sm text-muted-foreground">{`${linha.before} →`}</Text>
               ) : null}
               <Text className="text-sm font-semibold text-foreground">{linha.after}</Text>
             </View>
           ))}
         </View>
       ) : null}
-      {estado === 'desfeito' ? (
-        <Text className="text-xs text-muted-foreground">Desfeito. Nada ficou gravado.</Text>
-      ) : artifact.undoable && onUndo ? (
+      {aviso ? <Text className="text-xs text-muted-foreground">{aviso}</Text> : null}
+      {artifact.undoable && onUndo && comBotao ? (
         <Button
           variant="secondary"
-          disabled={estado === 'desfazendo'}
+          disabled={estado === 'undoing'}
           onPress={async () => {
-            setEstado('desfazendo');
+            setEstado('undoing');
             try {
               await onUndo();
-              setEstado('desfeito');
-            } catch {
-              setEstado('gravado');
+              setEstado('undone');
+            } catch (erro) {
+              setEstado(undoFailureState(erro));
             }
           }}
         >
-          {estado === 'desfazendo' ? 'Desfazendo…' : 'Desfazer'}
+          {estado === 'undoing' ? SAVED_CARD_COPY.undoing : SAVED_CARD_COPY.undo}
         </Button>
       ) : null}
     </View>

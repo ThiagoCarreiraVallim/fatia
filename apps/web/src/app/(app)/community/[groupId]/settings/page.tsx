@@ -297,7 +297,15 @@ export default function CommunitySettingsPage() {
   return (
     <div className="space-y-5 p-4">
       <section className="flex items-start gap-3">
-        <GroupAvatar name={g.name} url={g.avatarUrl} size={56} className="rounded-[18px]" />
+        <GroupAvatar
+          name={g.name}
+          url={g.avatarUrl}
+          size={56}
+          className={cn(
+            'rounded-[18px]',
+            g.type === 'SPONSORED' && 'bg-brand text-brand-foreground',
+          )}
+        />
         <div className="min-w-0 flex-1 space-y-1">
           {/* A barra diz "Sobre a comunidade"; o nome fica aqui. */}
           <h2 className="font-display text-h3 font-bold">{g.name}</h2>
@@ -334,7 +342,7 @@ export default function CommunitySettingsPage() {
         </p>
       )}
 
-      {g.hasAiSeat && (
+      {g.proPaidByThisGroup && (
         <Link
           href="/plan"
           className="flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3.5 text-sm"
@@ -406,7 +414,7 @@ export default function CommunitySettingsPage() {
         title={active ? `Sair da ${g.name}?` : 'Cancelar o pedido?'}
         description={
           active
-            ? g.hasAiSeat
+            ? g.proPaidByThisGroup
               ? LEAVE_COPY.bodyPro
               : LEAVE_COPY.body
             : 'Você pode pedir de novo depois, pelo código ou por um convite.'

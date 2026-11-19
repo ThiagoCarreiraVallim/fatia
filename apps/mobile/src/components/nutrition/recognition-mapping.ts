@@ -1,4 +1,9 @@
-import type { MealRecognition, RecognizedFoodItem, nutritionApi } from '@fatia/api-client';
+import {
+  adjustReviewGrams,
+  type MealRecognition,
+  type RecognizedFoodItem,
+  type nutritionApi,
+} from '@fatia/api-client';
 import { parsePositivo } from './helpers';
 
 /**
@@ -27,6 +32,13 @@ export interface ItemEditavel {
   incluido: boolean;
   /** Macros da sugestão, para a porção original. `null` = a pessoa preenche. */
   macrosPorGrama: MacrosPorGrama | null;
+  /** A porção que a IA viu: o −/+ parte dela quando o campo está vazio. */
+  gramasDaIa: number;
+  /**
+   * kcal por grama da sugestão, casada ou não — só para o total da tela (Al-M10). O gravado do
+   * item casado continua vindo da API pelo `foodId`.
+   */
+  kcalPorGrama: number | null;
 }
 
 interface MacrosPorGrama {
@@ -49,7 +61,7 @@ const arredondar = (n: number) => Math.round(n * 100) / 100;
  * Item **estimado** guarda o macro por grama, porque não há catálogo de onde
  * recalcular: mudar a porção reescala a estimativa, que é o melhor disponível.
  */
-export function itensEditaveis(resposta: MealRecognition): ItemEditavel[] {
+export function editableItems(resposta: MealRecognition): ItemEditavel[] {
   return resposta.itens.map((item, indice) => ({
     chave: `${indice}-${item.nomeReconhecido}`,
     nomeReconhecido: item.nomeReconhecido,
@@ -60,6 +72,8 @@ export function itensEditaveis(resposta: MealRecognition): ItemEditavel[] {
     gramas: String(arredondar(item.grams)),
     incluido: true,
     macrosPorGrama: macrosPorGrama(item),
+    gramasDaIa: item.grams,
+    kcalPorGrama: item.kcal !== null && item.grams > 0 ? item.kcal / item.grams : null,
   }));
 }
 
@@ -159,4 +173,21 @@ export function mensagemDeFotoSemComida(observacao: string | null): string {
   const base = 'Não identifiquei alimentos nesta foto.';
   const complemento = observacao?.trim();
   return complemento ? `${base} ${complemento}` : `${base} Registre pela busca de alimento.`;
+}
+
+/** O −/+ da prancha Al-M10: 10 g por toque, nunca abaixo de 10 g. Devolve o texto do campo. */
+export function stepGrams(item: ItemEditavel, direction: 1 | -1): string {
+  const atual = parsePositivo(item.gramas) ?? item.gramasDaIa;
+  return String(adjustReviewGrams(atual, direction));
+}
+
+/** O total de kcal do que está marcado, na porção digitada (o "N kcal" do cartão). */
+export function reviewKcalTotal(itens: ItemEditavel[]): number {
+  return Math.round(
+    itens.reduce((soma, item) => {
+      const gramas = parsePositivo(item.gramas);
+      if (!item.incluido || gramas === null || item.kcalPorGrama === null) return soma;
+      return soma + item.kcalPorGrama * gramas;
+    }, 0),
+  );
 }

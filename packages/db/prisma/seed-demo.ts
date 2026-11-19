@@ -20,7 +20,11 @@
  *
  * Uso: pnpm db:seed:demo
  */
+import { createHash } from 'node:crypto';
 import { MealType, PrismaClient, type ShareScope } from '@prisma/client';
+
+/** Código de entrada da Academia Demo (`GroupInvite.code`). */
+const DEMO_ENTRY_CODE = 'DEMO2026';
 
 const prisma = new PrismaClient();
 
@@ -443,6 +447,25 @@ async function seedCommunity(demoUserId: string) {
       create: { groupId: group.id, userId, role, status: 'ACTIVE', joinedAt, ...extra },
     });
   await ativo(dona.id, 'OWNER');
+
+  // Código de entrada da recepção (#393): a comunidade é privada, então o slug
+  // não abre a porta; para testar o "Entrar com código", digite DEMO2026.
+  await prisma.groupInvite.upsert({
+    where: { code: DEMO_ENTRY_CODE },
+    update: {
+      groupId: group.id,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 365 * 86_400_000),
+    },
+    create: {
+      groupId: group.id,
+      code: DEMO_ENTRY_CODE,
+      tokenHash: createHash('sha256').update(`seed-demo:${DEMO_ENTRY_CODE}`).digest('hex'),
+      role: 'MEMBER',
+      createdById: dona.id,
+      expiresAt: new Date(Date.now() + 365 * 86_400_000),
+    },
+  });
   await ativo(profissional.id, 'PROFESSIONAL');
 
   // Vínculos refeitos do zero: o consentimento de cada membro vale para a equipe toda.

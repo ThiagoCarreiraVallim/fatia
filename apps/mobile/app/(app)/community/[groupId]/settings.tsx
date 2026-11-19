@@ -52,6 +52,8 @@ import { colors } from '@/theme/colors';
 const TEAM_PREVIEW = 3;
 const DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+const STATS_LABEL = 'Entrar nos números da comunidade (sem nome)';
+
 function Eyebrow({ children }: { children: string }) {
   return (
     <Text
@@ -123,15 +125,26 @@ function SharingSection({ g }: { g: MyGroup }) {
           );
         })}
       </View>
-      <Checkbox
-        checked={g.statsOptIn}
-        label="Entrar nos números da comunidade (sem nome)"
-        onCheckedChange={(v) =>
-          !save.isPending && save.mutate({ scopes: g.consentScopes, statsOptIn: v })
-        }
-      />
+      {/* O `label` do Checkbox é só para o leitor de tela: o texto visível vem ao lado. */}
+      <View className="flex-row items-center gap-3 px-1">
+        <Checkbox
+          checked={g.statsOptIn}
+          label={STATS_LABEL}
+          onCheckedChange={(v) =>
+            !save.isPending && save.mutate({ scopes: g.consentScopes, statsOptIn: v })
+          }
+        />
+        <Text
+          className="flex-1 text-sm text-foreground"
+          onPress={() =>
+            !save.isPending && save.mutate({ scopes: g.consentScopes, statsOptIn: !g.statsOptIn })
+          }
+        >
+          {STATS_LABEL}
+        </Text>
+      </View>
       {save.isError ? (
-        <Text accessibilityRole="alert" className="px-1 text-sm text-destructive">
+        <Text accessibilityRole="alert" className="px-1 text-sm text-danger">
           {apiMessage(save.error, 'Não deu para salvar agora. Tente de novo.')}
         </Text>
       ) : null}
@@ -330,7 +343,7 @@ export default function CommunitySettingsScreen() {
     confirm({
       title: ativo ? `Sair da ${g.name}?` : 'Cancelar o pedido?',
       description: ativo
-        ? g.hasAiSeat
+        ? g.proPaidByThisGroup
           ? LEAVE_COPY.bodyPro
           : LEAVE_COPY.body
         : 'Você pode pedir de novo depois, pelo código ou por um convite.',
@@ -347,7 +360,7 @@ export default function CommunitySettingsScreen() {
     >
       <View className="gap-5 px-5 pb-4 pt-4">
         <View className="flex-row items-start gap-3">
-          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} />
+          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} brand={g.type === 'SPONSORED'} />
           <View className="min-w-0 flex-1 gap-1">
             <Text accessibilityRole="header" className="font-display text-h3 text-foreground">
               {g.name}
@@ -381,7 +394,7 @@ export default function CommunitySettingsScreen() {
           </Text>
         ) : null}
 
-        {g.hasAiSeat ? (
+        {g.proPaidByThisGroup ? (
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push('/plan')}
@@ -437,7 +450,7 @@ export default function CommunitySettingsScreen() {
         ) : (
           <Button
             variant="outline"
-            textClassName="text-destructive"
+            textClassName="text-danger"
             loading={leave.isPending}
             onPress={confirmLeave}
           >

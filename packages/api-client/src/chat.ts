@@ -868,12 +868,14 @@ export type ChatArtifact =
       title?: string;
       params: Record<string, string>;
     })
-  // "Gravado", com Desfazer: só o componente nesta issue — quem emite é a #385.
+  // "Gravado", com Desfazer: o `/mcp` o devolve na gravação automática (#385, ADR 039).
   | (ChatArtifactBase & {
       kind: 'saved';
       at: string;
       lines: { label: string; before?: string; after: string }[];
       undoable?: boolean;
+      /** O id do Desfazer (`POST /chat/auto-writes/:id/undo`). */
+      autoWriteId?: string;
     });
 
 // ---------------------------------------------------------------- memória e cota
@@ -882,6 +884,8 @@ export type ChatArtifact =
 export interface ChatMemory {
   id: string;
   content: string;
+  /** Preferência, rotina, treino ou hábito (#385). `null` nas antigas. */
+  category: import('./ai-settings').MemoryCategory | null;
   createdAt: string;
 }
 
@@ -940,3 +944,10 @@ export function previewChatAction(
 export function listChatToolTitles(): Promise<Record<string, string>> {
   return apiFetch('/api/chat/tools');
 }
+
+/**
+ * O texto do botão "Continuar" depois de um corte (#385). A API reconhece este texto e conta o turno
+ * como a mesma resposta da pessoa no teto de gravações automáticas — mantenha igual ao
+ * `CHAT_CONTINUE_MESSAGE` de `apps/api/src/chat/dto/chat.dto.ts`.
+ */
+export const CHAT_CONTINUE_MESSAGE = 'Continue de onde parou.';

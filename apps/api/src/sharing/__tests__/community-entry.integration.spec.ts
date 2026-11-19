@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
-import type { JoinPolicy } from '@fatia/db';
+import type { GroupVisibility, JoinPolicy } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
 import type { EmailService } from '../../notifications/email.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
@@ -38,9 +38,17 @@ describe('código de entrada (integração)', () => {
     return user.id;
   }
 
-  async function comunidade(joinPolicy: JoinPolicy = 'APPROVAL') {
+  async function comunidade(
+    joinPolicy: JoinPolicy = 'APPROVAL',
+    visibility: GroupVisibility = 'PRIVATE',
+  ) {
     const dono = await pessoa('Dona');
-    const grupo = await groups.create(dono, { type: 'SPONSORED', name: 'Academia', joinPolicy });
+    const grupo = await groups.create(dono, {
+      type: 'SPONSORED',
+      name: 'Academia',
+      joinPolicy,
+      visibility,
+    });
     grupos.push(grupo.id);
     return { dono, grupo };
   }
@@ -67,8 +75,10 @@ describe('código de entrada (integração)', () => {
       name: 'Academia',
       joinPolicy: 'APPROVAL',
       code: invite.code,
-      proOffer: false,
+      proOffer: null,
     });
+    // O slug é a porta que não se revoga: quem entrou por código não fica sabendo dele.
+    expect(cartao).not.toHaveProperty('slug');
   });
 
   it('com aprovação, entrar pelo código vira pedido; o uso do código é contado', async () => {
@@ -133,21 +143,63 @@ describe('código de entrada (integração)', () => {
     );
   });
 
-  it('o slug continua valendo como código', async () => {
-    const { grupo } = await comunidade('OPEN');
+  it('o slug vale como código só em comunidade pública', async () => {
+    const { grupo } = await comunidade('OPEN', 'PUBLIC');
     const cartao = await groups.previewByCode(grupo.slug.toUpperCase());
     expect(cartao).toMatchObject({ id: grupo.id, code: grupo.slug });
   });
 
+  it('comunidade privada: revogado o código, o slug não abre a porta (B1)', async () => {
+    const { dono, grupo } = await comunidade('OPEN', 'PRIVATE');
+    const { invite } = await invites.create(dono, grupo.id, { role: 'MEMBER', code: true });
+    await invites.revoke(dono, grupo.id, invite.id);
+    const aluno = await pessoa('Aluno');
+    await expect(groups.previewByCode(grupo.slug)).rejects.toThrow(NotFoundException);
+    await expect(memberships.requestJoin(aluno, grupo.slug, semConsentimento)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('código esgotado (maxUses) responde como código que não existe', async () => {
+    const { dono, grupo } = await comunidade('OPEN');
+    const { invite } = await invites.create(dono, grupo.id, { role: 'MEMBER', code: true });
+    await prisma.groupInvite.update({ where: { id: invite.id }, data: { maxUses: 1 } });
+    await memberships.requestJoin(await pessoa('Primeira'), invite.code!, semConsentimento);
+    const segunda = await pessoa('Segunda');
+    await expect(groups.previewByCode(invite.code!)).rejects.toThrow(NotFoundException);
+    await expect(memberships.requestJoin(segunda, invite.code!, semConsentimento)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('dois entrando juntos no último uso: só um entra, e o contador não passa do teto', async () => {
+    const { dono, grupo } = await comunidade('OPEN');
+    const { invite } = await invites.create(dono, grupo.id, { role: 'MEMBER', code: true });
+    await prisma.groupInvite.update({ where: { id: invite.id }, data: { maxUses: 1 } });
+    const [a, b] = await Promise.all([pessoa('A'), pessoa('B')]);
+    const r = await Promise.allSettled([
+      memberships.requestJoin(a, invite.code!, semConsentimento),
+      memberships.requestJoin(b, invite.code!, semConsentimento),
+    ]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const falhou = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect(falhou.reason).toBeInstanceOf(NotFoundException);
+    expect((await prisma.groupInvite.findUniqueOrThrow({ where: { id: invite.id } })).uses).toBe(1);
+    expect(
+      await prisma.groupMembership.count({ where: { groupId: grupo.id, role: 'MEMBER' } }),
+    ).toBe(1);
+  });
+
   describe('aviso de PRO liberado', () => {
-    it('só aparece quando a comunidade tem assento livre (ou dá a todos)', async () => {
-      const { dono, grupo } = await comunidade('OPEN');
-      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe(false);
+    it('todos os membros: libera; por assento: "pode liberar" só com vaga; sem pool valendo, nada', async () => {
+      const { grupo } = await comunidade('OPEN', 'PUBLIC');
+      expect((await groups.previewByCode(grupo.slug)).proOffer).toBeNull();
 
       const pool = await prisma.groupSeatPool.create({
         data: { groupId: grupo.id, seats: 1, unitPriceCents: 1490, status: 'ACTIVE' },
       });
-      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe(true);
+      // Por assento, com vaga: a academia pode liberar (quem decide é a equipe).
+      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe('SEATS');
 
       // O único assento ocupado: sem aviso.
       const aluna = await pessoa('Aluna');
@@ -155,19 +207,18 @@ describe('código de entrada (integração)', () => {
       await prisma.groupSeatAssignment.create({
         data: { poolId: pool.id, membershipId: m.membershipId },
       });
-      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe(false);
+      expect((await groups.previewByCode(grupo.slug)).proOffer).toBeNull();
 
-      // Todos os membros: sempre.
+      // Todos os membros: libera.
       await prisma.groupSeatPool.update({ where: { id: pool.id }, data: { mode: 'ALL_MEMBERS' } });
-      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe(true);
+      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe('ALL_MEMBERS');
 
       // Pool cancelado não oferece nada.
       await prisma.groupSeatPool.update({
         where: { id: pool.id },
         data: { status: 'CANCELED', currentPeriodEnd: new Date(Date.now() - 86_400_000) },
       });
-      expect((await groups.previewByCode(grupo.slug)).proOffer).toBe(false);
-      void dono;
+      expect((await groups.previewByCode(grupo.slug)).proOffer).toBeNull();
     });
   });
 });

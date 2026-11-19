@@ -98,6 +98,8 @@ export interface ActionSheetRequest {
   title: string;
   description?: string;
   options: ActionSheetOption[];
+  /** Fechou sem escolher (Cancelar ou arrastar para baixo). Não roda depois de uma opção. */
+  onCancel?: () => void;
 }
 
 const ConfirmContext = createContext<{
@@ -129,7 +131,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         <Drawer
           open={sheet != null}
           onOpenChange={(open) => {
-            if (!open) setSheet(null);
+            if (open || !sheet) return;
+            setSheet(null);
+            sheet.onCancel?.();
           }}
         >
           <DrawerContent className="px-4">
@@ -154,7 +158,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   {option.label}
                 </Button>
               ))}
-              <Button variant="ghost" onPress={() => setSheet(null)}>
+              <Button
+                variant="ghost"
+                onPress={() => {
+                  const atual = sheet;
+                  setSheet(null);
+                  atual?.onCancel?.();
+                }}
+              >
                 Cancelar
               </Button>
             </View>

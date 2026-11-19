@@ -16,6 +16,7 @@ export class UpdateWaterLogTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Atualiza um log de água existente (correção). ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","ml":750}';

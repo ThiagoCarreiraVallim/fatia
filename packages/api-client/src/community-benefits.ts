@@ -156,24 +156,52 @@ function isHttps(url: string): boolean {
   }
 }
 
-/** Confere o formulário com as mesmas regras da API e devolve o corpo pronto. */
+/** Confere o formulário com as mesmas regras da API e devolve o corpo pronto (cadastro). */
 export function benefitDraftToInput(
   d: BenefitDraft,
   today: string,
 ): { ok: true; input: BenefitInput } | { ok: false; errors: BenefitDraftErrors } {
+  return checkDraft(d, today, true);
+}
+
+/**
+ * O corpo do PATCH: a validade só vai quando mudou (e só aí é cobrada contra
+ * hoje), para dar para corrigir o texto de um benefício vencido.
+ */
+export function benefitDraftToPatch(
+  d: BenefitDraft,
+  today: string,
+  original: Pick<TeamBenefit, 'validUntil'>,
+): { ok: true; input: Partial<BenefitInput> } | { ok: false; errors: BenefitDraftErrors } {
+  const mudou = d.validUntil !== original.validUntil;
+  const r = checkDraft(d, today, mudou);
+  if (!r.ok || mudou) return r;
+  const { validUntil: _mesma, ...resto } = r.input;
+  void _mesma;
+  return { ok: true, input: resto };
+}
+
+function checkDraft(
+  d: BenefitDraft,
+  today: string,
+  checkDate: boolean,
+): { ok: true; input: BenefitInput } | { ok: false; errors: BenefitDraftErrors } {
   const errors: BenefitDraftErrors = {};
   const partnerName = d.partnerName.trim();
   const discountText = d.discountText.trim();
-  const couponCode = d.couponCode.trim().toUpperCase();
+  // Como foi digitado: o parceiro pode diferenciar maiúscula de minúscula.
+  const couponCode = d.couponCode.trim();
   const url = d.url.trim();
   if (!partnerName) errors.partnerName = 'Diga o parceiro';
   if (!discountText) errors.discountText = 'Diga o desconto';
-  if (d.kind === 'COUPON' && !/^[A-Z0-9_-]{2,40}$/.test(couponCode)) {
+  if (d.kind === 'COUPON' && !/^[A-Za-z0-9_-]{2,40}$/.test(couponCode)) {
     errors.couponCode = couponCode ? 'Use letras, números, - e _' : 'Digite o código do cupom';
   }
   if (d.kind === 'LINK' && !isHttps(url)) errors.url = 'O link precisa começar com https://';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.validUntil)) errors.validUntil = 'Escolha a validade';
-  else if (d.validUntil < today) errors.validUntil = 'A validade não pode estar no passado';
+  else if (checkDate && d.validUntil < today) {
+    errors.validUntil = 'A validade não pode estar no passado';
+  }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,

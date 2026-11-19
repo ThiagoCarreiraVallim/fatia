@@ -90,7 +90,10 @@ const config: ExpoConfig = {
       'expo-camera',
       {
         cameraPermission:
-          'O Fatia usa a câmera para ler códigos de barras e para reconhecer a refeição em uma foto do prato. A foto é analisada e descartada — ela não é salva no Fatia.',
+          // #385 (prancha Al-M12, nota da Apple 5.1.1): a foto pode ficar guardada com a
+          // refeição desde a #374, se a pessoa permitir — "descartada" deixou de ser verdade.
+          // Os códigos de barras ficam na frase porque a câmera também os lê.
+          'O Fatia usa a câmera para fotografar refeições e rótulos e para ler códigos de barras. A foto vai para a IA reconhecer os alimentos e só fica guardada se você permitir.',
         // A câmera não grava áudio, mas `false` aqui **bloqueia** a permissão de
         // microfone no manifesto do Android inteiro — e o ditado do chat (Fase
         // 9e, `expo-audio`) precisa dela. A câmera continua sem pedir microfone.
@@ -121,7 +124,7 @@ const config: ExpoConfig = {
       'expo-image-picker',
       {
         photosPermission:
-          'O Fatia acessa suas fotos e vídeos para você escolher a foto de uma refeição, que é analisada e descartada, ou, se você faz parte da equipe de uma comunidade, a imagem ou o vídeo que vai publicar nela.',
+          'O Fatia acessa suas fotos e vídeos para você escolher a foto de uma refeição, que a IA analisa e só fica guardada se você permitir, ou, se você faz parte da equipe de uma comunidade, a imagem ou o vídeo que vai publicar nela.',
       },
     ],
     [

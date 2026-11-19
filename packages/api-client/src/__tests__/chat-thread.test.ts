@@ -138,6 +138,19 @@ describe('applyChatFrame', () => {
     expect(resposta(s).tools[0].status).toBe('error');
   });
 
+  it('parar antes do primeiro token deixa uma resposta vazia marcada, abaixo da pergunta', () => {
+    let s = applyChatFrame(EMPTY_CHAT_THREAD, fragmento('ai-0', 'Oi!'));
+    s = applyChatFrame(s, { event: 'done', data: { status: 'completed' } });
+    s = appendUserMessage(s, { id: 'u-1', text: 'me conta do meu almoço' });
+    s = applyChatFrame(s, { event: 'done', data: { status: 'stopped' } });
+    expect(s.messages.map((m) => m.role)).toEqual(['assistant', 'user', 'assistant']);
+    const [anterior, , parada] = s.messages;
+    // A resposta anterior terminou normalmente: não é ela que foi parada.
+    expect(anterior.role === 'assistant' && anterior.stopped).toBeFalsy();
+    expect(parada.role === 'assistant' && parada.stopped).toBe(true);
+    expect(parada.role === 'assistant' && parada.text).toBe('');
+  });
+
   it('persisted liga a resposta à linha do banco, onde o voto grava', () => {
     const s = aplicar([
       fragmento('ai-1', 'Oi!'),

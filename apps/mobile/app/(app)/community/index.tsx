@@ -52,15 +52,15 @@ function SponsoredCard({ g, onPress }: { g: MyGroup; onPress: () => void }) {
       className="overflow-hidden rounded-card bg-card active:opacity-80"
     >
       <View style={{ height: 92, backgroundColor: brand.background }}>
-        {g.hasAiSeat ? (
+        {g.proPaidByThisGroup ? (
           <View className="absolute right-3 top-3">
             <Badge variant="pro">{PRO_PAID_BADGE}</Badge>
           </View>
         ) : null}
       </View>
       <View className="-mt-7 px-[18px]">
-        <View className="self-start rounded-[20px] border-4 border-card">
-          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} />
+        <View className="self-start rounded-[20px] border-4 border-card bg-card">
+          <GroupAvatar name={g.name} url={g.avatarUrl} size={56} brand />
         </View>
       </View>
       <View className="gap-3 px-[18px] pb-[18px] pt-2">
@@ -91,7 +91,7 @@ function RowCard({ g, onPress }: { g: MyGroup; onPress: () => void }) {
         <Text className="text-xs text-muted-foreground">{communityCardMeta(g)}</Text>
         <Badges g={g} />
       </View>
-      {g.hasAiSeat ? <Badge variant="pro">PRO</Badge> : null}
+      {g.proPaidByThisGroup ? <Badge variant="pro">PRO</Badge> : null}
       <ChevronRight size={16} color={colors.mutedForeground} />
     </Pressable>
   );

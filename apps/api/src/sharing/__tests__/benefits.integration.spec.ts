@@ -42,6 +42,7 @@ describe('benefícios de parceiros (integração)', () => {
   async function comunidade() {
     const dono = await pessoa('Dona');
     const grupo = await groups.create(dono, {
+      visibility: 'PUBLIC',
       type: 'SPONSORED',
       name: 'Academia',
       joinPolicy: 'OPEN',
@@ -160,6 +161,23 @@ describe('benefícios de parceiros (integração)', () => {
     await memberships.requestJoin(esperando, grupo.slug, { scopes: [], statsOptIn: false });
     await benefits.create(dono, grupo.id, cupom());
     await expect(benefits.listForMember(esperando, grupo.id)).rejects.toThrow(NotFoundException);
+  });
+
+  it('o cupom fica como foi digitado (só sem espaço nas pontas): o parceiro pode diferenciar caixa', async () => {
+    const { dono, grupo } = await comunidade();
+    const b = await benefits.create(dono, grupo.id, { ...cupom(), couponCode: '  Corre10x ' });
+    expect(b.couponCode).toBe('Corre10x');
+  });
+
+  it('o texto de um vencido se edita sem mexer na validade', async () => {
+    const { dono, grupo } = await comunidade();
+    const b = await benefits.create(dono, grupo.id, cupom(addDaysIso(hoje, 2)));
+    await prisma.groupPartnerBenefit.update({
+      where: { id: b.id },
+      data: { validUntil: new Date(`${addDaysIso(hoje, -1)}T00:00:00Z`) },
+    });
+    const editado = await benefits.update(dono, grupo.id, b.id, { discountText: '20% off' });
+    expect(editado).toMatchObject({ discountText: '20% off', status: 'expired' });
   });
 
   it('benefício de outra comunidade não se edita nem se apaga pela minha URL', async () => {

@@ -198,7 +198,7 @@ export class BenefitService {
     let couponCode: string | null = null;
     let url: string | null = null;
     if (input.kind === 'COUPON') {
-      couponCode = input.couponCode?.trim().toUpperCase() ?? '';
+      couponCode = input.couponCode?.trim() ?? '';
       if (!CUPOM.test(couponCode)) {
         throw new BadRequestException('O cupom precisa de um código (letras, números, - e _)');
       }

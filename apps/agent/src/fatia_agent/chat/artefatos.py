@@ -28,6 +28,9 @@ CAMPO_OBRIGATORIO = {
     "badges": "badges",
     "instructions": "steps",
     "file": "url",
+    # O "Gravado" da gravação automática (ADR 039, #385): o `/mcp` o devolve no lugar do
+    # cartão da tool, com o `autoWriteId` do Desfazer.
+    "saved": "lines",
     # Os dois que nascem no agente: as fontes da busca e o botão do "só no app".
     "sources": "sources",
     "app_only": "tool",

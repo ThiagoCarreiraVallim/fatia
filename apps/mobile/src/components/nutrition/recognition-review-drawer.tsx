@@ -2,8 +2,13 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Square } from 'lucide-react-native';
-import { nutritionApi, type MealRecognition, type MealType } from '@fatia/api-client';
+import { Check, Minus, Plus, Square } from 'lucide-react-native';
+import {
+  MEAL_PHOTO_COPY,
+  nutritionApi,
+  type MealRecognition,
+  type MealType,
+} from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -14,16 +19,18 @@ import {
   DrawerTitle,
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
-import { NUMEROS_TABULARES, instanteNoDia, mensagemDeErro } from './helpers';
+import { ROTULO_REFEICAO, NUMEROS_TABULARES, instanteNoDia, mensagemDeErro } from './helpers';
 import {
   faixaDeConfianca,
   itensDeRefeicao,
-  itensEditaveis,
+  editableItems,
   itensParaGravar,
   mensagemDeFotoSemComida,
   podeGravar,
   previaDoItem,
+  reviewKcalTotal,
   ROTULO_DE_CONFIANCA,
+  stepGrams,
   type ItemEditavel,
 } from './recognition-mapping';
 import { colors } from '@/theme/colors';
@@ -71,7 +78,7 @@ export function RecognitionReviewDrawer({
   onRegistrarManualmente,
 }: Props) {
   const qc = useQueryClient();
-  const [itens, setItens] = useState<ItemEditavel[]>(() => itensEditaveis(resultado));
+  const [itens, setItens] = useState<ItemEditavel[]>(() => editableItems(resultado));
 
   const gravar = useMutation({
     mutationFn: async () => {
@@ -116,13 +123,15 @@ export function RecognitionReviewDrawer({
     : undefined;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['88%']}>
+    <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
       <View className="flex-1 bg-background">
         <DrawerHeader>
-          <DrawerTitle>Confira o que a IA entendeu</DrawerTitle>
+          <DrawerTitle>
+            {mealType ? ROTULO_REFEICAO[mealType] : 'Confira o que a IA entendeu'}
+            {itens.length > 0 ? ` · ${reviewKcalTotal(itens)} kcal` : ''}
+          </DrawerTitle>
           <DrawerDescription>
-            Nada foi registrado ainda. Ajuste as porções, desmarque o que não estava no prato e
-            confirme.
+            {itens.length > 0 ? MEAL_PHOTO_COPY.found(itens.length) : 'Nada foi registrado ainda.'}
           </DrawerDescription>
         </DrawerHeader>
 
@@ -151,6 +160,8 @@ export function RecognitionReviewDrawer({
               />
             ))}
 
+            <Text className="text-xs text-muted-foreground">{MEAL_PHOTO_COPY.portionWarning}</Text>
+
             <Pressable
               accessibilityRole="button"
               onPress={onRegistrarManualmente}
@@ -163,7 +174,7 @@ export function RecognitionReviewDrawer({
           </DrawerScrollView>
         )}
 
-        <DrawerFooter className="gap-2 pb-6">
+        <DrawerFooter className="gap-2 pb-8">
           {erro ? (
             <Text accessibilityRole="alert" className="text-sm text-destructive">
               {erro}
@@ -176,7 +187,11 @@ export function RecognitionReviewDrawer({
               disabled={prontos.length === 0 || gravar.isPending}
               loading={gravar.isPending}
             >
-              {prontos.length === 1 ? 'Registrar 1 item' : `Registrar ${prontos.length} itens`}
+              {!mealId && mealType
+                ? MEAL_PHOTO_COPY.save(ROTULO_REFEICAO[mealType])
+                : prontos.length === 1
+                  ? 'Registrar 1 item'
+                  : `Registrar ${prontos.length} itens`}
             </Button>
           ) : null}
           <Button variant="ghost" onPress={() => onOpenChange(false)}>
@@ -251,8 +266,17 @@ function LinhaDoItem({
         </View>
       </View>
 
-      <View className="flex-row items-end gap-3">
-        <View className="w-32">
+      <View className="flex-row items-end gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Menos 10 g de ${item.nomeReconhecido}`}
+          disabled={!item.incluido}
+          onPress={() => onAlterar({ gramas: stepGrams(item, -1) })}
+          className="mb-1 h-11 w-11 items-center justify-center rounded-full border border-border"
+        >
+          <Minus size={16} color={colors.foreground} />
+        </Pressable>
+        <View className="w-24">
           <DrawerInput
             label="Porção (g)"
             labelClassName="text-xs text-muted-foreground"
@@ -262,6 +286,15 @@ function LinhaDoItem({
             onChangeText={(texto) => onAlterar({ gramas: texto })}
           />
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Mais 10 g de ${item.nomeReconhecido}`}
+          disabled={!item.incluido}
+          onPress={() => onAlterar({ gramas: stepGrams(item, 1) })}
+          className="mb-1 h-11 w-11 items-center justify-center rounded-full border border-border"
+        >
+          <Plus size={16} color={colors.foreground} />
+        </Pressable>
 
         <View className="flex-1 pb-2">
           {previa ? (

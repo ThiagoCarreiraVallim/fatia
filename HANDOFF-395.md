@@ -22,5 +22,6 @@ Estado: (atualizar a cada commit)
 - [x] testes vermelhos API (ffe58798)
 - [x] fix API (assertStepsOpen)
 - [x] client+web+app (testes 6e71c007, fix no commit seguinte)
-- [ ] MCP descrição do list, docs ADR 047 e REDESIGN_PROGRESS
-- [ ] merge origin/main, regenerar MCP, lint/typecheck/testes
+- [x] MCP descrição e docs (d4485829)
+- [x] merge origin/main (base 9adc2e5a via merge-tree; só conflitos de MCP, lado da #395)
+- [ ] regenerar MCP, lint/typecheck/testes (recriar fatia_t395: a migration da 393 mudou de nome)

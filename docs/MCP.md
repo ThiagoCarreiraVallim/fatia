@@ -4000,22 +4000,24 @@ anotação do assistente não apaga dado de saúde nem histórico — dizer de n
 
 Lista as memórias, da mais antiga para a mais nova.
 
-**Output:** `Array<{ id: string; content: string; createdAt: string }>`
+**Output:** `Array<{ id: string; content: string; category: string | null; createdAt: string }>`
 
 ### `save_memory`
 
-Guarda uma memória: uma frase curta, na terceira pessoa.
+Guarda uma memória: uma frase curta, na terceira pessoa, com a categoria (#385).
 
 **Input:**
 
 ```typescript
 {
   content: string; // 1–500 caracteres
+  category?: 'PREFERENCE' | 'ROUTINE' | 'TRAINING' | 'HABIT';
 }
 ```
 
-**Output:** `{ id: string; content: string; createdAt: string }`. Recusa (`INVALID_INPUT`) acima de
-50 memórias.
+**Output:** `{ id: string; content: string; category: string | null; createdAt: string }`. Recusa
+(`INVALID_INPUT`) com 50 memórias guardadas, pedindo ao modelo que pergunte à pessoa qual apagar.
+"Apagar todas" é só no app (`DELETE /api/chat/memories`): não há `forget_all_memories`.
 
 ### `forget_memory`
 

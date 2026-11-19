@@ -52,7 +52,7 @@ function SponsoredCard({ g }: { g: MyGroup }) {
       className="block overflow-hidden rounded-card bg-card hover:bg-accent/40"
     >
       <div className="relative h-[92px] bg-[linear-gradient(150deg,hsl(var(--brand)),hsl(var(--brand)/0.25))]">
-        {g.hasAiSeat && (
+        {g.proPaidByThisGroup && (
           <Badge variant="pro" className="absolute right-3 top-3">
             {PRO_PAID_BADGE}
           </Badge>
@@ -90,7 +90,7 @@ function RowCard({ g }: { g: MyGroup }) {
         <span className="block text-xs text-muted-foreground">{communityCardMeta(g)}</span>
       </span>
       <Badges g={g} />
-      {g.hasAiSeat && <Badge variant="pro">PRO</Badge>}
+      {g.proPaidByThisGroup && <Badge variant="pro">PRO</Badge>}
     </Link>
   );
 }

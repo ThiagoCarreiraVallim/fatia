@@ -44,6 +44,7 @@ const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   consentScopes: ['NUTRITION'],
   statsOptIn: false,
   hasAiSeat: true,
+  proPaidByThisGroup: true,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
   requiredSharingScopes: [],
@@ -119,12 +120,22 @@ describe('/community/[groupId]/settings (Cm-04)', () => {
     expect(groupsApi.accessLog).toHaveBeenCalledWith({ groupId: 'g1', limit: 5 });
     const acessos = await screen.findByRole('region', { name: 'Quem olhou seus dados' });
     expect(await within(acessos).findByText(/Ana abriu Alimentação/)).toBeInTheDocument();
+    // Patrocinada: o avatar na cor da comunidade, igual ao cartão da lista.
+    expect(screen.getByText('AD').className).toMatch(/bg-brand/);
   });
 
   it('sem PRO pago pela comunidade, sem a faixa', async () => {
-    renderPage(grupo({ hasAiSeat: false }));
+    renderPage(grupo({ hasAiSeat: false, proPaidByThisGroup: false }));
     await screen.findByRole('heading', { name: 'Academia Demo' });
     expect(screen.queryByText(/A academia paga seu PRO/)).not.toBeInTheDocument();
+  });
+
+  it('assento aqui, mas o PRO valendo é da pessoa: sem a faixa e sem "o PRO acaba" ao sair', async () => {
+    renderPage(grupo({ hasAiSeat: true, proPaidByThisGroup: false }));
+    await screen.findByRole('heading', { name: 'Academia Demo' });
+    expect(screen.queryByText(/A academia paga seu PRO/)).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Sair da comunidade' }));
+    expect(screen.queryByText(/o PRO pago pela academia acaba/)).not.toBeInTheDocument();
   });
 
   it('a entrada de Benefícios só com benefício valendo', async () => {
@@ -210,7 +221,7 @@ describe('/community/[groupId]/settings (Cm-04)', () => {
   });
 
   it('pedido pendente: sem equipe nem consentimento editável, e dá para cancelar', async () => {
-    renderPage(grupo({ status: 'INVITED', hasAiSeat: false }));
+    renderPage(grupo({ status: 'INVITED', hasAiSeat: false, proPaidByThisGroup: false }));
     expect(await screen.findByText(/aguardando o dono aprovar/)).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(groupsApi.team).not.toHaveBeenCalled();

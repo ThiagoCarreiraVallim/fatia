@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   benefitDraftToInput,
+  benefitDraftToPatch,
   benefitsApi,
   benefitToDraft,
   benefitValidity,
@@ -28,7 +29,7 @@ function todayIn(tz: string): string {
 }
 
 function FieldError({ text }: { text?: string }) {
-  return text ? <Text className="text-xs text-destructive">{text}</Text> : null;
+  return text ? <Text className="text-xs text-danger">{text}</Text> : null;
 }
 
 /**
@@ -80,11 +81,15 @@ function BenefitForm({
   };
   const salvar = useMutation({
     mutationFn: async () => {
+      if (editing) {
+        // PATCH: a validade só vai se mudou (corrigir o texto de um vencido pode).
+        const p = benefitDraftToPatch(draft, today, editing);
+        if (!p.ok) throw new Error('invalid');
+        return benefitsApi.update(g.id, editing.id, p.input);
+      }
       const r = benefitDraftToInput(draft, today);
       if (!r.ok) throw new Error('invalid');
-      return editing
-        ? benefitsApi.update(g.id, editing.id, r.input)
-        : benefitsApi.create(g.id, r.input);
+      return benefitsApi.create(g.id, r.input);
     },
     onSuccess: () => done('Benefício salvo · aparece em Comunidade → Benefícios'),
     onError: (err) =>
@@ -97,7 +102,9 @@ function BenefitForm({
   });
 
   function submit() {
-    const r = benefitDraftToInput(draft, today);
+    const r = editing
+      ? benefitDraftToPatch(draft, today, editing)
+      : benefitDraftToInput(draft, today);
     if (!r.ok) {
       setErrors(r.errors);
       return;
@@ -110,7 +117,7 @@ function BenefitForm({
       <Input
         accessibilityLabel="Parceiro"
         placeholder="Parceiro. Ex.: Suplementa"
-        maxLength={80}
+        maxLength={60}
         value={draft.partnerName}
         onChangeText={(t) => set('partnerName', t)}
       />
@@ -137,7 +144,7 @@ function BenefitForm({
           <Input
             accessibilityLabel="Código do cupom"
             placeholder="Código do cupom"
-            autoCapitalize="characters"
+            autoCapitalize="none"
             autoCorrect={false}
             maxLength={40}
             value={draft.couponCode}
@@ -180,7 +187,7 @@ function BenefitForm({
       {editing ? (
         <Button
           variant="ghost"
-          textClassName="text-destructive"
+          textClassName="text-danger"
           loading={remover.isPending}
           onPress={() =>
             confirm({

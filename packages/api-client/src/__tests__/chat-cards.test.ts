@@ -16,6 +16,7 @@ import {
   webSearchLineLabel,
   cardEyebrow,
   timelineAxisLabels,
+  barAxisLabels,
   timelinePeriodLabel,
   groupConversationsByDay,
   groupToolCalls,
@@ -438,6 +439,37 @@ describe('timelineAxisLabels — as datas embaixo da curva', () => {
   it('com um ou dois pontos, só os que existem', () => {
     expect(timelineAxisLabels([{ date: '2026-11-04T10:00:00Z' }])).toEqual(['4 nov']);
     expect(timelineAxisLabels([])).toEqual([]);
+  });
+});
+
+describe('barAxisLabels — os rótulos embaixo das barras', () => {
+  const bars = (labels: string[]) => labels.map((label, i) => ({ label, value: i }));
+  it('com muitas barras, só início, meio e fim, em "19 out"', () => {
+    const dias = Array.from({ length: 28 }, (_, i) => {
+      const d = new Date(Date.UTC(2026, 9, 19 + i));
+      return d.toISOString().slice(0, 10);
+    });
+    expect(barAxisLabels(bars(dias))).toEqual({
+      perBar: false,
+      labels: ['19 out', '1 nov', '15 nov'],
+    });
+  });
+  it('rótulo já curto passa como está', () => {
+    const r = barAxisLabels(bars(Array.from({ length: 10 }, (_, i) => `${i + 1} out`)));
+    expect(r).toEqual({ perBar: false, labels: ['1 out', '5 out', '10 out'] });
+  });
+  it('"20/10" da API sai como "20 out", igual à linha do tempo', () => {
+    const r = barAxisLabels(
+      bars(Array.from({ length: 10 }, (_, i) => `${String(i + 1).padStart(2, '0')}/11`)),
+    );
+    expect(r).toEqual({ perBar: false, labels: ['1 nov', '5 nov', '10 nov'] });
+  });
+  it('com poucas barras, um rótulo por barra', () => {
+    expect(barAxisLabels(bars(['2026-11-10', '2026-11-11', 'Sem 3']))).toEqual({
+      perBar: true,
+      labels: ['10 nov', '11 nov', 'Sem 3'],
+    });
+    expect(barAxisLabels([])).toEqual({ perBar: true, labels: [] });
   });
 });
 

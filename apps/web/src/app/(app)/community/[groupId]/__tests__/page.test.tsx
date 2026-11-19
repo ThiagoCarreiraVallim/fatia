@@ -54,6 +54,7 @@ const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   consentScopes: ['NUTRITION'],
   statsOptIn: false,
   hasAiSeat: false,
+  proPaidByThisGroup: false,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
   requiredSharingScopes: [],

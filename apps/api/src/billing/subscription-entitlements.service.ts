@@ -180,6 +180,27 @@ export abstract class AiEntitlements {
   abstract exigePlano(): boolean;
 }
 
+/**
+ * A comunidade que paga o PRO desta pessoa **agora**, pela mesma regra do
+ * portão (`resolveAiEntitlement`), ou `null`. Assinatura própria valendo vence
+ * o assento: aí quem paga é a pessoa, mesmo com assento atribuído (#393, I2).
+ * É o "PRO pago pela academia" e o "se sair, volta ao Free" das telas.
+ */
+export async function proPayerGroupOf(
+  prisma: Pick<PrismaService, 'userSubscription' | 'groupSeatAssignment' | 'groupSeatPool'>,
+  userId: string,
+  agora: Date = new Date(),
+): Promise<string | null> {
+  const [proprias, assentos] = await Promise.all([
+    prisma.userSubscription.findMany({ where: { userId }, select: ASSINATURA_LIDA }),
+    seatsAsSubscriptions(prisma, userId),
+  ]);
+  const direito = resolveAiEntitlement([...proprias, ...assentos], agora);
+  return direito.tier === 'PRO' && direito.source === 'GROUP'
+    ? (direito.subscription?.group?.id ?? null)
+    : null;
+}
+
 @Injectable()
 export class SubscriptionEntitlementsService extends AiEntitlements {
   private readonly logger = new Logger(SubscriptionEntitlementsService.name);

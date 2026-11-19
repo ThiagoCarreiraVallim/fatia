@@ -66,9 +66,11 @@ import {
  * braço A. As duas chegaram juntas no merge da main na #382.
  * O merge da main (#382) na #380 juntou os dois braços A acima.
  * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
+ * O merge da main (#385, `save_memory` com `category`) na #393 juntou os dois: braço A novo, braço B o da #385.
  * A #395 acrescentou `get_my_challenge_progress` (só leitura, sem intenção) e reescreveu as
  * descrições das tools de desafio: muda o braço A. Na revisão, `log_steps` perdeu o `source`
- * (a fonte não vem do cliente): muda de novo.
+ * (a fonte não vem do cliente): muda de novo. O merge da main com a #393 (#446, que trouxe a
+ * #385) e o aviso de passos fechados no `list_group_challenges` mudam os dois braços.
  */
 
 const SHA_ENTIDADE = '10a14492153346925ddb1603b59048ad0aba05a8e74e9968bfff8a2485306d26';
@@ -162,7 +164,11 @@ describe('superfície do /mcp', () => {
 
     it('com a flag desligada, o controller responde 400 antes de abrir o servidor MCP', async () => {
       const registry = { intencaoHabilitada: () => false } as unknown as McpToolRegistry;
-      const controller = new McpController(registry, { touch: async () => undefined } as never);
+      const controller = new McpController(
+        registry,
+        { touch: async () => undefined } as never,
+        config({}),
+      );
       const req = { headers: { [HEADER_SUPERFICIE]: 'intencao' } } as unknown as Request;
       await expect(
         controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),
