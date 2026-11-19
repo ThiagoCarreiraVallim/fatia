@@ -21,16 +21,18 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 
 ## Feito
 
-- (nada ainda)
+- Migration `20261119200000_invites_origin_activation` + schema (commit 674a756d).
+- API completa (commit 1e18e386): InviteService (create/batch com label, origin, noExpiry, accompaniedBy, giveSeat; overview; pending; resendMany; renew; freshLink; decline; accept grava joinedViaInviteId/accompaniedById/acceptedAt e dá assento), MemberAdminService (setAccompaniedBy, bulk), listMembers (joinedVia, accompaniedBy, leftAt, whatsapp com opt-in, `include=left`), permissão `member.assign`, env `INVITE_LINK_SECRET` (compose, .env examples, validação em produção), LGPD (export `invitesReceived`/`panelActions`, exclusão limpa e revoga convites do e-mail).
+- Testes API: `invite-activation.integration.spec.ts`, bloco #401 em `user-isolation.spec.ts`, `invite-email.spec.ts`, guards em `sharing.controller.spec.ts`, env, account. Suíte inteira verde (auto-write.integration é instável em paralelo; passa sozinho).
+- WhatsApp do membro: existe `User.whatsapp` + `whatsappOptIn`; sai em listMembers só para a equipe e só com opt-in.
 
 ## Falta (ordem)
 
-1. Migration `20261119200000_invites_origin_activation` + schema.
-2. API: invite create/batch (label, origin, noExpiry, accompaniedBy, giveSeat), accept (joinedViaInviteId, accompaniedBy, seat, acceptedAt), decline, overview, pending, resend em lote, renew; members (joinedVia, accompaniedBy, saíram), accompany, bulk; LGPD; e-mail Ex-01; testes vermelhos antes.
-3. api-client: tipos, orgApi, NAV (`activation`), textos; testes.
-4. Web: Membros (Pn-04/04b/04c/04d), Convites (Pn-06/06b), Ativação (Pn-22*); testes.
-5. Docs: PERMISSIONS.md, REDESIGN_PROGRESS (Etapa 8), DATA_RETENTION se preciso, envs.
-6. lint/typecheck/testes verdes; apagar este arquivo no último commit.
+1. api-client: tipos, orgApi (invitesOverview, pendingInvites, resendInvites, renewInvite, freshInviteLink, setAccompaniedBy, bulkMembers, members include left), NAV (`activation` em Pessoas, contador `pendingInvites` vai para ela), textos; testes vermelhos antes.
+2. Web: Membros (Pn-04/04b/04c/04d), Convites (Pn-06/06b), Ativação (Pn-22*); testes vermelhos antes.
+3. Mobile: `inviteSummary` com expiresAt nulo (conferir `apps/mobile/app/(app)/org/[groupId]/invites.tsx` e `c/[token].tsx`).
+4. Docs: REDESIGN_PROGRESS (Etapa 8), DATA_RETENTION (recusa/aceite), DADOS_REDESIGN se preciso.
+5. lint/typecheck/testes verdes; apagar este arquivo no último commit.
 
 ## Fora (dependências)
 
