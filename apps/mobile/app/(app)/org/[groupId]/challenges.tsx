@@ -39,6 +39,7 @@ import {
   type ChallengeForm,
 } from '@/components/challenges/challenge-view';
 import { challengeListKey } from '@/components/challenges/join-challenge-drawer';
+import { localToday } from '@/components/workout/agenda-view';
 import { apiMessage, Choice, OrgPanel, PanelCard } from '@/components/org/org-panel';
 import {
   Button,
@@ -443,7 +444,8 @@ function ReviewCard({ g, item }: { g: MyGroup; item: CheckinReviewItem }) {
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para decidir agora.') }),
   });
-  const today = new Date().toISOString().slice(0, 10);
+  // Hoje no fuso da comunidade: o dia do item é dela, não o UTC (passada visual #395).
+  const today = localToday(new Date(), g.timezone);
   const when = whenLabel(item.date, item.capturedAt, today);
   const origem =
     item.source === 'system'

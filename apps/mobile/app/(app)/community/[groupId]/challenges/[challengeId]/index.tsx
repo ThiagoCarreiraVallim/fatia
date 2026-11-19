@@ -33,6 +33,7 @@ import {
   challengeListKey,
   JoinChallengeDrawer,
 } from '@/components/challenges/join-challenge-drawer';
+import { localToday } from '@/components/workout/agenda-view';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
 import { WaterSheet } from '@/components/today/water-sheet';
@@ -313,7 +314,7 @@ function ChallengeScreen() {
   const cta = challengeCta(c);
   const pct = heroPct(c);
   const privacy = privacyLine(c);
-  const todayYmd = c.today?.date ?? new Date().toISOString().slice(0, 10);
+  const todayYmd = c.today?.date ?? localToday();
   const waterGoal =
     c.today?.items.find((i) => i.item === 'water')?.goal ?? c.rules.waterGoalMl ?? 2500;
 
