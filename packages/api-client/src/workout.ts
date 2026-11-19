@@ -428,6 +428,22 @@ export interface WorkoutSessionSummary {
    * mostra "Ver plano" no lugar do botão. Opcional para respostas antigas.
    */
   savedPlanId?: string | null;
+  /**
+   * Reação e comentário da equipe (#399). Só leitura: a resposta vai pelo
+   * WhatsApp (ADR 048). Opcional para respostas antigas em cache.
+   */
+  feedback?: WorkoutSessionFeedback[];
+}
+
+/** O que a equipe mandou sobre um treino feito (#399). */
+export interface WorkoutSessionFeedback {
+  id: string;
+  authorName: string | null;
+  groupName: string;
+  reaction: 'STRONG' | 'FIRE' | 'CLAP' | 'HEART' | null;
+  body: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Uma linha do histórico (`GET /workout/history`, #381, Al-T10). */

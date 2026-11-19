@@ -292,6 +292,7 @@ describe('regras do conteúdo', () => {
   it('a seção Planos e dicas é do dono e do profissional', () => {
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([
       'overview',
+      'review',
       'members',
       'invites',
       'content',

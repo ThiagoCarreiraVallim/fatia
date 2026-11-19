@@ -21,10 +21,10 @@ import {
   splitReview,
   whatsappHref,
   type AtRiskRow,
-  type ReviewItem,
+  type PanelReviewItem,
 } from '../review-queue';
 
-const item = (over: Partial<ReviewItem> = {}): ReviewItem => ({
+const item = (over: Partial<PanelReviewItem> = {}): PanelReviewItem => ({
   kind: 'WORKOUT',
   refId: 's1',
   membershipId: 'm1',

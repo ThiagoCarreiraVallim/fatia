@@ -45,6 +45,7 @@ describe('quem abre o painel e com que seções', () => {
   it('dono vê tudo, inclusive a moderação; profissional, membros, convites, conteúdo, exercícios e desafios; os demais, nada', () => {
     expect(panelSections('OWNER').map((s) => s.section)).toEqual([
       'overview',
+      'review',
       'members',
       'invites',
       'content',
@@ -59,6 +60,7 @@ describe('quem abre o painel e com que seções', () => {
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([
       'overview',
+      'review',
       'members',
       'invites',
       'content',
