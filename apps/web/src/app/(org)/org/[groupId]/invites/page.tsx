@@ -220,7 +220,8 @@ export default function OrgInvitesPage() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              “Entraram” e “Ativaram” só aparecem com 5 pessoas ou mais.
+              “Entraram” só aparece com 5 pessoas ou mais. A ativação sai só no total, para ninguém
+              ser reconhecido por um convite pequeno.
             </p>
           </div>
 
@@ -236,7 +237,6 @@ export default function OrgInvitesPage() {
                     <th className="hidden p-3 font-semibold lg:table-cell">Papel</th>
                     <th className="hidden p-3 font-semibold md:table-cell">Usos</th>
                     <th className="hidden p-3 font-semibold lg:table-cell">Entraram</th>
-                    <th className="hidden p-3 font-semibold lg:table-cell">Ativaram</th>
                     <th className="p-3 font-semibold">Validade</th>
                     <th className="p-3">
                       <span className="sr-only">Ações</span>
@@ -269,15 +269,6 @@ export default function OrgInvitesPage() {
                             <span className="text-xs text-muted-foreground">menos de 5</span>
                           ) : (
                             <b>{i.joined}</b>
-                          )}
-                        </td>
-                        <td className="hidden p-3 lg:table-cell">
-                          {email || i.activated === null ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            <b className="text-primary">
-                              {i.activated.value} · {i.activated.percent}%
-                            </b>
                           )}
                         </td>
                         <td className="p-3">{inviteValidityLabel(i)}</td>

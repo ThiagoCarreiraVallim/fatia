@@ -166,6 +166,8 @@ const SKIP_REASON: Record<BatchSkipReason, string> = {
   duplicate: 'repetido na lista',
   member: 'já faz parte',
   pending_invite: 'já tem convite aberto',
+  declined: 'recusou há menos de 30 dias',
+  limit: 'já recebeu 5 convites em 30 dias',
 };
 
 export function batchSkipLabel(reason: BatchSkipReason): string {

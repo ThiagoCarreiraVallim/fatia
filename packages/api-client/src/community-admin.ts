@@ -122,8 +122,6 @@ export interface InviteOverviewRow extends InviteView {
   accompaniedByName: string | null;
   /** Quantos entraram por ele; nulo = amostra pequena (1 a 4). */
   joined: number | null;
-  /** Quantos ativaram em 48 h; nulo = amostra pequena. */
-  activated: { value: number; percent: number } | null;
 }
 
 export interface InviteOverview {
@@ -131,7 +129,8 @@ export interface InviteOverview {
     activeLinks: number;
     notAccepted: number | null;
     joinedLast30Days: number | null;
-    activated48h: { value: number; percent: number } | null;
+    /** Só o percentual, de toda a população com opt-in (não por convite). */
+    activated48h: { percent: number } | null;
   };
   invites: InviteOverviewRow[];
 }
@@ -212,7 +211,8 @@ export interface CreatedInvite {
   emailSent: boolean;
 }
 
-export type BatchSkipReason = 'invalid' | 'duplicate' | 'member' | 'pending_invite';
+export type BatchSkipReason =
+  'invalid' | 'duplicate' | 'member' | 'pending_invite' | 'declined' | 'limit';
 
 export interface BatchInviteResult {
   created: { email: string; inviteId: string; emailSent: boolean }[];
@@ -358,7 +358,10 @@ export const orgApi = {
     apiFetch<CreatedInvite>(`${base}/${groupId}/invites/${inviteId}/renew`, json('POST')),
   /** Link novo do mesmo convite, sem e-mail: para mandar pelo WhatsApp. */
   freshInviteLink: (groupId: string, inviteId: string) =>
-    apiFetch<{ url: string }>(`${base}/${groupId}/invites/${inviteId}/link`, json('POST')),
+    apiFetch<{ url: string; reused: boolean }>(
+      `${base}/${groupId}/invites/${inviteId}/link`,
+      json('POST'),
+    ),
 };
 
 export const seatsApi = {

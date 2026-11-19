@@ -71,7 +71,7 @@ export default function ActivationPage() {
   const [busca, setBusca] = useState('');
   const [pagina, setPagina] = useState(1);
   const [sel, setSel] = useState<string[]>([]);
-  const [zap, setZap] = useState<{ email: string; message: string } | null>(null);
+  const [zap, setZap] = useState<{ email: string; message: string; reused: boolean } | null>(null);
   const [emLinha, setEmLinha] = useState<SidePanelContent | null>(null);
 
   const q = busca.trim();
@@ -140,7 +140,7 @@ export default function ActivationPage() {
   const whatsapp = useMutation({
     mutationFn: (i: PendingInviteItem) => orgApi.freshInviteLink(g.id, i.id),
     onSuccess: (r, i) => {
-      setZap({ email: i.email, message: whatsappInviteMessage(g.name, r.url) });
+      setZap({ email: i.email, message: whatsappInviteMessage(g.name, r.url), reused: r.reused });
       refrescar();
     },
     onError: falhou('Não deu para gerar o link agora.'),
@@ -396,6 +396,7 @@ export default function ActivationPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="gap-1"
+                                title="Gera um link para mandar pelo WhatsApp: invalida o link anterior (o do e-mail). Em 10 minutos, volta o mesmo."
                                 disabled={whatsapp.isPending}
                                 onClick={() => whatsapp.mutate(i)}
                               >
@@ -450,7 +451,7 @@ export default function ActivationPage() {
           <p className="text-xs text-muted-foreground">
             {pequeno
               ? 'Com menos de 5 pessoas os totais ficam ocultos. A lista de convites continua aparecendo para a equipe.'
-              : 'Convite expira em 30 dias. Reenviar manda um link novo por e-mail (o anterior deixa de valer). WhatsApp gera um link novo com a mensagem pronta.'}
+              : 'Convite expira em 30 dias. Reenviar manda um link novo por e-mail (o anterior deixa de valer). WhatsApp gera um link novo com a mensagem pronta, e por 10 minutos devolve o mesmo.'}
           </p>
         </>
       )}
@@ -475,7 +476,9 @@ export default function ActivationPage() {
           <DialogHeader>
             <DialogTitle>Mensagem para {zap?.email}</DialogTitle>
             <DialogDescription>
-              O link é novo: o do e-mail anterior deixou de valer. Mande pelo WhatsApp ou copie.
+              {zap?.reused
+                ? 'É o mesmo link de há pouco: nada mudou. Mande pelo WhatsApp ou copie.'
+                : 'Link novo. O link do e-mail anterior deixou de valer. Mande pelo WhatsApp ou copie.'}
             </DialogDescription>
           </DialogHeader>
           <p className="rounded-xl bg-muted/50 p-3 text-sm">{zap?.message}</p>

@@ -156,6 +156,18 @@ export function InvitePanel({
     ? accompanyOptions(membros.data ?? []).map((m) => ({ id: m.membershipId, label: m.name }))
     : [{ id: g.membershipId, label: 'Eu' }];
   const ehMembro = papel === 'MEMBER';
+  // Convite de equipe dá permissão de equipe: sempre com prazo (até 30 dias) e limite.
+  const limites: readonly (typeof LIMITES)[number][] = ehMembro
+    ? LIMITES
+    : LIMITES.filter((l) => l.value !== null);
+  const validades: readonly (typeof VALIDADES)[number][] = ehMembro
+    ? VALIDADES
+    : VALIDADES.filter((v) => v.days !== null);
+  // Sem a opção "sem": o limite cai para 1 uso, e a validade para 30 dias.
+  const limiteEscolhido = limites.includes(LIMITES[limite]!) ? LIMITES[limite]! : limites[0]!;
+  const validadeEscolhida = validades.includes(VALIDADES[validade]!)
+    ? VALIDADES[validade]!
+    : validades[validades.length - 1]!;
 
   const extras = (): Pick<CreateInviteInput, 'accompaniedByMembershipId' | 'giveSeat'> => ({
     ...(ehMembro && acompanha ? { accompaniedByMembershipId: acompanha } : {}),
@@ -166,8 +178,8 @@ export function InvitePanel({
 
   const criarLink = useMutation({
     mutationFn: () => {
-      const lim = LIMITES[limite]!.value;
-      const dias = VALIDADES[validade]!.days;
+      const lim = limiteEscolhido.value;
+      const dias = validadeEscolhida.days;
       return orgApi.createInvite(g.id, {
         role: papel,
         ...(nome.trim() ? { label: nome.trim() } : {}),
@@ -251,17 +263,32 @@ export function InvitePanel({
             </Campo>
             <Campo titulo="Limite de usos">
               <div className="flex flex-wrap gap-2">
-                {LIMITES.map((l, i) => (
-                  <Chip key={l.label} selected={limite === i} onClick={() => setLimite(i)}>
+                {limites.map((l) => (
+                  <Chip
+                    key={l.label}
+                    selected={limiteEscolhido === l}
+                    onClick={() => setLimite(LIMITES.indexOf(l))}
+                  >
                     {l.label}
                   </Chip>
                 ))}
               </div>
             </Campo>
-            <Campo titulo="Vale por" nota={inviteValidityNote('link')}>
+            <Campo
+              titulo="Vale por"
+              nota={
+                ehMembro
+                  ? inviteValidityNote('link')
+                  : 'Convite de equipe vence em até 30 dias e tem limite de usos.'
+              }
+            >
               <div className="flex flex-wrap gap-2">
-                {VALIDADES.map((v, i) => (
-                  <Chip key={v.label} selected={validade === i} onClick={() => setValidade(i)}>
+                {validades.map((v) => (
+                  <Chip
+                    key={v.label}
+                    selected={validadeEscolhida === v}
+                    onClick={() => setValidade(VALIDADES.indexOf(v))}
+                  >
                     {v.label}
                   </Chip>
                 ))}
