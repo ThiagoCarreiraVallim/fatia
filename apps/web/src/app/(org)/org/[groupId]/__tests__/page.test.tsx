@@ -41,7 +41,7 @@ const visao = (p: Partial<PanelOverview> = {}): PanelOverview => ({
   days: 30,
   counts: { pendingRequests: 2, pendingInvites: 7, openReports: 1, challengeReview: 0 },
   members: { active: 118, joinedLast30Days: 4 },
-  newThisWeek: { total: 6, viaInvite: 4, viaPage: 2 },
+  newThisWeek: { total: 6, viaInvite: 4, viaPage: 2, viaUnknown: 0 },
   aggregates: {
     active7d: { value: 86, percent: 73 },
     notLoggedYet: 5,

@@ -211,8 +211,16 @@ describe('painel base (#398, integração)', () => {
       await membro(a.groupId, 'Página 1', { diasAtras: 3, via: 'PAGE' });
       await membro(a.groupId, 'Antigo', { diasAtras: 20, via: 'PAGE' });
       const v = await panel.overview(a.dono, a.groupId, 30);
-      expect(v.newThisWeek).toEqual({ total: 3, viaInvite: 2, viaPage: 1 });
+      expect(v.newThisWeek).toEqual({ total: 3, viaInvite: 2, viaPage: 1, viaUnknown: 0 });
       expect(v.members).toEqual({ active: 4, joinedLast30Days: 4 });
+    });
+
+    it('quem entrou sem origem gravada aparece em viaUnknown, e a soma fecha', async () => {
+      const a = await comunidade();
+      await membro(a.groupId, 'Convite', { diasAtras: 1, via: 'INVITE' });
+      await membro(a.groupId, 'Sem origem', { diasAtras: 2, via: null });
+      const v = await panel.overview(a.dono, a.groupId, 7);
+      expect(v.newThisWeek).toEqual({ total: 2, viaInvite: 1, viaPage: 0, viaUnknown: 1 });
     });
 
     it('o profissional não recebe os agregados (insights.read é do dono)', async () => {
@@ -275,10 +283,101 @@ describe('painel base (#398, integração)', () => {
       }
       const v = await panel.overview(a.dono, a.groupId, 30);
       expect(v.aggregates!.active7d).toEqual({ value: null, percent: null });
-      expect(v.aggregates!.activity.workouts.every((c) => c.suppressed || c.value === 0)).toBe(
-        true,
-      );
       expect(v.aggregates!.activity.workouts.some((c) => (c.value ?? 0) > 0)).toBe(false);
+    });
+
+    it('com 5 ou mais no opt-in, o lado pequeno do indicador some pelo suppress', async () => {
+      const a = await comunidade();
+      const gente = [];
+      for (let i = 0; i < 8; i++) gente.push(await membro(a.groupId, `Aluno ${i}`, { optIn: true }));
+      // 3 treinaram, 5 não: o lado de 3 é pequeno, e o de 5 sozinho entregaria o outro.
+      for (const m of gente.slice(0, 3)) await treino(m.userId, 2);
+      const v = await panel.overview(a.dono, a.groupId, 7);
+      expect(v.aggregates!.active7d).toEqual({ value: null, percent: null });
+      expect(v.aggregates!.activity.people.some((c) => c.value === 3)).toBe(false);
+      expect(v.aggregates!.activity.workouts.some((c) => c.value === 3)).toBe(false);
+    });
+
+    it('"0 treinaram" e "0 registraram" também são pequenos: somem', async () => {
+      const a = await comunidade();
+      for (let i = 0; i < 6; i++) await membro(a.groupId, `Novo ${i}`, { diasAtras: 5, optIn: true });
+      const v = await panel.overview(a.dono, a.groupId, 7);
+      expect(v.aggregates!.active7d).toEqual({ value: null, percent: null });
+      expect(v.aggregates!.notLoggedYet).toBeNull();
+    });
+
+    it('só membro entra no indicador: a equipe com opt-in não conta', async () => {
+      const a = await comunidade();
+      const novos = [];
+      for (let i = 0; i < 10; i++) {
+        novos.push(await membro(a.groupId, `Novo ${i}`, { diasAtras: 5, optIn: true }));
+      }
+      for (const m of novos.slice(0, 5)) await treino(m.userId, 2);
+      const prof2 = await pessoa('Prof com opt-in');
+      await prisma.groupMembership.create({
+        data: {
+          groupId: a.groupId,
+          userId: prof2,
+          role: 'PROFESSIONAL',
+          status: 'ACTIVE',
+          statsOptIn: true,
+          joinedAt: new Date(Date.now() - 5 * DIA),
+        },
+      });
+      const v = await panel.overview(a.dono, a.groupId, 30);
+      expect(v.aggregates!.notLoggedYet).toBe(5);
+      expect(v.aggregates!.active7d.percent).toBe(50);
+    });
+
+    it('as janelas são de dias inteiros no fuso: o número não muda no meio do dia', async () => {
+      const a = await comunidade();
+      await prisma.group.update({
+        where: { id: a.groupId },
+        data: { timezone: 'America/Sao_Paulo' },
+      });
+      // Meia-noite de hoje em São Paulo (03:00 UTC); 10h e 20h do mesmo dia.
+      const hoje = new Date();
+      const meiaNoite = new Date(
+        Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() - 1, 3),
+      );
+      const dez = new Date(meiaNoite.getTime() + 10 * 3_600_000);
+      const vinte = new Date(meiaNoite.getTime() + 20 * 3_600_000);
+
+      // "Ainda não registraram": 5 novos treinaram, 6 não; X entrou há 30 dias às 15h.
+      const entra = async (nome: string, em: Date) => {
+        const userId = await pessoa(nome);
+        await prisma.groupMembership.create({
+          data: {
+            groupId: a.groupId,
+            userId,
+            role: 'MEMBER',
+            status: 'ACTIVE',
+            statsOptIn: true,
+            joinedAt: em,
+          },
+        });
+        return userId;
+      };
+      const treinou = async (userId: string, em: Date) =>
+        prisma.workoutSession.create({
+          data: { userId, startedAt: new Date(em.getTime() - 3_600_000), completedAt: em },
+        });
+      for (let i = 0; i < 5; i++) {
+        const u = await entra(`Treinou ${i}`, new Date(dez.getTime() - 10 * DIA));
+        await treinou(u, new Date(dez.getTime() - 2 * DIA));
+      }
+      for (let i = 0; i < 5; i++) await entra(`Parado ${i}`, new Date(dez.getTime() - 10 * DIA));
+      await entra('X', new Date(dez.getTime() - 30 * DIA + 5 * 3_600_000));
+      // "Ativos em 7 dias": Y treinou só há 7 dias, às 15h.
+      const y = await entra('Y', new Date(dez.getTime() - 60 * DIA));
+      await treinou(y, new Date(dez.getTime() - 7 * DIA + 5 * 3_600_000));
+
+      const cedo = await panel.overview(a.dono, a.groupId, 7, dez);
+      const tarde = await panel.overview(a.dono, a.groupId, 7, vinte);
+      expect(cedo.aggregates!.notLoggedYet).toBe(6);
+      expect(tarde.aggregates!.notLoggedYet).toBe(6);
+      expect(cedo.aggregates!.active7d).toEqual(tarde.aggregates!.active7d);
+      expect(cedo.aggregates!.active7d.value).toBe(6);
     });
   });
 

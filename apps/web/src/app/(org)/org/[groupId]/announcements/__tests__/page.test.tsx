@@ -126,6 +126,25 @@ describe('/org/[groupId]/announcements (Pn-14 e Pn-26)', () => {
     );
   });
 
+  it('depois de publicar, o contador da semana do editor vem de novo da API', async () => {
+    const user = userEvent.setup();
+    vi.mocked(announcementsApi.create).mockResolvedValue(agendado);
+    abrir();
+    vi.mocked(announcementsApi.settings)
+      .mockResolvedValueOnce({ pushWeeklyLimit: 3, pushUsedThisWeek: 1, emailAvailable: true })
+      .mockResolvedValue({ pushWeeklyLimit: 3, pushUsedThisWeek: 2, emailAvailable: true });
+    await user.click(await screen.findByRole('button', { name: /Novo comunicado/ }));
+    let form = screen.getByRole('form', { name: 'Novo comunicado' });
+    await within(form).findByText('1 de 3 avisos da semana usados');
+    await user.type(within(form).getByRole('textbox', { name: 'Título' }), 'Oi');
+    await user.type(within(form).getByRole('textbox', { name: 'Texto' }), 'Tchau');
+    await user.click(within(form).getByRole('button', { name: 'Publicar agora' }));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Novo comunicado' })).toBeNull());
+    await user.click(screen.getByRole('button', { name: /Novo comunicado/ }));
+    form = screen.getByRole('form', { name: 'Novo comunicado' });
+    expect(await within(form).findByText('2 de 3 avisos da semana usados')).toBeInTheDocument();
+  });
+
   it('sem e-mail na instalação a chave fica desligada e o limite cheio avisa', async () => {
     ajustes = { pushWeeklyLimit: 3, pushUsedThisWeek: 3, emailAvailable: false };
     const user = userEvent.setup();
@@ -158,7 +177,7 @@ describe('/org/[groupId]/announcements (Pn-14 e Pn-26)', () => {
     abrir();
     const lista = await screen.findByRole('list', { name: 'Comunicados enviados' });
     expect(
-      within(lista).getByText(/12 notificações · 10 entregues · 8 e-mails/),
+      within(lista).getByText(/12 notificações · 10 entregues no celular · 8 e-mails/),
     ).toBeInTheDocument();
     enviados = [];
   });

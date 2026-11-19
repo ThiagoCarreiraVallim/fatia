@@ -54,7 +54,7 @@ describe('entrega do comunicado (#398, integração)', () => {
   } as unknown as PushService;
   const webPush = {
     publicKey: () => null,
-    send: async () => ({ gone: [] }),
+    send: async (alvos: unknown[]) => ({ gone: [], sent: alvos.length }),
   } as unknown as WebPushService;
   const notifications = new NotificationService(prisma, push, webPush);
   notifications.clock = () => new Date('2026-11-16T15:00:00Z');
@@ -236,8 +236,130 @@ describe('entrega do comunicado (#398, integração)', () => {
       const post = await prisma.groupPost.findFirstOrThrow({
         where: { announcementId: quarto.id },
       });
-      expect(post.notifiedAt).toBeNull();
       expect(quarto.pushSkipped).toBe(true);
+      expect(await prisma.announcementDispatch.count({ where: { announcementId: quarto.id } })).toBe(
+        0,
+      );
+      expect(post.id).toBeTruthy();
+    });
+
+    it('apagar o post não devolve a vaga da semana', async () => {
+      const a = await comunidade();
+      const ids = [];
+      for (let i = 0; i < 3; i++) {
+        ids.push((await announcements.create(a.dono, a.groupId, agora({ title: `A${i}` }))).id);
+      }
+      await Promise.all([notifications.drain(), announcements.drain()]);
+      await prisma.groupPost.deleteMany({ where: { announcementId: { in: ids } } });
+      await prisma.groupAnnouncement.deleteMany({ where: { id: { in: ids } } });
+      expect((await announcements.settings(a.dono, a.groupId)).pushUsedThisWeek).toBe(3);
+      enviados.length = 0;
+      const quarto = await announcements.create(a.dono, a.groupId, agora({ title: 'De novo' }));
+      await Promise.all([notifications.drain(), announcements.drain()]);
+      expect(quarto.pushSkipped).toBe(true);
+      expect(enviados).toEqual([]);
+    });
+
+    it('pedidos ao mesmo tempo não furam o teto da semana', async () => {
+      const a = await comunidade();
+      const saidas = await Promise.all(
+        Array.from({ length: 6 }, (_, i) =>
+          announcements.create(a.dono, a.groupId, agora({ title: `Junto ${i}` })),
+        ),
+      );
+      await Promise.all([notifications.drain(), announcements.drain()]);
+      expect(saidas.filter((x) => !x.pushSkipped)).toHaveLength(3);
+      expect(await prisma.announcementDispatch.count({ where: { groupId: a.groupId } })).toBe(3);
+    });
+
+    it('sem ninguém para avisar, não gasta a vaga', async () => {
+      const dono = await pessoa('Dona sozinha');
+      const g = await groups.create(dono, { type: 'SPONSORED', name: 'Vazia' });
+      grupos.push(g.id);
+      const c = await announcements.create(dono, g.id, agora({ alsoEmail: true }));
+      expect(c.pushSkipped).toBe(false);
+      expect((await announcements.settings(dono, g.id)).pushUsedThisWeek).toBe(0);
+    });
+
+    it('quem desligou comunicados não conta como destinatário da vaga', async () => {
+      const a = await comunidade();
+      await notifications.setPreferences(a.ana, { ANNOUNCEMENTS: false });
+      await notifications.setPreferences(a.bia, { ANNOUNCEMENTS: false });
+      await announcements.create(a.dono, a.groupId, agora());
+      expect((await announcements.settings(a.dono, a.groupId)).pushUsedThisWeek).toBe(0);
+    });
+
+    it('o disparo atrasado registra a hora em que saiu, não a planejada', async () => {
+      const a = await comunidade();
+      const previsto = new Date(Math.ceil((Date.now() + 60_000) / 900_000) * 900_000);
+      const c = await announcements.create(
+        a.dono,
+        a.groupId,
+        agora({ at: previsto.toISOString() }),
+      );
+      const atrasado = new Date(previsto.getTime() + 3 * 3_600_000);
+      await announcements.runDue(atrasado);
+      await Promise.all([notifications.drain(), announcements.drain()]);
+      const d = await prisma.announcementDispatch.findFirstOrThrow({
+        where: { announcementId: c.id },
+      });
+      expect(d.at.getTime()).toBe(atrasado.getTime());
+    });
+
+    it('erro no aviso depois de o post sair não derruba o pedido nem duplica o post', async () => {
+      const a = await comunidade();
+      const original = notifications.notify.bind(notifications);
+      notifications.notify = () => {
+        throw new Error('fila caiu');
+      };
+      try {
+        const c = await announcements.create(a.dono, a.groupId, agora({ title: 'Uma vez' }));
+        expect(await prisma.groupPost.count({ where: { announcementId: c.id } })).toBe(1);
+      } finally {
+        notifications.notify = original;
+      }
+    });
+
+    it('notificações mandadas somam o push no navegador', async () => {
+      const a = await comunidade();
+      await prisma.webPushSubscription.create({
+        data: {
+          userId: a.ana,
+          endpoint: `https://push.test/${stamp}-${a.ana}`,
+          p256dh: 'p',
+          auth: 'a',
+        },
+      });
+      const c = await announcements.create(a.dono, a.groupId, agora());
+      await Promise.all([notifications.drain(), announcements.drain()]);
+      const linha = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
+      expect(linha.pushSent).toBe(3);
+    });
+
+    it('HTML no título, no nome da comunidade e no texto sai escapado no e-mail', async () => {
+      const dono = await pessoa('Dona');
+      const g = await groups.create(dono, { type: 'SPONSORED', name: '<b>Academia</b>' });
+      grupos.push(g.id);
+      const ana = await pessoa('Ana');
+      await prisma.groupMembership.create({
+        data: { groupId: g.id, userId: ana, role: 'MEMBER', status: 'ACTIVE' },
+      });
+      await announcements.create(
+        dono,
+        g.id,
+        agora({
+          title: '<script>alert(1)</script>',
+          body: '<img src=x onerror=alert(1)>',
+          alsoEmail: true,
+          push: false,
+        }),
+      );
+      await announcements.drain();
+      expect(emails).toHaveLength(1);
+      expect(emails[0]!.html).not.toMatch(/<script|<img|<b>Academia/);
+      expect(emails[0]!.headers!['List-Unsubscribe']).toMatch(
+        /^<https:\/\/app\.fatia\.test\/api\/descadastro\?t=[\w.-]+>$/,
+      );
     });
 
     it('comunicado sem push nem e-mail não gasta o limite', async () => {

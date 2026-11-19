@@ -71,13 +71,19 @@ describe('menu do painel (#398)', () => {
 
 describe('cartões da Visão geral', () => {
   it('textos dos cartões', () => {
-    expect(newThisWeekLabel({ total: 6, viaInvite: 4, viaPage: 2 })).toBe(
+    expect(newThisWeekLabel({ total: 6, viaInvite: 4, viaPage: 2, viaUnknown: 0 })).toBe(
       '6 entraram · 4 por convite, 2 pela página',
     );
-    expect(newThisWeekLabel({ total: 1, viaInvite: 1, viaPage: 0 })).toBe(
+    expect(newThisWeekLabel({ total: 1, viaInvite: 1, viaPage: 0, viaUnknown: 0 })).toBe(
       '1 entrou · 1 por convite',
     );
-    expect(newThisWeekLabel({ total: 0, viaInvite: 0, viaPage: 0 })).toBe('Ninguém entrou ainda');
+    expect(newThisWeekLabel({ total: 0, viaInvite: 0, viaPage: 0, viaUnknown: 0 })).toBe(
+      'Ninguém entrou ainda',
+    );
+    // Quem entrou sem origem gravada fecha a soma.
+    expect(newThisWeekLabel({ total: 5, viaInvite: 3, viaPage: 1, viaUnknown: 1 })).toBe(
+      '5 entraram · 3 por convite, 1 pela página, 1 sem origem',
+    );
     expect(activationLabel(7)).toBe('7 convites sem aceite');
     expect(activationLabel(1)).toBe('1 convite sem aceite');
     expect(notLoggedYetLabel(5)).toBe('5 pessoas · só o número, sem nomes');
@@ -163,7 +169,7 @@ describe('comunicado no painel lateral', () => {
         pushDelivered: 10,
         emailSent: 8,
       }),
-    ).toBe('12 notificações · 10 entregues · 8 e-mails');
+    ).toBe('12 notificações · 10 entregues no celular · 8 e-mails');
     expect(
       announcementDeliveryLine({
         push: false,
