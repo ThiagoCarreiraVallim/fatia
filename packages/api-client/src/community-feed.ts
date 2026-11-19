@@ -177,6 +177,8 @@ export interface AnnouncementInput {
   pin: boolean;
   pinDays: number | null;
   push: boolean;
+  /** Também por e-mail (#398), para quem aceita comunicados e não se descadastrou. */
+  alsoEmail?: boolean;
   /** ISO do primeiro disparo (bloco de 15 min); nulo = agora. */
   at: string | null;
   repeat: AnnouncementRepeat;
@@ -190,11 +192,25 @@ export interface Announcement {
   pin: boolean;
   pinDays: number | null;
   push: boolean;
+  alsoEmail: boolean;
   repeat: AnnouncementRepeat;
   nextRunAt: string | null;
   lastRunAt: string | null;
   createdAt: string;
   author: string;
+  /** Contas da entrega, somadas em todos os disparos (#398). */
+  pushSent: number;
+  pushDelivered: number;
+  emailSent: number;
+  /** Saiu agora, mas o limite da semana segurou a notificação e o e-mail. */
+  pushSkipped?: boolean;
+}
+
+/** O que o editor do comunicado precisa saber antes de mandar (#398). */
+export interface AnnouncementSettings {
+  pushWeeklyLimit: number;
+  pushUsedThisWeek: number;
+  emailAvailable: boolean;
 }
 
 /** Uma pessoa bloqueada (Você > Conta). */
@@ -343,6 +359,11 @@ const announcements = (groupId: string) => `/api/groups/${groupId}/announcements
 
 export const announcementsApi = {
   list: (groupId: string) => apiFetch<Announcement[]>(announcements(groupId)),
+  /** Limite semanal de avisos e se o e-mail está ligado nesta instância (#398). */
+  settings: (groupId: string) =>
+    apiFetch<AnnouncementSettings>(`${announcements(groupId)}/settings`),
+  /** Os últimos que saíram, com mandadas, entregues e e-mails (#398). */
+  recent: (groupId: string) => apiFetch<Announcement[]>(`${announcements(groupId)}/recent`),
   create: (groupId: string, input: AnnouncementInput) =>
     apiFetch<Announcement>(announcements(groupId), json('POST', input)),
   cancel: (groupId: string, id: string) =>
