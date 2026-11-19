@@ -148,7 +148,7 @@ export default function OrgInvitesPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-64 flex-1">
           <h1 className="font-display text-xl font-bold">Convites</h1>
           <p className="text-sm text-muted-foreground">
             Link com origem, QR ou e-mail. Quem entra por convite pula a aprovação.
@@ -249,8 +249,8 @@ export default function OrgInvitesPage() {
                     const email = i.kind === 'email';
                     return (
                       <tr key={i.id} className={cn(!ativo && 'opacity-60')}>
-                        <td className="p-3">
-                          <span className="block font-semibold">{inviteName(i)}</span>
+                        <td className="max-w-[9.5rem] p-3 sm:max-w-none">
+                          <span className="block truncate font-semibold">{inviteName(i)}</span>
                           <span className="block text-xs text-muted-foreground">
                             {inviteSub(i)}
                           </span>
@@ -274,7 +274,7 @@ export default function OrgInvitesPage() {
                         <td className="p-3">{inviteValidityLabel(i)}</td>
                         <td className="p-3">
                           {ativo ? (
-                            <span className="flex justify-end gap-1">
+                            <span className="flex flex-col items-end gap-1 md:flex-row md:justify-end">
                               {i.url && (
                                 <Button
                                   size="sm"

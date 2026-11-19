@@ -198,7 +198,7 @@ export default function ActivationPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-64 flex-1">
           <h1 className="font-display text-xl font-bold">Ativação pendente</h1>
           <p className="text-sm text-muted-foreground">Quem foi convidado e ainda não entrou.</p>
         </div>
@@ -333,7 +333,7 @@ export default function ActivationPage() {
                     <th className="p-3 font-semibold">E-mail</th>
                     <th className="hidden p-3 font-semibold md:table-cell">Convidado há</th>
                     <th className="hidden p-3 font-semibold md:table-cell">Origem</th>
-                    <th className="p-3 font-semibold">Status</th>
+                    <th className="hidden p-3 font-semibold sm:table-cell">Status</th>
                     <th className="p-3 text-right font-semibold">Ações</th>
                   </tr>
                 </thead>
@@ -356,19 +356,26 @@ export default function ActivationPage() {
                             />
                           )}
                         </td>
-                        <td className="max-w-[14rem] p-3">
+                        <td className="max-w-[11rem] p-3 sm:max-w-[14rem]">
                           <span className="block truncate font-semibold">{i.email}</span>
                           <span className="block text-xs text-muted-foreground md:hidden">
                             há {invitedAgoLabel(i.invitedAt)}
+                          </span>
+                          <span className={cn('block text-xs font-semibold sm:hidden', st.cls)}>
+                            {st.label}
                           </span>
                         </td>
                         <td className="hidden p-3 md:table-cell">{invitedAgoLabel(i.invitedAt)}</td>
                         <td className="hidden p-3 md:table-cell">
                           {i.label || inviteOriginLabel(i.origin)}
                         </td>
-                        <td className={cn('p-3 text-xs font-semibold', st.cls)}>{st.label}</td>
+                        <td
+                          className={cn('hidden p-3 text-xs font-semibold sm:table-cell', st.cls)}
+                        >
+                          {st.label}
+                        </td>
                         <td className="p-3">
-                          <span className="flex flex-wrap justify-end gap-1">
+                          <span className="flex flex-col items-end gap-1 md:flex-row md:flex-wrap md:justify-end">
                             {i.canResend && (
                               <Button
                                 size="sm"
