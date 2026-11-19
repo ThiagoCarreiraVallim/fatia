@@ -32,3 +32,10 @@ Pranchas baixadas em `.canvas/project` do checkout principal: Pn-02-Revisar, Pn-
 - web: /org/[g]/review (abas, filtros, tabela, em risco), /org/[g]/review/sessions/[id] (Pn-35/35b), comentário no histórico do aluno.
 - mobile: comentário no histórico (workout/history/[id].tsx).
 - docs: ADR 048, THREAT_MODEL, DATA_RETENTION, REDESIGN_PROGRESS (linha + bloco #399), fechar #306.
+
+## Atualização (mobile e docs feitos)
+
+- mobile: SessionFeedbackCard no histórico (a72a368d)
+- docs: ADR 048, PRD não-objetivo, THREAT_MODEL vetor 22, DATA_RETENTION, MCP, REDESIGN_PROGRESS (51ce8aeb)
+- #306 já estava fechada (NOT_PLANNED); comentário com a ADR adicionado
+- Falta: rodadas finais (lint/typecheck/test de api, api-client, web, mobile), apagar este HANDOFF, relatório
