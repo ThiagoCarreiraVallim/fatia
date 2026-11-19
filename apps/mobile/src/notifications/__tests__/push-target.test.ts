@@ -6,6 +6,9 @@ describe('toque no aviso no app (#399, F6)', () => {
     expect(mobilePushTarget({ url: '/org/g1/review/at-risk' })).toBe('/org/g1');
     expect(mobilePushTarget({ url: '/org/g1/review/sessions/s1' })).toBe('/org/g1');
     expect(mobilePushTarget({ url: '/org/g1/review' })).toBe('/org/g1');
+    // Ativação pendente (#401) também não tem tela no app ainda.
+    expect(mobilePushTarget({ url: '/org/g1/activation' })).toBe('/org/g1');
+    expect(mobilePushTarget({ url: '/org/g1/members' })).toBe('/org/g1/members');
   });
 
   it('o resto passa como o `notificationTarget` decide', () => {
