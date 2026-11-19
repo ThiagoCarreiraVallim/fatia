@@ -241,7 +241,23 @@ export function reviewWhatsappText(item: PanelReviewItem): string {
 
 // ---------------------------------------------------------------- em risco
 
-export const RISK_DAYS_OPTIONS = [3, 5, 7, 10, 14, 21, 30] as const;
+/** As opções do limite, no mesmo intervalo da API (3 a 60 dias). */
+export const RISK_DAYS_OPTIONS = [3, 5, 7, 10, 14, 21, 30, 45, 60] as const;
+
+/** As opções com o valor atual, mesmo fora da lista (gravado pela API ou pelo MCP). */
+export function riskDaysOptions(current: number): number[] {
+  const out: number[] = [...RISK_DAYS_OPTIONS];
+  if (!out.includes(current)) out.push(current);
+  return out.sort((a, b) => a - b);
+}
+
+/**
+ * A aba Em risco como caminho próprio: é para onde o aviso diário leva, e o
+ * toque no aviso só aceita caminho sem `?` (`notificationTarget`).
+ */
+export function riskAtRiskHref(groupId: string): string {
+  return `${panelHref(groupId, 'review')}/at-risk`;
+}
 
 /** A etiqueta "Tipo" do em risco. */
 export function riskKindLabel(row: Pick<AtRiskRow, 'signal' | 'level'>): string {
@@ -277,6 +293,11 @@ export function reactionEmoji(r: SessionReaction): string {
 }
 
 export const FEEDBACK_BODY_MAX = 500;
+
+/** O tamanho do comentário como a API e o banco contam: code points, sem as pontas. */
+export function feedbackBodyLength(body: string): number {
+  return [...body.trim()].length;
+}
 
 /** "Como foi": "cansaço 3 de 5 · sem dor", "dor no joelho", "pulou as perguntas". */
 export function checkinLine(
