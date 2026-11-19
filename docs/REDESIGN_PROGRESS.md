@@ -490,9 +490,10 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 ## Etapa 8: Painel base (em andamento)
 
-| Issue | Título                                      | Estado           | Superfícies                    |
-| ----- | ------------------------------------------- | ---------------- | ------------------------------ |
-| #398  | Painel: layout novo, visão geral e busca ⌘K | pronto na branch | api, db, api-client, web, docs |
+| Issue | Título                                            | Estado           | Superfícies                            |
+| ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
+| #398  | Painel: layout novo, visão geral e busca ⌘K       | pronto na branch | api, db, api-client, web, docs         |
+| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -530,6 +531,37 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A comunidade demo tem 6 pessoas com opt-in, então os indicadores e o gráfico aparecem como "Oculto"/"—" no dev; é a regra, não defeito.
   - Nada foi publicado na passada (contagens do banco de dev iguais antes e depois); o e-mail ficou desligado no dev.
 - **Falta:** o app (painel no celular é a #414).
+
+#402 (branch `redesign/402-ficha-pessoa`; migration `20261119300000_member_file`; nenhuma env nova; nenhuma tool nova no MCP: aceitar e recusar plano já existem no MCP (`list_plan_offers` e afins), e `list_workout_plans` não mudou):
+
+- **Decisões (orquestrador):**
+  - **Anotações da equipe** (`MemberNote`): a pessoa vê. A caixa diz "O aluno vê estas anotações"; `visibleToSubject = true` sempre; no app (Comunidade → Sobre, celular e PWA) é só leitura e só aparece com alguma anotação. Sem etiquetas. Editar e apagar: quem escreveu ou o dono. Saem quando a pessoa deixa a comunidade (na mesma transação de `encerrar`), entram no export LGPD (`memberNotes`) e na `DATA_RETENTION.md`.
+  - **Ordem dos planos:** a equipe dá a ordem inicial na ficha (`PlanOffer.position`, copiada para `WorkoutPlan.position` no aceite); a pessoa reordena no app (Treino → Planos → Ordenar). Depois que ela reordena (`User.plansOrderedAt`), a ordem da ficha não mexe mais na lista dela, e a ficha avisa isso.
+  - **Resumo por IA** é a #411.
+  - **Agenda:** só treinos planejados (`PlannedSession` de plano mandado por esta comunidade). Eventos com "Vou" entram com o modelo novo da #397; sem grade de aulas.
+  - **Visitas** são a #390.
+- **Ficha** (`/org/<id>/members/<membershipId>`; Membros leva à ficha de todo membro ativo para dono e profissional):
+  - `GET groups/:id/members/:membershipId/file` e `/agenda?from&to` (até 42 dias). Permissões novas `member.file`, `member.plans` e `member.note` (dono e profissional), em `permissions.ts` e `PERMISSIONS.md`.
+  - Abas Resumo, Planos, Treino, Alimentação, Fotos das refeições, Corpo e avaliações, Hábitos e metas e Agenda. Aba de categoria que ela não compartilha tem cadeado e o estado "Ana não compartilha…". Planos e agenda planejada aparecem sempre (são da equipe); "feito/não feito" e pesagens só com Treino/Corpo liberados.
+  - Resumo: o que ela compartilha com quem olha, planos ativos, a semana (treinos x meta, média de 7 dias e dias com proteína, peso em 60 dias; só das categorias liberadas), próximos 7 dias, anotações e os 10 últimos acessos à ficha (inclusive negados).
+  - **Dado de saúde** só pelo `assertReadable` (uma leitura por categoria, ação `get_member_file`/`get_member_agenda`), então cada abertura entra em "Quem olhou seus dados".
+  - **Planos:** mandar treino da biblioteca (Sem datas / Com calendário, recado), etiquetas "na comunidade" e "já com a Ana", subir/descer, apagar com "Avisar a Ana" e "Terminar hoje" (apaga as sessões futuras e deixa em Terminados). Apagar tira a cópia dela; o que ela registrou fica no histórico. Pedido pendente vira `SUPERSEDED`. Alimentação aparece só leitura.
+- **Isolamento:** `membershipId` precisa ser da comunidade da URL e estar ativo (senão 404); oferta, modelo e anotação são amarrados à comunidade e à pessoa. Coberto em `member-file.integration.spec.ts` e no bloco #402 do `user-isolation.spec.ts`.
+- **Desvios de propósito:**
+  - A ordem da pessoa é `GET/PUT workout/plans/order`, não `users/me/plans/order`: fica junto das rotas de plano.
+  - Não há tabela nova de "plano mandado" com `kind`: o treino reaproveita `PlanOffer`/`PlanOfferVersion` (#379), com campos novos (`position`, `sourceTemplateId`, `endedAt`, `removedAt`), e a alimentação continua no `NutritionPlan` (#376).
+  - Sem rascunho, duplicar, editar a cópia, "Criar para a Ana" e mandar dieta: dependem dos editores.
+- **Falta:**
+  - #383: avaliações e "Pedir avaliação" (a aba Corpo mostra o espaço vazio).
+  - #397: eventos com "Vou" na agenda.
+  - #399: detalhe da sessão e recordes do mês na aba Treino.
+  - #406/#407: editores, rascunho, duplicar, editar a cópia e mandar plano alimentar.
+  - #404: equipe ("acompanhada por" vem só de quem tem acesso hoje).
+  - #390: visitas.
+  - #391: hábitos e os "Outros envios".
+  - #411: resumo por IA.
+  - O telefone para WhatsApp e "Substituir o atual" no envio.
+  - Ordenar planos alimentares (`MealTemplate`).
 
 ## Etapas seguintes
 
