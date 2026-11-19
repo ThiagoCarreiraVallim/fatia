@@ -18,6 +18,7 @@ import { todayInTz } from '../progress/helpers/date-tz';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { planEndDate, scheduleDates } from '../workout/helpers/planned-schedule';
 import { WorkoutPlanService } from '../workout/workout-plan.service';
+import type { SendMemberPlanDto } from './dto/member-file.dto';
 import { MAX_OFFER_NOTE, MAX_OFFER_WEEKS, type SendPlanOfferDto } from './dto/plan-offer.dto';
 import { TEAM_ROLES } from './permissions';
 import { PlanMaterializerService } from './plan-materializer.service';
@@ -232,6 +233,36 @@ export class PlanOfferService {
       offerUpdatedNotice({ offerId, authorName: ctx.authorName, title: content.title }),
     );
     return { id: offerId, versionId: created.id, version: created.version };
+  }
+
+  // ------------------------------------------------- equipe, pela ficha (#402)
+
+  async sendToMember(
+    _authorId: string,
+    _groupId: string,
+    _membershipId: string,
+    _input: SendMemberPlanDto,
+  ): Promise<{ id: string; versionId: string; version: number }> {
+    throw new Error('não implementado');
+  }
+
+  async removeForMember(
+    _viewerId: string,
+    _groupId: string,
+    _membershipId: string,
+    _offerId: string,
+    _opts: { notify: boolean; endToday: boolean },
+  ): Promise<{ offerId: string; result: 'removed' | 'ended' }> {
+    throw new Error('não implementado');
+  }
+
+  async reorderForMember(
+    _viewerId: string,
+    _groupId: string,
+    _membershipId: string,
+    _offerIds: string[],
+  ): Promise<{ offerIds: string[] }> {
+    throw new Error('não implementado');
   }
 
   // ---------------------------------------------------------------- aluno

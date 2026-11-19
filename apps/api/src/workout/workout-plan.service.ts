@@ -278,6 +278,18 @@ export class WorkoutPlanService {
     return this.withStats(userId, plans);
   }
 
+  /** A ordem dos planos no app (#402) e se a pessoa já reordenou. */
+  async order(_userId: string): Promise<{ planIds: string[]; customized: boolean }> {
+    throw new Error('não implementado');
+  }
+
+  async reorder(
+    _userId: string,
+    _planIds: string[],
+  ): Promise<{ planIds: string[]; customized: boolean }> {
+    throw new Error('não implementado');
+  }
+
   /**
    * "Feito 12 vezes · último há 4 dias": só sessões encerradas, e só as da
    * pessoa — o `userId` no filtro é o mesmo do plano lido.
