@@ -7,7 +7,7 @@ import {
   type PlanTemplateKind,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { MIN_CELL, suppress, type Cell, type PublishedCell } from '../insights/aggregation.service';
+import { MIN_CELL } from '../insights/aggregation.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from './content-roles';
 import { can, type GroupAction } from './permissions';
@@ -31,7 +31,7 @@ export interface PanelCounts {
   challengeReview: number | null;
 }
 
-/** Uma célula do gráfico: suprimida nunca vira 0 (ver `suppress`). */
+/** Uma célula do gráfico: suprimida nunca vira 0. */
 export interface OverviewCell {
   key: string;
   value: number | null;
@@ -132,7 +132,7 @@ const nomeDe = (u: { name: string }) => u.name;
  * número segue a ação de quem o vê.
  *
  * Nada aqui lê dado de saúde de uma pessoa: os agregados saem de contagens de
- * treino de quem deu `statsOptIn`, sempre por `suppress()` (MIN_CELL), e o
+ * treino de quem deu `statsOptIn`, sempre com 5 ou mais de cada lado (MIN_CELL), e o
  * resto é administração (pedidos, convites, denúncias, envios de quem pergunta).
  * Por isso não há linha em `ProfessionalAccessLog`.
  */
@@ -287,7 +287,7 @@ export class PanelService {
 
   /**
    * Os números de comportamento da Visão geral. Só quem disse sim às
-   * estatísticas entra, inclusive no denominador, e tudo sai por `suppress()`.
+   * estatísticas entra, inclusive no denominador, e cada número de dois lados só sai com 5 ou mais de cada lado.
    * Só treino conta: alimentação, peso e medidas nunca entram num agregado
    * (`AGGREGATION_POLICY.md` §6), por isso "ativos" é quem treinou.
    */
@@ -371,15 +371,15 @@ export class PanelService {
       dia.sessoes += 1;
       dia.gente.add(s.userId);
     }
+    // Cada dia também é de dois lados (treinou / não treinou): sai só com 5 ou
+    // mais de cada lado. 0 é pequeno, e o dia em que quase todos treinaram
+    // entregaria os poucos que ficaram parados.
     const serie = (valor: (d: { sessoes: number; gente: Set<string> }) => number) =>
-      publish(
-        suppress(
-          chaves.map<Cell>((key) => {
-            const d = porDia.get(key)!;
-            return { key, n: d.gente.size, value: valor(d) };
-          }),
-        ).cells,
-      );
+      chaves.map((key) => {
+        const d = porDia.get(key)!;
+        const ok = binarySplit(d.gente.size, participantes.length - d.gente.size) !== null;
+        return { key, value: ok ? valor(d) : null, suppressed: !ok };
+      });
 
     return {
       active7d,
@@ -557,8 +557,4 @@ function reviewWhere(groupId: string, userId: string) {
  */
 export function binarySplit(a: number, b: number): number | null {
   return a < MIN_CELL || b < MIN_CELL ? null : a;
-}
-
-function publish(cells: PublishedCell[]): OverviewCell[] {
-  return cells.map((c) => ({ key: c.key, value: c.value, suppressed: c.suppressed }));
 }
