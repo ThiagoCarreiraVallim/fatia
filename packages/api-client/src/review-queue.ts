@@ -151,7 +151,8 @@ export function reviewLine(item: PanelReviewItem): string {
   return [
     item.title ?? 'Treino livre',
     item.durationMinutes !== null ? `${item.durationMinutes} min` : null,
-    item.sets !== null ? plural(item.sets, 'série', 'séries') : null,
+    // Sessão sem série (só o tempo) não diz "0 séries".
+    item.sets ? plural(item.sets, 'série', 'séries') : null,
   ]
     .filter(Boolean)
     .join(' · ');

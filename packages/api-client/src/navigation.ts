@@ -468,7 +468,7 @@ export const ROUTES: readonly RouteDef[] = [
   // dentro dele volta à Visão geral. `:id` no `parent` é o mesmo da rota.
   { pattern: '/org/:id', title: 'Painel', parent: '/community/:id' },
   { pattern: '/org/:id/review', title: 'Para revisar', parent: '/org/:id' },
-  { pattern: '/org/:id/review/at-risk', title: 'Para revisar', parent: '/org/:id' },
+  { pattern: '/org/:id/review/at-risk', title: 'Em risco', parent: '/org/:id' },
   {
     pattern: '/org/:id/review/sessions/:sessionId',
     title: 'Sessão',

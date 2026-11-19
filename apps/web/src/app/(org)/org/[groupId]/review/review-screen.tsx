@@ -25,6 +25,7 @@ import {
   type PanelReviewItem,
   type ReviewFilter,
 } from '@fatia/api-client';
+import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { orgKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
@@ -108,10 +109,24 @@ const td = 'px-3 py-3 align-middle';
  * pelo nome, só quem deu vínculo a quem olha. Cada leitura entra no histórico
  * que o membro vê.
  */
-export function ReviewScreen({ initialTab }: { initialTab: ReviewTab }) {
+const TAB_TITLE: Record<Tab, string> = {
+  open: 'Para revisar',
+  seen: 'Revisados',
+  risk: 'Em risco',
+};
+
+export function ReviewScreen({
+  initialTab,
+  subpage = false,
+}: {
+  initialTab: ReviewTab;
+  /** Aberta por caminho próprio (`/review/at-risk`): a migalha diz a aba, não "Detalhe". */
+  subpage?: boolean;
+}) {
   const g = useOrgGroup();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>(initialTab);
+  useTopBarTitle(subpage ? TAB_TITLE[tab] : null);
   const [filter, setFilter] = useState<ReviewFilter>('all');
 
   const queueKey = [...orgKeys.all(g.id), 'review'] as const;

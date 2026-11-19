@@ -8,5 +8,5 @@ import { ReviewScreen } from '../review-screen';
  * service worker), então `?aba=risco` não serviria.
  */
 export default function AtRiskPage() {
-  return <ReviewScreen initialTab="risk" />;
+  return <ReviewScreen initialTab="risk" subpage />;
 }
