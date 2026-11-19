@@ -35,6 +35,7 @@ export const CHAT_KEYS = {
   memories: ['chat', 'memories'] as const,
   availability: ['chat', 'availability'] as const,
   agents: ['chat', 'agents'] as const,
+  settings: ['chat', 'settings'] as const,
 };
 
 const ChatContext = createContext<ChatSession | null>(null);

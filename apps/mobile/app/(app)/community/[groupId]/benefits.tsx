@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Linking, View } from 'react-native';
+import { Image, Linking, Platform, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +19,10 @@ import { Badge } from '@/components/ui/badge';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 
+/** Cupom em fonte de largura fixa, como na prancha: 0 e O não se confundem. */
+const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
+
+/** Monograma neutro: o parceiro não é a academia, então não leva a cor dela (Cm-22). */
 function Logo({ b }: { b: MemberBenefit }) {
   if (b.logoUrl) {
     return (
@@ -30,10 +34,8 @@ function Logo({ b }: { b: MemberBenefit }) {
     );
   }
   return (
-    <View className="h-12 w-12 items-center justify-center rounded-[14px] bg-brand">
-      <Text className="font-display text-sm text-brand-foreground">
-        {benefitInitials(b.partnerName)}
-      </Text>
+    <View className="h-12 w-12 items-center justify-center rounded-[14px] bg-surface-3">
+      <Text className="font-display text-sm text-foreground">{benefitInitials(b.partnerName)}</Text>
     </View>
   );
 }
@@ -66,16 +68,12 @@ export default function CommunityBenefitsScreen() {
   return (
     <Screen onRefresh={() => void list.refetch()} refreshing={list.isRefetching}>
       <View className="gap-4 px-5 pb-4 pt-4">
-        <View className="gap-1 px-1">
-          <Text accessibilityRole="header" className="font-display text-h3 text-foreground">
-            Benefícios
-          </Text>
-          <Text className="text-sm text-muted-foreground">
-            {group.data
-              ? `Descontos que a ${group.data.name} combinou com parceiros.`
-              : 'Descontos que a comunidade combinou com parceiros.'}
-          </Text>
-        </View>
+        {/* O título já está na barra do topo; aqui fica só a frase (Cm-22). */}
+        <Text className="px-1 text-sm text-muted-foreground">
+          {group.data
+            ? `Descontos que a ${group.data.name} combinou com parceiros.`
+            : 'Descontos que a comunidade combinou com parceiros.'}
+        </Text>
 
         {list.isPending ? <LoadingState label="Carregando os benefícios…" /> : null}
         {list.isError ? (
@@ -91,15 +89,23 @@ export default function CommunityBenefitsScreen() {
           <View
             key={b.id}
             accessibilityLabel={b.partnerName}
-            className={cn('gap-3 rounded-card bg-card p-[18px]', b.expired && 'opacity-50')}
+            className="gap-3 rounded-card bg-card p-[18px]"
           >
             <View className="flex-row items-center gap-3">
-              <Logo b={b} />
-              <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className="font-sans-bold text-foreground">
-                  {b.partnerName}
-                </Text>
-                <Text className="text-sm text-muted-foreground">{b.discountText}</Text>
+              {/* Vencido: apaga só logo e título; selo e nota ficam com contraste cheio. */}
+              <View
+                className={cn(
+                  'min-w-0 flex-1 flex-row items-center gap-3',
+                  b.expired && 'opacity-50',
+                )}
+              >
+                <Logo b={b} />
+                <View className="min-w-0 flex-1">
+                  <Text numberOfLines={1} className="font-sans-bold text-foreground">
+                    {b.partnerName}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">{b.discountText}</Text>
+                </View>
               </View>
               <Badge variant={b.expired ? 'pending' : 'done'}>{benefitValidity(b)}</Badge>
             </View>
@@ -110,21 +116,22 @@ export default function CommunityBenefitsScreen() {
                 <View className="h-11 flex-1 justify-center rounded-xl border border-dashed border-border px-3">
                   <Text
                     selectable
-                    className="font-sans-bold text-sm tracking-wider text-foreground"
+                    style={{ fontFamily: MONO }}
+                    className="text-sm font-bold tracking-wider text-foreground"
                   >
                     {b.couponCode}
                   </Text>
                 </View>
                 <Button
                   size="sm"
-                  variant={copied === b.id ? 'outline' : 'default'}
+                  variant={copied === b.id ? 'outline' : 'brand'}
                   onPress={() => void copy(b)}
                 >
                   {copied === b.id ? 'Copiado' : 'Copiar código'}
                 </Button>
               </View>
             ) : b.url ? (
-              <Button variant="outline" onPress={() => void Linking.openURL(b.url!)}>
+              <Button variant="brand" onPress={() => void Linking.openURL(b.url!)}>
                 Visitar o site
               </Button>
             ) : null}

@@ -4,6 +4,8 @@ import {
   benefitValidity,
   emptyBenefitDraft,
   benefitDraftToInput,
+  benefitDraftToPatch,
+  benefitToDraft,
   benefitValidUntilOptions,
 } from '../community-benefits';
 
@@ -23,13 +25,13 @@ describe('benefícios (Cm-22)', () => {
 describe('formulário do painel (Pn-28)', () => {
   const hoje = '2026-11-17';
 
-  it('cupom vira maiúsculo, sem link', () => {
+  it('cupom fica como foi digitado (só o trim), sem link', () => {
     const r = benefitDraftToInput(
       {
         ...emptyBenefitDraft(hoje),
         partnerName: ' Suplementa ',
         discountText: '15% em suplementos',
-        couponCode: 'demo15',
+        couponCode: ' demo15 ',
         url: 'https://ignorado',
         validUntil: '2026-12-31',
       },
@@ -41,11 +43,43 @@ describe('formulário do painel (Pn-28)', () => {
         partnerName: 'Suplementa',
         discountText: '15% em suplementos',
         kind: 'COUPON',
-        couponCode: 'DEMO15',
+        couponCode: 'demo15',
         url: null,
         validUntil: '2026-12-31',
         logoFileId: null,
       },
+    });
+  });
+
+  it('editar: a validade só vai quando muda, e vencida intocada não barra o texto', () => {
+    const vencido = {
+      id: 'b1',
+      partnerName: 'Corre+',
+      logoUrl: null,
+      logoFileId: null,
+      discountText: '10% em tênis',
+      kind: 'COUPON' as const,
+      couponCode: 'CORRE10',
+      url: null,
+      validUntil: '2026-10-31',
+      status: 'expired' as const,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    };
+    const d = { ...benefitToDraft(vencido), discountText: '15% em tênis' };
+    const r = benefitDraftToPatch(d, hoje, vencido);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.input).not.toHaveProperty('validUntil');
+    expect(r.ok && r.input.discountText).toBe('15% em tênis');
+
+    // Mudou a validade: vai, e não pode estar no passado.
+    expect(benefitDraftToPatch({ ...d, validUntil: '2026-12-31' }, hoje, vencido)).toMatchObject({
+      ok: true,
+      input: { validUntil: '2026-12-31' },
+    });
+    expect(benefitDraftToPatch({ ...d, validUntil: '2026-11-01' }, hoje, vencido)).toEqual({
+      ok: false,
+      errors: { validUntil: 'A validade não pode estar no passado' },
     });
   });
 

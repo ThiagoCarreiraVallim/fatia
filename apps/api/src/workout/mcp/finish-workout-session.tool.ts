@@ -24,6 +24,7 @@ export class FinishWorkoutSessionTool implements McpToolDef {
   readonly hostedInference = false;
 
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Finaliza uma sessão de treino, registrando o horário de conclusão. ' +
     'Para treino já ocorrido (ex.: "ontem eu treinei"), informe completedAt — ' +

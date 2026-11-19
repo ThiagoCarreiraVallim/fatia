@@ -212,6 +212,7 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 | Issue | Título                                                 | Estado           | Superfícies                                                     |
 | ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
 | #384  | Chat com IA: conversas, cartões, estados e ferramentas | pronto na branch | api, db, agente, MCP (contrato de cartão), api-client, web, app |
+| #385  | IA: foto do prato, configurações, memórias e limites   | pronto na branch | api, db, agente, MCP (`save_memory`), api-client, web, app      |
 | #386  | Plano e assinatura                                     | pronto na branch | api, db, api-client, web, app, site, e-mail e push              |
 | #388  | Conectar sua IA                                        | pronto na branch | api, db, api-client, web, app, docs                             |
 
@@ -328,21 +329,60 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - **ChatGPT precisa de teste com conta real antes do lançamento:** os passos seguem a prancha, mas falta confirmar que o ChatGPT faz DCR com PKCE contra o facade, em que plano o modo desenvolvedor existe, e que `client_name` ele manda (se não tiver "ChatGPT"/"OpenAI", a conexão aparece em "Outro app").
   - Domínio de produção do endereço (a história de Produção).
 
+Pendências da #385 (branch `redesign/385-ia-config`, sobre a #384; migrations `20261117120000_ai_write_modes_and_memory_category` e `20261118090000_ai_auto_write_hardening`; nenhuma env nova, a credencial é a `AGENT_API_KEY` que já existe):
+
+- **Modo por categoria (ADR 039):** Registros do dia, Treino, Metas e Memórias, padrão Perguntar antes. A API decide (`toolModes` a cada turno) e confere de novo no `/mcp` com o header `x-fatia-auto-write`: modo, até 5 gravações por resposta, até 10 itens, nunca apagar; fora disso volta ao cartão de confirmação. Cada gravação automática guarda o "antes" (`AiAutoWrite`) e tem inversa por tool; "Gravado" com Desfazer (`POST /chat/auto-writes/:id/undo`, dono, uma vez, 24 h). Desligado tira as escritas da categoria do catálogo. Cobrança, equipe e mural não têm categoria: sempre pedem OK.
+- **Endurecimento da revisão (ADR 039, nota de 2026-11-18):**
+  - Cada gravação automática guarda também o "depois". O Desfazer recusa com `AUTO_WRITE_CHANGED` se o registro ou os filhos mudaram.
+  - Num timeout o agente consulta pelo `toolCallId` e nunca abre o cartão.
+  - O header só vale com `X-Fatia-Agent-Key` e com o token de um turno ativo.
+  - O teto de 5 conta por mensagem da pessoa, atravessando a retomada e o "Continuar".
+  - `toolCallId` repetido é idempotente.
+  - As cópias somem em 24 h, ao desfazer ou quando o registro é apagado.
+  - O cartão mostra os erros, lembra "Desfeito" ao recarregar e mostra antes → depois.
+  - Falha ao gravar a escolha de guardar a foto avisa e deixa tentar de novo.
+- **Config da IA (Al-M24):** engrenagem no topo do chat (web e app), com as categorias (toque gira o modo), "Nunca é automático", busca na web (a mesma preferência do globo) e Mais (memórias com "n de 50", Usar sua própria IA, Meu plano).
+- **Memórias (Al-M9):** `category` (preferência, rotina, treino, hábito) e data; "n de 50"; com 50 a IA pede para apagar uma; "Apagar todas" com confirmação (`DELETE /chat/memories`, sem tool no MCP); a equipe nunca lê.
+- **Estados (Al-M11):** cota com "volta amanhã às 00:00", "Registrar à mão" e campo "Volta amanhã"; fora do ar com "Sua mensagem ficou salva" e Tentar de novo; interrompida com Continuar; "Pode sair da tela" enquanto pensa (o aviso de pronto já existia).
+- **Foto do prato (Al-M12, Al-M10):** PWA por arquivo em `/nutrition/photo` (o menu da IA já apontava para lá); aviso do provedor (o nome vem de `AiConsentStatus.processor`, como no aceite do chat) com "Como tratamos seus dados" antes da primeira foto, que é o aceite do chat (o 403 `AI_CONSENT_REQUIRED` traz o aviso de volta); revisão com desmarcar, ±10 g, total, aviso de 20–30% e "Gravar no almoço"; "Vai para:" troca a refeição. Permissão da câmera e da galeria reescritas (a foto só fica com permissão).
+- **MCP:** `save_memory` ganhou `category` (opcional); números e `SHA_ENTIDADE` regerados pelos specs. Nenhuma tool lê ou muda o modo.
+- **Desvios de propósito:**
+  - Só grava sozinha a tool com inversa exata; as outras de uma categoria em Automático continuam pedindo OK (criar plano, bloco, exercício próprio, copiar dia, entre outras).
+  - A pergunta de guardar a foto vem antes do reconhecimento, não depois: é nele que a API guarda.
+  - A escolha do agente segue na conversa nova, não na Config da IA.
+  - A câmera do app não ganhou as abas Prato/Rótulo nem o "Tirar outra" depois do disparo: o rótulo continua no alimento próprio; o "Tirar outra" está no aviso do provedor.
+  - O texto da permissão da câmera inclui os códigos de barras, que a prancha não cita.
+  - O botão da IA no menu não gira com a resposta em segundo plano; fica o "Respondendo…" que já existia no PWA.
+  - A revisão da foto (Al-M10) fica na tela da foto, e não no fio do chat com chips e campo de correção: no PWA, logo abaixo da foto; no app, na gaveta de revisão da #374. A conversa sobre a foto continua possível pelo chat.
+  - A Config da IA não tem a escolha do agente ("Com quem você conversa"): ela fica na conversa nova, como já registrado acima.
+  - Com a IA fora do ar o campo segue ligado (só o texto muda para "Indisponível"): a mensagem fica salva e "Tentar de novo" reenvia; a prancha apaga o campo.
+  - "Continuar" da resposta interrompida fica dentro da própria barra "Resposta interrompida", e não num cartão "Está mais longo que o previsto" com "Parar aqui": parar já é o botão de parar do campo.
+  - "Pensando…" antes do primeiro token é um cartão com o aviso de segundo plano; depois que o texto começa, fica só o indicador.
+- **Foto do chat que vira refeição:** a #384 deixou o gancho `MediaService.promoteChatPhotoToMeal` (só com "guardar as fotos" ligado), mas a #385 ainda não o chama quando o chat grava uma refeição a partir da foto da mensagem. A foto do chat segue passageira (24 h, #384).
+- **Passada visual (Al-M12, Al-M10, Al-M24, Al-M9, Al-M11):** web e app conferidos contra as pranchas; cota e fora do ar do app conferidos com estado forçado (a cota fica desligada no dev).
+
+Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migration nem env nova):
+
+- **Cartão de barras:** até 7 barras, um rótulo por barra; acima disso, início, meio e fim, como a linha do tempo. "2026-10-19" e "19/10" saem como "19 out".
+- **Teclado no Android:** o chat e o menu da IA sobem pelo quanto o teclado cobre (`useKeyboardOverlap`, sem módulo nativo). O iOS segue no `KeyboardAvoidingView`.
+- **Parar antes do primeiro token:** mostra "Resposta interrompida" com Continuar, no web e no app.
+- **Pendência:** essa linha não volta ao recarregar a conversa. A API não grava turno vazio (`completeTurn`), e as duas telas descartam linha vazia do histórico. Parar no meio da resposta volta normalmente.
+
 ## Etapa 7: Comunidade no app (em andamento)
 
 | Issue | Título                                                                | Estado           | Superfícies                                              |
 | ----- | --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
-| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app         |
+| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446)  | api, db, MCP (1 tool nova), api-client, web, app         |
 | #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
 
-#393 (branch `redesign/393-comunidades`, migration `20261117200000_community_entry_code_benefits`; nenhuma env nova):
+#393 (branch `redesign/393-comunidades`, migration `20261118100000_community_entry_code_benefits`; nenhuma env nova):
 
-- **Código de entrada (Cm-02):** é um `GroupInvite` com `code` legível (8 caracteres, sem 0/O/1/I/L), gerado em Convites ("Gerar código de entrada", web e app), só de membro, vale até 1 ano, revogável na lista. **Não é aprovação:** segue a `joinPolicy` (aberta entra, com aprovação vira pedido); comunidade só por convite não gera código (409) e o código dela dá 404. O slug continua valendo como código (cartazes antigos). Cada entrada soma um uso no convite na mesma transação. **Não é cupom:** não tem comissão (#287) nem indicação (#332). `previewBySlug` virou `previewByCode`; `join` recebe `{ code }` (aceita `slug` ainda).
+- **Código de entrada (Cm-02):** é um `GroupInvite` com `code` legível (8 caracteres, sem 0/O/1/I/L), gerado em Convites ("Gerar código de entrada", web e app), só de membro, vale até 1 ano, revogável na lista. **Não é aprovação:** segue a `joinPolicy` (aberta entra, com aprovação vira pedido); comunidade só por convite não gera código (409) e o código dela dá 404. **O slug só vale como código em comunidade pública** (`visibility=PUBLIC`): ele não se revoga, então em comunidade privada só se entra por código gerado ou convite, e o cartão do código não devolve o slug. A Academia Demo (privada) ganhou o código `DEMO2026` no `seed-demo`. Cada entrada soma um uso no convite na mesma transação (o último uso disputado por dois só deixa um entrar; teste de corrida). Preview e join têm teto real por usuário (`UserThrottlerGuard`: 30 e 20 por minuto; o `@Throttle` sozinho era inerte, o `ThrottlerModule` não é `APP_GUARD`), e o `join_group` do MCP tem teto próprio (10 tentativas em 10 minutos). **Não é cupom:** não tem comissão (#287) nem indicação (#332). `previewBySlug` virou `previewByCode`; `join` recebe `{ code }` (aceita `slug` ainda).
 - **QR:** o link do QR é `${WEB_ORIGIN}/community?join=1&code=X`; `parseCommunityEntry` lê código, esse link, o link de convite (`/c/<token>`, que entra pelo caminho do convite) e o token puro. No app a câmera (`expo-camera`, a mesma do onboarding) lê; na web não há leitura de QR, o link serve colado. Inválido, vencido, revogado e só-por-convite dão a mesma frase ("Código ou link inválido. Peça um novo à equipe."). O painel mostra o código e o link do QR em texto, sem desenhar o QR (não há biblioteca de QR no projeto).
-- **"A academia libera o PRO" (Cm-02)** só aparece quando o pool de assentos vale (`resolveAiEntitlement`) e tem vaga, ou é para todos os membros. **"PRO pago pela academia" (Cm-01/Cm-04)** só com o PRO pago pela comunidade valendo para a pessoa (`hasAiSeat`, `paidBy=GROUP`).
+- **Oferta de PRO no cartão (Cm-02):** `proOffer` é `ALL_MEMBERS` ("A academia libera o PRO para todos os membros."), `SEATS` com vaga ("A academia pode liberar o PRO: a equipe distribui os assentos.") ou `null`, pela regra do portão (`resolveAiEntitlement`). **"PRO pago pela academia" (Cm-01/Cm-04)** e o "se sair, volta ao Free" usam `proPaidByThisGroup`: a fonte do PRO valendo é `GROUP` e o pool é desta comunidade; assinatura própria valendo vence o assento.
 - **Minhas comunidades (Cm-01):** `MyGroup` ganhou `visibility`, `timezone`, `memberCount`, `newPostCount`, `forYouCount` e `challenge { id, title, rank }`. "Posts novos" conta desde `GroupMembership.feedSeenAt`, gravado pelo servidor quando a primeira página do mural é lida (não por post visto na tela). "Para você" conta só as ofertas de plano pendentes da comunidade.
 - **Sobre (Cm-04):** cada categoria grava na hora (chave), a obrigatória fica travada com cadeado; números da comunidade num checkbox. A equipe vem de `GET /groups/:id/team` (quem da equipe, o que vê de mim, último acesso em `ProfessionalAccessLog` não negado, só do próprio membro), em seções por papel, com busca, "viu hoje" e "Ver toda a equipe (N)". "Quem olhou seus dados" mostra os 5 últimos, inclusive o negado.
-- **Benefícios (Cm-22, Pn-28):** `GroupPartnerBenefit` (parceiro, logo opcional pelo storage com propósito `benefit_logo`, desconto, cupom **ou** link https, validade em dia). O membro vê os ativos e os vencidos de ontem (sem cupom nem link), no fuso da comunidade; a entrada em Sobre só aparece com benefício ativo. Cupom copia, link abre fora. **Só o dono cadastra** (`benefit.manage`; `benefit.read` para todos os papéis), no painel da web (tabela + painel lateral com prévia e logo) e no app (formulário com validade em escolhas prontas, sem logo). MCP: `list_group_benefits` (leitura, cartão lista) — 155 tools, `SHA_ENTIDADE` novo.
+- **Benefícios (Cm-22, Pn-28):** `GroupPartnerBenefit` (parceiro, logo opcional pelo storage com propósito `benefit_logo`, desconto, cupom **ou** link https, validade em dia). O membro vê os ativos e os vencidos de ontem (sem cupom nem link), no fuso da comunidade; a entrada em Sobre só aparece com benefício ativo. Cupom copia (guardado como digitado, só sem espaço nas pontas), link abre fora; no vencido só logo e título ficam apagados. Editar manda a validade só quando ela muda, então dá para corrigir o texto de um vencido. **Só o dono cadastra** (`benefit.manage`; `benefit.read` para todos os papéis), no painel da web (tabela + painel lateral com prévia e logo) e no app (formulário com validade em escolhas prontas, sem logo). MCP: `list_group_benefits` (leitura, cartão lista) — 155 tools, `SHA_ENTIDADE` novo.
 - **Isolamento:** benefício é sempre buscado por `{ id, groupId }` da URL; o logo passa por `media.resolveForGroup`. `user-isolation.spec.ts` cobre benefícios e a equipe vista pelo membro.
 - **Desvios de propósito:**
   - Sem "Rever boas-vindas" em Sobre: depende da #410.
@@ -350,9 +390,16 @@ Pendências da #388 (branch `redesign/388-conectar-ia`, migration `2026111700000
   - O cartão do convite (link `/c/…`) não mostra a oferta do PRO: o preview do convite não traz o pool.
   - A tool `join_group` do MCP manteve a descrição, mas aceita código.
   - O consentimento de entrada segue o `ConsentForm` atual (#371 não mexeu nele).
-- **Falta:** passada visual (prints lado a lado com Cm-01, Cm-02, Cm-04, Cm-22, Cm-22b, Pn-28, Pn-28b, Pn-28c, web e app, escuro e claro); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção).
+  - Cm-02: o QR não abre dentro da folha (a prancha tem as abas QR Code/Código com o visor); no app é o botão "Ler QR Code", que abre a câmera em tela cheia, e o campo do código fica sempre à vista. Na web não há QR.
+  - Cm-02: código de uma comunidade em que a pessoa já está (ou já pediu) mostra "você é membro"/"aguardando aprovação" e "Abrir a comunidade"/"Ver o pedido", em vez de pedir de novo (`alreadyInView`). A prancha não tem esse caso.
+  - Cm-22: "Copiado" fica no contorno neutro com o check, não no verde suave da prancha (o verde sobre verde a 10% não passa contraste no tema claro). Os benefícios vêm por validade, o que vence antes primeiro.
+  - Pn-28c: com o editor aberto a tabela fica só com parceiro, validade e "Editar" (a prancha espreme as seis colunas; em 1440 px o link quebrava letra a letra e o "Editar" saía da tela).
+  - Pn-28/28b: a moldura do painel (barra lateral com grupos, busca, "Ver no app") é a do `/org` atual, que é de outra issue; o "Benefício" fica ao lado do título, não na barra do topo.
+  - Capa do cartão patrocinado no app é a cor chapada, sem o degradê da web (sem `expo-linear-gradient` no projeto).
+- **Passada visual (2026-11-18):** prints lado a lado em `~/.cache/fatia-vis/393/cmp-*.png` (escuro; Pn-28 só web: o app estava logado como membro). Corrigido nela: cor da comunidade nos botões dos benefícios e não no monograma do parceiro, título repetido em Benefícios, cupom em fonte fixa no app, link cortado e colunas do painel com o editor aberto, avatar da patrocinada na cor dela (o do app deixava a capa vazar), quem já é membro não refaz o pedido, erro e "Sair" em `text-danger` no app (o `text-destructive` escuro é #93000a), texto do checkbox de estatísticas em Sobre no app.
+- **Falta:** prints no tema claro e do painel de benefícios no app (logado como dono); desenhar o QR no painel (#414/#416); abrir o link do QR direto no app (universal link, história de Produção). Fora da #393: `text-destructive` em texto continua em ~50 lugares do app (escuro ilegível) e o `Checkbox` do app não mostra o `label`.
 
-#396 (branch `redesign/396-conteudo-equipe`, sai de `redesign/393-comunidades`; migration `20261118200000_user_goals_history`; nenhuma env nova; nenhuma permissão nova):
+#396 (branch `redesign/396-conteudo-equipe`, sobre a main com a #393; migration `20261118200000_user_goals_history`; nenhuma env nova; nenhuma permissão nova):
 
 - **Decisão: aplicar plano da equipe pede confirmação com o antes e o depois.** Na tela, a folha "O que entra na sua conta?" (Cm-14) mostra as metas de agora ao lado das do plano, e as metas só mudam se a pessoa marcar; marcando, e se já houver metas, avisa "Suas metas de agora ficam no histórico.". No chat, o cartão de confirmação do `adopt_group_plan` com `applyGoals` traz uma linha por faixa ("Calorias: 2500–2800 → 1800–2000", "(igual)", "sem meta → …"). O modo automático da ADR 039 ainda não existe no código, então a tool continua sempre confirmável.
 - **Decisão: o histórico de metas é mantido.** Tabela nova `UserGoalsHistory` com a linha anterior inteira. Todo caminho que troca metas passa por `upsertWithHistory(tx, …)`: tela de metas e MCP (`manual`), onboarding refeito (`manual`), plano da comunidade (`group_plan`, com `templateId` em SetNull e o título) e plano alimentar aceito (`nutrition_plan`). Dentro de uma transação, a linha das metas é travada (`SELECT … FOR UPDATE`) antes de ler o "antes"; só grava histórico se algum campo enviado muda, e duas trocas iguais ao mesmo tempo deixam uma linha só. O `upsert` devolve `{ goals, previous, historyWritten }`; a adoção devolve `previousGoals` e `goalsHistoryWritten`, e a frase "As de antes ficaram no histórico." só sai quando o histórico foi gravado. Entra no export LGPD (`nutritionGoalsHistory`) e em `DATA_RETENTION.md`. Não há tela do histórico ainda. (`store-review-account.ts`, a conta de revisão das lojas, grava metas direto no seed e não passa pelo histórico.)

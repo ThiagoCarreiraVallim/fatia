@@ -37,6 +37,7 @@ describe('minhas comunidades (integração)', () => {
   async function comunidade() {
     const dono = await pessoa('Dona');
     const grupo = await groups.create(dono, {
+      visibility: 'PUBLIC',
       type: 'SPONSORED',
       name: 'Academia',
       joinPolicy: 'OPEN',
@@ -64,7 +65,7 @@ describe('minhas comunidades (integração)', () => {
     const { aluna, grupo } = await comunidade();
     expect(await minha(aluna, grupo.id)).toMatchObject({
       memberCount: 2,
-      visibility: 'PRIVATE',
+      visibility: 'PUBLIC',
       timezone: 'America/Cuiaba',
     });
   });
@@ -208,6 +209,50 @@ describe('minhas comunidades (integração)', () => {
       await expect(memberships.teamForMember(estranha, grupo.id)).rejects.toThrow(
         'Group not found',
       );
+    });
+  });
+
+  describe('"PRO pago pela academia" (revisão I2)', () => {
+    async function comAssento() {
+      const c = await comunidade();
+      const pool = await prisma.groupSeatPool.create({
+        data: { groupId: c.grupo.id, seats: 1, unitPriceCents: 1490, status: 'ACTIVE' },
+      });
+      await prisma.groupSeatAssignment.create({
+        data: { poolId: pool.id, membershipId: c.membershipId },
+      });
+      return c;
+    }
+
+    it('assento valendo e sem assinatura própria: quem paga é esta comunidade', async () => {
+      const { aluna, grupo } = await comAssento();
+      expect(await minha(aluna, grupo.id)).toMatchObject({
+        hasAiSeat: true,
+        proPaidByThisGroup: true,
+      });
+    });
+
+    it('assinatura pessoal ativa mais assento: o PRO é da pessoa, não da academia', async () => {
+      const { aluna, grupo } = await comAssento();
+      await prisma.userSubscription.create({
+        data: {
+          userId: aluna,
+          source: 'ASAAS',
+          status: 'ACTIVE',
+          interval: 'MONTHLY',
+          currentPeriodEnd: new Date(Date.now() + 20 * 86_400_000),
+        },
+      });
+      expect(await minha(aluna, grupo.id)).toMatchObject({
+        hasAiSeat: true,
+        proPaidByThisGroup: false,
+      });
+      expect((await groups.findByIdForMember(aluna, grupo.id)).proPaidByThisGroup).toBe(false);
+    });
+
+    it('sem assento, não é pago pela academia', async () => {
+      const { aluna, grupo } = await comunidade();
+      expect((await minha(aluna, grupo.id)).proPaidByThisGroup).toBe(false);
     });
   });
 });

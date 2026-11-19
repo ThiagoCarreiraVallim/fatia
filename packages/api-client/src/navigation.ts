@@ -355,7 +355,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
   { pattern: '/nutrition/plan', title: 'Plano alimentar', parent: '/nutrition' },
   { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
-  { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
+  { pattern: '/nutrition/photo', title: 'Foto do prato', parent: '/nutrition' },
   { pattern: '/nutrition/meals/:id', title: 'Refeição', parent: '/nutrition' },
   { pattern: '/workout', title: 'Treino', parent: null },
   // Al-T10: a prancha chama de "Histórico".

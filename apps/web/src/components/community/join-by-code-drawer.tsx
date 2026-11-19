@@ -1,20 +1,22 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Crown } from 'lucide-react';
 import {
+  alreadyInView,
   ApiError,
   ENTRY_INVALID,
   entryPolicyView,
   groupsApi,
   joinResultMessage,
   parseCommunityEntry,
-  PRO_OFFER_NOTE,
+  proOfferNote,
   VISIBILITY_WORD,
   type CommunityEntry,
   type JoinConsent,
+  type ProOffer,
   type ShareScope,
   type TeamMember,
 } from '@fatia/api-client';
@@ -30,6 +32,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ConsentForm } from './consent-form';
 import { GroupAvatar } from './group-avatar';
+import { communityKeys } from './query-keys';
 
 interface Props {
   open: boolean;
@@ -42,13 +45,16 @@ interface Props {
 /** A comunidade achada, venha de código ou de convite: o cartão do Cm-02. */
 interface Found {
   entry: CommunityEntry;
+  groupId: string;
+  /** Patrocinada: o avatar leva a cor da comunidade, como no cartão da lista. */
+  sponsored: boolean;
   name: string;
   meta: string;
   badge: string;
   tone: 'done' | 'lite' | 'pending';
   text: string;
   cta: string;
-  proOffer: boolean;
+  proOffer: ProOffer;
   team: TeamMember[];
   required: ShareScope[];
 }
@@ -62,13 +68,15 @@ async function lookup(entry: CommunityEntry): Promise<Found> {
     const c = await groupsApi.previewInvite(entry.token);
     return {
       entry,
+      groupId: c.group.id,
+      sponsored: c.group.type === 'SPONSORED',
       name: c.group.name,
       meta: `${TYPE_WORD[c.group.type]} · ${membros(c.memberCount)}`,
       badge: 'convite',
       tone: 'done',
       text: c.invitedBy ? `Convite de ${c.invitedBy}: entra na hora` : 'O convite já é a aprovação',
       cta: 'Entrar',
-      proOffer: false,
+      proOffer: null,
       team: c.team,
       required: c.requiredSharingScopes,
     };
@@ -77,6 +85,8 @@ async function lookup(entry: CommunityEntry): Promise<Found> {
   const policy = entryPolicyView(g.joinPolicy);
   return {
     entry: { kind: 'code', code: g.code },
+    groupId: g.id,
+    sponsored: g.type === 'SPONSORED',
     name: g.name,
     meta: `${TYPE_WORD[g.type]} · ${VISIBILITY_WORD[g.visibility]} · ${membros(g.memberCount)}`,
     badge: policy.badge,
@@ -102,6 +112,8 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined, initialCode }: 
   const [found, setFound] = useState<Found | null>(null);
   const [sharing, setSharing] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  // A lista da tela de trás (já em cache): quem já está na comunidade não refaz o pedido.
+  const mine = useQuery({ queryKey: communityKeys.mine, queryFn: () => groupsApi.mine() });
 
   const look = useMutation({
     mutationFn: lookup,
@@ -170,6 +182,13 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined, initialCode }: 
       : 'Não deu para entrar agora. Tente de novo.'
     : null;
 
+  const already = found ? alreadyInView(mine.data, found.groupId) : null;
+  const card = found
+    ? already
+      ? { badge: already.badge, tone: TONE[already.tone], text: already.text }
+      : { badge: found.badge, tone: found.tone, text: found.text }
+    : null;
+
   return (
     <Drawer open={open} onOpenChange={reset}>
       <DrawerContent className="px-4 pb-8">
@@ -214,7 +233,7 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined, initialCode }: 
               </label>
               <Input
                 id="community-code"
-                placeholder="academia-demo"
+                placeholder="AD7K3Q9P"
                 autoCapitalize="none"
                 autoCorrect="off"
                 autoComplete="off"
@@ -244,26 +263,43 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined, initialCode }: 
                   className="space-y-3 rounded-2xl bg-card p-4"
                 >
                   <div className="flex items-center gap-3">
-                    <GroupAvatar name={found.name} url={null} />
+                    <GroupAvatar
+                      name={found.name}
+                      url={null}
+                      className={found.sponsored ? 'bg-brand text-brand-foreground' : undefined}
+                    />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{found.name}</p>
                       <p className="text-xs text-muted-foreground">{found.meta}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={found.tone}>{found.badge}</Badge>
-                    <span className="text-xs text-muted-foreground">{found.text}</span>
+                    <Badge variant={card!.tone}>{card!.badge}</Badge>
+                    <span className="text-xs text-muted-foreground">{card!.text}</span>
                   </div>
-                  {found.proOffer && (
+                  {!already && proOfferNote(found.proOffer) && (
                     <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm">
                       <Crown size={16} className="shrink-0 text-primary" aria-hidden />
-                      {PRO_OFFER_NOTE}
+                      {proOfferNote(found.proOffer)}
                     </p>
                   )}
                 </section>
-                <Button className="w-full" onClick={() => setSharing(true)}>
-                  {found.cta}
-                </Button>
+                {already ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      const id = found.groupId;
+                      reset(false);
+                      onJoined(id);
+                    }}
+                  >
+                    {already.cta}
+                  </Button>
+                ) : (
+                  <Button className="w-full" onClick={() => setSharing(true)}>
+                    {found.cta}
+                  </Button>
+                )}
               </>
             )}
           </div>

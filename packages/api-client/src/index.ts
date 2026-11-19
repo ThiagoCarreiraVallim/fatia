@@ -23,6 +23,7 @@ export * from './pro-block-copy';
 export * from './chat';
 export * from './chat-thread';
 export * from './chat-cards';
+export * from './ai-settings';
 export * from './chat-markdown';
 export * from './chat-quote';
 export * from './plan';

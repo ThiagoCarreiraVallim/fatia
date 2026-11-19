@@ -7,6 +7,7 @@ import { Copy, Gift, Plus, X } from 'lucide-react';
 import {
   ApiError,
   benefitDraftToInput,
+  benefitDraftToPatch,
   benefitInitials,
   benefitsApi,
   benefitToDraft,
@@ -42,7 +43,18 @@ function todayIn(tz: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, dateStyle: 'short' }).format(new Date());
 }
 
-function Initials({ name, url, size = 40 }: { name: string; url: string | null; size?: number }) {
+/** Monograma neutro: o parceiro não é a academia, então não leva a cor dela (Pn-28). */
+function Initials({
+  name,
+  url,
+  size = 40,
+  className,
+}: {
+  name: string;
+  url: string | null;
+  size?: number;
+  className?: string;
+}) {
   if (url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- URL assinada do storage, sem otimizador.
@@ -58,7 +70,10 @@ function Initials({ name, url, size = 40 }: { name: string; url: string | null; 
     <span
       aria-hidden
       style={{ width: size, height: size }}
-      className="flex shrink-0 items-center justify-center rounded-xl bg-brand font-display text-xs font-bold text-brand-foreground"
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-xl bg-surface-3 font-display text-xs font-bold text-foreground',
+        className,
+      )}
     >
       {benefitInitials(name || '?')}
     </span>
@@ -78,9 +93,12 @@ function BenefitForm({
   draft,
   setDraft,
   setLogo,
+  original,
 }: {
   groupId: string;
   edicao: Edicao;
+  /** O benefício como está salvo, ao editar: a validade só é cobrada se mudar. */
+  original: TeamBenefit | null;
   today: string;
   pending: boolean;
   onCancel: () => void;
@@ -106,7 +124,9 @@ function BenefitForm({
       className="space-y-4 rounded-card bg-card p-5"
       onSubmit={(e) => {
         e.preventDefault();
-        const r = benefitDraftToInput(draft, today);
+        const r = original
+          ? benefitDraftToPatch(draft, today, original)
+          : benefitDraftToInput(draft, today);
         setErrors(r.ok ? {} : r.errors);
         onSave(r.ok ? null : r.errors);
       }}
@@ -136,7 +156,7 @@ function BenefitForm({
         <Label htmlFor="b-parceiro">Parceiro</Label>
         <Input
           id="b-parceiro"
-          maxLength={80}
+          maxLength={60}
           value={draft.partnerName}
           onChange={(e) => set('partnerName', e.target.value)}
           aria-invalid={!!errors.partnerName}
@@ -173,8 +193,9 @@ function BenefitForm({
           <Input
             id="b-cupom"
             maxLength={40}
-            autoCapitalize="characters"
-            className="font-mono uppercase"
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="font-mono"
             value={draft.couponCode}
             onChange={(e) => set('couponCode', e.target.value)}
             aria-invalid={!!errors.couponCode}
@@ -201,7 +222,8 @@ function BenefitForm({
         <Input
           id="b-validade"
           type="date"
-          min={today}
+          // Vencido intocado não pode travar o envio: o mínimo só vale para data nova.
+          min={original?.validUntil === draft.validUntil ? undefined : today}
           value={draft.validUntil}
           onChange={(e) => set('validUntil', e.target.value)}
           aria-invalid={!!errors.validUntil}
@@ -219,7 +241,7 @@ function BenefitForm({
         <p className="eyebrow">Prévia no app</p>
         <div aria-label="Prévia no app" className="space-y-3 rounded-2xl bg-surface-3 p-4">
           <div className="flex items-center gap-3">
-            <Initials name={draft.partnerName} url={edicao.logo?.url ?? null} />
+            <Initials name={draft.partnerName} url={edicao.logo?.url ?? null} className="bg-card" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{draft.partnerName || 'Parceiro'}</p>
               <p className="text-xs text-muted-foreground">
@@ -230,7 +252,7 @@ function BenefitForm({
           {draft.kind === 'COUPON' ? (
             <p className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-brand text-sm font-semibold text-brand-foreground">
               <Copy size={14} aria-hidden />
-              {`Copiar código ${draft.couponCode.trim().toUpperCase() || '…'}`}
+              {`Copiar código ${draft.couponCode.trim() || '…'}`}
             </p>
           ) : (
             <p className="flex h-10 items-center justify-center rounded-xl border border-border text-sm font-semibold">
@@ -282,13 +304,19 @@ export default function OrgBenefitsPage() {
     void qc.invalidateQueries({ queryKey: ['community', 'benefits', g.id] });
   };
 
+  const emEdicao = lista.data?.find((b) => b.id === edicao?.id) ?? null;
+
   const salvar = useMutation({
     mutationFn: async () => {
+      if (edicao?.id && emEdicao) {
+        // PATCH: a validade só vai se mudou (corrigir o texto de um vencido pode).
+        const p = benefitDraftToPatch(draft, today, emEdicao);
+        if (!p.ok) throw new Error('invalid');
+        return benefitsApi.update(g.id, edicao.id, p.input);
+      }
       const r = benefitDraftToInput(draft, today);
       if (!r.ok) throw new Error('invalid');
-      return edicao?.id
-        ? benefitsApi.update(g.id, edicao.id, r.input)
-        : benefitsApi.create(g.id, r.input);
+      return benefitsApi.create(g.id, r.input);
     },
     onSuccess: () => {
       setEdicao(null);
@@ -316,8 +344,6 @@ export default function OrgBenefitsPage() {
     setDraft(benefitToDraft(b));
     setEdicao({ id: b.id, logo: b.logoFileId ? { fileId: b.logoFileId, url: b.logoUrl } : null });
   }
-
-  const emEdicao = lista.data?.find((b) => b.id === edicao?.id) ?? null;
 
   return (
     <div className="space-y-4">
@@ -360,14 +386,16 @@ export default function OrgBenefitsPage() {
           )}
           {lista.data && lista.data.length > 0 && (
             <div className="overflow-x-auto rounded-card bg-card">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className={cn('w-full text-sm', !edicao && 'min-w-[640px]')}>
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
                     <th className="px-4 py-3 font-medium">Parceiro</th>
-                    <th className="px-4 py-3 font-medium">Desconto</th>
-                    <th className="px-4 py-3 font-medium">Cupom ou link</th>
+                    {/* Com o editor ao lado, ficam parceiro, validade (que já diz
+                        "venceu") e o "Editar" das outras linhas, sem rolagem. */}
+                    {!edicao && <th className="px-4 py-3 font-medium">Desconto</th>}
+                    {!edicao && <th className="px-4 py-3 font-medium">Cupom ou link</th>}
                     <th className="px-4 py-3 font-medium">Validade</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    {!edicao && <th className="px-4 py-3 font-medium">Status</th>}
                     <th className="px-4 py-3">
                       <span className="sr-only">Ações</span>
                     </th>
@@ -376,6 +404,10 @@ export default function OrgBenefitsPage() {
                 <tbody className="divide-y divide-border">
                   {lista.data.map((b) => {
                     const ativo = b.status === 'active';
+                    const valor =
+                      b.kind === 'COUPON'
+                        ? b.couponCode
+                        : (b.url?.replace(/^https:\/\//, '') ?? null);
                     return (
                       <tr key={b.id} className={cn(!ativo && 'opacity-55')}>
                         <td className="px-4 py-3">
@@ -384,23 +416,35 @@ export default function OrgBenefitsPage() {
                             <span className="font-semibold">{b.partnerName}</span>
                           </span>
                         </td>
-                        <td className="px-4 py-3">{b.discountText}</td>
-                        <td className="max-w-[220px] px-4 py-3">
-                          <span className="text-xs text-muted-foreground">
-                            {b.kind === 'COUPON' ? 'cupom' : 'link'}
-                          </span>{' '}
-                          <span className="break-all font-mono text-xs">
-                            {b.kind === 'COUPON' ? b.couponCode : b.url?.replace(/^https:\/\//, '')}
+                        {!edicao && <td className="px-4 py-3">{b.discountText}</td>}
+                        {!edicao && (
+                          <td className="max-w-[220px] px-4 py-3">
+                            {/* Cortado com reticências: com o editor aberto a coluna aperta. */}
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {b.kind === 'COUPON' ? 'cupom' : 'link'}
+                              </span>
+                              <span
+                                title={valor ?? undefined}
+                                className="min-w-0 truncate font-mono text-xs"
+                              >
+                                {valor}
+                              </span>
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <span className="whitespace-nowrap">
+                            {benefitValidity({ validUntil: b.validUntil, expired: !ativo })}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          {benefitValidity({ validUntil: b.validUntil, expired: !ativo })}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={ativo ? 'done' : 'pending'}>
-                            {ativo ? 'ativo' : 'expirado'}
-                          </Badge>
-                        </td>
+                        {!edicao && (
+                          <td className="px-4 py-3">
+                            <Badge variant={ativo ? 'done' : 'pending'}>
+                              {ativo ? 'ativo' : 'expirado'}
+                            </Badge>
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-right">
                           <Button
                             size="sm"
@@ -431,6 +475,7 @@ export default function OrgBenefitsPage() {
             draft={draft}
             setDraft={setDraft}
             setLogo={(logo) => setEdicao({ ...edicao, logo })}
+            original={emEdicao}
             onCancel={() => setEdicao(null)}
             onSave={(errors) => {
               if (!errors) salvar.mutate();

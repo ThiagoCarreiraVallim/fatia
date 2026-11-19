@@ -292,9 +292,18 @@ export function applyChatFrame(state: ChatThreadState, frame: ChatStreamFrame): 
       const duracao =
         isRecord(data) && typeof data.durationMs === 'number' ? data.durationMs : undefined;
       let messages = s.messages;
-      const ultima = lastAssistant(messages);
-      if (ultima && (status === 'stopped' || duracao !== undefined)) {
-        messages = upsertAssistant(messages, ultima.id, (m) => ({
+      // A resposta deste turno é a que vem depois da pergunta. Parado antes do primeiro token
+      // não há nenhuma, e a anterior terminou normalmente: nasce uma vazia, só para a linha
+      // "Resposta interrompida" ficar abaixo da pergunta, como quando se para no meio.
+      const ultima = messages.at(-1);
+      const respostaId =
+        ultima?.role === 'assistant'
+          ? ultima.id
+          : ultima && status === 'stopped'
+            ? `stopped-${ultima.id}`
+            : undefined;
+      if (respostaId && (status === 'stopped' || duracao !== undefined)) {
+        messages = upsertAssistant(messages, respostaId, (m) => ({
           ...m,
           ...(status === 'stopped' ? { stopped: true } : {}),
           ...(duracao !== undefined ? { durationMs: duracao } : {}),

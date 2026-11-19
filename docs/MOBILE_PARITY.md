@@ -55,7 +55,7 @@ Nenhum placeholder restante no código.
 | `(app)/nutrition/nutrient-targets`   | `app/(app)/nutrition/nutrient-targets.tsx`               | ✅  |                                                                                                                                                                       |
 | `(app)/nutrition/plan`               | `app/(app)/nutrition/plan.tsx`                           | ✅  | Plano alimentar (#376): aceitar, comi isso, trocar e desfazer; a folha de troca é drawer irmão da `Screen`                                                            |
 | —                                    | `app/(app)/nutrition/scan.tsx`                           | ➕  | leitor (#140, #375): abas Código/Rótulo; código seu abre direto na quantidade; desconhecido segue para o rótulo com o código; no PWA o leitor mora no drawer de busca |
-| —                                    | `app/(app)/nutrition/photo.tsx`                          | ➕  | registro por foto (#139); na primeira foto pergunta "Guardar as fotos das refeições?" (#374); o PWA não tem, ver abaixo                                               |
+| `nutrition/photo` (#385)             | `app/(app)/nutrition/photo.tsx`                          | ✅  | registro por foto (#139); aviso do provedor antes da primeira; "Guardar as fotos das refeições?" (#374); no PWA o arquivo faz o papel da câmera, ver abaixo           |
 | `(app)/plan`                         | `app/(app)/plan.tsx`                                     | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo                                                                                                |
 | `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                                                                                                                       |
 | `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | prancha Al-V4 nos dois (#389)                                                                                                                                         |
@@ -168,14 +168,12 @@ exigência de loja.
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
 | Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
 | Avisos da comunidade (push)                       | Fase 8c, ADR 033 — o PWA no iOS não entrega push com confiança                         |
-| Registro de refeição por foto                     | #139 — depende de câmera e galeria; ver abaixo                                         |
 
-**Registro por foto (#139) não é dívida de paridade — é dependência de aparelho.**
-Câmera e galeria não existem no PWA de forma comparável (o `input[capture]` do
-Safari abre a câmera do sistema e devolve HEIC, que os modelos de visão não
-aceitam), e o fluxo inteiro se apoia em capturar, reduzir e recomprimir no
-dispositivo. O PWA continua na busca por nome, que é o caminho que sempre
-funcionou e é onde o nativo também termina, na tela de confirmação.
+**Registro por foto: o PWA usa arquivo no lugar da câmera (#385).** `/nutrition/photo` abre o
+seletor com `capture` (no celular, a câmera do sistema) e recodifica no canvas para JPEG sem EXIF,
+o que também converte HEIC onde o navegador sabe abrir. Daí em diante é o mesmo fluxo do app: aviso
+do provedor, a pergunta de guardar e a revisão com ±10 g. Sem câmera ao vivo, flip nem aba Rótulo
+nesta tela (o rótulo continua no formulário de alimento próprio).
 
 **A entrada por foto some quando não há IA configurada.** O botão só aparece se
 `GET /api/nutrition/photo-recognition` responder `available: true`, o que exige

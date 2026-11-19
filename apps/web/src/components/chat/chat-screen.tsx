@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuiState } from '@assistant-ui/react';
 import { SquarePen } from 'lucide-react';
@@ -15,6 +16,7 @@ import {
 import { LinhaDoAgente } from './agente';
 import { GavetaDeConversas, novaConversa } from './conversas';
 import { GavetaDeMemorias } from './memorias';
+import { ConfigDaIa } from './config-da-ia';
 import { UpsellIA } from './upsell-ia';
 import { ChatThread } from './thread';
 import { cn } from '@/lib/utils';
@@ -36,6 +38,7 @@ export function ChatScreen() {
   const fromRuntime = useAuiState((s) => s.threadListItem?.title);
   const title = fromServer ?? fromRuntime ?? 'Chat';
   const availability = useDisponibilidadeDoChat();
+  const [memoriasAbertas, setMemoriasAbertas] = useState(false);
   useTopBarTitle(title);
 
   return (
@@ -53,7 +56,8 @@ export function ChatScreen() {
     >
       <TopBarActions>
         <WebSearchSwitch />
-        <GavetaDeMemorias />
+        <GavetaDeMemorias aberta={memoriasAbertas} onAberta={setMemoriasAbertas} />
+        <ConfigDaIa onAbrirMemorias={() => setMemoriasAbertas(true)} />
         <GavetaDeConversas aberta={openId} />
         {/* Como no app: começar outra conversa a um toque, sem abrir a gaveta. */}
         <button

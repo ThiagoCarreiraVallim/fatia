@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   accessLogLine,
+  alreadyInView,
   communityCardBadges,
   communityCardMeta,
   entryPolicyView,
   parseCommunityEntry,
+  proOfferNote,
   teamSections,
   timezoneLabel,
   viewedToday,
@@ -39,6 +41,11 @@ describe('parseCommunityEntry', () => {
     expect(parseCommunityEntry(TOKEN)).toEqual({ kind: 'invite', token: TOKEN });
   });
 
+  it('código digitado com espaço no meio continua sendo código', () => {
+    expect(parseCommunityEntry('AD7K 3Q9P')).toEqual({ kind: 'code', code: 'AD7K3Q9P' });
+    expect(parseCommunityEntry(' ad7k  3q9p\n')).toEqual({ kind: 'code', code: 'ad7k3q9p' });
+  });
+
   it('curto demais ou sem nada legível é null', () => {
     expect(parseCommunityEntry('ab')).toBeNull();
     expect(parseCommunityEntry('')).toBeNull();
@@ -61,6 +68,7 @@ const grupo = (over: Partial<MyGroup> = {}): MyGroup => ({
   consentScopes: [],
   statsOptIn: false,
   hasAiSeat: true,
+  proPaidByThisGroup: true,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
   requiredSharingScopes: [],
@@ -98,6 +106,16 @@ describe('cartão de Minhas comunidades (Cm-01)', () => {
       { label: '1 post novo', tone: 'muted' },
       { label: 'pública', tone: 'muted' },
     ]);
+  });
+});
+
+describe('proOfferNote', () => {
+  it('todos os membros libera; por assento só pode liberar; sem oferta, nada', () => {
+    expect(proOfferNote('ALL_MEMBERS')).toBe('A academia libera o PRO para todos os membros.');
+    expect(proOfferNote('SEATS')).toBe(
+      'A academia pode liberar o PRO: a equipe distribui os assentos.',
+    );
+    expect(proOfferNote(null)).toBeNull();
   });
 });
 
@@ -182,5 +200,35 @@ describe('Sobre (Cm-04)', () => {
         'America/Sao_Paulo',
       ),
     ).toBe('Alguém que saiu do Fatia tentou ver Alimentação · negado · ontem 18:40');
+  });
+});
+
+describe('alreadyInView (Cm-02, quem já está na comunidade)', () => {
+  const mine = [
+    { id: 'g1', status: 'ACTIVE' as const },
+    { id: 'g2', status: 'INVITED' as const },
+  ];
+
+  it('membro ativo: avisa e leva até a comunidade, sem refazer o pedido', () => {
+    expect(alreadyInView(mine, 'g1')).toEqual({
+      badge: 'você é membro',
+      tone: 'ok',
+      text: 'Você já faz parte desta comunidade',
+      cta: 'Abrir a comunidade',
+    });
+  });
+
+  it('pedido esperando: diz que já foi e leva até ele', () => {
+    expect(alreadyInView(mine, 'g2')).toEqual({
+      badge: 'aguardando aprovação',
+      tone: 'warn',
+      text: 'Seu pedido já está com o dono',
+      cta: 'Ver o pedido',
+    });
+  });
+
+  it('fora da comunidade, ou lista ainda carregando: segue o fluxo de entrada', () => {
+    expect(alreadyInView(mine, 'g3')).toBeNull();
+    expect(alreadyInView(undefined, 'g1')).toBeNull();
   });
 });

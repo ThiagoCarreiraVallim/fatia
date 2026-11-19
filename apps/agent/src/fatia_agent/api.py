@@ -60,10 +60,12 @@ from .chat import (
     ContextoDoTurno,
     GrafoDaConversa,
     McpClient,
+    automaticas,
     build_mcp_client,
     camada_restrita,
     interrupcao_pendente,
     montar_grafo,
+    sem_desligadas,
     stream_chat_events,
     thread_da_conversa,
     todas_permitidas,
@@ -171,6 +173,22 @@ class ChatMemory(BaseModel):
     content: Annotated[str, Field(min_length=1, max_length=500)]
 
 
+_NOME_DE_TOOL = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")]
+
+
+class ChatToolModes(BaseModel):
+    """O modo da IA por categoria (ADR 039, #385), já traduzido em nomes de tool pelo `apps/api`.
+
+    `off`: saem do catálogo deste turno (categoria Desligada). `auto`: gravam sem cartão,
+    com o `/mcp` conferindo de novo o modo, os tetos e o "nunca automático".
+    """
+
+    model_config = {"extra": "forbid"}
+
+    auto: Annotated[list[_NOME_DE_TOOL], Field(default_factory=list, max_length=200)]
+    off: Annotated[list[_NOME_DE_TOOL], Field(default_factory=list, max_length=200)]
+
+
 class ChatPersona(BaseModel):
     """O agente da comunidade nesta conversa (Fase 7c, ADR 031).
 
@@ -270,6 +288,11 @@ class ChatRequest(BaseModel):
     # A busca na web (#384): o `apps/api` decide a cada turno pela preferência e pelo aceite
     # da pessoa. Ausente é desligada — quem não diz, não liga.
     web_search: Annotated[Literal["off", "ask", "on"], Field(alias="webSearch")] = "off"
+    # O modo por categoria (#385). Ausente é "Perguntar antes" em tudo — o default da ADR 039.
+    tool_modes: Annotated[ChatToolModes | None, Field(alias="toolModes")] = None
+    # O token do turno aberto no `apps/api` (#385): volta no header da gravação automática, e o
+    # `/mcp` só a aceita de um turno ativo desta conversa. Ausente, nada grava sem o OK.
+    run_token: Annotated[str | None, Field(alias="runToken", min_length=1, max_length=64)] = None
 
     @model_validator(mode="after")
     def _um_dos_dois(self) -> "ChatRequest":
@@ -647,7 +670,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # O catálogo antes do stream: é a primeira chamada que exercita o
             # Bearer, e a única chance de um token inválido virar 401 de verdade.
             anunciadas = await client.list_tools()
-            permitidas = todas_permitidas(anunciadas)
+            modos = payload.tool_modes or ChatToolModes(auto=[], off=[])
+            permitidas = sem_desligadas(todas_permitidas(anunciadas), modos.off)
             owner_id = await _owner_id(client)
             thread_id = thread_da_conversa(owner_id, str(payload.conversation_id))
             compilado = await compiled_graph()
@@ -700,6 +724,12 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # A pergunta da busca, numa chamada à parte que só recebe a fala da pessoa (#384).
             write_search_query=_query_writer(provider) if provider.supports_web_search else None,
             pause_after_tools=resolved.agent_chat_pause_after_tools,
+            conversation_id=str(payload.conversation_id),
+            # Sem a credencial do agente o `/mcp` recusaria o header (403): nem tenta.
+            auto_write=automaticas(permitidas, modos.auto)
+            if resolved.agent_api_key.strip() and payload.run_token
+            else frozenset(),
+            run_token=payload.run_token,
         )
 
         async def fluxo() -> AsyncIterator[str]:

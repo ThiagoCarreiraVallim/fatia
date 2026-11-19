@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+/** Monograma neutro: o parceiro não é a academia, então não leva a cor dela (Cm-22). */
 function Logo({ b }: { b: MemberBenefit }) {
   if (b.logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element -- URL assinada do storage, sem otimizador.
@@ -30,7 +31,7 @@ function Logo({ b }: { b: MemberBenefit }) {
   return (
     <span
       aria-hidden
-      className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-brand font-display text-sm font-bold text-brand-foreground"
+      className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-surface-3 font-display text-sm font-bold text-foreground"
     >
       {benefitInitials(b.partnerName)}
     </span>
@@ -47,15 +48,15 @@ function BenefitCard({
   onCopy: () => void;
 }) {
   return (
-    <li
-      className={cn('space-y-3 rounded-card bg-card p-[18px]', b.expired && 'opacity-50')}
-      aria-label={b.partnerName}
-    >
+    <li className="space-y-3 rounded-card bg-card p-[18px]" aria-label={b.partnerName}>
       <div className="flex items-center gap-3">
-        <Logo b={b} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{b.partnerName}</p>
-          <p className="text-sm text-muted-foreground">{b.discountText}</p>
+        {/* Vencido: apaga só logo e título; selo e nota ficam com contraste cheio. */}
+        <div className={cn('flex min-w-0 flex-1 items-center gap-3', b.expired && 'opacity-50')}>
+          <Logo b={b} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold">{b.partnerName}</p>
+            <p className="text-sm text-muted-foreground">{b.discountText}</p>
+          </div>
         </div>
         <Badge variant={b.expired ? 'pending' : 'done'}>{benefitValidity(b)}</Badge>
       </div>
@@ -68,7 +69,7 @@ function BenefitCard({
           </span>
           <Button
             size="sm"
-            variant={copied ? 'outline' : 'default'}
+            variant={copied ? 'outline' : 'brand'}
             className="h-11 gap-1.5"
             onClick={onCopy}
           >
@@ -77,7 +78,7 @@ function BenefitCard({
           </Button>
         </div>
       ) : b.url ? (
-        <Button asChild size="sm" variant="outline" className="h-11 w-full gap-1.5">
+        <Button asChild size="sm" variant="brand" className="h-11 w-full gap-1.5">
           <a href={b.url} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={16} aria-hidden />
             Visitar o site
@@ -118,14 +119,12 @@ export default function CommunityBenefitsPage() {
 
   return (
     <div className="space-y-4 p-4">
-      <div className="space-y-1 px-1">
-        <h2 className="font-display text-h3 font-bold">Benefícios</h2>
-        <p className="text-sm text-muted-foreground">
-          {group.data
-            ? `Descontos que a ${group.data.name} combinou com parceiros.`
-            : 'Descontos que a comunidade combinou com parceiros.'}
-        </p>
-      </div>
+      {/* O título já está na barra do topo; aqui fica só a frase (Cm-22). */}
+      <p className="px-1 text-sm text-muted-foreground">
+        {group.data
+          ? `Descontos que a ${group.data.name} combinou com parceiros.`
+          : 'Descontos que a comunidade combinou com parceiros.'}
+      </p>
 
       {list.isPending && (
         <div aria-busy="true" className="space-y-3">

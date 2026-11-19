@@ -28,6 +28,9 @@ FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+# O api-client depende de @fatia/design (relógio dos circuitos). Sem o node_modules
+# dele, os tipos de @fatia/design não resolvem e o build do web cai em `any`.
+COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web ./apps/web
 COPY packages/design ./packages/design

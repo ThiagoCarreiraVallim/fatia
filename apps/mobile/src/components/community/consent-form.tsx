@@ -144,7 +144,7 @@ export function ConsentForm({
       />
 
       {error ? (
-        <Text accessibilityRole="alert" className="text-sm text-destructive">
+        <Text accessibilityRole="alert" className="text-sm text-danger">
           {error}
         </Text>
       ) : null}

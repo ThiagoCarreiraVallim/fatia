@@ -42,6 +42,11 @@ export interface MyGroup {
   statsOptIn: boolean;
   /** A comunidade paga o PRO desta pessoa. */
   hasAiSeat: boolean;
+  /**
+   * O PRO valendo agora é pago por esta comunidade (assinatura própria vence o
+   * assento). É o selo "PRO pago pela academia" e o "se sair, volta ao Free".
+   */
+  proPaidByThisGroup: boolean;
   /** Avatar da comunidade, URL assinada de curta duração. */
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
@@ -80,8 +85,7 @@ export interface GroupPreview {
   id: string;
   type: GroupType;
   name: string;
-  slug: string;
-  /** O que mandar de volta em `join`: o código normalizado ou o slug. */
+  /** O que mandar de volta em `join`: o código normalizado, ou o slug de comunidade pública. */
   code: string;
   memberCount: number;
   description: string | null;
@@ -90,8 +94,8 @@ export interface GroupPreview {
   team: TeamMember[];
   /** O que é obrigatório compartilhar para entrar pelo código. */
   requiredSharingScopes: ShareScope[];
-  /** A comunidade tem assento livre (ou dá a todos): "A academia libera o PRO". */
-  proOffer: boolean;
+  /** `ALL_MEMBERS` libera; `SEATS` com vaga pode liberar; `null` sem oferta (`proOfferNote`). */
+  proOffer: 'ALL_MEMBERS' | 'SEATS' | null;
 }
 
 /** `GET /groups/invites/:token`, sem login: o cartão do convite. */

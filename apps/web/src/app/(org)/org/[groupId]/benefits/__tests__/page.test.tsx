@@ -54,25 +54,44 @@ describe('/org/[groupId]/benefits (Pn-28)', () => {
     renderPage([]);
     await userEvent.click(await screen.findByRole('button', { name: /Adicionar benefício/ }));
     const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
+    expect(within(form).getByLabelText('Parceiro')).toHaveAttribute('maxLength', '60');
     await userEvent.type(within(form).getByLabelText('Parceiro'), 'Suplementa');
     await userEvent.type(within(form).getByLabelText('Desconto'), '15% em suplementos');
-    await userEvent.type(within(form).getByLabelText('Código do cupom'), 'demo15');
+    await userEvent.type(within(form).getByLabelText('Código do cupom'), 'Demo15');
     await userEvent.clear(within(form).getByLabelText('Validade'));
     await userEvent.type(within(form).getByLabelText('Validade'), '2099-12-31');
     // A prévia mostra o que o membro vai ver.
-    expect(within(form).getByText('Copiar código DEMO15')).toBeInTheDocument();
+    expect(within(form).getByText('Copiar código Demo15')).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Salvar' }));
     await waitFor(() =>
       expect(benefitsApi.create).toHaveBeenCalledWith('g1', {
         partnerName: 'Suplementa',
         discountText: '15% em suplementos',
         kind: 'COUPON',
-        couponCode: 'DEMO15',
+        couponCode: 'Demo15',
         url: null,
         validUntil: '2099-12-31',
         logoFileId: null,
       }),
     );
+  });
+
+  it('vencido: corrige o texto sem mexer na validade, e o PATCH não leva a data', async () => {
+    vi.mocked(benefitsApi.update).mockResolvedValue(tb());
+    renderPage([
+      tb({ id: 'b2', partnerName: 'Corre+', validUntil: '2026-10-31', status: 'expired' }),
+    ]);
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar Corre+' }));
+    const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
+    const desconto = within(form).getByLabelText('Desconto');
+    await userEvent.clear(desconto);
+    await userEvent.type(desconto, '20% em tênis');
+    await userEvent.click(within(form).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(benefitsApi.update).toHaveBeenCalled());
+    const [, id, corpo] = vi.mocked(benefitsApi.update).mock.calls[0];
+    expect(id).toBe('b2');
+    expect(corpo).toMatchObject({ discountText: '20% em tênis' });
+    expect(corpo).not.toHaveProperty('validUntil');
   });
 
   it('link sem https não salva e diz por quê', async () => {
@@ -108,9 +127,36 @@ describe('/org/[groupId]/benefits (Pn-28)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Editar Suplementa' }));
     const form = screen.getByRole('form', { name: 'Benefício de parceiro' });
     expect(within(form).getByLabelText('Parceiro')).toHaveValue('Suplementa');
+    // Com o editor ao lado a tabela aperta: ficam parceiro, validade (que já diz
+    // "venceu") e o "Editar" das outras linhas, que não pode sumir na rolagem.
+    expect(within(tabela).queryByRole('columnheader', { name: 'Desconto' })).toBeNull();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Cupom ou link' })).toBeNull();
+    expect(within(tabela).getByRole('columnheader', { name: 'Validade' })).toBeInTheDocument();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Status' })).toBeNull();
+    expect(within(tabela).getByRole('button', { name: 'Editar Corre+ Tênis' })).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Remover' }));
     expect(benefitsApi.remove).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(benefitsApi.remove).toHaveBeenCalledWith('g1', 'b1'));
+  });
+
+  it('tabela: monograma neutro, link cortado com o endereço inteiro no title, validade numa linha', async () => {
+    renderPage([
+      tb(),
+      tb({
+        id: 'b2',
+        partnerName: 'Fisio Movimento',
+        kind: 'LINK',
+        couponCode: null,
+        url: 'https://fisiomovimento.com.br/demo',
+      }),
+    ]);
+    const tabela = await screen.findByRole('table');
+    expect(within(tabela).getByText('SU').className).not.toMatch(/bg-brand/);
+    const link = within(tabela).getByText('fisiomovimento.com.br/demo');
+    expect(link.className).toMatch(/truncate/);
+    expect(link.className).not.toMatch(/break-all/);
+    expect(link).toHaveAttribute('title', 'fisiomovimento.com.br/demo');
+    expect(within(tabela).getAllByText('até 31 dez')[0]!.className).toMatch(/whitespace-nowrap/);
   });
 });
