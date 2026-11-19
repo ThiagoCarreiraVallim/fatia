@@ -36,7 +36,7 @@ describe('WebPushService', () => {
     expect(s.publicKey()).toBeNull();
     expect(
       await s.send([alvo('https://fcm.googleapis.com/x')], { title: 't', body: 'b', url: '/' }),
-    ).toEqual({ gone: [] });
+    ).toEqual({ gone: [], sent: 0 });
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -56,7 +56,7 @@ describe('WebPushService', () => {
       ],
       { title: 'Oi', body: 'Corpo', url: '/community' },
     );
-    expect(r).toEqual({ gone: ['https://fcm.googleapis.com/morto'] });
+    expect(r).toEqual({ gone: ['https://fcm.googleapis.com/morto'], sent: 1 });
     expect(JSON.parse(spy.mock.calls[0][1] as string)).toEqual({
       title: 'Oi',
       body: 'Corpo',
