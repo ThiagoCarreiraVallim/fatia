@@ -663,10 +663,15 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **Em risco:** associação antiga sem `joinedAt` conta da criação dela ("não começou"); no aviso diário, a falha de uma pessoa vira log e não para as outras.
   - **Resposta a plano sem vínculo:** mantida, coerente com a ficha da #402 (a resposta é à oferta da comunidade, não dado de saúde); o `PERMISSIONS.md` explica.
   - Cobertas em `review-fixes.integration.spec.ts` (API), `review-queue-fixes.test.ts` (api-client), nos testes das telas (web) e em `panel-sections.test.ts` e `push-target.test.ts` (app). O teste antigo do aviso diário dependia da hora do dia e foi corrigido.
+- **Passada visual** (web 1440 e 390, escuro e claro, e app no emulador, contra Pn-02, Pn-35, Pn-35b e Al-T11; prints em `~/.cache/fatia-vis/399/cmp-*.png`):
+  - Corrigido com teste: a rota `/review/at-risk` aparecia na migalha como "Para revisar › Detalhe" e agora diz "Em risco" (e o título do mapa de rotas também); treino sem série dizia "0 séries" na fila.
+  - Corrigido no visual: no celular a fila e o Em risco viraram cartões (nome e ações em cima, o que aconteceu embaixo, sem cabeçalho), em vez de quatro colunas espremidas com nome cortado; a sessão feita ficou em duas colunas no computador, com "Reação e comentário" ao lado, como na prancha, e "Enviar ao aluno" sempre à vista; o nome do exercício quebra linha em vez de cortar; a etiqueta "não começou" não quebra; "Visto" ficou discreto, como na prancha, e a ação principal da linha é a de abrir.
+  - Conferido: abas e filtros, Revisados, filtro vazio "Nada aqui com este filtro.", Em risco pela aba e pela rota própria, comentário e reação enviados pela tela ("enviado à Carla", a sessão foi para Revisados), Pn-35b com o texto neutro, contador `n/500`; nada de texto escuro no modo escuro; nenhum menu cobre botão. No app, o cartão "Da sua equipe" no fim do histórico do treino, acima de "Repetir", e o painel da comunidade sem as abas "Para revisar" e "Ativação pendente".
+  - Desvios de propósito: Pn-35b não mostra o nome do plano nem a data da sessão (a prancha mostra): sem Treino liberado, a equipe não vê dado do treino. Sem "+% vs sessão anterior" quando não há sessão anterior comparável. As abas da fila seguem o tamanho do resto do painel (#398), menores que as da prancha.
+  - Dados de demo para os prints (uma sessão da Carla com séries e check-in, uma do Bruno com comentário para o app, os comentários e as linhas da trilha geradas) foram apagados; contagens iguais antes e depois (`demo-rows.txt`).
 - **Desvios de propósito:**
   - Filtros Avaliações, Alimentação e Desafios da prancha não aparecem: ainda não há o que mostrar neles.
   - Check-ins sinalizados de desafio não entram na fila: já vivem em Desafios, com contador próprio.
-  - Sem prints nesta etapa (pedido do orquestrador); a passada visual fica para depois.
 - **Falta:**
   - #391: questionários na fila.
   - #383: avaliações.
