@@ -114,6 +114,10 @@ describe('painel › membros (Pn-04)', () => {
     expect(within(linha('Carla')).getByText('Recepção')).toBeInTheDocument();
     expect(within(linha('Carla')).getByText('Helena')).toBeInTheDocument();
     expect(within(linha('Diego')).getByText('Instagram')).toBeInTheDocument();
+    // Pn-04: membro sem ninguém aparece destacado; equipe não tem "Acompanha".
+    expect(within(linha('Diego')).getByText('Ninguém')).toHaveClass('text-warning');
+    expect(within(linha('Márcia')).getByText('Ninguém')).toBeInTheDocument();
+    expect(within(linha('Helena')).queryByText('Ninguém')).toBeNull();
 
     await userEvent.selectOptions(screen.getByLabelText('Entrou por'), 'Instagram');
     expect(screen.queryByText('Carla')).toBeNull();
