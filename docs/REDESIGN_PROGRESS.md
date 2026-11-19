@@ -456,7 +456,18 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - Sem o selo "com relógio" nos passos.
   - A fila da equipe mostra foto, legenda e se o treino está ligado, não o nome e a duração do treino.
   - O motivo do item na fila nunca traz valor (ml, passos).
-- **Falta:** passada visual (prints lado a lado com Cm-08..11, Cm-17/17b/17c, Cm-18 e Pn-13, web e app, escuro e claro).
+- **Passada visual (web 390 e 1440, escuro e claro; app no emulador, escuro):** prancha | web | app em `~/.cache/fatia-vis/395/cmp-*.png` (Cm-08, 09, 10, 11, 17, 17b, 17c, 18, Pn-13 e Pn-13 no celular). Corrigido nela:
+  - o check-in do app subia 14 bytes no Expo Go (a pasta da câmera tem "%40" no nome e o `fetch(uri)` decodificava o caminho): a foto agora vai pelo base64 da câmera;
+  - abrir outro desafio por link deixava a gaveta de entrar aberta (aparecia até em desafio encerrado): a tela tem a chave do desafio;
+  - a fila da equipe e a atividade de quem não participa diziam "ontem" para o item de hoje depois das 21 h (o hoje vinha em UTC);
+  - a nota de "Seus pontos de hoje" citava passos e nutrição mesmo fora da tabela;
+  - no painel web a 1440, o campo de data esmagava o título e os rótulos dos tipos vazavam do cartão: título em linha própria e tipos em 3 colunas (a Pn-13 tem 4).
+- **Desvios de propósito vistos na passada:**
+  - A foto do check-in de outra pessoa não aparece na atividade (a Cm-17 mostra a foto): ADR 044 §1 e 047, foto é prova e só a pessoa e a equipe veem.
+  - Na web, entrar no desafio é um diálogo no centro, não a folha da Cm-09; o check-in é só pelo app.
+  - Empatados com 0 no ranking dividem a posição e o círculo da posição leva a cor dela; a medalha só sai com pontos.
+  - A explicação geral do tipo Pontos ainda cita passos, que o tipo aceita quando a sync de saúde existir.
+  - No emulador, a câmera virtual mostra a cena no visor, mas a foto sai preta (limite do emulador; o arquivo é um JPEG válido).
 
 ## Etapas seguintes
 
