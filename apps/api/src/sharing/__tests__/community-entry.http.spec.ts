@@ -8,6 +8,7 @@ import { ConsentService } from '../consent.service';
 import { ContentService } from '../content.service';
 import { GroupService } from '../group.service';
 import { InviteService } from '../invite.service';
+import { MemberAdminService } from '../member-admin.service';
 import { MembershipService } from '../membership.service';
 import { SharingController } from '../sharing.controller';
 
@@ -49,6 +50,7 @@ async function subirApp(): Promise<Cenario> {
       { provide: InviteService, useValue: {} },
       { provide: ConsentService, useValue: {} },
       { provide: ContentService, useValue: {} },
+      { provide: MemberAdminService, useValue: {} },
     ],
   }).compile();
 

@@ -18,6 +18,7 @@ import { ConsentService } from './consent.service';
 import { ContentService } from './content.service';
 import { GroupService } from './group.service';
 import { InviteService } from './invite.service';
+import { MemberAdminService } from './member-admin.service';
 import { MembershipService } from './membership.service';
 import {
   ApproveMemberDto,
@@ -28,7 +29,12 @@ import {
   InviteTokenParamDto,
   JoinConsentDto,
   JoinGroupDto,
+  ListMembersQueryDto,
+  MemberBulkDto,
+  PendingInvitesQueryDto,
   PreviewGroupDto,
+  ResendInvitesDto,
+  SetAccompaniedByDto,
   SetAvatarDto,
   TransferOwnershipDto,
   UpdateGroupDto,
@@ -65,6 +71,7 @@ export class SharingController {
     private readonly invites: InviteService,
     private readonly consents: ConsentService,
     private readonly content: ContentService,
+    private readonly memberAdmin: MemberAdminService,
   ) {}
 
   @Post()
@@ -122,6 +129,20 @@ export class SharingController {
     return this.invites.preview(p.token);
   }
 
+  /**
+   * Recusar o convite nominal (#401; a tela é a Onb-E1, #372). Só a conta do
+   * e-mail convidado recusa; link de vários usos e convite de outro e-mail dão 404.
+   */
+  @Post('invites/:token/decline')
+  @SelfOnly()
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  declineInvite(@CurrentUser() user: CurrentUserPayload, @Param() p: InviteTokenParamDto) {
+    return this.invites.decline(user.id, p.token);
+  }
+
   /** Aceitar: quem entra é sempre quem chamou, com o consentimento que escolheu. */
   @Post('invites/:token/accept')
   @SelfOnly()
@@ -147,8 +168,48 @@ export class SharingController {
 
   @Get(':groupId/members')
   @RequireGroupAction('member.list')
-  listMembers(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
-    return this.memberships.listMembers(user.id, groupId);
+  listMembers(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Query() q: ListMembersQueryDto,
+  ) {
+    return this.memberships.listMembers(user.id, groupId, { includeLeft: q.include === 'left' });
+  }
+
+  /**
+   * Ação em massa sobre membros (#401, Pn-04d): trocar responsável, dar ou
+   * tirar assento. Até 100 ids, todos amarrados à comunidade da URL; o service
+   * confere a ação de cada uma (`member.assign` ou `billing.manage`).
+   */
+  @Post(':groupId/members/bulk')
+  @RequireGroupAction('member.assign')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  bulkMembers(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: MemberBulkDto,
+  ) {
+    return this.memberAdmin.bulk(user.id, groupId, dto);
+  }
+
+  /** Quem da equipe acompanha este membro (#401); `null` = ninguém. */
+  @Put(':groupId/members/:membershipId/accompanied-by')
+  @RequireGroupAction('member.assign')
+  setAccompaniedBy(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: SetAccompaniedByDto,
+  ) {
+    return this.memberAdmin.setAccompaniedBy(
+      user.id,
+      groupId,
+      membershipId,
+      dto.accompaniedByMembershipId,
+    );
   }
 
   /**
@@ -254,6 +315,69 @@ export class SharingController {
   @RequireGroupAction('invite.create')
   listInvites(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
     return this.invites.list(user.id, groupId);
+  }
+
+  /** Tela Convites (#401, Pn-06): cartões, convites ativos e inativos, e os números de cada um. */
+  @Get(':groupId/invites/overview')
+  @RequireGroupAction('invite.create')
+  invitesOverview(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
+    return this.invites.overview(user.id, groupId);
+  }
+
+  /** Ativação pendente (#401, Pn-22): convites por e-mail sem aceite há 2 dias ou mais. */
+  @Get(':groupId/invites/pending')
+  @RequireGroupAction('invite.create')
+  pendingInvites(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Query() q: PendingInvitesQueryDto,
+  ) {
+    return this.invites.pending(user.id, groupId, q);
+  }
+
+  /** Reenviar vários (Pn-22). Cada um troca o link; o que não dá volta em `skipped`. */
+  @Post(':groupId/invites/resend')
+  @RequireGroupAction('invite.create')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  resendInvites(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: ResendInvitesDto,
+  ) {
+    return this.invites.resendMany(user.id, groupId, dto.inviteIds);
+  }
+
+  /** "Enviar convite novo" para o convite por e-mail que venceu (Pn-22). */
+  @Post(':groupId/invites/:inviteId/renew')
+  @RequireGroupAction('invite.create')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  renewInvite(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.invites.renew(user.id, groupId, inviteId);
+  }
+
+  /** Link novo do convite por e-mail, sem e-mail, para mandar pelo WhatsApp (Pn-22). */
+  @Post(':groupId/invites/:inviteId/link')
+  @RequireGroupAction('invite.create')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  freshInviteLink(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.invites.freshLink(user.id, groupId, inviteId);
   }
 
   @Delete(':groupId/invites/:inviteId')

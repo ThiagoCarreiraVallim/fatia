@@ -58,6 +58,12 @@ export const GROUP_PERMISSIONS = {
    * equipe é ele, e virar equipe é passar a receber o que os membros consentiram.
    */
   'member.role': [GroupRole.OWNER],
+  /**
+   * Escolher quem da equipe acompanha cada membro (#401, "Acompanhado por" e
+   * "Trocar responsável"). É administração, não leitura: quem lê dado de saúde
+   * continua sendo o `ProfessionalLink` que o membro deu.
+   */
+  'member.assign': [GroupRole.OWNER],
   /** Gerir o negócio não implica ver dado de saúde — e o inverso também. */
   'billing.read': [GroupRole.OWNER],
   'billing.manage': [GroupRole.OWNER],

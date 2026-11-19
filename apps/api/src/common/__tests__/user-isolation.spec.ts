@@ -2418,15 +2418,20 @@ describe('isolamento entre usuários', () => {
       // Metadado de associação, nunca dado de saúde — e nunca o `userId` de
       // outra pessoa: tudo que sai daqui é referenciado por `membershipId`. A
       // equipe vê também o que cada um compartilha COM ELA e o assento (Fase 6);
-      // `statsOptIn` individual nunca sai.
+      // `statsOptIn` individual nunca sai. Por onde entrou, quem acompanha, quando
+      // saiu e o WhatsApp que a pessoa autorizou mostrar entram com a #401.
       expect(Object.keys(peloDono[0]).sort()).toEqual([
+        'accompaniedBy',
         'hasAiSeat',
         'joinedAt',
+        'joinedVia',
+        'leftAt',
         'membershipId',
         'name',
         'role',
         'scopesGrantedToMe',
         'status',
+        'whatsapp',
       ]);
       expect(Object.keys(peloAluno[0]).sort()).toEqual([
         'joinedAt',

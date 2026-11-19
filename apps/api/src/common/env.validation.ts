@@ -25,6 +25,10 @@ export const AppEnvSchema = z
     // (ou com menos de 16 caracteres) = o e-mail de comunicado fica indisponível no painel.
     // Gerar com `openssl rand -hex 32`. Trocar invalida os links dos e-mails já mandados.
     EMAIL_UNSUBSCRIBE_SECRET: z.string().optional().or(z.literal('')),
+    // Deriva o token do link de convite sem e-mail (#401), para a equipe copiar o link (e o QR)
+    // de novo depois; o banco guarda só o hash. Vazio = o link só aparece na criação. Gerar com
+    // `openssl rand -hex 32`. Trocar invalida os links e QRs já impressos.
+    INVITE_LINK_SECRET: z.string().optional().or(z.literal('')),
     // Comunicados com aviso (notificação ou e-mail) por comunidade em 7 dias (#398). Passou
     // disso, o comunicado sai só no mural.
     ANNOUNCEMENT_PUSH_WEEKLY_LIMIT: z.coerce.number().int().min(0).default(3),
@@ -151,16 +155,21 @@ export const AppEnvSchema = z
     MEDIA_S3_SECRET_ACCESS_KEY: z.string().optional().or(z.literal('')),
   })
   .superRefine((env, ctx) => {
-    // Em produção o segredo do descadastro (#398) precisa ter entropia de verdade: quem
-    // descobre o segredo descadastra qualquer pessoa. Vazio desliga o e-mail de comunicado.
-    if (env.NODE_ENV !== 'production' || !env.EMAIL_UNSUBSCRIBE_SECRET) return;
-    const problema = weakUnsubscribeSecret(env.EMAIL_UNSUBSCRIBE_SECRET);
-    if (problema) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['EMAIL_UNSUBSCRIBE_SECRET'],
-        message: `EMAIL_UNSUBSCRIBE_SECRET ${problema}. Gere com \`openssl rand -hex 32\` ou deixe vazio.`,
-      });
+    if (env.NODE_ENV !== 'production') return;
+    // Em produção os segredos de link precisam ter entropia de verdade: quem descobre o do
+    // descadastro (#398) descadastra qualquer pessoa; quem descobre o do convite (#401) refaz
+    // o link de qualquer convite sem e-mail. Vazio desliga o recurso.
+    for (const chave of ['EMAIL_UNSUBSCRIBE_SECRET', 'INVITE_LINK_SECRET'] as const) {
+      const segredo = env[chave];
+      if (!segredo) continue;
+      const problema = weakUnsubscribeSecret(segredo);
+      if (problema) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [chave],
+          message: `${chave} ${problema}. Gere com \`openssl rand -hex 32\` ou deixe vazio.`,
+        });
+      }
     }
   });
 

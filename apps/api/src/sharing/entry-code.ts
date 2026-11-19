@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { GroupVisibility, JoinPolicy, type GroupAiMode, type Group } from '@fatia/db';
 import { resolveAiEntitlement } from '../billing/ai-entitlement';
 import type { PrismaService } from '../common/prisma.service';
+import { isInviteUsable } from './invite-state';
 
 /**
  * Código de entrada da comunidade (#393, Cm-02).
@@ -57,9 +58,7 @@ export async function findGroupByEntryCode(
     });
     if (
       convite &&
-      convite.revokedAt === null &&
-      convite.expiresAt > now &&
-      (convite.maxUses === null || convite.uses < convite.maxUses) &&
+      isInviteUsable(convite, now) &&
       convite.group.joinPolicy !== JoinPolicy.INVITE_ONLY
     ) {
       return { group: convite.group, inviteId: convite.id, inviteMaxUses: convite.maxUses, code };

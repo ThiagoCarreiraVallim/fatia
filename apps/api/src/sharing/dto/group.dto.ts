@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -20,6 +21,7 @@ import {
 import {
   AutoPostKind,
   GroupRole,
+  InviteOrigin,
   GroupType,
   GroupVisibility,
   JoinPolicy,
@@ -155,6 +157,13 @@ export class CreateInviteDto {
   @IsOptional() @IsInt() @Min(1) @Max(365) expiresInDays?: number;
   /** Código de entrada legível em vez de link (#393). */
   @IsOptional() @IsBoolean() code?: boolean;
+  /** Nome do link que só a equipe vê (#401). */
+  @IsOptional() @IsString() @MaxLength(60) label?: string;
+  @IsOptional() @IsEnum(InviteOrigin) origin?: InviteOrigin;
+  /** "Sem prazo": só link ou QR (o e-mail vence em 30 dias). */
+  @IsOptional() @IsBoolean() noExpiry?: boolean;
+  @IsOptional() @IsUUID() accompaniedByMembershipId?: string;
+  @IsOptional() @IsBoolean() giveSeat?: boolean;
 }
 
 /** Convite em lote: até um dia inteiro de convites numa chamada. */
@@ -172,6 +181,53 @@ export class BatchInviteDto {
   emails!: string[];
 
   @IsOptional() @IsInt() @Min(1) @Max(30) expiresInDays?: number;
+  @IsOptional() @IsUUID() accompaniedByMembershipId?: string;
+  @IsOptional() @IsBoolean() giveSeat?: boolean;
+}
+
+/** Reenviar vários convites por e-mail (Pn-22, "Reenviar selecionados"). */
+export class ResendInvitesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  inviteIds!: string[];
+}
+
+/** Filtros da Ativação pendente: origem, busca por e-mail e página. */
+export class PendingInvitesQueryDto {
+  @IsOptional() @IsIn([...Object.values(InviteOrigin), 'NONE']) origin?: InviteOrigin | 'NONE';
+  @IsOptional() @IsString() @MaxLength(254) q?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) page?: number;
+}
+
+/** `?include=left`: a aba "Saíram" de Membros (só para quem vê todos). */
+export class ListMembersQueryDto {
+  @IsOptional() @IsIn(['left']) include?: 'left';
+}
+
+/** Quem da equipe acompanha este membro; `null` = ninguém (#401). */
+export class SetAccompaniedByDto {
+  @ValidateIf((o: SetAccompaniedByDto) => o.accompaniedByMembershipId !== null)
+  @IsUUID()
+  accompaniedByMembershipId!: string | null;
+}
+
+/** Ação em massa sobre membros (Pn-04d): até 100 por vez. */
+export class MemberBulkDto {
+  @IsIn(['accompany', 'seat', 'unseat'])
+  action!: 'accompany' | 'seat' | 'unseat';
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsUUID('all', { each: true })
+  membershipIds!: string[];
+
+  @IsOptional()
+  @ValidateIf((o: MemberBulkDto) => o.accompaniedByMembershipId !== null)
+  @IsUUID()
+  accompaniedByMembershipId?: string | null;
 }
 
 /**

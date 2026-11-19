@@ -45,6 +45,8 @@ import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
 import { InviteService } from './invite.service';
+import { MemberAdminService } from './member-admin.service';
+import { BillingModule } from '../billing/billing.module';
 import { MembershipService } from './membership.service';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { ProfessionalAccessService } from './professional-access.service';
@@ -124,6 +126,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     NotificationsModule,
     StorageModule,
     SocialModule,
+    BillingModule,
   ],
   controllers: [
     SharingController,
@@ -151,6 +154,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupService,
     MembershipService,
     InviteService,
+    MemberAdminService,
     PlanMaterializerService,
     PlanOfferService,
     ContentService,

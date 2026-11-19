@@ -466,6 +466,89 @@ export class SeatPoolService {
     return this.overview(groupId);
   }
 
+  /**
+   * Dar assento a vários de uma vez (#401, ação em massa). Ou todos ganham, ou
+   * ninguém: sem vaga para o lote inteiro, 409 com `code: 'NO_SEATS'` e quantos
+   * faltam, para o painel levar à tela de assentos. Quem já tem assento não
+   * conta como falta. A permissão é do chamador (`billing.manage`).
+   */
+  async assignMany(actorId: string, groupId: string, membershipIds: string[]): Promise<number> {
+    await this.assertManager(actorId, groupId);
+    const pool = await this.poolVivo(groupId);
+    if (!ATRIBUIVEIS.includes(pool.status)) {
+      throw new ConflictException('Os assentos ficam disponíveis depois do primeiro pagamento.');
+    }
+    const jaTem = new Set(
+      (
+        await this.prisma.groupSeatAssignment.findMany({
+          where: { poolId: pool.id, membershipId: { in: membershipIds }, revokedAt: null },
+          select: { membershipId: true },
+        })
+      ).map((a) => a.membershipId),
+    );
+    const novos = membershipIds.filter((id) => !jaTem.has(id));
+    const livres = pool.seats - (await this.contarAtribuidos(pool.id));
+    if (novos.length > livres) {
+      const missing = novos.length - Math.max(0, livres);
+      throw new ConflictException({
+        code: 'NO_SEATS',
+        missing,
+        message: `Faltam ${missing === 1 ? '1 assento' : `${missing} assentos`}. Aumente os assentos ou escolha menos pessoas.`,
+      });
+    }
+    if (novos.length === 0) return 0;
+    await this.prisma.groupSeatAssignment.createMany({
+      data: novos.map((membershipId) => ({ poolId: pool.id, membershipId, assignedById: actorId })),
+      skipDuplicates: true,
+    });
+    // Dois lotes ao mesmo tempo podem passar da conta: este volta inteiro.
+    if ((await this.contarAtribuidos(pool.id)) > pool.seats) {
+      await this.prisma.groupSeatAssignment.deleteMany({
+        where: {
+          poolId: pool.id,
+          membershipId: { in: novos },
+          revokedAt: null,
+          assignedById: actorId,
+        },
+      });
+      throw new ConflictException({
+        code: 'NO_SEATS',
+        missing: novos.length,
+        message: lotado(pool.seats),
+      });
+    }
+    return novos.length;
+  }
+
+  /**
+   * Assento ao entrar por um convite com "Dar assento PRO" (#401). A decisão
+   * foi do dono ao criar o convite; aqui só se confere se ainda há vaga. Sem
+   * vaga, ou sem assentos ativos, a pessoa entra no Free e nada falha.
+   */
+  async assignOnJoin(
+    groupId: string,
+    membershipId: string,
+    assignedById: string | null,
+  ): Promise<boolean> {
+    const pool = await this.prisma.groupSeatPool.findUnique({ where: { groupId } });
+    if (!pool || !ATRIBUIVEIS.includes(pool.status)) return false;
+    if ((await this.contarAtribuidos(pool.id)) >= pool.seats) return false;
+    try {
+      const criado = await this.prisma.groupSeatAssignment.create({
+        data: { poolId: pool.id, membershipId, assignedById },
+        select: { id: true },
+      });
+      if ((await this.contarAtribuidos(pool.id)) > pool.seats) {
+        await this.prisma.groupSeatAssignment.delete({ where: { id: criado.id } });
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return true;
+      throw err;
+    }
+  }
+
   async unassign(
     actorId: string,
     groupId: string,

@@ -75,6 +75,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `member.approve`       | sim   | não          | não     | não    |
 | `member.remove`        | sim   | não          | não     | não    |
 | `member.role`          | sim   | não          | não     | não    |
+| `member.assign`        | sim   | não          | não     | não    |
 | `billing.read`         | sim   | não          | não     | não    |
 | `billing.manage`       | sim   | não          | não     | não    |
 | `content.publish`      | sim   | sim          | sim     | não    |
@@ -123,6 +124,12 @@ futura:
   à comunidade, então só quem define a equipe muda papel. Os vínculos acompanham no mesmo commit:
   quem entra na equipe recebe o leque inverso, quem sai perde tudo que recebia ali
   (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere.
+- **`member.assign` (#401) é `OWNER` e só.** É escolher quem da equipe acompanha cada membro
+  ("Acompanhado por", "Trocar responsável" em massa). É administração, não leitura: quem lê dado de
+  saúde continua sendo o `ProfessionalLink` que o membro deu. No convite, o profissional pode pôr
+  a si mesmo como responsável; outro profissional, só o dono. Dar e tirar assento em massa seguem
+  `billing.manage`. Cada lote (até 100 pessoas, tudo ou nada) deixa uma linha em `GroupAuditLog`
+  com os ids e a contagem.
 - **`content.publish` inclui o `OWNER`.** Numa academia é a dona quem publica o treino e as dicas
   da casa. Publicar é escrever para a comunidade, não ler dado de ninguém. O autor edita o que é
   dele; quem tem `content.moderate` edita e tira do ar o de qualquer pessoa da equipe.
@@ -193,6 +200,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `member.approve`       | não                  |
 | `member.remove`        | não                  |
 | `member.role`          | não                  |
+| `member.assign`        | não                  |
 | `billing.read`         | não                  |
 | `billing.manage`       | não                  |
 | `content.publish`      | não                  |
