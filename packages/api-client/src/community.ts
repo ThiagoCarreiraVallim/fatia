@@ -109,7 +109,8 @@ export interface InvitePreview {
   memberCount: number;
   /** O convite foi para um e-mail: só a conta com esse e-mail aceita. */
   emailBound: boolean;
-  expiresAt: string;
+  /** Nulo = sem prazo (link ou QR, #401). */
+  expiresAt: string | null;
   /** O que é obrigatório compartilhar para entrar por este convite; vazio em convite de equipe. */
   requiredSharingScopes: ShareScope[];
   /** O desafio em andamento, para as boas-vindas (Onb-02): título e quantos participam. */

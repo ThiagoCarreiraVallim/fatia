@@ -99,8 +99,7 @@ export interface PanelNavGroup {
 
 /**
  * O menu na ordem do canvas (Pn-01). Só entram as telas que já existem: as
- * da prancha que ainda não têm tela (Para revisar, Relatório, Ativação
- * pendente, Agenda...) entram com as issues delas.
+ * da prancha que ainda não têm tela (Para revisar, Relatório, Agenda...) entram com as issues delas.
  */
 const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string][] }[] = [
   {
@@ -117,6 +116,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
     items: [
       ['members', 'Membros'],
       ['invites', 'Convites'],
+      ['activation', 'Ativação pendente'],
       ['seats', 'Assentos e faturas'],
     ],
   },
@@ -149,7 +149,7 @@ function countOf(section: PanelSection, counts: PanelCounts | undefined): number
   const n =
     section === 'members'
       ? counts.pendingRequests
-      : section === 'invites'
+      : section === 'activation'
         ? counts.pendingInvites
         : section === 'moderation'
           ? counts.openReports

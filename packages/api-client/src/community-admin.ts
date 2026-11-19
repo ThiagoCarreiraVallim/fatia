@@ -70,7 +70,25 @@ export interface PanelMember {
   scopesGrantedToMe?: ShareScope[];
   /** A comunidade paga o PRO desta pessoa. Só para a equipe. */
   hasAiSeat?: boolean;
+  /** Por onde entrou (#401, "Entrou por"). Só para a equipe. */
+  joinedVia?: {
+    via: JoinVia | null;
+    inviteId: string | null;
+    label: string | null;
+    origin: InviteOrigin | null;
+  } | null;
+  /** Quem da equipe acompanha (#401). Só para a equipe. */
+  accompaniedBy?: { membershipId: string; name: string } | null;
+  /** Quando saiu ou foi removido (aba "Saíram"). */
+  leftAt?: string | null;
+  /** O WhatsApp que a pessoa escolheu mostrar à equipe; nulo sem autorização. */
+  whatsapp?: string | null;
 }
+
+export type JoinVia = 'INVITE' | 'CODE' | 'PAGE';
+export type InviteOrigin = 'QR' | 'INSTAGRAM' | 'SITE' | 'REFERRAL' | 'EMAIL_LIST' | 'OTHER';
+export type InviteStatus = 'active' | 'used' | 'expired' | 'revoked' | 'declined';
+export type InviteKind = 'link' | 'email' | 'code';
 
 export interface InviteView {
   id: string;
@@ -80,9 +98,94 @@ export interface InviteView {
   email: string | null;
   maxUses: number | null;
   uses: number;
-  expiresAt: string;
+  /** Nulo = sem prazo (só link e QR, #401). */
+  expiresAt: string | null;
   createdAt: string;
   lastSentAt: string | null;
+  /** Nome do link que só a equipe vê ("Recepção", "Instagram"). */
+  label: string | null;
+  origin: InviteOrigin | null;
+  sendCount: number;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  revokedAt: string | null;
+  giveSeat: boolean;
+  accompaniedById: string | null;
+  kind: InviteKind;
+  status: InviteStatus;
+}
+
+/** Linha da tela Convites (Pn-06). */
+export interface InviteOverviewRow extends InviteView {
+  /** O link de novo, para Copiar; nulo quando não dá para refazer. */
+  url: string | null;
+  accompaniedByName: string | null;
+  /** Quantos entraram por ele; nulo = amostra pequena (1 a 4). */
+  joined: number | null;
+}
+
+export interface InviteOverview {
+  cards: {
+    activeLinks: number;
+    notAccepted: number | null;
+    joinedLast30Days: number | null;
+    /** Só o percentual, de toda a população com opt-in (não por convite). */
+    activated48h: { percent: number } | null;
+  };
+  invites: InviteOverviewRow[];
+}
+
+export type PendingInviteStatus = 'pending' | 'expired' | 'declined';
+
+export interface PendingInviteItem {
+  id: string;
+  email: string;
+  role: GroupRole;
+  origin: InviteOrigin | null;
+  label: string | null;
+  invitedAt: string;
+  lastSentAt: string | null;
+  expiresAt: string | null;
+  status: PendingInviteStatus;
+  sendCount: number;
+  canResend: boolean;
+  canRenew: boolean;
+}
+
+/** Ativação pendente (Pn-22). */
+export interface PendingActivation {
+  cards: {
+    notAccepted: number | null;
+    joinedNoFirstLog: number | null;
+    acceptedThisMonth: { accepted: number; total: number } | null;
+  };
+  origins: { origin: InviteOrigin | null; count: number }[];
+  total: number;
+  page: number;
+  pageSize: number;
+  items: PendingInviteItem[];
+}
+
+export interface PendingQuery {
+  origin?: InviteOrigin | 'NONE';
+  q?: string;
+  page?: number;
+}
+
+export type ResendSkipReason = 'not_found' | 'expired' | 'limit' | 'too_soon';
+
+export interface ResendManyResult {
+  sent: { id: string; emailSent: boolean }[];
+  skipped: { id: string; reason: ResendSkipReason }[];
+}
+
+export type MemberBulkAction = 'accompany' | 'seat' | 'unseat';
+
+export interface MemberBulkInput {
+  action: MemberBulkAction;
+  membershipIds: string[];
+  /** Para `accompany`: o profissional, ou `null` para "Ninguém". */
+  accompaniedByMembershipId?: string | null;
 }
 
 export interface CreateInviteInput {
@@ -92,6 +195,13 @@ export interface CreateInviteInput {
   expiresInDays?: number;
   /** Gera um código de entrada (QR da recepção) em vez de link. Só de membro. */
   code?: boolean;
+  label?: string;
+  origin?: InviteOrigin;
+  /** "Sem prazo": só link e QR; o e-mail vence em 30 dias. */
+  noExpiry?: boolean;
+  accompaniedByMembershipId?: string;
+  /** Quem entra ganha assento PRO, se houver vaga. Só o dono. */
+  giveSeat?: boolean;
 }
 
 /** O link aparece só nesta resposta: o banco guarda o hash do token. */
@@ -101,7 +211,8 @@ export interface CreatedInvite {
   emailSent: boolean;
 }
 
-export type BatchSkipReason = 'invalid' | 'duplicate' | 'member' | 'pending_invite';
+export type BatchSkipReason =
+  'invalid' | 'duplicate' | 'member' | 'pending_invite' | 'declined' | 'limit';
 
 export interface BatchInviteResult {
   created: { email: string; inviteId: string; emailSent: boolean }[];
@@ -185,7 +296,18 @@ export const orgApi = {
   transferOwner: (groupId: string, membershipId: string) =>
     apiFetch<MyGroup>(`${base}/${groupId}/owner`, json('POST', { membershipId })),
 
-  members: (groupId: string) => apiFetch<PanelMember[]>(`${base}/${groupId}/members`),
+  /** `includeLeft`: também quem saiu ou foi removido (aba "Saíram"). */
+  members: (groupId: string, opts?: { includeLeft?: boolean }) =>
+    apiFetch<PanelMember[]>(
+      `${base}/${groupId}/members${opts?.includeLeft ? '?include=left' : ''}`,
+    ),
+  setAccompaniedBy: (groupId: string, membershipId: string, accompaniedBy: string | null) =>
+    apiFetch<{ membershipId: string; accompaniedById: string | null }>(
+      `${base}/${groupId}/members/${membershipId}/accompanied-by`,
+      json('PUT', { accompaniedByMembershipId: accompaniedBy }),
+    ),
+  bulkMembers: (groupId: string, input: MemberBulkInput) =>
+    apiFetch<{ updated: number }>(`${base}/${groupId}/members/bulk`, json('POST', input)),
   approve: (groupId: string, membershipId: string, role?: GrantableRole) =>
     apiFetch<MembershipChange>(
       `${base}/${groupId}/members/${membershipId}/approve`,
@@ -205,12 +327,41 @@ export const orgApi = {
     apiFetch<CreatedInvite>(`${base}/${groupId}/invites`, json('POST', input)),
   createInviteBatch: (
     groupId: string,
-    input: { emails: string[]; role: GrantableRole; expiresInDays?: number },
+    input: {
+      emails: string[];
+      role: GrantableRole;
+      expiresInDays?: number;
+      accompaniedByMembershipId?: string;
+      giveSeat?: boolean;
+    },
   ) => apiFetch<BatchInviteResult>(`${base}/${groupId}/invites/batch`, json('POST', input)),
   revokeInvite: (groupId: string, inviteId: string) =>
     apiFetch<InviteView>(`${base}/${groupId}/invites/${inviteId}`, json('DELETE')),
   resendInvite: (groupId: string, inviteId: string) =>
     apiFetch<CreatedInvite>(`${base}/${groupId}/invites/${inviteId}/resend`, json('POST')),
+  invitesOverview: (groupId: string) =>
+    apiFetch<InviteOverview>(`${base}/${groupId}/invites/overview`),
+  pendingInvites: (groupId: string, query: PendingQuery = {}) => {
+    const qs = new URLSearchParams();
+    if (query.origin) qs.set('origin', query.origin);
+    if (query.q) qs.set('q', query.q);
+    if (query.page && query.page > 1) qs.set('page', String(query.page));
+    const tail = qs.toString();
+    return apiFetch<PendingActivation>(
+      `${base}/${groupId}/invites/pending${tail ? `?${tail}` : ''}`,
+    );
+  },
+  resendInvites: (groupId: string, inviteIds: string[]) =>
+    apiFetch<ResendManyResult>(`${base}/${groupId}/invites/resend`, json('POST', { inviteIds })),
+  /** Convite vencido de novo por 30 dias, com e-mail (Pn-22, "Renovar"). */
+  renewInvite: (groupId: string, inviteId: string) =>
+    apiFetch<CreatedInvite>(`${base}/${groupId}/invites/${inviteId}/renew`, json('POST')),
+  /** Link novo do mesmo convite, sem e-mail: para mandar pelo WhatsApp. */
+  freshInviteLink: (groupId: string, inviteId: string) =>
+    apiFetch<{ url: string; reused: boolean }>(
+      `${base}/${groupId}/invites/${inviteId}/link`,
+      json('POST'),
+    ),
 };
 
 export const seatsApi = {

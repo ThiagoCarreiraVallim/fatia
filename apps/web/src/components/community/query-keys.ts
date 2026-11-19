@@ -29,7 +29,14 @@ export const orgKeys = {
   all: (groupId: string) => ['community', 'org', groupId] as const,
   group: (groupId: string) => ['community', 'group', groupId] as const,
   members: (groupId: string) => ['community', 'org', groupId, 'members'] as const,
+  /** Membros com quem saiu (aba "Saíram", #401): chave própria, sob `members`. */
+  membersWithLeft: (groupId: string) =>
+    ['community', 'org', groupId, 'members', 'with-left'] as const,
   invites: (groupId: string) => ['community', 'org', groupId, 'invites'] as const,
+  invitesOverview: (groupId: string) =>
+    ['community', 'org', groupId, 'invites', 'overview'] as const,
+  pendingInvites: (groupId: string, origin: string | undefined, q: string, page: number) =>
+    ['community', 'org', groupId, 'invites', 'pending', origin ?? 'all', q, page] as const,
   seats: (groupId: string) => ['community', 'org', groupId, 'seats'] as const,
   invoices: (groupId: string) => ['community', 'org', groupId, 'invoices'] as const,
   contentPlans: (groupId: string) => ['community', 'org', groupId, 'content', 'plans'] as const,

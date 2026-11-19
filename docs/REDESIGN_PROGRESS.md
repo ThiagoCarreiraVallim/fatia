@@ -493,8 +493,9 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 | Issue | Título                                            | Estado           | Superfícies                            |
 | ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
-| #398  | Painel: layout novo, visão geral e busca ⌘K       | pronto na branch | api, db, api-client, web, docs         |
-| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | pronto na branch | api, db, api-client, web, mobile, docs |
+| #398  | Painel: layout novo, visão geral e busca ⌘K       | mergeado (#451)  | api, db, api-client, web, docs         |
+| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452)  | api, db, api-client, web, mobile, docs |
+| #401  | Painel: membros, convites e ativação pendente     | mergeado (#453)  | api, db, api-client, web, mobile, docs |
 | #399  | Painel: para revisar, em risco e sessão feita     | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
@@ -573,17 +574,75 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - O telefone para WhatsApp e "Substituir o atual" no envio.
   - Ordenar planos alimentares (`MealTemplate`).
 
+#401 (branch `redesign/401-membros-convites`; migrations `20261119200000_invites_origin_activation` e `20261119200100_invite_link_issued_at`; env nova `INVITE_LINK_SECRET`; permissão nova `member.assign` (dono); nenhuma tool nova no MCP; dependência web nova `qrcode-generator`, JS puro):
+
+- **Decisões (orquestrador):**
+  - "Sem prazo" só vale para link e QR. O convite nominal por e-mail continua vencendo em 30 dias e vale uma vez; o texto de validade do `Ex-01` e as notas do painel mudam conforme o tipo (`inviteValidityText`, `inviteValidityNote`). A API recusa `noExpiry` com e-mail (400).
+  - "Convites sem aceite": a lista nominal fica (quem foi convidado ainda não é membro); só os totais pequenos (menos de 5) somem.
+  - Quem não aceitou em 2 dias entra em **Ativação pendente**; o convite por e-mail expira em 30 dias.
+  - Importação de alunos por planilha ou sistema de gestão (#340, #322) fica fora do redesign.
+- **Convite:** `GroupInvite` ganha nome (`label`, até 60 caracteres, só a equipe vê), origem (`InviteOrigin`: QR, Instagram, Site, Indicação, Lista de e-mails, Outra), `expiresAt` nulo (sem prazo), `sendCount`, `acceptedById`/`acceptedAt`, `declinedAt`, `accompaniedById` e `giveSeat`. Quem entra grava `GroupMembership.joinedViaInviteId` ("Entrou por") e, se o convite diz, `accompaniedById` (só se a pessoa ainda for profissional ou dono ativo) e o assento PRO (se houver vaga).
+- **Link copiável depois:** o banco segue só com o hash do token. O token do link (sem e-mail) é `HMAC-SHA256(INVITE_LINK_SECRET, "invite-link:"+id)`, então a tela Convites mostra "Copiar" de novo. Sem o segredo, o link só aparece na criação, como antes. Em produção a API não sobe com segredo fraco.
+- **Reenviar:** troca o token (o link do e-mail anterior deixa de valer), até 5 envios por convite e com intervalo de 10 min. Em lote: `POST groups/:id/invites/resend` (até 50). Renovar convite vencido: `POST …/invites/:id/renew` (409 se ainda vale). WhatsApp: `POST …/invites/:id/link` gera um link novo sem e-mail; a mensagem pronta abre num diálogo com Copiar e Abrir WhatsApp (copiar depois de um `await` é bloqueado pelo navegador). É a etapa 1 da #338: só mensagem, sem integração.
+- **Recusa:** `POST invites/:token/decline`, só convite por e-mail e só pela conta daquele e-mail (os outros recebem 404). A tela de recusa é da #372/#416.
+- **Ativação** (Convites e Ativação pendente) = 1º **treino** em até 48 h depois de entrar, só entre membros com `statsOptIn` e com a regra de dois lados (`binarySplit`) da #398. Refeição e peso não agregam (AGGREGATION_POLICY §6 e §7).
+- **Telas:**
+  - **Membros (Pn-04, 04b, 04c, 04d):** cartões; abas Todos, Aguardando, Sem acompanhamento e Saíram (`members?include=left`, só para a equipe), mais "Convite pendente", que leva à Ativação; filtro por nome e "Entrou por"; colunas escolhidas pela pessoa (no `localStorage`); 10 por página. O dono seleciona membros ativos e faz ações em massa (`POST groups/:id/members/bulk`: trocar responsável, dar e tirar assento; até 100 ids, tudo ou nada, com `GroupAuditLog`). A linha abre a pessoa no painel lateral: WhatsApp (só se ela autorizou, `whatsappOptIn`), "Acompanhada por" (`PUT …/members/:id/accompanied-by`), assento, papel, o que compartilha, "Ficha completa" e remover com confirmação. "Convidar" abre o painel de convite.
+  - **Convites (Pn-06, 06b):** cartões (links ativos, sem aceite, entraram em 30 dias, ativaram em 48 h só em percentual), abas Todos, Links e E-mails, e tabela com origem, papel, usos, entraram ("menos de 5") e validade. Ações: Copiar, Reenviar e Revogar. O painel "Novo link"/"Convidar por e-mail" tem origem e nome, limite de usos, validade (7 dias, 30 dias ou sem prazo), papel, "Acompanhado por" (o profissional só pode pôr a si mesmo) e "Dar assento PRO" (só o dono). O link criado sai com QR (SVG, preto no branco, também no tema escuro), "Baixar QR" e WhatsApp. O código de entrada da recepção (#393) continua embaixo.
+  - **Ativação pendente (Pn-22, 22b, 22c, 22d):** item novo em Pessoas no menu, que leva o contador de convites sem aceite. Mostra os cartões, filtro por origem com contagem, busca por e-mail, 10 por página no servidor e seleção com "Reenviar selecionados". Cada linha tem Reenviar ou Renovar, WhatsApp e Revogar. Sem nenhum pendente, aparece "Todos os convites foram aceitos"; com totais pequenos, o aviso de que eles ficam ocultos e a lista continua. Os cartões "Ativação pendente" e "Entraram e ainda não registraram" da visão geral passam a abrir esta tela.
+- **LGPD:** o export ganha `invitesReceived` (aceitos pela pessoa ou ainda com o e-mail dela) e `panelActions` (o `GroupAuditLog` dela). Excluir a conta revoga os convites abertos que ela criou e apaga o e-mail dela de todos os convites. O expurgo de e-mail de 30 dias também conta do aceite e da recusa (DATA_RETENTION).
+- **Isolamento:** todo id do corpo ou da query (convites do reenvio, membros do lote, acompanhante) fica amarrado ao `groupId` da URL. Um id de fora dá 404, e o lote inteiro é recusado. As rotas de lote, renovar, link e recusa usam `UserThrottlerGuard`. Coberto no bloco #401 do `user-isolation.spec.ts` e em `invite-activation.integration.spec.ts`.
+- **Desvios de propósito:**
+  - A lista de Ativação pendente mostra o **e-mail**, não o nome: o convite não tem nome.
+  - "Última visita" (Membros) depende do check-in da recepção (#404); a coluna não existe.
+  - "Administrador" e "Recepção" em "Entra como" dependem da #404.
+  - "Enviar" em massa (Pn-18) e "Pedir avaliação" (#383/#402) ficaram fora.
+  - As mudanças no painel da pessoa valem na hora, com aviso, sem "Salvar alterações": menos passos, e tudo se desfaz no mesmo lugar.
+  - "Copiar link geral" copia o primeiro link ativo com origem. Sem nenhum, o botão não aparece e "Convidar" cria um.
+- **Revisão adversarial (correções):**
+  - **Reenviar, reenviar em lote e renovar** são um `updateMany` condicional (teto de 5 envios, 10 minutos desde o último, ainda válido; no renovar, `expiresAt <= agora`). O token é gerado antes, e o e-mail só sai se o update pegou o convite (`count === 1`). Reenvios ao mesmo tempo mandam um e-mail só. `POST …/invites/:id/resend` e `PUT …/accompanied-by` ganharam `UserThrottlerGuard`.
+  - **"Ativaram em 48 h" sai só no cartão, só o percentual.** A linha de cada convite mostra só quantos entraram (mínimo de 5): com a ativação por convite, a diferença entre o cartão e as linhas isolava quem entrou por um convite pequeno. O cartão e o "Entraram e sem 1º registro" da Ativação pendente usam a mesma população: membros com opt-in que entraram entre 30 dias e 48 h atrás, por qualquer caminho.
+  - **Convite de equipe** (papel diferente de membro) não fica sem prazo nem sem limite de usos e vale no máximo 30 dias. Na tela, as opções "Sem prazo" e "Sem limite" somem. **Convite por e-mail vale sempre 30 dias** (o prazo pedido é ignorado).
+  - **Tetos por e-mail:** no máximo 5 envios para o mesmo e-mail na comunidade em 30 dias, somando convites revogados e recriados. Quem recusou não recebe convite novo por 30 dias. O convite individual recusa e-mail com convite aberto, como o lote. O lote ganhou os motivos "recusou há menos de 30 dias" e "já recebeu 5 convites em 30 dias". As mensagens não sugerem mais "revogue e convide de novo".
+  - **Lote de membros e trilha no mesmo `$transaction`.** Os assentos (lote e aceite com "Dar assento") são dados sob uma trava por pool (`pg_advisory_xact_lock`), então lotes e aceites simultâneos não passam da conta. O `targetCount` da trilha é o que mudou de fato.
+  - **Contador do menu** (`pendingInvites`) = o filtro da Ativação pendente sem os recusados: convidado há 2 dias ou mais, recortado pelo papel (`activationPendingWhere`).
+  - **Código de entrada** recusa acompanhante, assento e "sem prazo" (400). **Acompanhante** só para quem é membro (sozinho ou em lote, 400).
+  - **Aceite:** o update filtra `declinedAt: null` (recusa entre a leitura e a gravação não deixa entrar). O assento que falha vira log, e a pessoa entra mesmo assim.
+  - **WhatsApp:** com o segredo, o link sem e-mail deriva do id e da hora em que saiu (`GroupInvite.linkIssuedAt`). Em 10 minutos, volta o mesmo link, sem invalidar o que a equipe acabou de mandar. O botão avisa que um link novo invalida o anterior, e o diálogo diz se o link é novo ou o mesmo. Reenviar e renovar zeram essa data.
+  - **Exclusão de conta** também revoga os convites abertos que a pessoa criou.
+  - **Segredos em produção:** um bloco repetido é recusado, e `INVITE_LINK_SECRET` igual a `EMAIL_UNSUBSCRIBE_SECRET` também.
+  - **Recusados na Ativação pendente (decisão do orquestrador):** a lista continua mostrando quem recusou, com o status "recusou" e sem Reenviar nem WhatsApp, para a equipe saber e não insistir. Só o contador do menu deixa os recusados de fora.
+  - **App:** no formulário do link, papel de equipe começa com 1 uso e 30 dias, sem "sem limite" (campo vazio volta para 1); membro segue com vazio = sem limite e 7 dias (`link-invite-form.ts`).
+  - **Tipos:** `InvitePreview.expiresAt` passou a ser `string | null`.
+  - **Testes novos:** concorrência no reenvio, na renovação e nos assentos (lote e aceite); `url` nulo para link revogado ou vencido; link HMAC revogado recusado no aceite e na prévia (`invite-review.integration.spec.ts`).
+- **Passada visual** (web 1440 e 390, escuro e claro, contra Pn-04, 04b, 04c, 04d, Pn-06, 06b, Pn-22, 22b, 22c, 22d e Ex-01; app contra o formulário da Pn-04c; prints em `~/.cache/fatia-vis/401/cmp-*.png`):
+  - Corrigido:
+    - "Acompanha" (Membros) mostra o nome em etiqueta e "Ninguém" em destaque (`text-warning`) para membro sem acompanhamento, como na Pn-04. A equipe segue com "—".
+    - Convites e Ativação pendente em 390 px: o título não espreme mais o subtítulo ao lado dos botões, as ações da linha empilham e o status da Ativação vai para baixo do e-mail. Nada sai da tela.
+    - Ativação pendente vazia só diz "Todos os convites foram aceitos" quando não há convite sem aceite. Com convites de menos de 2 dias, diz "Nenhum convite parado há 2 dias".
+    - App: o campo do link ganhou o rótulo "Limite de usos" (o "1" do convite de equipe ficava sem contexto).
+  - Conferido:
+    - O painel lateral (pessoa, convite, link com QR) empurra a página e não cobre botão. No celular ocupa a tela com Cancelar/Criar visíveis.
+    - O lote aparece na barra verde.
+    - Não há texto escuro no modo escuro: Revogar e "expirou" usam `text-danger`.
+    - O e-mail Ex-01 sai igual à prancha, em fonte do sistema e com o topo sem degradê (cliente de e-mail).
+  - Desvios que ficam:
+    - A Ativação pendente lista do convite mais antigo para o mais novo (quem espera há mais tempo primeiro); a prancha vai do mais novo.
+    - "Status" de Membros é texto, sem o ponto colorido da prancha.
+    - "Copiar" na linha do link e "Copiar link geral" só aparecem com `INVITE_LINK_SECRET`, que o dev não tem.
+- **Falta (dependências):** aceitar o convite na web redesenhada (#416) e a recusa no Onb-E1 (#372; a API já existe). Assentos em massa seguem a regra atual até a #403. Os papéis novos de equipe ficam para a #404.
+
 #399 (branch `redesign/399-para-revisar`; migration `20261119400000_review_queue`; nenhuma env nova; nenhuma tool nova no MCP: `get_workout_session` passa a trazer `feedback`, o comentário da equipe, só leitura):
 
 - **Decisões (orquestrador):**
   - **Sem chat no Fatia** (#306 e a etapa 2 da #338): a conversa é no WhatsApp, pelo link `wa.me` com texto pronto. [ADR 048](./ADR/048-sem-chat-entre-equipe-e-aluno.md), que entra nos não-objetivos do PRD e tira do THREAT_MODEL o vetor "mensagem entre contas" (vetor 22 descreve o que ficou). #306 já estava fechada como não planejada; ganhou o comentário com a ADR.
-  - **Comentário por sessão** (#303): reação 💪🔥👏❤️ e/ou até 500 caracteres (`SessionFeedback`), um por pessoa da equipe por sessão, editável por quem escreveu. Comentário **por exercício** fica como melhoria futura.
+  - **Comentário por sessão** (#303): reação 💪🔥👏❤️ e/ou até 500 caracteres (`SessionFeedback`), um por pessoa da equipe, sessão e comunidade, editável por quem escreveu. Comentário **por exercício** fica como melhoria futura.
   - **O aluno não responde no app**: vê "Da sua equipe" no histórico do treino (web e app, só leitura) e recebe o aviso "Helena comentou seu treino"; a resposta vai pelo WhatsApp.
 - **Para revisar** (`/org/<id>/review`, Pn-02; permissão nova `panel.review`, dono e profissional, em `permissions.ts` e `PERMISSIONS.md`; item "Para revisar" no grupo Acompanhar do menu):
   - `GET groups/:id/review`: os últimos 7 dias dos membros ativos **com vínculo com quem olha** — treino concluído e meta concluída (cada um pelo `assertReadable`, ação `list_review_queue`; só os escopos que o vínculo tem, para não encher a trilha de negadas) e plano mandado por esta comunidade que foi aceito ou recusado (sem escopo: é resposta à oferta).
   - Abas Para revisar · N e Revisados · N pelo "Visto" de cada um (`ReviewSeen`, `POST review/:kind/:refId/seen`); comentar a sessão também marca visto ("depois de comentar, sai da fila"). Filtros Tudo, Treinos, Respostas e planos; vazio "Nada aqui com este filtro.". Colunas Membro, Tipo, O que aconteceu, Compartilha, com "Ver sessão" (treino) ou "Abrir ficha" e o WhatsApp quando a pessoa autorizou.
   - Sem contador no menu: exigiria ler dado de saúde a cada tela.
-- **Em risco** (aba da mesma tela; `GET groups/:id/at-risk`):
+- **Em risco** (aba da mesma tela, também em `/org/<id>/review/at-risk`; `GET groups/:id/at-risk`):
   - Só quem tem vínculo com quem olha. Para cada um, o último registro de Treino, Alimentação, Corpo e Hábitos que ele libera (`assertReadable`, `list_at_risk`), em dias no fuso da comunidade; sem registro nenhum, conta da entrada. Sinais: "parado" (nada há N dias), "sumiu" (2× o limite), "sem treino" (registra outras coisas, mas não treina) e "não começou". "Chamar no WhatsApp" com texto pronto.
   - O limite (3 a 60 dias, padrão 7, `Group.riskDays`) é do dono (`PATCH at-risk/settings` com `group.update`); o profissional vê "Entra na lista depois de N dias sem registrar.".
   - **Aviso diário** opcional, por pessoa (`PUT at-risk/digest`, `GroupMembership.riskDigest`): a partir das 9 h no fuso da comunidade, um push "N alunos precisam de atenção." contando as mesmas linhas que ela vê; uma vez por dia (`riskDigestOn` reivindicado com `updateMany`).
@@ -591,6 +650,19 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Sessão feita** (`/org/<id>/review/sessions/<sessionId>`, Pn-35 e Pn-35b; `GET review/sessions/:id` e `POST …/feedback`): duração, séries, volume com a comparação, "Como foi" (check-in), exercícios com melhor série e recorde, nota da pessoa, reações e comentário com "Enviar ao aluno", "enviado à Ana", "Ficha da Ana" e WhatsApp. Sem Treino liberado: só "Ana não compartilha Treino" e o texto da prancha. Comentar exige `WORKOUT`.
 - **Dados e LGPD:** `SessionFeedback` e `ReviewSeen` saem quando a pessoa deixa a comunidade (mesma transação de `endMembership`, ex-`encerrar`), com a sessão, a comunidade e a conta; autor apagado vira nulo. Entram no export (`sessionFeedback` recebido, `sessionFeedbackWritten`, `reviewSeen`) e na `DATA_RETENTION.md`.
 - **Isolamento:** sessão, meta e oferta precisam ser de membro ativo do grupo da URL (senão 404, igual a inexistente); o "Visto" resolve o titular pelo id e confere a membership no mesmo grupo. Coberto em `review.integration.spec.ts` e no bloco #399 do `user-isolation.spec.ts`.
+- **Correções da revisão adversarial:**
+  - **Comentário por comunidade (F1):** a chave única é (sessão, autor, comunidade), na própria migration `20261119400000` (não tinha ido para produção). Reagir em B nunca move nem troca o comentário de A; "comentado" na fila e o anterior do envio são lidos só na comunidade da URL. O aluno pode ter um comentário de cada comunidade.
+  - **Corrida e aviso (F2, F3):** ler o anterior e gravar correm numa transação sob `pg_advisory_xact_lock` por (sessão, autor, comunidade), sem `include` no upsert (o nome do autor vem numa leitura à parte); quatro envios simultâneos dão um comentário e um aviso. O aviso sai pelo resultado da transação, só no primeiro envio e quando o texto aparece pela primeira vez; editar o texto ou trocar a reação não avisa.
+  - **O comentário é do aluno (F4):** fica mesmo depois que o autor sai da comunidade (sem nome se apagar a conta); sai quando o aluno sai.
+  - **"Visto" órfão (F5):** apagar a sessão ou a meta (e o Desfazer da IA que as apaga) apaga o `ReviewSeen` delas na mesma transação.
+  - **Toque no aviso diário (F6):** o aviso leva a `/org/<id>/review/at-risk`, caminho sem `?` que o `notificationTarget` e o service worker aceitam (o filtro não foi alargado). No app, que ainda não tem a tela (#414), o toque em `/org/<id>/review…` cai no painel da comunidade (`mobilePushTarget`).
+  - **Aba sem tela no app (F7):** "Para revisar" sai das abas do painel no celular até a #414 (`mobilePanelSections`); um teste confere que toda aba exibida tem arquivo de rota.
+  - **Limite do comentário (F8):** contado por code point na API, no DTO e na tela (contador `n/500`), como o `char_length` do CHECK.
+  - **Limite do em risco (F9):** as opções vão de 3 a 60 e sempre incluem o valor atual.
+  - **Tela (F10):** a fila e o Em risco carregam e erram cada um na sua aba; tocar na reação atual tira a reação; Pn-35b diz "Só a pessoa pode ligar".
+  - **Em risco:** associação antiga sem `joinedAt` conta da criação dela ("não começou"); no aviso diário, a falha de uma pessoa vira log e não para as outras.
+  - **Resposta a plano sem vínculo:** mantida, coerente com a ficha da #402 (a resposta é à oferta da comunidade, não dado de saúde); o `PERMISSIONS.md` explica.
+  - Cobertas em `review-fixes.integration.spec.ts` (API), `review-queue-fixes.test.ts` (api-client), nos testes das telas (web) e em `panel-sections.test.ts` e `push-target.test.ts` (app). O teste antigo do aviso diário dependia da hora do dia e foi corrigido.
 - **Desvios de propósito:**
   - Filtros Avaliações, Alimentação e Desafios da prancha não aparecem: ainda não há o que mostrar neles.
   - Check-ins sinalizados de desafio não entram na fila: já vivem em Desafios, com contador próprio.

@@ -153,6 +153,10 @@ model User {
   aiUsage         AiUsage[]
   subscriptions   UserSubscription[]
   invitesCreated  GroupInvite[]         @relation("GroupInviteCreator")
+  /// Convites por e-mail que a pessoa aceitou (#401).
+  invitesAccepted GroupInvite[]         @relation("GroupInviteAcceptedBy")
+  /// Ações em massa que a pessoa fez num painel de comunidade (#401).
+  groupAuditLogs  GroupAuditLog[]
   mediaFiles      MediaFile[]           @relation("MediaUploader")
   planTemplates   GroupPlanTemplate[]   @relation("PlanTemplateAuthor")
   tipsAuthored    GroupTip[]            @relation("TipAuthor")
@@ -1777,6 +1781,7 @@ model Group {
   links                  ProfessionalLink[]
   aiUsage                AiUsage[]
   invites                GroupInvite[]
+  auditLogs              GroupAuditLog[]
   seatPool               GroupSeatPool?
   /// Avatar da comunidade (ADR 028).
   avatarFileId           String?                @unique
@@ -1842,57 +1847,69 @@ enum JoinVia {
 }
 
 model GroupMembership {
-  id            String           @id @default(uuid())
-  groupId       String
-  userId        String
-  role          GroupRole
-  status        MembershipStatus @default(INVITED)
-  invitedAt     DateTime         @default(now())
-  joinedAt      DateTime?
-  leftAt        DateTime?
+  id                String           @id @default(uuid())
+  groupId           String
+  userId            String
+  role              GroupRole
+  status            MembershipStatus @default(INVITED)
+  invitedAt         DateTime         @default(now())
+  joinedAt          DateTime?
+  leftAt            DateTime?
   /// O que a pessoa aceitou compartilhar com a equipe ao entrar (ADR 026).
   /// Registro do aceite; a autorização de fato são os `ProfessionalLink`.
-  consentScopes ShareScope[]     @default([])
-  consentAt     DateTime?
+  consentScopes     ShareScope[]     @default([])
+  consentAt         DateTime?
   /// Entra nas estatísticas agregadas da comunidade (opt-in, ADR 026 §6).
-  statsOptIn    Boolean          @default(false)
+  statsOptIn        Boolean          @default(false)
   /// Apelido na comunidade: como a pessoa aparece no ranking dos desafios
   /// (Fase 8a). Nulo até a primeira vez que ela entra num desafio.
-  displayName   String?
+  displayName       String?
   /// Última vez que a pessoa abriu o mural desta comunidade (#393, #394): conta
   /// os "posts novos" da lista e do mural. Nulo = nunca abriu; conta desde a entrada.
-  feedSeenAt    DateTime?
+  feedSeenAt        DateTime?
   /// Por onde a pessoa entrou (#398, "Novos esta semana"): convite, código de
   /// entrada ou a página da comunidade. Nulo = entrou antes de existir o campo,
   /// ou é quem criou a comunidade.
-  joinVia       JoinVia?
+  joinVia           JoinVia?
+  /// O convite (link, QR, e-mail ou código) por onde a pessoa entrou (#401,
+  /// "Entrou por"). Nulo = pela página, antes do campo, ou o convite sumiu.
+  joinedViaInviteId String?
+  /// O profissional (ou o dono) da equipe que acompanha esta pessoa (#401,
+  /// "Acompanha"). Só administração: quem lê dado de saúde continua sendo o
+  /// `ProfessionalLink`. Nulo = ninguém.
+  accompaniedById   String?
   /// Aviso diário "N alunos precisam de atenção" (#399), da equipe. Opcional:
   /// nasce desligado. Sem nomes no texto.
-  riskDigest    Boolean          @default(false)
+  riskDigest        Boolean          @default(false)
   /// O dia (YYYY-MM-DD, fuso da comunidade) do último aviso diário: um por dia.
-  riskDigestOn  String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  riskDigestOn      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  group            Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  seatAssignments  GroupSeatAssignment[]
-  challengeEntries GroupChallengeParticipant[]
+  group               Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user                User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedViaInvite     GroupInvite?                @relation("JoinedViaInvite", fields: [joinedViaInviteId], references: [id], onDelete: SetNull)
+  accompaniedBy       GroupMembership?            @relation("Accompanies", fields: [accompaniedById], references: [id], onDelete: SetNull)
+  accompanying        GroupMembership[]           @relation("Accompanies")
+  /// Convites que já põem a pessoa como acompanhada por este profissional.
+  invitesAccompanying GroupInvite[]               @relation("InviteAccompaniedBy")
+  seatAssignments     GroupSeatAssignment[]
+  challengeEntries    GroupChallengeParticipant[]
   /// Sinalizações "Não parece válido" feitas pela pessoa (#395).
-  checkinFlags     ChallengeCheckinFlag[]
+  checkinFlags        ChallengeCheckinFlag[]
   /// "Me avise quando começar" (#395).
-  challengeWatches GroupChallengeWatcher[]
+  challengeWatches    GroupChallengeWatcher[]
   /// O mural (Fase 8b): o que a pessoa publicou, reagiu, comentou e denunciou.
-  posts            GroupPost[]                 @relation("PostAuthor")
-  postsRemoved     GroupPost[]                 @relation("PostRemovedBy")
-  postReactions    GroupPostReaction[]
-  postComments     GroupPostComment[]          @relation("CommentAuthor")
-  commentsRemoved  GroupPostComment[]          @relation("CommentRemovedBy")
-  reportsMade      GroupPostReport[]           @relation("ReportReporter")
-  reportsResolved  GroupPostReport[]           @relation("ReportResolvedBy")
-  postsHidden      GroupPostHide[]
-  pollVotes        GroupPollVote[]
-  announcements    GroupAnnouncement[]
+  posts               GroupPost[]                 @relation("PostAuthor")
+  postsRemoved        GroupPost[]                 @relation("PostRemovedBy")
+  postReactions       GroupPostReaction[]
+  postComments        GroupPostComment[]          @relation("CommentAuthor")
+  commentsRemoved     GroupPostComment[]          @relation("CommentRemovedBy")
+  reportsMade         GroupPostReport[]           @relation("ReportReporter")
+  reportsResolved     GroupPostReport[]           @relation("ReportResolvedBy")
+  postsHidden         GroupPostHide[]
+  pollVotes           GroupPollVote[]
+  announcements       GroupAnnouncement[]
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -1901,6 +1918,8 @@ model GroupMembership {
   @@index([userId, status])
   @@index([groupId, status])
   @@index([groupId, role])
+  @@index([joinedViaInviteId])
+  @@index([accompaniedById])
 }
 
 /// A ÚNICA autorização de leitura entre contas do produto (ADR 014).
@@ -2373,31 +2392,86 @@ model BillingWebhookEvent {
 /// `/c/<token>` aparece uma vez, para quem criou. Com e-mail, vale só para a
 /// conta com aquele e-mail e uma vez; sem e-mail, é link compartilhável.
 model GroupInvite {
-  id          String    @id @default(uuid())
-  groupId     String
+  id              String        @id @default(uuid())
+  groupId         String
   /// sha256 do token, em hex.
-  tokenHash   String    @unique
+  tokenHash       String        @unique
   /// Código de entrada legível (#393, "AD7K3Q9P"): reutilizável e revogável,
   /// para o QR da recepção. Diferente do link, **não** é aprovação: quem entra
   /// por ele segue a `joinPolicy` da comunidade. Nulo = convite por link.
-  code        String?   @unique
+  code            String?       @unique
   /// Apagado 30 dias depois do uso ou da expiração (DATA_RETENTION.md).
-  email       String?
-  role        GroupRole
-  createdById String?
+  email           String?
+  role            GroupRole
+  createdById     String?
   /// null = sem limite até expirar.
-  maxUses     Int?
-  uses        Int       @default(0)
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  lastSentAt  DateTime?
-  createdAt   DateTime  @default(now())
+  maxUses         Int?
+  uses            Int           @default(0)
+  /// Nulo = "sem prazo" (#401): só link ou QR, nunca e-mail nem código.
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  lastSentAt      DateTime?
+  /// Quantas vezes o e-mail saiu (criação, reenvio, convite novo): o teto de
+  /// reenvios (#401) conta aqui.
+  sendCount       Int           @default(0)
+  /// Quando saiu o link sem e-mail do convite nominal (WhatsApp, #401). O token
+  /// deriva do segredo e desta data: em 10 minutos o mesmo link é devolvido.
+  linkIssuedAt    DateTime?
+  /// Nome do link que só a equipe vê ("Recepção", "Instagram"), #401.
+  label           String?
+  origin          InviteOrigin?
+  /// Convite por e-mail aceito: quem e quando (#401). Link de vários usos não
+  /// guarda quem entrou aqui: está em `GroupMembership.joinedViaInviteId`.
+  acceptedById    String?
+  acceptedAt      DateTime?
+  /// A pessoa convidada recusou (#401, Onb-E1): o convite deixa de valer.
+  declinedAt      DateTime?
+  /// Quem entra já fica acompanhado por este profissional da equipe.
+  accompaniedById String?
+  /// Quem entra ganha um assento PRO, se houver vaga na hora.
+  giveSeat        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
 
-  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  createdBy User? @relation("GroupInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  group         Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy     User?             @relation("GroupInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  acceptedBy    User?             @relation("GroupInviteAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  accompaniedBy GroupMembership?  @relation("InviteAccompaniedBy", fields: [accompaniedById], references: [id], onDelete: SetNull)
+  joinedMembers GroupMembership[] @relation("JoinedViaInvite")
 
   @@index([groupId, revokedAt])
   @@index([createdById])
+  @@index([acceptedById])
+  @@index([accompaniedById])
+}
+
+/// Por onde o convite circula (#401, Pn-06b): aparece em "Entrou por" e em Origens.
+enum InviteOrigin {
+  QR
+  INSTAGRAM
+  SITE
+  REFERRAL
+  EMAIL_LIST
+  OTHER
+}
+
+/// Trilha das ações em massa do painel (#401): trocar responsável, dar ou
+/// tirar assento. Só ids e contagem, nunca dado de saúde.
+model GroupAuditLog {
+  id          String   @id @default(uuid())
+  groupId     String
+  actorId     String?
+  /// `members.accompany`, `members.seat`, `members.unseat`.
+  action      String
+  targetCount Int
+  /// `{ membershipIds, accompaniedById? }`.
+  payload     Json
+  createdAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@index([actorId])
 }
 
 /// Como a comunidade dá o PRO (#386, #288): por assento escolhido (ADR 025) ou

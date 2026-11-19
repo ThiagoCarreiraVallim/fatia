@@ -39,6 +39,7 @@
     "lucide-react": "^1.28.0",
     "nanoid": "^6.0.1",
     "next": "^15.0.0",
+    "qrcode-generator": "1.4.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.83.0",

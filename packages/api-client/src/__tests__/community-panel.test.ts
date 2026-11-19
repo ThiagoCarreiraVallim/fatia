@@ -48,6 +48,7 @@ describe('quem abre o painel e com que seções', () => {
       'review',
       'members',
       'invites',
+      'activation',
       'content',
       'exercises',
       'challenges',
@@ -63,6 +64,7 @@ describe('quem abre o painel e com que seções', () => {
       'review',
       'members',
       'invites',
+      'activation',
       'content',
       'exercises',
       'challenges',
@@ -85,6 +87,7 @@ describe('quem abre o painel e com que seções', () => {
     expect(activePanelSection('/org/g1')).toBe('overview');
     expect(activePanelSection('/org/g1/members/m9')).toBe('members');
     expect(activePanelSection('/org/g1/invites?x=1')).toBe('invites');
+    expect(activePanelSection('/org/g1/activation')).toBe('activation');
     expect(activePanelSection('/org/g1/challenges')).toBe('challenges');
   });
 });
@@ -133,7 +136,24 @@ describe('convites e assentos', () => {
     expiresAt: '2026-10-24T12:00:00.000Z',
     createdAt: '2026-10-17T12:00:00.000Z',
     lastSentAt: null,
+    label: null,
+    origin: null,
+    sendCount: 0,
+    acceptedAt: null,
+    declinedAt: null,
+    revokedAt: null,
+    giveSeat: false,
+    accompaniedById: null,
+    kind: 'link',
+    status: 'active',
     ...extra,
+  });
+
+  it('link sem prazo (#401): "sem prazo" no lugar da data, e o nome do link na frente', () => {
+    expect(inviteSummary(convite({ expiresAt: null, uses: 2 }))).toBe('Link · 2 usos · sem prazo');
+    expect(inviteSummary(convite({ expiresAt: null, label: 'Recepção' }))).toBe(
+      'Recepção · 0 usos · sem prazo',
+    );
   });
 
   it('resume link e e-mail', () => {

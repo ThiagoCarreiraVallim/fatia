@@ -8,6 +8,7 @@ import {
 import {
   GroupRole,
   JoinPolicy,
+  type InviteOrigin,
   JoinVia,
   MembershipStatus,
   type GroupMembership,
@@ -62,6 +63,28 @@ export interface MemberView {
    * **não** sai para ninguém: diria quem entra no agregado (THREAT_MODEL §9).
    */
   hasAiSeat?: boolean;
+  /**
+   * Por onde entrou e quem acompanha (#401, "Entrou por" e "Acompanha"). Só
+   * para a equipe que vê todos (`OWNER`, `PROFESSIONAL`).
+   */
+  joinedVia?: {
+    via: JoinVia | null;
+    inviteId: string | null;
+    label: string | null;
+    origin: InviteOrigin | null;
+  } | null;
+  accompaniedBy?: { membershipId: string; name: string } | null;
+  leftAt?: Date | null;
+  /**
+   * O WhatsApp que a pessoa escolheu mostrar à equipe (`whatsappOptIn`, perfil).
+   * Só de quem está ativo e só para a equipe que vê todos.
+   */
+  whatsapp?: string | null;
+}
+
+export interface ListMembersOptions {
+  /** Inclui quem saiu ou foi removido (aba "Saíram"). Só para quem vê todos. */
+  includeLeft?: boolean;
 }
 
 /** O que a pessoa escolheu compartilhar ao entrar (ADR 026). Nada por padrão. */
@@ -184,6 +207,7 @@ export class MembershipService {
         consent,
         at: new Date(),
         via,
+        viaInviteId: entrada.inviteId ?? null,
       });
       const [membership] = (await this.prisma
         .$transaction([...ops, ...usoDoCodigo])
@@ -205,6 +229,8 @@ export class MembershipService {
       consentAt: new Date(),
       statsOptIn: consent.statsOptIn,
       joinVia: via,
+      joinedViaInviteId: entrada.inviteId ?? null,
+      accompaniedById: null,
     };
     const [membership] = (await this.prisma
       .$transaction([
@@ -303,6 +329,10 @@ export class MembershipService {
     at: Date;
     /** Por onde entrou (#398). Ausente na aprovação: vale o que o pedido guardou. */
     via?: JoinVia;
+    /** O convite por onde entrou (#401, "Entrou por"); vale junto com `via`. */
+    viaInviteId?: string | null;
+    /** Quem da equipe acompanha (#401); vale junto com `via`. */
+    accompaniedById?: string | null;
   }): Promise<Prisma.PrismaPromise<unknown>[]> {
     const { groupId, userId, role, at } = params;
     const scopes = normalizarEscopos(params.consent.scopes);
@@ -319,7 +349,15 @@ export class MembershipService {
       consentScopes: scopes,
       consentAt: at,
       statsOptIn: params.consent.statsOptIn,
-      ...(params.via ? { joinVia: params.via } : {}),
+      // Entrada nova (com `via`) reescreve a origem e o responsável: quem volta
+      // por outro caminho não herda o de antes. Na aprovação, fica o do pedido.
+      ...(params.via
+        ? {
+            joinVia: params.via,
+            joinedViaInviteId: params.viaInviteId ?? null,
+            accompaniedById: params.accompaniedById ?? null,
+          }
+        : {}),
     };
     const ops: Prisma.PrismaPromise<unknown>[] = [
       this.prisma.groupMembership.upsert({
@@ -408,18 +446,32 @@ export class MembershipService {
    *   alunos de uma academia é informação sobre pessoas, e não é do interesse
    *   de outro aluno.
    */
-  async listMembers(userId: string, groupId: string): Promise<MemberView[]> {
+  async listMembers(
+    userId: string,
+    groupId: string,
+    opts: ListMembersOptions = {},
+  ): Promise<MemberView[]> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
     const veTodos = eu.role === GroupRole.OWNER || eu.role === GroupRole.PROFESSIONAL;
+    // Quem saiu só aparece para a equipe que vê todos: nome e data, nada mais.
+    const status =
+      veTodos && opts.includeLeft
+        ? [
+            MembershipStatus.INVITED,
+            MembershipStatus.ACTIVE,
+            MembershipStatus.LEFT,
+            MembershipStatus.REMOVED,
+          ]
+        : [MembershipStatus.INVITED, MembershipStatus.ACTIVE];
 
     const membros = await this.prisma.groupMembership.findMany({
       where: {
         groupId,
-        status: { in: [MembershipStatus.INVITED, MembershipStatus.ACTIVE] },
+        status: { in: status },
         ...(veTodos
           ? {}
           : {
@@ -430,7 +482,9 @@ export class MembershipService {
             }),
       },
       include: {
-        user: { select: { name: true } },
+        user: { select: { name: true, whatsapp: true, whatsappOptIn: true } },
+        joinedViaInvite: { select: { id: true, label: true, origin: true } },
+        accompaniedBy: { select: { id: true, user: { select: { name: true } } } },
       },
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
@@ -448,7 +502,7 @@ export class MembershipService {
     const withSeat = veTodos
       ? await membershipsWithEffectiveSeat(
           this.prisma,
-          membros.map((m) => m.id),
+          membros.filter((m) => m.status === MembershipStatus.ACTIVE).map((m) => m.id),
         )
       : new Set<string>();
 
@@ -460,8 +514,26 @@ export class MembershipService {
       joinedAt: m.joinedAt,
       ...(veTodos
         ? {
-            scopesGrantedToMe: porTitular.get(m.userId) ?? [],
+            scopesGrantedToMe:
+              m.status === MembershipStatus.ACTIVE || m.status === MembershipStatus.INVITED
+                ? (porTitular.get(m.userId) ?? [])
+                : [],
             hasAiSeat: withSeat.has(m.id),
+            joinedVia:
+              m.joinVia || m.joinedViaInvite
+                ? {
+                    via: m.joinVia,
+                    inviteId: m.joinedViaInvite?.id ?? null,
+                    label: m.joinedViaInvite?.label ?? null,
+                    origin: m.joinedViaInvite?.origin ?? null,
+                  }
+                : null,
+            accompaniedBy: m.accompaniedBy
+              ? { membershipId: m.accompaniedBy.id, name: m.accompaniedBy.user.name }
+              : null,
+            leftAt: m.leftAt,
+            whatsapp:
+              m.status === MembershipStatus.ACTIVE && m.user.whatsappOptIn ? m.user.whatsapp : null,
           }
         : {}),
     }));
@@ -529,10 +601,20 @@ export class MembershipService {
       ? [cancelScheduledAnnouncementsOp(this.prisma, alvo.id, at)]
       : [];
 
+    // Quem deixa de ser profissional deixa de acompanhar; quem vira equipe deixa
+    // de ser acompanhado (#401).
+    const acompanha = (r: GroupRole) => r === GroupRole.PROFESSIONAL || r === GroupRole.OWNER;
+    const largaAcompanhados =
+      acompanha(alvo.role) && !acompanha(role) ? releaseAccompaniedOps(this.prisma, alvo.id) : [];
+
     const [membership, ...resto] = (await this.prisma.$transaction([
-      this.prisma.groupMembership.update({ where: { id: alvo.id }, data: { role } }),
+      this.prisma.groupMembership.update({
+        where: { id: alvo.id },
+        data: { role, ...(role !== GroupRole.MEMBER ? { accompaniedById: null } : {}) },
+      }),
       ...vinculos,
       ...cancelaAgendados,
+      ...largaAcompanhados,
     ])) as [GroupMembership, ...unknown[]];
 
     return {
@@ -694,7 +776,7 @@ export class MembershipService {
     const [membership, revogados] = await this.prisma.$transaction([
       this.prisma.groupMembership.update({
         where: { id: membershipId },
-        data: { status, leftAt: agora },
+        data: { status, leftAt: agora, accompaniedById: null },
       }),
       // Sem `professionalId` no filtro de propósito: o vínculo é contextual ao
       // grupo, então sair encerra TODOS os daquele grupo. Filtrar por um
@@ -708,6 +790,8 @@ export class MembershipService {
       }),
       // Os comunicados que a pessoa agendou não saem depois que ela saiu (#394).
       cancelScheduledAnnouncementsOp(this.prisma, membershipId, agora),
+      // Quem ela acompanhava fica sem responsável (#401).
+      ...releaseAccompaniedOps(this.prisma, membershipId),
       // As anotações da equipe sobre ela moram na comunidade e saem com ela (#402).
       this.prisma.memberNote.deleteMany({ where: { groupId, subjectUserId: userId } }),
       // Plano que esperava o aceite não se responde mais (#402); o aceito é dela.
@@ -749,4 +833,24 @@ export class MembershipService {
       throw new ForbiddenException('Apenas o dono do grupo pode fazer isso');
     }
   }
+}
+
+/**
+ * Quem sai da equipe (ou da comunidade) deixa de acompanhar: os membros e os
+ * convites que apontavam para ela ficam sem responsável (#401).
+ */
+function releaseAccompaniedOps(
+  prisma: PrismaService,
+  membershipId: string,
+): Prisma.PrismaPromise<unknown>[] {
+  return [
+    prisma.groupMembership.updateMany({
+      where: { accompaniedById: membershipId },
+      data: { accompaniedById: null },
+    }),
+    prisma.groupInvite.updateMany({
+      where: { accompaniedById: membershipId },
+      data: { accompaniedById: null },
+    }),
+  ];
 }

@@ -568,6 +568,8 @@ export class AccountService {
         where: { createdById: userId },
         select: {
           group: { select: { name: true } },
+          label: true,
+          origin: true,
           role: true,
           maxUses: true,
           uses: true,
@@ -773,6 +775,40 @@ export class AccountService {
           ).map((u) => [u.id, u.name] as const),
     );
 
+    // Convites que a pessoa recebeu (#401): os aceitos por ela e os que ainda
+    // estão no e-mail dela (pendentes, vencidos, recusados). Sem o hash do token
+    // e sem quem convidou além do nome da comunidade.
+    const [invitesReceived, panelActions] = await Promise.all([
+      this.prisma.groupInvite.findMany({
+        where: {
+          OR: [{ acceptedById: userId }, { email: { equals: user.email, mode: 'insensitive' } }],
+        },
+        select: {
+          group: { select: { name: true } },
+          role: true,
+          email: true,
+          createdAt: true,
+          expiresAt: true,
+          acceptedAt: true,
+          declinedAt: true,
+          revokedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Ações em massa que a pessoa fez num painel (#401): o que, quando e em
+      // quantas pessoas. Os ids dos outros membros ficam de fora (dado de terceiro).
+      this.prisma.groupAuditLog.findMany({
+        where: { actorId: userId },
+        select: {
+          group: { select: { name: true } },
+          action: true,
+          targetCount: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
     return {
       // `exportedAt` é gerado no servidor de propósito: o cliente não deve poder
       // datar o próprio export.
@@ -832,6 +868,8 @@ export class AccountService {
         communityMemberships.map((m) => this.exportMembership(m, opts.photoLinks === true)),
       ),
       invitesCreated,
+      invitesReceived,
+      panelActions,
       contentPublished,
       mediaUploaded,
       devices,
@@ -870,6 +908,8 @@ export class AccountService {
         posts: communityMemberships.reduce((n, m) => n + m.posts.length, 0),
         postComments: communityMemberships.reduce((n, m) => n + m.postComments.length, 0),
         invitesCreated: invitesCreated.length,
+        invitesReceived: invitesReceived.length,
+        panelActions: panelActions.length,
         contentPublished:
           contentPublished.plans.length +
           contentPublished.tips.length +
@@ -1059,6 +1099,22 @@ export class AccountService {
     // conta continua inteira e o erro sobe — um checkpoint sobrevivendo à conta
     // seria dado de saúde sem dono e sem como ser apagado pela pessoa.
     await this.checkpoints.apagarDoUsuario(userId);
+
+    // O e-mail da pessoa sai dos convites que ela recebeu (#401). O que ainda
+    // estava em aberto é revogado junto: sem e-mail, o convite viraria link
+    // que qualquer um com o token usaria.
+    const doEmail = { equals: user.email, mode: 'insensitive' as const };
+    await this.prisma.groupInvite.updateMany({
+      where: { email: doEmail, revokedAt: null },
+      data: { email: null, revokedAt: new Date() },
+    });
+    await this.prisma.groupInvite.updateMany({ where: { email: doEmail }, data: { email: null } });
+    // Os convites que a pessoa criou e ainda valem param de valer: o autor vira
+    // nulo no `SetNull`, e o link de quem saiu não pode seguir abrindo a comunidade.
+    await this.prisma.groupInvite.updateMany({
+      where: { createdById: userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
     await this.prisma.user.delete({ where: { id: userId } });
 

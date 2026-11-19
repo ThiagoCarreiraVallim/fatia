@@ -295,6 +295,7 @@ describe('regras do conteúdo', () => {
       'review',
       'members',
       'invites',
+      'activation',
       'content',
       'exercises',
       'challenges',

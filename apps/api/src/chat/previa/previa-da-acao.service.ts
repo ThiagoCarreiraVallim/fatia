@@ -6,6 +6,7 @@ import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
 import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
 import { blockedUserIds } from '../../sharing/block.service';
 import { hashInviteToken } from '../../sharing/invite.service';
+import { isInviteUsable } from '../../sharing/invite-state';
 import { reminderTitle } from '../../notifications/reminders/reminder-rules';
 import {
   CAMPOS,
@@ -399,18 +400,17 @@ export class PreviaDaAcaoService {
         const convite = await this.prisma.groupInvite.findUnique({
           where: { tokenHash: hashInviteToken(String(valor)) },
           select: {
+            email: true,
+            code: true,
             revokedAt: true,
+            declinedAt: true,
             expiresAt: true,
             maxUses: true,
             uses: true,
             group: { select: { name: true } },
           },
         });
-        const vale =
-          convite &&
-          !convite.revokedAt &&
-          convite.expiresAt > ctx.agora &&
-          (convite.maxUses === null || convite.uses < convite.maxUses);
+        const vale = convite && isInviteUsable(convite, ctx.agora);
         return vale ? convite.group.name : null;
       }
       case 'profissional': {
