@@ -1,3 +1,4 @@
+import { whatsappChatHref } from './community-invites';
 import { panelHref } from './community-panel';
 import { apiFetch } from './http';
 import type { ShareScope } from './sharing';
@@ -217,14 +218,13 @@ export function reviewAction(
 }
 
 /**
- * O link do WhatsApp com o texto pronto (#338, etapa 1). Sem DDI, assume o
- * Brasil (o perfil já guarda com o 55). Nulo para número curto demais.
+ * O link do WhatsApp com o número e o texto pronto (#338, etapa 1). O número
+ * segue a regra de `whatsappChatHref` (#401): sem DDI, assume o Brasil; curto
+ * demais, nulo.
  */
-export function whatsappHref(phone: string, text: string): string | null {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 10) return null;
-  const full = digits.length <= 11 ? `55${digits}` : digits;
-  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
+export function whatsappTextHref(phone: string, text: string): string | null {
+  const chat = whatsappChatHref(phone);
+  return chat ? `${chat}?text=${encodeURIComponent(text)}` : null;
 }
 
 /** O texto pronto da linha da fila. Termina em espaço para quem escreve continuar. */

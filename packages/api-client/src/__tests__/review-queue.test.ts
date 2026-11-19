@@ -19,7 +19,7 @@ import {
   sessionFeedbackByline,
   sharesLine,
   splitReview,
-  whatsappHref,
+  whatsappTextHref,
   type AtRiskRow,
   type PanelReviewItem,
 } from '../review-queue';
@@ -110,11 +110,11 @@ describe('fila "Para revisar" (#399, Pn-02)', () => {
   });
 
   it('WhatsApp com texto pronto, só com número válido', () => {
-    expect(whatsappHref('5565998123456', 'Oi, Ana!')).toBe(
+    expect(whatsappTextHref('5565998123456', 'Oi, Ana!')).toBe(
       'https://wa.me/5565998123456?text=Oi%2C%20Ana!',
     );
-    expect(whatsappHref('(65) 99812-3456', 'x')).toBe('https://wa.me/5565998123456?text=x');
-    expect(whatsappHref('123', 'x')).toBeNull();
+    expect(whatsappTextHref('(65) 99812-3456', 'x')).toBe('https://wa.me/5565998123456?text=x');
+    expect(whatsappTextHref('123', 'x')).toBeNull();
     expect(reviewWhatsappText(item())).toBe('Oi, Ana! Vi seu treino no Fatia. ');
     expect(reviewWhatsappText(item({ kind: 'GOAL', title: 'Correr 5 km' }))).toBe(
       'Oi, Ana! Parabéns por concluir a meta “Correr 5 km”! ',

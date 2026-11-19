@@ -20,7 +20,7 @@ import {
   riskWhatsappText,
   sharesLine,
   splitReview,
-  whatsappHref,
+  whatsappTextHref,
   type AtRiskRow,
   type PanelReviewItem,
   type ReviewFilter,
@@ -83,7 +83,7 @@ function Person({ name }: { name: string }) {
 }
 
 function WhatsappLink({ phone, text, label }: { phone: string; text: string; label: string }) {
-  const href = whatsappHref(phone, text);
+  const href = whatsappTextHref(phone, text);
   if (!href) return null;
   return (
     <a

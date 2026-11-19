@@ -12,3 +12,4 @@ Regra: test(...) vermelho commitado antes de fix(...). Banco fatia_t399. Sem pus
 - web: ReviewScreen (review-screen.tsx), page /review e /review/at-risk, erro por aba, tirar reação, contador por code point, texto neutro Pn-35b
 - Falta: mobile F7 + toque do aviso; docs (F4 DATA_RETENTION, PERMISSIONS PLAN_RESPONSE, REDESIGN_PROGRESS); merge origin/main; rodadas finais
 - mobile: mobilePanelSections (sem review), mobilePushTarget (review → /org/<g>)
+- merge origin/main feito (6311775d); whatsappHref colidiu com o da #401 → whatsappTextHref (usa whatsappChatHref); activation também fora das abas do app

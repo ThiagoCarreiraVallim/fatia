@@ -19,7 +19,7 @@ import {
   reactionEmoji,
   reviewApi,
   SESSION_REACTIONS,
-  whatsappHref,
+  whatsappTextHref,
   type ReviewFeedback,
   type ReviewSessionSummary,
   type SessionReaction,
@@ -162,7 +162,7 @@ export default function ReviewSessionPage() {
   // Tirar a reação sem texto nenhum apagaria tudo: a API recusa, o botão também.
   const nothingLeft = current === null && !body.trim() && !mine?.body;
   const zap = view.whatsapp
-    ? whatsappHref(view.whatsapp, `Oi, ${first}! Vi seu treino no Fatia. `)
+    ? whatsappTextHref(view.whatsapp, `Oi, ${first}! Vi seu treino no Fatia. `)
     : null;
   const exercises = new Set(s.exercises.map((e) => e.exerciseId)).size;
 
