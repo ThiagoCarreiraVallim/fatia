@@ -15,6 +15,7 @@ import {
   Eye,
   Gift,
   LayoutGrid,
+  ListChecks,
   Link2,
   LogOut,
   Megaphone,
@@ -77,6 +78,7 @@ export function useOrgGroup(): MyGroup {
 
 const ICONE: Record<PanelSection, LucideIcon> = {
   overview: LayoutGrid,
+  review: ListChecks,
   members: Users,
   invites: Link2,
   seats: Crown,

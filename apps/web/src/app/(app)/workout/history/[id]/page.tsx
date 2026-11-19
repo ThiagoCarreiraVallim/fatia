@@ -29,6 +29,7 @@ import { ErrorState } from '@/components/elements/error-state';
 import { ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { useStartWithExercises } from '@/components/workout/use-start-with-exercises';
 import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
+import { SessionFeedbackCard } from '@/components/workout/session-feedback-card';
 import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { cn } from '@/lib/utils';
@@ -147,6 +148,8 @@ function CircuitDetail({
         <p className="rounded-card bg-card px-4 py-3.5 text-xs text-faint">“{summary.notes}”</p>
       )}
 
+      <SessionFeedbackCard feedback={summary.feedback} />
+
       {start.isError && (
         <p role="alert" className="text-sm text-danger">
           Não foi possível começar o circuito. Tente de novo.
@@ -232,6 +235,8 @@ function Detail({ summary }: { summary: WorkoutSessionSummary }) {
           <StrengthExercises summary={summary} />
         </>
       )}
+
+      <SessionFeedbackCard feedback={summary.feedback} />
 
       <Link
         href={`/workout/session/${summary.sessionId}`}
