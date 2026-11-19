@@ -495,6 +495,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
 | #398  | Painel: layout novo, visão geral e busca ⌘K       | pronto na branch | api, db, api-client, web, docs         |
 | #402  | Painel: ficha da pessoa (resumo, planos e agenda) | pronto na branch | api, db, api-client, web, mobile, docs |
+| #399  | Painel: para revisar, em risco e sessão feita     | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -571,6 +572,37 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - #411: resumo por IA.
   - O telefone para WhatsApp e "Substituir o atual" no envio.
   - Ordenar planos alimentares (`MealTemplate`).
+
+#399 (branch `redesign/399-para-revisar`; migration `20261119400000_review_queue`; nenhuma env nova; nenhuma tool nova no MCP: `get_workout_session` passa a trazer `feedback`, o comentário da equipe, só leitura):
+
+- **Decisões (orquestrador):**
+  - **Sem chat no Fatia** (#306 e a etapa 2 da #338): a conversa é no WhatsApp, pelo link `wa.me` com texto pronto. [ADR 048](./ADR/048-sem-chat-entre-equipe-e-aluno.md), que entra nos não-objetivos do PRD e tira do THREAT_MODEL o vetor "mensagem entre contas" (vetor 22 descreve o que ficou). #306 já estava fechada como não planejada; ganhou o comentário com a ADR.
+  - **Comentário por sessão** (#303): reação 💪🔥👏❤️ e/ou até 500 caracteres (`SessionFeedback`), um por pessoa da equipe por sessão, editável por quem escreveu. Comentário **por exercício** fica como melhoria futura.
+  - **O aluno não responde no app**: vê "Da sua equipe" no histórico do treino (web e app, só leitura) e recebe o aviso "Helena comentou seu treino"; a resposta vai pelo WhatsApp.
+- **Para revisar** (`/org/<id>/review`, Pn-02; permissão nova `panel.review`, dono e profissional, em `permissions.ts` e `PERMISSIONS.md`; item "Para revisar" no grupo Acompanhar do menu):
+  - `GET groups/:id/review`: os últimos 7 dias dos membros ativos **com vínculo com quem olha** — treino concluído e meta concluída (cada um pelo `assertReadable`, ação `list_review_queue`; só os escopos que o vínculo tem, para não encher a trilha de negadas) e plano mandado por esta comunidade que foi aceito ou recusado (sem escopo: é resposta à oferta).
+  - Abas Para revisar · N e Revisados · N pelo "Visto" de cada um (`ReviewSeen`, `POST review/:kind/:refId/seen`); comentar a sessão também marca visto ("depois de comentar, sai da fila"). Filtros Tudo, Treinos, Respostas e planos; vazio "Nada aqui com este filtro.". Colunas Membro, Tipo, O que aconteceu, Compartilha, com "Ver sessão" (treino) ou "Abrir ficha" e o WhatsApp quando a pessoa autorizou.
+  - Sem contador no menu: exigiria ler dado de saúde a cada tela.
+- **Em risco** (aba da mesma tela; `GET groups/:id/at-risk`):
+  - Só quem tem vínculo com quem olha. Para cada um, o último registro de Treino, Alimentação, Corpo e Hábitos que ele libera (`assertReadable`, `list_at_risk`), em dias no fuso da comunidade; sem registro nenhum, conta da entrada. Sinais: "parado" (nada há N dias), "sumiu" (2× o limite), "sem treino" (registra outras coisas, mas não treina) e "não começou". "Chamar no WhatsApp" com texto pronto.
+  - O limite (3 a 60 dias, padrão 7, `Group.riskDays`) é do dono (`PATCH at-risk/settings` com `group.update`); o profissional vê "Entra na lista depois de N dias sem registrar.".
+  - **Aviso diário** opcional, por pessoa (`PUT at-risk/digest`, `GroupMembership.riskDigest`): a partir das 9 h no fuso da comunidade, um push "N alunos precisam de atenção." contando as mesmas linhas que ela vê; uma vez por dia (`riskDigestOn` reivindicado com `updateMany`).
+  - **Privacidade:** não há agregado novo. A lista nominal é o que o vínculo já libera (o vínculo é o consentimento, e toda leitura fica na trilha); por isso não depende do `statsOptIn`. Os números das abas e do aviso contam só linhas que a pessoa já vê pelo nome, então nada se infere por diferença e o `binarySplit` não se aplica.
+- **Sessão feita** (`/org/<id>/review/sessions/<sessionId>`, Pn-35 e Pn-35b; `GET review/sessions/:id` e `POST …/feedback`): duração, séries, volume com a comparação, "Como foi" (check-in), exercícios com melhor série e recorde, nota da pessoa, reações e comentário com "Enviar ao aluno", "enviado à Ana", "Ficha da Ana" e WhatsApp. Sem Treino liberado: só "Ana não compartilha Treino" e o texto da prancha. Comentar exige `WORKOUT`.
+- **Dados e LGPD:** `SessionFeedback` e `ReviewSeen` saem quando a pessoa deixa a comunidade (mesma transação de `endMembership`, ex-`encerrar`), com a sessão, a comunidade e a conta; autor apagado vira nulo. Entram no export (`sessionFeedback` recebido, `sessionFeedbackWritten`, `reviewSeen`) e na `DATA_RETENTION.md`.
+- **Isolamento:** sessão, meta e oferta precisam ser de membro ativo do grupo da URL (senão 404, igual a inexistente); o "Visto" resolve o titular pelo id e confere a membership no mesmo grupo. Coberto em `review.integration.spec.ts` e no bloco #399 do `user-isolation.spec.ts`.
+- **Desvios de propósito:**
+  - Filtros Avaliações, Alimentação e Desafios da prancha não aparecem: ainda não há o que mostrar neles.
+  - Check-ins sinalizados de desafio não entram na fila: já vivem em Desafios, com contador próprio.
+  - Sem prints nesta etapa (pedido do orquestrador); a passada visual fica para depois.
+- **Falta:**
+  - #391: questionários na fila.
+  - #383: avaliações.
+  - #390: visitas.
+  - "Saiu do desafio" (a linha do participante é apagada ao sair), sinais de alimentação e "programa terminando".
+  - Comentário por exercício (#303) e resposta do aluno no app (fora pela ADR 048).
+  - WhatsApp pela Cloud API (#338 etapa 2, fora pela ADR 048).
+  - O app do painel (#414).
 
 ## Etapas seguintes
 

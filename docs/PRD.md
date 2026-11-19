@@ -138,6 +138,9 @@ Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037)
 - ❌ **Sincronização offline de escrita** (cache de leitura é aceito)
 - ❌ **Frequência cardíaca em tempo real e GPS de corrida** — vêm de wearable/app de corrida, não do Fatia
 - ❌ **App nas lojas com a marca de cada comunidade** (white-label) — a marca aparece dentro do Fatia
+- ❌ **Chat entre contas** (equipe e aluno, ou entre membros) e mensagem pela Cloud API do
+  WhatsApp — a conversa acontece no WhatsApp pelo link `wa.me`; o único texto da equipe ao aluno é
+  o comentário da sessão feita, sem resposta no app ([ADR 048](./ADR/048-sem-chat-entre-equipe-e-aluno.md))
 
 **Em discussão** — têm issue com a label `discussion` e só entram com ADR:
 

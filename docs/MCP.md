@@ -1701,6 +1701,17 @@ Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fus
   // Agregados úteis
   totalVolumeKg: number; // soma de weight*reps
   exerciseCount: number;
+  // Reação e comentário da equipe (#399), só leitura: a resposta vai pelo
+  // WhatsApp (ADR 048). Um por pessoa da equipe com Treino liberado.
+  feedback: Array<{
+    id: string;
+    authorName: string | null; // nulo se quem escreveu apagou a conta
+    groupName: string;
+    reaction: 'STRONG' | 'FIRE' | 'CLAP' | 'HEART' | null;
+    body: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }
 ```
 
