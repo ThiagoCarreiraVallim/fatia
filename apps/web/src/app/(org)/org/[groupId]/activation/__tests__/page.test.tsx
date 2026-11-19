@@ -220,6 +220,22 @@ describe('painel › ativação pendente (Pn-22)', () => {
     ).toBeInTheDocument();
   });
 
+  it('vazia com convites recentes sem aceite: não diz que todos aceitaram', async () => {
+    for (const notAccepted of [4, null]) {
+      const { unmount } = abrir(
+        pagina({
+          cards: { notAccepted, joinedNoFirstLog: null, acceptedThisMonth: null },
+          origins: [],
+          total: 0,
+          items: [],
+        }),
+      );
+      expect(await screen.findByText('Nenhum convite parado há 2 dias')).toBeInTheDocument();
+      expect(screen.queryByText('Todos os convites foram aceitos')).toBeNull();
+      unmount();
+    }
+  });
+
   it('poucos: totais ocultos, mas a lista continua', async () => {
     abrir(
       pagina({
