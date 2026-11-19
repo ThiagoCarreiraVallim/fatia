@@ -26,10 +26,11 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 - Testes API: `invite-activation.integration.spec.ts`, bloco #401 em `user-isolation.spec.ts`, `invite-email.spec.ts`, guards em `sharing.controller.spec.ts`, env, account. Suíte inteira verde (auto-write.integration é instável em paralelo; passa sozinho).
 - WhatsApp do membro: existe `User.whatsapp` + `whatsappOptIn`; sai em listMembers só para a equipe e só com opt-in.
 
+- api-client (commits 796d468b vermelho, 20f5d710): tipos, orgApi novos, `community-invites.ts`, NAV com Ativação pendente.
+- Web (742d53c7 vermelho + commit seguinte): Membros (tabela, abas, colunas, massa, MemberPanel), Convites (cartões, tabela, InvitePanel com QR via `qrcode-generator` JS puro), Ativação pendente (/activation).
+
 ## Falta (ordem)
 
-1. api-client: tipos, orgApi (invitesOverview, pendingInvites, resendInvites, renewInvite, freshInviteLink, setAccompaniedBy, bulkMembers, members include left), NAV (`activation` em Pessoas, contador `pendingInvites` vai para ela), textos; testes vermelhos antes.
-2. Web: Membros (Pn-04/04b/04c/04d), Convites (Pn-06/06b), Ativação (Pn-22*); testes vermelhos antes.
 3. Mobile: `inviteSummary` com expiresAt nulo (conferir `apps/mobile/app/(app)/org/[groupId]/invites.tsx` e `c/[token].tsx`).
 4. Docs: REDESIGN_PROGRESS (Etapa 8), DATA_RETENTION (recusa/aceite), DADOS_REDESIGN se preciso.
 5. lint/typecheck/testes verdes; apagar este arquivo no último commit.
