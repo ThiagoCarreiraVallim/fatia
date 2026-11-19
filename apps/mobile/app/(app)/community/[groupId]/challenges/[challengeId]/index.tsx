@@ -6,6 +6,7 @@ import {
   ApiError,
   challengePeriod,
   challengesApi,
+  pointsDayNote,
   KIND_INFO,
   type ActivityItem,
   type ChallengeDetail,
@@ -463,7 +464,7 @@ function ChallengeScreen() {
                 </Pressable>
               ))}
               <Text className="pt-1.5 text-xs text-muted-foreground">
-                {`Máximo de ${c.today.maxPoints ?? 0} pontos por dia. Os pontos de água, passos e nutrição entram sozinhos.`}
+                {pointsDayNote(c.rules.pointsTable ?? {}, c.today.maxPoints ?? 0)}
               </Text>
             </View>
           ) : null}

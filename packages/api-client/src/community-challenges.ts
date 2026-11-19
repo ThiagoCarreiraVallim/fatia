@@ -436,6 +436,27 @@ export const POINT_ITEM_INFO: Record<PointItem, { label: string; explain: string
   kcal: { label: 'Dia na faixa de calorias', explain: 'dentro da faixa, nunca abaixo' },
 };
 
+const AUTO_ITEM_NAME: Partial<Record<PointItem, string>> = {
+  water: 'água',
+  steps: 'passos',
+  protein: 'proteína',
+  kcal: 'calorias',
+};
+
+/**
+ * A nota de "Seus pontos de hoje": o máximo do dia e os itens que entram
+ * sozinhos, só os que a tabela tem (o treino precisa do check-in).
+ */
+export function pointsDayNote(table: PointsTable, maxPoints: number): string {
+  const auto = POINT_ITEMS.filter((i) => (table[i] ?? 0) > 0 && AUTO_ITEM_NAME[i]).map(
+    (i) => AUTO_ITEM_NAME[i]!,
+  );
+  const max = `Máximo de ${maxPoints} pontos por dia.`;
+  if (auto.length === 0) return max;
+  const lista = auto.length === 1 ? auto[0] : `${auto.slice(0, -1).join(', ')} e ${auto.at(-1)}`;
+  return `${max} Os pontos de ${lista} entram sozinhos.`;
+}
+
 /** Soma da tabela: o máximo que um dia completo daria. */
 export function maxPointsOf(table: PointsTable): number {
   return POINT_ITEMS.reduce((s, i) => s + (table[i] ?? 0), 0);

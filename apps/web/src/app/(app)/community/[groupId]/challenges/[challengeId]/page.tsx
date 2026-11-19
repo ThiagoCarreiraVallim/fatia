@@ -16,9 +16,11 @@ import {
   METRIC_INFO,
   PHOTO_CONSENT_TEXT,
   POINT_ITEM_INFO,
+  pointsDayNote,
   type ActivityItem,
   type ChallengeDetail,
   type ChallengeToday,
+  type PointsTable,
   type TodayItem,
 } from '@fatia/api-client';
 import {
@@ -169,7 +171,7 @@ function todayItemDetail(i: TodayItem): string {
 }
 
 /** "Seus pontos de hoje" do desafio de pontos (Cm-17c). */
-function TodayPoints({ today }: { today: ChallengeToday }) {
+function TodayPoints({ today, table }: { today: ChallengeToday; table: PointsTable }) {
   return (
     <section aria-labelledby="pontos-hoje" className="rounded-card bg-card px-4 py-3.5">
       <div className="flex items-center justify-between pb-1.5">
@@ -215,7 +217,7 @@ function TodayPoints({ today }: { today: ChallengeToday }) {
         ))}
       </ul>
       <p className="pt-1.5 text-xs text-muted-foreground">
-        {`Máximo de ${today.maxPoints ?? 0} pontos por dia. Os pontos de água, passos e proteína entram sozinhos.`}
+        {pointsDayNote(table, today.maxPoints ?? 0)}
       </p>
     </section>
   );
@@ -592,7 +594,7 @@ export default function CommunityChallengePage() {
       )}
 
       {inside && c.status === 'running' && c.kind === 'POINTS' && c.today && (
-        <TodayPoints today={c.today} />
+        <TodayPoints today={c.today} table={c.rules.pointsTable ?? {}} />
       )}
 
       {privacy && !ended && (
