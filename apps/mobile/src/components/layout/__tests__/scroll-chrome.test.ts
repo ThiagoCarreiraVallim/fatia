@@ -33,12 +33,9 @@ describe('nextScrollChrome', () => {
   });
 
   it('tremida menor que o limiar não esconde', () => {
-    const s = scroll([100, 100 + SCROLL_CHROME.threshold - 1]);
-    // O primeiro quadro já fica longe do topo; o deslocamento depois dele é pequeno.
-    expect(nextScrollChrome(scroll([100]), frame(100 + SCROLL_CHROME.threshold - 1)).hidden).toBe(
-      false,
-    );
-    expect(s.y).toBe(100 + SCROLL_CHROME.threshold - 1);
+    const still: ScrollChromeState = { y: 100, anchor: 100, hidden: false };
+    expect(nextScrollChrome(still, frame(100 + SCROLL_CHROME.threshold - 1)).hidden).toBe(false);
+    expect(nextScrollChrome(still, frame(100 + SCROLL_CHROME.threshold + 1)).hidden).toBe(true);
   });
 
   it('rolar para cima além do limiar mostra de novo', () => {

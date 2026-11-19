@@ -39,6 +39,26 @@ export const PRIMARY_TABS: NavTab[] = [
 ];
 
 /**
+ * O nome da rota da aba no navegador de abas do app (`app/(app)/_layout.tsx`):
+ * o arquivo, sem extensão. `/` é `index`; `/nutrition`, `nutrition/index`.
+ */
+export function tabRouteName(href: string): string {
+  const path = href.replace(/^\/+|\/+$/g, '');
+  return path ? `${path}/index` : 'index';
+}
+
+const TAB_ROUTE_NAMES = new Set(PRIMARY_TABS.map((t) => tabRouteName(t.href)));
+
+/**
+ * Fora de foco, só as cinco abas continuam montadas (a troca é instantânea e a
+ * rolagem fica onde estava). Detalhe e tarefa de foco desmontam ao sair, como
+ * antes: câmera, cronômetro da sessão e tela acesa não seguem rodando escondidos.
+ */
+export function keepMountedOnBlur(routeName: string): boolean {
+  return TAB_ROUTE_NAMES.has(routeName);
+}
+
+/**
  * O que cada linha de Você faz: `link` abre uma tela; `toggle` liga e desliga
  * ali mesmo ("Guardar fotos das refeições"); `action` dispara uma ação (trocar
  * a senha, exportar os dados). A tela decide o que cada `key` faz.
