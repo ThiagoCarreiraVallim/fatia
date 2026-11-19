@@ -247,8 +247,16 @@ export default function ActivationPage() {
       {vazia && (
         <EmptyState
           icon={MailCheck}
-          title="Todos os convites foram aceitos"
-          description="Quando alguém não aceitar em 2 dias, aparece aqui."
+          title={
+            cards?.notAccepted === 0
+              ? 'Todos os convites foram aceitos'
+              : 'Nenhum convite parado há 2 dias'
+          }
+          description={
+            cards?.notAccepted === 0
+              ? 'Quando alguém não aceitar em 2 dias, aparece aqui.'
+              : 'Os convites sem aceite são recentes. Quem não aceitar em 2 dias aparece aqui.'
+          }
           action={
             <Button variant="outline" onClick={convidar}>
               Convidar mais pessoas
