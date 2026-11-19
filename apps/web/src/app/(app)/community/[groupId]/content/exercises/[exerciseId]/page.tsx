@@ -7,14 +7,12 @@ import { toast } from 'sonner';
 import { BookOpen, Check, Plus } from 'lucide-react';
 import {
   ApiError,
-  authorWithRole,
   groupExerciseApi,
+  initialsOf,
   workoutApi,
   type WorkoutPlan,
 } from '@fatia/api-client';
 import { communityKeys } from '@/components/community/query-keys';
-import { guideLine } from '@/components/content/member-content';
-import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -50,7 +48,6 @@ export default function CommunityGuidePage() {
     queryFn: () => workoutApi.getExercise(id),
     enabled: howTo,
   });
-  useTopBarTitle(guide.data?.name ?? 'Guia da academia');
 
   if (guide.isPending) return <Skeleton className="m-4 h-64 rounded-2xl bg-card" />;
   if (!guide.data) {
@@ -119,18 +116,33 @@ export default function CommunityGuidePage() {
           className="w-full rounded-2xl object-cover"
         />
       )}
-      <div>
+      <div className="space-y-2">
         <h1 className="font-display text-2xl font-semibold">{g.name}</h1>
-        <p className="text-sm text-muted-foreground">{guideLine(g)}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[g.muscleGroup, g.equipment].filter(Boolean).map((c) => (
+            <span
+              key={c}
+              data-slot="guide-chip"
+              className="rounded-full bg-surface-3 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"
+            >
+              {c}
+            </span>
+          ))}
+        </div>
       </div>
       {g.tips && (
-        <section className="space-y-1 rounded-2xl bg-card p-4">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-primary">
+        <section className="space-y-1.5 rounded-2xl bg-card p-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <span
+              aria-hidden
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[11px] font-bold"
+            >
+              {initialsOf(g.authorName)}
+            </span>
             Dica de {g.authorName}
           </h2>
-          <p className="whitespace-pre-line text-sm leading-relaxed">{g.tips}</p>
-          <p className="text-xs text-muted-foreground">
-            {authorWithRole(g.authorName, g.authorRole)}
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            {g.tips}
           </p>
         </section>
       )}

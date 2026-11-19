@@ -13,13 +13,13 @@ import {
   groupContentApi,
   nutritionApi,
   nutritionDiff,
-  planTemplateSummary,
+  PLAN_LEVEL_LABEL,
+  TEMPLATE_KIND_LABEL,
   type AdoptInput,
   type PlanTemplate,
 } from '@fatia/api-client';
 import { communityKeys } from '@/components/community/query-keys';
 import { CheckableRow } from '@/components/content/content-ui';
-import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -50,7 +50,6 @@ export default function CommunityTemplatePage() {
     queryFn: () => groupContentApi.plan(groupId, templateId),
     retry: false,
   });
-  useTopBarTitle(template.data?.title);
 
   const adopt = useMutation({
     mutationFn: (input: AdoptInput) => groupContentApi.adopt(groupId, templateId, input),
@@ -100,12 +99,26 @@ export default function CommunityTemplatePage() {
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
         <img src={t.cover.url} alt="" className="aspect-video w-full rounded-2xl object-cover" />
       ) : null}
-      <header className="space-y-1">
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <KindIcon size={14} aria-hidden />
-          {planTemplateSummary(t)}
-        </p>
-        <h2 className="text-lg font-semibold">{t.title}</h2>
+      {/* O topo da prancha Cm-13: os selos do tipo e do nível e o nome grande. */}
+      <header className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <span
+            data-slot="template-badge"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-primary"
+          >
+            <KindIcon size={12} aria-hidden />
+            {TEMPLATE_KIND_LABEL[t.kind]}
+          </span>
+          {t.level && (
+            <span
+              data-slot="template-badge"
+              className="rounded-full bg-surface-3 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"
+            >
+              {PLAN_LEVEL_LABEL[t.level]}
+            </span>
+          )}
+        </div>
+        <h1 className="font-display text-2xl font-semibold">{t.title}</h1>
         <p className="text-xs text-muted-foreground">
           Por {authorWithRole(t.authorName, t.authorRole)}
         </p>

@@ -3,7 +3,13 @@ import { Image, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Droplet, Dumbbell } from 'lucide-react-native';
-import { groupContentApi, tipByline, tipShortcut, TIP_CATEGORY_LABEL } from '@fatia/api-client';
+import {
+  groupContentApi,
+  initialsOf,
+  tipByline,
+  tipShortcut,
+  TIP_CATEGORY_LABEL,
+} from '@fatia/api-client';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { Screen } from '@/components/layout/screen';
 import { LogWaterDrawer } from '@/components/progress';
@@ -95,7 +101,14 @@ export default function CommunityTipScreen() {
           <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
             {d.title}
           </Text>
-          <Text className="text-sm text-muted-foreground">{tipByline(d, deviceTimezone())}</Text>
+          <View className="flex-row items-center gap-2">
+            <View className="h-7 w-7 items-center justify-center rounded-full bg-surface-3">
+              <Text className="text-[11px] font-sans-bold text-foreground">
+                {initialsOf(d.authorName)}
+              </Text>
+            </View>
+            <Text className="text-sm text-muted-foreground">{tipByline(d, deviceTimezone())}</Text>
+          </View>
           <MarkdownLite source={d.body} />
         </View>
       </Screen>

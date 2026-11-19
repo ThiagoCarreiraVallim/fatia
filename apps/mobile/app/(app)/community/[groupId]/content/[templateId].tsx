@@ -11,7 +11,8 @@ import {
   groupContentApi,
   nutritionApi,
   nutritionDiff,
-  planTemplateSummary,
+  PLAN_LEVEL_LABEL,
+  TEMPLATE_KIND_LABEL,
   type AdoptInput,
   type PlanTemplate,
 } from '@fatia/api-client';
@@ -127,11 +128,24 @@ function AdoptNutritionDrawer({
               checked={metas}
               onPress={() => setMetas(!metas)}
             >
+              {/* "agora" e "plano" em colunas, como na prancha Cm-14. */}
+              <View className="flex-row gap-2 pl-8">
+                <Text className="w-24 text-xs text-muted-foreground" />
+                <Text className="flex-1 text-right text-xs text-muted-foreground">agora</Text>
+                <Text className="w-28 text-right text-xs font-sans-bold text-primary">plano</Text>
+              </View>
               {diff.map((l) => (
                 <View key={l.label} className="flex-row gap-2 pl-8">
                   <Text className="w-24 text-xs text-muted-foreground">{l.label}</Text>
-                  <Text className="flex-1 text-xs text-foreground">{`${l.current} → `}</Text>
-                  <Text className={cn('text-xs text-foreground', l.changed && 'font-bold')}>
+                  <Text className="flex-1 text-right text-xs text-muted-foreground">
+                    {l.current}
+                  </Text>
+                  <Text
+                    className={cn(
+                      'w-28 text-right text-xs text-foreground',
+                      l.changed && 'font-sans-bold',
+                    )}
+                  >
                     {l.next}
                   </Text>
                 </View>
@@ -270,11 +284,7 @@ export default function CommunityTemplateScreen() {
 
   return (
     <>
-      <Screen
-        title={t.title}
-        onRefresh={() => void modelo.refetch()}
-        refreshing={modelo.isRefetching}
-      >
+      <Screen onRefresh={() => void modelo.refetch()} refreshing={modelo.isRefetching}>
         <View className="gap-4 px-5 pb-6 pt-4">
           {t.cover?.url ? (
             <Image
@@ -283,8 +293,25 @@ export default function CommunityTemplateScreen() {
               className="aspect-video w-full rounded-2xl"
             />
           ) : null}
-          <View className="gap-1">
-            <Text className="text-xs text-muted-foreground">{planTemplateSummary(t)}</Text>
+          {/* O topo da prancha Cm-13: os selos do tipo e do nível e o nome grande. */}
+          <View className="gap-2">
+            <View className="flex-row flex-wrap gap-1.5">
+              <View className="rounded-full bg-primary/15 px-2.5 py-0.5">
+                <Text className="text-xs font-sans-bold uppercase tracking-wide text-primary">
+                  {TEMPLATE_KIND_LABEL[t.kind]}
+                </Text>
+              </View>
+              {t.level ? (
+                <View className="rounded-full bg-surface-3 px-2.5 py-0.5">
+                  <Text className="text-xs font-sans-bold uppercase tracking-wide text-muted-foreground">
+                    {PLAN_LEVEL_LABEL[t.level]}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
+              {t.title}
+            </Text>
             <Text className="text-xs text-muted-foreground">
               {`Por ${authorWithRole(t.authorName, t.authorRole)}`}
             </Text>

@@ -305,7 +305,8 @@ describe('regras do conteúdo', () => {
 
   it('voltar do plano leva à lista, e da lista à comunidade', () => {
     expect(routeInfo('/community/g1/content/t1')).toMatchObject({
-      title: 'Plano pronto',
+      // O cabeçalho da prancha Cm-13; o nome do plano vem grande no topo.
+      title: 'Plano da academia',
       parent: '/community/g1/content',
     });
     expect(routeInfo('/community/g1/content')).toMatchObject({

@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Droplet, Dumbbell, Pin } from 'lucide-react';
-import { groupContentApi, tipByline, tipShortcut, TIP_CATEGORY_LABEL } from '@fatia/api-client';
+import {
+  groupContentApi,
+  initialsOf,
+  tipByline,
+  tipShortcut,
+  TIP_CATEGORY_LABEL,
+} from '@fatia/api-client';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
@@ -61,7 +67,16 @@ export default function CommunityTipPage() {
         <Badge variant="pending">{TIP_CATEGORY_LABEL[d.category].toLowerCase()}</Badge>
       </div>
       <h1 className="font-display text-2xl font-semibold">{d.title}</h1>
-      <p className="text-sm text-muted-foreground">{tipByline(d, BROWSER_TZ)}</p>
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span
+          data-slot="author-avatar"
+          aria-hidden
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[11px] font-bold text-foreground"
+        >
+          {initialsOf(d.authorName)}
+        </span>
+        {tipByline(d, BROWSER_TZ)}
+      </p>
       <MarkdownLite source={d.body} className="space-y-2 text-sm leading-relaxed text-foreground" />
       {atalho === 'water' && (
         <Button variant="outline" className="mt-auto w-full" onClick={() => setWater(true)}>

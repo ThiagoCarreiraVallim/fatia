@@ -95,6 +95,14 @@ describe('comunidade › plano pronto', () => {
     vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
     renderWithClient(<CommunityTemplatePage />);
     expect(await screen.findByText('Por Helena (profissional)')).toBeInTheDocument();
+    // O topo da prancha Cm-13: os selos do tipo e do nível e o nome grande.
+    expect(screen.getByRole('heading', { level: 1, name: 'Treino A' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Treino', { selector: '[data-slot="template-badge"]' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Iniciante', { selector: '[data-slot="template-badge"]' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Guia da academia: Remada/ })).toHaveAttribute(
       'href',
       '/community/g1/content/exercises/77',

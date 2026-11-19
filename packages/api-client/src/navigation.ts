@@ -439,7 +439,7 @@ export const ROUTES: readonly RouteDef[] = [
   },
   {
     pattern: '/community/:id/content/:templateId',
-    title: 'Plano pronto',
+    title: 'Plano da academia',
     parent: '/community/:id/content',
   },
   // A dica e o guia da academia (Cm-15, Cm-16, #396) voltam para a aba Conteúdo.

@@ -225,6 +225,8 @@ describe('comunidade › dica (Cm-15)', () => {
       await screen.findByRole('heading', { name: 'Água antes do treino' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/^Bruno · dono · \d+ nov$/)).toBeInTheDocument();
+    // O avatar de quem escreveu, com as iniciais.
+    expect(screen.getByText('B', { selector: '[data-slot="author-avatar"]' })).toBeInTheDocument();
     expect(screen.getByText('fixada')).toBeInTheDocument();
     expect(groupContentApi.tip).toHaveBeenCalledWith('g1', 'd1');
     fireEvent.click(screen.getByRole('button', { name: 'Registrar água' }));
@@ -269,6 +271,14 @@ describe('comunidade › guia da academia (Cm-16)', () => {
     );
     expect(groupExerciseApi.memberGuide).toHaveBeenCalledWith('g1', 42);
     expect(screen.getByText('Dica de Helena')).toBeInTheDocument();
+    // Cm-16: o grupo muscular e o equipamento em selos, e o cabeçalho é o da rota.
+    expect(
+      screen.getByText('pernas', { selector: '[data-slot="guide-chip"]' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('máquina', { selector: '[data-slot="guide-chip"]' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Helena \(profissional\)/)).toBeNull();
     // Com vídeo, a primeira foto também abre ao tocar na miniatura dela.
     expect(screen.queryByRole('img', { name: 'Foto 1 de Leg press 45° da casa' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Foto 1 de 2' }));

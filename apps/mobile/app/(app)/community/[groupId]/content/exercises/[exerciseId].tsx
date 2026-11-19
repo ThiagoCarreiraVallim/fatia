@@ -5,13 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { BookOpen, Check, Play, Plus } from 'lucide-react-native';
 import {
-  authorWithRole,
+  initialsOf,
   groupExerciseApi,
   SIGNED_VIDEO_REFRESH_MS,
   workoutApi,
   type WorkoutPlan,
 } from '@fatia/api-client';
-import { guideLine } from '@/components/content/member-content';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
 import {
@@ -169,7 +168,6 @@ function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: numbe
   return (
     <>
       <Screen
-        title={g.name}
         onRefresh={() => void guia.refetch()}
         refreshing={guia.isRefetching}
         footer={
@@ -260,17 +258,32 @@ function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: numbe
             <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
               {g.name}
             </Text>
-            <Text className="text-sm text-muted-foreground">{guideLine(g)}</Text>
+            <View className="flex-row flex-wrap gap-1.5 pt-1.5">
+              {[g.muscleGroup, g.equipment].filter(Boolean).map((c) => (
+                <View key={c} className="rounded-full bg-surface-3 px-2.5 py-0.5">
+                  <Text className="text-xs font-sans-bold uppercase tracking-wide text-muted-foreground">
+                    {c}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
           {g.tips ? (
-            <View className="gap-1 rounded-2xl bg-card p-4">
-              <Text className="text-xs font-bold uppercase tracking-wide text-primary">
-                {`Dica de ${g.authorName}`}
-              </Text>
-              <Text className="text-sm leading-relaxed text-foreground">{g.tips}</Text>
-              <Text className="text-xs text-muted-foreground">
-                {authorWithRole(g.authorName, g.authorRole)}
-              </Text>
+            <View className="gap-1.5 rounded-2xl bg-card p-4">
+              <View className="flex-row items-center gap-2">
+                <View className="h-7 w-7 items-center justify-center rounded-full bg-surface-3">
+                  <Text className="text-[11px] font-sans-bold text-foreground">
+                    {initialsOf(g.authorName)}
+                  </Text>
+                </View>
+                <Text
+                  accessibilityRole="header"
+                  className="text-sm font-sans-semibold text-foreground"
+                >
+                  {`Dica de ${g.authorName}`}
+                </Text>
+              </View>
+              <Text className="text-sm leading-relaxed text-muted-foreground">{g.tips}</Text>
             </View>
           ) : null}
         </View>
