@@ -33,6 +33,8 @@ import {
   workoutMeta,
   workoutSpan,
   workoutTitle,
+  checkinPhotoBytes,
+  checkinPhotoPreview,
   type CapturedPhoto,
   type Tone,
 } from '@/components/challenges/challenge-view';
@@ -57,14 +59,14 @@ const TAG_VARIANT: Record<Tone, 'done' | 'lite' | 'risk'> = {
 
 /** Pede a URL, manda o JPEG direto ao bucket e devolve o id do arquivo. */
 async function uploadCheckinPhoto(groupId: string, photo: CapturedPhoto): Promise<string> {
-  const body = await (await fetch(photo.uri)).blob();
-  if (body.size <= 0) throw new Error('A foto saiu vazia. Tire outra.');
-  if (body.size > IMAGE_MAX_BYTES) throw new Error('A foto ficou grande demais. Tire outra.');
+  const body = checkinPhotoBytes(photo);
+  if (body.byteLength <= 0) throw new Error('A foto saiu vazia. Tire outra.');
+  if (body.byteLength > IMAGE_MAX_BYTES) throw new Error('A foto ficou grande demais. Tire outra.');
   const ticket = await mediaApi.requestUpload({
     purpose: CHECKIN_PURPOSE,
     groupId,
     mime: 'image/jpeg',
-    bytes: body.size,
+    bytes: body.byteLength,
   });
   const put = await fetch(ticket.uploadUrl, { method: 'PUT', body, headers: ticket.headers });
   if (!put.ok) throw new Error('O envio da foto falhou. Tente de novo.');
@@ -173,8 +175,12 @@ export default function ChallengeCheckinScreen() {
     if (!camera.current || !canShoot) return;
     setShooting(true);
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.6, exif: false });
-      if (photo?.uri) dispatch({ type: 'shot', photo: { uri: photo.uri } });
+      const photo = await camera.current.takePictureAsync({
+        quality: 0.6,
+        exif: false,
+        base64: true,
+      });
+      if (photo?.base64) dispatch({ type: 'shot', photo: { base64: photo.base64 } });
     } catch {
       setCameraFailed(true);
     } finally {
@@ -326,7 +332,7 @@ export default function ChallengeCheckinScreen() {
 
             <View className="h-[300px] overflow-hidden rounded-3xl bg-muted">
               <Image
-                source={{ uri: state.photo.uri }}
+                source={{ uri: checkinPhotoPreview(state.photo) }}
                 accessibilityLabel="Sua foto de agora"
                 accessibilityIgnoresInvertColors
                 style={{ width: '100%', height: '100%' }}

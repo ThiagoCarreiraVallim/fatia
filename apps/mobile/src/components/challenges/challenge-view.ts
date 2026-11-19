@@ -689,8 +689,26 @@ export function checkinButtonLabel(c: Pick<Challenge, 'kind' | 'rules'>): string
     : 'Fazer check-in · +1 dia';
 }
 
+/**
+ * A foto da câmera em base64 (JPEG, sem o prefixo `data:`). Não guarda o
+ * caminho do arquivo: no Expo Go a pasta tem "%40" no nome e o `fetch(uri)`
+ * decodifica o caminho, lendo um corpo de erro no lugar da foto.
+ */
 export interface CapturedPhoto {
-  uri: string;
+  base64: string;
+}
+
+/** Os bytes da foto, para o PUT direto ao bucket. */
+export function checkinPhotoBytes(photo: CapturedPhoto): Uint8Array<ArrayBuffer> {
+  const bin = atob(photo.base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** A foto para a prévia, sem ler arquivo. */
+export function checkinPhotoPreview(photo: CapturedPhoto): string {
+  return `data:image/jpeg;base64,${photo.base64}`;
 }
 
 export type CheckinState =
