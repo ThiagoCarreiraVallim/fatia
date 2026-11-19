@@ -60,7 +60,7 @@ export interface PanelOverview {
   /** Membros ativos (papel MEMBER) e quantos entraram nos últimos 30 dias. */
   members: { active: number; joinedLast30Days: number };
   /** Entraram nos últimos 7 dias; convite junta link, e-mail e código de entrada. */
-  newThisWeek: { total: number; viaInvite: number; viaPage: number };
+  newThisWeek: { total: number; viaInvite: number; viaPage: number; viaUnknown: number };
   /** Só com `insights.read`: tudo passa pelo `statsOptIn` e pelo mínimo de 5. */
   aggregates: {
     /** Treinaram nos últimos 7 dias. `null` = menos de 5 pessoas de um lado. */
@@ -190,6 +190,8 @@ export class PanelService {
         total: novos.reduce((s, x) => s + x._count._all, 0),
         viaInvite: porVia(JoinVia.INVITE) + porVia(JoinVia.CODE),
         viaPage: porVia(JoinVia.PAGE),
+        // Quem entrou antes da #398 não tem origem gravada: a soma fecha com ele.
+        viaUnknown: novos.find((x) => x.joinVia === null)?._count._all ?? 0,
       },
       aggregates: can(role, 'insights.read')
         ? await this.aggregates(groupId, group.timezone, days, now)
@@ -295,13 +297,23 @@ export class PanelService {
     days: OverviewDays,
     now: Date,
   ): Promise<NonNullable<PanelOverview['aggregates']>> {
+    // Só membro (a equipe não é medida) e só quem disse sim às estatísticas.
     const participantes = await this.prisma.groupMembership.findMany({
-      where: { groupId, status: MembershipStatus.ACTIVE, statsOptIn: true },
+      where: {
+        groupId,
+        status: MembershipStatus.ACTIVE,
+        statsOptIn: true,
+        role: GroupRole.MEMBER,
+      },
       select: { userId: true, joinedAt: true },
     });
     const ids = participantes.map((p) => p.userId);
+    // Tudo em dias inteiros que já acabaram, no fuso da comunidade: o número fica
+    // congelado o dia todo. Janela que anda com o relógio deixaria ver a diferença
+    // quando uma pessoa entra ou sai dela no meio do dia.
     const hoje = dateInTz(now, timezone);
-    const inicioYmd = addDaysIso(hoje, -(days - 1));
+    const fimOntem = dayBoundsInTz(hoje, timezone).start;
+    const inicioYmd = addDaysIso(hoje, -days);
     const chaves = Array.from({ length: days }, (_, i) => addDaysIso(inicioYmd, i));
     const vazio = {
       active7d: { value: null, percent: null },
@@ -314,46 +326,40 @@ export class PanelService {
     if (participantes.length < MIN_CELL) return vazio;
 
     const desde = dayBoundsInTz(inicioYmd, timezone).start;
-    const semana = new Date(now.getTime() - 7 * DIA_MS);
-    const corteNovos = new Date(now.getTime() - NEW_MEMBER_DAYS * DIA_MS);
+    const semana = dayBoundsInTz(addDaysIso(hoje, -7), timezone).start;
+    const corteNovos = dayBoundsInTz(addDaysIso(hoje, -NEW_MEMBER_DAYS), timezone).start;
     const maisAntigo = new Date(Math.min(desde.getTime(), semana.getTime(), corteNovos.getTime()));
     const sessoes = await this.prisma.workoutSession.findMany({
-      where: { userId: { in: ids }, completedAt: { gte: maisAntigo, lte: now } },
+      where: { userId: { in: ids }, completedAt: { gte: maisAntigo, lt: fimOntem } },
       select: { userId: true, completedAt: true },
     });
 
-    // Ativos em 7 dias: [treinaram, não treinaram], as duas células pelo limiar.
+    // Ativos em 7 dias: [treinaram, não treinaram]. Indicador binário: os dois
+    // lados precisam de 5 ou mais (0 também é pequeno), senão um entrega o outro.
     const treinaram = new Set(sessoes.filter((s) => s.completedAt! >= semana).map((s) => s.userId));
-    const parado = participantes.length - treinaram.size;
-    const [ativos] = suppress([
-      { key: 'active', n: treinaram.size, value: treinaram.size },
-      { key: 'idle', n: parado, value: parado },
-    ]).cells;
+    const ativos = binarySplit(treinaram.size, participantes.length - treinaram.size);
     const active7d =
-      ativos!.value === null
+      ativos === null
         ? { value: null, percent: null }
         : {
-            value: ativos!.value,
-            percent: Math.round((ativos!.value / participantes.length) * 100),
+            value: ativos,
+            percent: Math.round((ativos / participantes.length) * 100),
           };
 
-    // Entraram e ainda não registraram: só o número, e só com 5 ou mais novos.
-    const novos = participantes.filter((p) => p.joinedAt && p.joinedAt >= corteNovos);
-    let notLoggedYet: number | null = null;
-    if (novos.length >= MIN_CELL) {
-      const entrouEm = new Map(novos.map((p) => [p.userId, p.joinedAt!]));
-      const registraram = new Set(
-        sessoes
-          .filter((s) => entrouEm.has(s.userId) && s.completedAt! >= entrouEm.get(s.userId)!)
-          .map((s) => s.userId),
-      );
-      const nao = novos.length - registraram.size;
-      const cells = suppress([
-        { key: 'logged', n: registraram.size, value: registraram.size },
-        { key: 'not_logged', n: nao, value: nao },
-      ]).cells;
-      notLoggedYet = cells[1]!.value;
-    }
+    // Entraram e ainda não registraram: quem entrou entre 30 dias atrás e ontem,
+    // e não treinou até o fim de ontem. Só o número, pelo mesmo binário.
+    const novos = participantes.filter(
+      (p) => p.joinedAt && p.joinedAt >= corteNovos && p.joinedAt < fimOntem,
+    );
+    const entrouEm = new Map(novos.map((p) => [p.userId, p.joinedAt!]));
+    const registraram = new Set(
+      sessoes
+        .filter((s) => entrouEm.has(s.userId) && s.completedAt! >= entrouEm.get(s.userId)!)
+        .map((s) => s.userId),
+    );
+    const naoRegistraram = novos.length - registraram.size;
+    const notLoggedYet =
+      binarySplit(naoRegistraram, registraram.size) === null ? null : naoRegistraram;
 
     // O gráfico, por dia no fuso da comunidade.
     const porDia = new Map<string, { sessoes: number; gente: Set<string> }>(
@@ -542,6 +548,15 @@ function reviewWhere(groupId: string, userId: string) {
       membership: { userId: { not: userId } },
     },
   };
+}
+
+/**
+ * Um lado de um indicador de dois lados (`a` + `b` = todo mundo), ou `null`
+ * se qualquer lado tem menos de `MIN_CELL`. Zero conta como pequeno: "0
+ * treinaram" diria de cada pessoa que ela não treinou.
+ */
+export function binarySplit(a: number, b: number): number | null {
+  return a < MIN_CELL || b < MIN_CELL ? null : a;
 }
 
 function publish(cells: PublishedCell[]): OverviewCell[] {

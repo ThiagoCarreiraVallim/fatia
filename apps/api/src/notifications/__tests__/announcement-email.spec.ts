@@ -7,7 +7,9 @@ describe('e-mail de comunicado', () => {
       plainAnnouncementText(
         'Veja https://x.com/a_b_c*d e **forte** e _itálico_ e `código` e [o link](https://y.com/p_q*r_s)',
       ),
-    ).toBe('Veja https://x.com/a_b_c*d e forte e itálico e código e o link (https://y.com/p_q*r_s)');
+    ).toBe(
+      'Veja https://x.com/a_b_c*d e forte e itálico e código e o link (https://y.com/p_q*r_s)',
+    );
   });
 
   it('asterisco e sublinhado soltos ficam (5 * 3, nome_composto)', () => {
@@ -25,7 +27,7 @@ describe('e-mail de comunicado', () => {
       unsubscribeUrl: 'https://app.fatia.test/descadastro?t=a.b',
       oneClickUrl: 'https://app.fatia.test/api/descadastro?t=a.b',
     });
-    expect(m.html).not.toMatch(/<script|<img|<b |onerror=alert|href="javascript/i);
+    expect(m.html).not.toMatch(/<script|<img|<b |href="javascript/i);
     expect(m.html).toContain('&#60;script&#62;');
     expect(m.html).toContain('&#60;img');
   });

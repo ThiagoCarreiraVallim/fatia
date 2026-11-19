@@ -66,10 +66,17 @@ export class WebPushService {
     return this.vapid?.publicKey ?? null;
   }
 
-  /** Envia a cada inscrição. Devolve os endpoints que o serviço disse que acabaram (404/410). */
-  async send(targets: WebPushTarget[], payload: WebPushPayload): Promise<{ gone: string[] }> {
+  /**
+   * Envia a cada inscrição. Devolve os endpoints que o serviço disse que
+   * acabaram (404/410) e quantos o serviço aceitou (`sent`).
+   */
+  async send(
+    targets: WebPushTarget[],
+    payload: WebPushPayload,
+  ): Promise<{ gone: string[]; sent?: number }> {
     const gone: string[] = [];
-    if (!this.vapid || targets.length === 0) return { gone };
+    let sent = 0;
+    if (!this.vapid || targets.length === 0) return { gone, sent };
     const corpo = JSON.stringify(payload);
     await Promise.all(
       targets.map(async (t) => {
@@ -79,6 +86,7 @@ export class WebPushService {
             corpo,
             { TTL: TTL_S, vapidDetails: this.vapid!, timeout: 10_000 },
           );
+          sent += 1;
         } catch (err) {
           const status = (err as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410) gone.push(t.endpoint);
@@ -87,6 +95,6 @@ export class WebPushService {
         }
       }),
     );
-    return { gone };
+    return { gone, sent };
   }
 }

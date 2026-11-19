@@ -136,7 +136,9 @@ export function announcementNotice(p: {
  * Limite semanal (#398): cada comunidade manda no máximo
  * `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT` disparos com aviso (notificação ou e-mail)
  * em 7 dias. Passou disso, o comunicado sai no mural e mais nada. A vaga é
- * reivindicada com trava por comunidade: dois disparos juntos não furam o teto.
+ * reivindicada com trava por comunidade (dois disparos juntos não furam o
+ * teto), só quando há alguém para avisar, e fica em `AnnouncementDispatch`:
+ * apagar o post ou o comunicado não devolve a vaga.
  */
 @Injectable()
 export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
@@ -303,9 +305,8 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         data: { nextRunAt: next },
       });
       if (pego.count === 0) continue;
-      let postId: string;
       try {
-        ({ postId } = await this.posts.publishAnnouncement(a, at));
+        await this.posts.publishAnnouncement(a, at);
       } catch (err) {
         await this.failed(a, previsto, next, now, err);
         continue;
@@ -316,7 +317,7 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         data: { lastRunAt: at, attempts: 0 },
       });
       // O post já saiu: falha no aviso não volta o disparo (sairia duplicado).
-      await this.notify(a, postId, at).catch((err: unknown) =>
+      await this.notify(a, now).catch((err: unknown) =>
         this.logger.warn({
           event: 'comunicado_sem_aviso',
           announcementId: a.id,
@@ -356,47 +357,58 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fire(a: GroupAnnouncement, at: Date): Promise<{ pushSkipped: boolean }> {
-    const { postId } = await this.posts.publishAnnouncement(a, at);
+    await this.posts.publishAnnouncement(a, at);
     await this.prisma.groupAnnouncement.update({
       where: { id: a.id },
       data: { lastRunAt: at },
     });
-    return this.notify(a, postId, at);
+    // O post já saiu: erro no aviso vira log, nunca 500 (o cliente tentaria de
+    // novo e o post sairia duplicado).
+    return this.notify(a, at).catch((err: unknown) => {
+      this.logger.warn({
+        event: 'comunicado_sem_aviso',
+        announcementId: a.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { pushSkipped: false };
+    });
   }
 
-  /** Disparos com aviso nos últimos 7 dias (o post guarda `notifiedAt`). */
+  /** Disparos com aviso nos últimos 7 dias, pelo registro próprio (não pelo post). */
   private usedThisWeek(
     db: Prisma.TransactionClient | PrismaService,
     groupId: string,
     now: Date,
   ): Promise<number> {
-    return db.groupPost.count({
-      where: { groupId, notifiedAt: { gt: new Date(now.getTime() - 7 * DIA_MS) } },
+    return db.announcementDispatch.count({
+      where: { groupId, at: { gt: new Date(now.getTime() - 7 * DIA_MS) } },
     });
   }
 
   /** Reivindica uma vaga da semana para este disparo, com trava por comunidade. */
-  private claimWeeklySlot(groupId: string, postId: string, now: Date): Promise<boolean> {
+  private claimWeeklySlot(
+    a: GroupAnnouncement,
+    now: Date,
+    canais: { push: boolean; email: boolean },
+  ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${`announce-push:${groupId}`}))`;
-      if ((await this.usedThisWeek(tx, groupId, now)) >= this.weeklyLimit) return false;
-      await tx.groupPost.update({ where: { id: postId }, data: { notifiedAt: now } });
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${`announce-push:${a.groupId}`}))`;
+      if ((await this.usedThisWeek(tx, a.groupId, now)) >= this.weeklyLimit) return false;
+      await tx.announcementDispatch.create({
+        data: { groupId: a.groupId, announcementId: a.id, at: now, ...canais },
+      });
       return true;
     });
   }
 
-  /** O aviso (notificação e, se pediu, e-mail) do comunicado que acabou de sair. */
-  private async notify(
-    a: GroupAnnouncement,
-    postId: string,
-    at: Date,
-  ): Promise<{ pushSkipped: boolean }> {
+  /**
+   * O aviso (notificação e, se pediu, e-mail) do comunicado que acabou de
+   * sair. Primeiro descobre quem recebe; só com alguém para avisar a vaga da
+   * semana é reivindicada, na hora real do disparo (`now`).
+   */
+  private async notify(a: GroupAnnouncement, now: Date): Promise<{ pushSkipped: boolean }> {
     const porEmail = a.alsoEmail && Boolean(this.mail?.available);
     if (!a.push && !porEmail) return { pushSkipped: false };
-    if (!(await this.claimWeeklySlot(a.groupId, postId, at))) {
-      this.logger.warn({ event: 'comunicado_sem_aviso_limite', announcementId: a.id });
-      return { pushSkipped: true };
-    }
     const [grupo, membros, autor] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({ where: { id: a.groupId }, select: { name: true } }),
       this.prisma.groupMembership.findMany({
@@ -412,8 +424,26 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
       a.publishedAs === PostAuthorAs.PERSON
         ? new Set(await blockedUserIds(this.prisma, autor.userId))
         : new Set<string>();
-    const para = membros.map((m) => m.userId).filter((id) => !fora.has(id));
+    const candidatos = membros.map((m) => m.userId).filter((id) => !fora.has(id));
+    // Quem desligou "Comunicados da comunidade" não recebe push nem e-mail.
+    const desligados = new Set(
+      (
+        await this.prisma.notificationPreference.findMany({
+          where: {
+            userId: { in: candidatos },
+            kind: NotificationKind.ANNOUNCEMENTS,
+            enabled: false,
+          },
+          select: { userId: true },
+        })
+      ).map((p) => p.userId),
+    );
+    const para = candidatos.filter((id) => !desligados.has(id));
     if (para.length === 0) return { pushSkipped: false };
+    if (!(await this.claimWeeklySlot(a, now, { push: a.push, email: porEmail }))) {
+      this.logger.warn({ event: 'comunicado_sem_aviso_limite', announcementId: a.id });
+      return { pushSkipped: true };
+    }
     if (a.push) {
       this.notifications.notify(para, {
         ...announcementNotice({

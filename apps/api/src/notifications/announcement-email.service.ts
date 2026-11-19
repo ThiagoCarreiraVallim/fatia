@@ -38,14 +38,39 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** O texto do comunicado sem a marcação do markdown-lite; o link vira "texto (url)". */
+// Links do markdown-lite e URLs soltas: ficam de fora da limpeza da marcação,
+// para `_` e `*` dentro de uma URL não sumirem.
+const LINK = /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|https?:\/\/[^\s)]+/g;
+// Só pares de marcação, colados no texto que marcam (`5 * 3` e `nome_composto` ficam).
+const PARES: [RegExp, string][] = [
+  [/\*\*(?=\S)([^*\n]*?\S)\*\*/g, '$1'],
+  [/__(?=\S)([^_\n]*?\S)__/g, '$1'],
+  [/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, '$1$2'],
+  [/(^|[^\w_])_(?=\S)([^_\n]*?\S)_(?![\w_])/g, '$1$2'],
+  [/`([^`\n]+)`/g, '$1'],
+];
+
+function semMarcacao(trecho: string): string {
+  let t = trecho.replace(/^#+\s*/gm, '').replace(/^>\s*/gm, '');
+  for (const [re, por] of PARES) t = t.replace(re, por);
+  return t;
+}
+
+/**
+ * O texto do comunicado sem a marcação do markdown-lite. O link vira
+ * "texto (url)" e nenhuma URL é mexida: a limpeza só tira pares de marcação,
+ * fora dos links.
+ */
 export function plainAnnouncementText(body: string): string {
-  return body
-    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '$1 ($2)')
-    .replace(/^#+\s*/gm, '')
-    .replace(/^>\s*/gm, '')
-    .replace(/[*_`]/g, '')
-    .trim();
+  let out = '';
+  let ultimo = 0;
+  for (const m of body.matchAll(LINK)) {
+    out += semMarcacao(body.slice(ultimo, m.index));
+    out += m[1] !== undefined ? `${semMarcacao(m[1])} (${m[2]})` : m[0];
+    ultimo = m.index + m[0].length;
+  }
+  out += semMarcacao(body.slice(ultimo));
+  return out.trim();
 }
 
 export function announcementEmail(p: {
@@ -54,6 +79,8 @@ export function announcementEmail(p: {
   title: string;
   body: string;
   unsubscribeUrl: string;
+  /** O POST de um clique do provedor (RFC 8058, `List-Unsubscribe-Post`). */
+  oneClickUrl: string;
 }): EmailMessage {
   const texto = plainAnnouncementText(p.body);
   const subject = `${p.groupName}: ${p.title}`;
@@ -77,7 +104,16 @@ export function announcementEmail(p: {
 <tr><td style="font-size:14px;line-height:1.5;color:#d6d3d1;padding-bottom:16px">${paragrafos}</td></tr>
 <tr><td style="font-size:12px;color:#8a8a8a">Comunicado de ${escapeHtml(p.groupName)} no Fatia. <a href="${escapeHtml(p.unsubscribeUrl)}" style="color:#baccaf">Não receber mais comunicados por e-mail</a>.</td></tr>
 </table></td></tr></table></body></html>`;
-  return { to: p.to, subject, text, html };
+  return {
+    to: p.to,
+    subject,
+    text,
+    html,
+    headers: {
+      'List-Unsubscribe': `<${p.oneClickUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  };
 }
 
 /**
@@ -127,6 +163,7 @@ export class AnnouncementEmailService {
       }),
     ]);
     const fora = new Set(desligados.map((d) => d.userId));
+    const token = (id: string) => announcementUnsubscribeToken(id, this.secret);
     let saiu = 0;
     for (const p of pessoas) {
       if (fora.has(p.id) || !p.email) continue;
@@ -136,7 +173,8 @@ export class AnnouncementEmailService {
           groupName: a.groupName,
           title: a.title,
           body: a.body,
-          unsubscribeUrl: `${this.origin}/descadastro?t=${announcementUnsubscribeToken(p.id, this.secret)}`,
+          unsubscribeUrl: `${this.origin}/descadastro?t=${token(p.id)}`,
+          oneClickUrl: `${this.origin}/api/descadastro?t=${token(p.id)}`,
         }),
       );
       if (ok) saiu += 1;

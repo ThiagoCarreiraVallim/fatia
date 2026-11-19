@@ -567,10 +567,12 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     if (tickets.length > 0) {
       await this.prisma.pushTicket.createMany({ data: tickets, skipDuplicates: true });
     }
-    if (notice.announcementId && tickets.length > 0) {
+    // Mandadas = celular (ticket da Expo) + navegador (aceito pelo serviço de push).
+    const mandadas = tickets.length + (web.sent ?? 0);
+    if (notice.announcementId && mandadas > 0) {
       await this.prisma.groupAnnouncement.updateMany({
         where: { id: notice.announcementId },
-        data: { pushSent: { increment: tickets.length } },
+        data: { pushSent: { increment: mandadas } },
       });
     }
   }
