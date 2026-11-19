@@ -58,6 +58,7 @@ export * from './community-benefits';
 export * from './content-panel';
 export * from './markdown-lite';
 export * from './users';
+export * from './auth-experience';
 export * from './units';
 export * from './tutorials';
 export * from './you';
