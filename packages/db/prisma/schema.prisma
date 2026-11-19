@@ -1864,7 +1864,12 @@ model ProfessionalAccessLog {
   /// conseguindo responder "quem olhou meu dado".
   professionalId String
   subjectUserId  String
-  scope          ShareScope
+  /// Nulo só na abertura da ficha (#402, "open_member_file"): abrir não lê categoria.
+  scope          ShareScope?
+  /// Comunidade em que a leitura aconteceu (#402), da associação lida. String
+  /// pura como `professionalId`: a trilha sobrevive à comunidade. Nulo nas
+  /// linhas antigas, que ficam fora do histórico da ficha.
+  groupId        String?
   /// Vocabulário do produto: "list_workout_sessions", "get_student_progress".
   action         String
   denied         Boolean    @default(false)
@@ -1874,6 +1879,7 @@ model ProfessionalAccessLog {
   subject User              @relation("AccessLogSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
 
   @@index([subjectUserId, at])
+  @@index([subjectUserId, groupId, at])
   @@index([professionalId, at])
   @@index([linkId, at])
 }

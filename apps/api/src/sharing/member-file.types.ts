@@ -66,7 +66,8 @@ export interface MemberWeek {
 
 export interface MemberAccessEntry {
   at: Date;
-  scope: ShareScope;
+  /** Nulo na linha de abertura da ficha. */
+  scope: ShareScope | null;
   action: string;
   denied: boolean;
   /** Nulo quando a conta de quem olhou não existe mais. */

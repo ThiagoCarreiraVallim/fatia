@@ -48,7 +48,8 @@ export interface AccessLogView {
   at: Date;
   /** Operação do produto: "list_workout_sessions", "get_student_progress". */
   action: string;
-  scope: ShareScope;
+  /** Nulo na abertura da ficha (#402): abrir não lê categoria. */
+  scope: ShareScope | null;
   /** `true` = tentou e foi barrado. É o registro que denuncia mau uso. */
   denied: boolean;
   /** Nome de quem tentou. `null` se a conta do profissional já não existe. */
