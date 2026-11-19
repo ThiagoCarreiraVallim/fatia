@@ -569,6 +569,8 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **WhatsApp:** com o segredo, o link sem e-mail deriva do id e da hora em que saiu (`GroupInvite.linkIssuedAt`). Em 10 minutos, volta o mesmo link, sem invalidar o que a equipe acabou de mandar. O botão avisa que um link novo invalida o anterior, e o diálogo diz se o link é novo ou o mesmo. Reenviar e renovar zeram essa data.
   - **Exclusão de conta** também revoga os convites abertos que a pessoa criou.
   - **Segredos em produção:** um bloco repetido é recusado, e `INVITE_LINK_SECRET` igual a `EMAIL_UNSUBSCRIBE_SECRET` também.
+  - **Recusados na Ativação pendente (decisão do orquestrador):** a lista continua mostrando quem recusou, com o status "recusou" e sem Reenviar nem WhatsApp, para a equipe saber e não insistir. Só o contador do menu deixa os recusados de fora.
+  - **App:** no formulário do link, papel de equipe começa com 1 uso e 30 dias, sem "sem limite" (campo vazio volta para 1); membro segue com vazio = sem limite e 7 dias (`link-invite-form.ts`).
   - **Tipos:** `InvitePreview.expiresAt` passou a ser `string | null`.
   - **Testes novos:** concorrência no reenvio, na renovação e nos assentos (lote e aceite); `url` nulo para link revogado ou vencido; link HMAC revogado recusado no aceite e na prévia (`invite-review.integration.spec.ts`).
 - **Falta (dependências):** aceitar o convite na web redesenhada (#416) e a recusa no Onb-E1 (#372; a API já existe). Assentos em massa seguem a regra atual até a #403. Os papéis novos de equipe ficam para a #404.
