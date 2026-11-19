@@ -84,6 +84,10 @@ model User {
   quietFrom         Int     @default(1320)
   quietTo           Int     @default(420)
 
+  /// Descadastro do e-mail de comunicado da comunidade (#398), pelo link do
+  /// próprio e-mail, sem login. Nulo = recebe (se `ANNOUNCEMENTS` estiver ligado).
+  announcementEmailOptOutAt DateTime?
+
   /// Busca na web no chat (#384): o ícone do topo liga e desliga. Ligada só vale depois do
   /// aceite da primeira busca (`AiConsent` WEB_SEARCH); desligada, a IA nem oferece a busca.
   webSearchEnabled Boolean @default(true)
@@ -1677,7 +1681,7 @@ model Group {
   /// Que conteúdo novo vira post automático no mural (#394, prancha Pn-14).
   /// Liga por padrão só nas comunidades criadas depois da 20261118100100; as
   /// que já existiam começam desligadas (opt-in na tela de mural).
-  autoPosts             AutoPostKind[]       @default([PLAN, TIP, EXERCISE, CHALLENGE])
+  autoPosts             AutoPostKind[]        @default([PLAN, TIP, EXERCISE, CHALLENGE])
   blocksFrom            UserBlock[]
   /// Descontos de parceiros para os membros (#393).
   partnerBenefits       GroupPartnerBenefit[]
@@ -1688,6 +1692,16 @@ model Group {
 
   @@index([ownerId])
   @@index([type])
+}
+
+/// Por onde a pessoa entrou na comunidade (#398).
+enum JoinVia {
+  /// Link de convite ou convite por e-mail.
+  INVITE
+  /// Código de entrada legível (o QR da recepção, #393).
+  CODE
+  /// Slug ou página pública da comunidade.
+  PAGE
 }
 
 model GroupMembership {
@@ -1711,6 +1725,10 @@ model GroupMembership {
   /// Última vez que a pessoa abriu o mural desta comunidade (#393, #394): conta
   /// os "posts novos" da lista e do mural. Nulo = nunca abriu; conta desde a entrada.
   feedSeenAt    DateTime?
+  /// Por onde a pessoa entrou (#398, "Novos esta semana"): convite, código de
+  /// entrada ou a página da comunidade. Nulo = entrou antes de existir o campo,
+  /// ou é quem criou a comunidade.
+  joinVia       JoinVia?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -2845,6 +2863,9 @@ model GroupPost {
   pinnedUntil    DateTime?
   /// O comunicado (agendado ou repetido) que gerou este post.
   announcementId String?
+  /// Quando este disparo de comunicado saiu como notificação (#398). Conta para
+  /// o limite semanal de avisos por comunidade.
+  notifiedAt     DateTime?
   /// Post automático: que conteúdo novo ele anuncia (o id fica em `autoRefId`).
   autoKind       AutoPostKind?
   autoRefId      String?
@@ -2864,12 +2885,13 @@ model GroupPost {
   hides        GroupPostHide[]
   poll         GroupPoll?
 
-  @@index([groupId, createdAt])
-  @@index([announcementId])
-  @@index([groupId, pinnedAt])
-  @@index([membershipId])
   /// Um post automático por conteúdo (nulos não colidem: posts comuns ficam de fora).
   @@unique([groupId, autoKind, autoRefId])
+  @@index([groupId, createdAt])
+  @@index([announcementId])
+  @@index([groupId, notifiedAt])
+  @@index([groupId, pinnedAt])
+  @@index([membershipId])
 }
 
 /// Até quatro imagens por post (mídia `post_image`, ADR 028).
@@ -3037,28 +3059,36 @@ model GroupPollVote {
 /// e repete. Cada disparo vira um `GroupPost` kind ANNOUNCEMENT; o job
 /// (`AnnouncementJob`) avança `nextRunAt` conforme `repeat`.
 model GroupAnnouncement {
-  id           String             @id @default(uuid())
-  groupId      String
+  id            String             @id @default(uuid())
+  groupId       String
   /// Quem da equipe criou. Some com a associação (cascata).
-  membershipId String
-  publishedAs  PostAuthorAs       @default(GROUP)
-  title        String
-  body         String
-  pin          Boolean            @default(false)
+  membershipId  String
+  publishedAs   PostAuthorAs       @default(GROUP)
+  title         String
+  body          String
+  pin           Boolean            @default(false)
   /// Dias no topo; nulo = sem prazo.
-  pinDays      Int?
-  push         Boolean            @default(true)
-  repeat       AnnouncementRepeat @default(NONE)
+  pinDays       Int?
+  push          Boolean            @default(true)
+  /// Também por e-mail (#398): para quem deixou `ANNOUNCEMENTS` ligado e não se
+  /// descadastrou pelo link.
+  alsoEmail     Boolean            @default(false)
+  /// Contas da entrega, somadas em todos os disparos: notificações mandadas,
+  /// entregues pela Apple/Google (recibo da Expo) e e-mails que saíram.
+  pushSent      Int                @default(0)
+  pushDelivered Int                @default(0)
+  emailSent     Int                @default(0)
+  repeat        AnnouncementRepeat @default(NONE)
   /// Próximo disparo; nulo quando não há mais nenhum (feito ou cancelado).
-  nextRunAt    DateTime?
+  nextRunAt     DateTime?
   /// O primeiro horário marcado. As repetições contam dele, no fuso da
   /// comunidade (o dia 31 volta a ser 31 depois de fevereiro).
-  anchorAt     DateTime?
+  anchorAt      DateTime?
   /// Falhas seguidas do disparo atual; zera quando sai. No teto, cancela.
-  attempts     Int                @default(0)
-  lastRunAt    DateTime?
-  canceledAt   DateTime?
-  createdAt    DateTime           @default(now())
+  attempts      Int                @default(0)
+  lastRunAt     DateTime?
+  canceledAt    DateTime?
+  createdAt     DateTime           @default(now())
 
   group      Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
@@ -3151,9 +3181,11 @@ model UserDevice {
 /// apaga o aparelho. Vive no máximo 24 h.
 model PushTicket {
   /// O id do ticket da Expo.
-  id        String   @id
-  deviceId  String
-  createdAt DateTime @default(now())
+  id             String   @id
+  deviceId       String
+  /// O comunicado deste envio (#398): o recibo bom soma em `pushDelivered`.
+  announcementId String?
+  createdAt      DateTime @default(now())
 
   device UserDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
