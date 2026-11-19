@@ -81,7 +81,11 @@ export type SessionSummaryView = SessionSummary & {
    * o botão por "Ver plano"; nulo se não virou (ou se o plano foi apagado).
    */
   savedPlanId: string | null;
-  /** Reação e comentário da equipe (#399), só de quem comentou e ainda é da comunidade. */
+  /**
+   * Reação e comentário da equipe (#399), um por pessoa da equipe e
+   * comunidade. É da pessoa que treinou: fica mesmo se quem comentou sair da
+   * comunidade (sem o nome, se apagar a conta), e sai quando ELA sai dela.
+   */
   feedback: SessionFeedbackView[];
 };
 
@@ -512,7 +516,14 @@ export class WorkoutSessionService {
     // "já não existe" para não revelar que o id existe em outra conta (#92).
     if (!session || session.userId !== userId) return; // idempotente: nada a fazer
     try {
-      await this.prisma.workoutSession.delete({ where: { id } });
+      // O "Visto" da equipe (#399) aponta para a sessão só pelo id: sai junto,
+      // na mesma transação (em lote, não interativa), para não sobrar órfão.
+      await this.prisma.$transaction([
+        this.prisma.reviewSeen.deleteMany({
+          where: { kind: 'WORKOUT', refId: id, subjectUserId: userId },
+        }),
+        this.prisma.workoutSession.delete({ where: { id } }),
+      ]);
     } catch (err) {
       // P2025: removida concorrentemente entre o findUnique e o delete → no-op.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') return;

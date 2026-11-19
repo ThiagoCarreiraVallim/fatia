@@ -1427,7 +1427,7 @@ model SessionFeedback {
   /// Nulo quando quem comentou apagou a conta: o comentário fica, sem o nome.
   authorId  String?
   reaction  SessionReaction?
-  /// Texto puro, até 500 caracteres (CHECK na migration).
+  /// Texto puro, até 500 caracteres (code points, `char_length`; CHECK na migration).
   body      String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
@@ -1436,7 +1436,8 @@ model SessionFeedback {
   group   Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
   author  User?          @relation("SessionFeedbackAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
-  @@unique([sessionId, authorId])
+  /// Um por pessoa da equipe, sessão e comunidade: comentar em B nunca mexe no de A.
+  @@unique([sessionId, authorId, groupId])
   @@index([groupId])
   @@index([authorId])
 }

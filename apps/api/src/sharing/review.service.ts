@@ -65,7 +65,7 @@ interface LinkedMember {
   membershipId: string;
   userId: string;
   name: string;
-  joinedAt: Date | null;
+  joinedAt: Date;
   whatsapp: string | null;
   scopes: ShareScope[];
 }
@@ -246,7 +246,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
         }),
         workoutRefs.length
           ? this.prisma.sessionFeedback.findMany({
-              where: { authorId: viewerId, sessionId: { in: workoutRefs } },
+              where: { authorId: viewerId, groupId, sessionId: { in: workoutRefs } },
               select: { sessionId: true },
             })
           : Promise.resolve([]),
@@ -333,10 +333,15 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Reação e comentário curto (Pn-35, "Enviar ao aluno"). Um por pessoa da
-   * equipe e sessão: mandar de novo troca o que veio (o que não veio fica).
-   * Comentar marca a sessão como vista para quem comentou, e a pessoa recebe o
-   * aviso, sem o texto: ele aparece na tela bloqueada. Só reação, sobre um
-   * comentário que já existia, não avisa de novo.
+   * equipe, sessão e comunidade: mandar de novo troca o que veio (o que não
+   * veio fica), e comentar em outra comunidade é outro comentário. Comentar
+   * marca a sessão como vista para quem comentou.
+   *
+   * A pessoa recebe o aviso, sem o texto (ele apareceria na tela bloqueada),
+   * só no primeiro envio e quando o texto aparece pela primeira vez: editar o
+   * texto ou trocar a reação não avisa de novo. Ler o anterior e gravar correm
+   * sob uma trava por (sessão, autor, comunidade), então envios simultâneos não
+   * batem no índice único nem avisam duas vezes.
    */
   async sendFeedback(
     viewerId: string,
@@ -347,7 +352,8 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     await this.requireTeam(viewerId, groupId);
     const body =
       input.body === undefined ? undefined : input.body === null ? null : input.body.trim() || null;
-    if (body && body.length > FEEDBACK_BODY_MAX) {
+    // Por code point, como o `char_length` do CHECK e o DTO: um emoji conta 1.
+    if (body && feedbackLength(body) > FEEDBACK_BODY_MAX) {
       throw new BadRequestException(`O comentário tem até ${FEEDBACK_BODY_MAX} caracteres.`);
     }
     if (input.reaction === undefined && body === undefined) {
@@ -358,32 +364,42 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Session not found');
     }
 
-    const before = await this.prisma.sessionFeedback.findUnique({
-      where: { sessionId_authorId: { sessionId, authorId: viewerId } },
-    });
-    const reaction = input.reaction === undefined ? (before?.reaction ?? null) : input.reaction;
-    const text = body === undefined ? (before?.body ?? null) : body;
-    if (reaction === null && text === null) {
-      throw new BadRequestException('Escolha uma reação ou escreva um comentário.');
-    }
-    const row = await this.prisma.sessionFeedback.upsert({
-      where: { sessionId_authorId: { sessionId, authorId: viewerId } },
-      create: { sessionId, groupId, authorId: viewerId, reaction, body: text },
-      update: { groupId, reaction, body: text },
-      include: { author: { select: { name: true } } },
+    const key = { sessionId_authorId_groupId: { sessionId, authorId: viewerId, groupId } };
+    const { before, row } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`session-feedback:${sessionId}:${viewerId}:${groupId}`}))::text`;
+      const before = await tx.sessionFeedback.findUnique({
+        where: key,
+        select: { reaction: true, body: true },
+      });
+      const reaction = input.reaction === undefined ? (before?.reaction ?? null) : input.reaction;
+      const text = body === undefined ? (before?.body ?? null) : body;
+      if (reaction === null && text === null) {
+        throw new BadRequestException('Escolha uma reação ou escreva um comentário.');
+      }
+      // A comunidade é parte da chave: nunca entra no `update`.
+      const row = await tx.sessionFeedback.upsert({
+        where: key,
+        create: { sessionId, groupId, authorId: viewerId, reaction, body: text },
+        update: { reaction, body: text },
+      });
+      return { before, row };
     });
     await this.seen(viewerId, groupId, member.userId, ReviewKind.WORKOUT, sessionId);
 
-    const newText = text !== null && text !== (before?.body ?? null);
-    if (!before || newText) {
+    const author = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { name: true },
+    });
+    const firstText = row.body !== null && (before?.body ?? null) === null;
+    if (!before || firstText) {
       this.notifications.notify(
         [member.userId],
-        feedbackNotice(row.author?.name ?? '', text !== null, sessionId),
+        feedbackNotice(author?.name ?? '', row.body !== null, sessionId),
       );
     }
     return {
       id: row.id,
-      authorName: row.author?.name ?? null,
+      authorName: author?.name ?? null,
       reaction: row.reaction,
       body: row.body,
       createdAt: row.createdAt,
@@ -490,13 +506,23 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
         data: { riskDigestOn: today },
       });
       if (claimed.count === 0) continue;
-      const rows = await this.riskRows(sub.userId, sub.groupId, sub.group, now, ACTION.digest);
-      if (rows.length === 0) continue;
-      this.notifications.notify(
-        [sub.userId],
-        riskDigestNotice(sub.groupId, sub.group.name, rows.length),
-      );
-      sent += 1;
+      // Uma pessoa que falha (leitura, trilha) não pode deixar as outras sem
+      // o aviso do dia; a dela fica para amanhã, porque o dia já foi reivindicado.
+      try {
+        const rows = await this.riskRows(sub.userId, sub.groupId, sub.group, now, ACTION.digest);
+        if (rows.length === 0) continue;
+        this.notifications.notify(
+          [sub.userId],
+          riskDigestNotice(sub.groupId, sub.group.name, rows.length),
+        );
+        sent += 1;
+      } catch (err) {
+        this.logger.warn(
+          `Aviso diário do em risco falhou para a associação ${sub.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
     return sent;
   }
@@ -553,6 +579,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
         id: true,
         userId: true,
         joinedAt: true,
+        createdAt: true,
         user: { select: { name: true, whatsapp: true, whatsappOptIn: true } },
       },
     });
@@ -563,7 +590,8 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
           membershipId: r.id,
           userId: r.userId,
           name: r.user.name,
-          joinedAt: r.joinedAt,
+          // Associação antiga sem `joinedAt`: a criação dela é a entrada.
+          joinedAt: r.joinedAt ?? r.createdAt,
           // Só o número que a pessoa deixou a equipe ver (perfil, #401).
           whatsapp: r.user.whatsappOptIn ? r.user.whatsapp : null,
         },
@@ -694,15 +722,9 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
         lastBy.set(scope, await this.lastRecord(m.userId, scope, now));
       }
       if (lastBy.size === 0) continue;
-      const since = (d: Date | null) =>
-        d
-          ? daysBetween(dateInTz(d, tz), today)
-          : m.joinedAt
-            ? daysBetween(dateInTz(m.joinedAt, tz), today)
-            : null;
+      const since = (d: Date | null) => daysBetween(dateInTz(d ?? m.joinedAt, tz), today);
       const last = latest([...lastBy.values()]);
       const days = since(last);
-      if (days === null) continue;
       const level = (d: number): AtRiskRow['level'] =>
         d >= group.riskDays * 2 ? 'gone' : 'attention';
       if (days >= group.riskDays) {
@@ -722,7 +744,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       if (lastBy.has(ShareScope.WORKOUT)) {
         const lastWorkout = lastBy.get(ShareScope.WORKOUT) ?? null;
         const workoutDays = since(lastWorkout);
-        if (workoutDays !== null && workoutDays >= group.riskDays) {
+        if (workoutDays >= group.riskDays) {
           rows.push({
             membershipId: m.membershipId,
             name: m.name,
@@ -792,6 +814,11 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
+/** O tamanho do comentário em code points, como o `char_length` do Postgres. */
+export function feedbackLength(body: string): number {
+  return [...body].length;
+}
+
 /** Para a pessoa: a equipe comentou ou reagiu. Sem o texto: é a tela bloqueada. */
 export function feedbackNotice(authorName: string, withText: boolean, sessionId: string): Notice {
   const quem = authorName ? firstName(authorName) : 'Sua equipe';
@@ -809,6 +836,7 @@ export function riskDigestNotice(groupId: string, groupName: string, n: number):
     kind: NotificationKind.COMMUNITY,
     title: groupName,
     body: `${n} ${n === 1 ? 'aluno precisa' : 'alunos precisam'} de atenção.`,
-    url: `/org/${groupId}/review?aba=risco`,
+    // Caminho sem `?`: o toque só aceita caminho interno puro (`notificationTarget`).
+    url: `/org/${groupId}/review/at-risk`,
   };
 }

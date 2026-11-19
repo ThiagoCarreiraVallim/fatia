@@ -56,7 +56,7 @@ CREATE INDEX "SessionFeedback_groupId_idx" ON "SessionFeedback"("groupId");
 CREATE INDEX "SessionFeedback_authorId_idx" ON "SessionFeedback"("authorId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SessionFeedback_sessionId_authorId_key" ON "SessionFeedback"("sessionId", "authorId");
+CREATE UNIQUE INDEX "SessionFeedback_sessionId_authorId_groupId_key" ON "SessionFeedback"("sessionId", "authorId", "groupId");
 
 -- AddForeignKey
 ALTER TABLE "ReviewSeen" ADD CONSTRAINT "ReviewSeen_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE CASCADE ON UPDATE CASCADE;

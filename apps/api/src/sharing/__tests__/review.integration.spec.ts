@@ -534,7 +534,9 @@ describe('para revisar, em risco e sessão feita (integração, #399)', () => {
 
   describe('aviso diário à equipe', () => {
     it('é opcional, sai uma vez por dia e só com o número, sem nomes', async () => {
-      const meioDia = new Date(`${todayInTz(TZ)}T15:00:00Z`);
+      // Meio-dia de hoje na comunidade, ou agora se já passou: nunca antes dos
+      // treinos criados nesta rodada, a qualquer hora que o teste rode.
+      const meioDia = new Date(Math.max(Date.now(), Date.parse(`${todayInTz(TZ)}T15:00:00Z`)));
       await review.sendRiskDigests(meioDia);
       expect(notify).not.toHaveBeenCalled();
 

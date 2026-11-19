@@ -15,6 +15,8 @@ type MockPrisma = {
   };
   workoutPlan: { findFirst: jest.Mock };
   sessionFeedback: { findMany: jest.Mock };
+  reviewSeen: { deleteMany: jest.Mock };
+  $transaction: jest.Mock;
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -29,6 +31,9 @@ const makePrisma = (): MockPrisma => ({
   },
   workoutPlan: { findFirst: jest.fn() },
   sessionFeedback: { findMany: jest.fn().mockResolvedValue([]) },
+  reviewSeen: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  // Em lote: as operações já são promessas; a transação só as espera.
+  $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 });
 
 describe('WorkoutSessionService', () => {

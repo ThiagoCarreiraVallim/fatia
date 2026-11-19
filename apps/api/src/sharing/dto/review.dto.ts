@@ -6,12 +6,12 @@ import {
   IsOptional,
   IsString,
   Max,
-  MaxLength,
   Min,
+  ValidateBy,
   ValidateIf,
 } from 'class-validator';
 import { SessionReaction } from '@fatia/db';
-import { FEEDBACK_BODY_MAX, RISK_DAYS_MAX, RISK_DAYS_MIN } from '../review.service';
+import { FEEDBACK_BODY_MAX, RISK_DAYS_MAX, RISK_DAYS_MIN, feedbackLength } from '../review.service';
 
 export const REVIEW_KIND_PARAMS = ['workout', 'goal', 'plan'] as const;
 export type ReviewKindParam = (typeof REVIEW_KIND_PARAMS)[number];
@@ -26,7 +26,16 @@ export class SessionFeedbackDto {
   @IsOptional()
   @ValidateIf((_o, v) => v !== null)
   @IsString()
-  @MaxLength(FEEDBACK_BODY_MAX)
+  // Por code point, como o service e o `char_length` do banco (o `MaxLength`
+  // do class-validator descontaria seletores de variação, e um "❤️" contaria 1).
+  @ValidateBy({
+    name: 'maxCodePoints',
+    validator: {
+      validate: (v: unknown) =>
+        typeof v === 'string' && feedbackLength(v.trim()) <= FEEDBACK_BODY_MAX,
+      defaultMessage: () => `O comentário tem até ${FEEDBACK_BODY_MAX} caracteres.`,
+    },
+  })
   body?: string | null;
 }
 
