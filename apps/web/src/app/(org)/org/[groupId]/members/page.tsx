@@ -185,7 +185,10 @@ export default function OrgMembersPage() {
           {lista.map((m) => {
             const pendente = m.status === 'INVITED';
             const ehDono = m.role === 'OWNER';
-            const leitura = !pendente && (m.scopesGrantedToMe?.length ?? 0) > 0;
+            // A ficha (#402) é de quem é membro, com ou sem nada compartilhado: planos e
+            // agenda são da equipe, e o cadeado fica nas abas. Abre para dono e profissional.
+            const ficha =
+              !pendente && m.role === 'MEMBER' && (g.role === 'OWNER' || g.role === 'PROFESSIONAL');
             return (
               <li
                 key={m.membershipId}
@@ -268,12 +271,12 @@ export default function OrgMembersPage() {
                     </>
                   )}
 
-                  {leitura && (
+                  {ficha && (
                     <Link
                       href={`${panelHref(g.id, 'members')}/${m.membershipId}`}
                       className="flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-semibold text-primary hover:bg-muted"
                     >
-                      Ver dados <ChevronRight size={16} aria-hidden />
+                      Ficha <ChevronRight size={16} aria-hidden />
                     </Link>
                   )}
                 </div>

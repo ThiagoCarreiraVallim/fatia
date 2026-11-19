@@ -22,7 +22,9 @@ Pranchas em `.canvas/project/Pn-05*.dc.html` (baixadas do artifact).
   `WorkoutPlanService.order/reorder` (`GET/PUT workout/plans/order`), controllers `MemberFileController` e `MyMemberNotesController`
   (`GET groups/:groupId/my-notes`). Permissões `member.file|plans|note`. Export e saída da comunidade. Isolamento (#402 no user-isolation).
 - Testes: `member-file.integration.spec.ts` (16) e bloco #402 em `user-isolation.spec.ts` (5).
+- api-client: `member-file.ts` (tipos, rótulos, abas/cadeado, `memberFileApi`, `myNotesApi`, `planOrderApi`) + teste.
+- web: ficha em `components/org/member-file/*` (abas, resumo, planos com ordem/apagar/terminar, adicionar da biblioteca no painel lateral, agenda semana/mês, anotações); Membros leva à "Ficha" de todo membro ativo.
 
 ## Falta
 
-- api-client (tipos + funções), web (ficha com abas), mobile (notas em Sobre; reordenar planos), docs (REDESIGN_PROGRESS Etapa 8), MCP (origem/status em list_workout_plans?).
+- mobile (notas em Sobre; reordenar planos), docs (REDESIGN_PROGRESS Etapa 8), MCP (origem/status em list_workout_plans?).
