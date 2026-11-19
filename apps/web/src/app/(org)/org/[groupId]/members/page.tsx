@@ -514,7 +514,17 @@ export default function OrgMembersPage() {
                       <td className="hidden p-3 md:table-cell">{joinedViaLabel(m)}</td>
                     )}
                     {mostra('accompanied') && (
-                      <td className="hidden p-3 md:table-cell">{m.accompaniedBy?.name ?? '—'}</td>
+                      <td className="hidden p-3 md:table-cell">
+                        {m.accompaniedBy ? (
+                          <Badge variant="outline">{m.accompaniedBy.name}</Badge>
+                        ) : m.role === 'MEMBER' && m.status !== 'LEFT' ? (
+                          <Badge variant="outline" className="border-warning/50 text-warning">
+                            Ninguém
+                          </Badge>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     )}
                     {mostra('status') && (
                       <td className="p-3">
