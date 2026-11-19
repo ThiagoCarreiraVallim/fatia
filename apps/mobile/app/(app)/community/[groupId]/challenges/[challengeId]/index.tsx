@@ -212,6 +212,13 @@ function ActivityCard({
  * o ranking e as regras. Foto de check-in só a própria pessoa vê (ADR 044).
  */
 export default function CommunityChallengeScreen() {
+  const { challengeId } = useLocalSearchParams<{ challengeId: string }>();
+  // A rota fica montada ao abrir outro desafio por link: sem a chave, a gaveta
+  // de entrar, a aba e a água ficavam do desafio anterior (passada visual #395).
+  return <ChallengeScreen key={challengeId} />;
+}
+
+function ChallengeScreen() {
   const confirm = useConfirm();
   const router = useRouter();
   const { groupId, challengeId, join } = useLocalSearchParams<{
