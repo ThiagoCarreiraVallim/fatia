@@ -413,7 +413,9 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - "Pôr num treino" abre um seletor dos meus planos (o que já tem o exercício aparece desligado com "já tem"), e não o fluxo Al-T8 da prancha: é um toque a menos e evita repetir o exercício.
   - O antes e depois mostra quatro faixas (com carboidrato); a prancha mostra três.
   - O botão Adotar continua logo depois da descrição (decisão anterior de usabilidade), e não preso ao pé da tela.
-- **Falta:** passada visual (prints lado a lado com Cm-12 a Cm-16, web e app, escuro e claro); tela do histórico de metas; o e2e `content.spec.ts` foi ajustado à dica em tela própria e ao aviso "Em Meus planos", mas não rodou aqui (sem servidores).
+- **Conferência visual (2026-11-18):** prints lado a lado prancha | web | app de Cm-12 a Cm-16 e do "Pôr num treino", escuro e claro na web, em `~/.cache/fatia-vis/396/cmp-*.png`. Corrigido na passada: cabeçalho "Plano da academia" com os selos de tipo e nível e o nome grande (Cm-13); cabeçalho "Guia da academia", músculo e equipamento em selos e a dica com as iniciais de quem escreveu (Cm-16); avatar na assinatura da dica (Cm-15); "agora" e "plano" em colunas na folha do app (Cm-14). Menu escondido sob todas as folhas (adotar, água, Como fazer, Pôr num treino); sem texto escuro no escuro.
+- **Desvios visuais de propósito:** o topo da comunidade segue o das outras abas (nome e o (i) de Sobre, e não avatar e botão "Sobre"); na web, as abas Planos/Dicas/Exercícios ficam compactas, como nas outras telas da web; o plano sem capa não tem o degradê da prancha; na web, "O que entra na sua conta?" é o diálogo central do projeto, e no app é folha; na web, "Registrar água" fica logo depois do texto (no app, preso ao pé); o vídeo toca na própria página na web e abre no navegador no app; a legenda do "Como fazer" embaixo dos botões saiu (o botão já diz o que faz).
+- **Falta:** tela do histórico de metas; o e2e `content.spec.ts` foi ajustado à dica em tela própria e ao aviso "Em Meus planos", mas não rodou aqui.
 
 ## Etapas seguintes
 
