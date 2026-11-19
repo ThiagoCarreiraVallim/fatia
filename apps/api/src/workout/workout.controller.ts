@@ -30,6 +30,7 @@ import {
   AddPlanExercisesDto,
   CreatePlanDto,
   ReorderExercisesDto,
+  ReorderPlansDto,
   UpdatePlanDto,
   UpdatePlanExerciseDto,
 } from './dto/plan.dto';
@@ -226,6 +227,17 @@ export class WorkoutController {
   @Get('plans')
   listPlans(@CurrentUser() user: CurrentUserPayload) {
     return this.plans.list(user.id);
+  }
+
+  /** A ordem da lista de planos (#402). Antes de `plans/:id`, senão "order" vira id. */
+  @Get('plans/order')
+  planOrder(@CurrentUser() user: CurrentUserPayload) {
+    return this.plans.order(user.id);
+  }
+
+  @Put('plans/order')
+  reorderPlans(@CurrentUser() user: CurrentUserPayload, @Body() dto: ReorderPlansDto) {
+    return this.plans.reorder(user.id, dto.planIds);
   }
 
   @Get('plans/:id')

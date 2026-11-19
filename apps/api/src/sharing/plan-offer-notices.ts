@@ -48,3 +48,21 @@ export function offerAnsweredNotice(p: {
     url: `/org/${p.groupId}/members`,
   };
 }
+
+/** Para a pessoa (#402): a equipe terminou ou tirou um plano dela. */
+export function offerRemovedNotice(p: {
+  authorName: string;
+  title: string;
+  ended: boolean;
+}): Notice {
+  return {
+    kind: NotificationKind.PLAN_RECEIVED,
+    title: p.ended
+      ? `${firstName(p.authorName)} terminou um plano seu`
+      : `${firstName(p.authorName)} tirou um plano seu`,
+    body: p.ended
+      ? `${p.title} termina hoje. O que você registrou continua no seu histórico.`
+      : `${p.title} saiu da sua lista. O que você registrou continua no seu histórico.`,
+    url: '/workout/plans',
+  };
+}

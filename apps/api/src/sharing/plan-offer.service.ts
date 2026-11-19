@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -24,7 +25,13 @@ import { TEAM_ROLES } from './permissions';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { diffOfferVersions, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
 import { activeLinksOf, hasActiveLink, isLinked } from './plan-offer-links';
-import { offerAnsweredNotice, offerSentNotice, offerUpdatedNotice } from './plan-offer-notices';
+import {
+  offerAnsweredNotice,
+  offerRemovedNotice,
+  offerSentNotice,
+  offerUpdatedNotice,
+} from './plan-offer-notices';
+import { resolveMemberTarget } from './member-file-target';
 import {
   buildPlanSnapshot,
   PLAN_SNAPSHOT_VERSION,
@@ -237,32 +244,236 @@ export class PlanOfferService {
 
   // ------------------------------------------------- equipe, pela ficha (#402)
 
+  /**
+   * Um plano para UMA pessoa, pela ficha (#402, Pn-05q): um modelo da
+   * biblioteca DESTA comunidade ou um plano da conta de quem envia. Precisa de
+   * `member.plans` no papel e do vínculo ativo com a pessoa (o mesmo do #379).
+   * A oferta entra no fim da ordem da ficha.
+   */
   async sendToMember(
-    _authorId: string,
-    _groupId: string,
-    _membershipId: string,
-    _input: SendMemberPlanDto,
+    authorId: string,
+    groupId: string,
+    membershipId: string,
+    input: SendMemberPlanDto,
   ): Promise<{ id: string; versionId: string; version: number }> {
-    throw new Error('não implementado');
+    if (Boolean(input.templateId) === Boolean(input.planId)) {
+      throw new BadRequestException('Escolha um plano da biblioteca ou um plano seu, um só.');
+    }
+    await resolveMemberTarget(this.prisma, authorId, groupId, membershipId, 'member.plans');
+    const ctx = await this.assertCanSend(authorId, membershipId);
+    const source = input.templateId
+      ? await this.templateSource(groupId, input.templateId)
+      : await this.planSource(authorId, input.planId!);
+    const content = this.scheduleContent(source, input);
+    const last = await this.prisma.planOffer.aggregate({
+      where: { userId: ctx.studentId, groupId, removedAt: null },
+      _max: { position: true },
+    });
+    const offer = await this.prisma.planOffer.create({
+      data: {
+        userId: ctx.studentId,
+        authorId,
+        groupId,
+        position: (last._max.position ?? -1) + 1,
+        sourceTemplateId: input.templateId ?? null,
+        versions: { create: { version: 1, ...content } },
+      },
+      include: { versions: true },
+    });
+    this.notifications.notify(
+      [ctx.studentId],
+      offerSentNotice({ offerId: offer.id, authorName: ctx.authorName, title: content.title }),
+    );
+    return { id: offer.id, versionId: offer.versions[0]!.id, version: 1 };
   }
 
+  /**
+   * "Apagar da Ana" e "Terminar hoje" (Pn-05s). É do autor ou do dono.
+   *
+   * - Terminar: as sessões da agenda de amanhã em diante saem, a versão que
+   *   esperava aceite fica substituída, e a cópia segue com a pessoa.
+   * - Apagar: a cópia sai da conta dela (o treino que ela registrou fica, sem o
+   *   plano) e a oferta some do app e da ficha. A linha fica para o export.
+   */
   async removeForMember(
-    _viewerId: string,
-    _groupId: string,
-    _membershipId: string,
-    _offerId: string,
-    _opts: { notify: boolean; endToday: boolean },
+    viewerId: string,
+    groupId: string,
+    membershipId: string,
+    offerId: string,
+    opts: { notify: boolean; endToday: boolean },
   ): Promise<{ offerId: string; result: 'removed' | 'ended' }> {
-    throw new Error('não implementado');
+    const target = await resolveMemberTarget(
+      this.prisma,
+      viewerId,
+      groupId,
+      membershipId,
+      'member.plans',
+    );
+    const offer = await this.prisma.planOffer.findFirst({
+      where: { id: offerId, userId: target.subjectUserId, groupId, removedAt: null },
+      select: {
+        id: true,
+        authorId: true,
+        versions: { orderBy: { version: 'desc' }, take: 1, select: { title: true } },
+        user: { select: { timezone: true } },
+      },
+    });
+    if (!offer) throw new NotFoundException(OFFER_NOT_FOUND);
+    if (offer.authorId !== viewerId && target.viewerRole !== GroupRole.OWNER) {
+      throw new ForbiddenException('Só quem mandou o plano, ou o dono, tira o plano da pessoa');
+    }
+    const now = new Date();
+    const supersede = this.prisma.planOfferVersion.updateMany({
+      where: { offerId, status: 'PENDING' },
+      data: { status: 'SUPERSEDED', respondedAt: now },
+    });
+    const title = offer.versions[0]?.title ?? 'o plano';
+
+    if (opts.endToday) {
+      const today = todayInTz(offer.user.timezone);
+      await this.prisma.$transaction([
+        supersede,
+        this.prisma.plannedSession.deleteMany({
+          where: {
+            userId: target.subjectUserId,
+            plan: { fromOfferId: offerId },
+            date: { gt: today },
+          },
+        }),
+        this.prisma.planOffer.update({ where: { id: offerId }, data: { endedAt: now } }),
+      ]);
+    } else {
+      await this.prisma.$transaction([
+        supersede,
+        // O `userId` no filtro: a cópia é da pessoa da URL, nunca de outra.
+        this.prisma.workoutPlan.deleteMany({
+          where: { userId: target.subjectUserId, fromOfferId: offerId },
+        }),
+        this.prisma.planOffer.update({ where: { id: offerId }, data: { removedAt: now } }),
+      ]);
+    }
+    if (opts.notify) {
+      const author = await this.prisma.user.findUnique({
+        where: { id: viewerId },
+        select: { name: true },
+      });
+      this.notifications.notify(
+        [target.subjectUserId],
+        offerRemovedNotice({
+          authorName: author?.name ?? 'A equipe',
+          title,
+          ended: opts.endToday,
+        }),
+      );
+    }
+    return { offerId, result: opts.endToday ? 'ended' : 'removed' };
   }
 
+  /**
+   * A ordem dos planos na ficha (#402). A equipe define a ordem inicial: ela
+   * vai para as cópias já aceitas enquanto a pessoa não reordenou no app.
+   * Depois disso a lista do app é dela, e aqui só muda a ordem das ofertas.
+   */
   async reorderForMember(
-    _viewerId: string,
-    _groupId: string,
-    _membershipId: string,
-    _offerIds: string[],
+    viewerId: string,
+    groupId: string,
+    membershipId: string,
+    offerIds: string[],
   ): Promise<{ offerIds: string[] }> {
-    throw new Error('não implementado');
+    const target = await resolveMemberTarget(
+      this.prisma,
+      viewerId,
+      groupId,
+      membershipId,
+      'member.plans',
+    );
+    const unique = [...new Set(offerIds)];
+    const found = await this.prisma.planOffer.findMany({
+      where: { id: { in: unique }, userId: target.subjectUserId, groupId, removedAt: null },
+      select: { id: true },
+    });
+    if (found.length !== unique.length) throw new NotFoundException(OFFER_NOT_FOUND);
+    const subject = await this.prisma.user.findUnique({
+      where: { id: target.subjectUserId },
+      select: { plansOrderedAt: true },
+    });
+    await this.prisma.$transaction([
+      ...unique.map((id, position) =>
+        this.prisma.planOffer.update({ where: { id }, data: { position } }),
+      ),
+      ...(subject?.plansOrderedAt
+        ? []
+        : unique.map((id, position) =>
+            this.prisma.workoutPlan.updateMany({
+              where: { userId: target.subjectUserId, fromOfferId: id },
+              data: { position },
+            }),
+          )),
+    ]);
+    return { offerIds: unique };
+  }
+
+  /** O retrato de um modelo de treino da biblioteca desta comunidade. */
+  private async templateSource(groupId: string, templateId: string) {
+    const tpl = await this.prisma.groupPlanTemplate.findFirst({
+      where: { id: templateId, groupId },
+      select: { kind: true, title: true, snapshot: true },
+    });
+    if (!tpl) throw new NotFoundException('Template not found');
+    if (tpl.kind !== 'WORKOUT') {
+      throw new BadRequestException(
+        'Plano alimentar para uma pessoa chega com o editor de dieta. Por ora, só treino.',
+      );
+    }
+    const snap = parseSnapshot(tpl.snapshot);
+    if (!snap) throw new BadRequestException('Este modelo não pode ser enviado.');
+    return { title: tpl.title, snapshot: await this.groupItemsByValue(snap, groupId) };
+  }
+
+  private async planSource(authorId: string, planId: string) {
+    // `findById` com o `userId` de quem envia: plano de outra pessoa é 404.
+    const plan = await this.plans.findById(authorId, planId);
+    return { title: plan.name, snapshot: buildPlanSnapshot(plan) };
+  }
+
+  /**
+   * Numa oferta o exercício da comunidade viaja por valor (#379): a pessoa
+   * pode sair da comunidade e o plano continua dela. O modelo da biblioteca
+   * guarda o exercício da comunidade por referência, então ele vira custom aqui.
+   */
+  private async groupItemsByValue(snap: PlanSnapshot, groupId: string): Promise<PlanSnapshot> {
+    const ids = snap.exercises.flatMap((e) => (e.source === 'group' ? [e.groupExerciseId] : []));
+    if (ids.length === 0) return snap;
+    const rows = await this.prisma.exercise.findMany({
+      where: { id: { in: ids }, groupOwned: true, groupId },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const exercises = snap.exercises.map((item) => {
+      if (item.source !== 'group') return item;
+      const ex = byId.get(item.groupExerciseId);
+      if (!ex) throw new BadRequestException('Um exercício deste modelo não existe mais.');
+      const { source: _source, groupExerciseId: _id, ...base } = item;
+      void _source;
+      void _id;
+      const definition = Object.fromEntries(
+        Object.entries({
+          name: ex.name,
+          muscleGroup: ex.muscleGroup,
+          equipment: ex.equipment,
+          level: ex.level,
+          mechanic: ex.mechanic,
+          primaryMuscles: ex.primaryMuscles,
+          secondaryMuscles: ex.secondaryMuscles,
+          instructions: ex.instructions,
+          youtubeVideoId: ex.youtubeVideoId,
+          youtubeVideoIdPt: ex.youtubeVideoIdPt,
+        }).filter(([, v]) => v !== null && !(Array.isArray(v) && v.length === 0)),
+      );
+      return { source: 'custom' as const, exercise: definition, ...base };
+    });
+    const parsed = planSnapshotSchema.safeParse({ ...snap, exercises });
+    if (!parsed.success) throw new BadRequestException('Este modelo não pode ser enviado.');
+    return parsed.data;
   }
 
   // ---------------------------------------------------------------- aluno
@@ -270,7 +481,8 @@ export class PlanOfferService {
   async list(userId: string): Promise<PlanOfferList> {
     const [offers, links] = await Promise.all([
       this.prisma.planOffer.findMany({
-        where: { userId },
+        // A oferta que a equipe apagou (#402) some do app; a linha fica no export.
+        where: { userId, removedAt: null },
         include: OFFER_INCLUDE,
         orderBy: { updatedAt: 'desc' },
       }),
@@ -353,6 +565,7 @@ export class PlanOfferService {
           data: { status: 'SUPERSEDED', respondedAt: now },
         }),
         ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
+        ...(await this.positionWrites(userId, planId, offer.position)),
       ]);
     } catch (error) {
       await this.prisma.planOfferVersion.update({
@@ -477,15 +690,21 @@ export class PlanOfferService {
 
   /** O retrato do plano do autor e a agenda pedida, validados. */
   private async versionContent(authorId: string, input: SendPlanOfferDto) {
-    // `findById` com o `userId` de quem envia: plano de outra pessoa é 404.
-    const plan = await this.plans.findById(authorId, input.planId);
-    // Sem `groupId`: numa oferta, o exercício da comunidade viaja por valor.
-    const snapshot = buildPlanSnapshot(plan);
+    // Sem `groupId` no retrato: numa oferta, o exercício da comunidade viaja por valor.
+    return this.scheduleContent(await this.planSource(authorId, input.planId), input);
+  }
+
+  /** A agenda pedida, validada, sobre o retrato já pronto. */
+  private scheduleContent(
+    source: { title: string; snapshot: PlanSnapshot },
+    input: Pick<SendPlanOfferDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'>,
+  ) {
+    const snapshot = source.snapshot;
     const note = input.note?.trim() ? input.note.trim().slice(0, MAX_OFFER_NOTE) : null;
 
     if (input.schedule === 'FLEXIBLE') {
       return {
-        title: plan.name,
+        title: source.title,
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
         snapshotVersion: PLAN_SNAPSHOT_VERSION,
         schedule: 'FLEXIBLE' as const,
@@ -513,7 +732,7 @@ export class PlanOfferService {
       );
     }
     return {
-      title: plan.name,
+      title: source.title,
       snapshot: snapshot as unknown as Prisma.InputJsonValue,
       snapshotVersion: PLAN_SNAPSHOT_VERSION,
       schedule: 'CALENDAR' as const,
@@ -526,7 +745,7 @@ export class PlanOfferService {
 
   private async findOffer(userId: string, offerId: string): Promise<OfferRow> {
     const offer = await this.prisma.planOffer.findFirst({
-      where: { id: offerId, userId },
+      where: { id: offerId, userId, removedAt: null },
       include: OFFER_INCLUDE,
     });
     if (!offer || offer.versions.length === 0) throw new NotFoundException(OFFER_NOT_FOUND);
@@ -564,6 +783,22 @@ export class PlanOfferService {
       .filter((row) => row.date >= today)
       .map((row) => ({ ...row, userId, planId, offerVersionId: version.id }));
     return [clear, this.prisma.plannedSession.createMany({ data: rows })];
+  }
+
+  /**
+   * A ordem que a equipe deu na ficha vai para a cópia (#402), enquanto a
+   * pessoa não reordenou os planos no app. Depois a ordem é dela.
+   */
+  private async positionWrites(userId: string, planId: string, position: number | null) {
+    if (position === null) return [];
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { plansOrderedAt: true },
+    });
+    if (!user || user.plansOrderedAt) return [];
+    return [
+      this.prisma.workoutPlan.updateMany({ where: { id: planId, userId }, data: { position } }),
+    ];
   }
 
   /** O aviso à equipe. `notify` não espera a entrega; o nome do aluno é uma leitura só. */
