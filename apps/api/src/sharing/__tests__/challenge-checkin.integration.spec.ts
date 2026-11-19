@@ -20,6 +20,7 @@ import {
   ChallengeService,
   REVIEW_GRACE_MS,
   REVIEW_QUEUE_MAX,
+  normalizeRules,
   type ChallengeInput,
 } from '../challenge.service';
 import { GroupService } from '../group.service';
@@ -107,15 +108,21 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
     input: Omit<ChallengeInput, 'title' | 'startDate' | 'endDate'>,
     dias = 3,
   ) {
+    // Passos não se criam até a sync de saúde (#395): o desafio nasce de água e
+    // recebe as regras de passos direto no banco, como um que já existisse.
+    const passos = input.kind === 'STEPS' || (input.pointsTable?.steps ?? 0) > 0;
     const c = await challenges.create(autor, groupId, {
       title: 'Desafio',
       startDate: hoje(),
       endDate: addDaysIso(hoje(), 5),
-      ...input,
+      ...(passos ? { kind: 'WATER' as const } : input),
     });
     await prisma.groupChallenge.update({
       where: { id: c.id },
-      data: { startsAt: dayBoundsInTz(addDaysIso(hoje(), -(dias - 1)), SP).start },
+      data: {
+        ...(passos ? normalizeRules({ title: 'x', startDate: '', endDate: '', ...input }) : {}),
+        startsAt: dayBoundsInTz(addDaysIso(hoje(), -(dias - 1)), SP).start,
+      },
     });
     return c.id;
   }
