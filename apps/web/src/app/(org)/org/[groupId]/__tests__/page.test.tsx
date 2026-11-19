@@ -29,6 +29,14 @@ vi.mock('@fatia/api-client', async () => {
 
 import { insightsApi, panelApi, seatsApi } from '@fatia/api-client';
 import OrgOverviewPage from '../page';
+import { SidePanelProvider, useSidePanel } from '@/components/org/side-panel';
+import { useEffect } from 'react';
+
+function AbrePainel() {
+  const { open } = useSidePanel();
+  useEffect(() => open({ title: 'Novo comunicado', body: null }), [open]);
+  return null;
+}
 
 const serie = (vals: (number | null)[]): OverviewCell[] =>
   vals.map((v, i) => ({
@@ -134,6 +142,23 @@ describe('painel › visão geral (Pn-01, #398)', () => {
     expect(
       JSON.parse(window.localStorage.getItem('fatia:panel:overview-columns:mo')!).columns,
     ).not.toContain('owner');
+  });
+
+  it('com o painel lateral aberto, a tabela fica só com item, tipo e status (Pn-01b)', async () => {
+    ctx.group = grupo();
+    vi.mocked(panelApi.overview).mockResolvedValue(visao());
+    vi.mocked(seatsApi.get).mockResolvedValue(assentos());
+    vi.mocked(insightsApi.panels).mockResolvedValue({ retention: true, behavior: false });
+    renderWithClient(
+      <SidePanelProvider>
+        <AbrePainel />
+        <OrgOverviewPage />
+      </SidePanelProvider>,
+    );
+    const tabela = await screen.findByRole('table');
+    expect(within(tabela).getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Responsável' })).toBeNull();
+    expect(within(tabela).queryByRole('columnheader', { name: 'Pessoa' })).toBeNull();
   });
 
   it('o profissional não vê assentos nem agregados', async () => {

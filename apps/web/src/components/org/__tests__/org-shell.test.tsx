@@ -129,7 +129,11 @@ describe('OrgShell', () => {
     await user.click(screen.getByRole('button', { name: 'Comunicado' }));
     const lateral = screen.getByRole('complementary', { name: 'Novo comunicado' });
     expect(within(lateral).getByRole('form', { name: 'Novo comunicado' })).toBeInTheDocument();
+    // Com o painel aberto o menu encolhe para os ícones (Pn-01b), sem mudar a preferência.
+    expect(screen.getByRole('button', { name: 'Abrir menu' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('fatia:panel:nav:mo')).toBeNull();
     await user.click(within(lateral).getByRole('button', { name: 'Fechar painel' }));
+    expect(screen.getByRole('button', { name: 'Recolher menu' })).toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Novo comunicado' })).toBeNull();
   });
 
