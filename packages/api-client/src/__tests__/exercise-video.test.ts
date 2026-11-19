@@ -3,6 +3,7 @@ import {
   exerciseDetailPath,
   exerciseVideoSource,
   howToMeta,
+  isYoutubeEmbedNavigation,
   signedVideoIsStale,
   youtubeEmbedUrl,
   youtubeWatchUrl,
@@ -67,6 +68,23 @@ describe('vídeo do exercício', () => {
     expect(howToMeta({ ...base, level: null, mechanic: 'isolation' } as Exercise)).toBe(
       'barra · isolado',
     );
+  });
+});
+
+describe('a WebView do player só navega dentro do embed', () => {
+  it('aceita o embed e o about:blank, recusa o resto (vai para o navegador)', () => {
+    expect(
+      isYoutubeEmbedNavigation('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1'),
+    ).toBe(true);
+    expect(isYoutubeEmbedNavigation('about:blank')).toBe(true);
+    expect(isYoutubeEmbedNavigation('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(false);
+    expect(isYoutubeEmbedNavigation('https://www.youtube-nocookie.com.evil.com/embed/x')).toBe(
+      false,
+    );
+    expect(isYoutubeEmbedNavigation('http://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')).toBe(
+      false,
+    );
+    expect(isYoutubeEmbedNavigation('nada')).toBe(false);
   });
 });
 
