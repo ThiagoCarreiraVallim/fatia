@@ -130,8 +130,10 @@ futura:
 - **"Para revisar" e "Em risco" (#399): `panel.review` é do dono e do profissional.** O papel
   só abre a tela: cada pessoa aparece só com `ProfessionalLink` ativo com quem olha, e cada
   categoria lida (treino, metas, e no em risco também alimentação, corpo e hábitos) passa pela
-  porta de leitura e entra na trilha dela. As respostas aos planos que a equipe mandou entram sem
-  categoria. Ver a sessão feita, reagir e comentar exigem Treino liberado para quem olha; sem ele,
+  porta de leitura e entra na trilha dela. As respostas aos planos que a própria comunidade mandou (aceitou ou
+  recusou) aparecem para a equipe **sem vínculo nem categoria**: são a resposta a uma oferta que
+  a comunidade fez, não dado de saúde, e a ficha (#402) já mostra o mesmo estado a quem tem
+  `member.plans`; oferta de outra comunidade nunca entra. Ver a sessão feita, reagir e comentar exigem Treino liberado para quem olha; sem ele,
   a tela diz só que não há detalhe. O "Visto" é de cada um. Mudar o limite do em risco é
   `group.update` (o dono).
 - **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é

@@ -22,8 +22,8 @@ O "Para revisar" do painel (#399) precisava decidir como a equipe responde a um 
    WhatsApp: o painel abre `wa.me` com o número que o aluno informou e autorizou ("equipe pode me
    chamar", #387) e um texto pronto. O Fatia não guarda a conversa nem sabe se ela aconteceu.
 2. **O único texto da equipe para o aluno é o comentário da sessão feita** (`SessionFeedback`,
-   #399/#303): uma reação (💪🔥👏❤️) e/ou até 500 caracteres, **um por pessoa da equipe por
-   sessão**, editável por quem escreveu. Só quem tem `WORKOUT` liberado pelo aluno comenta
+   #399/#303): uma reação (💪🔥👏❤️) e/ou até 500 caracteres, **um por pessoa da equipe,
+   sessão e comunidade**, editável por quem escreveu. Só quem tem `WORKOUT` liberado pelo aluno comenta
    (`assertReadable`, com o log de acesso). O aluno lê no histórico do treino e recebe um aviso;
    **não responde no app** — a resposta vai pelo WhatsApp.
 3. **Comentário por exercício fica para depois** (melhoria futura da #303); hoje é por sessão.
