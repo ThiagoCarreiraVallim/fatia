@@ -196,142 +196,155 @@ export default function ReviewSessionPage() {
         </div>
       </header>
 
-      <section aria-label="Resumo da sessão" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Fact
-          label="Duração"
-          value={s.durationMinutes === null ? '—' : `${s.durationMinutes} min`}
-          hint={s.completedAt ? `${hm(s.startedAt)} – ${hm(s.completedAt)}` : null}
-        />
-        <Fact
-          label="Séries"
-          value={String(s.sets)}
-          hint={`${exercises} ${exercises === 1 ? 'exercício' : 'exercícios'}`}
-        />
-        <Fact
-          label="Volume"
-          value={formatTrainingVolume(s.volumeKg)}
-          hint={
-            volumeDelta && volumeDelta !== '—'
-              ? `${volumeDelta.replace(/ [▲▼]$/, '')} vs sessão anterior`
-              : null
-          }
-        />
-        <Fact
-          label="Como foi"
-          value={feeling?.emoji ?? '—'}
-          hint={comoFoi ?? feeling?.label ?? null}
-        />
-      </section>
+      {/* No computador, a reação e o comentário ficam ao lado (Pn-35): "Enviar ao aluno" sempre à vista. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <div className="min-w-0 space-y-4">
+          <section aria-label="Resumo da sessão" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <Fact
+              label="Duração"
+              value={s.durationMinutes === null ? '—' : `${s.durationMinutes} min`}
+              hint={s.completedAt ? `${hm(s.startedAt)} – ${hm(s.completedAt)}` : null}
+            />
+            <Fact
+              label="Séries"
+              value={String(s.sets)}
+              hint={`${exercises} ${exercises === 1 ? 'exercício' : 'exercícios'}`}
+            />
+            <Fact
+              label="Volume"
+              value={formatTrainingVolume(s.volumeKg)}
+              hint={
+                volumeDelta && volumeDelta !== '—'
+                  ? `${volumeDelta.replace(/ [▲▼]$/, '')} vs sessão anterior`
+                  : null
+              }
+            />
+            <Fact
+              label="Como foi"
+              value={feeling?.emoji ?? '—'}
+              hint={comoFoi ?? feeling?.label ?? null}
+            />
+          </section>
 
-      {s.exercises.length > 0 && (
-        <table className="w-full table-fixed overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))]">
-          <thead className="bg-card text-xs text-muted-foreground">
-            <tr>
-              <th scope="col" className="px-3 py-2.5 text-left font-semibold">
-                Exercício
-              </th>
-              <th
-                scope="col"
-                className="hidden w-24 px-3 py-2.5 text-left font-semibold sm:table-cell"
-              >
-                Feito
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left font-semibold">
-                Melhor série
-              </th>
-              <th scope="col" className="w-16 px-3 py-2.5 text-left font-semibold">
-                Sentiu
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {s.exercises.map((e) => (
-              <tr key={e.exerciseId} className="border-t border-border">
-                <td className="truncate px-3 py-3 font-semibold">{e.exerciseName}</td>
-                <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
-                  {e.isCardio ? 'cardio' : `${e.sets} ${e.sets === 1 ? 'série' : 'séries'}`}
-                </td>
-                <td
-                  className={cn('px-3 py-3', e.isRecord ? 'text-primary' : 'text-muted-foreground')}
-                >
-                  {bestLine(e)}
-                </td>
-                <td className="px-3 py-3" aria-label={feelingOf(e.feeling)?.label ?? 'sem marca'}>
-                  {feelingOf(e.feeling)?.emoji ?? '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {note && (
-        <section aria-label={`Nota da ${first}`} className={card}>
-          <p className="text-[13px] text-muted-foreground">Nota da {first}</p>
-          <p className="mt-1 text-sm">“{note}”</p>
-        </section>
-      )}
-
-      <section aria-label="Reação e comentário" className={cn(card, 'space-y-3')}>
-        <p className="text-sm font-bold">Reação e comentário</p>
-        {others.map((f) => (
-          <FeedbackLine key={f.id} f={f} first={first} />
-        ))}
-        {mine && <FeedbackLine f={mine} first={first} />}
-        <div className="flex gap-2" role="group" aria-label="Reação">
-          {SESSION_REACTIONS.map((r) => {
-            const on = current === r.key;
-            return (
-              <button
-                key={r.key}
-                type="button"
-                aria-pressed={on}
-                aria-label={`${r.emoji} ${r.label}`}
-                // Tocar na reação que já está tira a reação.
-                onClick={() => setReaction(on ? null : r.key)}
-                className={cn(
-                  'flex h-10 w-12 items-center justify-center rounded-xl text-xl',
-                  on
-                    ? 'bg-primary/15 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.5)]'
-                    : 'bg-muted',
-                )}
-              >
-                {r.emoji}
-              </button>
-            );
-          })}
-        </div>
-        <Textarea
-          aria-label={`Comentário para a ${first}`}
-          placeholder={`Escreva para a ${first}. A resposta vem pelo WhatsApp.`}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={3}
-        />
-        <p
-          className={cn(
-            'text-right text-xs',
-            tooLong ? 'font-semibold text-danger' : 'text-muted-foreground',
+          {s.exercises.length > 0 && (
+            <table className="w-full table-fixed overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))]">
+              <thead className="bg-card text-xs text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-3 py-2.5 text-left font-semibold">
+                    Exercício
+                  </th>
+                  <th
+                    scope="col"
+                    className="hidden w-24 px-3 py-2.5 text-left font-semibold sm:table-cell"
+                  >
+                    Feito
+                  </th>
+                  <th scope="col" className="px-3 py-2.5 text-left font-semibold">
+                    Melhor série
+                  </th>
+                  <th scope="col" className="w-16 px-3 py-2.5 text-left font-semibold">
+                    Sentiu
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.exercises.map((e) => (
+                  <tr key={e.exerciseId} className="border-t border-border">
+                    <td className="break-words px-3 py-3 font-semibold">{e.exerciseName}</td>
+                    <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
+                      {e.isCardio ? 'cardio' : `${e.sets} ${e.sets === 1 ? 'série' : 'séries'}`}
+                    </td>
+                    <td
+                      className={cn(
+                        'px-3 py-3',
+                        e.isRecord ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    >
+                      {bestLine(e)}
+                    </td>
+                    <td
+                      className="px-3 py-3"
+                      aria-label={feelingOf(e.feeling)?.label ?? 'sem marca'}
+                    >
+                      {feelingOf(e.feeling)?.emoji ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        >
-          {length}/{FEEDBACK_BODY_MAX}
-        </p>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link
-            href={panelHref(g.id, 'review')}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            <span className="font-semibold">Volta para Para revisar</span>
-            <span className="block">depois de comentar, sai da fila</span>
-          </Link>
-          <Button
-            disabled={send.isPending || tooLong || !changed || nothingLeft}
-            onClick={() => send.mutate()}
-          >
-            <Send aria-hidden className="h-4 w-4" /> Enviar ao aluno
-          </Button>
+
+          {note && (
+            <section aria-label={`Nota da ${first}`} className={card}>
+              <p className="text-[13px] text-muted-foreground">Nota da {first}</p>
+              <p className="mt-1 text-sm">“{note}”</p>
+            </section>
+          )}
         </div>
-      </section>
+        <section
+          aria-label="Reação e comentário"
+          className={cn(card, 'space-y-3 lg:sticky lg:top-4')}
+        >
+          <p className="text-sm font-bold">Reação e comentário</p>
+          {others.map((f) => (
+            <FeedbackLine key={f.id} f={f} first={first} />
+          ))}
+          {mine && <FeedbackLine f={mine} first={first} />}
+          <div className="flex gap-2" role="group" aria-label="Reação">
+            {SESSION_REACTIONS.map((r) => {
+              const on = current === r.key;
+              return (
+                <button
+                  key={r.key}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${r.emoji} ${r.label}`}
+                  // Tocar na reação que já está tira a reação.
+                  onClick={() => setReaction(on ? null : r.key)}
+                  className={cn(
+                    'flex h-10 w-12 items-center justify-center rounded-xl text-xl',
+                    on
+                      ? 'bg-primary/15 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.5)]'
+                      : 'bg-muted',
+                  )}
+                >
+                  {r.emoji}
+                </button>
+              );
+            })}
+          </div>
+          <Textarea
+            aria-label={`Comentário para a ${first}`}
+            placeholder={`Escreva para a ${first}. A resposta vem pelo WhatsApp.`}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={3}
+          />
+          <p
+            className={cn(
+              'text-right text-xs',
+              tooLong ? 'font-semibold text-danger' : 'text-muted-foreground',
+            )}
+          >
+            {length}/{FEEDBACK_BODY_MAX}
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Link
+              href={panelHref(g.id, 'review')}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              <span className="font-semibold">Volta para Para revisar</span>
+              <span className="block">depois de comentar, sai da fila</span>
+            </Link>
+            <Button
+              disabled={send.isPending || tooLong || !changed || nothingLeft}
+              onClick={() => send.mutate()}
+            >
+              <Send aria-hidden className="h-4 w-4" /> Enviar ao aluno
+            </Button>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

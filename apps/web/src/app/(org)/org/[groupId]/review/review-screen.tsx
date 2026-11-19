@@ -60,7 +60,7 @@ function Tag({ label }: { label: string }) {
   return (
     <span
       className={cn(
-        'inline-flex rounded-md px-2 py-0.5 text-xs font-semibold',
+        'inline-flex whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold',
         TONE[label] ?? 'bg-muted text-muted-foreground',
       )}
     >
@@ -101,6 +101,13 @@ function WhatsappLink({ phone, text, label }: { phone: string; text: string; lab
 
 const th = 'px-3 py-2.5 text-left font-semibold';
 const td = 'px-3 py-3 align-middle';
+// No celular a linha vira um cartão: nome e ações em cima, o que aconteceu
+// embaixo, na largura toda (o cabeçalho some). No computador, tabela normal.
+const ROW =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-border first:border-t-0 md:table-row md:first:border-t';
+const PERSON = 'col-start-1 row-start-1 min-w-0';
+const ACTIONS = 'col-start-2 row-start-1';
+const LINE = 'col-span-2 row-start-2 pt-0 text-muted-foreground md:pt-3';
 
 /**
  * "Para revisar" (#399, prancha Pn-02): numa fila só, o que os membros
@@ -245,8 +252,8 @@ export function ReviewScreen({
               : 'Nada revisado nos últimos 7 dias.'}
         </p>
       ) : (
-        <table className="w-full table-fixed overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))]">
-          <thead className="bg-card text-xs text-muted-foreground">
+        <table className="block w-full overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))] md:table md:table-fixed">
+          <thead className="hidden bg-card text-xs text-muted-foreground md:table-header-group">
             <tr>
               <th scope="col" className={cn(th, 'w-[38%] md:w-48')}>
                 Membro
@@ -265,24 +272,24 @@ export function ReviewScreen({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block md:table-row-group">
             {list.map((i) => {
               const go = reviewAction(g.id, i);
               return (
-                <tr key={`${i.kind}-${i.refId}`} className="border-t border-border">
-                  <td className={td}>
+                <tr key={`${i.kind}-${i.refId}`} className={ROW}>
+                  <td className={cn(td, PERSON)}>
                     <Person name={i.name} />
                   </td>
                   <td className={cn(td, 'hidden md:table-cell')}>
                     <Tag label={reviewKindLabel(i)} />
                   </td>
-                  <td className={cn(td, 'text-muted-foreground')}>
+                  <td className={cn(td, LINE)}>
                     <span className="line-clamp-2">{reviewLine(i)}</span>
                   </td>
                   <td className={cn(td, 'hidden truncate text-muted-foreground lg:table-cell')}>
                     {sharesLine(i.shares)}
                   </td>
-                  <td className={td}>
+                  <td className={cn(td, ACTIONS)}>
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
                       <Link
                         href={go.href}
@@ -300,6 +307,7 @@ export function ReviewScreen({
                       {i.seenAt === null ? (
                         <Button
                           size="sm"
+                          variant="text"
                           className="h-8"
                           disabled={seen.isPending && seen.variables?.refId === i.refId}
                           onClick={() => seen.mutate(i)}
@@ -394,8 +402,8 @@ function RiskTab({
           Ninguém em risco agora.
         </p>
       ) : (
-        <table className="w-full table-fixed overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))]">
-          <thead className="bg-card text-xs text-muted-foreground">
+        <table className="block w-full overflow-hidden rounded-2xl text-[13.5px] shadow-[inset_0_0_0_1px_hsl(var(--border))] md:table md:table-fixed">
+          <thead className="hidden bg-card text-xs text-muted-foreground md:table-header-group">
             <tr>
               <th scope="col" className={cn(th, 'w-[38%] md:w-48')}>
                 Membro
@@ -414,22 +422,22 @@ function RiskTab({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block md:table-row-group">
             {rows.map((r) => (
-              <tr key={r.membershipId} className="border-t border-border">
-                <td className={td}>
+              <tr key={r.membershipId} className={ROW}>
+                <td className={cn(td, PERSON)}>
                   <Person name={r.name} />
                 </td>
                 <td className={cn(td, 'hidden md:table-cell')}>
                   <Tag label={riskKindLabel(r)} />
                 </td>
-                <td className={cn(td, 'text-muted-foreground')}>
+                <td className={cn(td, LINE)}>
                   <span className="line-clamp-2">{riskLine(r)}</span>
                 </td>
                 <td className={cn(td, 'hidden truncate text-muted-foreground lg:table-cell')}>
                   {sharesLine(r.shares)}
                 </td>
-                <td className={td}>
+                <td className={cn(td, ACTIONS)}>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <Link
                       href={`${panelHref(groupId, 'members')}/${r.membershipId}`}
