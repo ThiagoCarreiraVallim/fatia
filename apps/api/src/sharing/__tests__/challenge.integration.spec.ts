@@ -311,6 +311,27 @@ describe('desafios da comunidade (integração)', () => {
       );
     });
 
+    it('sem apelido escolhido, entra com o nome do perfil e não copia para a comunidade', async () => {
+      const a = await comunidade();
+      await prisma.user.update({ where: { id: a.membro }, data: { nickname: 'Aninha' } });
+      const id = await emAndamento(a.groupId, a.dono, 'KCAL_IN_RANGE_DAYS');
+      expect((await challenges.get(a.membro, a.groupId, id)).suggestedDisplayName).toBe('Aninha');
+
+      const dentro = await challenges.join(a.membro, a.groupId, id, undefined);
+      expect(dentro.me).toMatchObject({ displayName: 'Aninha' });
+      const m = await prisma.groupMembership.findUniqueOrThrow({
+        where: { groupId_userId: { groupId: a.groupId, userId: a.membro } },
+      });
+      expect(m.displayName).toBeNull();
+
+      // Trocar o apelido no perfil troca o nome sugerido no próximo desafio.
+      await prisma.user.update({ where: { id: a.membro }, data: { nickname: null } });
+      const proximo = await emAndamento(a.groupId, a.dono, 'STEPS');
+      expect((await challenges.get(a.membro, a.groupId, proximo)).suggestedDisplayName).toBe(
+        'Membro',
+      );
+    });
+
     it('o ranking só traz apelido, pontuação, posição, a marca de quem vê e a medalha', async () => {
       const a = await comunidade();
       const id = await emAndamento(a.groupId, a.dono, 'KCAL_IN_RANGE_DAYS');
