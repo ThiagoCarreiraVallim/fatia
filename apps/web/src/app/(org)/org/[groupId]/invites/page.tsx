@@ -1,146 +1,93 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Link2, Mail, ScanLine, Upload } from 'lucide-react';
+import { Copy, Link2, Mail, QrCode, ScanLine, Send } from 'lucide-react';
 import {
   ApiError,
-  batchResultMessage,
-  batchSkipLabel,
-  inviteSummary,
+  SMALL_SAMPLE,
+  inviteOriginLabel,
+  inviteStatusLabel,
+  inviteValidityLabel,
+  invitedAgoLabel,
   orgApi,
-  parseInviteEmails,
-  parsedEmailsSummary,
+  panelHref,
   teamRoleLabel,
-  type BatchInviteResult,
-  type GrantableRole,
+  type InviteOverviewRow,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
-import { ShareButton } from '@/components/org/share-button';
 import { orgKeys } from '@/components/community/query-keys';
+import { InvitePanel, type InviteMode } from '@/components/org/invite-panel';
+import { useOptionalSidePanel, type SidePanelContent } from '@/components/org/side-panel';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
-const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
+type Aba = 'all' | 'links' | 'emails';
 
 function erroDaApi(err: unknown, padrao: string): string {
   return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
 }
 
-function Secao({
-  id,
-  titulo,
-  icone: Icone,
-  children,
-}: {
-  id: string;
-  titulo: string;
-  icone: typeof Link2;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      aria-labelledby={id}
-      className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
-    >
-      <h2 id={id} className="flex items-center gap-2 text-sm font-semibold">
-        <Icone size={16} aria-hidden /> {titulo}
-      </h2>
-      {children}
-    </section>
-  );
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Link copiado.');
+  } catch {
+    toast('Não deu para copiar. Selecione o link e copie.');
+  }
 }
 
-function PapelSelect({
-  id,
-  value,
-  onChange,
-  papeis,
-}: {
-  id: string;
-  value: GrantableRole;
-  onChange: (r: GrantableRole) => void;
-  papeis: GrantableRole[];
-}) {
-  // O profissional só convida membros: um seletor de uma opção só seria ruído.
-  if (papeis.length === 1) {
-    return (
-      <p id={id} className="flex h-11 items-center text-sm text-muted-foreground">
-        {teamRoleLabel(papeis[0]!)}
-      </p>
-    );
-  }
-  return (
-    <Select value={value} onValueChange={(v) => onChange(v as GrantableRole)}>
-      <SelectTrigger id={id} className="h-11">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {papeis.map((r) => (
-          <SelectItem key={r} value={r}>
-            {teamRoleLabel(r)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+/** "38 · sem limite", "3 de 10" ou, no e-mail, "0 de 1". */
+function usesLabel(i: InviteOverviewRow): string {
+  return i.maxUses === null ? `${i.uses} · sem limite` : `${i.uses} de ${i.maxUses}`;
+}
+
+function inviteName(i: InviteOverviewRow): string {
+  if (i.email) return i.email;
+  if (i.code) return i.label || `Código ${i.code}`;
+  return i.label || 'Link';
+}
+
+function inviteSub(i: InviteOverviewRow): string {
+  if (i.kind === 'email') return `convidado há ${invitedAgoLabel(i.lastSentAt ?? i.createdAt)}`;
+  if (i.kind === 'code') return `código ${i.code}`;
+  return i.accompaniedByName ? `acompanha: ${i.accompaniedByName}` : 'link de convite';
 }
 
 /**
- * Convites: link para compartilhar, por e-mail, em lote e os que ainda valem.
- * O profissional convida só membros; quem define a equipe é o dono.
+ * Convites (Pn-06): os números, a lista com origem, usos, quem entrou e quem
+ * ativou, e os atalhos de criar link ou convidar por e-mail no painel lateral.
+ * O código de entrada da recepção (#393) continua aqui embaixo.
  */
 export default function OrgInvitesPage() {
   const g = useOrgGroup();
-  const papeis: GrantableRole[] = g.role === 'OWNER' ? PAPEIS : ['MEMBER'];
   const qc = useQueryClient();
-  const refrescar = () => void qc.invalidateQueries({ queryKey: orgKeys.invites(g.id) });
-
-  const [papelLink, setPapelLink] = useState<GrantableRole>('MEMBER');
-  const [usos, setUsos] = useState('');
-  const [dias, setDias] = useState('7');
-  const [link, setLink] = useState<string | null>(null);
-
+  const painel = useOptionalSidePanel();
+  const [aba, setAba] = useState<Aba>('all');
+  const [emLinha, setEmLinha] = useState<SidePanelContent | null>(null);
   const [entrada, setEntrada] = useState<{ code: string; url: string } | null>(null);
+  const refrescar = () => void qc.invalidateQueries({ queryKey: orgKeys.all(g.id) });
 
-  const [papelEmail, setPapelEmail] = useState<GrantableRole>('MEMBER');
-  const [email, setEmail] = useState('');
-
-  const [lote, setLote] = useState('');
-  const [resultado, setResultado] = useState<BatchInviteResult | null>(null);
-  const arquivo = useRef<HTMLInputElement>(null);
-  const lidos = parseInviteEmails(lote);
-
-  const convites = useQuery({
-    queryKey: orgKeys.invites(g.id),
-    queryFn: () => orgApi.invites(g.id),
+  const visao = useQuery({
+    queryKey: orgKeys.invitesOverview(g.id),
+    queryFn: () => orgApi.invitesOverview(g.id),
   });
 
-  const criarLink = useMutation({
-    mutationFn: () =>
-      orgApi.createInvite(g.id, {
-        role: papelLink,
-        ...(usos ? { maxUses: Number(usos) } : {}),
-        expiresInDays: Number(dias),
-      }),
-    onSuccess: (r) => {
-      setLink(r.url);
-      refrescar();
-    },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para criar o link agora.')),
-  });
+  const fechar = () => (painel ? painel.close() : setEmLinha(null));
+  const abrir = (mode: InviteMode) => {
+    const c: SidePanelContent = {
+      title: mode === 'link' ? 'Novo link de convite' : 'Convidar por e-mail',
+      subtitle: 'Convites · quem entra por convite pula a aprovação',
+      body: <InvitePanel key={mode} group={g} initialMode={mode} onDone={fechar} />,
+    };
+    if (painel) painel.open(c);
+    else setEmLinha(c);
+  };
+
   const criarCodigo = useMutation({
     mutationFn: () => orgApi.createInvite(g.id, { role: 'MEMBER', code: true }),
     onSuccess: (r) => {
@@ -149,33 +96,10 @@ export default function OrgInvitesPage() {
     },
     onError: (err) => toast(erroDaApi(err, 'Não deu para gerar o código agora.')),
   });
-  const convidarEmail = useMutation({
-    mutationFn: () => orgApi.createInvite(g.id, { role: papelEmail, email: email.trim() }),
-    onSuccess: (r) => {
-      toast(
-        r.emailSent
-          ? `Convite enviado para ${email.trim()}.`
-          : 'Convite criado, mas o e-mail não saiu. Reenvie pela lista.',
-      );
-      setEmail('');
-      refrescar();
-    },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para convidar agora.')),
-  });
-  const convidarLote = useMutation({
-    mutationFn: () => orgApi.createInviteBatch(g.id, { role: 'MEMBER', emails: lidos.valid }),
-    onSuccess: (r) => {
-      setResultado(r);
-      toast(batchResultMessage(r.created.length, r.skipped.length));
-      setLote('');
-      refrescar();
-    },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para enviar o lote agora.')),
-  });
   const reenviar = useMutation({
-    mutationFn: (id: string) => orgApi.resendInvite(g.id, id),
-    onSuccess: () => {
-      toast('Convite reenviado. O link anterior deixou de valer.');
+    mutationFn: (i: InviteOverviewRow) => orgApi.resendInvite(g.id, i.id),
+    onSuccess: (_r, i) => {
+      toast(`Convite reenviado para ${i.email}. O link anterior deixou de valer.`);
       refrescar();
     },
     onError: (err) => toast(erroDaApi(err, 'Não deu para reenviar agora.')),
@@ -189,73 +113,241 @@ export default function OrgInvitesPage() {
     onError: (err) => toast(erroDaApi(err, 'Não deu para revogar agora.')),
   });
 
-  async function copyLink(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Link copiado.');
-    } catch {
-      toast('Não deu para copiar. Selecione o link e copie.');
-    }
-  }
+  const todos = visao.data?.invites ?? [];
+  const links = todos.filter((i) => i.kind !== 'email');
+  const emails = todos.filter((i) => i.kind === 'email');
+  const lista = aba === 'links' ? links : aba === 'emails' ? emails : todos;
+  const c = visao.data?.cards;
+
+  const cards: { label: string; value: string; extra?: React.ReactNode }[] = c
+    ? [
+        { label: 'Links ativos', value: String(c.activeLinks) },
+        {
+          label: 'Convites sem aceite',
+          value: c.notAccepted === null ? SMALL_SAMPLE : String(c.notAccepted),
+          extra: (
+            <Link
+              href={panelHref(g.id, 'activation')}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              ver ativação pendente ›
+            </Link>
+          ),
+        },
+        {
+          label: 'Entraram em 30 dias',
+          value: c.joinedLast30Days === null ? SMALL_SAMPLE : String(c.joinedLast30Days),
+        },
+        {
+          label: 'Ativaram em 48 h',
+          value: c.activated48h === null ? SMALL_SAMPLE : `${c.activated48h.percent}%`,
+        },
+      ]
+    : [];
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Secao id="link" titulo="Link de convite" icone={Link2}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1">
-            <Label htmlFor="papel-link">Entra como</Label>
-            <PapelSelect
-              id="papel-link"
-              value={papelLink}
-              onChange={setPapelLink}
-              papeis={papeis}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="usos">Limite de usos</Label>
-            <Input
-              id="usos"
-              inputMode="numeric"
-              placeholder="Sem limite"
-              value={usos}
-              onChange={(e) => setUsos(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="dias">Vale por (dias)</Label>
-            <Input
-              id="dias"
-              inputMode="numeric"
-              value={dias}
-              onChange={(e) => setDias(e.target.value.replace(/\D/g, '').slice(0, 2))}
-            />
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-64 flex-1">
+          <h1 className="font-display text-xl font-bold">Convites</h1>
+          <p className="text-sm text-muted-foreground">
+            Link com origem, QR ou e-mail. Quem entra por convite pula a aprovação.
+          </p>
         </div>
-        <Button
-          disabled={criarLink.isPending || !dias || Number(dias) < 1 || Number(dias) > 30}
-          onClick={() => criarLink.mutate()}
-        >
-          {criarLink.isPending ? 'Criando...' : 'Criar link'}
+        <Button variant="outline" className="gap-1" onClick={() => abrir('email')}>
+          <Mail size={16} aria-hidden /> Convidar por e-mail
         </Button>
-        {link && (
-          <div className="space-y-2 rounded-xl bg-muted/50 p-3">
-            <p className="break-all font-mono text-xs" data-testid="invite-url">
-              {link}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <ShareButton text={`Entre na ${g.name} no Fatia:`} url={link} />
-              <Button size="sm" variant="outline" className="gap-1" onClick={() => copyLink(link)}>
-                <Copy size={14} aria-hidden /> Copiar link
-              </Button>
+        <Button className="gap-1" onClick={() => abrir('link')}>
+          <Link2 size={16} aria-hidden /> Novo link
+        </Button>
+      </div>
+
+      {visao.isPending && <Skeleton className="h-24 rounded-2xl bg-card" />}
+      {visao.isError && (
+        <EmptyState
+          title="Não deu para carregar os convites"
+          action={
+            <Button variant="outline" onClick={() => visao.refetch()}>
+              Tentar novamente
+            </Button>
+          }
+        />
+      )}
+
+      {c && (
+        <ul aria-label="Resumo dos convites" className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {cards.map((k) => (
+            <li key={k.label} className="space-y-1 rounded-2xl border border-subtle bg-card p-3">
+              <p className="text-xs text-muted-foreground">{k.label}</p>
+              <p
+                className={cn(
+                  k.value === SMALL_SAMPLE
+                    ? 'text-xs text-muted-foreground'
+                    : 'font-display text-2xl font-bold',
+                )}
+              >
+                {k.value}
+              </p>
+              {k.extra}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {visao.data && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Filtrar convites" className="flex gap-1">
+              {(
+                [
+                  ['all', 'Todos', todos.length],
+                  ['links', 'Links', links.length],
+                  ['emails', 'E-mails', emails.length],
+                ] as const
+              ).map(([v, l, n]) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={aba === v}
+                  onClick={() => setAba(v)}
+                  className={cn(
+                    'flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold',
+                    aba === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                  )}
+                >
+                  {l} <span className="text-xs opacity-80">{n}</span>
+                </button>
+              ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              O link aparece só agora. Se perder, crie outro e revogue este na lista.
+              “Entraram” só aparece com 5 pessoas ou mais. A ativação sai só no total, para ninguém
+              ser reconhecido por um convite pequeno.
             </p>
           </div>
-        )}
-      </Secao>
 
-      <Secao id="codigo" titulo="Código de entrada (recepção)" icone={ScanLine}>
+          {lista.length === 0 ? (
+            <EmptyState title="Nenhum convite por aqui" />
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-subtle bg-card">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-subtle text-left text-xs text-muted-foreground">
+                    <th className="p-3 font-semibold">Convite</th>
+                    <th className="hidden p-3 font-semibold md:table-cell">Origem</th>
+                    <th className="hidden p-3 font-semibold lg:table-cell">Papel</th>
+                    <th className="hidden p-3 font-semibold md:table-cell">Usos</th>
+                    <th className="hidden p-3 font-semibold lg:table-cell">Entraram</th>
+                    <th className="p-3 font-semibold">Validade</th>
+                    <th className="p-3">
+                      <span className="sr-only">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-subtle">
+                  {lista.map((i) => {
+                    const ativo = i.status === 'active';
+                    const email = i.kind === 'email';
+                    return (
+                      <tr key={i.id} className={cn(!ativo && 'opacity-60')}>
+                        <td className="max-w-[9.5rem] p-3 sm:max-w-none">
+                          <span className="block truncate font-semibold">{inviteName(i)}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {inviteSub(i)}
+                          </span>
+                        </td>
+                        <td className="hidden p-3 md:table-cell">
+                          {email ? 'E-mail' : inviteOriginLabel(i.origin)}
+                        </td>
+                        <td className="hidden p-3 lg:table-cell">
+                          {teamRoleLabel(i.role).toLowerCase()}
+                        </td>
+                        <td className="hidden p-3 md:table-cell">{usesLabel(i)}</td>
+                        <td className="hidden p-3 lg:table-cell">
+                          {email ? (
+                            '—'
+                          ) : i.joined === null ? (
+                            <span className="text-xs text-muted-foreground">menos de 5</span>
+                          ) : (
+                            <b>{i.joined}</b>
+                          )}
+                        </td>
+                        <td className="p-3">{inviteValidityLabel(i)}</td>
+                        <td className="p-3">
+                          {ativo ? (
+                            <span className="flex flex-col items-end gap-1 md:flex-row md:justify-end">
+                              {i.url && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  onClick={() => copyText(i.url!)}
+                                >
+                                  <Copy size={14} aria-hidden /> Copiar
+                                </Button>
+                              )}
+                              {email && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  disabled={reenviar.isPending}
+                                  onClick={() => reenviar.mutate(i)}
+                                >
+                                  <Send size={14} aria-hidden /> Reenviar
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-danger"
+                                disabled={revogar.isPending}
+                                onClick={() => revogar.mutate(i.id)}
+                              >
+                                Revogar
+                              </Button>
+                            </span>
+                          ) : (
+                            <span className="block text-right text-xs text-muted-foreground">
+                              {inviteStatusLabel(i.status)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Convite com papel de equipe dá as permissões desse papel. Convite por e-mail vale uma
+            vez, por até 30 dias; link e QR podem ficar sem prazo.
+          </p>
+        </>
+      )}
+
+      {emLinha && (
+        <section
+          aria-label={emLinha.title}
+          className="flex flex-col rounded-2xl border border-subtle bg-card"
+        >
+          <div className="flex items-center gap-2 border-b border-subtle p-3">
+            <b className="flex-1 text-sm">{emLinha.title}</b>
+            <Button size="sm" variant="ghost" onClick={() => setEmLinha(null)}>
+              Fechar
+            </Button>
+          </div>
+          {emLinha.body}
+        </section>
+      )}
+
+      <section
+        aria-labelledby="codigo"
+        className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
+      >
+        <h2 id="codigo" className="flex items-center gap-2 text-sm font-semibold">
+          <ScanLine size={16} aria-hidden /> Código de entrada (recepção)
+        </h2>
         {g.joinPolicy === 'INVITE_ONLY' ? (
           <p className="text-sm text-muted-foreground">
             Esta comunidade entra só por convite: o código de entrada fica desligado. Mude a forma
@@ -264,16 +356,19 @@ export default function OrgInvitesPage() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              Um código curto para o cartaz ou o QR da recepção. Quem usa entra como membro e segue
-              a forma de entrada da comunidade
+              Um código curto para o cartaz da recepção. Quem usa entra como membro e segue a forma
+              de entrada da comunidade
               {g.joinPolicy === 'APPROVAL' ? ' (você aprova cada pedido)' : ''}. Vale 1 ano; revogue
-              na lista quando quiser trocar.
+              na lista quando quiser trocar. Para entrar sem aprovação, use um link com origem
+              “Recepção”.
             </p>
             <Button
               variant="outline"
+              className="gap-1"
               disabled={criarCodigo.isPending}
               onClick={() => criarCodigo.mutate()}
             >
+              <QrCode size={16} aria-hidden />
               {criarCodigo.isPending ? 'Gerando...' : 'Gerar código de entrada'}
             </Button>
             {entrada && (
@@ -290,157 +385,17 @@ export default function OrgInvitesPage() {
                 <p className="break-all font-mono text-xs" data-testid="entry-code-url">
                   {entrada.url}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                    onClick={() => copyLink(entrada.url)}
-                  >
-                    <Copy size={14} aria-hidden /> Copiar link do QR
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => copyText(entrada.url)}
+                >
+                  <Copy size={14} aria-hidden /> Copiar link do QR
+                </Button>
               </div>
             )}
           </>
-        )}
-      </Secao>
-
-      <Secao id="email" titulo="Convidar por e-mail" icone={Mail}>
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            convidarEmail.mutate();
-          }}
-        >
-          <div className="space-y-1">
-            <Label htmlFor="email-convite">E-mail</Label>
-            <Input
-              id="email-convite"
-              type="email"
-              autoComplete="off"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="papel-email">Entra como</Label>
-            <PapelSelect
-              id="papel-email"
-              value={papelEmail}
-              onChange={setPapelEmail}
-              papeis={papeis}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Só a conta com este e-mail aceita, uma vez. O e-mail some 30 dias depois do uso ou do
-            vencimento.
-          </p>
-          <Button type="submit" disabled={convidarEmail.isPending || !email.includes('@')}>
-            {convidarEmail.isPending ? 'Enviando...' : 'Enviar convite'}
-          </Button>
-        </form>
-      </Secao>
-
-      <Secao id="lote" titulo="Convidar em lote" icone={Upload}>
-        <div className="space-y-1">
-          <Label htmlFor="lote-emails">E-mails (um por linha, ou cole a coluna da planilha)</Label>
-          <Textarea
-            id="lote-emails"
-            rows={5}
-            value={lote}
-            onChange={(e) => {
-              setLote(e.target.value);
-              setResultado(null);
-            }}
-          />
-        </div>
-        <input
-          ref={arquivo}
-          type="file"
-          accept=".csv,text/csv,text/plain"
-          className="sr-only"
-          aria-label="Escolher arquivo CSV"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (f) setLote(await f.text());
-            e.target.value = '';
-          }}
-        />
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-1" onClick={() => arquivo.current?.click()}>
-            <Upload size={14} aria-hidden /> Subir .csv
-          </Button>
-          <Button
-            disabled={convidarLote.isPending || lidos.valid.length === 0}
-            onClick={() => convidarLote.mutate()}
-          >
-            {convidarLote.isPending
-              ? 'Enviando...'
-              : `Convidar ${lidos.valid.length} ${lidos.valid.length === 1 ? 'pessoa' : 'pessoas'}`}
-          </Button>
-        </div>
-        {lote.trim() && (
-          <p className="text-xs text-muted-foreground" aria-live="polite">
-            {parsedEmailsSummary(lidos)}
-          </p>
-        )}
-        <p className="text-xs text-muted-foreground">Em lote, todos entram como membro.</p>
-        {resultado && resultado.skipped.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold">Pulados</p>
-            <ul className="space-y-0.5 text-xs text-muted-foreground">
-              {resultado.skipped.map((s) => (
-                <li key={`${s.email}-${s.reason}`}>
-                  {s.email}: {batchSkipLabel(s.reason)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Secao>
-
-      <section aria-labelledby="abertos" className="space-y-2 lg:col-span-2">
-        <h2 id="abertos" className="text-sm font-semibold">
-          Convites que ainda valem
-        </h2>
-        {convites.isPending && <Skeleton className="h-24 rounded-2xl bg-card" />}
-        {convites.data && convites.data.length === 0 && (
-          <EmptyState title="Nenhum convite aberto" />
-        )}
-        {convites.data && convites.data.length > 0 && (
-          <ul className="divide-y divide-subtle rounded-2xl border border-subtle bg-card">
-            {convites.data.map((c) => (
-              <li key={c.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{inviteSummary(c)}</p>
-                  <p className="text-xs text-muted-foreground">{teamRoleLabel(c.role)}</p>
-                </div>
-                <div className="flex gap-2">
-                  {c.email && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={reenviar.isPending}
-                      onClick={() => reenviar.mutate(c.id)}
-                    >
-                      Reenviar
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-danger"
-                    disabled={revogar.isPending}
-                    onClick={() => revogar.mutate(c.id)}
-                  >
-                    Revogar
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
         )}
       </section>
     </div>

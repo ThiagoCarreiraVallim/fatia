@@ -644,7 +644,7 @@ export default function OrgOverviewPage() {
                 ? activationLabel(v.counts.pendingInvites)
                 : 'Nenhum convite esperando'
             }
-            href={panelHref(g.id, 'invites')}
+            href={panelHref(g.id, 'activation')}
             destaque={v.counts.pendingInvites > 0}
           />
         )}
@@ -659,7 +659,7 @@ export default function OrgOverviewPage() {
             icon={Clock}
             titulo="Entraram e ainda não registraram"
             texto={notLoggedYetLabel(ag.notLoggedYet)}
-            href={panelHref(g.id, 'invites')}
+            href={panelHref(g.id, 'activation')}
           />
         )}
       </div>

@@ -34,9 +34,11 @@ describe('menu do painel (#398)', () => {
     expect(pessoas.items.map((i) => i.label)).toEqual([
       'Membros',
       'Convites',
+      'Ativação pendente',
       'Assentos e faturas',
     ]);
-    expect(pessoas.items.map((i) => i.count)).toEqual([2, 7, null]);
+    // Os convites sem aceite contam em Ativação pendente (#401), como na Pn-04.
+    expect(pessoas.items.map((i) => i.count)).toEqual([2, null, 7, null]);
     expect(pessoas.count).toBe(9);
     const comunidade = nav.find((g) => g.key === 'community')!;
     expect(comunidade.items.map((i) => i.label)).toEqual([
@@ -66,6 +68,10 @@ describe('menu do painel (#398)', () => {
     expect(panelBreadcrumb('/org/g1')).toEqual({ group: 'Acompanhar', label: 'Visão geral' });
     expect(panelBreadcrumb('/org/g1/members/m1')).toEqual({ group: 'Pessoas', label: 'Membros' });
     expect(panelBreadcrumb('/org/g1/settings')).toEqual({ group: null, label: 'Configurações' });
+    expect(panelBreadcrumb('/org/g1/activation')).toEqual({
+      group: 'Pessoas',
+      label: 'Ativação pendente',
+    });
   });
 });
 

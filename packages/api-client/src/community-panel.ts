@@ -31,6 +31,7 @@ export type PanelSection =
   | 'overview'
   | 'members'
   | 'invites'
+  | 'activation'
   | 'content'
   | 'exercises'
   | 'challenges'
@@ -52,6 +53,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   overview: { section: 'overview', label: 'Visão geral', path: '' },
   members: { section: 'members', label: 'Membros', path: '/members' },
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
+  activation: { section: 'activation', label: 'Ativação pendente', path: '/activation' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
   challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
@@ -83,6 +85,7 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.overview,
       SECTIONS.members,
       SECTIONS.invites,
+      SECTIONS.activation,
       SECTIONS.content,
       SECTIONS.exercises,
       SECTIONS.challenges,
@@ -163,6 +166,8 @@ const SKIP_REASON: Record<BatchSkipReason, string> = {
   duplicate: 'repetido na lista',
   member: 'já faz parte',
   pending_invite: 'já tem convite aberto',
+  declined: 'recusou há menos de 30 dias',
+  limit: 'já recebeu 5 convites em 30 dias',
 };
 
 export function batchSkipLabel(reason: BatchSkipReason): string {
@@ -179,7 +184,7 @@ export function batchResultMessage(created: number, skipped: number): string {
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 /** "24 out", no fuso de Brasília (o de quem administra, quase sempre). */
-function dataCurta(iso: string): string {
+export function shortPanelDate(iso: string): string {
   const [, m, d] = new Date(new Date(iso).getTime() - 3 * 3_600_000)
     .toISOString()
     .slice(0, 10)
@@ -187,16 +192,20 @@ function dataCurta(iso: string): string {
   return `${Number(d)} ${MESES[Number(m) - 1]}`;
 }
 
-/** "Link · 3 de 10 usos · vence 24 out" ou "ana@x.com · vence 24 out". */
+/**
+ * "Link · 3 de 10 usos · vence 24 out", "ana@x.com · vence 24 out" ou
+ * "Recepção · 2 usos · sem prazo" (link sem prazo e com nome, #401).
+ */
 export function inviteSummary(invite: InviteView): string {
-  const quem = invite.email ?? (invite.code ? `Código ${invite.code}` : 'Link');
+  const quem = invite.email ?? (invite.code ? `Código ${invite.code}` : invite.label || 'Link');
   const usos =
     invite.email !== null
       ? null
       : invite.maxUses === null
         ? `${invite.uses} ${invite.uses === 1 ? 'uso' : 'usos'}`
         : `${invite.uses} de ${invite.maxUses} usos`;
-  return [quem, usos, `vence ${dataCurta(invite.expiresAt)}`].filter(Boolean).join(' · ');
+  const prazo = invite.expiresAt ? `vence ${shortPanelDate(invite.expiresAt)}` : 'sem prazo';
+  return [quem, usos, prazo].filter(Boolean).join(' · ');
 }
 
 const POOL_STATUS: Record<PoolStatus, string> = {

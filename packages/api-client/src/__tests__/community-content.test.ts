@@ -294,6 +294,7 @@ describe('regras do conteúdo', () => {
       'overview',
       'members',
       'invites',
+      'activation',
       'content',
       'exercises',
       'challenges',

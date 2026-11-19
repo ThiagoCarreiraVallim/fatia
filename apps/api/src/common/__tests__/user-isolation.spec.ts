@@ -90,6 +90,9 @@ import { ScoreboardService } from '../../social/scoreboard.service';
 import { ChallengeService } from '../../sharing/challenge.service';
 import { ChallengeCheckinService } from '../../sharing/challenge-checkin.service';
 import { PanelService } from '../../sharing/panel.service';
+import { InviteService } from '../../sharing/invite.service';
+import { MemberAdminService } from '../../sharing/member-admin.service';
+import { SeatPoolService } from '../../billing/seat-pool.service';
 import {
   announcementUnsubscribeToken,
   AnnouncementEmailService,
@@ -2417,15 +2420,20 @@ describe('isolamento entre usuários', () => {
       // Metadado de associação, nunca dado de saúde — e nunca o `userId` de
       // outra pessoa: tudo que sai daqui é referenciado por `membershipId`. A
       // equipe vê também o que cada um compartilha COM ELA e o assento (Fase 6);
-      // `statsOptIn` individual nunca sai.
+      // `statsOptIn` individual nunca sai. Por onde entrou, quem acompanha, quando
+      // saiu e o WhatsApp que a pessoa autorizou mostrar entram com a #401.
       expect(Object.keys(peloDono[0]).sort()).toEqual([
+        'accompaniedBy',
         'hasAiSeat',
         'joinedAt',
+        'joinedVia',
+        'leftAt',
         'membershipId',
         'name',
         'role',
         'scopesGrantedToMe',
         'status',
+        'whatsapp',
       ]);
       expect(Object.keys(peloAluno[0]).sort()).toEqual([
         'joinedAt',
@@ -5044,6 +5052,164 @@ describe('isolamento entre usuários', () => {
       await expect(
         mail.setSubscribed(announcementUnsubscribeToken(p.beaB, 'outro-segredo-0123456789'), false),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('membros, convites e ativação pendente (#401)', () => {
+    const config401 = {
+      get: (k: string) =>
+        k === 'INVITE_LINK_SECRET' ? 'segredo-iso-401-com-variedade-0123' : 'https://fatia.test/',
+    } as unknown as ConfigService;
+    const seats401 = new SeatPoolService(prisma, config401, null);
+    const invites401 = new InviteService(
+      prisma,
+      memberships,
+      { send: async () => true } as never,
+      config401,
+      silentNotifications,
+      seats401,
+    );
+    const admin401 = new MemberAdminService(prisma, seats401);
+    const p = { donoA: '', profA: '', anaA: '', donoB: '', beaB: '', grupoA: '', grupoB: '' };
+    const m = { profA: '', anaA: '', beaB: '' };
+    let conviteA = '';
+    let tokenA = '';
+
+    beforeAll(async () => {
+      const stamp = `iso401-${Date.now()}`;
+      const nomes = ['Dono A', 'Prof A', 'Ana A', 'Dono B', 'Bea B'];
+      const [donoA, profA, anaA, donoB, beaB] = await Promise.all(
+        nomes.map((name, i) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${i}`, email: `${stamp}-${i}@test.local`, name },
+          }),
+        ),
+      );
+      Object.assign(p, {
+        donoA: donoA!.id,
+        profA: profA!.id,
+        anaA: anaA!.id,
+        donoB: donoB!.id,
+        beaB: beaB!.id,
+      });
+      const a = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia A 401',
+          slug: `${stamp}-a`,
+          ownerId: p.donoA,
+          memberships: {
+            create: [
+              { userId: p.donoA, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: p.profA, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+              { userId: p.anaA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      const b = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia B 401',
+          slug: `${stamp}-b`,
+          ownerId: p.donoB,
+          memberships: {
+            create: [
+              { userId: p.donoB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: p.beaB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      p.grupoA = a.id;
+      p.grupoB = b.id;
+      m.profA = a.memberships.find((x) => x.userId === p.profA)!.id;
+      m.anaA = a.memberships.find((x) => x.userId === p.anaA)!.id;
+      m.beaB = b.memberships.find((x) => x.userId === p.beaB)!.id;
+      const c = await invites401.create(p.donoA, p.grupoA, {
+        role: GroupRole.MEMBER,
+        email: `${stamp}-convidada@test.local`,
+      });
+      conviteA = c.invite.id;
+      tokenA = new URL(c.url).pathname.replace(/^\/c\//, '');
+      await prisma.groupInvite.update({
+        where: { id: conviteA },
+        data: { createdAt: new Date(Date.now() - 5 * 86_400_000) },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [p.grupoA, p.grupoB] } } });
+      await prisma.user.deleteMany({
+        where: { id: { in: [p.donoA, p.profA, p.anaA, p.donoB, p.beaB] } },
+      });
+    });
+
+    it('convites e ativação de A não abrem para o dono de B nem para o membro de A', async () => {
+      await expect(invites401.overview(p.donoB, p.grupoA)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(invites401.pending(p.donoB, p.grupoA, {})).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(invites401.pending(p.anaA, p.grupoA, {})).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      const deB = await invites401.pending(p.donoB, p.grupoB, {});
+      expect(JSON.stringify(deB)).not.toContain(conviteA);
+    });
+
+    it('id de convite de A pela URL de B: reenviar, renovar e gerar link não passam', async () => {
+      const r = await invites401.resendMany(p.donoB, p.grupoB, [conviteA]);
+      expect(r.sent).toEqual([]);
+      expect(r.skipped).toEqual([{ id: conviteA, reason: 'not_found' }]);
+      await expect(invites401.renew(p.donoB, p.grupoB, conviteA)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(invites401.freshLink(p.donoB, p.grupoB, conviteA)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      const intacto = await prisma.groupInvite.findUniqueOrThrow({ where: { id: conviteA } });
+      expect(intacto.sendCount).toBe(1);
+    });
+
+    it('só a conta do e-mail recusa o convite nominal', async () => {
+      await expect(invites401.decline(p.beaB, tokenA)).rejects.toBeInstanceOf(NotFoundException);
+      const c = await prisma.groupInvite.findUniqueOrThrow({ where: { id: conviteA } });
+      expect(c.declinedAt).toBeNull();
+    });
+
+    it('acompanhar e ações em massa: membership de B pela URL de A não passa', async () => {
+      await expect(
+        admin401.setAccompaniedBy(p.donoA, p.grupoA, m.beaB, m.profA),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        admin401.setAccompaniedBy(p.donoB, p.grupoB, m.beaB, m.profA),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        admin401.bulk(p.donoB, p.grupoB, {
+          action: 'accompany',
+          membershipIds: [m.anaA],
+          accompaniedByMembershipId: null,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        admin401.bulk(p.profA, p.grupoA, { action: 'unseat', membershipIds: [m.anaA] }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      const bea = await prisma.groupMembership.findUniqueOrThrow({ where: { id: m.beaB } });
+      expect(bea.accompaniedById).toBeNull();
+    });
+
+    it('a lista de membros de A, com quem saiu, não abre para B', async () => {
+      await expect(
+        memberships.listMembers(p.donoB, p.grupoA, { includeLeft: true }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // O membro comum não vê quem saiu, nem a origem dos outros.
+      const vista = await memberships.listMembers(p.anaA, p.grupoA, { includeLeft: true });
+      expect(vista.every((x) => x.status === 'ACTIVE' || x.status === 'INVITED')).toBe(true);
+      expect(vista.every((x) => x.joinedVia === undefined)).toBe(true);
     });
   });
 

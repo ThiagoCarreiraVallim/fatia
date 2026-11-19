@@ -10,6 +10,7 @@ import { PrismaService } from '../common/prisma.service';
 import { MIN_CELL } from '../insights/aggregation.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from './content-roles';
+import { activationPendingWhere } from './invite-state';
 import { can, type GroupAction } from './permissions';
 
 const DIA_MS = 86_400_000;
@@ -271,7 +272,7 @@ export class PanelService {
         }),
       ),
       se('invite.create', () =>
-        this.prisma.groupInvite.count({ where: pendingInvite(groupId, now) }),
+        this.prisma.groupInvite.count({ where: activationPendingWhere(groupId, role, now) }),
       ),
       se('content.moderate', () =>
         this.prisma.groupPostReport.count({
@@ -526,18 +527,6 @@ const OFFER_STATUS: Record<string, string> = {
   DECLINED: 'Recusado',
   SUPERSEDED: 'Substituído',
 };
-
-/** Convite por e-mail ainda sem aceite (#398, "Ativação pendente"). */
-export function pendingInvite(groupId: string, now: Date) {
-  return {
-    groupId,
-    email: { not: null },
-    uses: 0,
-    revokedAt: null,
-    code: null,
-    expiresAt: { gt: now },
-  };
-}
 
 /** A mesma fila de `ChallengeCheckinService.queue`, para contar. */
 function reviewWhere(groupId: string, userId: string) {

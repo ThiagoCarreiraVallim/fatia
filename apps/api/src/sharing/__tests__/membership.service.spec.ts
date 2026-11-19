@@ -14,7 +14,9 @@ type MockPrisma = {
     create: jest.Mock;
     update: jest.Mock;
     upsert: jest.Mock;
+    updateMany: jest.Mock;
   };
+  groupInvite: { updateMany: jest.Mock };
   professionalLink: { findMany: jest.Mock };
   groupSeatPool: { findMany: jest.Mock };
   groupSeatAssignment: { updateMany: jest.Mock; findMany: jest.Mock };
@@ -37,7 +39,10 @@ const makePrisma = (): MockPrisma => ({
     create: jest.fn(),
     update: jest.fn(),
     upsert: jest.fn(),
+    // Quem sai deixa de acompanhar (#401).
+    updateMany: jest.fn().mockReturnValue({ count: 0 }),
   },
+  groupInvite: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
   professionalLink: { findMany: jest.fn() },
   groupSeatPool: { findMany: jest.fn().mockResolvedValue([]) },
   groupSeatAssignment: {
@@ -327,7 +332,9 @@ describe('MembershipService', () => {
       // Duas escritas separadas abririam uma janela em que a associação já
       // acabou e o vínculo ainda autoriza leitura de dado de saúde.
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(6);
+      // Associação, vínculos, assento, comunicados agendados, (#401) quem ela
+      // acompanhava, em membros e em convites, e (#402) notas e planos pendentes.
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(8);
       expect(resultado.revokedLinks).toBe(2);
       // As anotações da equipe sobre ela e os planos esperando aceite (#402).
       expect(prisma.memberNote.deleteMany).toHaveBeenCalledWith({
