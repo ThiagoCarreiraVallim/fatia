@@ -11,6 +11,7 @@ import {
   checkinLine,
   comparisonFacts,
   FEEDBACK_BODY_MAX,
+  feedbackBodyLength,
   feelingOf,
   formatBestSet,
   formatTrainingVolume,
@@ -85,18 +86,19 @@ export default function ReviewSessionPage() {
   const view = q.data;
   useTopBarTitle(view?.shared ? (view.summary.planName ?? 'Treino livre') : 'Sessão');
 
-  const [reaction, setReaction] = useState<SessionReaction | null>(null);
+  // `undefined`: não mexeu (fica a reação que já foi); `null`: tirou.
+  const [reaction, setReaction] = useState<SessionReaction | null | undefined>(undefined);
   const [body, setBody] = useState('');
   const send = useMutation({
     mutationFn: () =>
       reviewApi.sendFeedback(g.id, sessionId, {
-        ...(reaction ? { reaction } : {}),
+        ...(reaction !== undefined ? { reaction } : {}),
         ...(body.trim() ? { body: body.trim() } : {}),
       }),
     onSuccess: () => {
       if (view) toast(`Comentário enviado à ${firstNameOf(view.name)}`);
       setBody('');
-      setReaction(null);
+      setReaction(undefined);
       void qc.invalidateQueries({ queryKey: key });
       void qc.invalidateQueries({ queryKey: [...orgKeys.all(g.id), 'review'] });
     },
@@ -136,7 +138,7 @@ export default function ReviewSessionPage() {
           <Lock aria-hidden className="mx-auto h-5 w-5 text-muted-foreground" />
           <p className="mt-3 text-sm font-bold">{first} não compartilha Treino</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-            Só ela pode ligar em Comunidade → Sobre. A equipe vê só que a sessão aconteceu, sem
+            Só a pessoa pode ligar em Comunidade → Sobre. A equipe vê só que a sessão aconteceu, sem
             detalhes.
           </p>
         </div>
@@ -152,6 +154,13 @@ export default function ReviewSessionPage() {
   const note = view.checkin?.note ?? s.notes;
   const mine = view.feedback.find((f) => f.isMine) ?? null;
   const others = view.feedback.filter((f) => !f.isMine);
+  const current = reaction === undefined ? (mine?.reaction ?? null) : reaction;
+  // Conta como a API e o banco: por code point (um emoji é 1).
+  const length = feedbackBodyLength(body);
+  const tooLong = length > FEEDBACK_BODY_MAX;
+  const changed = reaction !== undefined || body.trim() !== '';
+  // Tirar a reação sem texto nenhum apagaria tudo: a API recusa, o botão também.
+  const nothingLeft = current === null && !body.trim() && !mine?.body;
   const zap = view.whatsapp
     ? whatsappHref(view.whatsapp, `Oi, ${first}! Vi seu treino no Fatia. `)
     : null;
@@ -271,14 +280,15 @@ export default function ReviewSessionPage() {
         {mine && <FeedbackLine f={mine} first={first} />}
         <div className="flex gap-2" role="group" aria-label="Reação">
           {SESSION_REACTIONS.map((r) => {
-            const on = (reaction ?? mine?.reaction) === r.key;
+            const on = current === r.key;
             return (
               <button
                 key={r.key}
                 type="button"
                 aria-pressed={on}
                 aria-label={`${r.emoji} ${r.label}`}
-                onClick={() => setReaction(on && reaction ? null : r.key)}
+                // Tocar na reação que já está tira a reação.
+                onClick={() => setReaction(on ? null : r.key)}
                 className={cn(
                   'flex h-10 w-12 items-center justify-center rounded-xl text-xl',
                   on
@@ -293,12 +303,19 @@ export default function ReviewSessionPage() {
         </div>
         <Textarea
           aria-label={`Comentário para a ${first}`}
-          placeholder={`Escreva para a ${first}. A resposta dela vem pelo WhatsApp.`}
-          maxLength={FEEDBACK_BODY_MAX}
+          placeholder={`Escreva para a ${first}. A resposta vem pelo WhatsApp.`}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={3}
         />
+        <p
+          className={cn(
+            'text-right text-xs',
+            tooLong ? 'font-semibold text-danger' : 'text-muted-foreground',
+          )}
+        >
+          {length}/{FEEDBACK_BODY_MAX}
+        </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             href={panelHref(g.id, 'review')}
@@ -308,7 +325,7 @@ export default function ReviewSessionPage() {
             <span className="block">depois de comentar, sai da fila</span>
           </Link>
           <Button
-            disabled={send.isPending || (!reaction && !body.trim())}
+            disabled={send.isPending || tooLong || !changed || nothingLeft}
             onClick={() => send.mutate()}
           >
             <Send aria-hidden className="h-4 w-4" /> Enviar ao aluno
