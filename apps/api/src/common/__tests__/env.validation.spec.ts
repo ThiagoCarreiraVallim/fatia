@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { AppEnvSchema } from '../env.validation';
 
 /**
@@ -173,5 +174,28 @@ describe('AppEnvSchema — segredo do descadastro (#398)', () => {
     expect(() =>
       AppEnvSchema.parse({ ...BASE, EMAIL_UNSUBSCRIBE_SECRET: 'segredo-de-teste-1234567890' }),
     ).not.toThrow();
+  });
+});
+
+describe('AppEnvSchema — segredo do link de convite (#401)', () => {
+  const PROD = { ...BASE, NODE_ENV: 'production' };
+
+  it('vazio sobe: o link só aparece na criação, como antes', () => {
+    expect(AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: '' }).INVITE_LINK_SECRET).toBe('');
+  });
+
+  it('em produção, o placeholder ou um segredo curto derruba o boot', () => {
+    for (const segredo of ['CHANGE_ME_openssl_rand_hex_32', 'curto-demais']) {
+      expect(() => AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: segredo })).toThrow(
+        /INVITE_LINK_SECRET/,
+      );
+    }
+  });
+
+  it('em produção, 32 bytes aleatórios sobem', () => {
+    const segredo = randomBytes(32).toString('hex');
+    expect(AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: segredo }).INVITE_LINK_SECRET).toBe(
+      segredo,
+    );
   });
 });
