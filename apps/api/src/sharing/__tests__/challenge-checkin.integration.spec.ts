@@ -209,13 +209,13 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
       const pontos = await challenges.create(a.dono, a.groupId, {
         ...base,
         kind: 'POINTS',
-        pointsTable: { workout: 3, water: 1, steps: 1, protein: 1 },
+        pointsTable: { workout: 3, water: 1, protein: 1 },
       });
       expect(pontos).toMatchObject({
         kind: 'POINTS',
         needsPhotoConsent: true,
         rules: {
-          pointsTable: { workout: 3, water: 1, steps: 1, protein: 1 },
+          pointsTable: { workout: 3, water: 1, protein: 1 },
           maxPointsPerDay: 6,
           checkin: { minWorkoutMinutes: 20, windowHours: 2 },
         },

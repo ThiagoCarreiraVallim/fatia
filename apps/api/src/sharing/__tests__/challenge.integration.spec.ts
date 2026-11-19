@@ -137,7 +137,7 @@ describe('desafios da comunidade (integração)', () => {
 
     it('recusa começo no passado, fim antes do começo e mais de 90 dias', async () => {
       const a = await comunidade();
-      const base = { title: 'Passos', kind: 'STEPS' as const };
+      const base = { title: 'Água', kind: 'WATER' as const };
       for (const datas of [
         { startDate: addDaysIso(hoje(), -1), endDate: hoje() },
         { startDate: addDaysIso(hoje(), 2), endDate: addDaysIso(hoje(), 1) },
@@ -198,6 +198,81 @@ describe('desafios da comunidade (integração)', () => {
       await expect(challenges.remove(a.dono, a.groupId, marcado.id)).resolves.toEqual({
         deleted: true,
       });
+    });
+  });
+
+  describe('passos fechados até a sync de saúde (#395)', () => {
+    const datas = () => ({ startDate: addDaysIso(hoje(), 1), endDate: addDaysIso(hoje(), 7) });
+
+    it('não cria desafio de passos nem item de passos nos pontos, com 400 claro', async () => {
+      const a = await comunidade();
+      for (const ruim of [
+        { kind: 'STEPS' as const },
+        { kind: 'STEPS' as const, stepsGoal: 8000, allowedStepSources: ['GARMIN' as const] },
+        { kind: 'POINTS' as const, pointsTable: { workout: 2, steps: 1 } },
+      ]) {
+        const erro = await challenges
+          .create(a.dono, a.groupId, { title: 'Passos', ...datas(), ...ruim })
+          .catch((e: unknown) => e);
+        expect(erro).toBeInstanceOf(BadRequestException);
+        expect((erro as BadRequestException).message).toMatch(/sincroniza/i);
+      }
+      // Passos com 0 ponto não é item de passos: a tabela segue valendo.
+      await expect(
+        challenges.create(a.dono, a.groupId, {
+          title: 'Misto',
+          ...datas(),
+          kind: 'POINTS',
+          pointsTable: { workout: 2, steps: 0 },
+        }),
+      ).resolves.toMatchObject({ kind: 'POINTS', rules: { stepsGoal: null } });
+      expect(
+        await prisma.groupChallenge.count({ where: { groupId: a.groupId, title: 'Passos' } }),
+      ).toBe(0);
+    });
+
+    it('não vira passos ao editar; o desafio de passos que já existe aparece e se edita', async () => {
+      const a = await comunidade();
+      const agua = await challenges.create(a.dono, a.groupId, {
+        title: 'Água',
+        kind: 'WATER',
+        ...datas(),
+      });
+      for (const ruim of [
+        { kind: 'STEPS' as const },
+        { kind: 'POINTS' as const, pointsTable: { water: 1, steps: 1 } },
+      ]) {
+        await expect(
+          challenges.update(a.dono, a.groupId, agua.id, { title: 'Água', ...datas(), ...ruim }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+
+      // Um de passos de antes do bloqueio, marcado para amanhã.
+      const antigo = await challenges.create(a.dono, a.groupId, {
+        title: 'Passos',
+        kind: 'WATER',
+        ...datas(),
+      });
+      await prisma.groupChallenge.update({
+        where: { id: antigo.id },
+        data: {
+          kind: 'STEPS',
+          metric: 'STEPS',
+          waterGoalMl: null,
+          dailyCap: null,
+          stepsGoal: 8000,
+        },
+      });
+      const lista = await challenges.list(a.membro, a.groupId);
+      expect(lista.challenges.map((c) => c.kind)).toContain('STEPS');
+      await expect(
+        challenges.update(a.dono, a.groupId, antigo.id, {
+          title: 'Passos da semana',
+          kind: 'STEPS',
+          stepsGoal: 9000,
+          ...datas(),
+        }),
+      ).resolves.toMatchObject({ kind: 'STEPS', title: 'Passos da semana' });
     });
   });
 
