@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isKnownRoute, routeInfo } from '../navigation';
 import { notificationTarget } from '../notifications';
 import {
+  reviewLine,
   feedbackBodyLength,
   FEEDBACK_BODY_MAX,
   riskAtRiskHref,
@@ -32,5 +33,28 @@ describe('para revisar: correções da revisão (#399)', () => {
     expect(riskDaysOptions(33)).toContain(33);
     const com33 = riskDaysOptions(33);
     expect([...com33].sort((a, b) => a - b)).toEqual(com33);
+  });
+
+  it('passada visual: a rota do Em risco tem o próprio título', () => {
+    expect(routeInfo('/org/g1/review/at-risk').title).toBe('Em risco');
+  });
+
+  it('passada visual: treino sem série não diz "0 séries"', () => {
+    const base = {
+      kind: 'WORKOUT' as const,
+      refId: 's1',
+      membershipId: 'm1',
+      name: 'Diego Lima',
+      at: '2026-11-18T21:54:00.000Z',
+      title: null,
+      durationMinutes: 45,
+      answer: null,
+      shares: [],
+      whatsapp: null,
+      seenAt: null,
+      myFeedback: false,
+    };
+    expect(reviewLine({ ...base, sets: 0 })).toBe('Treino livre · 45 min');
+    expect(reviewLine({ ...base, sets: 1 })).toBe('Treino livre · 45 min · 1 série');
   });
 });

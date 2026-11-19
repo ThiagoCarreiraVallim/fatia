@@ -35,6 +35,7 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 import { reviewApi } from '@fatia/api-client';
+import { TopBarProvider, useTopBarCurrentTitle } from '@/components/layout/app-top-bar';
 import AtRiskPage from '../page';
 
 beforeEach(() => {
@@ -57,5 +58,18 @@ describe('Em risco por caminho próprio (#399, F6)', () => {
       'true',
     );
     expect(await screen.findByText('Ninguém em risco agora.')).toBeInTheDocument();
+  });
+
+  it('a migalha diz "Em risco", não "Detalhe" (passada visual)', async () => {
+    function Titulo() {
+      return <p data-testid="titulo">{useTopBarCurrentTitle()}</p>;
+    }
+    renderWithClient(
+      <TopBarProvider>
+        <Titulo />
+        <AtRiskPage />
+      </TopBarProvider>,
+    );
+    expect(await screen.findByTestId('titulo')).toHaveTextContent('Em risco');
   });
 });
