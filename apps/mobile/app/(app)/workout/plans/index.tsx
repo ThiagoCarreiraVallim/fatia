@@ -3,12 +3,23 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { ChevronRight, Layers, Play, Plus, Trash2, Users } from 'lucide-react-native';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Layers,
+  Play,
+  Plus,
+  Trash2,
+  Users,
+} from 'lucide-react-native';
 import {
   circuitBadge,
   circuitExerciseChips,
   circuitPlanSummary,
+  moveWithin,
   planExerciseChips,
+  planOrderApi,
   planSummaryLine,
   workoutApi,
   type TrainingBlock,
@@ -67,6 +78,29 @@ export default function PlansScreen() {
     },
   });
 
+  // A ordem é da pessoa (#402): o primeiro é o treino de hoje. A equipe dá a
+  // ordem inicial; depois de reordenar aqui, a lista não muda mais pela ficha.
+  const [ordering, setOrdering] = useState(false);
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => planOrderApi.set(ids),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['workout', 'plans'] }),
+  });
+  const move = (id: string, delta: -1 | 1) => {
+    if (!plans.data || !shown) return;
+    const all = plans.data.map((p) => p.id);
+    const next = moveWithin(
+      all,
+      shown.map((p) => p.id),
+      id,
+      delta,
+    );
+    if (next === all) return;
+    qc.setQueryData<WorkoutPlan[]>(['workout', 'plans'], (old) =>
+      old ? next.flatMap((pid) => old.filter((p) => p.id === pid)) : old,
+    );
+    reorder.mutate(next);
+  };
+
   const activeBlock = block.data ?? null;
   const shown = plans.data?.filter((p) => (p.kind === 'CIRCUIT') === circuitsTab);
   const starting = start.isPending || startCircuit.isPending;
@@ -99,6 +133,7 @@ export default function PlansScreen() {
           onChange={(next) => {
             setTab(next);
             setAskId(null);
+            setOrdering(false);
           }}
           options={[
             { value: 'planos', label: 'Planos' },
@@ -136,31 +171,92 @@ export default function PlansScreen() {
           </Text>
         ) : null}
 
-        {shown?.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            circuit={circuitsTab}
-            starting={starting}
-            asking={askId === plan.id}
-            removing={remove.isPending}
-            removeFailed={remove.isError && askId === plan.id}
-            onOpen={() =>
-              router.push(
-                (circuitsTab
-                  ? `/workout/circuits/${plan.id}`
-                  : `/workout/plans/${plan.id}`) as Href,
-              )
-            }
-            onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
-            onAsk={() => {
-              remove.reset();
-              setAskId(plan.id);
-            }}
-            onCancel={() => setAskId(null)}
-            onDelete={() => remove.mutate(plan.id)}
-          />
-        ))}
+        {shown && shown.length > 1 ? (
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs text-faint">
+              {ordering ? 'O primeiro é o treino de hoje.' : `${shown.length} na ordem do app`}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setOrdering((v) => !v)}
+              className="h-11 justify-center rounded-[12px] px-3 active:opacity-80"
+            >
+              <Text className="font-sans-bold text-sm text-primary-text">
+                {ordering ? 'Pronto' : 'Ordenar'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {reorder.isError ? (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            Não deu para salvar a ordem.
+          </Text>
+        ) : null}
+
+        {ordering && shown
+          ? shown.map((plan, i) => (
+              <View
+                key={plan.id}
+                className="flex-row items-center gap-2 rounded-card bg-card px-4 py-2"
+              >
+                <Text className="w-5 text-xs text-faint">{String(i + 1)}</Text>
+                <Text
+                  className="min-w-0 flex-1 font-sans-bold text-sm text-foreground"
+                  numberOfLines={1}
+                >
+                  {plan.name}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Subir ${plan.name}`}
+                  disabled={i === 0}
+                  onPress={() => move(plan.id, -1)}
+                  className={cn('h-11 w-11 items-center justify-center', i === 0 && 'opacity-30')}
+                >
+                  <ArrowUp size={18} color={colors.foreground} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Descer ${plan.name}`}
+                  disabled={i === shown.length - 1}
+                  onPress={() => move(plan.id, 1)}
+                  className={cn(
+                    'h-11 w-11 items-center justify-center',
+                    i === shown.length - 1 && 'opacity-30',
+                  )}
+                >
+                  <ArrowDown size={18} color={colors.foreground} />
+                </Pressable>
+              </View>
+            ))
+          : null}
+
+        {!ordering &&
+          shown?.map((plan) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              circuit={circuitsTab}
+              starting={starting}
+              asking={askId === plan.id}
+              removing={remove.isPending}
+              removeFailed={remove.isError && askId === plan.id}
+              onOpen={() =>
+                router.push(
+                  (circuitsTab
+                    ? `/workout/circuits/${plan.id}`
+                    : `/workout/plans/${plan.id}`) as Href,
+                )
+              }
+              onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
+              onAsk={() => {
+                remove.reset();
+                setAskId(plan.id);
+              }}
+              onCancel={() => setAskId(null)}
+              onDelete={() => remove.mutate(plan.id)}
+            />
+          ))}
 
         {!circuitsTab ? (
           <>

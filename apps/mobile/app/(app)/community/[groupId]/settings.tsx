@@ -13,9 +13,11 @@ import {
   groupsApi,
   LEAVE_COPY,
   lockedScopes,
+  myNotesApi,
   myRoleBadge,
   panelHref,
   PRO_PAID_NOTE,
+  relativeStamp,
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
   SHARE_SCOPES,
@@ -279,6 +281,32 @@ function LinkRow({
  * pago pela comunidade, os benefícios, o que eu compartilho (grava na hora),
  * quem da equipe vê, quem olhou meus dados e sair.
  */
+/**
+ * Anotações da equipe sobre você (#402). A equipe escreve na ficha; aqui é só
+ * leitura. Somem quando você sai da comunidade e vão junto na exportação.
+ */
+function TeamNotesSection({ groupId, now }: { groupId: string; now: Date }) {
+  const notes = useQuery({
+    queryKey: ['community', 'my-notes', groupId],
+    queryFn: () => myNotesApi.list(groupId),
+  });
+  if (!notes.data || notes.data.length === 0) return null;
+  return (
+    <View className="gap-2 rounded-card bg-card px-[18px] py-4">
+      <Eyebrow>Anotações da equipe</Eyebrow>
+      {notes.data.map((n) => (
+        <View key={n.id} className="gap-0.5">
+          <Text className="text-sm text-foreground">{n.text}</Text>
+          <Text className="text-xs text-muted-foreground">
+            {`${n.authorName ?? 'Alguém que saiu da equipe'} · ${relativeStamp(new Date(n.createdAt), now, DEVICE_TZ)}`}
+          </Text>
+        </View>
+      ))}
+      <Text className="text-xs text-faint">Só a equipe escreve. Somem se você sair.</Text>
+    </View>
+  );
+}
+
 export default function CommunitySettingsScreen() {
   const confirm = useConfirm();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
@@ -421,6 +449,7 @@ export default function CommunitySettingsScreen() {
 
         {ativo ? <SharingSection g={g} /> : null}
         {ativo ? <TeamSection groupId={g.id} /> : null}
+        {ativo ? <TeamNotesSection groupId={g.id} now={now} /> : null}
 
         {ativo ? (
           <View className="gap-2 rounded-card bg-surface-3 px-[18px] py-4">
