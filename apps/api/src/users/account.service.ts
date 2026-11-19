@@ -91,6 +91,8 @@ export class AccountService {
         quietTo: true,
         // A busca na web do chat (#384): ligada ou não. Os aceites vão em `aiConsents`.
         webSearchEnabled: true,
+        // Descadastro do e-mail de comunicado pelo link (#398).
+        announcementEmailOptOutAt: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -402,6 +404,7 @@ export class AccountService {
           consentScopes: true,
           consentAt: true,
           statsOptIn: true,
+          joinVia: true,
           displayName: true,
           seatAssignments: { select: { assignedAt: true, revokedAt: true } },
           // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação

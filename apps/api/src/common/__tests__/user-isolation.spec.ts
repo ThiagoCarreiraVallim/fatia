@@ -87,6 +87,11 @@ import { UsersController } from '../../users/users.controller';
 import { ScoreboardService } from '../../social/scoreboard.service';
 import { ChallengeService } from '../../sharing/challenge.service';
 import { ChallengeCheckinService } from '../../sharing/challenge-checkin.service';
+import { PanelService } from '../../sharing/panel.service';
+import {
+  announcementUnsubscribeToken,
+  AnnouncementEmailService,
+} from '../../notifications/announcement-email.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -4907,6 +4912,136 @@ describe('isolamento entre usuários', () => {
       expect(exportado.mealTemplates).toEqual([
         expect.objectContaining({ fromTemplateId: c.nutritionId }),
       ]);
+    });
+  });
+
+  describe('painel base: visão geral, busca ⌘K e descadastro (#398)', () => {
+    const panel = new PanelService(prisma);
+    const p = {
+      donoA: '',
+      profA: '',
+      anaA: '',
+      saiuA: '',
+      donoB: '',
+      beaB: '',
+      grupoA: '',
+      grupoB: '',
+    };
+
+    beforeAll(async () => {
+      const stamp = `iso398-${Date.now()}`;
+      const nomes = ['Dono A', 'Prof A', 'Ana Alves', 'Ana Saiu', 'Dono B', 'Ana Bernardes'];
+      const [donoA, profA, anaA, saiuA, donoB, beaB] = await Promise.all(
+        nomes.map((name, i) =>
+          prisma.user.create({
+            data: {
+              logtoSub: `${stamp}-${i}`,
+              email: `${stamp}-${i}@test.local`,
+              name,
+              timezone: TZ,
+            },
+          }),
+        ),
+      );
+      Object.assign(p, {
+        donoA: donoA!.id,
+        profA: profA!.id,
+        anaA: anaA!.id,
+        saiuA: saiuA!.id,
+        donoB: donoB!.id,
+        beaB: beaB!.id,
+      });
+      const a = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia A 398',
+          slug: `${stamp}-a`,
+          ownerId: p.donoA,
+          memberships: {
+            create: [
+              { userId: p.donoA, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: p.profA, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+              { userId: p.anaA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: p.saiuA, role: GroupRole.MEMBER, status: MembershipStatus.LEFT },
+            ],
+          },
+        },
+      });
+      const b = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia B 398',
+          slug: `${stamp}-b`,
+          ownerId: p.donoB,
+          memberships: {
+            create: [
+              { userId: p.donoB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: p.beaB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+      });
+      p.grupoA = a.id;
+      p.grupoB = b.id;
+      await prisma.groupPlanTemplate.create({
+        data: {
+          groupId: b.id,
+          kind: 'WORKOUT',
+          title: 'Ana Plano B',
+          snapshot: {},
+          snapshotVersion: 1,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [p.grupoA, p.grupoB] } } });
+      await prisma.user.deleteMany({
+        where: { id: { in: [p.donoA, p.profA, p.anaA, p.saiuA, p.donoB, p.beaB] } },
+      });
+    });
+
+    it('a busca devolve só gente e planos da comunidade da URL, e só para quem tem papel nela', async () => {
+      const r = await panel.search(p.donoA, p.grupoA, 'Ana');
+      expect(r.members.map((m) => m.name)).toEqual(['Ana Alves']);
+      expect(r.plans).toEqual([]);
+      // O dono de B não busca dentro de A (nem descobre que A existe).
+      await expect(panel.search(p.donoB, p.grupoA, 'Ana')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      // Membro de A não busca em A.
+      await expect(panel.search(p.anaA, p.grupoA, 'Ana')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      // Quem saiu não aparece.
+      expect(JSON.stringify(r)).not.toContain('Ana Saiu');
+    });
+
+    it('visão geral e contadores de A não abrem para B, nem para o membro', async () => {
+      await expect(panel.overview(p.donoB, p.grupoA, 30)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(panel.counts(p.donoB, p.grupoA)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(panel.overview(p.anaA, p.grupoA, 30)).rejects.toBeInstanceOf(ForbiddenException);
+      const prof = await panel.overview(p.profA, p.grupoA, 30);
+      expect(prof.aggregates).toBeNull();
+      expect(prof.counts.pendingRequests).toBeNull();
+    });
+
+    it('o link de descadastro só mexe na pessoa que ele nomeia', async () => {
+      const segredo = 'segredo-iso-398-0123456789abcdef';
+      const mail = new AnnouncementEmailService(
+        prisma,
+        { enabled: true, send: async () => true } as never,
+        { get: (k: string) => (k === 'EMAIL_UNSUBSCRIBE_SECRET' ? segredo : undefined) } as never,
+      );
+      await mail.setSubscribed(announcementUnsubscribeToken(p.anaA, segredo), false);
+      const [ana, bea] = await Promise.all(
+        [p.anaA, p.beaB].map((id) => prisma.user.findUniqueOrThrow({ where: { id } })),
+      );
+      expect(ana!.announcementEmailOptOutAt).not.toBeNull();
+      expect(bea!.announcementEmailOptOutAt).toBeNull();
+      await expect(
+        mail.setSubscribed(announcementUnsubscribeToken(p.beaB, 'outro-segredo-0123456789'), false),
+      ).rejects.toThrow();
     });
   });
 
