@@ -112,7 +112,11 @@ describe('painel › visão geral (Pn-01, #398)', () => {
     expect(screen.getByText('6 entraram · 4 por convite, 2 pela página')).toBeInTheDocument();
     expect(screen.getByText('5 pessoas · só o número, sem nomes')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Atividade dos membros: 76 treinos/ })).toBeVisible();
-    expect(screen.getByText('Dias com menos de 5 pessoas ficam em branco.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Dias com menos de 5 pessoas de cada lado (treinou e não treinou) ficam em branco.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Lia Prado pediu para entrar' })).toHaveAttribute(
       'href',
       '/org/g1/members?filtro=pending',

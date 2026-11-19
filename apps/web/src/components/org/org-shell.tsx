@@ -204,7 +204,13 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
 
   return (
     <div className="md:flex md:h-dvh md:overflow-hidden md:bg-sunken">
-      <Sidebar g={g} prefs={prefs} onPrefs={muda} counts={counts.data} active={active} />
+      <Sidebar
+        g={g}
+        prefs={painel.content ? { ...prefs, collapsed: true } : prefs}
+        onPrefs={muda}
+        counts={counts.data}
+        active={active}
+      />
 
       <MobileNav g={g} counts={counts.data} active={active} onSearch={() => setBusca(true)} />
 
@@ -213,9 +219,14 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
           <header className="hidden h-[52px] shrink-0 items-center gap-2.5 border-b border-border pl-3 pr-4 md:flex">
             <button
               type="button"
-              onClick={() => muda({ ...prefs, collapsed: !prefs.collapsed })}
-              aria-label={prefs.collapsed ? 'Abrir menu' : 'Recolher menu'}
-              aria-pressed={prefs.collapsed}
+              onClick={() => {
+                // Com o painel lateral aberto o menu está encolhido só por ele: abrir
+                // o menu fecha o painel, e a preferência fica como estava.
+                if (painel.content) return painel.close();
+                muda({ ...prefs, collapsed: !prefs.collapsed });
+              }}
+              aria-label={prefs.collapsed || painel.content ? 'Abrir menu' : 'Recolher menu'}
+              aria-pressed={prefs.collapsed || Boolean(painel.content)}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PanelLeft aria-hidden className="h-4 w-4" />
@@ -226,7 +237,11 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
             <button
               type="button"
               onClick={() => setBusca(true)}
-              className="hidden h-9 w-56 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))] hover:text-foreground lg:flex"
+              className={cn(
+                'hidden h-9 w-60 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))] hover:text-foreground',
+                // Com o painel lateral aberto fica só o ícone (Pn-01b).
+                painel.content ? 'lg:hidden' : 'lg:flex',
+              )}
             >
               <Search aria-hidden className="h-4 w-4" />
               Buscar membro ou tela
@@ -238,7 +253,10 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
               type="button"
               onClick={() => setBusca(true)}
               aria-label="Buscar (⌘K)"
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))] hover:text-foreground lg:hidden"
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))] hover:text-foreground',
+                !painel.content && 'lg:hidden',
+              )}
             >
               <Search aria-hidden className="h-4 w-4" />
             </button>

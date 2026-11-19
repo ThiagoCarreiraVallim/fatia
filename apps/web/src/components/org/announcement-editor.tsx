@@ -184,6 +184,9 @@ export function AnnouncementEditor({
       }}
     >
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        <p aria-hidden className="-mb-3 text-[13px] font-semibold text-muted-foreground">
+          Publicar como
+        </p>
         <Segmented
           label="Publicar como"
           value={comoGrupo}
@@ -277,6 +280,9 @@ export function AnnouncementEditor({
         </div>
 
         <div className="space-y-3">
+          <p aria-hidden className="text-[13px] font-semibold text-muted-foreground">
+            Quando
+          </p>
           <Segmented
             label="Quando"
             value={quando}
@@ -361,7 +367,7 @@ export function AnnouncementEditor({
                 aria-label="Prévia na tela bloqueada"
                 className="rounded-[28px] bg-sunken px-4 pb-5 pt-6 text-center shadow-[inset_0_0_0_1px_hsl(var(--border))]"
               >
-                <p className="text-xs capitalize text-muted-foreground">{diaTrava}</p>
+                <p className="text-xs text-muted-foreground">{diaTrava}</p>
                 <p className="font-display text-4xl font-semibold tabular-nums">{horaTrava}</p>
                 <div className="mt-4 rounded-2xl bg-card/90 p-3 text-left">
                   <p className="flex justify-between text-[10.5px] font-bold tracking-wide text-muted-foreground">

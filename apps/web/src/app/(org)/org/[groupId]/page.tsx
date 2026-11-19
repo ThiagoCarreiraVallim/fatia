@@ -232,7 +232,8 @@ function Atividade({
       </div>
       {oculto ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          Com menos de 5 pessoas compartilhando estatísticas, o gráfico fica oculto.
+          Nenhum dia com 5 ou mais pessoas de cada lado (treinou e não treinou): o gráfico fica
+          oculto.
         </p>
       ) : (
         <>
@@ -276,7 +277,7 @@ function Atividade({
           </div>
           {data.workouts.some((c) => c.suppressed) && (
             <p className="pt-1 text-xs text-muted-foreground">
-              Dias com menos de 5 pessoas ficam em branco.
+              Dias com menos de 5 pessoas de cada lado (treinou e não treinou) ficam em branco.
             </p>
           )}
         </>
@@ -311,6 +312,8 @@ function Itens({
   items: PanelOverview['items'];
   onAnnounce: (() => void) | null;
 }) {
+  // Com o painel lateral aberto a página encolhe: só item, tipo e status (Pn-01b).
+  const lateralAberto = Boolean(useOptionalSidePanel()?.content);
   const [aba, setAba] = useState<Aba>('needsYou');
   const [colunas, setColunas] = useState<OverviewColumn[]>(() => {
     const salvas = readOverviewColumns(membershipId);
@@ -326,6 +329,7 @@ function Itens({
     writeOverviewColumns(membershipId, ordenadas);
   };
   const linhas = items[aba];
+  const visiveis = lateralAberto ? colunas.filter((k) => k === 'type' || k === 'status') : colunas;
   const celula = (it: OverviewItem, k: OverviewColumn) =>
     k === 'type'
       ? overviewItemType(it.type)
@@ -411,7 +415,7 @@ function Itens({
               <th scope="col" className="px-4 py-2.5 font-semibold">
                 Item
               </th>
-              {colunas.map((k) => (
+              {visiveis.map((k) => (
                 <th
                   key={k}
                   scope="col"
@@ -433,7 +437,7 @@ function Itens({
                     {it.title}
                   </Link>
                 </td>
-                {colunas.map((k) => (
+                {visiveis.map((k) => (
                   <td
                     key={k}
                     className={cn(
@@ -441,7 +445,20 @@ function Itens({
                       larga(k) && 'hidden md:table-cell',
                     )}
                   >
-                    {celula(it, k)}
+                    {k === 'type' || k === 'status' ? (
+                      // Tipo e status como etiquetas, como na prancha (Pn-01).
+                      <span className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-xs shadow-[inset_0_0_0_1px_hsl(var(--border))]">
+                        {k === 'status' && (
+                          <span
+                            aria-hidden
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                          />
+                        )}
+                        {celula(it, k)}
+                      </span>
+                    ) : (
+                      celula(it, k)
+                    )}
                   </td>
                 ))}
               </tr>
@@ -570,7 +587,7 @@ export default function OrgOverviewPage() {
             tendencia={variacao === null ? null : `${variacao > 0 ? '+' : ''}${variacao}%`}
             linha={
               hoje?.treinos === null || !hoje
-                ? 'Oculto com menos de 5 pessoas'
+                ? 'Oculto: menos de 5 de cada lado'
                 : variacao === null
                   ? 'Registrados ontem'
                   : `${variacao >= 0 ? 'Mais' : 'Menos'} que no mesmo dia da semana passada`
@@ -587,7 +604,7 @@ export default function OrgOverviewPage() {
             titulo="Ativos em 7 dias"
             valor={ag.active7d.value === null ? '—' : ag.active7d.value.toLocaleString('pt-BR')}
             linha={
-              ag.active7d.value === null ? 'Oculto com menos de 5 pessoas' : 'Registraram treino'
+              ag.active7d.value === null ? 'Oculto: menos de 5 de cada lado' : 'Registraram treino'
             }
             detalhe={
               ag.active7d.percent === null
