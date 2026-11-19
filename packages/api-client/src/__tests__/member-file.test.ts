@@ -193,6 +193,20 @@ describe('resumo (Pn-05)', () => {
       fileAccessLine(
         {
           at: '2026-11-19T15:00:00.000Z',
+          scope: null,
+          action: 'open_member_file',
+          denied: false,
+          professionalName: 'Helena Prado',
+          isMe: false,
+        },
+        now,
+        'America/Sao_Paulo',
+      ),
+    ).toMatch(/^Helena Prado abriu a ficha · /);
+    expect(
+      fileAccessLine(
+        {
+          at: '2026-11-19T15:00:00.000Z',
           scope: 'NUTRITION',
           action: 'get_student_progress',
           denied: true,
