@@ -198,6 +198,8 @@ export class SharingController {
   /** Quem da equipe acompanha este membro (#401); `null` = ninguém. */
   @Put(':groupId/members/:membershipId/accompanied-by')
   @RequireGroupAction('member.assign')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @UseGuards(UserThrottlerGuard)
   setAccompaniedBy(
     @CurrentUser() user: CurrentUserPayload,
     @Param('groupId') groupId: string,
@@ -393,6 +395,9 @@ export class SharingController {
   @Post(':groupId/invites/:inviteId/resend')
   @RequireGroupAction('invite.create')
   @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // Sem o guard de rota o @Throttle é inerte (o ThrottlerModule não é APP_GUARD).
+  @UseGuards(UserThrottlerGuard)
   resendInvite(
     @CurrentUser() user: CurrentUserPayload,
     @Param('groupId') groupId: string,

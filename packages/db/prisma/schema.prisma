@@ -2267,6 +2267,9 @@ model GroupInvite {
   /// Quantas vezes o e-mail saiu (criação, reenvio, convite novo): o teto de
   /// reenvios (#401) conta aqui.
   sendCount       Int           @default(0)
+  /// Quando saiu o link sem e-mail do convite nominal (WhatsApp, #401). O token
+  /// deriva do segredo e desta data: em 10 minutos o mesmo link é devolvido.
+  linkIssuedAt    DateTime?
   /// Nome do link que só a equipe vê ("Recepção", "Instagram"), #401.
   label           String?
   origin          InviteOrigin?

@@ -34,6 +34,7 @@ import { inviteNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes } from './consent-scopes';
 import { newEntryCode } from './entry-code';
 import {
+  activationPendingWhere,
   inviteKind,
   inviteStatus,
   notExpiredWhere,
@@ -60,7 +61,6 @@ export const INVITE_EMAIL_DAYS = 30;
 /** Quantas vezes o mesmo convite sai por e-mail, somando criação, reenvios e convite novo. */
 export const INVITE_MAX_SENDS = 5;
 /** Quem não aceitou em 2 dias entra na Ativação pendente (#401). */
-export const ACTIVATION_PENDING_AFTER_DAYS = 2;
 /** Ativou = primeiro treino em até 48 h depois de entrar. */
 export const ACTIVATION_WINDOW_MS = 48 * 60 * 60 * 1000;
 export const PENDING_PAGE_SIZE = 10;
@@ -69,6 +69,10 @@ const LABEL_MAX = 60;
 /** Segredo do link copiável: abaixo disto, o link só aparece na criação. */
 const LINK_SECRET_MIN = 16;
 const RESEND_MIN_INTERVAL_MS = 10 * 60 * 1000;
+/** O link do WhatsApp volta igual por este tempo (não invalida o que acabou de sair). */
+const FRESH_LINK_REUSE_MS = 10 * 60 * 1000;
+/** Janela do teto de envios por e-mail e do bloqueio depois da recusa. */
+const EMAIL_WINDOW_DAYS = 30;
 /** O e-mail do convidado não fica além disto depois do uso ou da expiração. */
 export const INVITE_EMAIL_RETENTION_DAYS = 30;
 /**
@@ -135,8 +139,6 @@ export interface InviteOverviewRow extends InviteView {
   accompaniedByName: string | null;
   /** Quantos entraram por ele. Nulo = entre 1 e 4 (menos de 5 não aparece). */
   joined: number | null;
-  /** Quantos ativaram em 48 h (só quem autorizou estatísticas); nulo = amostra pequena. */
-  activated: { value: number; percent: number } | null;
 }
 
 export interface InviteOverview {
@@ -146,7 +148,12 @@ export interface InviteOverview {
     notAccepted: number | null;
     /** Quem entrou por convite nos últimos 30 dias. Nulo = entre 1 e 4. */
     joinedLast30Days: number | null;
-    activated48h: { value: number; percent: number } | null;
+    /**
+     * Só o percentual (nunca com o número): de quem entrou nos últimos 30 dias e
+     * já passou das 48 h, com opt-in — a mesma população do "Entraram e sem 1º
+     * registro" da Ativação pendente. Nulo = algum lado com menos de 5.
+     */
+    activated48h: { percent: number } | null;
   };
   invites: InviteOverviewRow[];
 }
@@ -203,7 +210,8 @@ export interface CreatedInvite {
   emailSent: boolean;
 }
 
-export type BatchSkipReason = 'invalid' | 'duplicate' | 'member' | 'pending_invite';
+export type BatchSkipReason =
+  'invalid' | 'duplicate' | 'member' | 'pending_invite' | 'declined' | 'limit';
 
 export interface BatchInviteInput {
   role: InvitableRole;
@@ -355,6 +363,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   async create(actorId: string, groupId: string, input: CreateInviteInput): Promise<CreatedInvite> {
+    if (input.code && (input.accompaniedByMembershipId || input.giveSeat || input.noExpiry)) {
+      // O código não guarda acompanhante nem assento, e vale até 1 ano: aceitar
+      // e ignorar enganaria quem criou.
+      throw new BadRequestException(
+        'O código de entrada não leva acompanhante, assento nem "sem prazo": use um link com origem',
+      );
+    }
     const eu = await this.assertCanCreate(actorId, groupId, input);
     const acompanhante = await this.resolveAccompanier(
       actorId,
@@ -370,12 +385,28 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         'Convite por e-mail vence em 30 dias: "sem prazo" é só para link ou QR',
       );
     }
+    if (input.role !== GroupRole.MEMBER) {
+      // Convite de equipe dá permissão de equipe: sempre com prazo (até 30
+      // dias) e com limite de usos (o de e-mail já vale uma vez).
+      if (input.noExpiry) {
+        throw new BadRequestException('Convite de equipe vence em até 30 dias: não fica sem prazo');
+      }
+      if (!email && !input.maxUses) {
+        throw new BadRequestException('Convite de equipe precisa de limite de usos');
+      }
+    }
     const agora = new Date();
+    if (email) {
+      const [bloqueio] = (await this.emailBlocks(groupId, [email], agora)).values();
+      if (bloqueio) throw this.emailBlockError(bloqueio);
+    }
     await this.assertDailyRoom(groupId, 1, agora);
     await this.purgeOldEmails(agora);
 
-    const padrao = email ? INVITE_EMAIL_DAYS : INVITE_DEFAULT_DAYS;
-    const dias = Math.min(Math.max(input.expiresInDays ?? padrao, 1), INVITE_MAX_DAYS);
+    // O convite por e-mail vale sempre 30 dias; o link, o que a equipe escolher (até 30).
+    const dias = email
+      ? INVITE_EMAIL_DAYS
+      : Math.min(Math.max(input.expiresInDays ?? INVITE_DEFAULT_DAYS, 1), INVITE_MAX_DAYS);
     const id = randomUUID();
     // Link sem e-mail: o token deriva do id com o segredo, e a equipe copia de
     // novo depois. Convite nominal: token aleatório, que só vai no e-mail.
@@ -486,7 +517,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     }
 
     const agora = new Date();
-    const [dentro, abertos] = await Promise.all([
+    const [dentro, bloqueios] = await Promise.all([
       this.prisma.groupMembership.findMany({
         where: {
           groupId,
@@ -495,25 +526,14 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         },
         select: { user: { select: { email: true } } },
       }),
-      this.prisma.groupInvite.findMany({
-        where: {
-          groupId,
-          email: { in: candidatos },
-          revokedAt: null,
-          declinedAt: null,
-          ...notExpiredWhere(agora),
-        },
-        select: { email: true, uses: true, maxUses: true },
-      }),
+      this.emailBlocks(groupId, candidatos, agora),
     ]);
     const membros = new Set(dentro.map((m) => m.user.email.toLowerCase()));
-    const pendentes = new Set(
-      abertos.filter((c) => c.maxUses === null || c.uses < c.maxUses).map((c) => c.email),
-    );
     const convidar: string[] = [];
     for (const email of candidatos) {
+      const bloqueio = bloqueios.get(email);
       if (membros.has(email)) skipped.push({ email, reason: 'member' });
-      else if (pendentes.has(email)) skipped.push({ email, reason: 'pending_invite' });
+      else if (bloqueio) skipped.push({ email, reason: bloqueio });
       else convidar.push(email);
     }
 
@@ -525,7 +545,6 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       const r = await this.create(actorId, groupId, {
         role: input.role,
         email,
-        expiresInDays: input.expiresInDays,
         origin: InviteOrigin.EMAIL_LIST,
         accompaniedByMembershipId: input.accompaniedByMembershipId,
         giveSeat: input.giveSeat,
@@ -583,58 +602,42 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       take: 200,
     });
 
-    // Quem entrou por cada convite: contagem e ativação, sem nome de ninguém.
+    // Quem entrou por cada convite: só a contagem, sem nome de ninguém. A
+    // ativação não sai por convite: a diferença entre linhas e o cartão
+    // isolaria quem entrou por um convite pequeno (revisão #401).
     const entradas = await this.prisma.groupMembership.findMany({
       where: { groupId, joinedViaInviteId: { not: null }, joinedAt: { not: null } },
-      select: {
-        joinedViaInviteId: true,
-        joinedAt: true,
-        userId: true,
-        role: true,
-        status: true,
-        statsOptIn: true,
-      },
+      select: { joinedViaInviteId: true, joinedAt: true },
     });
-    const ativou = await this.activatedUsers(entradas, now);
-    const elegivel = (e: (typeof entradas)[number]) =>
-      e.role === GroupRole.MEMBER &&
-      e.status === MembershipStatus.ACTIVE &&
-      e.statsOptIn &&
-      e.joinedAt!.getTime() <= now.getTime() - ACTIVATION_WINDOW_MS;
-    const porConvite = new Map<string, (typeof entradas)[number][]>();
+    const porConvite = new Map<string, number>();
     for (const e of entradas) {
-      const lista = porConvite.get(e.joinedViaInviteId!) ?? [];
-      lista.push(e);
-      porConvite.set(e.joinedViaInviteId!, lista);
+      porConvite.set(e.joinedViaInviteId!, (porConvite.get(e.joinedViaInviteId!) ?? 0) + 1);
     }
 
     const invites: InviteOverviewRow[] = linhas.map((l) => {
       const v = view(l, now);
-      const deste = porConvite.get(l.id) ?? [];
-      const contaveis = deste.filter(elegivel);
       return {
         ...v,
         url: this.copyUrl(l, v.status),
         accompaniedByName: l.accompaniedBy?.user.name ?? null,
-        joined: cell(deste.length),
-        activated: split(contaveis.filter((e) => ativou.has(e.userId)).length, contaveis.length),
+        joined: cell(porConvite.get(l.id) ?? 0),
       };
     });
 
     const recentes = entradas.filter((e) => e.joinedAt! >= desde);
-    const recentesContaveis = recentes.filter(elegivel);
-    const semAceite = await this.prisma.groupInvite.count({
-      where: { ...this.waitingWhere(groupId, eu.role), createdAt: { gte: desde } },
-    });
+    const [semAceite, coorte] = await Promise.all([
+      this.prisma.groupInvite.count({
+        where: { ...this.waitingWhere(groupId, eu.role), createdAt: { gte: desde } },
+      }),
+      this.activationCohort(groupId, now),
+    ]);
+    const ativados = split(coorte.activated, coorte.total);
     return {
       cards: {
         activeLinks: invites.filter((i) => i.kind !== 'email' && i.status === 'active').length,
         notAccepted: cell(semAceite),
         joinedLast30Days: cell(recentes.length),
-        activated48h: split(
-          recentesContaveis.filter((e) => ativou.has(e.userId)).length,
-          recentesContaveis.length,
-        ),
+        activated48h: ativados ? { percent: ativados.percent } : null,
       },
       invites,
     };
@@ -653,16 +656,9 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     now: Date = new Date(),
   ): Promise<PendingActivation> {
     const eu = await this.assertCan(actorId, groupId, 'invite.create');
-    const base: Prisma.GroupInviteWhereInput = {
-      groupId,
-      ...this.alcance(eu.role),
-      email: { not: null },
-      code: null,
-      uses: 0,
-      acceptedAt: null,
-      revokedAt: null,
-      createdAt: { lte: new Date(now.getTime() - ACTIVATION_PENDING_AFTER_DAYS * DAY_MS) },
-    };
+    const base: Prisma.GroupInviteWhereInput = activationPendingWhere(groupId, eu.role, now, {
+      includeDeclined: true,
+    });
     const q = query.q?.trim().toLowerCase();
     const where: Prisma.GroupInviteWhereInput = {
       AND: [
@@ -680,7 +676,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const hoje = dateInTz(now, timezone);
     const inicioDoMes = dayBoundsInTz(`${hoje.slice(0, 8)}01`, timezone).start;
 
-    const [total, linhas, origens, semAceite, doMes, aceitosDoMes, novos] = await Promise.all([
+    const [total, linhas, origens, semAceite, doMes, aceitosDoMes, coorte] = await Promise.all([
       this.prisma.groupInvite.count({ where }),
       this.prisma.groupInvite.findMany({
         where,
@@ -701,27 +697,15 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
           ],
         },
       }),
-      // Entraram entre 30 dias atrás e 48 h atrás (a janela já fechou): só
-      // membro, só quem autorizou estatísticas (AGGREGATION_POLICY §7).
-      this.prisma.groupMembership.findMany({
-        where: {
-          groupId,
-          role: GroupRole.MEMBER,
-          status: MembershipStatus.ACTIVE,
-          statsOptIn: true,
-          joinedAt: { gte: desde, lte: new Date(now.getTime() - ACTIVATION_WINDOW_MS) },
-        },
-        select: { userId: true, joinedAt: true },
-      }),
+      this.activationCohort(groupId, now),
     ]);
-    const ativou = await this.activatedUsers(novos, now);
-    const semRegistro = novos.length - novos.filter((m) => ativou.has(m.userId)).length;
+    const semRegistro = coorte.total - coorte.activated;
 
     return {
       cards: {
         notAccepted: cell(semAceite),
         joinedNoFirstLog:
-          semRegistro < MIN_CELL || novos.length - semRegistro < MIN_CELL ? null : semRegistro,
+          semRegistro < MIN_CELL || coorte.activated < MIN_CELL ? null : semRegistro,
         acceptedThisMonth:
           doMes === 0 || doMes >= MIN_CELL ? { accepted: aceitosDoMes, total: doMes } : null,
       },
@@ -780,16 +764,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const motivo = this.resendBlock(convite, agora);
     if (motivo === 'not_found' || motivo === 'expired')
       throw new NotFoundException(INVITE_NOT_FOUND);
-    if (motivo === 'limit') {
-      throw new HttpException(
-        `Este convite já saiu ${INVITE_MAX_SENDS} vezes: revogue e convide de novo`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    if (motivo === 'too_soon') {
-      throw new HttpException('Espere alguns minutos para reenviar', HttpStatus.TOO_MANY_REQUESTS);
-    }
-    return this.sendAgain(convite!, actorId, agora);
+    if (motivo === 'limit') throw this.limitError();
+    if (motivo === 'too_soon') throw this.tooSoonError();
+    if (await this.emailCapReached(groupId, convite!.email!, agora)) throw this.emailCapError();
+    // A checagem acima é para a mensagem; quem decide é o update condicional.
+    const r = await this.sendAgain(convite!, actorId, agora);
+    if (!r) throw this.tooSoonError();
+    return r;
   }
 
   /**
@@ -816,8 +797,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         result.skipped.push({ id, reason: motivo });
         continue;
       }
+      if (await this.emailCapReached(groupId, convite!.email!, agora)) {
+        result.skipped.push({ id, reason: 'limit' });
+        continue;
+      }
       const r = await this.sendAgain(convite!, actorId, agora);
-      result.sent.push({ id, emailSent: r.emailSent });
+      if (r) result.sent.push({ id, emailSent: r.emailSent });
+      else result.skipped.push({ id, reason: 'too_soon' });
     }
     return result;
   }
@@ -846,21 +832,31 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     if (inviteStatus(convite, agora) !== 'expired') {
       throw new ConflictException('Este convite ainda vale: use Reenviar');
     }
-    if (convite.sendCount >= INVITE_MAX_SENDS) {
-      throw new HttpException(
-        `Este convite já saiu ${INVITE_MAX_SENDS} vezes: revogue e convide de novo`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    if (convite.sendCount >= INVITE_MAX_SENDS) throw this.limitError();
+    if (await this.emailCapReached(groupId, convite.email!, agora)) throw this.emailCapError();
     const token = newToken();
-    const atualizado = await this.prisma.groupInvite.update({
-      where: { id: convite.id },
+    // Condicional: dois "Renovar" ao mesmo tempo, só um casa (o outro já vê o prazo novo).
+    const { count } = await this.prisma.groupInvite.updateMany({
+      where: {
+        id: convite.id,
+        uses: 0,
+        acceptedAt: null,
+        revokedAt: null,
+        declinedAt: null,
+        expiresAt: { lte: agora },
+        sendCount: { lt: INVITE_MAX_SENDS },
+      },
       data: {
         tokenHash: hashInviteToken(token),
         expiresAt: new Date(agora.getTime() + INVITE_EMAIL_DAYS * DAY_MS),
         lastSentAt: agora,
         sendCount: { increment: 1 },
+        linkIssuedAt: null,
       },
+    });
+    if (count !== 1) throw new ConflictException('Este convite acabou de ser renovado');
+    const atualizado = await this.prisma.groupInvite.findUniqueOrThrow({
+      where: { id: convite.id },
     });
     const url = this.url(token);
     const emailSent = await this.enviar(atualizado, url, actorId);
@@ -872,7 +868,11 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
    * equipe manda pela conversa. Troca o token, então o link do e-mail
    * anterior deixa de valer. Continua sendo só daquela conta.
    */
-  async freshLink(actorId: string, groupId: string, inviteId: string): Promise<{ url: string }> {
+  async freshLink(
+    actorId: string,
+    groupId: string,
+    inviteId: string,
+  ): Promise<{ url: string; reused: boolean }> {
     const eu = await this.assertCan(actorId, groupId, 'invite.create');
     const agora = new Date();
     const convite = await this.prisma.groupInvite.findFirst({
@@ -882,12 +882,27 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     if (inviteStatus(convite, agora) !== 'active') {
       throw new ConflictException('Este convite não vale mais: envie um convite novo');
     }
-    const token = newToken();
-    await this.prisma.groupInvite.update({
-      where: { id: convite.id },
-      data: { tokenHash: hashInviteToken(token) },
+    // Saiu um link nos últimos 10 minutos: o mesmo de novo, sem invalidar o
+    // que a equipe acabou de mandar. Só dá com o segredo (o token deriva da data).
+    if (
+      convite.linkIssuedAt &&
+      agora.getTime() - convite.linkIssuedAt.getTime() < FRESH_LINK_REUSE_MS
+    ) {
+      const token = this.nominalLinkToken(convite.id, convite.linkIssuedAt);
+      if (token && hashInviteToken(token) === convite.tokenHash) {
+        return { url: this.url(token), reused: true };
+      }
+    }
+    const token = this.nominalLinkToken(convite.id, agora) ?? newToken();
+    const { count } = await this.prisma.groupInvite.updateMany({
+      where: { id: convite.id, tokenHash: convite.tokenHash },
+      data: { tokenHash: hashInviteToken(token), linkIssuedAt: agora },
     });
-    return { url: this.url(token) };
+    if (count !== 1) {
+      // Outro pedido trocou o link no meio do caminho: devolve o dele.
+      return this.freshLink(actorId, groupId, inviteId);
+    }
+    return { url: this.url(token), reused: false };
   }
 
   /**
@@ -1037,6 +1052,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
           where: {
             id: convite.id,
             revokedAt: null,
+            declinedAt: null,
             ...(convite.maxUses !== null ? { uses: { lt: convite.maxUses } } : {}),
           },
           data: {
@@ -1046,7 +1062,15 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         }),
       ])) as unknown as [GroupMembership, ...unknown[]];
       if (convite.giveSeat && convite.role === GroupRole.MEMBER && this.seats) {
-        await this.seats.assignOnJoin(convite.groupId, membership.id, convite.createdById);
+        // A pessoa já entrou: o assento que falha vira log, não erro do aceite
+        // (o dono dá depois pela tela de Assentos).
+        try {
+          await this.seats.assignOnJoin(convite.groupId, membership.id, convite.createdById);
+        } catch (err) {
+          this.logger.warn(
+            `Assento no aceite falhou (${convite.groupId}): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
       return {
         membershipId: membership.id,
@@ -1171,6 +1195,33 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * A população da ativação (cartão "Ativaram em 48 h" e "Entraram e sem 1º
+   * registro"): membros com opt-in que entraram entre 30 dias atrás e 48 h
+   * atrás (a janela já fechou), por qualquer caminho. Só o total e quantos
+   * ativaram — nunca quem (AGGREGATION_POLICY §7).
+   */
+  private async activationCohort(
+    groupId: string,
+    now: Date,
+  ): Promise<{ total: number; activated: number }> {
+    const novos = await this.prisma.groupMembership.findMany({
+      where: {
+        groupId,
+        role: GroupRole.MEMBER,
+        status: MembershipStatus.ACTIVE,
+        statsOptIn: true,
+        joinedAt: {
+          gte: new Date(now.getTime() - 30 * DAY_MS),
+          lte: new Date(now.getTime() - ACTIVATION_WINDOW_MS),
+        },
+      },
+      select: { userId: true, joinedAt: true },
+    });
+    const ativou = await this.activatedUsers(novos, now);
+    return { total: novos.length, activated: novos.filter((m) => ativou.has(m.userId)).length };
+  }
+
+  /**
    * Quem ativou: treinou em até 48 h depois de entrar. Só treino, porque
    * refeição, peso e medida nunca entram num agregado (AGGREGATION_POLICY §6).
    */
@@ -1227,19 +1278,145 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     return null;
   }
 
+  /**
+   * Reenvia com um `updateMany` condicional: o teto de envios, o intervalo de
+   * 10 minutos e o "ainda vale" são conferidos no próprio update, então dois
+   * reenvios ao mesmo tempo não passam juntos. `null` = outro levou.
+   */
   private async sendAgain(
     convite: { id: string },
     actorId: string,
     agora: Date,
-  ): Promise<CreatedInvite> {
+  ): Promise<CreatedInvite | null> {
     const token = newToken();
-    const atualizado = await this.prisma.groupInvite.update({
+    const { count } = await this.prisma.groupInvite.updateMany({
+      where: {
+        id: convite.id,
+        email: { not: null },
+        code: null,
+        uses: 0,
+        revokedAt: null,
+        declinedAt: null,
+        sendCount: { lt: INVITE_MAX_SENDS },
+        AND: [
+          notExpiredWhere(agora),
+          {
+            OR: [
+              { lastSentAt: null },
+              { lastSentAt: { lte: new Date(agora.getTime() - RESEND_MIN_INTERVAL_MS) } },
+            ],
+          },
+        ],
+      },
+      data: {
+        tokenHash: hashInviteToken(token),
+        lastSentAt: agora,
+        sendCount: { increment: 1 },
+        linkIssuedAt: null,
+      },
+    });
+    if (count !== 1) return null;
+    const atualizado = await this.prisma.groupInvite.findUniqueOrThrow({
       where: { id: convite.id },
-      data: { tokenHash: hashInviteToken(token), lastSentAt: agora, sendCount: { increment: 1 } },
     });
     const url = this.url(token);
     const emailSent = await this.enviar(atualizado, url, actorId);
     return { invite: view(atualizado, agora), url, emailSent };
+  }
+
+  /**
+   * Por que cada e-mail não pode receber convite novo agora (revisão #401):
+   * já tem um aberto, recusou há menos de 30 dias, ou já recebeu 5 envios
+   * nesta comunidade em 30 dias (somando convites revogados e recriados).
+   */
+  private async emailBlocks(
+    groupId: string,
+    emails: string[],
+    agora: Date,
+  ): Promise<Map<string, 'pending_invite' | 'declined' | 'limit'>> {
+    const out = new Map<string, 'pending_invite' | 'declined' | 'limit'>();
+    if (emails.length === 0) return out;
+    const desde = new Date(agora.getTime() - EMAIL_WINDOW_DAYS * DAY_MS);
+    const convites = await this.prisma.groupInvite.findMany({
+      where: { groupId, email: { in: emails, mode: 'insensitive' } },
+      select: {
+        email: true,
+        code: true,
+        uses: true,
+        maxUses: true,
+        expiresAt: true,
+        revokedAt: true,
+        declinedAt: true,
+        sendCount: true,
+        createdAt: true,
+        lastSentAt: true,
+      },
+    });
+    const envios = new Map<string, number>();
+    for (const c of convites) {
+      const email = c.email!.toLowerCase();
+      if (inviteStatus(c, agora) === 'active') out.set(email, 'pending_invite');
+      else if (c.declinedAt && c.declinedAt >= desde && out.get(email) !== 'pending_invite') {
+        out.set(email, 'declined');
+      }
+      if (c.createdAt >= desde || (c.lastSentAt && c.lastSentAt >= desde)) {
+        envios.set(email, (envios.get(email) ?? 0) + c.sendCount);
+      }
+    }
+    for (const [email, n] of envios) {
+      if (!out.has(email) && n + 1 > INVITE_MAX_SENDS) out.set(email, 'limit');
+    }
+    return out;
+  }
+
+  private async emailCapReached(groupId: string, email: string, agora: Date): Promise<boolean> {
+    const desde = new Date(agora.getTime() - EMAIL_WINDOW_DAYS * DAY_MS);
+    const { _sum } = await this.prisma.groupInvite.aggregate({
+      where: {
+        groupId,
+        email: { equals: email, mode: 'insensitive' },
+        OR: [{ createdAt: { gte: desde } }, { lastSentAt: { gte: desde } }],
+      },
+      _sum: { sendCount: true },
+    });
+    return (_sum.sendCount ?? 0) + 1 > INVITE_MAX_SENDS;
+  }
+
+  private emailBlockError(motivo: 'pending_invite' | 'declined' | 'limit'): HttpException {
+    if (motivo === 'pending_invite') {
+      return new ConflictException('Este e-mail já tem um convite aberto: reenvie pela lista');
+    }
+    if (motivo === 'declined') {
+      return new ConflictException('Esta pessoa recusou um convite há menos de 30 dias');
+    }
+    return this.emailCapError();
+  }
+
+  private emailCapError(): HttpException {
+    return new HttpException(
+      `Este e-mail já recebeu ${INVITE_MAX_SENDS} convites desta comunidade nos últimos 30 dias`,
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private limitError(): HttpException {
+    return new HttpException(
+      `Este convite já saiu ${INVITE_MAX_SENDS} vezes`,
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private tooSoonError(): HttpException {
+    return new HttpException('Espere alguns minutos para reenviar', HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  /** O link sem e-mail do convite nominal, derivado do id e da hora em que saiu. */
+  private nominalLinkToken(inviteId: string, issuedAt: Date): string | null {
+    const segredo = this.config.get<string>('INVITE_LINK_SECRET') ?? '';
+    if (segredo.length < LINK_SECRET_MIN) return null;
+    return createHmac('sha256', segredo)
+      .update(`invite-fresh:${inviteId}:${issuedAt.toISOString()}`)
+      .digest('base64url');
   }
 
   /**

@@ -25,6 +25,8 @@ export interface MemberBulkInput {
   accompaniedByMembershipId?: string | null;
 }
 
+const ONLY_MEMBERS_ACCOMPANIED = 'Só membros têm quem acompanhe';
+
 const ACAO_DO_LOTE: Record<MemberBulkAction, GroupAction> = {
   accompany: 'member.assign',
   seat: 'billing.manage',
@@ -52,6 +54,7 @@ export class MemberAdminService {
   ): Promise<{ membershipId: string; accompaniedById: string | null }> {
     await this.assertCan(actorId, groupId, 'member.assign');
     const [alvo] = await this.members(groupId, [membershipId]);
+    if (alvo!.role !== GroupRole.MEMBER) throw new BadRequestException(ONLY_MEMBERS_ACCOMPANIED);
     const acompanhante = await this.accompanier(groupId, accompaniedByMembershipId);
     if (acompanhante === alvo!.id) throw new BadRequestException('Ninguém acompanha a si mesmo');
     await this.prisma.groupMembership.update({
@@ -72,42 +75,56 @@ export class MemberAdminService {
     }
     await this.assertCan(actorId, groupId, ACAO_DO_LOTE[input.action]);
     const alvos = await this.members(groupId, ids);
-
-    let updated: number;
-    let acompanhante: string | null = null;
-    if (input.action === 'accompany') {
-      acompanhante = await this.accompanier(groupId, input.accompaniedByMembershipId ?? null);
-      const r = await this.prisma.groupMembership.updateMany({
-        where: {
-          id: { in: alvos.map((a) => a.id).filter((id) => id !== acompanhante) },
-          groupId,
-        },
-        data: { accompaniedById: acompanhante },
-      });
-      updated = r.count;
-    } else if (input.action === 'seat') {
-      updated = await this.seats.assignMany(actorId, groupId, ids);
-    } else {
-      const r = await this.prisma.groupSeatAssignment.updateMany({
-        where: { membershipId: { in: ids }, revokedAt: null, pool: { groupId } },
-        data: { revokedAt: new Date() },
-      });
-      updated = r.count;
+    const acompanhante =
+      input.action === 'accompany'
+        ? await this.accompanier(groupId, input.accompaniedByMembershipId ?? null)
+        : null;
+    if (input.action === 'accompany' && alvos.some((a) => a.role !== GroupRole.MEMBER)) {
+      throw new BadRequestException(ONLY_MEMBERS_ACCOMPANIED);
     }
 
-    await this.prisma.groupAuditLog.create({
-      data: {
-        groupId,
-        actorId,
-        action: `members.${input.action}`,
-        targetCount: ids.length,
-        payload: {
-          membershipIds: ids,
-          ...(input.action === 'accompany' ? { accompaniedById: acompanhante } : {}),
+    // A ação e a trilha no mesmo commit: ou as duas ficam, ou nenhuma.
+    return this.prisma.$transaction(async (tx) => {
+      let updated: number;
+      if (input.action === 'accompany') {
+        const r = await tx.groupMembership.updateMany({
+          where: {
+            id: { in: alvos.map((a) => a.id).filter((id) => id !== acompanhante) },
+            groupId,
+            role: GroupRole.MEMBER,
+            // Só quem muda de fato (o `not` do SQL deixa o nulo de fora: daí o OR).
+            ...(acompanhante
+              ? { OR: [{ accompaniedById: null }, { accompaniedById: { not: acompanhante } }] }
+              : { accompaniedById: { not: null } }),
+          },
+          data: { accompaniedById: acompanhante },
+        });
+        updated = r.count;
+      } else if (input.action === 'seat') {
+        updated = await this.seats.assignMany(actorId, groupId, ids, tx);
+      } else {
+        const r = await tx.groupSeatAssignment.updateMany({
+          where: { membershipId: { in: ids }, revokedAt: null, pool: { groupId } },
+          data: { revokedAt: new Date() },
+        });
+        updated = r.count;
+      }
+
+      await tx.groupAuditLog.create({
+        data: {
+          groupId,
+          actorId,
+          action: `members.${input.action}`,
+          // O que mudou de fato, não quantos foram pedidos.
+          targetCount: updated,
+          payload: {
+            membershipIds: ids,
+            ...(input.action === 'accompany' ? { accompaniedById: acompanhante } : {}),
+          },
         },
-      },
+      });
+      return { updated };
     });
-    return { updated };
   }
 
   /** Membros ativos desta comunidade, todos; um de fora derruba o lote inteiro (404). */
@@ -119,7 +136,7 @@ export class MemberAdminService {
         status: MembershipStatus.ACTIVE,
         role: { not: GroupRole.OWNER },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (achados.length !== ids.length) throw new NotFoundException(MEMBER_NOT_FOUND);
     return achados;

@@ -171,6 +171,15 @@ export const AppEnvSchema = z
         });
       }
     }
+    // Segredos iguais: quem descobre um descobre o outro.
+    if (env.INVITE_LINK_SECRET && env.INVITE_LINK_SECRET === env.EMAIL_UNSUBSCRIBE_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['INVITE_LINK_SECRET'],
+        message:
+          'INVITE_LINK_SECRET precisa ser diferente de EMAIL_UNSUBSCRIBE_SECRET. Gere outro com `openssl rand -hex 32`.',
+      });
+    }
   });
 
 /**
@@ -188,6 +197,8 @@ export function weakUnsubscribeSecret(segredo: string): string | null {
   const bytes = hex ? segredo.length / 2 : Math.floor((segredo.replace(/=+$/, '').length * 3) / 4);
   if (bytes < 32) return 'precisa de pelo menos 32 bytes';
   if (new Set(segredo).size < (hex ? 10 : 16)) return 'tem pouca variedade para ser aleatório';
+  // Um bloco curto repetido ("abc…abc…") tem variedade mas não tem 32 bytes de acaso.
+  if (/^(.{4,})\1+$/.test(segredo.replace(/=+$/, ''))) return 'é um bloco repetido';
   return null;
 }
 

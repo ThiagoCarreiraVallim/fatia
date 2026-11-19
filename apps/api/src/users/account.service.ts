@@ -1032,6 +1032,12 @@ export class AccountService {
       data: { email: null, revokedAt: new Date() },
     });
     await this.prisma.groupInvite.updateMany({ where: { email: doEmail }, data: { email: null } });
+    // Os convites que a pessoa criou e ainda valem param de valer: o autor vira
+    // nulo no `SetNull`, e o link de quem saiu não pode seguir abrindo a comunidade.
+    await this.prisma.groupInvite.updateMany({
+      where: { createdById: userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
     await this.prisma.user.delete({ where: { id: userId } });
 

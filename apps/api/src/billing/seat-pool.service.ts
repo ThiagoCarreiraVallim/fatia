@@ -472,58 +472,59 @@ export class SeatPoolService {
    * faltam, para o painel levar à tela de assentos. Quem já tem assento não
    * conta como falta. A permissão é do chamador (`billing.manage`).
    */
-  async assignMany(actorId: string, groupId: string, membershipIds: string[]): Promise<number> {
+  async assignMany(
+    actorId: string,
+    groupId: string,
+    membershipIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
     await this.assertManager(actorId, groupId);
     const pool = await this.poolVivo(groupId);
     if (!ATRIBUIVEIS.includes(pool.status)) {
       throw new ConflictException('Os assentos ficam disponíveis depois do primeiro pagamento.');
     }
-    const jaTem = new Set(
-      (
-        await this.prisma.groupSeatAssignment.findMany({
-          where: { poolId: pool.id, membershipId: { in: membershipIds }, revokedAt: null },
-          select: { membershipId: true },
-        })
-      ).map((a) => a.membershipId),
-    );
-    const novos = membershipIds.filter((id) => !jaTem.has(id));
-    const livres = pool.seats - (await this.contarAtribuidos(pool.id));
-    if (novos.length > livres) {
-      const missing = novos.length - Math.max(0, livres);
-      throw new ConflictException({
-        code: 'NO_SEATS',
-        missing,
-        message: `Faltam ${missing === 1 ? '1 assento' : `${missing} assentos`}. Aumente os assentos ou escolha menos pessoas.`,
-      });
-    }
-    if (novos.length === 0) return 0;
-    await this.prisma.groupSeatAssignment.createMany({
-      data: novos.map((membershipId) => ({ poolId: pool.id, membershipId, assignedById: actorId })),
-      skipDuplicates: true,
-    });
-    // Dois lotes ao mesmo tempo podem passar da conta: este volta inteiro.
-    if ((await this.contarAtribuidos(pool.id)) > pool.seats) {
-      await this.prisma.groupSeatAssignment.deleteMany({
-        where: {
+    // Dentro da trava do pool: dois lotes ao mesmo tempo esperam um pelo outro,
+    // e a conta de vagas é a de depois do lote anterior.
+    const dar = async (db: Prisma.TransactionClient) => {
+      await lockPool(db, pool.id);
+      const jaTem = new Set(
+        (
+          await db.groupSeatAssignment.findMany({
+            where: { poolId: pool.id, membershipId: { in: membershipIds }, revokedAt: null },
+            select: { membershipId: true },
+          })
+        ).map((a) => a.membershipId),
+      );
+      const novos = membershipIds.filter((id) => !jaTem.has(id));
+      const livres =
+        pool.seats -
+        (await db.groupSeatAssignment.count({ where: { poolId: pool.id, revokedAt: null } }));
+      if (novos.length > livres) {
+        const missing = novos.length - Math.max(0, livres);
+        throw new ConflictException({
+          code: 'NO_SEATS',
+          missing,
+          message: `Faltam ${missing === 1 ? '1 assento' : `${missing} assentos`}. Aumente os assentos ou escolha menos pessoas.`,
+        });
+      }
+      if (novos.length === 0) return 0;
+      await db.groupSeatAssignment.createMany({
+        data: novos.map((membershipId) => ({
           poolId: pool.id,
-          membershipId: { in: novos },
-          revokedAt: null,
+          membershipId,
           assignedById: actorId,
-        },
+        })),
+        skipDuplicates: true,
       });
-      throw new ConflictException({
-        code: 'NO_SEATS',
-        missing: novos.length,
-        message: lotado(pool.seats),
-      });
-    }
-    return novos.length;
+      return novos.length;
+    };
+    return tx ? dar(tx) : this.prisma.$transaction(dar);
   }
 
   /**
    * Assento ao entrar por um convite com "Dar assento PRO" (#401). A decisão
-   * foi do dono ao criar o convite; aqui só se confere se ainda há vaga. Sem
-   * vaga, ou sem assentos ativos, a pessoa entra no Free e nada falha.
+   * foi do dono ao criar o convite; aqui só se confere se ainda há vaga, sob a
+   * trava do pool (aceites simultâneos não passam da conta). Sem vaga, `false`.
    */
   async assignOnJoin(
     groupId: string,
@@ -532,21 +533,22 @@ export class SeatPoolService {
   ): Promise<boolean> {
     const pool = await this.prisma.groupSeatPool.findUnique({ where: { groupId } });
     if (!pool || !ATRIBUIVEIS.includes(pool.status)) return false;
-    if ((await this.contarAtribuidos(pool.id)) >= pool.seats) return false;
-    try {
-      const criado = await this.prisma.groupSeatAssignment.create({
-        data: { poolId: pool.id, membershipId, assignedById },
+    return this.prisma.$transaction(async (tx) => {
+      await lockPool(tx, pool.id);
+      const jaTem = await tx.groupSeatAssignment.findFirst({
+        where: { poolId: pool.id, membershipId, revokedAt: null },
         select: { id: true },
       });
-      if ((await this.contarAtribuidos(pool.id)) > pool.seats) {
-        await this.prisma.groupSeatAssignment.delete({ where: { id: criado.id } });
-        return false;
-      }
+      if (jaTem) return true;
+      const usados = await tx.groupSeatAssignment.count({
+        where: { poolId: pool.id, revokedAt: null },
+      });
+      if (usados >= pool.seats) return false;
+      await tx.groupSeatAssignment.create({
+        data: { poolId: pool.id, membershipId, assignedById },
+      });
       return true;
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return true;
-      throw err;
-    }
+    });
   }
 
   async unassign(
@@ -914,4 +916,9 @@ function lotado(seats: number): string {
   const uso =
     seats === 1 ? 'O único assento está em uso' : `Todos os ${seats} assentos estão em uso`;
   return `${uso}. Aumente os assentos ou retire um antes.`;
+}
+
+/** Trava de transação por pool: quem dá assento espera quem está dando. */
+async function lockPool(tx: Prisma.TransactionClient, poolId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`seat-pool:${poolId}`}))`;
 }
