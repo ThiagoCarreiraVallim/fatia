@@ -14,6 +14,7 @@ type MockPrisma = {
     delete: jest.Mock;
   };
   workoutPlan: { findFirst: jest.Mock };
+  sessionFeedback: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -27,6 +28,7 @@ const makePrisma = (): MockPrisma => ({
     delete: jest.fn(),
   },
   workoutPlan: { findFirst: jest.fn() },
+  sessionFeedback: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 describe('WorkoutSessionService', () => {

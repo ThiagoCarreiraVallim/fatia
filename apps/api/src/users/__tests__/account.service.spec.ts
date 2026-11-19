@@ -33,6 +33,8 @@ const makePrisma = () => ({
   nutritionPlan: { findMany: jest.fn().mockResolvedValue([]) },
   planOffer: { findMany: jest.fn().mockResolvedValue([]) },
   memberNote: { findMany: jest.fn().mockResolvedValue([]) },
+  sessionFeedback: { findMany: jest.fn().mockResolvedValue([]) },
+  reviewSeen: { findMany: jest.fn().mockResolvedValue([]) },
   plannedSession: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
@@ -92,6 +94,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   planOffers: 'planOffers',
   // Anotações da equipe sobre a pessoa (#402): ela já lê no app.
   memberNotes: 'memberNotes',
+  // O que a pessoa, na equipe, comentou nos treinos dos alunos e marcou como visto (#399).
+  sessionFeedbackAuthored: 'sessionFeedbackWritten',
+  reviewSeen: 'reviewSeen',
   plannedSessions: 'plannedSessions',
   customExercises: 'customExercises',
   // Favoritos de exercício (#378): o atalho que a pessoa marcou no Como fazer.
@@ -158,6 +163,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
   memberNotesAuthored:
     'Anotações que a pessoa, como equipe, escreveu sobre outros membros (#402): dado de terceiro.',
+  reviewSeenAbout:
+    'O "Visto" que a equipe marcou sobre a pessoa (#399): estado de trabalho da equipe. A ' +
+    'leitura em si já está na trilha (`accessLogs`), e a linha some quando ela sai.',
   planOffersAuthored:
     'Planos de treino que a pessoa ofereceu como profissional (#379): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',

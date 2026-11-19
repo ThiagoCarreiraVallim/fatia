@@ -21,6 +21,8 @@ type MockPrisma = {
   groupAnnouncement: { updateMany: jest.Mock };
   memberNote: { deleteMany: jest.Mock };
   planOfferVersion: { updateMany: jest.Mock };
+  sessionFeedback: { deleteMany: jest.Mock };
+  reviewSeen: { deleteMany: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -47,6 +49,8 @@ const makePrisma = (): MockPrisma => ({
   groupAnnouncement: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
   memberNote: { deleteMany: jest.fn().mockReturnValue({ count: 0 }) },
   planOfferVersion: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
+  sessionFeedback: { deleteMany: jest.fn().mockReturnValue({ count: 0 }) },
+  reviewSeen: { deleteMany: jest.fn().mockReturnValue({ count: 0 }) },
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
   $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
 });
@@ -327,7 +331,7 @@ describe('MembershipService', () => {
       // Duas escritas separadas abririam uma janela em que a associação já
       // acabou e o vínculo ainda autoriza leitura de dado de saúde.
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(6);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(8);
       expect(resultado.revokedLinks).toBe(2);
       // As anotações da equipe sobre ela e os planos esperando aceite (#402).
       expect(prisma.memberNote.deleteMany).toHaveBeenCalledWith({
@@ -336,6 +340,13 @@ describe('MembershipService', () => {
       expect(prisma.planOfferVersion.updateMany).toHaveBeenCalledWith({
         where: { status: 'PENDING', offer: { groupId: GROUP, userId: ALUNO } },
         data: { status: 'SUPERSEDED', respondedAt: expect.any(Date) },
+      });
+      // Reação e comentário da equipe nos treinos dela e o "Visto" sobre ela (#399).
+      expect(prisma.sessionFeedback.deleteMany).toHaveBeenCalledWith({
+        where: { groupId: GROUP, session: { userId: ALUNO } },
+      });
+      expect(prisma.reviewSeen.deleteMany).toHaveBeenCalledWith({
+        where: { groupId: GROUP, OR: [{ subjectUserId: ALUNO }, { userId: ALUNO }] },
       });
       // O assento pago pela comunidade (ADR 025) acaba na mesma transação.
       expect(prisma.groupSeatAssignment.updateMany).toHaveBeenCalledWith({

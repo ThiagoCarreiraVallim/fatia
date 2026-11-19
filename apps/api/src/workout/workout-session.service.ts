@@ -7,7 +7,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { Prisma, ShareScope, type WorkoutCheckin } from '@prisma/client';
+import { Prisma, ShareScope, type SessionReaction, type WorkoutCheckin } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SharedWithService } from '../sharing/shared-with.service';
 import type {
@@ -81,7 +81,23 @@ export type SessionSummaryView = SessionSummary & {
    * o botão por "Ver plano"; nulo se não virou (ou se o plano foi apagado).
    */
   savedPlanId: string | null;
+  /** Reação e comentário da equipe (#399), só de quem comentou e ainda é da comunidade. */
+  feedback: SessionFeedbackView[];
 };
+
+/**
+ * O que a equipe mandou sobre a sessão (#399): reação e comentário curto. A
+ * pessoa lê e não responde no app (a conversa é pelo WhatsApp, ADR 048).
+ */
+export interface SessionFeedbackView {
+  id: string;
+  authorName: string | null;
+  groupName: string;
+  reaction: SessionReaction | null;
+  body: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const SESSION_INCLUDE = {
   // As respostas do fim do treino vão junto: o dono vê as dele, e a equipe as
@@ -239,7 +255,25 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new NotFoundException('Session not found');
-    return this.shapeSession(session);
+    return { ...this.shapeSession(session), feedback: await this.feedbackFor(session.id) };
+  }
+
+  /** Reação e comentário da equipe na sessão (#399). Quem chama já conferiu o dono. */
+  private async feedbackFor(sessionId: string): Promise<SessionFeedbackView[]> {
+    const rows = await this.prisma.sessionFeedback.findMany({
+      where: { sessionId },
+      include: { author: { select: { name: true } }, group: { select: { name: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      authorName: r.author?.name ?? null,
+      groupName: r.group.name,
+      reaction: r.reaction,
+      body: r.body,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
   }
 
   async findActive(userId: string) {
@@ -554,7 +588,7 @@ export class WorkoutSessionService {
     if (!session) throw new NotFoundException('Session not found');
 
     const exerciseIds = [...new Set(session.sets.map((s) => s.exerciseId))];
-    const [previous, priorSets, questions, savedPlan] = await Promise.all([
+    const [previous, priorSets, questions, savedPlan, feedback] = await Promise.all([
       session.planId
         ? this.prisma.workoutSession.findFirst({
             where: {
@@ -593,6 +627,7 @@ export class WorkoutSessionService {
         where: { userId, fromSessionId: session.id },
         select: { id: true },
       }),
+      this.feedbackFor(session.id),
     ]);
 
     const summary = summarizeSession({
@@ -621,7 +656,14 @@ export class WorkoutSessionService {
       void _dono;
       checkin = rest;
     }
-    return { ...summary, checkin, questions, circuit, savedPlanId: savedPlan?.id ?? null };
+    return {
+      ...summary,
+      checkin,
+      questions,
+      circuit,
+      savedPlanId: savedPlan?.id ?? null,
+      feedback,
+    };
   }
 
   /**
