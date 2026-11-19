@@ -20,11 +20,14 @@ vi.mock('@fatia/api-client', async () => {
       bans: vi.fn(),
       ban: vi.fn(),
       unban: vi.fn(),
+      reorderPins: vi.fn(),
+      unpin: vi.fn(),
     },
+    feedApi: { list: vi.fn() },
   };
 });
 
-import { moderationApi, orgApi } from '@fatia/api-client';
+import { feedApi, moderationApi, orgApi, type FeedPage, type Post } from '@fatia/api-client';
 import OrgModerationPage from '../page';
 
 const denuncia = (p: Partial<ReportQueueItem> = {}): ReportQueueItem => ({
@@ -41,8 +44,30 @@ const denuncia = (p: Partial<ReportQueueItem> = {}): ReportQueueItem => ({
   ...p,
 });
 
-function abrir(fila: ReportQueueItem[] = [denuncia()]) {
-  ctx.group = grupo({ role: 'OWNER', postPolicy: 'ALL_MEMBERS' });
+const aviso = (id: string, title: string): Post => ({
+  id,
+  kind: 'ANNOUNCEMENT',
+  title,
+  body: 'texto',
+  createdAt: new Date().toISOString(),
+  author: { displayName: 'Academia Demo', team: true, asGroup: true, isMe: false },
+  images: [],
+  pinned: true,
+  pinnedUntil: null,
+  removed: null,
+  reactions: { counts: { STRONG: 0, FIRE: 0, CLAP: 0, HEART: 0 }, mine: null },
+  commentCount: 0,
+  canDelete: false,
+  canModerate: true,
+});
+
+function abrir(
+  fila: ReportQueueItem[] = [denuncia()],
+  pins: Post[] = [],
+  g: Partial<MyGroup> = {},
+) {
+  ctx.group = grupo({ role: 'OWNER', postPolicy: 'ALL_MEMBERS', ...g });
+  vi.mocked(feedApi.list).mockResolvedValue({ pins, posts: [] } as unknown as FeedPage);
   vi.mocked(moderationApi.reports).mockResolvedValue(fila);
   vi.mocked(moderationApi.removed).mockResolvedValue([
     {
@@ -60,6 +85,39 @@ function abrir(fila: ReportQueueItem[] = [denuncia()]) {
 
 describe('/org/[groupId]/moderation', () => {
   afterEach(() => vi.clearAllMocks());
+
+  it('avisos fixados: na ordem do carrossel, sobem e desafixam (Pn-14)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(moderationApi.reorderPins).mockResolvedValue({ order: [] });
+    vi.mocked(moderationApi.unpin).mockResolvedValue({ id: 'a1' });
+    abrir([], [aviso('a1', 'Feriado'), aviso('a2', 'Aula nova')]);
+    const lista = await screen.findByRole('list', { name: 'Avisos fixados' });
+    expect(within(lista).getByText('1. Feriado')).toBeInTheDocument();
+    expect(within(lista).getAllByText(/sem prazo|fixado/i).length).toBeGreaterThan(0);
+    await user.click(within(lista).getByRole('button', { name: 'Subir Aula nova na ordem' }));
+    expect(moderationApi.reorderPins).toHaveBeenCalledWith('g1', ['a2', 'a1']);
+    await user.click(within(lista).getAllByRole('button', { name: 'Desafixar' })[0]!);
+    await waitFor(() => expect(moderationApi.unpin).toHaveBeenCalledWith('g1', 'a1'));
+  });
+
+  it('sem fixados, o mural começa direto nos posts', async () => {
+    abrir([]);
+    expect(
+      await screen.findByText('Nenhum aviso fixado. O mural começa direto nos posts.'),
+    ).toBeInTheDocument();
+  });
+
+  it('posts automáticos ligam e desligam por tipo', async () => {
+    const user = userEvent.setup();
+    vi.mocked(orgApi.update).mockResolvedValue({} as never);
+    abrir([], [], { autoPosts: ['PLAN', 'TIP', 'EXERCISE', 'CHALLENGE'] });
+    const sw = await screen.findByRole('switch', { name: 'Dica nova' });
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    await user.click(sw);
+    expect(orgApi.update).toHaveBeenCalledWith('g1', {
+      autoPosts: ['PLAN', 'EXERCISE', 'CHALLENGE'],
+    });
+  });
 
   it('a fila mostra o resumo, o trecho e as observações, sem quem denunciou', async () => {
     abrir();

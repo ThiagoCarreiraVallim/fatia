@@ -47,6 +47,8 @@ import type { ListDataSharingTool } from '../../../sharing/mcp/list-data-sharing
 import type { ListGroupChallengesTool } from '../../../sharing/mcp/list-group-challenges.tool';
 import type { ListGroupPlansTool } from '../../../sharing/mcp/list-group-plans.tool';
 import type { ListGroupPostsTool } from '../../../sharing/mcp/list-group-posts.tool';
+import type { GetGroupPollTool } from '../../../sharing/mcp/get-group-poll.tool';
+import type { ListBlockedUsersTool } from '../../../sharing/mcp/list-blocked-users.tool';
 import type { ListGroupTipsTool } from '../../../sharing/mcp/list-group-tips.tool';
 import type { ListGroupBenefitsTool } from '../../../sharing/mcp/list-group-benefits.tool';
 import type { ListMyGroupsTool } from '../../../sharing/mcp/list-my-groups.tool';
@@ -860,29 +862,75 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
   ),
   list_group_posts: sample<ListGroupPostsTool>(
     {
+      pins: [],
       posts: [
         {
           id: 'po1',
+          kind: 'POST',
+          title: null,
           body: 'Bora treinar amanhã cedo?',
           createdAt: dia('2026-11-16T09:00:00Z'),
-          author: { displayName: 'Ana', team: false, isMe: false, avatarUrl: null },
+          author: {
+            displayName: 'Ana',
+            team: false,
+            role: null,
+            asGroup: false,
+            isMe: false,
+            avatarUrl: null,
+          },
           images: 0,
           pinned: false,
+          pinnedUntil: null,
+          poll: null,
+          auto: null,
           removed: null,
-          reactions: { counts: { STRONG: 3 }, mine: null },
+          reactions: { counts: { STRONG: 3, FIRE: 0, CLAP: 0, HEART: 0 }, mine: null },
           commentCount: 2,
           canDelete: false,
           canModerate: false,
+          canHide: true,
+          canBlock: true,
         },
       ],
       policy: 'ALL_MEMBERS',
       canPost: true,
       canModerate: false,
+      isTeam: false,
+      groupName: 'Academia Demo',
+      unseen: 1,
       displayName: 'Thi',
       suggestedDisplayName: 'Thi',
       nextCursor: null,
     },
     { groupId: 'gr1' },
+  ),
+  get_group_poll: sample<GetGroupPollTool>(
+    {
+      postId: 'po2',
+      question: 'Qual horário para o aulão de sábado?',
+      closesAt: dia('2026-11-20T12:00:00Z'),
+      closed: false,
+      myOptionId: 'op1',
+      totalVotes: 25,
+      options: [
+        { id: 'op1', label: '8h', percent: 52 },
+        { id: 'op2', label: '9h', percent: 32 },
+        { id: 'op3', label: '10h', percent: 16 },
+      ],
+      canClose: false,
+    },
+    { groupId: 'gr1', postId: 'po2' },
+  ),
+  list_blocked_users: sample<ListBlockedUsersTool>(
+    [
+      {
+        id: 'b1',
+        label: 'Gabi',
+        groupName: 'Academia Demo',
+        createdAt: dia('2026-11-10T12:00:00Z'),
+      },
+    ],
+    {},
   ),
   list_group_benefits: sample<ListGroupBenefitsTool>(
     [

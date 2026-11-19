@@ -20,7 +20,10 @@ import {
   CreateCommentDto,
   CreatePostDto,
   FeedQueryDto,
+  PinDto,
+  PinOrderDto,
   PostParamDto,
+  VoteDto,
   ReactionDto,
   RemovePostDto,
   ReportDto,
@@ -48,7 +51,35 @@ export class PostController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Query() q: FeedQueryDto,
   ) {
-    return this.posts.list(user.id, groupId, q.cursor);
+    return this.posts.list(user.id, groupId, q.cursor, q.filter);
+  }
+
+  /** "Posts novos" desde a última visita (#394). */
+  @Get('unseen')
+  @RequireGroupAction('post.read')
+  unseen(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.posts.unseen(user.id, groupId);
+  }
+
+  @Post('seen')
+  @HttpCode(200)
+  @RequireGroupAction('post.read')
+  seen(@CurrentUser() user: CurrentUserPayload, @Param('groupId', ParseUUIDPipe) groupId: string) {
+    return this.posts.markSeen(user.id, groupId);
+  }
+
+  /** A ordem do carrossel de avisos (prancha Pn-14). */
+  @Put('pins')
+  @RequireGroupAction('content.moderate')
+  reorderPins(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: PinOrderDto,
+  ) {
+    return this.posts.reorderPins(user.id, groupId, dto.postIds);
   }
 
   @Post()
@@ -74,6 +105,27 @@ export class PostController {
   @RequireGroupAction('post.read')
   remove(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto) {
     return this.posts.remove(user.id, p.groupId, p.id);
+  }
+
+  /** "Ocultar este post": só para mim (prancha Cm-07). */
+  @Post(':id/hide')
+  @HttpCode(200)
+  @RequireGroupAction('post.read')
+  hide(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto) {
+    return this.posts.hide(user.id, p.groupId, p.id);
+  }
+
+  @Put(':id/poll/vote')
+  @RequireGroupAction('post.read')
+  vote(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto, @Body() dto: VoteDto) {
+    return this.posts.vote(user.id, p.groupId, p.id, dto.optionId);
+  }
+
+  @Post(':id/poll/close')
+  @HttpCode(200)
+  @RequireGroupAction('post.read')
+  closePoll(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto) {
+    return this.posts.closePoll(user.id, p.groupId, p.id);
   }
 
   @Put(':id/reaction')
@@ -146,8 +198,8 @@ export class PostController {
   @Post(':id/pin')
   @HttpCode(200)
   @RequireGroupAction('content.moderate')
-  pin(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto) {
-    return this.posts.moderatePost(user.id, p.groupId, p.id, 'pin');
+  pin(@CurrentUser() user: CurrentUserPayload, @Param() p: PostParamDto, @Body() dto: PinDto) {
+    return this.posts.pin(user.id, p.groupId, p.id, dto.days ?? null);
   }
 
   @Delete(':id/pin')

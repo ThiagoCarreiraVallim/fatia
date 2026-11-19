@@ -11,10 +11,21 @@ import { ChallengeController } from './challenge.controller';
 import { ChallengeService } from './challenge.service';
 import { ModerationController } from './moderation.controller';
 import { PostController } from './post.controller';
+import { AnnouncementController } from './announcement.controller';
+import { AnnouncementService } from './announcement.service';
+import { BlockController } from './block.controller';
+import { BlockService } from './block.service';
+import { ForYouController } from './for-you.controller';
+import { ForYouService } from './for-you.service';
 import { PostService } from './post.service';
 import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
 import { CreateGroupPostTool } from './mcp/create-group-post.tool';
 import { ListGroupPostsTool } from './mcp/list-group-posts.tool';
+import { GetGroupPollTool } from './mcp/get-group-poll.tool';
+import { VoteGroupPollTool } from './mcp/vote-group-poll.tool';
+import { ListBlockedUsersTool } from './mcp/list-blocked-users.tool';
+import { BlockUserTool } from './mcp/block-user.tool';
+import { UnblockUserTool } from './mcp/unblock-user.tool';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { GroupExerciseController } from './group-exercise.controller';
@@ -118,6 +129,9 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupAgentController,
     ChallengeController,
     PostController,
+    AnnouncementController,
+    BlockController,
+    ForYouController,
     ModerationController,
     PlanOfferController,
     BenefitController,
@@ -138,6 +152,9 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupAgentService,
     ChallengeService,
     PostService,
+    AnnouncementService,
+    BlockService,
+    ForYouService,
     BenefitService,
     GroupRoleGuard,
     ListMyGroupsTool,
@@ -160,6 +177,11 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GetChallengeLeaderboardTool,
     JoinGroupChallengeTool,
     ListGroupPostsTool,
+    GetGroupPollTool,
+    VoteGroupPollTool,
+    ListBlockedUsersTool,
+    BlockUserTool,
+    UnblockUserTool,
     CreateGroupPostTool,
     CommentOnGroupPostTool,
     ListPlanOffersTool,

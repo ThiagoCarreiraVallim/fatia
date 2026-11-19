@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,87 +8,20 @@ import {
   ApiError,
   canOpenPanel,
   consentSummary,
-  displayNameProblem,
+  FEED_FILTER_LABEL,
+  FEED_FILTERS,
   feedApi,
   groupsApi,
   panelHref,
-  POST_BODY_MAX,
-  POST_MAX_IMAGES,
-  postProblem,
+  type FeedFilter,
 } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
-import type { ImageValue } from '@/components/content/image-field';
-import { PhotosField } from '@/components/content/photos-field';
-import { feedKey, NicknameField, PostCard, type MyName } from '@/components/feed/feed-ui';
+import { ComposerEntry } from '@/components/feed/composer';
+import { feedListKey, forYouKey, PostCard } from '@/components/feed/feed-ui';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import { apiMessage } from '@/components/org/org-panel';
-import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
-import { useToast } from '@/components/ui/toast';
+import { Button, Chip, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { colors } from '@/theme/colors';
-
-function Composer({ groupId, me }: { groupId: string; me: MyName }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [texto, setTexto] = useState('');
-  const [imagens, setImagens] = useState<ImageValue[]>([]);
-  const [apelido, setApelido] = useState(me.suggested);
-  const publicar = useMutation({
-    mutationFn: () =>
-      feedApi.create(groupId, {
-        body: texto.trim(),
-        imageFileIds: imagens.map((i) => i.fileId),
-        ...(me.displayName ? {} : { displayName: apelido.trim() }),
-      }),
-    onSuccess: () => {
-      setTexto('');
-      setImagens([]);
-      toast.show({ message: 'Publicado no mural.' });
-      void qc.invalidateQueries({ queryKey: feedKey(groupId) });
-    },
-    onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para publicar agora.') }),
-  });
-  const escreveu = texto.trim().length > 0 || imagens.length > 0;
-  const problema =
-    postProblem(texto, imagens.length) ?? (me.displayName ? null : displayNameProblem(apelido));
-
-  return (
-    <View className="gap-3 rounded-2xl border border-border bg-card p-4">
-      <Input
-        value={texto}
-        onChangeText={setTexto}
-        maxLength={POST_BODY_MAX}
-        multiline
-        className="min-h-[80px]"
-        textAlignVertical="top"
-        accessibilityLabel="O que você quer contar para a comunidade?"
-        placeholder="O que você quer contar para a comunidade?"
-      />
-      <PhotosField
-        groupId={groupId}
-        value={imagens}
-        onChange={setImagens}
-        purpose="post_image"
-        max={POST_MAX_IMAGES}
-        label={`Imagens (até ${POST_MAX_IMAGES})`}
-        addLabel="Adicionar imagens"
-      />
-      {!me.displayName && escreveu ? <NicknameField value={apelido} onChange={setApelido} /> : null}
-      {problema && escreveu ? (
-        <Text accessibilityRole="alert" className="text-sm text-destructive">
-          {problema}
-        </Text>
-      ) : null}
-      <Button
-        disabled={Boolean(problema)}
-        loading={publicar.isPending}
-        onPress={() => publicar.mutate()}
-      >
-        Publicar
-      </Button>
-    </View>
-  );
-}
 
 /**
  * A comunidade abre no mural (equivalente de
@@ -106,9 +39,11 @@ export default function CommunityFeedScreen() {
   // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
   // que a pessoa está dentro.
   const ativo = group.data?.status === 'ACTIVE';
+  const qc = useQueryClient();
+  const [filtro, setFiltro] = useState<FeedFilter>('all');
   const feed = useInfiniteQuery({
-    queryKey: feedKey(groupId),
-    queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam),
+    queryKey: feedListKey(groupId, filtro),
+    queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filtro),
     initialPageParam: null as string | null,
     getNextPageParam: (ultima) => ultima.nextCursor,
     enabled: ativo,
@@ -119,6 +54,25 @@ export default function CommunityFeedScreen() {
     ? { displayName: primeira.displayName, suggested: primeira.suggestedDisplayName }
     : null;
   const settingsHref = `/community/${groupId}/settings`;
+  const pins = primeira?.pins ?? [];
+
+  // "N posts novos" desde a última visita; abrir o mural conta a visita, uma vez.
+  const [novos, setNovos] = useState<number | null>(null);
+  const marcou = useRef(false);
+  const visto = useMutation({
+    mutationFn: () => feedApi.markSeen(groupId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: forYouKey(groupId) });
+      // O cartão de Minhas comunidades conta os posts novos desde a visita (#393).
+      void qc.invalidateQueries({ queryKey: ['community', 'mine'] });
+    },
+  });
+  useEffect(() => {
+    if (!primeira || marcou.current || filtro !== 'all') return;
+    marcou.current = true;
+    setNovos(primeira.unseen ?? 0);
+    visto.mutate();
+  }, [primeira, filtro, visto]);
 
   if (group.isError) {
     const sumiu = group.error instanceof ApiError && group.error.isNotFound;
@@ -187,14 +141,60 @@ export default function CommunityFeedScreen() {
         ) : null}
         {primeira && me ? (
           <>
+            {pins.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                accessibilityLabel="Avisos fixados"
+                contentContainerClassName="gap-3"
+                className="-mx-5"
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+              >
+                {pins.map((p) => (
+                  <View key={p.id} className="w-[300px]">
+                    <PostCard groupId={groupId} post={p} me={me} />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
             {primeira.canPost ? (
-              <Composer groupId={groupId} me={me} />
+              <ComposerEntry
+                groupId={groupId}
+                me={me}
+                team={
+                  primeira.isTeam
+                    ? { groupName: primeira.groupName ?? group.data?.name ?? '' }
+                    : null
+                }
+              />
             ) : (
               <Text className="rounded-2xl border border-border bg-card p-4 text-xs text-muted-foreground">
                 Nesta comunidade, só a equipe publica no mural. Você pode reagir e comentar.
               </Text>
             )}
-            {posts.length === 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              accessibilityLabel="Filtrar o mural"
+              contentContainerClassName="gap-2"
+            >
+              {FEED_FILTERS.map((f) => (
+                <Chip
+                  key={f}
+                  label={FEED_FILTER_LABEL[f]}
+                  selected={filtro === f}
+                  onPress={() => setFiltro(f)}
+                />
+              ))}
+            </ScrollView>
+            {novos !== null && novos > 0 && filtro === 'all' ? (
+              <Text accessibilityRole="alert" className="text-xs font-semibold text-primary">
+                {`${novos === 1 ? '1 post novo' : `${novos} posts novos`} desde a sua última visita`}
+              </Text>
+            ) : null}
+            {posts.length === 0 && filtro !== 'all' ? (
+              <EmptyState title="Nada por aqui" description="Nenhum post deste tipo ainda." />
+            ) : posts.length === 0 && pins.length === 0 ? (
               <EmptyState
                 title="O mural está vazio"
                 description={
