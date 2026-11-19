@@ -104,9 +104,14 @@ describe('painel › visão geral (Pn-01, #398)', () => {
     expect(screen.getByText('86')).toBeInTheDocument();
     expect(screen.getByText('73% de quem compartilha estatísticas')).toBeInTheDocument();
     expect(await screen.findByText('1/2')).toBeInTheDocument();
+    // A tela de Ativação pendente existe desde a #401: os dois cartões levam a ela.
     expect(screen.getByRole('link', { name: /Ativação pendente/ })).toHaveAttribute(
       'href',
-      '/org/g1/invites',
+      '/org/g1/activation',
+    );
+    expect(screen.getByRole('link', { name: /Entraram e ainda não registraram/ })).toHaveAttribute(
+      'href',
+      '/org/g1/activation',
     );
     expect(screen.getByText('7 convites sem aceite')).toBeInTheDocument();
     expect(screen.getByText('6 entraram · 4 por convite, 2 pela página')).toBeInTheDocument();
