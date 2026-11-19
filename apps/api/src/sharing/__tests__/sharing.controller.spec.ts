@@ -83,6 +83,9 @@ describe('SharingController — teto por usuário nas rotas em lote (#401)', () 
     'renewInvite',
     'freshInviteLink',
     'bulkMembers',
+    // Revisão #401: reenviar um e trocar o acompanhante também têm teto por usuário.
+    'resendInvite',
+    'setAccompaniedBy',
   ] as const)('%s tem o UserThrottlerGuard', (method) => {
     expect(comGuarda(method)).toBe(true);
   });

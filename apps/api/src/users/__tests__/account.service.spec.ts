@@ -494,6 +494,21 @@ describe('AccountService', () => {
       expect(chamadas).toContainEqual({ where: { email: doEmail }, data: { email: null } });
     });
 
+    it('revoga os convites ainda abertos que a pessoa criou (DATA_RETENTION, #401)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+
+      await service.deleteAccount('user-A', DELETE_CONFIRMATION);
+
+      const chamadas = prisma.groupInvite.updateMany.mock.calls.map(
+        (c: unknown[]) => c[0] as { where: Record<string, unknown>; data: Record<string, unknown> },
+      );
+      // Sem isto, o link de quem saiu continuaria abrindo a comunidade (o autor vira nulo).
+      expect(chamadas).toContainEqual({
+        where: { createdById: 'user-A', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+    });
+
     it('apaga o Logto ANTES do banco — identidade órfã reprovisionaria conta vazia', async () => {
       prisma.user.findUnique.mockResolvedValue(USER);
       const order: string[] = [];

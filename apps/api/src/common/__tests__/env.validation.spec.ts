@@ -184,12 +184,41 @@ describe('AppEnvSchema — segredo do link de convite (#401)', () => {
     expect(AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: '' }).INVITE_LINK_SECRET).toBe('');
   });
 
-  it('em produção, o placeholder ou um segredo curto derruba o boot', () => {
-    for (const segredo of ['CHANGE_ME_openssl_rand_hex_32', 'curto-demais']) {
-      expect(() => AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: segredo })).toThrow(
-        /INVITE_LINK_SECRET/,
-      );
-    }
+  it('em produção, um segredo curto derruba o boot', () => {
+    expect(() => AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: 'curto-demais' })).toThrow(
+      /INVITE_LINK_SECRET precisa de pelo menos 32 bytes/,
+    );
+  });
+
+  it('o placeholder derruba pelo texto de exemplo, mesmo com tamanho e variedade de sobra', () => {
+    // 56 caracteres base64url, mais de 16 distintos: só a regra do placeholder pega.
+    const placeholder = 'CHANGE_ME_openssl_rand_hex_32_abcdefghijklmnopqrstuvwxyz';
+    expect(placeholder.length).toBeGreaterThanOrEqual(43);
+    expect(() => AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: placeholder })).toThrow(
+      /INVITE_LINK_SECRET é o valor de exemplo/,
+    );
+  });
+
+  it('um bloco aleatório repetido não conta como 32 bytes', () => {
+    const metade = randomBytes(16).toString('hex');
+    expect(() => AppEnvSchema.parse({ ...PROD, INVITE_LINK_SECRET: metade + metade })).toThrow(
+      /INVITE_LINK_SECRET/,
+    );
+    const quarto = randomBytes(8).toString('hex');
+    expect(() =>
+      AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: quarto.repeat(4) }),
+    ).toThrow(/EMAIL_UNSUBSCRIBE_SECRET/);
+  });
+
+  it('o segredo do convite não pode ser o mesmo do descadastro', () => {
+    const segredo = randomBytes(32).toString('hex');
+    expect(() =>
+      AppEnvSchema.parse({
+        ...PROD,
+        INVITE_LINK_SECRET: segredo,
+        EMAIL_UNSUBSCRIBE_SECRET: segredo,
+      }),
+    ).toThrow(/INVITE_LINK_SECRET/);
   });
 
   it('em produção, 32 bytes aleatórios sobem', () => {

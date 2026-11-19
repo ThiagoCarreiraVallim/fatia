@@ -449,7 +449,7 @@ describe('convites, ativação e membros (#401, integração)', () => {
   });
 
   describe('convites: cartões e colunas (Pn-06)', () => {
-    it('"Entraram" e "Ativaram" por convite só com 5 ou mais; revogado e expirado aparecem inativos', async () => {
+    it('"Entraram" por convite só com 5 ou mais; revogado e expirado aparecem inativos', async () => {
       const a = await comunidade();
       const recepcao = await invites.create(a.dono, a.groupId, {
         role: 'MEMBER',
@@ -484,16 +484,15 @@ describe('convites, ativação e membros (#401, integração)', () => {
 
       const v = await invites.overview(a.dono, a.groupId);
       const linha = (id: string) => v.invites.find((i) => i.id === id)!;
-      expect(linha(recepcao.invite.id)).toMatchObject({
-        joined: 12,
-        activated: { value: 7, percent: 58 },
-        status: 'active',
-      });
-      expect(linha(poucos.invite.id)).toMatchObject({ joined: null, activated: null });
+      // A linha não traz ativação (revisão #401: a diferença entre linhas e o
+      // cartão isolaria quem entrou por um convite pequeno).
+      expect(linha(recepcao.invite.id)).toMatchObject({ joined: 12, status: 'active' });
+      expect(linha(recepcao.invite.id)).not.toHaveProperty('activated');
+      expect(linha(poucos.invite.id)).toMatchObject({ joined: null });
       expect(linha(revogado.invite.id).status).toBe('revoked');
       expect(v.cards.activeLinks).toBe(2);
       expect(v.cards.joinedLast30Days).toBe(14);
-      expect(v.cards.activated48h).toEqual({ value: 7, percent: 58 });
+      expect(v.cards.activated48h).toEqual({ percent: 58 });
       // Nenhum e-mail sem aceite: zero aparece (balde vazio não esconde ninguém).
       expect(v.cards.notAccepted).toBe(0);
     });

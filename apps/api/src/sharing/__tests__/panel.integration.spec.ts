@@ -155,11 +155,18 @@ describe('painel base (#398, integração)', () => {
       await prisma.groupMembership.create({
         data: { groupId: a.groupId, userId: pedinte, role: 'MEMBER', status: 'INVITED' },
       });
+      // O contador é o da tela Ativação pendente (#401): convidado há 2 dias ou
+      // mais, sem aceite, sem revogar e sem recusa (vencido conta: dá para renovar),
+      // e o profissional só conta os convites de membro.
+      const ha3dias = new Date(Date.now() - 3 * DIA);
       for (const [i, extra] of [
         {},
         { revokedAt: new Date() },
         { expiresAt: new Date(Date.now() - DIA) },
         { uses: 1 },
+        { declinedAt: new Date() },
+        { createdAt: new Date(Date.now() - DIA) },
+        { role: 'PROFESSIONAL' as const },
       ].entries()) {
         await prisma.groupInvite.create({
           data: {
@@ -168,6 +175,7 @@ describe('painel base (#398, integração)', () => {
             email: `convidado${i}@x.test`,
             role: 'MEMBER',
             maxUses: 1,
+            createdAt: ha3dias,
             expiresAt: new Date(Date.now() + 7 * DIA),
             ...extra,
           },
@@ -177,14 +185,14 @@ describe('painel base (#398, integração)', () => {
       const dono = await panel.counts(a.dono, a.groupId);
       expect(dono).toEqual({
         pendingRequests: 1,
-        pendingInvites: 1,
+        pendingInvites: 3,
         openReports: 0,
         challengeReview: 0,
       });
       const prof = await panel.counts(a.prof, a.groupId);
       expect(prof).toEqual({
         pendingRequests: null,
-        pendingInvites: 1,
+        pendingInvites: 2,
         openReports: null,
         challengeReview: 0,
       });
