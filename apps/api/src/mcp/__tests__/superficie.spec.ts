@@ -73,8 +73,8 @@ import {
  * #385) e o aviso de passos fechados no `list_group_challenges` mudam os dois braços.
  */
 
-const SHA_ENTIDADE = '10a14492153346925ddb1603b59048ad0aba05a8e74e9968bfff8a2485306d26';
-const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
+const SHA_ENTIDADE = 'b6e2c5ac77056c5d6ce51039d01e34933ea29b3c0d2de1138bf4c19fad413a46';
+const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
