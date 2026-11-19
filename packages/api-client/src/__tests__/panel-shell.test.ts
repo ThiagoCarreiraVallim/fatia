@@ -35,10 +35,17 @@ describe('menu do painel (#398)', () => {
       'Membros',
       'Convites',
       'Ativação pendente',
+      'Origem dos convites',
       'Assentos e faturas',
     ]);
     // Os convites sem aceite contam em Ativação pendente (#401), como na Pn-04.
-    expect(pessoas.items.map((i) => i.count)).toEqual([2, null, 7, null]);
+    expect(pessoas.items.map((i) => i.count)).toEqual([2, null, 7, null, null]);
+    // O relatório do mês (#400) fica em Acompanhar, depois de Para revisar.
+    expect(nav.find((g) => g.key === 'track')!.items.map((i) => i.label)).toEqual([
+      'Visão geral',
+      'Para revisar',
+      'Relatório',
+    ]);
     expect(pessoas.count).toBe(9);
     const comunidade = nav.find((g) => g.key === 'community')!;
     expect(comunidade.items.map((i) => i.label)).toEqual([
@@ -56,6 +63,9 @@ describe('menu do painel (#398)', () => {
     expect(secoes).not.toContain('seats');
     expect(secoes).not.toContain('moderation');
     expect(secoes).not.toContain('agent');
+    // Relatório e origens são do dono por enquanto (#400; os outros papéis com a #404).
+    expect(secoes).not.toContain('report');
+    expect(secoes).not.toContain('origins');
     expect(nav.map((g) => g.key)).not.toContain('ai');
     expect(nav.find((g) => g.key === 'people')!.items[0]!.count).toBeNull();
   });
@@ -68,6 +78,11 @@ describe('menu do painel (#398)', () => {
     expect(panelBreadcrumb('/org/g1')).toEqual({ group: 'Acompanhar', label: 'Visão geral' });
     expect(panelBreadcrumb('/org/g1/members/m1')).toEqual({ group: 'Pessoas', label: 'Membros' });
     expect(panelBreadcrumb('/org/g1/settings')).toEqual({ group: null, label: 'Configurações' });
+    expect(panelBreadcrumb('/org/g1/report')).toEqual({ group: 'Acompanhar', label: 'Relatório' });
+    expect(panelBreadcrumb('/org/g1/origins')).toEqual({
+      group: 'Pessoas',
+      label: 'Origem dos convites',
+    });
     expect(panelBreadcrumb('/org/g1/activation')).toEqual({
       group: 'Pessoas',
       label: 'Ativação pendente',
