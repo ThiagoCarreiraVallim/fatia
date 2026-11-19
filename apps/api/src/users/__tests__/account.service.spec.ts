@@ -32,6 +32,7 @@ const makePrisma = () => ({
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   nutritionPlan: { findMany: jest.fn().mockResolvedValue([]) },
   planOffer: { findMany: jest.fn().mockResolvedValue([]) },
+  memberNote: { findMany: jest.fn().mockResolvedValue([]) },
   plannedSession: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
@@ -90,6 +91,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   nutritionPlans: 'nutritionPlans',
   // Plano de treino recebido da equipe (#379), com as versões, e a agenda.
   planOffers: 'planOffers',
+  // Anotações da equipe sobre a pessoa (#402): ela já lê no app.
+  memberNotes: 'memberNotes',
   plannedSessions: 'plannedSessions',
   customExercises: 'customExercises',
   // Favoritos de exercício (#378): o atalho que a pessoa marcou no Como fazer.
@@ -158,6 +161,8 @@ const FORA_DO_EXPORT: Record<string, string> = {
   nutritionPlansAuthored:
     'Planos alimentares que a pessoa escreveu como profissional (#376): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
+  memberNotesAuthored:
+    'Anotações que a pessoa, como equipe, escreveu sobre outros membros (#402): dado de terceiro.',
   planOffersAuthored:
     'Planos de treino que a pessoa ofereceu como profissional (#379): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',

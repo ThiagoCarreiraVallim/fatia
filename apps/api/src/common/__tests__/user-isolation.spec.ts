@@ -70,6 +70,8 @@ import { AchievementService } from '../../progress/achievement.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
+import { MemberFileService } from '../../sharing/member-file.service';
+import { MemberNoteService } from '../../sharing/member-note.service';
 import { PostService } from '../../sharing/post.service';
 import { BlockService } from '../../sharing/block.service';
 import { AgendaService } from '../../workout/agenda.service';
@@ -5208,6 +5210,190 @@ describe('isolamento entre usuários', () => {
       const vista = await memberships.listMembers(p.anaA, p.grupoA, { includeLeft: true });
       expect(vista.every((x) => x.status === 'ACTIVE' || x.status === 'INVITED')).toBe(true);
       expect(vista.every((x) => x.joinedVia === undefined)).toBe(true);
+    });
+  });
+
+  describe('ficha da pessoa no painel (#402)', () => {
+    const fichaOffers = new PlanOfferService(
+      prisma,
+      new PlanMaterializerService(prisma, exercises),
+      silentNotifications,
+      plans,
+    );
+    const fichaNotes = new MemberNoteService(prisma);
+    const ficha = new MemberFileService(prisma, access, nutritionSummary, progress, fichaNotes);
+    const f = { g: '', h: '', aInG: '', bInG: '', aInH: '', tpl: '', offer: '', note: '' };
+
+    beforeAll(async () => {
+      const stamp = `ficha-${Date.now()}`;
+      const g = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Ficha G',
+          slug: `${stamp}-g`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      // Na H, o B é o dono e a A é membro: equipe de uma comunidade não lê a outra.
+      const h = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Ficha H',
+          slug: `${stamp}-h`,
+          ownerId: owned.userB,
+          memberships: {
+            create: [
+              { userId: owned.userB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      f.g = g.id;
+      f.h = h.id;
+      f.aInG = g.memberships.find((m) => m.userId === owned.userA)!.id;
+      f.bInG = g.memberships.find((m) => m.userId === owned.userB)!.id;
+      f.aInH = h.memberships.find((m) => m.userId === owned.userA)!.id;
+      await prisma.professionalLink.create({
+        data: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          groupId: g.id,
+          scopes: [ShareScope.WORKOUT],
+        },
+      });
+      const catalogo = await prisma.exercise.findFirstOrThrow({
+        where: { createdByUserId: null, groupOwned: false },
+        select: { id: true },
+      });
+      f.tpl = (
+        await prisma.groupPlanTemplate.create({
+          data: {
+            groupId: g.id,
+            authorId: owned.pro,
+            kind: 'WORKOUT',
+            title: 'Modelo G',
+            snapshot: {
+              version: PLAN_SNAPSHOT_VERSION,
+              name: 'Modelo G',
+              exercises: [
+                {
+                  source: 'catalog',
+                  catalogExerciseId: catalogo.id,
+                  order: 0,
+                  targetSets: 3,
+                  targetReps: '10',
+                },
+              ],
+            },
+            snapshotVersion: PLAN_SNAPSHOT_VERSION,
+          },
+        })
+      ).id;
+      f.offer = (
+        await fichaOffers.sendToMember(owned.pro, g.id, f.aInG, {
+          templateId: f.tpl,
+          schedule: 'FLEXIBLE',
+        })
+      ).id;
+      f.note = (await fichaNotes.create(owned.pro, g.id, f.aInG, 'Nota da G')).id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [f.g, f.h] } } });
+    });
+
+    it('a ficha só abre com a associação da comunidade da URL e para quem é da equipe', async () => {
+      // O dono da H usa o id da A na G com a URL da H, e o contrário.
+      await expect(ficha.file(owned.userB, f.h, f.aInG)).rejects.toThrow(NotFoundException);
+      await expect(ficha.file(owned.pro, f.g, f.aInH)).rejects.toThrow(NotFoundException);
+      await expect(ficha.agenda(owned.userB, f.h, f.aInG)).rejects.toThrow(NotFoundException);
+      // Na G o B é só membro.
+      await expect(ficha.file(owned.userB, f.g, f.aInG)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('a ficha da A na H não traz plano, nota nem trilha da G', async () => {
+      const naH = await ficha.file(owned.userB, f.h, f.aInH);
+      expect(naH.plans.workout).toEqual([]);
+      expect(naH.notes).toEqual([]);
+      expect(naH.grantedToMe).toEqual([]);
+      expect(JSON.stringify(naH)).not.toContain(f.offer);
+      expect(JSON.stringify(naH)).not.toContain('Nota da G');
+      // A leitura da G (o pro abriu a ficha da A lá) não aparece no histórico da H.
+      await ficha.file(owned.pro, f.g, f.aInG);
+      // Na H só ficam as linhas do próprio B (a abertura e as negadas da H).
+      const logH = (await ficha.file(owned.userB, f.h, f.aInH)).accessLog;
+      expect(logH.length).toBeGreaterThan(0);
+      expect(logH.every((l) => l.isMe)).toBe(true);
+    });
+
+    it('oferta e anotação da A não se mexem pela H nem pela associação do B', async () => {
+      await expect(
+        fichaOffers.removeForMember(owned.userB, f.h, f.aInH, f.offer, {
+          notify: false,
+          endToday: false,
+        }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        fichaOffers.removeForMember(owned.pro, f.g, f.bInG, f.offer, {
+          notify: false,
+          endToday: false,
+        }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        fichaOffers.reorderForMember(owned.userB, f.h, f.aInH, [f.offer]),
+      ).rejects.toThrow(NotFoundException);
+      await expect(fichaNotes.update(owned.userB, f.h, f.aInH, f.note, 'x')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(fichaNotes.remove(owned.pro, f.g, f.bInG, f.note)).rejects.toThrow(
+        NotFoundException,
+      );
+      // Modelo da G não sai pela H.
+      await expect(
+        fichaOffers.sendToMember(owned.userB, f.h, f.aInH, {
+          templateId: f.tpl,
+          schedule: 'FLEXIBLE',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      // Sem vínculo, nem o dono manda plano.
+      await expect(
+        fichaOffers.sendToMember(owned.pro, f.g, f.bInG, {
+          templateId: f.tpl,
+          schedule: 'FLEXIBLE',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(await prisma.planOffer.count({ where: { id: f.offer, removedAt: null } })).toBe(1);
+      expect((await prisma.memberNote.findUniqueOrThrow({ where: { id: f.note } })).text).toBe(
+        'Nota da G',
+      );
+    });
+
+    it('as notas da A só ela lê; o B não lê, nem pela comunidade dele', async () => {
+      expect((await fichaNotes.mine(owned.userA, f.g)).map((n) => n.id)).toEqual([f.note]);
+      expect(await fichaNotes.mine(owned.userB, f.g)).toEqual([]);
+      expect(await fichaNotes.mine(owned.userB, f.h)).toEqual([]);
+    });
+
+    it('a ordem dos planos é de cada um: o B não reordena plano da A', async () => {
+      const daA = await prisma.workoutPlan.create({
+        data: { userId: owned.userA, name: 'Plano da A (#402)' },
+      });
+      await expect(plans.reorder(owned.userB, [daA.id])).rejects.toThrow(NotFoundException);
+      expect((await plans.order(owned.userB)).planIds).not.toContain(daA.id);
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } })).plansOrderedAt,
+      ).toBeNull();
+      await prisma.workoutPlan.delete({ where: { id: daA.id } });
     });
   });
 

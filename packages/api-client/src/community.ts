@@ -146,7 +146,8 @@ export interface GroupMember {
 export interface AccessLogEntry {
   at: string;
   action: string;
-  scope: ShareScope;
+  /** `null` na abertura da ficha pela equipe (#402): abrir não lê categoria. */
+  scope: ShareScope | null;
   denied: boolean;
   /** `null` se a conta de quem olhou já não existe. */
   professionalName: string | null;

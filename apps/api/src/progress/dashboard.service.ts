@@ -11,6 +11,7 @@ import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 import { computeDailyGoals } from './helpers/daily-goals';
 import { activeLinksOf, linkedOffersWhere } from '../sharing/plan-offer-links';
 import type { NextEvent, ReceivedPlan, TodoItem, TodoSummary } from './today-contracts';
+import { PLAN_ORDER } from '../workout/workout-plan.service';
 
 /** Janela da variação de peso que o cartão do Hoje mostra ("−2,5 em 30 dias"). */
 const WEIGHT_CHANGE_DAYS = 30;
@@ -110,7 +111,8 @@ export class DashboardService {
       // concluída de cada plano, para saber qual foi treinado por último.
       this.prisma.workoutPlan.findMany({
         where: { userId: ctx.userId },
-        orderBy: { createdAt: 'asc' },
+        // A ordem da pessoa (#402): o primeiro da lista é o primeiro da rotação.
+        orderBy: PLAN_ORDER,
         select: {
           id: true,
           name: true,

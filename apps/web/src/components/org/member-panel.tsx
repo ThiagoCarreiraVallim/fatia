@@ -155,7 +155,6 @@ export function MemberPanel({
   const zap = m.whatsapp ? whatsappChatHref(m.whatsapp) : null;
   const via = joinedViaLabel(m);
   const vaga = assentos.data ? hasFreeSeat(assentos.data) : false;
-  const compartilha = (m.scopesGrantedToMe?.length ?? 0) > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -203,7 +202,8 @@ export function MemberPanel({
           </div>
         )}
 
-        {ativo && compartilha && (
+        {/* A ficha (#402) abre para todo membro ativo; o cadeado fica nas abas. */}
+        {ativo && ehMembro && (
           <Button variant="outline" asChild className="w-full">
             <Link href={`${panelHref(g.id, 'members')}/${m.membershipId}`}>Ficha completa</Link>
           </Button>

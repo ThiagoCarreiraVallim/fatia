@@ -47,6 +47,13 @@ const PLAN_INCLUDE = {
 
 type PlanRow = Prisma.WorkoutPlanGetPayload<{ include: typeof PLAN_INCLUDE }>;
 
+/** Ordem da lista (#402): a que a pessoa ou a equipe deu; sem ordem, por criação. */
+/** A ordem dos planos da pessoa (#402): a dela, ou a da equipe, e depois a de criação. */
+export const PLAN_ORDER = [
+  { position: { sort: 'asc', nulls: 'last' } },
+  { createdAt: 'asc' },
+] satisfies Prisma.WorkoutPlanOrderByWithRelationInput[];
+
 /** O plano com quantas vezes foi feito e quando foi o último (Al-T6, Al-T7). */
 export type PlanView = PlanRow & { timesDone: number; lastDoneAt: Date | null };
 
@@ -273,9 +280,50 @@ export class WorkoutPlanService {
     const plans = await this.prisma.workoutPlan.findMany({
       where: { userId },
       include: PLAN_INCLUDE,
-      orderBy: { createdAt: 'asc' },
+      orderBy: PLAN_ORDER,
     });
     return this.withStats(userId, plans);
+  }
+
+  /** A ordem dos planos no app (#402) e se a pessoa já reordenou. */
+  async order(userId: string): Promise<{ planIds: string[]; customized: boolean }> {
+    const [rows, user] = await Promise.all([
+      this.prisma.workoutPlan.findMany({
+        where: { userId },
+        select: { id: true },
+        orderBy: PLAN_ORDER,
+      }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { plansOrderedAt: true } }),
+    ]);
+    return { planIds: rows.map((r) => r.id), customized: Boolean(user?.plansOrderedAt) };
+  }
+
+  /**
+   * A pessoa reordena os planos (#402): o primeiro é o treino de hoje. Daí em
+   * diante a ordem é dela, e a da equipe na ficha não muda mais esta lista.
+   * Id de plano de outra pessoa responde como inexistente; plano que ficou de
+   * fora da lista vai para o fim, na ordem de antes.
+   */
+  async reorder(
+    userId: string,
+    planIds: string[],
+  ): Promise<{ planIds: string[]; customized: boolean }> {
+    const unique = [...new Set(planIds)];
+    const owned = await this.prisma.workoutPlan.findMany({
+      where: { id: { in: unique }, userId },
+      select: { id: true },
+    });
+    if (owned.length !== unique.length) throw new NotFoundException('Plan not found');
+    const rest = (await this.order(userId)).planIds.filter((id) => !unique.includes(id));
+    // `plansOrderedAt` primeiro: trava a linha da pessoa, e a ficha (que trava
+    // a mesma linha antes de mexer nas cópias) passa a ver que a ordem é dela.
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { plansOrderedAt: new Date() } }),
+      ...[...unique, ...rest].map((id, position) =>
+        this.prisma.workoutPlan.updateMany({ where: { id, userId }, data: { position } }),
+      ),
+    ]);
+    return this.order(userId);
   }
 
   /**

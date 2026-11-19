@@ -92,6 +92,9 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `insights.read`        | sim   | não          | não     | não    |
 | `panel.overview`       | sim   | sim          | não     | não    |
 | `panel.search`         | sim   | sim          | não     | não    |
+| `member.file`          | sim   | sim          | não     | não    |
+| `member.plans`         | sim   | sim          | não     | não    |
+| `member.note`          | sim   | sim          | não     | não    |
 | `benefit.read`         | sim   | sim          | sim     | sim    |
 | `benefit.manage`       | sim   | não          | não     | não    |
 
@@ -116,6 +119,14 @@ futura:
   mínimo de 5 e o `statsOptIn`. A busca devolve só nome, papel e situação do membro, telas
   conforme a ação de cada tela e planos da biblioteca com `content.publish`; nunca dado de saúde.
   Um papel só com `panel.search` (a Recepção da #404) vê só nomes.
+- **Ficha da pessoa (#402): `member.file`, `member.plans` e `member.note` são do dono e do
+  profissional.** Abrir a ficha mostra o que é da equipe (planos que ela mandou, anotações,
+  agenda planejada, quem abriu a ficha); dado de saúde continua só pelo vínculo, uma categoria
+  por leitura, e cada leitura entra na trilha da pessoa. Mandar plano exige, além do papel,
+  `ProfessionalLink` ativo entre quem manda e a pessoa. Apagar ou terminar um plano é do autor
+  ou do dono; reordenar é de quem tem `member.plans`. A anotação não é privada: a pessoa vê, só
+  leitura, e ela some quando a pessoa sai da comunidade. Editar ou apagar a anotação é do autor
+  ou do dono.
 - **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é
   o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
   convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
@@ -217,6 +228,9 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `insights.read`        | não                  |
 | `panel.overview`       | não                  |
 | `panel.search`         | não                  |
+| `member.file`          | não                  |
+| `member.plans`         | não                  |
+| `member.note`          | não                  |
 | `benefit.read`         | não                  |
 | `benefit.manage`       | não                  |
 

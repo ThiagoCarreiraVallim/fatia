@@ -89,6 +89,8 @@ const iniciais = (nome: string) =>
 
 /** Só membro ativo entra na seleção: as ações em massa valem para ele. */
 const selecionavel = (m: PanelMember) => m.status === 'ACTIVE' && m.role === 'MEMBER';
+/** Ficha da pessoa (#402): membro ativo; a página só abre para dono e profissional. */
+const temFicha = (m: PanelMember) => m.status === 'ACTIVE' && m.role === 'MEMBER';
 
 function ColumnsMenu({ cols, onChange }: { cols: Coluna[]; onChange: (c: Coluna[]) => void }) {
   const [aberto, setAberto] = useState(false);
@@ -566,6 +568,16 @@ export default function OrgMembersPage() {
                             Recusar
                           </Button>
                         </span>
+                      )}
+                      {/* A ficha (#402) é de quem é membro, com ou sem nada compartilhado:
+                          planos e agenda são da equipe, e o cadeado fica nas abas. */}
+                      {temFicha(m) && (
+                        <Link
+                          href={`${panelHref(g.id, 'members')}/${m.membershipId}`}
+                          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-primary hover:bg-muted"
+                        >
+                          Ficha
+                        </Link>
                       )}
                     </td>
                   </tr>

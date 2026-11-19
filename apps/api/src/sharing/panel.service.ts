@@ -469,7 +469,7 @@ export class PanelService {
     // Só o que quem pergunta mandou: o envio de outra pessoa da equipe é dela.
     const envios = can(role, 'offer.create')
       ? await this.prisma.planOffer.findMany({
-          where: { groupId, authorId: userId },
+          where: { groupId, authorId: userId, removedAt: null },
           select: {
             id: true,
             user: { select: { name: true } },

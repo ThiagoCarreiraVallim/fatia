@@ -385,6 +385,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Minhas comunidades (Cm-01):** `MyGroup` ganhou `visibility`, `timezone`, `memberCount`, `newPostCount`, `forYouCount` e `challenge { id, title, rank }`. "Posts novos" conta desde `GroupMembership.feedSeenAt`, gravado quando a pessoa abre o mural (o `markSeen` da #394, chamado pela web e pelo app; ler a lista não grava, porque o mural mostra a faixa de posts novos antes). "Para você" conta só as ofertas de plano pendentes da comunidade.
 - **Sobre (Cm-04):** cada categoria grava na hora (chave), a obrigatória fica travada com cadeado; números da comunidade num checkbox. A equipe vem de `GET /groups/:id/team` (quem da equipe, o que vê de mim, último acesso em `ProfessionalAccessLog` não negado, só do próprio membro), em seções por papel, com busca, "viu hoje" e "Ver toda a equipe (N)". "Quem olhou seus dados" mostra os 5 últimos, inclusive o negado.
 - **Benefícios (Cm-22, Pn-28):** `GroupPartnerBenefit` (parceiro, logo opcional pelo storage com propósito `benefit_logo`, desconto, cupom **ou** link https, validade em dia). O membro vê os ativos e os vencidos de ontem (sem cupom nem link), no fuso da comunidade; a entrada em Sobre só aparece com benefício ativo. Cupom copia (guardado como digitado, só sem espaço nas pontas), link abre fora; no vencido só logo e título ficam apagados. Editar manda a validade só quando ela muda, então dá para corrigir o texto de um vencido. **Só o dono cadastra** (`benefit.manage`; `benefit.read` para todos os papéis), no painel da web (tabela + painel lateral com prévia e logo) e no app (formulário com validade em escolhas prontas, sem logo). MCP: `list_group_benefits` (leitura, cartão lista) — 155 tools, `SHA_ENTIDADE` novo.
+- **Ordem e corridas (revisão):** o Hoje (próximo da rotação) e a sugestão da semana seguem a ordem dos planos (`PLAN_ORDER`). `PUT …/plans/order` exige a lista inteira das ofertas da pessoa, sem repetir (400). Enviar e reordenar na ficha correm com `pg_advisory_xact_lock` por pessoa e comunidade; a cópia só muda de posição com `plansOrderedAt` vazio, lido com a linha da pessoa travada (e condicionado no aceite), então a ordem dela nunca é sobrescrita. Oferta apagada não recebe versão nova (404) nem aparece em Para você e Últimos envios; terminada responde 409 e, no app, acaba no dia em que terminou (`endedAt`). O `--purge` do `community:invite` apaga as notas e encerra as ofertas pendentes, como sair.
 - **Isolamento:** benefício é sempre buscado por `{ id, groupId }` da URL; o logo passa por `media.resolveForGroup`. `user-isolation.spec.ts` cobre benefícios e a equipe vista pelo membro.
 - **Desvios de propósito:**
   - Sem "Rever boas-vindas" em Sobre: depende da #410.
@@ -490,10 +491,11 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 ## Etapa 8: Painel base (em andamento)
 
-| Issue | Título                                        | Estado           | Superfícies                    |
-| ----- | --------------------------------------------- | ---------------- | ------------------------------ |
-| #398  | Painel: layout novo, visão geral e busca ⌘K   | pronto na branch | api, db, api-client, web, docs |
-| #401  | Painel: membros, convites e ativação pendente | pronto na branch | api, db, api-client, web, docs |
+| Issue | Título                                            | Estado           | Superfícies                            |
+| ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
+| #398  | Painel: layout novo, visão geral e busca ⌘K       | mergeado (#451)  | api, db, api-client, web, docs         |
+| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452)  | api, db, api-client, web, mobile, docs |
+| #401  | Painel: membros, convites e ativação pendente     | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -531,6 +533,45 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A comunidade demo tem 6 pessoas com opt-in, então os indicadores e o gráfico aparecem como "Oculto"/"—" no dev; é a regra, não defeito.
   - Nada foi publicado na passada (contagens do banco de dev iguais antes e depois); o e-mail ficou desligado no dev.
 - **Falta:** o app (painel no celular é a #414).
+
+#402 (branch `redesign/402-ficha-pessoa`; migrations `20261119300000_member_file` e `20261119300100_access_log_group`; nenhuma env nova; nenhuma tool nova no MCP: aceitar e recusar plano já existem no MCP (`list_plan_offers` e afins), e `list_workout_plans` não mudou):
+
+- **Decisões (orquestrador):**
+  - **Anotações da equipe** (`MemberNote`): a pessoa vê. A caixa diz "O aluno vê estas anotações"; `visibleToSubject = true` sempre; no app (Comunidade → Sobre, celular e PWA) é só leitura e só aparece com alguma anotação. Sem etiquetas. Editar e apagar: quem escreveu ou o dono. Saem quando a pessoa deixa a comunidade (na mesma transação de `encerrar`), entram no export LGPD (`memberNotes`) e na `DATA_RETENTION.md`.
+  - **Ordem dos planos:** a equipe dá a ordem inicial na ficha (`PlanOffer.position`, copiada para `WorkoutPlan.position` no aceite); a pessoa reordena no app (Treino → Planos → Ordenar). Depois que ela reordena (`User.plansOrderedAt`), a ordem da ficha não mexe mais na lista dela, e a ficha avisa isso.
+  - **Resumo por IA** é a #411.
+  - **Agenda:** só treinos planejados (`PlannedSession` de plano mandado por esta comunidade). Eventos com "Vou" entram com o modelo novo da #397; sem grade de aulas.
+  - **Visitas** são a #390.
+- **Ficha** (`/org/<id>/members/<membershipId>`; Membros leva à ficha de todo membro ativo para dono e profissional):
+  - `GET groups/:id/members/:membershipId/file` e `/agenda?from&to` (até 42 dias). Permissões novas `member.file`, `member.plans` e `member.note` (dono e profissional), em `permissions.ts` e `PERMISSIONS.md`.
+  - Abas Resumo, Planos, Treino, Alimentação, Fotos das refeições, Corpo e avaliações, Hábitos e metas e Agenda. Aba de categoria que ela não compartilha tem cadeado e o estado "Ana não compartilha…". Planos e agenda planejada aparecem sempre (são da equipe); "feito/não feito" e pesagens só com Treino/Corpo liberados.
+  - Resumo: o que ela compartilha com quem olha, planos ativos, a semana (treinos x meta, média de 7 dias e dias com proteína, peso em 60 dias; só das categorias liberadas), próximos 7 dias, anotações e os 10 últimos acessos à ficha (inclusive negados).
+  - **Dado de saúde** só pelo `assertReadable` (uma leitura por categoria, ação `get_member_file`/`get_member_agenda`), então cada abertura entra em "Quem olhou seus dados".
+  - **Tudo fica no histórico (revisão):** abrir a ficha grava uma linha `open_member_file` sem categoria ("Helena abriu sua ficha"), e cada categoria que a ficha tenta mostrar (Treino, Alimentação e Corpo no resumo; Treino e Corpo na agenda) passa pela porta única: a trancada vira tentativa negada. A trilha guarda a comunidade (`ProfessionalAccessLog.groupId`, da associação lida); o histórico da ficha lista só a comunidade dela, e linha antiga sem comunidade fica fora. Em Comunidade → Sobre, a linha antiga ainda entra pelo vínculo.
+  - **Agenda sem Treino liberado:** título e dias da versão aceita que a equipe mandou, nunca o nome nem os dias remarcados da cópia dela.
+  - **Planos:** mandar treino da biblioteca (Sem datas / Com calendário, recado), etiquetas "na comunidade" e "já com a Ana", subir/descer, apagar com "Avisar a Ana" e "Terminar hoje" (apaga as sessões futuras e deixa em Terminados). Apagar tira a cópia dela; o que ela registrou fica no histórico. Pedido pendente vira `SUPERSEDED`. Alimentação aparece só leitura.
+- **Isolamento:** `membershipId` precisa ser da comunidade da URL e estar ativo (senão 404); oferta, modelo e anotação são amarrados à comunidade e à pessoa. Coberto em `member-file.integration.spec.ts` e no bloco #402 do `user-isolation.spec.ts`.
+- **Desvios de propósito:**
+  - A ordem da pessoa é `GET/PUT workout/plans/order`, não `users/me/plans/order`: fica junto das rotas de plano.
+  - Não há tabela nova de "plano mandado" com `kind`: o treino reaproveita `PlanOffer`/`PlanOfferVersion` (#379), com campos novos (`position`, `sourceTemplateId`, `endedAt`, `removedAt`), e a alimentação continua no `NutritionPlan` (#376).
+  - Sem rascunho, duplicar, editar a cópia, "Criar para a Ana" e mandar dieta: dependem dos editores.
+- **Passada visual** (web 1440 e 390, escuro e claro, e app no emulador, contra Pn-05, Pn-05p, Pn-05q, Pn-05s, Pn-05d, Cm-04 e Al-T6; prints em `~/.cache/fatia-vis/402/cmp-*.png`):
+  - Corrigido: no celular o nome da pessoa ficava espremido ao lado de "Adicionar plano" (o botão agora desce para a linha de baixo); a tabela de planos tinha 640 px fixos e escondia as ações em 390 (Quando e Andamento somem no celular, e Quando vai sob o nome); o formulário "Adicionar plano" no painel lateral não tinha respiro nem rolagem própria.
+  - Acrescentado: "Ordenar" planos também no app web (o celular já tinha), mesma regra e a mesma chamada.
+  - Conferido: o painel lateral empurra a página e não cobre "Adicionar plano"; o diálogo de apagar fica sobre a barra de abas no celular com os três botões visíveis; "Apagar" em `text-danger`; sem texto escuro no modo escuro; aba trancada com cadeado e o estado "Carla não compartilha Corpo".
+  - Desvios de propósito: abas em fichas (o `Segmented` do produto) em vez da barra de abas lisa da prancha; o compartilhado no Resumo em etiquetas e não em lista; a semana da agenda sem altura mínima por dia; telefone, "Pedir avaliação", Visitas e "Criar para a Ana" ficam fora (ver Falta). O lado da pessoa foi conferido com o dono (nota de uma profissional sobre ele e os planos dele), porque a conta demo não é membro da Academia Demo.
+  - Dados de demo criados para os prints (3 ofertas, 5 planos, 3 notas, linhas da trilha, ordem do Bruno) foram apagados; contagens iguais antes e depois.
+- **Falta:**
+  - #383: avaliações e "Pedir avaliação" (a aba Corpo mostra o espaço vazio).
+  - #397: eventos com "Vou" na agenda.
+  - #399: detalhe da sessão e recordes do mês na aba Treino.
+  - #406/#407: editores, rascunho, duplicar, editar a cópia e mandar plano alimentar.
+  - #404: equipe ("acompanhada por" vem só de quem tem acesso hoje).
+  - #390: visitas.
+  - #391: hábitos e os "Outros envios".
+  - #411: resumo por IA.
+  - O telefone para WhatsApp e "Substituir o atual" no envio.
+  - Ordenar planos alimentares (`MealTemplate`).
 
 #401 (branch `redesign/401-membros-convites`; migrations `20261119200000_invites_origin_activation` e `20261119200100_invite_link_issued_at`; env nova `INVITE_LINK_SECRET`; permissão nova `member.assign` (dono); nenhuma tool nova no MCP; dependência web nova `qrcode-generator`, JS puro):
 

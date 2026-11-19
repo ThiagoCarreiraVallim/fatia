@@ -150,3 +150,12 @@ export class ReorderExercisesDto {
   @Type(() => ReorderItemDto)
   exercises!: ReorderItemDto[];
 }
+
+/** A ordem dos planos no app (#402): o primeiro é o treino de hoje. */
+export class ReorderPlansDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID('all', { each: true })
+  planIds!: string[];
+}

@@ -132,7 +132,7 @@ describe('painel › membros (Pn-04)', () => {
     expect(screen.queryByRole('columnheader', { name: 'Entrou por' })).toBeNull();
   });
 
-  it('o dono aprova pedido na própria linha', async () => {
+  it('o dono aprova pedido na própria linha, e todo membro ativo tem a ficha (#402)', async () => {
     vi.mocked(orgApi.approve).mockResolvedValue({
       membershipId: 'm-Márcia',
       groupId: 'g1',
@@ -142,6 +142,20 @@ describe('painel › membros (Pn-04)', () => {
     });
     abrir();
     await screen.findByText('Márcia');
+    expect(within(linha('Carla')).getByRole('link', { name: /Ficha/ })).toHaveAttribute(
+      'href',
+      '/org/g1/members/m-Carla',
+    );
+    // A ficha mostra planos e agenda mesmo sem nada compartilhado; o cadeado fica nas abas.
+    expect(within(linha('Diego')).getByRole('link', { name: /Ficha/ })).toBeInTheDocument();
+    // Pedido e equipe não têm ficha.
+    expect(within(linha('Márcia')).queryByRole('link', { name: /Ficha/ })).toBeNull();
+    expect(
+      within(
+        screen.getByRole('button', { name: 'Abrir Helena' }).closest('tr') as HTMLElement,
+      ).queryByRole('link', { name: /Ficha/ }),
+    ).toBeNull();
+
     await userEvent.click(within(linha('Márcia')).getByRole('button', { name: 'Aprovar' }));
     await waitFor(() => expect(orgApi.approve).toHaveBeenCalledWith('g1', 'm-Márcia', 'MEMBER'));
     expect(toast).toHaveBeenCalledWith('Márcia entrou na comunidade.');
@@ -222,6 +236,7 @@ describe('painel › membros (Pn-04)', () => {
     expect(screen.queryByRole('button', { name: 'Aprovar' })).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(seatsApi.get).not.toHaveBeenCalled();
+    expect(within(linha('Carla')).getByRole('link', { name: /Ficha/ })).toBeInTheDocument();
     await userEvent.click(within(linha('Carla')).getByRole('button', { name: 'Abrir Carla' }));
     const p = painel();
     expect(within(p).queryByRole('button', { name: 'Remover da comunidade' })).toBeNull();
