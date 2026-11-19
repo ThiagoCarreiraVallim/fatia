@@ -299,6 +299,20 @@ describe('painel base (#398, integração)', () => {
       expect(v.aggregates!.activity.workouts.some((c) => c.value === 3)).toBe(false);
     });
 
+    it('cada dia do gráfico também é de dois lados: 0 treinos ou menos de 5 parados somem', async () => {
+      const a = await comunidade();
+      const gente = [];
+      for (let i = 0; i < 8; i++)
+        gente.push(await membro(a.groupId, `Aluno ${i}`, { optIn: true }));
+      // Ontem 6 treinaram e só 2 não: o lado de 2 entregaria quem ficou parado.
+      for (const m of gente.slice(0, 6)) await treino(m.userId, 1);
+      const v = await panel.overview(a.dono, a.groupId, 7);
+      for (const serie of [v.aggregates!.activity.workouts, v.aggregates!.activity.people]) {
+        // Nenhum dia sai: nos outros ninguém treinou (0 também é pequeno).
+        expect(serie.every((c) => c.value === null && c.suppressed)).toBe(true);
+      }
+    });
+
     it('"0 treinaram" e "0 registraram" também são pequenos: somem', async () => {
       const a = await comunidade();
       for (let i = 0; i < 6; i++)
