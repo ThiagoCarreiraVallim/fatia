@@ -440,10 +440,17 @@ describe('painel base (#398, integração)', () => {
           publishedAt: new Date(),
         },
       });
-      const dono = await panel.search(a.dono, a.groupId, 'a');
       const prof = await panel.search(a.prof, a.groupId, 'a');
-      expect(dono.screens.map((s) => s.key)).toContain('seats');
-      expect(prof.screens.map((s) => s.key)).not.toContain('seats');
+      // A busca devolve até 6 telas: "assent" isola a de assentos (#400 pôs mais telas com "a").
+      const telas = async (quem: typeof a.dono, q: string) =>
+        (await panel.search(quem, a.groupId, q)).screens.map((s) => s.key);
+      expect(await telas(a.dono, 'assent')).toContain('seats');
+      expect(await telas(a.prof, 'assent')).not.toContain('seats');
+      // Relatório e origens são do dono (`insights.read`, #400).
+      expect(await telas(a.dono, 'relat')).toContain('report');
+      expect(await telas(a.prof, 'relat')).not.toContain('report');
+      expect(await telas(a.dono, 'origem')).toContain('origins');
+      expect(await telas(a.prof, 'origem')).not.toContain('origins');
       expect(prof.screens.map((s) => s.key)).not.toContain('moderation');
       expect(prof.plans.map((p) => p.title)).toEqual(['Hipertrofia A/B']);
       expect((await panel.search(a.dono, a.groupId, 'hipert')).plans[0]).toMatchObject({
