@@ -4640,6 +4640,69 @@ describe('isolamento entre usuários', () => {
     });
 
     it('o export do user-A leva o check-in e a foto dele; o da colega, só o que ela fez', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+        [],
+        checkinMedia,
+      );
+      const deA = await conta.exportData(owned.userA, { photoLinks: true });
+      const naAcademia = deA.communityMemberships.find((m) => m.group.name === 'Academia B')!;
+      const entrada = naAcademia.challengeEntries.find((e) => e.checkins.length > 0)!;
+      expect(entrada).toMatchObject({
+        challenge: { kind: 'PHOTO' },
+        photoConsentVersion: expect.any(String),
+      });
+      expect(entrada.checkins).toEqual([
+        expect.objectContaining({
+          type: 'PHOTO',
+          photo: expect.objectContaining({
+            mime: expect.stringMatching(/^image\//),
+            url: expect.any(String),
+          }),
+        }),
+      ]);
+      expect(JSON.stringify(entrada)).not.toContain(ids.checkinA);
+
+      const daColega = await conta.exportData(owned.colega, { photoLinks: true });
+      const dela = daColega.communityMemberships.flatMap((m) => m.challengeEntries);
+      expect(dela.flatMap((e) => e.checkins)).toEqual([]);
+      // A sinalização é dela (o que ela fez), sem a foto nem o nome de quem foi sinalizado.
+      await prisma.challengeCheckinFlag.upsert({
+        where: {
+          checkinId_membershipId: {
+            checkinId: ids.checkinA,
+            membershipId: (await prisma.groupMembership.findFirstOrThrow({
+              where: { groupId: owned.groupId, userId: owned.colega },
+            }))!.id,
+          },
+        },
+        create: {
+          checkinId: ids.checkinA,
+          membershipId: (await prisma.groupMembership.findFirstOrThrow({
+            where: { groupId: owned.groupId, userId: owned.colega },
+          }))!.id,
+        },
+        update: {},
+      });
+      const flags = (await conta.exportData(owned.colega)).communityMemberships.flatMap(
+        (m) => m.checkinFlags,
+      );
+      expect(flags).toEqual([{ createdAt: expect.any(Date), challenge: 'Iso 395' }]);
+      expect(JSON.stringify(flags)).not.toMatch(/Ana|image\/jpeg/);
+    });
+
+    it('a colega vê o dia do user-A, nunca a foto dele', async () => {
+      const visto = await challenges.get(owned.colega, owned.groupId, ids.desafio);
+      const itemDoA = visto.activity.filter((i) => !i.isMe);
+      expect(itemDoA.length).toBeGreaterThan(0);
+      expect(JSON.stringify(visto)).not.toMatch(/photoUrl":"/);
+      const proprio = await challenges.get(owned.userA, owned.groupId, ids.desafio);
+      expect(proprio.activity.some((i) => i.isMe && i.photoUrl)).toBe(true);
+    });
+  });
+
   describe('conteúdo da equipe: planos, dicas e guias (#396)', () => {
     const store = new MemoryObjectStore();
     const media = new MediaService(prisma, store);
@@ -4836,62 +4899,6 @@ describe('isolamento entre usuários', () => {
         prisma,
         {} as LogtoManagementService,
         {} as CheckpointPurgeService,
-        [],
-        checkinMedia,
-      );
-      const deA = await conta.exportData(owned.userA, { photoLinks: true });
-      const naAcademia = deA.communityMemberships.find((m) => m.group.name === 'Academia B')!;
-      const entrada = naAcademia.challengeEntries.find((e) => e.checkins.length > 0)!;
-      expect(entrada).toMatchObject({
-        challenge: { kind: 'PHOTO' },
-        photoConsentVersion: expect.any(String),
-      });
-      expect(entrada.checkins).toEqual([
-        expect.objectContaining({
-          type: 'PHOTO',
-          photo: expect.objectContaining({
-            mime: expect.stringMatching(/^image\//),
-            url: expect.any(String),
-          }),
-        }),
-      ]);
-      expect(JSON.stringify(entrada)).not.toContain(ids.checkinA);
-
-      const daColega = await conta.exportData(owned.colega, { photoLinks: true });
-      const dela = daColega.communityMemberships.flatMap((m) => m.challengeEntries);
-      expect(dela.flatMap((e) => e.checkins)).toEqual([]);
-      // A sinalização é dela (o que ela fez), sem a foto nem o nome de quem foi sinalizado.
-      await prisma.challengeCheckinFlag.upsert({
-        where: {
-          checkinId_membershipId: {
-            checkinId: ids.checkinA,
-            membershipId: (await prisma.groupMembership.findFirstOrThrow({
-              where: { groupId: owned.groupId, userId: owned.colega },
-            }))!.id,
-          },
-        },
-        create: {
-          checkinId: ids.checkinA,
-          membershipId: (await prisma.groupMembership.findFirstOrThrow({
-            where: { groupId: owned.groupId, userId: owned.colega },
-          }))!.id,
-        },
-        update: {},
-      });
-      const flags = (await conta.exportData(owned.colega)).communityMemberships.flatMap(
-        (m) => m.checkinFlags,
-      );
-      expect(flags).toEqual([{ createdAt: expect.any(Date), challenge: 'Iso 395' }]);
-      expect(JSON.stringify(flags)).not.toMatch(/Ana|image\/jpeg/);
-    });
-
-    it('a colega vê o dia do user-A, nunca a foto dele', async () => {
-      const visto = await challenges.get(owned.colega, owned.groupId, ids.desafio);
-      const itemDoA = visto.activity.filter((i) => !i.isMe);
-      expect(itemDoA.length).toBeGreaterThan(0);
-      expect(JSON.stringify(visto)).not.toMatch(/photoUrl":"/);
-      const proprio = await challenges.get(owned.userA, owned.groupId, ids.desafio);
-      expect(proprio.activity.some((i) => i.isMe && i.photoUrl)).toBe(true);
       );
       const exportado = await conta.exportData(c.membro);
       expect(exportado.workoutPlans).toEqual([
