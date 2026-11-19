@@ -49,3 +49,13 @@ export function readRecents(membershipId: string): RecentEntry[] {
 }
 export const writeRecents = (membershipId: string, items: RecentEntry[]) =>
   write(RECENT_KEY(membershipId), { items });
+
+const COLUMNS_KEY = (membershipId: string) => `fatia:panel:overview-columns:${membershipId}`;
+
+/** As colunas escolhidas na tabela da Visão geral; nulo = o padrão (todas). */
+export function readOverviewColumns(membershipId: string): string[] | null {
+  const r = read<{ columns: string[] | null }>(COLUMNS_KEY(membershipId), { columns: null });
+  return Array.isArray(r.columns) ? r.columns : null;
+}
+export const writeOverviewColumns = (membershipId: string, columns: string[]) =>
+  write(COLUMNS_KEY(membershipId), { columns });
