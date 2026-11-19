@@ -16,9 +16,11 @@ import {
   groupsApi,
   LEAVE_COPY,
   lockedScopes,
+  myNotesApi,
   myRoleBadge,
   panelHref,
   PRO_PAID_NOTE,
+  relativeStamp,
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
   SHARE_SCOPES,
@@ -221,6 +223,34 @@ function TeamSection({ groupId }: { groupId: string }) {
 }
 
 /**
+ * Anotações da equipe sobre você (#402). A equipe escreve na ficha; aqui é só
+ * leitura. Somem quando você sai da comunidade e vão junto na exportação.
+ */
+function TeamNotesSection({ groupId, now }: { groupId: string; now: Date }) {
+  const notes = useQuery({
+    queryKey: communityKeys.myNotes(groupId),
+    queryFn: () => myNotesApi.list(groupId),
+  });
+  if (!notes.data || notes.data.length === 0) return null;
+  return (
+    <section aria-labelledby="anotacoes" className="space-y-2 rounded-card bg-card px-[18px] py-4">
+      <h2 id="anotacoes" className="eyebrow">
+        Anotações da equipe
+      </h2>
+      {notes.data.map((n) => (
+        <div key={n.id}>
+          <p className="whitespace-pre-wrap break-words text-sm">{n.text}</p>
+          <p className="text-xs text-muted-foreground">
+            {`${n.authorName ?? 'Alguém que saiu da equipe'} · ${relativeStamp(new Date(n.createdAt), now, BROWSER_TZ)}`}
+          </p>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">Só a equipe escreve. Somem se você sair.</p>
+    </section>
+  );
+}
+
+/**
  * Sobre a comunidade (Cm-04), atrás da engrenagem do mural: quem é, o PRO pago
  * pela comunidade, os benefícios, o que eu compartilho (cada categoria grava
  * na hora; a obrigatória fica travada), quem da equipe vê, quem olhou meus
@@ -373,6 +403,7 @@ export default function CommunitySettingsPage() {
 
       {active && <SharingSection g={g} />}
       {active && <TeamSection groupId={g.id} />}
+      {active && <TeamNotesSection groupId={g.id} now={now} />}
 
       {active && (
         <section

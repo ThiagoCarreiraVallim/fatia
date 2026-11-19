@@ -21,6 +21,7 @@ export const communityKeys = {
   forYou: (groupId: string) => ['community', 'for-you', groupId] as const,
   /** Quem da equipe vê o quê de mim (Sobre). */
   team: (groupId: string) => ['community', 'team', groupId] as const,
+  myNotes: (groupId: string) => ['community', 'my-notes', groupId] as const,
   benefits: (groupId: string) => ['community', 'benefits', groupId] as const,
 };
 /** Chaves do painel da equipe. Sob `['community', 'org', groupId]`: uma mudança invalida o painel inteiro. */
