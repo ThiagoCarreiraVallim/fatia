@@ -1,5 +1,5 @@
 import type { GroupRole } from './community';
-import { accessLogLine } from './community-home';
+import { accessLogLine, relativeStamp } from './community-home';
 import { dayMonth, formatDecimal, formatInteger, MONTHS_SHORT } from './format';
 import { apiFetch } from './http';
 import type { ShareScope } from './sharing';
@@ -41,7 +41,8 @@ export interface MemberNutritionPlan {
 
 export interface MemberAccessEntry {
   at: string;
-  scope: ShareScope;
+  /** `null` na abertura da ficha. */
+  scope: ShareScope | null;
   action: string;
   denied: boolean;
   professionalName: string | null;
@@ -290,6 +291,10 @@ export function fileFollowLine(f: Pick<MemberFile, 'joinedAt' | 'followedBy'>): 
 
 /** Uma linha do "Histórico de acesso à ficha": "Você" para quem olha. */
 export function fileAccessLine(e: MemberAccessEntry, now: Date, tz: string): string {
+  if (e.scope === null) {
+    const quem = e.isMe ? 'Você' : (e.professionalName ?? 'Alguém que saiu do Fatia');
+    return `${quem} abriu a ficha · ${relativeStamp(new Date(e.at), now, tz)}`;
+  }
   return accessLogLine(
     {
       at: e.at,

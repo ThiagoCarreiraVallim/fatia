@@ -239,8 +239,9 @@ export function relativeStamp(at: Date, now: Date, tz: string): string {
 /** "Helena Prado abriu Treino · hoje 09:12" / "… tentou ver Alimentação · negado · seg 18:40". */
 export function accessLogLine(entry: AccessLogEntry, now: Date, tz: string): string {
   const quem = entry.professionalName ?? 'Alguém que saiu do Fatia';
-  const area = SHARE_SCOPE_LABEL[entry.scope];
   const quando = relativeStamp(new Date(entry.at), now, tz);
+  if (entry.scope === null) return `${quem} abriu sua ficha · ${quando}`;
+  const area = SHARE_SCOPE_LABEL[entry.scope];
   return entry.denied
     ? `${quem} tentou ver ${area} · negado · ${quando}`
     : `${quem} abriu ${area} · ${quando}`;
