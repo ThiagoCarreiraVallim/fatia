@@ -10,6 +10,8 @@ import {
   challengeCta,
   challengeInputFromForm,
   challengeRules,
+  checkinPhotoBytes,
+  checkinPhotoPreview,
   checkinReducer,
   checkinStamp,
   checkinTag,
@@ -411,8 +413,8 @@ describe('check-in (Cm-18)', () => {
   });
 
   it('os passos: foto → revisão → envio → feito; erro volta à revisão', () => {
-    let s = checkinReducer({ step: 'camera' }, { type: 'shot', photo: { uri: 'f.jpg' } });
-    expect(s).toEqual({ step: 'review', photo: { uri: 'f.jpg' }, error: null });
+    let s = checkinReducer({ step: 'camera' }, { type: 'shot', photo: { base64: 'AAEC' } });
+    expect(s).toEqual({ step: 'review', photo: { base64: 'AAEC' }, error: null });
     expect(checkinReducer(s, { type: 'retake' })).toEqual({ step: 'camera' });
     s = checkinReducer(s, { type: 'send' });
     expect(s.step).toBe('sending');
@@ -422,13 +424,24 @@ describe('check-in (Cm-18)', () => {
     const falhou = checkinReducer(s, { type: 'failed', message: 'Esta foto já foi usada.' });
     expect(falhou).toEqual({
       step: 'review',
-      photo: { uri: 'f.jpg' },
+      photo: { base64: 'AAEC' },
       error: 'Esta foto já foi usada.',
     });
     const feito = checkinReducer(s, { type: 'succeeded', detail: detail() });
     expect(feito.step).toBe('done');
     // Foto na câmera só na etapa da câmera.
-    expect(checkinReducer(feito, { type: 'shot', photo: { uri: 'x' } })).toBe(feito);
+    expect(checkinReducer(feito, { type: 'shot', photo: { base64: 'AA==' } })).toBe(feito);
+  });
+});
+
+describe('foto do check-in', () => {
+  // No Expo Go o arquivo da câmera fica numa pasta com "%40" no nome, e o
+  // fetch(uri) decodifica o caminho: a foto subia com 14 bytes e a prévia
+  // ficava preta. A foto vai pelo base64 da própria câmera.
+  it('vira bytes para o envio e data URI para a prévia, sem ler arquivo', () => {
+    const foto = { base64: 'AAEC/w==' };
+    expect([...checkinPhotoBytes(foto)]).toEqual([0, 1, 2, 255]);
+    expect(checkinPhotoPreview(foto)).toBe('data:image/jpeg;base64,AAEC/w==');
   });
 });
 
