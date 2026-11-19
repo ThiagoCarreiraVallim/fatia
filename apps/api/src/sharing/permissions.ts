@@ -104,6 +104,19 @@ export const GROUP_PERMISSIONS = {
    * informação com regras diferentes.
    */
   'insights.read': [GroupRole.OWNER],
+  /**
+   * Abrir o painel da equipe (#398): os contadores do menu e a Visão geral. O
+   * que cada contador e cada cartão mostra segue a ação própria dele
+   * (`member.approve`, `invite.create`, `content.moderate`, `challenge.review`,
+   * `insights.read`); esta ação só abre a porta.
+   */
+  'panel.overview': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
+  /**
+   * A busca ⌘K do painel (#398): nomes de membros, telas e planos da
+   * biblioteca, nunca dado de saúde. Telas e planos dependem das ações de cada
+   * um, então um papel só com esta ação (a Recepção, #404) vê só nomes.
+   */
+  'panel.search': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /** Ver os descontos de parceiros da comunidade (#393). */
   'benefit.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   /**

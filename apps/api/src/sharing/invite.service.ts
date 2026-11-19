@@ -14,6 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   GroupRole,
   JoinPolicy,
+  JoinVia,
   MembershipStatus,
   type GroupMembership,
   type ShareScope,
@@ -533,6 +534,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       role: convite.role,
       consent,
       at: agora,
+      via: JoinVia.INVITE,
     });
     try {
       const [membership] = (await this.prisma.$transaction([

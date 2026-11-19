@@ -14,6 +14,8 @@ import { ModerationController } from './moderation.controller';
 import { PostController } from './post.controller';
 import { AnnouncementController } from './announcement.controller';
 import { AnnouncementService } from './announcement.service';
+import { PanelController } from './panel.controller';
+import { PanelService } from './panel.service';
 import { BlockController } from './block.controller';
 import { BlockService } from './block.service';
 import { ForYouController } from './for-you.controller';
@@ -133,6 +135,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ChallengeController,
     PostController,
     AnnouncementController,
+    PanelController,
     BlockController,
     ForYouController,
     ModerationController,
@@ -157,6 +160,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ChallengeCheckinService,
     PostService,
     AnnouncementService,
+    PanelService,
     BlockService,
     ForYouService,
     BenefitService,

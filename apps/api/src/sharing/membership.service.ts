@@ -8,6 +8,7 @@ import {
 import {
   GroupRole,
   JoinPolicy,
+  JoinVia,
   MembershipStatus,
   type GroupMembership,
   type Prisma,
@@ -139,6 +140,8 @@ export class MembershipService {
     const entrada = await findGroupByEntryCode(this.prisma, code);
     if (!entrada) throw new NotFoundException(NOT_FOUND);
     const { group } = entrada;
+    // Código gerado pela equipe (o QR da recepção) ou o slug da página (#398).
+    const via = entrada.inviteId ? JoinVia.CODE : JoinVia.PAGE;
     // Conta o uso do código no mesmo commit da entrada; o filtro de `maxUses`
     // faz o último uso disputado falhar inteiro (P2025 → 404).
     const usoDoCodigo = entrada.inviteId
@@ -180,6 +183,7 @@ export class MembershipService {
         role: GroupRole.MEMBER,
         consent,
         at: new Date(),
+        via,
       });
       const [membership] = (await this.prisma
         .$transaction([...ops, ...usoDoCodigo])
@@ -200,6 +204,7 @@ export class MembershipService {
       consentScopes: escopos,
       consentAt: new Date(),
       statsOptIn: consent.statsOptIn,
+      joinVia: via,
     };
     const [membership] = (await this.prisma
       .$transaction([
@@ -296,6 +301,8 @@ export class MembershipService {
     role: GroupRole;
     consent: JoinConsent;
     at: Date;
+    /** Por onde entrou (#398). Ausente na aprovação: vale o que o pedido guardou. */
+    via?: JoinVia;
   }): Promise<Prisma.PrismaPromise<unknown>[]> {
     const { groupId, userId, role, at } = params;
     const scopes = normalizarEscopos(params.consent.scopes);
@@ -312,6 +319,7 @@ export class MembershipService {
       consentScopes: scopes,
       consentAt: at,
       statsOptIn: params.consent.statsOptIn,
+      ...(params.via ? { joinVia: params.via } : {}),
     };
     const ops: Prisma.PrismaPromise<unknown>[] = [
       this.prisma.groupMembership.upsert({
