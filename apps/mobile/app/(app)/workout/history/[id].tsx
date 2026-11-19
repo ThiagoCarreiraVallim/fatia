@@ -29,6 +29,7 @@ import { useStartSession } from '@/components/workout/use-start-session';
 import { CircuitResultBlocks } from '@/components/workout/circuit/circuit-result';
 import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
+import { SessionFeedbackCard } from '@/components/workout/session-feedback-card';
 import { colors } from '@/theme/colors';
 
 /**
@@ -179,6 +180,7 @@ function CircuitDetail({
             <Text className="text-xs text-faint">“{summary.notes}”</Text>
           </View>
         ) : null}
+        <SessionFeedbackCard feedback={summary.feedback} />
         {failed ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
             Não foi possível começar o circuito. Tente de novo.
@@ -317,6 +319,8 @@ function Detail({
             <StrengthExercises summary={summary} />
           </>
         )}
+
+        <SessionFeedbackCard feedback={summary.feedback} />
 
         <Pressable
           accessibilityRole="link"
