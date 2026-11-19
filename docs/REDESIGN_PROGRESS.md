@@ -511,7 +511,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Visão geral** (`GET groups/:id/overview?days=7|30|90`, permissão nova `panel.overview`):
   - Membros ativos (entraram nos últimos 30 dias, pedidos aguardando), **Treinos ontem** e **Ativos em 7 dias** (só o dono, que tem `insights.read`), Assentos PRO (dono).
   - Cartões Ativação pendente (convites por e-mail sem aceite, não revogados e no prazo), Novos esta semana (por convite ou código / pela página, de `GroupMembership.joinVia`, gravado a partir de agora; quem entrou antes conta em `viaUnknown`, "sem origem", e a soma fecha) e Entraram e ainda não registraram.
-  - Gráfico Atividade dos membros (dono): treinos registrados e pessoas que treinaram por dia no fuso da comunidade, os 7, 30 ou 90 dias até ontem, séries ligáveis; dia com menos de 5 pessoas fica em branco.
+  - Gráfico Atividade dos membros (dono): treinos registrados e pessoas que treinaram por dia no fuso da comunidade, os 7, 30 ou 90 dias até ontem, séries ligáveis; cada dia é de dois lados como os indicadores (quem treinou e quem não treinou entre os membros com opt-in): só sai com 5 ou mais de cada lado, senão fica em branco, e sem nenhum dia publicável o gráfico fica oculto.
   - Tabela com abas Precisa de você (pedidos, denúncias, check-ins para revisar), Desafios (em andamento e começando) e Últimos envios (planos que **eu** mandei), colunas escolhidas pela pessoa.
   - Retenção e Comportamento (os `InsightsCard` de antes) ficam embaixo, em "Relatório", até a #400.
 - **Comunicado:** limite de avisos por semana por comunidade (`ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`, padrão 3; vale para push e e-mail juntos, travado com `pg_advisory_xact_lock`). Cada disparo com aviso fica em `AnnouncementDispatch` (comunidade, comunicado em SetNull, hora real em que saiu, canais): apagar o post ou o comunicado não devolve a vaga. A vaga só é reivindicada depois de saber quem recebe, e só se houver alguém (quem desligou `ANNOUNCEMENTS` não conta). Passou do limite: sai no mural sem push nem e-mail, e a API devolve `pushSkipped` (o editor avisa antes, "Limite de 3 avisos por semana atingido"). Erro no aviso depois de o post sair vira log, não 500 (o cliente tentaria de novo e duplicaria o post). Contas de entrega por comunicado: notificações mandadas (`pushSent`, celular e navegador), entregues no celular pelo recibo do Expo (`pushDelivered`, via `PushTicket.announcementId`; o navegador não tem recibo) e e-mails (`emailSent`), na lista "Enviados" da tela de Comunicados. `GET …/announcements/settings` e `/recent`.
@@ -524,7 +524,12 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - O subtítulo do membro na busca é o papel ("membro", "pedido para entrar"), não o plano dele.
   - "Enviar para alunos" (botão do topo do menu na prancha) depende da Pn-18; ficou fora.
   - Os cartões levam a telas que existem: "Entraram e ainda não registraram" e "Ativação pendente" abrem Convites até a tela de Ativação pendente existir.
-- **Falta:** passada visual (prints lado a lado, web 390 e 1440, escuro e claro) — o brief desta issue pediu para não tirar prints; o app (painel no celular é a #414).
+- **Passada visual** (web 1440 e 390, escuro e claro, contra Pn-01, Pn-01b, Pn2-00b e Pn2-00c; prints em `~/.cache/fatia-vis/398/cmp-*.png`):
+  - Corrigido: o gráfico mostrava dias com 0 ou poucas pessoas (inferência individual) e agora segue a regra de dois lados; com o painel lateral aberto o menu fica só nos ícones (sem mudar a preferência salva; "Abrir menu" fecha o painel), a busca do topo vira só o ícone e a tabela fica com Item, Tipo e Status (Pn-01b); "Buscar membro ou tela" não quebra linha; Tipo e Status em etiquetas; "Publicar como" e "Quando" com rótulo visível; data da prévia da tela bloqueada em minúsculas (pt-BR).
+  - Conferido: o painel lateral empurra a página e não cobre botão; no celular ocupa a tela acima da barra de abas com Cancelar/Publicar visíveis; sem texto escuro no modo escuro; busca com resultados e "Nada com" iguais às pranchas; `/descadastro` com link inválido.
+  - A comunidade demo tem 6 pessoas com opt-in, então os indicadores e o gráfico aparecem como "Oculto"/"—" no dev; é a regra, não defeito.
+  - Nada foi publicado na passada (contagens do banco de dev iguais antes e depois); o e-mail ficou desligado no dev.
+- **Falta:** o app (painel no celular é a #414).
 
 ## Etapas seguintes
 
