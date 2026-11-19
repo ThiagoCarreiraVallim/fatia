@@ -24,4 +24,5 @@ Estado: (atualizar a cada commit)
 - [x] client+web+app (testes 6e71c007, fix no commit seguinte)
 - [x] MCP descrição e docs (d4485829)
 - [x] merge origin/main (base 9adc2e5a via merge-tree; só conflitos de MCP, lado da #395)
-- [ ] regenerar MCP, lint/typecheck/testes (recriar fatia_t395: a migration da 393 mudou de nome)
+- [x] MCP regenerado (7a71556e), ReviewItem→CheckinReviewItem (e738e127), lint e typecheck verdes; client 1054, web 1071, mobile 570
+- [ ] suíte da API inteira; depois apagar este handoff e responder com o SHA
