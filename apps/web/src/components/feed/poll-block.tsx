@@ -3,13 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Lock } from 'lucide-react';
-import {
-  feedApi,
-  pollClosesLabel,
-  pollResultNote,
-  type Post,
-  type PollView,
-} from '@fatia/api-client';
+import { feedApi, pollFooter, type Post, type PollView } from '@fatia/api-client';
 import { communityKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -125,9 +119,7 @@ export function PollBlock({
           })}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">
-        {pollResultNote(poll)} · {pollClosesLabel(poll)}
-      </p>
+      <p className="text-xs text-muted-foreground">{pollFooter(poll)}</p>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <Lock size={12} aria-hidden />
         Seu voto é anônimo · Ninguém vê em quem você votou, nem a equipe.

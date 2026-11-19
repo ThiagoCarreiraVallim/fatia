@@ -98,7 +98,7 @@ function Autor({ author, createdAt }: { author: PostAuthor; createdAt: string })
 
 function Reacoes({ post, onReact }: { post: Post; onReact: (k: PostReactionKind | null) => void }) {
   return (
-    <View className="flex-row flex-wrap gap-1" accessibilityLabel="Reações">
+    <View className="flex-row gap-1" accessibilityLabel="Reações">
       {POST_REACTIONS.map((k) => {
         const minha = post.reactions.mine === k;
         const n = post.reactions.counts[k];

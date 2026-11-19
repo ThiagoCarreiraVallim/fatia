@@ -463,7 +463,7 @@ export function pollResultNote(
 ): string {
   if (poll.totalVotes !== null) {
     const n = poll.totalVotes === 1 ? '1 voto' : `${poll.totalVotes} votos`;
-    return poll.closed ? `${n} · encerrada` : n;
+    return n;
   }
   if (!poll.closed && !poll.myOptionId) return 'Vote para ver o resultado';
   // Quem votou conhece o próprio voto: contam os votos dos outros.
@@ -487,7 +487,14 @@ export function pollClosesLabel(
   return `Encerra em ${dias} dias`;
 }
 
-/** O selo do aviso fixado. */
+/** O rodapé da enquete: o resultado e o prazo, com o encerramento uma vez só. */
+export function pollFooter(
+  poll: Pick<PollView, 'closed' | 'closesAt' | 'myOptionId' | 'totalVotes'>,
+  now: Date = new Date(),
+): string {
+  return `${pollResultNote(poll)} · ${pollClosesLabel(poll, now)}`;
+}
+
 /** O nome do aviso nas listas (Moderação): o título, ou a primeira linha do texto sem marcação. */
 export function pinHeadline(post: { title?: string | null; body: string }): string {
   if (post.title) return post.title;
@@ -495,6 +502,7 @@ export function pinHeadline(post: { title?: string | null; body: string }): stri
   return markdownLitePlainText(primeira).trim() || 'Aviso';
 }
 
+/** O selo do aviso fixado. */
 export function pinDeadlineLabel(pinnedUntil: string | null | undefined): string {
   if (!pinnedUntil) return 'Fixado';
   const d = new Date(pinnedUntil);

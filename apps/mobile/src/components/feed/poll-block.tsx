@@ -1,13 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock } from 'lucide-react-native';
-import {
-  feedApi,
-  pollClosesLabel,
-  pollResultNote,
-  type PollView,
-  type Post,
-} from '@fatia/api-client';
+import { feedApi, pollFooter, type PollView, type Post } from '@fatia/api-client';
 import { apiMessage } from '@/components/org/org-panel';
 import { Button, cn } from '@/components/ui';
 import { Text } from '@/components/ui/text';
@@ -100,9 +94,7 @@ export function PollBlock({
           );
         })}
       </View>
-      <Text className="text-xs text-muted-foreground">
-        {`${pollResultNote(poll)} · ${pollClosesLabel(poll)}`}
-      </Text>
+      <Text className="text-xs text-muted-foreground">{pollFooter(poll)}</Text>
       <View className="flex-row items-center gap-1">
         <Lock size={12} color={colors.mutedForeground} />
         <Text className="flex-1 text-xs text-muted-foreground">

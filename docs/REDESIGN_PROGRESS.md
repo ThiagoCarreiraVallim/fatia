@@ -423,13 +423,16 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - No app, a barra de formatação acrescenta no fim do texto (como o script da prancha); na web, insere no cursor. O horário do comunicado no app é escolhido em chips de dia e de horário, sem seletor nativo.
   - Copiar link no app copia o link do app (`expo-linking`), que abre o mural.
   - O "Fixar como aviso" do composer fixa por 7 dias; outros prazos pelo menu do post ou pelo comunicado.
+  - Na Enquete, o composer (web e app) tem um "Contexto da enquete" opcional com Escrever e Prévia, que a Cm-06b não tem.
+  - Os avisos do carrossel levam reações e Comentar, como os posts; a Cm-03 empilha os avisos sem rodapé.
+  - A Cm-07 é a denúncia em folha; no app, a denúncia abre sob o post, com os mesmos motivos. O menu e a confirmação de bloqueio são folhas que cobrem a barra de baixo.
+- **Passada visual (web, 390 e 1440, e app no emulador, tema escuro):** prancha | web | app em `~/.cache/fatia-vis/394/cmp-*.png` (Cm-03, 05, 06, 06b, 07, 20, 21, 21b, 21c, 21d, Pn-01b, Pn-14, Pn-26, Pn-26b). Corrigido nela: o composer começa fechado na linha "Escreva para a comunidade…" (Cm-03); o aviso fixado sem título aparece na Moderação pela primeira linha sem marcação; `text-destructive` virou `text-danger` no composer e na Moderação do app; a enquete encerrada dizia "encerrada · Encerrada" (agora `pollFooter`); no app, as reações de um post quebravam linha sozinhas (a fileira não quebra mais; quem desce é o Comentar); o ciclo de import `feed-ui` ↔ `poll-block` saiu para `feed-keys.ts`. O menu nunca cobre botão de folha ou de formulário (Cancelar e Publicar ficam acima da barra ao rolar). A engrenagem dobrada no topo do app é o botão "Tools" do Expo Go, não do app. O aviso de ciclo `ai-menu` ↔ `food-search-drawer` no LogBox é anterior à #394.
 - **Falta (fora do escopo, registrado):**
   - **E-mail do comunicado:** não há descadastro com link na comunidade. Só notificação e mural.
   - Partes da #315 sem prancha: segmentar o comunicado por grupo de membros, imagem e link interno no comunicado, limite semanal e métricas de abertura.
   - Para você: avaliação pedida (#383) e questionário (#391) entram quando essas issues criarem os dados. "Também aparece no Hoje" fica para a issue do Hoje.
   - Posts automáticos de resultado de desafio e de membro novo (prancha Pn-14) dependem de dado que ainda não existe (pódio fechado e consentimento do apelido).
   - Aba Agenda (#397).
-  - Prints lado a lado com as pranchas: não feitos nesta issue (o brief pediu sem screenshots). Falta a passada visual de web e app contra Cm-03 a Cm-21d, Pn-14 e Pn-26.
 
 ## Etapas seguintes
 

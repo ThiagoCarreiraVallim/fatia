@@ -7,6 +7,7 @@ import {
   communityTabs,
   pinDeadlineLabel,
   pollClosesLabel,
+  pollFooter,
   pollProblem,
   pollResultNote,
   repeatOptions,
@@ -50,7 +51,14 @@ describe('mural #394: enquete, avisos, comunicados e abas', () => {
       'Amostra pequena demais para mostrar · o resultado aparece com 5 votos',
     );
     expect(pollResultNote(poll({ myOptionId: 'a', totalVotes: 12 }))).toBe('12 votos');
-    expect(pollResultNote(poll({ closed: true, totalVotes: 5 }))).toBe('5 votos · encerrada');
+    expect(pollResultNote(poll({ closed: true, totalVotes: 5 }))).toBe('5 votos');
+  });
+
+  it('rodapé da enquete: o encerramento aparece uma vez só', () => {
+    expect(pollFooter(poll({ closed: true, totalVotes: 7 }), agora)).toBe('7 votos · Encerrada');
+    expect(pollFooter(poll({ myOptionId: 'a', totalVotes: 12 }), agora)).toBe(
+      '12 votos · Encerra em 3 dias',
+    );
   });
 
   it('prazo da enquete', () => {
