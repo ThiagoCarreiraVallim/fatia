@@ -24,7 +24,7 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 - [x] api-client
 - [x] web
 - [x] mobile filtro
-- [ ] docs (REDESIGN_PROGRESS bloco #400, PERMISSIONS?, AGGREGATION_POLICY, DATA_RETENTION, export LGPD)
+- [x] docs
 - [ ] lint/typecheck/testes
 
 ## Próximo passo

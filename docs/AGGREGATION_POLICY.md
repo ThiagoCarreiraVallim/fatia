@@ -247,6 +247,22 @@ convites) e da comunidade passam pelas mesmas regras ([`DADOS_REDESIGN.md`](./DA
 - **"Alunos em risco" continua contagem por faixa** (regra 8). Lista nominal de quem está em risco
   só existe para quem consentiu individualmente, por vínculo — e aí não é agregado.
 
+### Relatório do mês e origens dos convites (#400)
+
+Vivem em `sharing/report.service.ts`, fora de `insights/`, como o resto do painel base (#398);
+usam o mesmo `MIN_CELL` e o `binarySplit` da visão geral:
+
+- **Base:** só membros ativos com `statsOptIn`, no numerador e no denominador; só treino conta
+  (§6, §7). Planos e revisões contam ofertas e comentários da equipe a quem aceitou.
+- **Semanas, dias e desafios:** cada célula com menos de 5 (ou com menos de 5 do outro lado)
+  sai como `null`; a frase "quem participa registra N× mais" exige 5 de cada lado.
+- **Origens:** linha com menos de 5 que entraram fica oculta; taxa só com 5 de cada lado
+  (ativou e não ativou). O total de "entraram" só aparece se as linhas ocultas somam 5 ou mais
+  e sobra 5 ou mais além delas (bloco seguro), e a taxa total exige que o resto das linhas sem
+  taxa tenha 5 ou mais de cada lado — senão o total menos as linhas visíveis revelaria a oculta.
+- **Períodos fixos** (7 e 30 dias, meses fechados): não há janela arbitrária para subtrair uma
+  da outra.
+
 ## Onde isso vive
 
 | Regra                       | Código                                                  | Teste                             |
