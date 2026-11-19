@@ -18,15 +18,15 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 
 ## Estado
 
-- [ ] schema + migration
-- [ ] testes vermelhos (api)
-- [ ] api
-- [ ] api-client
+- [x] schema + migration
+- [x] testes vermelhos (api)
+- [x] api
+- [x] api-client
 - [ ] web
-- [ ] mobile filtro
+- [x] mobile filtro
 - [ ] docs (REDESIGN_PROGRESS bloco #400, PERMISSIONS?, AGGREGATION_POLICY, DATA_RETENTION, export LGPD)
 - [ ] lint/typecheck/testes
 
 ## Próximo passo
 
-Começar pelo schema.
+Web: ícones no org-shell, páginas report e origins (testes vermelhos primeiro), ?novo=link, descadastro com kind, tirar InsightsCards da visão geral. Depois docs e verificação final.
