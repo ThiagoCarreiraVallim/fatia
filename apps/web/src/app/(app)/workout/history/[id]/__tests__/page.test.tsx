@@ -382,6 +382,37 @@ describe('Sessão do histórico', () => {
     ]);
   });
 
+  it('comentário da equipe (#399): reação, texto e quem mandou, só leitura', async () => {
+    getSummary.mockResolvedValue({
+      ...base,
+      feedback: [
+        {
+          id: 'f1',
+          authorName: 'Helena Prado',
+          groupName: 'Academia Demo',
+          reaction: 'STRONG',
+          body: 'Recorde no supino!',
+          createdAt: '2026-11-02T14:00:00.000Z',
+          updatedAt: '2026-11-02T14:00:00.000Z',
+        },
+      ],
+    });
+    renderPage();
+    const card = await screen.findByRole('region', { name: 'Da sua equipe' });
+    expect(within(card).getByText('Recorde no supino!')).toBeInTheDocument();
+    expect(within(card).getByText('Helena Prado · Academia Demo')).toBeInTheDocument();
+    expect(within(card).getByText('💪')).toBeInTheDocument();
+    // Sem resposta no app: a conversa é pelo WhatsApp (ADR 048).
+    expect(within(card).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('sem comentário, sem o cartão da equipe', async () => {
+    getSummary.mockResolvedValue({ ...base, feedback: [] });
+    renderPage();
+    await screen.findByText('Supino reto');
+    expect(screen.queryByRole('region', { name: 'Da sua equipe' })).not.toBeInTheDocument();
+  });
+
   it('sessão ainda aberta vai para o treino em andamento', async () => {
     getSummary.mockResolvedValue({ ...base, completedAt: null });
     renderPage();
