@@ -218,14 +218,13 @@ describe('desafios da comunidade (integração)', () => {
         expect((erro as BadRequestException).message).toMatch(/sincroniza/i);
       }
       // Passos com 0 ponto não é item de passos: a tabela segue valendo.
-      await expect(
-        challenges.create(a.dono, a.groupId, {
-          title: 'Misto',
-          ...datas(),
-          kind: 'POINTS',
-          pointsTable: { workout: 2, steps: 0 },
-        }),
-      ).resolves.toMatchObject({ kind: 'POINTS', rules: { stepsGoal: null } });
+      const misto = await challenges.create(a.dono, a.groupId, {
+        title: 'Misto',
+        ...datas(),
+        kind: 'POINTS',
+        pointsTable: { workout: 2, steps: 0 },
+      });
+      expect(misto.rules.pointsTable).toEqual({ workout: 2 });
       expect(
         await prisma.groupChallenge.count({ where: { groupId: a.groupId, title: 'Passos' } }),
       ).toBe(0);

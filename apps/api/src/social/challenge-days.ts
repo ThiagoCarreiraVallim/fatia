@@ -29,6 +29,16 @@ export type PointsTable = Partial<Record<PointItem, number>>;
 export type DayPart = PointItem;
 
 export const POINT_VALUE_MAX = 5;
+/**
+ * Passos só contam vindos do Apple Saúde, do Health Connect ou de relógio, e o
+ * app ainda não sincroniza nenhum (ADR 047 §7). Até a sync de saúde chegar, não
+ * se cria desafio de passos nem item de passos nos pontos; os que já existem
+ * seguem aparecendo e se editam sem perder os passos.
+ */
+export const STEPS_SYNC_AVAILABLE = false;
+export const STEPS_CLOSED_MESSAGE =
+  'Desafio de passos volta quando o app sincronizar com o Apple Saúde ou o Health Connect: ' +
+  'hoje nenhum passo conta';
 export const DEFAULT_WATER_GOAL_ML = 2500;
 export const DEFAULT_STEPS_GOAL = 10_000;
 /** Acima disto, a água do dia não soma (prancha Cm-17b: "até 4 L"). */

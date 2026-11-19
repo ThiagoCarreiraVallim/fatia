@@ -19,4 +19,8 @@ MCP: não há tool que crie desafio; só a descrição do list avisa.
 
 Estado: (atualizar a cada commit)
 
-- [ ] testes vermelhos API
+- [x] testes vermelhos API (ffe58798)
+- [x] fix API (assertStepsOpen)
+- [ ] client+web+app (testes vermelhos, depois fix)
+- [ ] MCP descrição do list, docs ADR 047 e REDESIGN_PROGRESS
+- [ ] merge origin/main, regenerar MCP, lint/typecheck/testes

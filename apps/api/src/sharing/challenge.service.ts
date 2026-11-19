@@ -39,6 +39,8 @@ import {
   parsePointsTable,
   POINT_ITEMS,
   POINT_VALUE_MAX,
+  STEPS_CLOSED_MESSAGE,
+  STEPS_SYNC_AVAILABLE,
   type ChallengeKindName,
   type DayPart,
   type PointItem,
@@ -564,6 +566,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     });
     const janela = this.window(input, group.timezone);
     const regras = normalizeRules(input);
+    assertStepsOpen(regras, false);
     const abertos = await this.prisma.groupChallenge.count({
       where: { groupId, endsAt: { gt: now } },
     });
@@ -623,6 +626,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       (input.kind ?? 'METRIC') === 'METRIC' &&
       input.metric === row.metric;
     const regras = antigo ? legacyRules(row) : normalizeRules(input);
+    assertStepsOpen(regras, rulesUseSteps(row));
     const viraFoto = usesPhotoCheckin({
       kind: regras.kind,
       pointsTable:
@@ -1502,6 +1506,28 @@ const intEntre = (v: number | null | undefined, min: number, max: number, campo:
  * Nunca peso nem medida; nutrição só como dia na própria meta; passos à mão
  * nunca contam.
  */
+/** Se as regras contam passos: o tipo de passos ou o item de passos nos pontos. */
+function rulesUseSteps(r: {
+  kind: string;
+  metric: ChallengeMetric;
+  pointsTable: Prisma.JsonValue | Prisma.InputJsonValue | typeof Prisma.DbNull | null;
+}): boolean {
+  if (r.kind === 'STEPS' || r.metric === 'STEPS') return true;
+  if (r.kind !== 'POINTS' || r.pointsTable === null || r.pointsTable === Prisma.DbNull) {
+    return false;
+  }
+  return (parsePointsTable(r.pointsTable as Prisma.JsonValue).steps ?? 0) > 0;
+}
+
+/**
+ * Passos fechados até a sync de saúde (ADR 047 §7): não nasce desafio que conte
+ * passos. Quem já contava (`jaUsava`) segue contando ao ser editado.
+ */
+function assertStepsOpen(regras: ReturnType<typeof normalizeRules>, jaUsava: boolean) {
+  if (STEPS_SYNC_AVAILABLE || jaUsava) return;
+  if (rulesUseSteps(regras)) throw new BadRequestException(STEPS_CLOSED_MESSAGE);
+}
+
 /** As regras de um desafio antigo de ml ou passos, como estão (#395 M8). */
 function legacyRules(row: GroupChallenge): ReturnType<typeof normalizeRules> {
   return {
