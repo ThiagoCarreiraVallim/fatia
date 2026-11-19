@@ -56,19 +56,21 @@ export class UpdateMyTargetsTool extends IntentTool<'update_my_targets'> {
           `Ainda não há metas definidas; para criar, informe também ${faltando.join(', ')}.`,
         );
       }
-      goals = await this.goals.upsert(userId, {
-        kcalMin: juntas.kcalMin,
-        kcalMax: juntas.kcalMax,
-        proteinMinG: juntas.proteinMinG,
-        proteinMaxG: juntas.proteinMaxG,
-        carbsMinG: juntas.carbsMinG,
-        carbsMaxG: juntas.carbsMaxG,
-        fatMinG: juntas.fatMinG,
-        fatMaxG: juntas.fatMaxG,
-        weeklyWorkouts: juntas.weeklyWorkouts,
-        dailyStepsTarget: juntas.dailyStepsTarget,
-        dailyWaterTargetMl: juntas.dailyWaterTargetMl,
-      }); // set_nutrition_goals
+      goals = (
+        await this.goals.upsert(userId, {
+          kcalMin: juntas.kcalMin,
+          kcalMax: juntas.kcalMax,
+          proteinMinG: juntas.proteinMinG,
+          proteinMaxG: juntas.proteinMaxG,
+          carbsMinG: juntas.carbsMinG,
+          carbsMaxG: juntas.carbsMaxG,
+          fatMinG: juntas.fatMinG,
+          fatMaxG: juntas.fatMaxG,
+          weeklyWorkouts: juntas.weeklyWorkouts,
+          dailyStepsTarget: juntas.dailyStepsTarget,
+          dailyWaterTargetMl: juntas.dailyWaterTargetMl,
+        })
+      ).goals; // set_nutrition_goals
     }
 
     const nutrientTarget =

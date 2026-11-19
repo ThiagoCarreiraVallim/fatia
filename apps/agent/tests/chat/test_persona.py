@@ -42,6 +42,13 @@ def test_a_persona_vem_depois_das_regras_e_antes_da_memoria_com_as_orientacoes_c
     assert f"groupId {GRUPO}" in sistema
 
 
+def test_a_persona_aponta_os_guias_de_exercicio_da_academia():
+    # #396: o guia da academia (vídeo, fotos e a dica da equipe) é consulta da comunidade.
+    sistema = bloco_da_persona(PERSONA)
+
+    assert f"list_group_exercise_guides com groupId {GRUPO}" in sistema
+
+
 def test_sem_persona_o_prompt_e_o_de_sempre():
     sistema = sistema_do_turno(None)
 

@@ -8,6 +8,8 @@ import type {
   TipCategory,
 } from './community-content';
 import type { UserGoals } from './nutrition';
+import type { GroupRole } from './community';
+import { equipmentLabel, type GymEquipmentState } from './community-exercises';
 
 /**
  * Textos e regras dos planos prontos e dicas (Fase 7a), iguais na web e no
@@ -102,7 +104,9 @@ export function adoptResultMessage(r: AdoptResult): string {
   if (r.goalsApplied) partes.push('metas atualizadas');
   if (!partes.length) return 'Nada mudou.';
   const texto = partes.join(', ');
-  return `${texto.charAt(0).toUpperCase()}${texto.slice(1)}.`;
+  const frase = `${texto.charAt(0).toUpperCase()}${texto.slice(1)}.`;
+  // #396: trocar as metas não apaga as de antes.
+  return r.goalsHistoryWritten ? `${frase} As de antes ficaram no histórico.` : frase;
 }
 
 /** Dicas para a vitrine do membro: fixadas primeiro, depois as mais novas. */
@@ -134,4 +138,83 @@ export function goalsProblem(
     if (a > b) return `O mínimo de ${nome} passa do máximo.`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------- vitrine do membro (#396)
+
+/** Nome do autor que apagou a conta, como a API devolve. */
+const TEAM_AUTHOR = 'Equipe';
+
+const ROLE_SHORT: Partial<Record<GroupRole, string>> = {
+  OWNER: 'dono',
+  PROFESSIONAL: 'profissional',
+  CREATOR: 'criador de conteúdo',
+};
+
+const KIND_SHORT: Record<TemplateKind, string> = { WORKOUT: 'treino', NUTRITION: 'alimentação' };
+
+/** "treino · 4 exercícios · intermediário · Bruno" — a linha do plano na aba Conteúdo (Cm-12). */
+export function memberTemplateLine(
+  t: Pick<PlanTemplate, 'kind' | 'exercises' | 'meals' | 'level' | 'authorName'>,
+): string {
+  const partes: string[] = [KIND_SHORT[t.kind]];
+  if (t.kind === 'WORKOUT') partes.push(plural(t.exercises.length, 'exercício', 'exercícios'));
+  else if (t.meals.length) partes.push(plural(t.meals.length, 'refeição', 'refeições'));
+  if (t.level) partes.push(PLAN_LEVEL_LABEL[t.level].toLowerCase());
+  if (t.authorName && t.authorName !== TEAM_AUTHOR) partes.push(t.authorName);
+  return partes.join(' · ');
+}
+
+/** "Bruno (dono)". Membro e quem já saiu da comunidade aparecem só pelo nome. */
+export function authorWithRole(name: string, role: GroupRole | null): string {
+  const papel = role ? ROLE_SHORT[role] : undefined;
+  return papel ? `${name} (${papel})` : name;
+}
+
+/** O alto do cartão da dica: "Fixada · hábitos" ou "nutrição · Helena" (Cm-12). */
+export function tipEyebrow(t: Pick<GroupTip, 'pinned' | 'category' | 'authorName'>): string {
+  const categoria = TIP_CATEGORY_LABEL[t.category].toLowerCase();
+  return t.pinned ? `Fixada · ${categoria}` : `${categoria} · ${t.authorName}`;
+}
+
+/** "Bruno · dono · 3 nov": quem escreveu a dica e quando, no fuso da pessoa (Cm-15). */
+export function tipByline(
+  t: Pick<GroupTip, 'authorName' | 'authorRole' | 'publishedAt'>,
+  timezone: string,
+): string {
+  const partes = [t.authorName];
+  const papel = t.authorRole ? ROLE_SHORT[t.authorRole] : undefined;
+  if (papel) partes.push(papel);
+  if (t.publishedAt) {
+    const quando = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: timezone,
+    })
+      .format(new Date(t.publishedAt))
+      .replace(' de ', ' ')
+      .replace('.', '');
+    partes.push(quando);
+  }
+  return partes.join(' · ');
+}
+
+export type TipShortcut = 'water' | 'workout';
+
+/**
+ * O atalho no pé da dica (Cm-15): "Registrar água" quando ela fala de água ou
+ * hidratação, "Ir para o treino" na dica de treino. Sem atalho no resto.
+ */
+export function tipShortcut(t: Pick<GroupTip, 'category' | 'title' | 'body'>): TipShortcut | null {
+  // Começo de palavra à mão: o `\b` do JS não vê o "Á" como letra ("aguarde" não conta).
+  if (/(^|[^\p{L}])(água(?!\p{L})|agua(?!\p{L})|hidrat)/iu.test(`${t.title} ${t.body}`)) {
+    return 'water';
+  }
+  if (t.category === 'WORKOUT') return 'workout';
+  return null;
+}
+
+/** "Equipamentos da academia" (Cm-12): os da lista no rótulo de tela, depois os próprios. */
+export function gymEquipmentLabels(state: GymEquipmentState): string[] {
+  return [...state.equipment.map(equipmentLabel), ...state.customEquipment];
 }

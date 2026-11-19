@@ -13,6 +13,7 @@ import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { ExerciseService } from '../../workout/exercise.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { ContentService } from '../content.service';
+import { GroupExerciseService } from '../group-exercise.service';
 import { GroupService } from '../group.service';
 import { NUTRITION_SNAPSHOT_VERSION } from '../nutrition-snapshot';
 import { PlanMaterializerService } from '../plan-materializer.service';
@@ -33,6 +34,7 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
   const materializer = new PlanMaterializerService(prisma, exercises);
   const content = new ContentService(prisma, plans, mealTemplates, goals, materializer, media);
   const groups = new GroupService(prisma, new ProfessionalLinkService(prisma), [], media);
+  const guides = new GroupExerciseService(prisma, media);
 
   const stamp = `conteudo-${Date.now()}`;
   const criados: string[] = [];
@@ -318,6 +320,100 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
     });
   });
 
+  describe('a vitrine do redesign (#396)', () => {
+    it('cada exercício do plano diz o id e se a academia tem guia dele; o autor vem com o papel', async () => {
+      const { groupId, dono, prof, membro } = await comunidade();
+      await guides.setGuide(prof, groupId, catalogo[0], { tips: 'Na máquina do fundo.' });
+      const t = await content.createWorkoutTemplate(dono, groupId, { planId: await planoDe(dono) });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+
+      const visto = await content.getTemplateForMember(membro, groupId, t.id);
+      expect(visto.authorRole).toBe('OWNER');
+      expect(visto.exercises).toEqual([
+        expect.objectContaining({ exerciseId: catalogo[0], hasGuide: true }),
+        expect.objectContaining({ exerciseId: catalogo[1], hasGuide: false }),
+        // O exercício próprio do autor não abre para o membro: sem id, sem guia.
+        expect.objectContaining({ exerciseId: null, hasGuide: false }),
+      ]);
+      // O guia de outra comunidade não acende o "guia" desta.
+      const outra = await comunidade();
+      await guides.setGuide(outra.dono, outra.groupId, catalogo[1], { tips: 'x' });
+      const deNovo = await content.getTemplateForMember(membro, groupId, t.id);
+      expect(deNovo.exercises[1]).toMatchObject({ hasGuide: false });
+    });
+
+    it.each(['INVITED', 'REMOVED', 'BANNED'] as const)(
+      'membro %s não abre a dica publicada',
+      async (status) => {
+        const { groupId, prof, membro } = await comunidade();
+        const d = await content.createTip(prof, groupId, {
+          title: 'Dica',
+          body: 'x',
+          category: 'HABITS',
+        });
+        await content.setTipState(prof, groupId, d.id, { published: true });
+        await prisma.groupMembership.update({
+          where: { groupId_userId: { groupId, userId: membro } },
+          data: { status },
+        });
+        await expect(content.getTipForMember(membro, groupId, d.id)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      },
+    );
+
+    it('a lista busca o papel dos autores uma vez, e não uma por item', async () => {
+      const { groupId, dono, prof, membro } = await comunidade();
+      const criador = await entra(groupId, 'CREATOR');
+      for (const autor of [dono, prof, criador]) {
+        const d = await content.createTip(autor, groupId, {
+          title: `Dica ${autor}`,
+          body: 'x',
+          category: 'HABITS',
+        });
+        await content.setTipState(dono, groupId, d.id, { published: true });
+      }
+      const papeis = jest.spyOn(prisma.groupMembership, 'findMany');
+      try {
+        const lista = await content.listTipsForMember(membro, groupId);
+        expect(lista.map((t) => t.authorRole).sort()).toEqual(['CREATOR', 'OWNER', 'PROFESSIONAL']);
+        expect(papeis).toHaveBeenCalledTimes(1);
+        papeis.mockClear();
+        await content.listTipsForTeam(dono, groupId);
+        expect(papeis).toHaveBeenCalledTimes(1);
+      } finally {
+        papeis.mockRestore();
+      }
+    });
+
+    it('a dica abre pelo id: só publicada, só desta comunidade, com o papel do autor', async () => {
+      const { groupId, prof, membro } = await comunidade();
+      const outra = await comunidade();
+      const d = await content.createTip(prof, groupId, {
+        title: 'Água antes do treino',
+        body: 'Beba 500 ml.',
+        category: 'HABITS',
+      });
+      await expect(content.getTipForMember(membro, groupId, d.id)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await content.setTipState(prof, groupId, d.id, { published: true });
+      await expect(content.getTipForMember(membro, groupId, d.id)).resolves.toMatchObject({
+        id: d.id,
+        authorRole: 'PROFESSIONAL',
+      });
+      expect(await content.listTipsForMember(membro, groupId)).toEqual([
+        expect.objectContaining({ id: d.id, authorRole: 'PROFESSIONAL' }),
+      ]);
+      await expect(
+        content.getTipForMember(outra.membro, outra.groupId, d.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(content.getTipForMember(outra.membro, groupId, d.id)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('adotar', () => {
     it('treino vira plano do membro uma vez só, e não acompanha o modelo depois', async () => {
       const { groupId, dono, membro } = await comunidade();
@@ -398,6 +494,78 @@ describe('planos prontos e dicas da comunidade (integração)', () => {
       expect(r2).toMatchObject({ goalsApplied: true, mealsSaved: 0, mealsAlreadySaved: true });
       expect(await goals.get(membro)).toMatchObject({ kcalMin: 1800, kcalMax: 2100 });
       expect(await prisma.mealTemplate.count({ where: { userId: membro } })).toBe(1);
+    });
+
+    it('#396: trocar as metas guarda as anteriores no histórico e devolve o antes', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      const minhas = { ...metas, kcalMin: 2500, kcalMax: 2800 };
+      await goals.upsert(membro, minhas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Cutting 1.800',
+        goals: metas,
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: true, saveMeals: false });
+      expect(r).toMatchObject({
+        goalsApplied: true,
+        mealsSaved: 0,
+        previousGoals: expect.objectContaining({ kcalMin: 2500, kcalMax: 2800 }),
+        goalsHistoryWritten: true,
+      });
+      // Só as metas: nenhuma refeição entrou.
+      expect(await prisma.mealTemplate.count({ where: { userId: membro } })).toBe(0);
+      const historico = await prisma.userGoalsHistory.findMany({ where: { userId: membro } });
+      expect(historico).toEqual([
+        expect.objectContaining({
+          kcalMin: 2500,
+          kcalMax: 2800,
+          source: 'group_plan',
+          templateId: t.id,
+          templateTitle: 'Cutting 1.800',
+        }),
+      ]);
+      // O modelo some, o histórico fica (sem o vínculo).
+      await content.deleteTemplate(dono, groupId, t.id);
+      expect(
+        await prisma.userGoalsHistory.findFirstOrThrow({ where: { userId: membro } }),
+      ).toMatchObject({ templateId: null, templateTitle: 'Cutting 1.800' });
+    });
+
+    it('#396: só as refeições não mexe nas metas nem cria histórico', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      await goals.upsert(membro, metas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Base',
+        goals: { ...metas, kcalMin: 1500, kcalMax: 1700 },
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: false, saveMeals: true });
+      expect(r).toMatchObject({
+        goalsApplied: false,
+        mealsSaved: 1,
+        previousGoals: null,
+        goalsHistoryWritten: false,
+      });
+      expect(await goals.get(membro)).toMatchObject({ kcalMin: 1800, kcalMax: 2100 });
+      expect(await prisma.userGoalsHistory.count({ where: { userId: membro } })).toBe(0);
+    });
+
+    it('#396: metas iguais às do plano não vão para o histórico', async () => {
+      const { groupId, dono, membro } = await comunidade();
+      await goals.upsert(membro, metas);
+      const t = await content.createNutritionTemplate(dono, groupId, {
+        title: 'Igual',
+        goals: metas,
+        mealTemplateIds: [await refeicaoSalvaDe(dono, null)],
+      });
+      await content.setTemplatePublished(dono, groupId, t.id, true);
+      const r = await content.adopt(membro, groupId, t.id, { applyGoals: true, saveMeals: false });
+      expect(r).toMatchObject({ goalsApplied: true, goalsHistoryWritten: false });
+      expect(r.previousGoals).toMatchObject({ kcalMin: metas.kcalMin });
+      expect(await prisma.userGoalsHistory.count({ where: { userId: membro } })).toBe(0);
     });
 
     it('nome de refeição que a pessoa já tem ganha o sufixo da comunidade', async () => {

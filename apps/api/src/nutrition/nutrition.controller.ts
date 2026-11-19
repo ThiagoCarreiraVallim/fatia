@@ -394,8 +394,8 @@ export class NutritionController {
   }
 
   @Put('goals')
-  upsertGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpsertGoalsDto) {
-    return this.goals.upsert(user.id, dto);
+  async upsertGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpsertGoalsDto) {
+    return (await this.goals.upsert(user.id, dto)).goals;
   }
 
   /** Só calcula; não grava. O que faltar no corpo vem do perfil e da última pesagem. */

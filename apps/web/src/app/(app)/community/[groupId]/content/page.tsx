@@ -1,22 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, Lightbulb, PlayCircle, Video } from 'lucide-react';
-import {
-  groupContentApi,
-  groupExerciseApi,
-  groupsApi,
-  sortTips,
-  workoutApi,
-} from '@fatia/api-client';
+import { Dumbbell, Info, Lightbulb, Video } from 'lucide-react';
+import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
-import { TemplateCard, TipCard } from '@/components/content/content-cards';
-import { ListError, RowChevron } from '@/components/content/content-ui';
-import { ExerciseDetailDrawer } from '@/components/workout/exercise-detail-drawer';
-import { useTopBarTitle } from '@/components/layout/app-top-bar';
+import { ListError } from '@/components/content/content-ui';
+import {
+  GuideRow,
+  GymEquipmentCard,
+  MemberTemplateRow,
+  MemberTipCard,
+} from '@/components/content/member-content';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,7 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const TABS = ['plans', 'tips', 'exercises'] as const;
 type Tab = (typeof TABS)[number];
 
-/** Os planos prontos, as dicas e os exercícios que a equipe da comunidade publicou. */
+/**
+ * A aba Conteúdo da comunidade (Cm-12, #396): os planos, as dicas e os guias de
+ * exercício que a equipe publicou. Cada item abre a própria tela (plano, dica,
+ * guia da academia); a API só devolve o que está publicado.
+ */
 export default function CommunityContentPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const requested = useSearchParams().get('tab');
@@ -49,10 +52,19 @@ export default function CommunityContentPage() {
     queryKey: communityKeys.tips(groupId),
     queryFn: () => groupContentApi.tips(groupId),
   });
-  useTopBarTitle(group.data ? `Planos e dicas · ${group.data.name}` : 'Planos e dicas');
+  useTopBarTitle(group.data?.name ?? 'Conteúdo');
 
   return (
     <div className="space-y-4 p-4">
+      <TopBarActions>
+        <Link
+          href={`/community/${groupId}/settings`}
+          aria-label="Sobre a comunidade"
+          className={topBarActionClass}
+        >
+          <Info size={20} aria-hidden />
+        </Link>
+      </TopBarActions>
       <CommunityTabs groupId={groupId} />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <TabsList>
@@ -64,16 +76,15 @@ export default function CommunityContentPage() {
           {plans.isPending ? (
             <Skeleton className="h-24 rounded-2xl bg-card" />
           ) : plans.isError ? (
-            // Antes o erro caía no "Nenhum plano publicado".
             <ListError
               title="Não deu para carregar os planos"
               onRetry={() => void plans.refetch()}
             />
           ) : plans.data.length ? (
-            <ul className="space-y-2" aria-label="Planos prontos">
+            <ul className="space-y-2" aria-label="Planos da equipe">
               {plans.data.map((t) => (
                 <li key={t.id}>
-                  <TemplateCard template={t} href={`/community/${groupId}/content/${t.id}`} />
+                  <MemberTemplateRow template={t} href={`/community/${groupId}/content/${t.id}`} />
                 </li>
               ))}
             </ul>
@@ -85,13 +96,19 @@ export default function CommunityContentPage() {
             />
           )}
         </TabsContent>
-        <TabsContent value="tips" className="space-y-3 pt-2">
+        <TabsContent value="tips" className="space-y-2 pt-2">
           {tips.isPending ? (
             <Skeleton className="h-24 rounded-2xl bg-card" />
           ) : tips.isError ? (
             <ListError title="Não deu para carregar as dicas" onRetry={() => void tips.refetch()} />
           ) : tips.data.length ? (
-            sortTips(tips.data).map((d) => <TipCard key={d.id} tip={d} />)
+            <ul className="space-y-2" aria-label="Dicas da equipe">
+              {sortTips(tips.data).map((d) => (
+                <li key={d.id}>
+                  <MemberTipCard tip={d} href={`/community/${groupId}/content/tips/${d.id}`} />
+                </li>
+              ))}
+            </ul>
           ) : (
             <EmptyState
               icon={Lightbulb}
@@ -101,88 +118,52 @@ export default function CommunityContentPage() {
           )}
         </TabsContent>
         <TabsContent value="exercises" className="space-y-2 pt-2">
-          <CommunityExercises groupId={groupId} />
+          <CommunityGuides groupId={groupId} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-/**
- * O catálogo da comunidade (Fase 7b): os exercícios da casa e os tutoriais
- * gravados pela equipe. Abrir mostra o detalhe de sempre, com o vídeo dela.
- */
-function CommunityExercises({ groupId }: { groupId: string }) {
-  const [openId, setOpenId] = useState<number | null>(null);
+/** Os guias de exercício da academia e, embaixo, o equipamento que ela tem. */
+function CommunityGuides({ groupId }: { groupId: string }) {
   const list = useQuery({
     queryKey: communityKeys.exercises(groupId),
     queryFn: () => groupExerciseApi.forMember(groupId),
   });
-  const detail = useQuery({
-    queryKey: ['workout', 'exercise', openId],
-    queryFn: () => workoutApi.getExercise(openId!),
-    enabled: openId !== null,
+  const equipment = useQuery({
+    queryKey: [...communityKeys.exercises(groupId), 'equipment'],
+    queryFn: () => groupExerciseApi.memberEquipment(groupId),
   });
 
-  if (list.isPending) return <Skeleton className="h-24 rounded-2xl bg-card" />;
-  if (list.isError) {
-    return (
-      <ListError title="Não deu para carregar os exercícios" onRetry={() => void list.refetch()} />
-    );
-  }
-  if (!list.data.length) {
-    return (
-      <EmptyState
-        icon={Video}
-        title="Nenhum exercício ainda"
-        description="Os exercícios e tutoriais que a equipe gravar aparecem aqui e no seu treino."
-      />
-    );
-  }
   return (
     <>
-      <ul className="space-y-2" aria-label="Exercícios da comunidade">
-        {list.data.map((e) => (
-          <li key={e.exerciseId}>
-            <button
-              type="button"
-              onClick={() => setOpenId(e.exerciseId)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-subtle bg-card p-3 text-left hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {e.photos[0]?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador
-                <img
-                  src={e.photos[0].url}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-xl object-cover"
-                />
-              ) : (
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted">
-                  <Dumbbell className="h-5 w-5 text-muted-foreground" aria-hidden />
-                </span>
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">{e.name}</span>
-                <span className="block text-xs capitalize text-muted-foreground">
-                  {[e.muscleGroup, e.equipment].filter(Boolean).join(' · ')}
-                </span>
-              </span>
-              {e.video && (
-                <PlayCircle className="h-5 w-5 shrink-0 text-primary" aria-label="Com vídeo" />
-              )}
-              {/* Sem a seta, a linha parecia só informação. */}
-              <RowChevron />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <ExerciseDetailDrawer
-        exercise={detail.data ?? null}
-        open={openId !== null && Boolean(detail.data)}
-        onOpenChange={(o) => {
-          if (!o) setOpenId(null);
-        }}
-      />
+      {list.isPending ? (
+        <Skeleton className="h-24 rounded-2xl bg-card" />
+      ) : list.isError ? (
+        <ListError
+          title="Não deu para carregar os exercícios"
+          onRetry={() => void list.refetch()}
+        />
+      ) : list.data.length ? (
+        <ul className="space-y-2" aria-label="Guias da academia">
+          {list.data.map((e) => (
+            <li key={e.exerciseId}>
+              <GuideRow
+                guide={e}
+                href={`/community/${groupId}/content/exercises/${e.exerciseId}`}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Video}
+          title="Nenhum exercício ainda"
+          description="Os guias que a equipe gravar aparecem aqui e no seu treino."
+        />
+      )}
+      {equipment.data && <GymEquipmentCard state={equipment.data} />}
     </>
   );
 }

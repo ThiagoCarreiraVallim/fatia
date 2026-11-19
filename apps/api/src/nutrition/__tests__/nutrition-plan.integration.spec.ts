@@ -242,6 +242,14 @@ describe('plano alimentar do profissional (integração)', () => {
 
       const metas = await prisma.userGoals.findUniqueOrThrow({ where: { userId: ids.ana } });
       expect(metas).toMatchObject({ ...GOALS, dailyWaterTargetMl: 3000 });
+      // As metas de antes ficam no histórico, com a origem do plano (#396).
+      const historico = await prisma.userGoalsHistory.findMany({ where: { userId: ids.ana } });
+      expect(historico).toHaveLength(1);
+      expect(historico[0]).toMatchObject({
+        kcalMin: 1500,
+        dailyWaterTargetMl: 3000,
+        source: 'nutrition_plan',
+      });
 
       const salvas = await prisma.mealTemplate.findMany({ where: { userId: ids.ana } });
       expect(salvas).toHaveLength(3);

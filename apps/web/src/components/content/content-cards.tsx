@@ -1,13 +1,7 @@
 import Link from 'next/link';
-import { Dumbbell, Pin, Salad } from 'lucide-react';
-import {
-  planTemplateSummary,
-  TIP_CATEGORY_LABEL,
-  type GroupTip,
-  type PlanTemplate,
-} from '@fatia/api-client';
+import { Dumbbell, Salad } from 'lucide-react';
+import { planTemplateSummary, type PlanTemplate } from '@fatia/api-client';
 import { RowChevron, StatusBadge } from './content-ui';
-import { MarkdownLite } from './markdown-lite';
 
 /**
  * Cartão de plano pronto: capa (ou ícone do tipo), título, o resumo e a seta
@@ -52,32 +46,5 @@ export function TemplateCard({
       </span>
       <RowChevron />
     </Link>
-  );
-}
-
-/** Dica inteira, como o membro lê. */
-export function TipCard({ tip }: { tip: GroupTip }) {
-  return (
-    <article className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
-      {tip.image?.url && (
-        // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
-        <img src={tip.image.url} alt="" className="aspect-video w-full rounded-xl object-cover" />
-      )}
-      <header className="space-y-1">
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          {tip.pinned && (
-            <span className="inline-flex items-center gap-1 font-semibold text-primary">
-              <Pin className="h-3.5 w-3.5" aria-hidden />
-              Fixada
-            </span>
-          )}
-          <span>{TIP_CATEGORY_LABEL[tip.category]}</span>
-          <span aria-hidden>·</span>
-          <span>{tip.authorName}</span>
-        </p>
-        <h3 className="text-base font-semibold">{tip.title}</h3>
-      </header>
-      <MarkdownLite source={tip.body} />
-    </article>
   );
 }

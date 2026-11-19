@@ -18,6 +18,8 @@ import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
 import { ConsentService } from '../../sharing/consent.service';
 import { BenefitService } from '../../sharing/benefit.service';
+import { ContentService } from '../../sharing/content.service';
+import { GroupExerciseService } from '../../sharing/group-exercise.service';
 import { GroupService } from '../../sharing/group.service';
 import { MembershipService } from '../../sharing/membership.service';
 import { PlanMaterializerService } from '../../sharing/plan-materializer.service';
@@ -4445,6 +4447,213 @@ describe('isolamento entre usuários', () => {
       await expect(
         memberships.teamForMember(owned.userA, owned.grupoDoProId),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('conteúdo da equipe: planos, dicas e guias (#396)', () => {
+    const store = new MemoryObjectStore();
+    const media = new MediaService(prisma, store);
+    const content = new ContentService(
+      prisma,
+      plans,
+      mealTemplates,
+      userGoals,
+      new PlanMaterializerService(prisma, exercises),
+      media,
+    );
+    const guides = new GroupExerciseService(prisma, media);
+    const c = {
+      dono: '',
+      membro: '',
+      groupId: '',
+      tipId: '',
+      workoutId: '',
+      nutritionId: '',
+      exerciseId: 0,
+      videoId: '',
+    };
+
+    /** Um arquivo pronto da comunidade, como se o envio tivesse terminado. */
+    async function arquivo(purpose: string, kind: 'IMAGE' | 'VIDEO', mime: string) {
+      const f = await prisma.mediaFile.create({
+        data: {
+          uploaderId: c.dono,
+          groupId: c.groupId,
+          purpose,
+          kind,
+          status: 'READY',
+          key: `iso396/${randomUUID()}`,
+          mime,
+          bytes: 10,
+          confirmedAt: new Date(),
+        },
+      });
+      store.upload(f.key, Buffer.from('x'), mime);
+      return f.id;
+    }
+
+    beforeAll(async () => {
+      const stamp = `iso396-${Date.now()}`;
+      const [dono, membro] = await Promise.all(
+        ['dono', 'membro'].map((n) =>
+          prisma.user.create({
+            data: {
+              logtoSub: `${stamp}-${n}`,
+              email: `${stamp}-${n}@test.local`,
+              name: n,
+              timezone: TZ,
+            },
+          }),
+        ),
+      );
+      c.dono = dono.id;
+      c.membro = membro.id;
+      // O user-A não está nesta academia: é o "de fora". Na dele (owned.groupId) é membro.
+      const g = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia 396',
+          slug: `${stamp}-academia`,
+          ownerId: c.dono,
+          memberships: {
+            create: [
+              { userId: c.dono, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: c.membro, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+      });
+      c.groupId = g.id;
+
+      const imagem = await arquivo('group_content', 'IMAGE', 'image/webp');
+      const tip = await content.createTip(c.dono, c.groupId, {
+        title: 'Água antes do treino',
+        body: 'Beba 500 ml.',
+        category: 'HABITS',
+        imageFileId: imagem,
+      });
+      await content.setTipState(c.dono, c.groupId, tip.id, { published: true });
+      c.tipId = tip.id;
+
+      c.exerciseId = owned.sharedExerciseId;
+      c.videoId = await arquivo('exercise_video', 'VIDEO', 'video/mp4');
+      await guides.setGuide(c.dono, c.groupId, c.exerciseId, {
+        videoFileId: c.videoId,
+        tips: 'Máquina do fundo.',
+      });
+
+      const plano = await plans.create(c.dono, { name: 'Pernas e glúteos' });
+      await plans.addExercise(c.dono, plano.id, { exerciseId: c.exerciseId, order: 0 });
+      const treino = await content.createWorkoutTemplate(c.dono, c.groupId, { planId: plano.id });
+      await content.setTemplatePublished(c.dono, c.groupId, treino.id, true);
+      c.workoutId = treino.id;
+
+      const refeicao = await prisma.mealTemplate.create({
+        data: {
+          userId: c.dono,
+          name: 'Café 396',
+          items: {
+            create: [
+              {
+                position: 0,
+                foodName: 'Aveia',
+                grams: 40,
+                kcal: 150,
+                proteinG: 5,
+                carbsG: 27,
+                fatG: 3,
+              },
+            ],
+          },
+        },
+      });
+      const dieta = await content.createNutritionTemplate(c.dono, c.groupId, {
+        title: 'Cutting 396',
+        mealTemplateIds: [refeicao.id],
+      });
+      await content.setTemplatePublished(c.dono, c.groupId, dieta.id, true);
+      c.nutritionId = dieta.id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: c.groupId } });
+      await prisma.workoutPlan.deleteMany({ where: { userId: { in: [c.dono, c.membro] } } });
+      await prisma.user.deleteMany({ where: { id: { in: [c.dono, c.membro] } } });
+    });
+
+    it('quem é de fora não lê dica, guia, equipamento nem plano (nem a mídia deles)', async () => {
+      const fora = owned.userA;
+      const tentativas = [
+        content.listTipsForMember(fora, c.groupId),
+        content.getTipForMember(fora, c.groupId, c.tipId),
+        content.listTemplatesForMember(fora, c.groupId),
+        content.getTemplateForMember(fora, c.groupId, c.workoutId),
+        guides.listForMember(fora, c.groupId),
+        guides.getForMember(fora, c.groupId, c.exerciseId),
+        guides.equipmentForMember(fora, c.groupId),
+        content.adopt(fora, c.groupId, c.workoutId),
+      ];
+      for (const t of tentativas) await expect(t).rejects.toBeInstanceOf(NotFoundException);
+      expect(
+        await prisma.workoutPlan.count({ where: { userId: fora, fromTemplateId: c.workoutId } }),
+      ).toBe(0);
+    });
+
+    it('id de outra comunidade pela URL da própria comunidade não abre', async () => {
+      // O user-A é membro ativo de owned.groupId; os ids são da Academia 396.
+      await expect(
+        content.getTipForMember(owned.userA, owned.groupId, c.tipId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        guides.getForMember(owned.userA, owned.groupId, c.exerciseId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        content.getTemplateForMember(owned.userA, owned.groupId, c.nutritionId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        content.adopt(owned.userA, owned.groupId, c.nutritionId, { applyGoals: true }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('o membro vê a mídia; depois de sair, perde a mídia e fica com as cópias', async () => {
+      expect((await content.getTipForMember(c.membro, c.groupId, c.tipId)).image?.url).toBeTruthy();
+      expect((await guides.getForMember(c.membro, c.groupId, c.exerciseId)).video?.id).toBe(
+        c.videoId,
+      );
+      const treino = await content.adopt(c.membro, c.groupId, c.workoutId);
+      const dieta = await content.adopt(c.membro, c.groupId, c.nutritionId, { saveMeals: true });
+      expect(dieta.mealsSaved).toBe(1);
+
+      await memberships.leave(c.membro, c.groupId);
+
+      for (const t of [
+        content.getTipForMember(c.membro, c.groupId, c.tipId),
+        guides.getForMember(c.membro, c.groupId, c.exerciseId),
+        content.listTemplatesForMember(c.membro, c.groupId),
+      ]) {
+        await expect(t).rejects.toBeInstanceOf(NotFoundException);
+      }
+      // A cópia é dela: sair não apaga o plano nem as refeições salvas.
+      const plano = await plans.findById(c.membro, treino.planId!);
+      expect(plano.name).toBe('Pernas e glúteos');
+      expect(
+        await prisma.mealTemplate.count({
+          where: { userId: c.membro, fromTemplateId: c.nutritionId },
+        }),
+      ).toBe(1);
+      // E o export LGPD leva as duas cópias, com a proveniência.
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const exportado = await conta.exportData(c.membro);
+      expect(exportado.workoutPlans).toEqual([
+        expect.objectContaining({ id: treino.planId, fromTemplateId: c.workoutId }),
+      ]);
+      expect(exportado.mealTemplates).toEqual([
+        expect.objectContaining({ fromTemplateId: c.nutritionId }),
+      ]);
     });
   });
 

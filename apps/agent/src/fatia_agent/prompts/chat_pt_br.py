@@ -162,8 +162,10 @@ def bloco_da_persona(persona: Mapping[str, str]) -> str:
         )
     partes.append(
         "Quando a pessoa perguntar por plano, dica ou exercício da comunidade, consulte "
-        f"list_group_plans e list_group_tips com groupId {persona['groupId']}, e "
-        "search_exercise com onlyMyGym para o que dá para fazer na academia."
+        f"list_group_plans e list_group_tips com groupId {persona['groupId']}, "
+        f"list_group_exercise_guides com groupId {persona['groupId']} para os guias que a "
+        "equipe gravou (vídeo e fotos só abrem no app), e search_exercise com onlyMyGym para "
+        "o que dá para fazer na academia."
     )
     return "\n\n".join(partes)
 

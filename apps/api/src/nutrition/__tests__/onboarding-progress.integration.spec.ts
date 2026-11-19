@@ -133,6 +133,29 @@ describe('onboarding salvo a cada passo (integração)', () => {
     expect(user.onboardingDraft).toBeNull();
   });
 
+  it('refazer o onboarding com metas novas guarda as de antes no histórico (#396)', async () => {
+    const ana = await pessoa();
+    await prisma.userGoals.create({
+      data: { userId: ana, ...GOALS, kcalMin: 1500, kcalMax: 1600 },
+    });
+    await service.complete(
+      ana,
+      {
+        sex: 'FEMALE',
+        birthDate: '1994-03-12',
+        heightCm: 168,
+        weightKg: 70.2,
+        activityLevel: 'LIGHT',
+        objective: 'LOSE',
+        goals: GOALS,
+      },
+      TZ,
+    );
+    const historico = await prisma.userGoalsHistory.findMany({ where: { userId: ana } });
+    expect(historico).toHaveLength(1);
+    expect(historico[0]).toMatchObject({ kcalMin: 1500, kcalMax: 1600, source: 'manual' });
+  });
+
   it('terminar sem ter concluído as metas também marca o onboarding como feito', async () => {
     const ana = await pessoa();
     await service.finish(ana);

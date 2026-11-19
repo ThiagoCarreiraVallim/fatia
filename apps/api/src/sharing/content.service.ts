@@ -28,7 +28,12 @@ import {
   type NutritionSnapshot,
   type SuggestedMealItem,
 } from './nutrition-snapshot';
-import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
+import {
+  assertCanEditContent,
+  authorRoles,
+  canEditContent,
+  requireContentRole,
+} from './content-roles';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION, planSnapshotSchema } from './plan-snapshot';
@@ -79,6 +84,13 @@ export interface AdoptInput {
 
 /** Resumo de exercício no retrato, com o nome resolvido para a prévia. */
 export interface TemplateExerciseView {
+  /**
+   * O exercício do catálogo geral ou da comunidade, para o atalho "guia" (#396).
+   * `null` no exercício próprio do autor: o membro não abre o de outra pessoa.
+   */
+  exerciseId: number | null;
+  /** A comunidade tem guia dela (vídeo, fotos, dica) para este exercício. */
+  hasGuide: boolean;
   name: string;
   muscleGroup: string | null;
   targetSets: number;
@@ -93,6 +105,8 @@ export interface TemplateView {
   level: string | null;
   cover: MediaView | null;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396): "Bruno (dono)". `null` se saiu. */
+  authorRole: GroupRole | null;
   publishedAt: Date | null;
   updatedAt: Date;
   /** Treino: os exercícios na ordem. Nutrição: vazio. */
@@ -129,6 +143,8 @@ export interface TipView {
   image: MediaView | null;
   pinned: boolean;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396). `null` se saiu. */
+  authorRole: GroupRole | null;
   publishedAt: Date | null;
   updatedAt: Date;
   canEdit?: boolean;
@@ -143,6 +159,13 @@ export interface AdoptResult {
   mealsSaved: number;
   /** Já havia cópias das refeições deste plano; nada foi duplicado. */
   mealsAlreadySaved: boolean;
+  /**
+   * As metas que valiam antes da troca (#396), para o "antes → depois" de quem
+   * confirmou. Ficam também no histórico de metas. `null` sem troca ou sem metas antes.
+   */
+  previousGoals: NutritionGoals | null;
+  /** As metas de antes foram para o histórico (havia metas e alguma mudou). */
+  goalsHistoryWritten: boolean;
 }
 
 const TEMPLATE_INCLUDE = {
@@ -157,6 +180,20 @@ const TIP_INCLUDE = {
 
 type TemplateRow = GroupPlanTemplate & { cover: MediaFile | null; author: { name: string } | null };
 type TipRow = GroupTip & { image: MediaFile | null; author: { name: string } | null };
+
+/** As oito faixas de macro das metas, sem água, passos e treinos. */
+function macrosOf(g: NutritionGoals): NutritionGoals {
+  return {
+    kcalMin: g.kcalMin,
+    kcalMax: g.kcalMax,
+    proteinMinG: g.proteinMinG,
+    proteinMaxG: g.proteinMaxG,
+    carbsMinG: g.carbsMinG,
+    carbsMaxG: g.carbsMaxG,
+    fatMinG: g.fatMinG,
+    fatMaxG: g.fatMaxG,
+  };
+}
 
 /** Autor que apagou a conta aparece como a equipe: o conteúdo é da comunidade. */
 const TEAM_AUTHOR = 'Equipe';
@@ -196,7 +233,12 @@ export class ContentService {
       include: TEMPLATE_INCLUDE,
       orderBy: [{ publishedAt: { sort: 'desc', nulls: 'first' } }, { updatedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.templateView(r, userId, eu)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.templateView(r, userId, eu, papeis)));
   }
 
   async getTemplateForTeam(userId: string, groupId: string, id: string): Promise<TemplateView> {
@@ -367,7 +409,12 @@ export class ContentService {
       include: TIP_INCLUDE,
       orderBy: [{ publishedAt: { sort: 'desc', nulls: 'first' } }, { updatedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.tipView(r, userId, eu)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.tipView(r, userId, eu, papeis)));
   }
 
   async createTip(userId: string, groupId: string, input: TipInput): Promise<TipView> {
@@ -466,7 +513,12 @@ export class ContentService {
       include: TEMPLATE_INCLUDE,
       orderBy: { publishedAt: 'desc' },
     });
-    return Promise.all(rows.map((r) => this.templateView(r, userId, null)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.templateView(r, userId, null, papeis)));
   }
 
   /**
@@ -530,7 +582,23 @@ export class ContentService {
       include: TIP_INCLUDE,
       orderBy: [{ pinned: 'desc' }, { publishedAt: 'desc' }],
     });
-    return Promise.all(rows.map((r) => this.tipView(r, userId, null)));
+    const papeis = await authorRoles(
+      this.prisma,
+      groupId,
+      rows.map((r) => r.authorId),
+    );
+    return Promise.all(rows.map((r) => this.tipView(r, userId, null, papeis)));
+  }
+
+  /** Uma dica publicada (Cm-15, #396), buscada com o `groupId` da URL. */
+  async getTipForMember(userId: string, groupId: string, id: string): Promise<TipView> {
+    await this.assertMember(userId, groupId);
+    const row = await this.prisma.groupTip.findFirst({
+      where: { id, groupId, publishedAt: { not: null } },
+      include: TIP_INCLUDE,
+    });
+    if (!row) throw new NotFoundException('Tip not found');
+    return this.tipView(row, userId, null);
   }
 
   /**
@@ -571,6 +639,8 @@ export class ContentService {
         goalsApplied: false,
         mealsSaved: 0,
         mealsAlreadySaved: false,
+        previousGoals: null,
+        goalsHistoryWritten: false,
       };
     }
 
@@ -601,7 +671,18 @@ export class ContentService {
         }
       }
     }
-    if (applyGoals && snap.goals) await this.goals.upsert(userId, snap.goals);
+    let previousGoals: NutritionGoals | null = null;
+    let goalsHistoryWritten = false;
+    if (applyGoals && snap.goals) {
+      // O "antes" vem da mesma transação que troca e grava o histórico.
+      const r = await this.goals.upsert(userId, snap.goals, {
+        source: 'group_plan',
+        templateId: modelo.id,
+        templateTitle: modelo.title,
+      });
+      previousGoals = r.previous ? macrosOf(r.previous) : null;
+      goalsHistoryWritten = r.historyWritten;
+    }
 
     return {
       kind: modelo.kind,
@@ -609,6 +690,8 @@ export class ContentService {
       goalsApplied: applyGoals,
       mealsSaved,
       mealsAlreadySaved,
+      previousGoals,
+      goalsHistoryWritten,
     };
   }
 
@@ -646,6 +729,16 @@ export class ContentService {
     });
     if (!row) throw new NotFoundException('Tip not found');
     return row;
+  }
+
+  private async authorRole(
+    groupId: string,
+    authorId: string | null,
+    papeis?: Map<string, GroupRole>,
+  ): Promise<GroupRole | null> {
+    if (!authorId) return null;
+    if (papeis) return papeis.get(authorId) ?? null;
+    return (await authorRoles(this.prisma, groupId, [authorId])).get(authorId) ?? null;
   }
 
   private async resolveCover(groupId: string, fileId: string | null | undefined) {
@@ -765,10 +858,12 @@ export class ContentService {
     }));
   }
 
+  /** `papeis`: os papéis dos autores já buscados em lote pela lista (#396). */
   private async templateView(
     row: TemplateRow,
     userId: string,
     teamRole: GroupRole | null,
+    papeis?: Map<string, GroupRole>,
   ): Promise<TemplateView> {
     const base = {
       id: row.id,
@@ -778,6 +873,7 @@ export class ContentService {
       level: row.level,
       cover: await this.media.viewOrNull(row.cover),
       authorName: row.author?.name ?? TEAM_AUTHOR,
+      authorRole: await this.authorRole(row.groupId, row.authorId, papeis),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole
@@ -837,6 +933,16 @@ export class ContentService {
           })
         : [];
     const porId = new Map(catalogo.map((e) => [e.id, e]));
+    const comGuia = new Set(
+      catalogo.length
+        ? (
+            await this.prisma.groupExerciseGuide.findMany({
+              where: { groupId, exerciseId: { in: catalogo.map((e) => e.id) } },
+              select: { exerciseId: true },
+            })
+          ).map((g) => g.exerciseId)
+        : [],
+    );
     return [...parsed.data.exercises]
       .sort((a, b) => a.order - b.order)
       .map((e) => {
@@ -845,8 +951,11 @@ export class ContentService {
             ? porId.get(e.catalogExerciseId)
             : e.source === 'group'
               ? porId.get(e.groupExerciseId)
-              : { name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+              : { id: null, name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+        const exerciseId = ex?.id ?? null;
         return {
+          exerciseId,
+          hasGuide: exerciseId !== null && comGuia.has(exerciseId),
           name: ex?.name ?? 'Exercício',
           muscleGroup: ex?.muscleGroup ?? null,
           targetSets: e.targetSets,
@@ -855,7 +964,12 @@ export class ContentService {
       });
   }
 
-  private async tipView(row: TipRow, userId: string, teamRole: GroupRole | null): Promise<TipView> {
+  private async tipView(
+    row: TipRow,
+    userId: string,
+    teamRole: GroupRole | null,
+    papeis?: Map<string, GroupRole>,
+  ): Promise<TipView> {
     return {
       id: row.id,
       title: row.title,
@@ -864,6 +978,7 @@ export class ContentService {
       image: await this.media.viewOrNull(row.image),
       pinned: row.pinned,
       authorName: row.author?.name ?? TEAM_AUTHOR,
+      authorRole: await this.authorRole(row.groupId, row.authorId, papeis),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole ? { canEdit: this.canEdit(teamRole, userId, row.authorId) } : {}),

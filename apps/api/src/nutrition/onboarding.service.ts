@@ -6,7 +6,7 @@ import { dateInTz, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz'
 import { nutritionGoalsSchema, type NutritionGoals } from '../sharing/nutrition-snapshot';
 import { profileUpdateData } from '../users/profile-update';
 import { profileProblem, suggestGoals, type SuggestionProfile } from './goal-suggestion';
-import { assertGoalsValid } from './user-goals.service';
+import { assertGoalsValid, upsertWithHistory } from './user-goals.service';
 import {
   GOAL_SOURCES,
   ONBOARDING_STEPS,
@@ -183,11 +183,8 @@ export class OnboardingService {
       if (!sameToday) {
         await tx.weightLog.create({ data: { userId, weightKg, loggedAt: new Date() } });
       }
-      const saved = await tx.userGoals.upsert({
-        where: { userId },
-        create: { userId, ...goals },
-        update: goals,
-      });
+      // Refazer o onboarding com metas novas guarda as de antes (#396).
+      const { goals: saved } = await upsertWithHistory(tx, userId, goals, { source: 'manual' });
       return { onboardedAt: user.onboardedAt, goals: saved };
     });
   }

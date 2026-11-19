@@ -14,7 +14,13 @@ const makePrisma = () => {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     weightLog: { findFirst: jest.fn(), create: jest.fn() },
-    userGoals: { upsert: jest.fn().mockResolvedValue({ userId: 'u1' }) },
+    userGoals: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ userId: 'u1' }),
+    },
+    userGoalsHistory: { create: jest.fn() },
+    // A trava da linha das metas antes de ler o "antes" (#396).
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
   prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
