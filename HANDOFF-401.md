@@ -29,11 +29,12 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 - api-client (commits 796d468b vermelho, 20f5d710): tipos, orgApi novos, `community-invites.ts`, NAV com Ativação pendente.
 - Web (742d53c7 vermelho + commit seguinte): Membros (tabela, abas, colunas, massa, MemberPanel), Convites (cartões, tabela, InvitePanel com QR via `qrcode-generator` JS puro), Ativação pendente (/activation).
 
+- Docs: REDESIGN_PROGRESS (Etapa 8, linha e bloco #401), DATA_RETENTION.
+
 ## Falta (ordem)
 
 3. Mobile: `inviteSummary` com expiresAt nulo (conferir `apps/mobile/app/(app)/org/[groupId]/invites.tsx` e `c/[token].tsx`).
-4. Docs: REDESIGN_PROGRESS (Etapa 8), DATA_RETENTION (recusa/aceite), DADOS_REDESIGN se preciso.
-5. lint/typecheck/testes verdes; apagar este arquivo no último commit.
+4. lint/typecheck/testes verdes; apagar este arquivo no último commit.
 
 ## Fora (dependências)
 

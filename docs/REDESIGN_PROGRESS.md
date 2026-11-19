@@ -490,9 +490,10 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 ## Etapa 8: Painel base (em andamento)
 
-| Issue | Título                                      | Estado           | Superfícies                    |
-| ----- | ------------------------------------------- | ---------------- | ------------------------------ |
-| #398  | Painel: layout novo, visão geral e busca ⌘K | pronto na branch | api, db, api-client, web, docs |
+| Issue | Título                                        | Estado           | Superfícies                    |
+| ----- | --------------------------------------------- | ---------------- | ------------------------------ |
+| #398  | Painel: layout novo, visão geral e busca ⌘K   | pronto na branch | api, db, api-client, web, docs |
+| #401  | Painel: membros, convites e ativação pendente | pronto na branch | api, db, api-client, web, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -530,6 +531,33 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A comunidade demo tem 6 pessoas com opt-in, então os indicadores e o gráfico aparecem como "Oculto"/"—" no dev; é a regra, não defeito.
   - Nada foi publicado na passada (contagens do banco de dev iguais antes e depois); o e-mail ficou desligado no dev.
 - **Falta:** o app (painel no celular é a #414).
+
+#401 (branch `redesign/401-membros-convites`; migration `20261119200000_invites_origin_activation`; env nova `INVITE_LINK_SECRET`; permissão nova `member.assign` (dono); nenhuma tool nova no MCP; dependência web nova `qrcode-generator`, JS puro):
+
+- **Decisões (orquestrador):**
+  - "Sem prazo" só vale para link e QR. O convite nominal por e-mail continua vencendo em 30 dias e vale uma vez; o texto de validade do `Ex-01` e as notas do painel mudam conforme o tipo (`inviteValidityText`, `inviteValidityNote`). A API recusa `noExpiry` com e-mail (400).
+  - "Convites sem aceite": a lista nominal fica (quem foi convidado ainda não é membro); só os totais pequenos (menos de 5) somem.
+  - Quem não aceitou em 2 dias entra em **Ativação pendente**; o convite por e-mail expira em 30 dias.
+  - Importação de alunos por planilha ou sistema de gestão (#340, #322) fica fora do redesign.
+- **Convite:** `GroupInvite` ganha nome (`label`, até 60 caracteres, só a equipe vê), origem (`InviteOrigin`: QR, Instagram, Site, Indicação, Lista de e-mails, Outra), `expiresAt` nulo (sem prazo), `sendCount`, `acceptedById`/`acceptedAt`, `declinedAt`, `accompaniedById` e `giveSeat`. Quem entra grava `GroupMembership.joinedViaInviteId` ("Entrou por") e, se o convite diz, `accompaniedById` (só se a pessoa ainda for profissional ou dono ativo) e o assento PRO (se houver vaga).
+- **Link copiável depois:** o banco segue só com o hash do token. O token do link (sem e-mail) é `HMAC-SHA256(INVITE_LINK_SECRET, "invite-link:"+id)`, então a tela Convites mostra "Copiar" de novo. Sem o segredo, o link só aparece na criação, como antes. Em produção a API não sobe com segredo fraco.
+- **Reenviar:** troca o token (o link do e-mail anterior deixa de valer), até 5 envios por convite e com intervalo de 10 min. Em lote: `POST groups/:id/invites/resend` (até 50). Renovar convite vencido: `POST …/invites/:id/renew` (409 se ainda vale). WhatsApp: `POST …/invites/:id/link` gera um link novo sem e-mail; a mensagem pronta abre num diálogo com Copiar e Abrir WhatsApp (copiar depois de um `await` é bloqueado pelo navegador). É a etapa 1 da #338: só mensagem, sem integração.
+- **Recusa:** `POST invites/:token/decline`, só convite por e-mail e só pela conta daquele e-mail (os outros recebem 404). A tela de recusa é da #372/#416.
+- **Ativação** (Convites e Ativação pendente) = 1º **treino** em até 48 h depois de entrar, só entre membros com `statsOptIn` e com a regra de dois lados (`binarySplit`) da #398. Refeição e peso não agregam (AGGREGATION_POLICY §6 e §7).
+- **Telas:**
+  - **Membros (Pn-04, 04b, 04c, 04d):** cartões; abas Todos, Aguardando, Sem acompanhamento e Saíram (`members?include=left`, só para a equipe), mais "Convite pendente", que leva à Ativação; filtro por nome e "Entrou por"; colunas escolhidas pela pessoa (no `localStorage`); 10 por página. O dono seleciona membros ativos e faz ações em massa (`POST groups/:id/members/bulk`: trocar responsável, dar e tirar assento; até 100 ids, tudo ou nada, com `GroupAuditLog`). A linha abre a pessoa no painel lateral: WhatsApp (só se ela autorizou, `whatsappOptIn`), "Acompanhada por" (`PUT …/members/:id/accompanied-by`), assento, papel, o que compartilha, "Ficha completa" e remover com confirmação. "Convidar" abre o painel de convite.
+  - **Convites (Pn-06, 06b):** cartões (links ativos, sem aceite, entraram em 30 dias, ativaram em 48 h), abas Todos, Links e E-mails, e tabela com origem, papel, usos, entraram ("menos de 5"), ativaram e validade. Ações: Copiar, Reenviar e Revogar. O painel "Novo link"/"Convidar por e-mail" tem origem e nome, limite de usos, validade (7 dias, 30 dias ou sem prazo), papel, "Acompanhado por" (o profissional só pode pôr a si mesmo) e "Dar assento PRO" (só o dono). O link criado sai com QR (SVG, preto no branco, também no tema escuro), "Baixar QR" e WhatsApp. O código de entrada da recepção (#393) continua embaixo.
+  - **Ativação pendente (Pn-22, 22b, 22c, 22d):** item novo em Pessoas no menu, que leva o contador de convites sem aceite. Mostra os cartões, filtro por origem com contagem, busca por e-mail, 10 por página no servidor e seleção com "Reenviar selecionados". Cada linha tem Reenviar ou Renovar, WhatsApp e Revogar. Sem nenhum pendente, aparece "Todos os convites foram aceitos"; com totais pequenos, o aviso de que eles ficam ocultos e a lista continua. Os cartões "Ativação pendente" e "Entraram e ainda não registraram" da visão geral passam a abrir esta tela.
+- **LGPD:** o export ganha `invitesReceived` (aceitos pela pessoa ou ainda com o e-mail dela) e `panelActions` (o `GroupAuditLog` dela). Excluir a conta revoga os convites abertos que ela criou e apaga o e-mail dela de todos os convites. O expurgo de e-mail de 30 dias também conta do aceite e da recusa (DATA_RETENTION).
+- **Isolamento:** todo id do corpo ou da query (convites do reenvio, membros do lote, acompanhante) fica amarrado ao `groupId` da URL. Um id de fora dá 404, e o lote inteiro é recusado. As rotas de lote, renovar, link e recusa usam `UserThrottlerGuard`. Coberto no bloco #401 do `user-isolation.spec.ts` e em `invite-activation.integration.spec.ts`.
+- **Desvios de propósito:**
+  - A lista de Ativação pendente mostra o **e-mail**, não o nome: o convite não tem nome.
+  - "Última visita" (Membros) depende do check-in da recepção (#404); a coluna não existe.
+  - "Administrador" e "Recepção" em "Entra como" dependem da #404.
+  - "Enviar" em massa (Pn-18) e "Pedir avaliação" (#383/#402) ficaram fora.
+  - As mudanças no painel da pessoa valem na hora, com aviso, sem "Salvar alterações": menos passos, e tudo se desfaz no mesmo lugar.
+  - "Copiar link geral" copia o primeiro link ativo com origem. Sem nenhum, o botão não aparece e "Convidar" cria um.
+- **Falta (dependências):** aceitar o convite na web redesenhada (#416) e a recusa no Onb-E1 (#372; a API já existe). Assentos em massa seguem a regra atual até a #403. Os papéis novos de equipe ficam para a #404.
 
 ## Etapas seguintes
 
