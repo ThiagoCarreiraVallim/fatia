@@ -164,6 +164,7 @@ function Convites({ g }: { g: MyGroup }) {
             }}
           />
         ) : null}
+        <Text className="text-xs text-muted-foreground">Limite de usos</Text>
         <Input
           value={usos}
           onChangeText={(v) => setUsos(v.replace(/\D/g, '').slice(0, 4))}
