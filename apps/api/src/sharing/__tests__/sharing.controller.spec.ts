@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { SharingController } from '../sharing.controller';
 import { PreviewGroupDto } from '../dto/group.dto';
+import { UserThrottlerGuard } from '../../common/user-throttler.guard';
 
 /**
  * Entrada das rotas de grupo, do lado do pipe.
@@ -61,5 +62,28 @@ describe('SharingController — validação de entrada', () => {
       expect(validado).toBeInstanceOf(PreviewGroupDto);
       expect(validado).toEqual({ slug: 'academia-x' });
     });
+  });
+});
+
+/**
+ * Envio em lote é limitado por usuário (#401). O `ThrottlerModule` não é
+ * `APP_GUARD`: sem o `UserThrottlerGuard` na rota, o `@Throttle` é inerte.
+ */
+describe('SharingController — teto por usuário nas rotas em lote (#401)', () => {
+  const GUARDS = '__guards__';
+  const comGuarda = (method: keyof SharingController) =>
+    (
+      (Reflect.getMetadata(GUARDS, SharingController.prototype[method]) as unknown[] | undefined) ??
+      []
+    ).includes(UserThrottlerGuard);
+
+  it.each([
+    'createInviteBatch',
+    'resendInvites',
+    'renewInvite',
+    'freshInviteLink',
+    'bulkMembers',
+  ] as const)('%s tem o UserThrottlerGuard', (method) => {
+    expect(comGuarda(method)).toBe(true);
   });
 });
