@@ -84,6 +84,10 @@ services:
       # E-mail do convite de comunidade. Vazio = só o link, sem e-mail.
       MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
       EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fat.ia.br>}
+      # Link de descadastro do e-mail de comunicado (#398). Vazio = sem e-mail de comunicado.
+      EMAIL_UNSUBSCRIBE_SECRET: ${EMAIL_UNSUBSCRIBE_SECRET:-}
+      # Comunicados com aviso por comunidade em 7 dias (#398).
+      ANNOUNCEMENT_PUSH_WEEKLY_LIMIT: ${ANNOUNCEMENT_PUSH_WEEKLY_LIMIT:-3}
       # Avisos no celular pela Expo (ADR 033). A instância pública usa true.
       PUSH_ENABLED: ${PUSH_ENABLED:-false}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}

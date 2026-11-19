@@ -20,6 +20,13 @@ export const AppEnvSchema = z.object({
   // fora dela no dev. Vazio = não envia: o convite continua valendo pelo link copiado.
   MAIL_SMTP_URL: z.string().url().optional().or(z.literal('')),
   EMAIL_FROM: z.string().min(3).default('Fatia <nao-responda@fatia.local>'),
+  // Assina o link de descadastro do e-mail de comunicado (#398), que funciona sem login. Vazio
+  // (ou com menos de 16 caracteres) = o e-mail de comunicado fica indisponível no painel.
+  // Gerar com `openssl rand -hex 32`. Trocar invalida os links dos e-mails já mandados.
+  EMAIL_UNSUBSCRIBE_SECRET: z.string().optional().or(z.literal('')),
+  // Comunicados com aviso (notificação ou e-mail) por comunidade em 7 dias (#398). Passou
+  // disso, o comunicado sai só no mural.
+  ANNOUNCEMENT_PUSH_WEEKLY_LIMIT: z.coerce.number().int().min(0).default(3),
   // Avisos no celular pela Expo (ADR 033). Desligado por padrão: o dev e os testes não mandam
   // aviso para o celular de ninguém. O token de acesso só vale se o projeto na Expo exigir.
   PUSH_ENABLED: z.enum(['true', 'false']).default('false'),

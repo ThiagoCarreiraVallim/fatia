@@ -117,7 +117,7 @@ describe('entrega do comunicado (#398, integração)', () => {
   });
 
   afterAll(async () => {
-    await notifications.drain();
+    await Promise.all([notifications.drain(), announcements.drain()]);
     await prisma.group.deleteMany({ where: { id: { in: grupos } } });
     await prisma.user.deleteMany({ where: { id: { in: criados } } });
     await prisma.$disconnect();
@@ -134,7 +134,7 @@ describe('entrega do comunicado (#398, integração)', () => {
       await notifications.setPreferences(caio, { ANNOUNCEMENTS: false });
 
       const c = await announcements.create(a.dono, a.groupId, agora({ alsoEmail: true }));
-      await notifications.drain();
+      await Promise.all([notifications.drain(), announcements.drain()]);
 
       const para = emails.map((e) => e.to).sort();
       const quem = await prisma.user.findMany({
@@ -165,7 +165,7 @@ describe('entrega do comunicado (#398, integração)', () => {
       expect(await mail.setSubscribed(t, false)).toEqual({ subscribed: false });
 
       await announcements.create(a.dono, a.groupId, agora({ alsoEmail: true }));
-      await notifications.drain();
+      await Promise.all([notifications.drain(), announcements.drain()]);
       const ana = await prisma.user.findUniqueOrThrow({ where: { id: a.ana } });
       expect(emails.map((e) => e.to)).not.toContain(ana.email);
       // O push continua: descadastrar é do e-mail.
@@ -216,7 +216,7 @@ describe('entrega do comunicado (#398, integração)', () => {
       for (let i = 0; i < 3; i++) {
         await announcements.create(a.dono, a.groupId, agora({ title: `Aviso ${i}` }));
       }
-      await notifications.drain();
+      await Promise.all([notifications.drain(), announcements.drain()]);
       expect(await announcements.settings(a.dono, a.groupId)).toMatchObject({
         pushWeeklyLimit: 3,
         pushUsedThisWeek: 3,
@@ -230,7 +230,7 @@ describe('entrega do comunicado (#398, integração)', () => {
         a.groupId,
         agora({ title: 'Quarto', alsoEmail: true }),
       );
-      await notifications.drain();
+      await Promise.all([notifications.drain(), announcements.drain()]);
       expect(enviados).toEqual([]);
       expect(emails).toEqual([]);
       const post = await prisma.groupPost.findFirstOrThrow({
@@ -249,7 +249,7 @@ describe('entrega do comunicado (#398, integração)', () => {
     it('conta notificações mandadas e as que a Expo confirmou', async () => {
       const a = await comunidade();
       const c = await announcements.create(a.dono, a.groupId, agora());
-      await notifications.drain();
+      await Promise.all([notifications.drain(), announcements.drain()]);
       let linha = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
       expect(linha.pushSent).toBe(2);
 
@@ -259,7 +259,13 @@ describe('entrega do comunicado (#398, integração)', () => {
         [tickets[0]!.id]: { status: 'ok' },
         [tickets[1]!.id]: { status: 'error', details: { error: 'MessageRateExceeded' } },
       };
-      await notifications.checkReceipts(new Date(Date.now() + 16 * 60_000));
+      // Envelhece só os tickets deste teste: ler recibos com o relógio adiantado
+      // levaria os tickets das outras suítes que rodam junto.
+      await prisma.pushTicket.updateMany({
+        where: { announcementId: c.id },
+        data: { createdAt: new Date(Date.now() - 20 * 60_000) },
+      });
+      await notifications.checkReceipts(new Date());
       linha = await prisma.groupAnnouncement.findUniqueOrThrow({ where: { id: c.id } });
       expect(linha.pushDelivered).toBe(1);
       expect((await announcements.list(a.dono, a.groupId)).length).toBe(0);
