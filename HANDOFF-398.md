@@ -29,7 +29,12 @@ Pranchas: `/home/thiago/Documentos/pessoal/fatia/.canvas/project/Pn-01-Visao.dc.
   `email/announcements/subscription`), limite semanal, `settings`/`recent`, contas pushSent/Delivered/emailSent.
   Spec `announcement-delivery.integration.spec.ts`. Envs no compose, .env.example e .env.production.example.
 
+- user-isolation (bloco #398), export LGPD (opt-out e joinVia), api-client (`panel-shell.ts`).
+- Web: `org-shell.tsx` novo (menu em grupos, topo, ⌘K, painel lateral), `panel-search.tsx`, `side-panel.tsx`,
+  `panel-prefs.ts`, `announcement-editor.tsx` (usado no topo, na Visão geral e em Comunicados), Visão geral nova,
+  `/descadastro` público. Testes web atualizados/novos.
+- `docs/REDESIGN_PROGRESS.md`: seção Etapa 8 com o bloco #398.
+
 ## Falta
 
-- user-isolation.spec (bloco #398), export LGPD (opt-out do e-mail?), api-client, web (shell, ⌘K, visão geral,
-  comunicado lateral, página /descadastro), REDESIGN_PROGRESS, lint/typecheck/testes.
+- `pnpm lint`, `pnpm typecheck`, testes api/api-client/web; apagar este arquivo no último commit; relatório final.

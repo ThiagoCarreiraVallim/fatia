@@ -375,7 +375,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446)  | api, db, MCP (1 tool nova), api-client, web, app         |
 | #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | mergeado (#447)  | api, db, MCP, api-client, web, app, docs                 |
 | #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
-| #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
+| #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app         |
 
 #393 (branch `redesign/393-comunidades`, migration `20261118100000_community_entry_code_benefits`; nenhuma env nova):
 
@@ -488,6 +488,41 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A explicação geral do tipo Pontos ainda cita passos, que o tipo aceita quando a sync de saúde existir.
   - No emulador, a câmera virtual mostra a cena no visor, mas a foto sai preta (limite do emulador; o arquivo é um JPEG válido).
 
+## Etapa 8: Painel base (em andamento)
+
+| Issue | Título                                      | Estado           | Superfícies                    |
+| ----- | ------------------------------------------- | ---------------- | ------------------------------ |
+| #398  | Painel: layout novo, visão geral e busca ⌘K | pronto na branch | api, db, api-client, web, docs |
+
+#398 (branch `redesign/398-painel-layout`; migration `20261119100000_panel_overview_announcement_email`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
+
+- **Decisões (orquestrador):**
+  - As regras do comunicado são as da #394. Aqui entram o editor no **painel lateral** (Pn-01b) e a prévia **No mural / Tela bloqueada**.
+  - #311 (tarefas do profissional) fica fora.
+  - **E-mail do comunicado** ("Também por e-mail · opcional"): vai para quem deixou "Comunicados da comunidade" (`ANNOUNCEMENTS`) ligado e não se descadastrou pelo link. Cada e-mail leva o link de descadastro da própria pessoa (`/descadastro?t=…`, token HMAC-SHA256 com `EMAIL_UNSUBSCRIBE_SECRET`, sem login e sem prazo). Abrir o link não descadastra (leitores de link dos provedores abrem sozinhos): a página pede o clique, que faz o POST. Só o e-mail muda; push segue a preferência. Sem SMTP ou com o segredo vazio ou curto (menos de 16 caracteres), o e-mail fica indisponível e o editor mostra a chave desligada. `User.announcementEmailOptOutAt` entra no export LGPD.
+  - **"Entraram e ainda não registraram"** é só número, sem nomes: quem entrou nos últimos 30 dias, tem `statsOptIn` e não registrou treino, pelo `suppress()` (some com menos de 5 pessoas, e o par registrou/não registrou passa junto pelo limiar).
+- **Menu lateral** (Pn-01, reaproveitável pelas #399–#402): grupos Acompanhar, Pessoas, Conteúdo, Comunidade e IA (`panelNav`, api-client), recolhíveis um a um; menu inteiro recolhe para 56 px só com ícones. O estado e as colunas da tabela ficam no `localStorage`, por `membershipId` (preferência de UI). Contadores por item (`GET groups/:id/panel/counts`: pedidos, convites sem aceite, denúncias abertas, desafios para revisar), cada um nulo quando o papel não tem a ação; grupo fechado mostra a soma. Rodapé com Configurações, Ver como membro (`/community/<id>`) e o menu do perfil (Meu perfil, Sair). **Só entram as telas que já existem**: Para revisar, Relatório, Ativação pendente, Agenda, Programas etc. entram com as issues delas, acrescentando em `NAV` (`panel-shell.ts`).
+- **Topo:** recolher o menu, migalha (grupo › tela, e na subpágina a tela vira link e o título vem do `useTopBarTitle`), busca "Buscar membro ou tela ⌘K", **Comunicado** (para quem tem a seção de comunicados) e **Novo plano** (leva a Planos e dicas). No computador a barra do app some; no celular ficam a barra do app, a busca e as seções em fichas com os contadores, e a barra de abas.
+- **Painel lateral** (`SidePanelProvider`/`useSidePanel`): no computador empurra a página (440 px, nada fica por baixo); no celular ocupa a tela acima da barra de abas, então os botões do pé nunca ficam cobertos. Fecha no botão ou com esc. A tela de Comunicados também abre o editor nele.
+- **Busca ⌘K** (Pn2-00, 00b, 00c): `GET groups/:id/search?q=` com permissão nova `panel.search` (dono e profissional). Membros pelo nome (ativos e pedidos), telas que o papel abre e, com `content.publish`, planos da biblioteca. Nunca dado de saúde, nunca e-mail. Recentes no navegador (5, por pessoa e comunidade). ↑↓ e Enter, "Nada com “x”" no vazio. Ctrl+K também abre.
+- **Visão geral** (`GET groups/:id/overview?days=7|30|90`, permissão nova `panel.overview`):
+  - Membros ativos (entraram nos últimos 30 dias, pedidos aguardando), **Treinos hoje** e **Ativos em 7 dias** (só o dono, que tem `insights.read`), Assentos PRO (dono).
+  - Cartões Ativação pendente (convites por e-mail sem aceite, não revogados e no prazo), Novos esta semana (por convite ou código / pela página, de `GroupMembership.joinVia`, gravado a partir de agora; quem entrou antes fica sem origem) e Entraram e ainda não registraram.
+  - Gráfico Atividade dos membros (dono): treinos registrados e pessoas que treinaram por dia no fuso da comunidade, período de 7, 30 ou 90 dias, séries ligáveis; dia com menos de 5 pessoas fica em branco.
+  - Tabela com abas Precisa de você (pedidos, denúncias, check-ins para revisar), Desafios (em andamento e começando) e Últimos envios (planos que **eu** mandei), colunas escolhidas pela pessoa.
+  - Retenção e Comportamento (os `InsightsCard` de antes) ficam embaixo, em "Relatório", até a #400.
+- **Comunicado:** limite de avisos por semana por comunidade (`ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`, padrão 3; vale para push e e-mail juntos, travado com `pg_advisory_xact_lock`). Passou do limite: sai no mural sem push nem e-mail, e a API devolve `pushSkipped` (o editor avisa antes, "Limite de 3 avisos por semana atingido"). Contas de entrega por comunicado: notificações mandadas (`pushSent`), entregues pelo recibo do Expo (`pushDelivered`, via `PushTicket.announcementId`) e e-mails (`emailSent`), na lista "Enviados" da tela de Comunicados. `GET …/announcements/settings` e `/recent`.
+- **Isolamento:** tudo pelo `groupId` da URL com `requireContentRole`; a busca nunca devolve membro, tela ou plano de outra comunidade, e o membro comum recebe 403. O token de descadastro só muda a própria pessoa. Coberto em `panel.integration.spec.ts`, `announcement-delivery.integration.spec.ts` e no bloco #398 do `user-isolation.spec.ts`.
+- **Desvios de propósito:**
+  - **"Visitas hoje" e a série Visitas do gráfico** não existem: não há check-in da recepção ainda (#404). No lugar, "Treinos hoje" e a série "Pessoas que treinaram".
+  - **"Ativos em 7 dias" conta só treino**, não "treino ou refeição" como na prancha: a `AGGREGATION_POLICY` §6 não agrega refeições. O percentual é sobre quem compartilha estatísticas (`statsOptIn`), não sobre todos os membros.
+  - "Comunicados e enquetes" continua item próprio do menu (decisão da #394: o profissional comunica e não modera).
+  - Sem métrica de abertura do comunicado (precisaria do app avisar; a prancha não mostra).
+  - O subtítulo do membro na busca é o papel ("membro", "pedido para entrar"), não o plano dele.
+  - "Enviar para alunos" (botão do topo do menu na prancha) depende da Pn-18; ficou fora.
+  - Os cartões levam a telas que existem: "Entraram e ainda não registraram" e "Ativação pendente" abrem Convites até a tela de Ativação pendente existir.
+- **Falta:** passada visual (prints lado a lado, web 390 e 1440, escuro e claro) — o brief desta issue pediu para não tirar prints; o app (painel no celular é a #414).
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -497,7 +532,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | em andamento |
-| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
+| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | em andamento |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
 | 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
 | 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer      |
