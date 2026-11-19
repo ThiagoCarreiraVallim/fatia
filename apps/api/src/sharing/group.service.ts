@@ -12,6 +12,7 @@ import {
   GroupType,
   MembershipStatus,
   type Group,
+  type AutoPostKind,
   type GroupAiMode,
   type GroupMembership,
   type GroupVisibility,
@@ -68,6 +69,8 @@ export interface UpdateGroupInput {
   timezone?: string;
   /** Quem publica no mural (Fase 8b). */
   postPolicy?: PostPolicy;
+  /** Que conteúdo novo vira post automático no mural (#394). */
+  autoPosts?: AutoPostKind[];
   /**
    * Mudar a lista vale para quem entrar dali em diante: quem já está dentro
    * não passa a dever o que nunca compartilhou (`consent-scopes.ts`).
@@ -104,6 +107,8 @@ export interface GroupSummary {
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
   postPolicy: PostPolicy;
+  /** Que conteúdo novo vira post automático no mural (#394). */
+  autoPosts: AutoPostKind[];
   /** O que a comunidade exige que membros compartilhem para entrar. */
   requiredSharingScopes: ShareScope[];
   /** Pública ou privada (Cm-01, Cm-04). */
@@ -190,6 +195,7 @@ function toSummary(
     proPaidByThisGroup,
     avatarUrl,
     postPolicy: m.group.postPolicy,
+    autoPosts: m.group.autoPosts,
     requiredSharingScopes: m.group.requiredSharingScopes,
     visibility: m.group.visibility,
     timezone: m.group.timezone,
@@ -452,7 +458,7 @@ export class GroupService {
   /** Perfil da comunidade. O guarda já conferiu `group.update`; o dono de novo aqui. */
   async update(ownerId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
     await this.assertOwner(ownerId, groupId);
-    const { requiredSharingScopes, ...resto } = input;
+    const { requiredSharingScopes, autoPosts, ...resto } = input;
     return this.prisma.group.update({
       where: { id: groupId },
       data: {
@@ -460,6 +466,7 @@ export class GroupService {
         ...(requiredSharingScopes
           ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
           : {}),
+        ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
       },
     });
   }

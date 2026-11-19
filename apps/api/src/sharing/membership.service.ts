@@ -19,8 +19,9 @@ import { ChallengeService } from './challenge.service';
 import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
+import { cancelScheduledAnnouncementsOp } from './announcement-schedule';
 import { findGroupByEntryCode } from './entry-code';
-import { canReceiveLink } from './permissions';
+import { can, canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
 /** Mesma resposta para "grupo não existe" e "não sou membro dele" (#92). */
@@ -515,10 +516,15 @@ export class MembershipService {
       );
     }
     if (sai) vinculos.push(this.links.revokeAsReceiverOp(groupId, alvo.userId, at));
+    // Sem o papel de comunicar, os agendados dela não saem mais (#394).
+    const cancelaAgendados = !can(role, 'announcement.publish')
+      ? [cancelScheduledAnnouncementsOp(this.prisma, alvo.id, at)]
+      : [];
 
     const [membership, ...resto] = (await this.prisma.$transaction([
       this.prisma.groupMembership.update({ where: { id: alvo.id }, data: { role } }),
       ...vinculos,
+      ...cancelaAgendados,
     ])) as [GroupMembership, ...unknown[]];
 
     return {
@@ -692,6 +698,8 @@ export class MembershipService {
         where: { membershipId, revokedAt: null },
         data: { revokedAt: agora },
       }),
+      // Os comunicados que a pessoa agendou não saem depois que ela saiu (#394).
+      cancelScheduledAnnouncementsOp(this.prisma, membershipId, agora),
     ]);
 
     // As fotos de prova dos check-ins dela nesta comunidade saem na hora (ADR 044 §7).

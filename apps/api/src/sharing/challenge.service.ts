@@ -9,6 +9,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import {
+  AutoPostKind,
   ChallengeCheckinStatus,
   ChallengeCheckinType,
   ChallengeFlagSource,
@@ -20,6 +21,7 @@ import {
   type StepSource,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { publishAutoPost } from './auto-post';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz';
 import {
   buildScoreboard,
@@ -585,6 +587,14 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         ...regras,
         ...janela,
       },
+    });
+    await publishAutoPost(this.prisma, {
+      groupId,
+      actorUserId: userId,
+      kind: AutoPostKind.CHALLENGE,
+      refId: criado.id,
+      title: criado.title,
+      meta: null,
     });
     const avisar = await this.prisma.groupMembership.findMany({
       where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },

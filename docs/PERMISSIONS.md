@@ -63,33 +63,34 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 
 ## Ações administrativas (papel decide)
 
-| Ação               | OWNER | PROFESSIONAL | CREATOR | MEMBER |
-| ------------------ | ----- | ------------ | ------- | ------ |
-| `group.read`       | sim   | sim          | sim     | sim    |
-| `group.update`     | sim   | não          | não     | não    |
-| `group.delete`     | sim   | não          | não     | não    |
-| `group.transfer`   | sim   | não          | não     | não    |
-| `invite.create`    | sim   | sim          | não     | não    |
-| `invite.revoke`    | sim   | sim          | não     | não    |
-| `member.list`      | sim   | sim          | sim     | sim    |
-| `member.approve`   | sim   | não          | não     | não    |
-| `member.remove`    | sim   | não          | não     | não    |
-| `member.role`      | sim   | não          | não     | não    |
-| `billing.read`     | sim   | não          | não     | não    |
-| `billing.manage`   | sim   | não          | não     | não    |
-| `content.publish`  | sim   | sim          | sim     | não    |
-| `content.read`     | sim   | sim          | sim     | sim    |
-| `content.moderate` | sim   | não          | sim     | não    |
-| `offer.create`     | não   | sim          | não     | não    |
-| `challenge.manage` | sim   | sim          | sim     | não    |
-| `challenge.join`   | sim   | sim          | sim     | sim    |
-| `challenge.review` | sim   | sim          | sim     | não    |
-| `post.read`        | sim   | sim          | sim     | sim    |
-| `post.create`      | sim   | sim          | sim     | sim    |
-| `member.ban`       | sim   | não          | não     | não    |
-| `insights.read`    | sim   | não          | não     | não    |
-| `benefit.read`     | sim   | sim          | sim     | sim    |
-| `benefit.manage`   | sim   | não          | não     | não    |
+| Ação                   | OWNER | PROFESSIONAL | CREATOR | MEMBER |
+| ---------------------- | ----- | ------------ | ------- | ------ |
+| `group.read`           | sim   | sim          | sim     | sim    |
+| `group.update`         | sim   | não          | não     | não    |
+| `group.delete`         | sim   | não          | não     | não    |
+| `group.transfer`       | sim   | não          | não     | não    |
+| `invite.create`        | sim   | sim          | não     | não    |
+| `invite.revoke`        | sim   | sim          | não     | não    |
+| `member.list`          | sim   | sim          | sim     | sim    |
+| `member.approve`       | sim   | não          | não     | não    |
+| `member.remove`        | sim   | não          | não     | não    |
+| `member.role`          | sim   | não          | não     | não    |
+| `billing.read`         | sim   | não          | não     | não    |
+| `billing.manage`       | sim   | não          | não     | não    |
+| `content.publish`      | sim   | sim          | sim     | não    |
+| `content.read`         | sim   | sim          | sim     | sim    |
+| `content.moderate`     | sim   | não          | sim     | não    |
+| `offer.create`         | não   | sim          | não     | não    |
+| `challenge.manage`     | sim   | sim          | sim     | não    |
+| `challenge.join`       | sim   | sim          | sim     | sim    |
+| `challenge.review`     | sim   | sim          | sim     | não    |
+| `post.read`            | sim   | sim          | sim     | sim    |
+| `post.create`          | sim   | sim          | sim     | sim    |
+| `announcement.publish` | sim   | sim          | não     | não    |
+| `member.ban`           | sim   | não          | não     | não    |
+| `insights.read`        | sim   | não          | não     | não    |
+| `benefit.read`         | sim   | sim          | sim     | sim    |
+| `benefit.manage`       | sim   | não          | não     | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
 futura:
@@ -142,6 +143,13 @@ futura:
   conferido no `PostService` e no pedido de envio da imagem). Reagir, comentar e denunciar são
   `post.read`. Quem modera remove, restaura e fixa e trata a fila de denúncias, sem saber quem
   denunciou; banir é mais forte que remover membro e fica com quem remove.
+- **Comunicados (#394): `announcement.publish` é `OWNER` e `PROFESSIONAL`.** Comunicar é mandar
+  notificação a todos (agora, agendado ou repetido) e fixar o aviso no topo; quem comunica também
+  vê os agendados e cancela. Não é moderar: reordenar e desafixar avisos e tratar denúncias seguem
+  em `content.moderate`. O `CREATOR` publica conteúdo, mas não manda aviso no celular de todos. A
+  "recepção" das pranchas não é papel do Fatia; quando for, entra aqui como quem comunica sem
+  moderar. No mural, a equipe toda (`TEAM_ROLES`) publica em nome da comunidade e fixa o próprio
+  post como aviso; o painel de enquetes é `content.publish`.
 - **Benefícios de parceiros (#393): `benefit.read` de todos, `benefit.manage` só do dono.** O
   desconto é acordo comercial da comunidade, como a cobrança. O membro vê só os que valem (e o
   vencido de ontem, sem o cupom); o Fatia não rastreia compra nem passa dado ao parceiro.
@@ -164,33 +172,34 @@ exercem nada — o papel guardado numa associação encerrada faria o ex-dono co
 administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **pendente**
 (`INVITED`, criada por `POST /groups/join`) exerce só isto:
 
-| Ação               | Pendente (`INVITED`) |
-| ------------------ | -------------------- |
-| `group.read`       | sim                  |
-| `group.update`     | não                  |
-| `group.delete`     | não                  |
-| `group.transfer`   | não                  |
-| `invite.create`    | não                  |
-| `invite.revoke`    | não                  |
-| `member.list`      | não                  |
-| `member.approve`   | não                  |
-| `member.remove`    | não                  |
-| `member.role`      | não                  |
-| `billing.read`     | não                  |
-| `billing.manage`   | não                  |
-| `content.publish`  | não                  |
-| `content.read`     | não                  |
-| `content.moderate` | não                  |
-| `offer.create`     | não                  |
-| `challenge.manage` | não                  |
-| `challenge.join`   | não                  |
-| `challenge.review` | não                  |
-| `post.read`        | não                  |
-| `post.create`      | não                  |
-| `member.ban`       | não                  |
-| `insights.read`    | não                  |
-| `benefit.read`     | não                  |
-| `benefit.manage`   | não                  |
+| Ação                   | Pendente (`INVITED`) |
+| ---------------------- | -------------------- |
+| `group.read`           | sim                  |
+| `group.update`         | não                  |
+| `group.delete`         | não                  |
+| `group.transfer`       | não                  |
+| `invite.create`        | não                  |
+| `invite.revoke`        | não                  |
+| `member.list`          | não                  |
+| `member.approve`       | não                  |
+| `member.remove`        | não                  |
+| `member.role`          | não                  |
+| `billing.read`         | não                  |
+| `billing.manage`       | não                  |
+| `content.publish`      | não                  |
+| `content.read`         | não                  |
+| `content.moderate`     | não                  |
+| `offer.create`         | não                  |
+| `challenge.manage`     | não                  |
+| `challenge.join`       | não                  |
+| `challenge.review`     | não                  |
+| `post.read`            | não                  |
+| `post.create`          | não                  |
+| `announcement.publish` | não                  |
+| `member.ban`           | não                  |
+| `insights.read`        | não                  |
+| `benefit.read`         | não                  |
+| `benefit.manage`       | não                  |
 
 `group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de
 `group.service.ts` inclui `INVITED`): é a tela "aguardando aprovação". Fechá-lo no guarda faria o

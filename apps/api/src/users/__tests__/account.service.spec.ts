@@ -48,6 +48,7 @@ const makePrisma = () => ({
   feedbackIdea: { findMany: jest.fn().mockResolvedValue([]) },
   dataExport: { findMany: jest.fn().mockResolvedValue([]) },
   mcpOAuthConnection: { findMany: jest.fn().mockResolvedValue([]) },
+  userBlock: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
   reminder: { findMany: jest.fn().mockResolvedValue([]) },
   aiConsent: { findMany: jest.fn().mockResolvedValue([]) },
@@ -132,6 +133,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   aiAutoWrites: 'aiAutoWrites',
   // Conectar sua IA (#388): qual app de IA a pessoa ligou e quando. Sem o hash do token.
   mcpConnections: 'mcpConnections',
+  // Bloqueios (#394): quem a pessoa bloqueou, com o nome que aparecia.
+  blocksMade: 'blocks',
 };
 
 /**
@@ -153,6 +156,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
     'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
+  blocksReceived:
+    'Quem bloqueou a pessoa (#394): o bloqueio é invisível para quem foi bloqueado, e contar ' +
+    'quem foi seria dizer. Apaga com a conta (cascata dos dois lados).',
   benefitsCreated:
     'Benefícios de parceiros que o dono cadastrou para a comunidade (#393): texto, cupom e ' +
     'link do parceiro, conteúdo B2B do grupo, nada do titular. Apagar a conta só zera o autor.',

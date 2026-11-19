@@ -141,6 +141,8 @@ describe('mural da comunidade (integração)', () => {
       expect(visto.posts[0]!.author).toEqual({
         displayName: 'Ana',
         team: false,
+        role: null,
+        asGroup: false,
         isMe: false,
         avatarUrl: null,
       });
@@ -157,6 +159,8 @@ describe('mural da comunidade (integração)', () => {
       expect(post.author).toEqual({
         displayName: 'Equipe',
         team: true,
+        role: 'PROFESSIONAL',
+        asGroup: false,
         isMe: true,
         avatarUrl: null,
       });
@@ -234,13 +238,14 @@ describe('mural da comunidade (integração)', () => {
       await posts.moderatePost(a.dono, a.groupId, ids[0]!, 'pin');
 
       const p1 = await posts.list(a.outro, a.groupId);
-      expect(p1.posts[0]).toMatchObject({ id: ids[0], pinned: true });
-      expect(p1.posts).toHaveLength(FEED_PAGE_SIZE + 1);
+      // Os fixados vão no carrossel (`pins`), fora da lista paginada (#394).
+      expect(p1.pins).toEqual([expect.objectContaining({ id: ids[0], pinned: true })]);
+      expect(p1.posts).toHaveLength(FEED_PAGE_SIZE);
       expect(p1.nextCursor).not.toBeNull();
 
       const p2 = await posts.list(a.outro, a.groupId, p1.nextCursor);
       expect(p2.nextCursor).toBeNull();
-      const todos = [...p1.posts, ...p2.posts].map((p) => p.id);
+      const todos = [...p1.pins, ...p1.posts, ...p2.posts].map((p) => p.id);
       expect(new Set(todos).size).toBe(ids.length);
       expect(todos).toHaveLength(ids.length);
     });
@@ -364,7 +369,7 @@ describe('mural da comunidade (integração)', () => {
         await expect(posts.reports(quem, a.groupId)).rejects.toBeInstanceOf(ForbiddenException);
       }
       await posts.moderatePost(criador, a.groupId, post.id, 'pin');
-      expect((await posts.list(a.outro, a.groupId)).posts[0]).toMatchObject({ pinned: true });
+      expect((await posts.list(a.outro, a.groupId)).pins[0]).toMatchObject({ pinned: true });
     });
 
     it('fixa até 3', async () => {

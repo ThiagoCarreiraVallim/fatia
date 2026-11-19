@@ -1,8 +1,14 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
+  IsInt,
+  Max,
+  Min,
+  ValidateNested,
   IsOptional,
   IsString,
   IsUUID,
@@ -14,8 +20,17 @@ import {
 import type { PostReactionKind, ReportReason } from '@fatia/db';
 import { DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DISPLAY_NAME_PATTERN } from '../display-name';
 import {
+  ANNOUNCEMENT_TITLE_MAX,
   COMMENT_BODY_MAX,
+  FEED_FILTERS,
+  PIN_MAX_DAYS,
+  POLL_MAX_DAYS,
+  POLL_MAX_OPTIONS,
+  POLL_MIN_OPTIONS,
+  POLL_OPTION_MAX,
+  POLL_QUESTION_MAX,
   POST_BODY_MAX,
+  type FeedFilter,
   POST_MAX_IMAGES,
   POST_REACTIONS,
   REPORT_NOTE_MAX,
@@ -41,6 +56,28 @@ export class FeedQueryDto {
   @IsOptional()
   @IsUUID()
   cursor?: string;
+
+  @IsOptional()
+  @IsIn([...FEED_FILTERS])
+  filter?: FeedFilter;
+}
+
+export class PollDto {
+  @IsString()
+  @MaxLength(POLL_QUESTION_MAX)
+  question!: string;
+
+  @IsArray()
+  @ArrayMinSize(POLL_MIN_OPTIONS)
+  @ArrayMaxSize(POLL_MAX_OPTIONS)
+  @IsString({ each: true })
+  @MaxLength(POLL_OPTION_MAX, { each: true })
+  options!: string[];
+
+  @IsInt()
+  @Min(1)
+  @Max(POLL_MAX_DAYS)
+  days!: number;
 }
 
 class WithDisplayName {
@@ -65,6 +102,111 @@ export class CreatePostDto extends WithDisplayName {
   @ArrayMaxSize(POST_MAX_IMAGES)
   @IsUUID('4', { each: true })
   imageFileIds?: string[];
+
+  @IsOptional()
+  @IsIn(['POST', 'POLL'])
+  kind?: 'POST' | 'POLL';
+
+  @IsOptional()
+  @IsIn(['PERSON', 'GROUP'])
+  publishedAs?: 'PERSON' | 'GROUP';
+
+  @IsOptional()
+  @IsBoolean()
+  pin?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(1)
+  @Max(PIN_MAX_DAYS)
+  pinDays?: number | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PollDto)
+  poll?: PollDto;
+}
+
+export class PinDto {
+  /** Dias no topo; ausente ou nulo = sem prazo. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(1)
+  @Max(PIN_MAX_DAYS)
+  days?: number | null;
+}
+
+export class PinOrderDto {
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID('4', { each: true })
+  postIds!: string[];
+}
+
+export class VoteDto {
+  @IsUUID()
+  optionId!: string;
+}
+
+export class AnnouncementDto {
+  @IsString()
+  @MaxLength(ANNOUNCEMENT_TITLE_MAX)
+  title!: string;
+
+  @IsString()
+  @MaxLength(POST_BODY_MAX)
+  body!: string;
+
+  @IsIn(['PERSON', 'GROUP'])
+  publishedAs!: 'PERSON' | 'GROUP';
+
+  @IsBoolean()
+  pin!: boolean;
+
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(1)
+  @Max(PIN_MAX_DAYS)
+  pinDays!: number | null;
+
+  @IsBoolean()
+  push!: boolean;
+
+  /** ISO do primeiro disparo; nulo = agora. */
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  at!: string | null;
+
+  @IsIn(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'])
+  repeat!: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+}
+
+export class AnnouncementParamDto {
+  @IsUUID()
+  groupId!: string;
+
+  @IsUUID()
+  id!: string;
+}
+
+export class BlockDto {
+  @IsUUID()
+  groupId!: string;
+
+  @IsUUID()
+  postId!: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsUUID()
+  commentId?: string | null;
+}
+
+export class BlockParamDto {
+  @IsUUID()
+  id!: string;
 }
 
 export class CreateCommentDto extends WithDisplayName {

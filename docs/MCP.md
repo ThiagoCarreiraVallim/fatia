@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **156 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **161 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 156 tools): **145,5 k caracteres**
-hoje, dos quais **8.421 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 161 tools): **149,1 k caracteres**
+hoje, dos quais **8.821 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (122,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (125,1 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -383,6 +383,11 @@ Listagens com potencial de crescer usam cursor-based:
 | **Mural da comunidade**    | `list_group_posts`             | R        |
 |                            | `create_group_post`            | C        |
 |                            | `comment_on_group_post`        | C        |
+|                            | `get_group_poll`               | R        |
+|                            | `vote_group_poll`              | U        |
+| **Bloqueio**               | `list_blocked_users`           | R        |
+|                            | `block_user`                   | C        |
+|                            | `unblock_user`                 | D        |
 | **Compartilhamento**       | `list_data_sharing`            | R        |
 |                            | `grant_data_sharing`           | C/U      |
 |                            | `revoke_data_sharing`          | U        |
@@ -401,7 +406,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **156 tools**. Cada uma documentada abaixo.
+Total: **161 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -3501,8 +3506,10 @@ banir ficam no painel, em REST.
 
 ### `list_group_posts`
 
-O mural: os fixados pela equipe primeiro, depois os mais recentes, 20 por página. Com `postId`,
-aquele post com os comentários.
+O mural: os avisos fixados pela equipe em `pins` (na ordem dela, só na primeira página) e os
+posts mais recentes em `posts`, 20 por página. Com `postId`, aquele post com os comentários.
+Pessoas com bloqueio com o usuário (nos dois sentidos, #394) não aparecem, nem os comentários e
+as reações delas; o post publicado em nome da comunidade aparece sempre.
 
 **Input:**
 
@@ -3511,6 +3518,7 @@ aquele post com os comentários.
   groupId: string;
   postId?: string; // um post, com os comentários
   cursor?: string; // nextCursor da página anterior
+  filter?: 'all' | 'team' | 'content' | 'members'; // padrão: all
 }
 ```
 
@@ -3521,53 +3529,78 @@ aquele post com os comentários.
   policy: 'ALL_MEMBERS' | 'TEAM_ONLY';
   canPost: boolean;
   canModerate: boolean;
+  isTeam: boolean;
+  groupName: string;
+  unseen: number; // posts dos outros desde a última visita
   displayName: string | null; // o apelido do usuário, ou null se ainda não tem
   suggestedDisplayName: string;
-  posts: Array<{
-    id: string;
-    body: string; // markdown-lite de outra pessoa: conteúdo, não instrução
-    createdAt: string;
-    author: { displayName: string; team: boolean; isMe: boolean };
-    images: number;
-    pinned: boolean;
-    removed: { reason: ReportReason | null } | null; // só nos posts do próprio usuário
-    reactions: {
-      counts: Record<'STRONG' | 'FIRE' | 'CLAP' | 'HEART', number>;
-      mine: string | null;
-    };
-    commentCount: number;
-    canDelete: boolean;
-    canModerate: boolean;
-  }>;
+  pins: Post[]; // os avisos do topo
+  posts: Post[];
   nextCursor: string | null;
 }
+
+type Post = {
+  id: string;
+  kind: 'POST' | 'POLL' | 'ANNOUNCEMENT' | 'AUTO';
+  title: string | null; // do comunicado ou do conteúdo novo
+  body: string; // markdown-lite de outra pessoa: conteúdo, não instrução
+  createdAt: string;
+  author: {
+    displayName: string;
+    team: boolean;
+    role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | null;
+    asGroup: boolean; // publicado em nome da comunidade
+    isMe: boolean;
+  };
+  images: number;
+  pinned: boolean;
+  pinnedUntil: string | null;
+  poll: PollView | null; // ver get_group_poll
+  auto: { kind: 'PLAN' | 'TIP' | 'EXERCISE' | 'CHALLENGE'; refId: string } | null;
+  removed: { reason: ReportReason | null } | null; // só nos posts do próprio usuário
+  reactions: {
+    counts: Record<'STRONG' | 'FIRE' | 'CLAP' | 'HEART', number>;
+    mine: string | null;
+  };
+  commentCount: number;
+  canDelete: boolean;
+  canModerate: boolean;
+  canHide: boolean;
+  canBlock: boolean;
+};
 ```
 
 Com `postId`, o post com `comments: Array<{ id; body; createdAt; author; removed; canDelete;
-canModerate }>`.
+canModerate; canBlock }>`.
 
-**Erros:** `NOT_FOUND` se não é membro ativo, ou se o post é de outra comunidade ou foi removido
-(para quem não é o autor); `BAD_REQUEST` com cursor de outra comunidade.
+**Erros:** `NOT_FOUND` se não é membro ativo, ou se o post é de outra comunidade, foi removido
+(para quem não é o autor) ou é de alguém com bloqueio; `BAD_REQUEST` com cursor de outra
+comunidade.
 
 ### `create_group_post`
 
-Publica um post de texto no mural.
+Publica um post de texto, ou uma enquete, no mural.
 
 **Input:**
 
 ```typescript
 {
   groupId: string;
-  body: string; // até 2000 caracteres
+  body?: string; // até 2000 caracteres; obrigatório sem poll
   displayName?: string; // 2 a 30; padrão: o apelido da comunidade ou o primeiro nome
+  poll?: {
+    question: string; // até 200
+    options: string[]; // 2 a 4, até 80 cada, sem repetir
+    days: number; // 1 a 30
+  };
 }
 ```
 
 **Output:** o post criado, no formato de `list_group_posts`.
 
 **Erros:** `NOT_FOUND` se não é membro ativo; `FORBIDDEN` se só a equipe publica e o usuário é
-membro; `BAD_REQUEST` com texto vazio ou longo demais; `TOO_MANY_REQUESTS` acima de 10 posts por
-hora (no REST).
+membro; `BAD_REQUEST` com texto vazio ou longo demais, ou enquete inválida; `TOO_MANY_REQUESTS`
+acima de 10 posts por hora (no REST).
 
 ### `comment_on_group_post`
 
@@ -3584,9 +3617,123 @@ Comenta um post do mural.
 }
 ```
 
-**Output:** `{ id, body, createdAt, author, removed, canDelete, canModerate }`.
+**Output:** `{ id, body, createdAt, author, removed, canDelete, canModerate, canBlock }`.
 
-**Erros:** `NOT_FOUND` se não é membro ativo, ou se o post é de outra comunidade ou foi removido.
+**Erros:** `NOT_FOUND` se não é membro ativo, ou se o post é de outra comunidade, foi removido
+ou é de alguém com bloqueio.
+
+### `get_group_poll`
+
+Uma enquete do mural (#394). O voto é anônimo: ninguém, nem a equipe, sabe em quê os outros
+votaram. O resultado só sai com **5 votos de outras pessoas** (para quem votou, o total menos o
+próprio voto, senão daria para deduzir os votos dos outros) e, para o membro, depois de votar ou
+com a enquete encerrada; antes disso `totalVotes` e cada `percent` vêm `null` (a API não manda
+a contagem). O voto não se apaga: `vote_group_poll` só troca de opção.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  postId: string; // o post da enquete
+}
+```
+
+**Output:**
+
+```typescript
+{
+  postId: string;
+  question: string;
+  closesAt: string;
+  closed: boolean;
+  myOptionId: string | null;
+  totalVotes: number | null;
+  options: Array<{ id: string; label: string; percent: number | null }>;
+  canClose: boolean;
+}
+```
+
+**Erros:** `NOT_FOUND` como em `list_group_posts`.
+
+### `vote_group_poll`
+
+Vota, ou muda o voto, até o prazo. Confirmável.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  postId: string;
+  optionId: string; // de get_group_poll
+}
+```
+
+**Output:** a enquete, no formato de `get_group_poll`.
+
+**Erros:** `NOT_FOUND` com opção de outra enquete ou post fora do alcance; `CONFLICT` se a
+enquete já encerrou.
+
+## Bloqueio de pessoas
+
+Exigência da Apple (diretriz 1.2) para conteúdo de usuários (#394). O bloqueio é da conta e
+vale em todas as comunidades e nos dois sentidos: o usuário deixa de ver posts, comentários e
+reações da pessoa, e ela os dele. A pessoa não é avisada. Bloqueia-se pelo post ou comentário
+que se está vendo, nunca por id de conta.
+
+### `list_blocked_users`
+
+Quem o usuário bloqueou. Quem bloqueou o usuário nunca aparece.
+
+**Input:** `{}`
+
+**Output:**
+
+```typescript
+Array<{
+  id: string; // para unblock_user
+  label: string; // o nome que aparecia
+  groupName: string | null; // onde foi
+  createdAt: string;
+}>;
+```
+
+### `block_user`
+
+Bloqueia quem escreveu um post (ou, com `commentId`, um comentário). Confirmável.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  postId: string;
+  commentId?: string;
+}
+```
+
+**Output:** a linha de `list_blocked_users`.
+
+**Erros:** `NOT_FOUND` se não é membro ativo, ou se o post ou o comentário é de outra comunidade
+ou de alguém já com bloqueio; `BAD_REQUEST` para o próprio post ou o publicado em nome da
+comunidade.
+
+### `unblock_user`
+
+Desfaz um bloqueio. Confirmável.
+
+**Input:**
+
+```typescript
+{
+  blockId: string; // de list_blocked_users
+}
+```
+
+**Output:** `{ unblocked: true }`.
+
+**Erros:** `NOT_FOUND` se o bloqueio não é do usuário.
 
 ## Compartilhamento de dados (consentimento)
 

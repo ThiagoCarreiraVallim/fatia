@@ -145,6 +145,9 @@ model User {
   notificationPreferences NotificationPreference[]
   pendingNotices          PendingNotice[]
   webPushSubscriptions    WebPushSubscription[]
+  /// Bloqueios (#394): quem esta pessoa bloqueou e quem a bloqueou.
+  blocksMade              UserBlock[]              @relation("BlockBlocker")
+  blocksReceived          UserBlock[]              @relation("BlockBlocked")
   // Central de avisos do sino do Hoje (#373).
   inboxNotices            InboxNotice[]
   // Lembretes pessoais (#389). A equipe não vê.
@@ -1635,6 +1638,13 @@ model Group {
   /// Quem publica no mural (Fase 8b, ADR 032).
   postPolicy            PostPolicy            @default(ALL_MEMBERS)
   posts                 GroupPost[]
+  /// Comunicados agendados ou repetidos (#394).
+  announcements         GroupAnnouncement[]
+  /// Que conteúdo novo vira post automático no mural (#394, prancha Pn-14).
+  /// Liga por padrão só nas comunidades criadas depois da 20261118100100; as
+  /// que já existiam começam desligadas (opt-in na tela de mural).
+  autoPosts             AutoPostKind[]       @default([PLAN, TIP, EXERCISE, CHALLENGE])
+  blocksFrom            UserBlock[]
   /// Descontos de parceiros para os membros (#393).
   partnerBenefits       GroupPartnerBenefit[]
   /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
@@ -1664,8 +1674,8 @@ model GroupMembership {
   /// Apelido na comunidade: como a pessoa aparece no ranking dos desafios
   /// (Fase 8a). Nulo até a primeira vez que ela entra num desafio.
   displayName   String?
-  /// Última vez que a pessoa abriu o mural desta comunidade (#393): conta os
-  /// "posts novos" da lista. Nulo = nunca abriu; conta desde a entrada.
+  /// Última vez que a pessoa abriu o mural desta comunidade (#393, #394): conta
+  /// os "posts novos" da lista e do mural. Nulo = nunca abriu; conta desde a entrada.
   feedSeenAt    DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
@@ -1686,6 +1696,9 @@ model GroupMembership {
   commentsRemoved  GroupPostComment[]          @relation("CommentRemovedBy")
   reportsMade      GroupPostReport[]           @relation("ReportReporter")
   reportsResolved  GroupPostReport[]           @relation("ReportResolvedBy")
+  postsHidden      GroupPostHide[]
+  pollVotes        GroupPollVote[]
+  announcements    GroupAnnouncement[]
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -2779,28 +2792,48 @@ enum ReportReason {
 /// de equipe saem dela, e apagar a conta apaga o post junto (cascata).
 /// Removido pela moderação continua aqui, visível só ao autor (ADR 032).
 model GroupPost {
-  id            String        @id @default(uuid())
-  groupId       String
-  membershipId  String
+  id             String        @id @default(uuid())
+  groupId        String
+  membershipId   String
+  kind           PostKind      @default(POST)
+  /// Título do comunicado; nulo nos outros tipos.
+  title          String?
   /// Markdown-lite, até 2000 caracteres. Pode ser vazio quando há imagem.
-  body          String
-  pinnedAt      DateTime?
-  removedAt     DateTime?
-  removedById   String?
-  removedReason ReportReason?
-  createdAt     DateTime      @default(now())
+  body           String
+  /// A equipe publica em nome da comunidade ou no próprio nome (#394).
+  publishedAs    PostAuthorAs  @default(PERSON)
+  pinnedAt       DateTime?
+  /// Posição no carrossel de avisos (menor primeiro). Só vale com `pinnedAt`.
+  pinOrder       Int?
+  /// Depois disto o aviso sai do topo e fica no mural como post comum.
+  pinnedUntil    DateTime?
+  /// O comunicado (agendado ou repetido) que gerou este post.
+  announcementId String?
+  /// Post automático: que conteúdo novo ele anuncia (o id fica em `autoRefId`).
+  autoKind       AutoPostKind?
+  autoRefId      String?
+  removedAt      DateTime?
+  removedById    String?
+  removedReason  ReportReason?
+  createdAt      DateTime      @default(now())
 
-  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  author    GroupMembership     @relation("PostAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
-  removedBy GroupMembership?    @relation("PostRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
-  images    GroupPostImage[]
-  reactions GroupPostReaction[]
-  comments  GroupPostComment[]
-  reports   GroupPostReport[]
+  group        Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author       GroupMembership     @relation("PostAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
+  removedBy    GroupMembership?    @relation("PostRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  announcement GroupAnnouncement?  @relation(fields: [announcementId], references: [id], onDelete: SetNull)
+  images       GroupPostImage[]
+  reactions    GroupPostReaction[]
+  comments     GroupPostComment[]
+  reports      GroupPostReport[]
+  hides        GroupPostHide[]
+  poll         GroupPoll?
 
   @@index([groupId, createdAt])
+  @@index([announcementId])
   @@index([groupId, pinnedAt])
   @@index([membershipId])
+  /// Um post automático por conteúdo (nulos não colidem: posts comuns ficam de fora).
+  @@unique([groupId, autoKind, autoRefId])
 }
 
 /// Até quatro imagens por post (mídia `post_image`, ADR 028).
@@ -2873,6 +2906,151 @@ model GroupPostReport {
   @@index([postId, resolvedAt])
   @@index([commentId])
   @@index([reporterId])
+}
+
+enum PostKind {
+  POST
+  POLL
+  /// Comunicado da equipe (agora, agendado ou repetido).
+  ANNOUNCEMENT
+  /// Conteúdo novo da equipe (plano, dica, exercício, desafio).
+  AUTO
+}
+
+/// Em nome de quem o post aparece. `GROUP` é só da equipe.
+enum PostAuthorAs {
+  PERSON
+  GROUP
+}
+
+enum AnnouncementRepeat {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+/// Conteúdo novo que vira post automático, ligado por tipo no painel.
+enum AutoPostKind {
+  PLAN
+  TIP
+  EXERCISE
+  CHALLENGE
+}
+
+/// "Ocultar este post": some só para quem ocultou (prancha Cm-07).
+model GroupPostHide {
+  postId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  post       GroupPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([postId, membershipId])
+  @@index([membershipId])
+}
+
+/// Enquete de um post (kind POLL). Voto anônimo: nenhuma rota diz quem votou
+/// em quê, e o resultado só sai com 5 votos (`MIN_CELL`).
+model GroupPoll {
+  id        String    @id @default(uuid())
+  postId    String    @unique
+  question  String
+  closesAt  DateTime
+  /// Encerrada antes do prazo pela equipe ou pelo autor.
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  post    GroupPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  options GroupPollOption[]
+  votes   GroupPollVote[]
+}
+
+model GroupPollOption {
+  id     String @id @default(uuid())
+  pollId String
+  label  String
+  order  Int
+
+  poll  GroupPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes GroupPollVote[]
+
+  @@index([pollId])
+}
+
+/// Um voto por pessoa por enquete; muda até o prazo.
+model GroupPollVote {
+  id           String   @id @default(uuid())
+  pollId       String
+  optionId     String
+  membershipId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  poll       GroupPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option     GroupPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, membershipId])
+  @@index([optionId])
+  @@index([membershipId])
+}
+
+/// Comunicado da equipe (prancha Pn-14): publica agora ou no horário marcado,
+/// e repete. Cada disparo vira um `GroupPost` kind ANNOUNCEMENT; o job
+/// (`AnnouncementJob`) avança `nextRunAt` conforme `repeat`.
+model GroupAnnouncement {
+  id           String             @id @default(uuid())
+  groupId      String
+  /// Quem da equipe criou. Some com a associação (cascata).
+  membershipId String
+  publishedAs  PostAuthorAs       @default(GROUP)
+  title        String
+  body         String
+  pin          Boolean            @default(false)
+  /// Dias no topo; nulo = sem prazo.
+  pinDays      Int?
+  push         Boolean            @default(true)
+  repeat       AnnouncementRepeat @default(NONE)
+  /// Próximo disparo; nulo quando não há mais nenhum (feito ou cancelado).
+  nextRunAt    DateTime?
+  /// O primeiro horário marcado. As repetições contam dele, no fuso da
+  /// comunidade (o dia 31 volta a ser 31 depois de fevereiro).
+  anchorAt     DateTime?
+  /// Falhas seguidas do disparo atual; zera quando sai. No teto, cancela.
+  attempts     Int                @default(0)
+  lastRunAt    DateTime?
+  canceledAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  group      Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  posts      GroupPost[]
+
+  @@index([nextRunAt])
+  @@index([groupId])
+}
+
+/// Bloqueio entre contas (#394, Apple 1.2): vale em todas as comunidades e
+/// nos dois sentidos (quem bloqueou não vê, e é como se não existisse para
+/// quem foi bloqueado). Quem foi bloqueado não é avisado.
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  /// Como a pessoa aparecia quando foi bloqueada (para a lista em Você > Conta).
+  label     String
+  /// A comunidade onde o bloqueio aconteceu; só para a lista.
+  groupId   String?
+  createdAt DateTime @default(now())
+
+  blocker User   @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User   @relation("BlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  group   Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 // ============================================================

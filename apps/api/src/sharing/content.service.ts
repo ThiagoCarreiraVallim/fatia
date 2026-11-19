@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AutoPostKind,
   GroupRole,
   MembershipStatus,
   PlanTemplateKind,
@@ -14,6 +15,7 @@ import {
   type MediaFile,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { publishAutoPost } from './auto-post';
 import { snapshotOf } from '../nutrition/helpers/meal-snapshot';
 import { MealTemplateService } from '../nutrition/meal-template.service';
 import { UserGoalsService } from '../nutrition/user-goals.service';
@@ -335,6 +337,16 @@ export class ContentService {
       data: { publishedAt: published ? (atual.publishedAt ?? new Date()) : null },
       include: TEMPLATE_INCLUDE,
     });
+    if (published && !atual.publishedAt) {
+      await publishAutoPost(this.prisma, {
+        groupId,
+        actorUserId: userId,
+        kind: AutoPostKind.PLAN,
+        refId: row.id,
+        title: row.title,
+        meta: row.kind === PlanTemplateKind.WORKOUT ? 'plano de treino' : 'plano alimentar',
+      });
+    }
     return this.templateView(row, userId, eu);
   }
 
@@ -422,6 +434,16 @@ export class ContentService {
       },
       include: TIP_INCLUDE,
     });
+    if (state.published && !atual.publishedAt) {
+      await publishAutoPost(this.prisma, {
+        groupId,
+        actorUserId: userId,
+        kind: AutoPostKind.TIP,
+        refId: row.id,
+        title: row.title,
+        meta: row.category ? String(row.category).toLowerCase() : null,
+      });
+    }
     return this.tipView(row, userId, eu);
   }
 

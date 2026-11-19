@@ -67,6 +67,7 @@ export type MenuKey =
   | 'appearance'
   | 'news'
   | 'help'
+  | 'blocked'
   | 'password'
   | 'export';
 
@@ -180,6 +181,8 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
       link('appearance', 'Aparência', 'palette', '/profile/appearance'),
       link('news', 'Novidades', 'gift', '/you/news'),
       link('help', 'Ajuda e tutoriais', 'book', '/you/help'),
+      // Bloqueio global (#394, prancha Cm-07): "Dá para desfazer em Você, na seção Conta."
+      link('blocked', 'Pessoas bloqueadas', 'userx', '/you/blocked'),
       { key: 'password', label: 'Trocar senha', icon: 'lock', kind: 'action', href: null },
       {
         key: 'export',
@@ -395,6 +398,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/you/news', title: 'Novidades', parent: '/you' },
   { pattern: '/you/help', title: 'Ajuda e tutoriais', parent: '/you' },
   { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
+  { pattern: '/you/blocked', title: 'Pessoas bloqueadas', parent: '/you' },
   { pattern: '/progress', title: 'Progresso', parent: '/you', untitled: true },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
   { pattern: '/progress/charts', title: 'Gráficos', parent: '/progress' },
@@ -419,7 +423,8 @@ export const ROUTES: readonly RouteDef[] = [
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
-  { pattern: '/community/:id/content', title: 'Planos e dicas', parent: '/community/:id' },
+  { pattern: '/community/:id/content', title: 'Conteúdo', parent: '/community/:id' },
+  { pattern: '/community/:id/for-you', title: 'Para você', parent: '/community/:id' },
   // O mural é o próprio `/community/:id`, na web e no app; este caminho (que os
   // avisos do mural usam) só redireciona para lá.
   { pattern: '/community/:id/feed', title: 'Mural', parent: '/community/:id' },
@@ -467,6 +472,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/exercises/:exerciseId', title: 'Exercício', parent: '/org/:id/exercises' },
   { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
   { pattern: '/org/:id/moderation', title: 'Moderação', parent: '/org/:id' },
+  { pattern: '/org/:id/announcements', title: 'Comunicados e enquetes', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
   { pattern: '/org/:id/benefits', title: 'Benefícios', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },

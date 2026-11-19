@@ -53,6 +53,8 @@ export interface MyGroup {
   postPolicy: PostPolicy;
   /** O que a comunidade exige que membros compartilhem (vale para quem entra como membro). */
   requiredSharingScopes: ShareScope[];
+  /** Os posts automáticos ligados (#394). */
+  autoPosts?: ('PLAN' | 'TIP' | 'EXERCISE' | 'CHALLENGE')[];
   visibility: Visibility;
   /** Fuso da comunidade (IANA). */
   timezone: string;

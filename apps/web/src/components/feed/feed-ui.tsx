@@ -3,7 +3,8 @@
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { MessageCircle, MoreHorizontal, Pin, ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
+import { Megaphone, MessageCircle, MoreHorizontal, Pin, ShieldAlert, Sparkles } from 'lucide-react';
 import {
   ApiError,
   COMMENT_BODY_MAX,
@@ -13,6 +14,8 @@ import {
   commentsLabel,
   feedApi,
   moderationApi,
+  PIN_DAY_OPTIONS,
+  pinDeadlineLabel,
   POST_REACTIONS,
   REACTION_INFO,
   relativeTime,
@@ -20,6 +23,7 @@ import {
   REPORT_NOTE_MAX,
   REPORT_REASON_LABEL,
   REPORT_REASONS,
+  type AutoPostKind,
   type Post,
   type PostAuthor,
   type PostComment,
@@ -43,6 +47,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/you/user-avatar';
+import { BlockDialog } from './block-dialog';
+import { PollBlock } from './poll-block';
 
 export function apiMessage(err: unknown, padrao: string): string {
   return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
@@ -56,9 +62,9 @@ function Autor({ author, createdAt }: { author: PostAuthor; createdAt: string })
       <span className="font-semibold">
         {author.isMe ? `${author.displayName} (você)` : author.displayName}
       </span>
-      {author.team && (
+      {(author.team || author.asGroup) && (
         <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
-          Equipe
+          {author.asGroup ? 'Comunidade' : 'Equipe'}
         </span>
       )}
       <time dateTime={createdAt} className="text-xs text-muted-foreground">
@@ -156,6 +162,7 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
   const [texto, setTexto] = useState('');
   const [apelido, setApelido] = useState(me.suggested);
   const [denunciando, setDenunciando] = useState<PostComment | null>(null);
+  const [bloqueando, setBloqueando] = useState<PostComment | null>(null);
   const detalhe = useQuery({
     queryKey: communityKeys.post(groupId, post.id),
     queryFn: () => feedApi.get(groupId, post.id),
@@ -217,6 +224,15 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
                     Denunciar
                   </button>
                 )}
+                {c.canBlock && (
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setBloqueando(c)}
+                  >
+                    Bloquear
+                  </button>
+                )}
               </div>
             </li>
           ))}
@@ -249,6 +265,15 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
           postId={post.id}
           commentId={denunciando.id}
           onClose={() => setDenunciando(null)}
+        />
+      )}
+      {bloqueando && (
+        <BlockDialog
+          groupId={groupId}
+          postId={post.id}
+          commentId={bloqueando.id}
+          name={bloqueando.author.displayName}
+          onClose={() => setBloqueando(null)}
         />
       )}
     </div>
@@ -325,7 +350,7 @@ export function DenunciarDialog({
   );
 }
 
-type Acao = 'delete' | 'remove' | 'pin' | 'unpin' | 'report';
+type Acao = 'delete' | 'remove' | 'pin' | 'unpin' | 'report' | 'copy' | 'hide' | 'block';
 
 function AcoesDoPost({
   post,
@@ -336,10 +361,16 @@ function AcoesDoPost({
   onPick: (a: Acao) => void;
   onClose: () => void;
 }) {
+  // A ordem da prancha Cm-07: copiar, ocultar, bloquear e denunciar; depois o
+  // que é da equipe e o que é do autor.
   const acoes: { a: Acao; label: string; danger?: boolean }[] = [];
-  if (post.canModerate && !post.pinned) acoes.push({ a: 'pin', label: 'Fixar no topo' });
-  if (post.canModerate && post.pinned) acoes.push({ a: 'unpin', label: 'Desafixar' });
+  if (!post.removed) acoes.push({ a: 'copy', label: 'Copiar link' });
+  if (post.canHide) acoes.push({ a: 'hide', label: 'Ocultar este post' });
+  if (post.canBlock) acoes.push({ a: 'block', label: `Bloquear ${post.author.displayName}` });
   if (!post.author.isMe && !post.removed) acoes.push({ a: 'report', label: 'Denunciar' });
+  if (post.canModerate && !post.pinned && !post.removed)
+    acoes.push({ a: 'pin', label: 'Fixar no topo' });
+  if (post.canModerate && post.pinned) acoes.push({ a: 'unpin', label: 'Desafixar' });
   if (post.canModerate && !post.author.isMe)
     acoes.push({ a: 'remove', label: 'Remover do mural', danger: true });
   if (post.canDelete) acoes.push({ a: 'delete', label: 'Apagar post', danger: true });
@@ -367,16 +398,32 @@ function AcoesDoPost({
   );
 }
 
-/** Um post no mural: autor, texto, imagens, reações, comentários e ações. */
+const AUTO_CTA: Record<AutoPostKind, string> = {
+  PLAN: 'Ver o plano',
+  TIP: 'Ver a dica',
+  EXERCISE: 'Ver o exercício',
+  CHALLENGE: 'Ver o desafio',
+};
+
+/** Para onde o post automático leva: as telas de conteúdo que já existem. */
+function autoHref(groupId: string, kind: AutoPostKind, refId: string): string {
+  const base = `/community/${groupId}`;
+  if (kind === 'PLAN') return `${base}/content/${refId}`;
+  if (kind === 'CHALLENGE') return `${base}/challenges/${refId}`;
+  return `${base}/content?tab=${kind === 'TIP' ? 'tips' : 'exercises'}`;
+}
+
+/** Um post no mural: autor, texto, imagens, enquete, reações, comentários e ações. */
 export function PostCard({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
   const qc = useQueryClient();
   const [abertos, setAbertos] = useState(false);
   const [menu, setMenu] = useState(false);
   const [confirmar, setConfirmar] = useState<'delete' | 'remove' | null>(null);
   const [denunciando, setDenunciando] = useState(false);
+  const [bloqueando, setBloqueando] = useState(false);
+  const [fixando, setFixando] = useState(false);
 
-  const recarregar = () =>
-    void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId), exact: true });
+  const recarregar = () => void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId) });
 
   const reagir = useMutation({
     mutationFn: (k: PostReactionKind | null) => feedApi.react(groupId, post.id, k),
@@ -384,10 +431,10 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
     onError: (err) => toast(apiMessage(err, 'Não deu para reagir agora.')),
   });
   const acao = useMutation({
-    mutationFn: (a: Exclude<Acao, 'report'>): Promise<unknown> => {
+    mutationFn: (a: 'delete' | 'remove' | 'unpin' | 'hide'): Promise<unknown> => {
       if (a === 'delete') return feedApi.remove(groupId, post.id);
       if (a === 'remove') return moderationApi.removePost(groupId, post.id);
-      if (a === 'pin') return moderationApi.pin(groupId, post.id);
+      if (a === 'hide') return feedApi.hide(groupId, post.id);
       return moderationApi.unpin(groupId, post.id);
     },
     onSuccess: (_, a) => {
@@ -397,19 +444,40 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
           ? 'Post apagado.'
           : a === 'remove'
             ? 'Post removido do mural. Só quem publicou ainda vê.'
-            : a === 'pin'
-              ? 'Post fixado no topo.'
+            : a === 'hide'
+              ? 'Post oculto. Só some para você.'
               : 'Post desafixado.',
       );
       recarregar();
     },
     onError: (err) => toast(apiMessage(err, 'Não deu para fazer isso agora.')),
   });
+  const fixar = useMutation({
+    mutationFn: (days: number | null) => moderationApi.pin(groupId, post.id, days),
+    onSuccess: () => {
+      setFixando(false);
+      toast('Post fixado no topo.');
+      recarregar();
+    },
+    onError: (err) => toast(apiMessage(err, 'Não deu para fixar agora.')),
+  });
+  const copiarLink = async () => {
+    const url = `${window.location.origin}/community/${groupId}#post-${post.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link copiado.');
+    } catch {
+      toast('Não deu para copiar o link.');
+    }
+  };
 
-  const temAcoes = post.canDelete || post.canModerate || (!post.author.isMe && !post.removed);
+  const temAcoes =
+    post.canDelete || post.canModerate || !post.removed || post.canHide || post.canBlock;
+  const titulo = post.title ?? null;
 
   return (
     <article
+      id={`post-${post.id}`}
       aria-label={`Post de ${post.author.displayName}`}
       className={cn(
         'space-y-3 rounded-2xl border border-subtle bg-card p-4',
@@ -420,7 +488,17 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
         <div className="min-w-0 space-y-1">
           {post.pinned && (
             <p className="flex items-center gap-1 text-xs font-semibold text-primary">
-              <Pin size={12} aria-hidden /> Fixado pela equipe
+              <Pin size={12} aria-hidden /> {pinDeadlineLabel(post.pinnedUntil)}
+            </p>
+          )}
+          {post.kind === 'ANNOUNCEMENT' && (
+            <p className="flex items-center gap-1 text-xs font-semibold text-primary">
+              <Megaphone size={12} aria-hidden /> Comunicado
+            </p>
+          )}
+          {post.kind === 'AUTO' && (
+            <p className="flex items-center gap-1 text-xs font-semibold text-primary">
+              <Sparkles size={12} aria-hidden /> Conteúdo novo
             </p>
           )}
           <Autor author={post.author} createdAt={post.createdAt} />
@@ -444,7 +522,17 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
         </p>
       )}
 
+      {titulo && <h3 className="font-display text-base font-semibold">{titulo}</h3>}
       {post.body && <MarkdownLite source={post.body} />}
+      {post.poll && <PollBlock groupId={groupId} post={post} poll={post.poll} />}
+      {post.auto && (
+        <Link
+          href={autoHref(groupId, post.auto.kind, post.auto.refId)}
+          className="inline-flex text-sm font-semibold text-primary hover:underline"
+        >
+          {AUTO_CTA[post.auto.kind]}
+        </Link>
+      )}
       <Imagens post={post} />
 
       {!post.removed && (
@@ -471,6 +559,9 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
           onPick={(a) => {
             setMenu(false);
             if (a === 'report') setDenunciando(true);
+            else if (a === 'block') setBloqueando(true);
+            else if (a === 'pin') setFixando(true);
+            else if (a === 'copy') void copiarLink();
             else if (a === 'delete' || a === 'remove') setConfirmar(a);
             else acao.mutate(a);
           }}
@@ -478,6 +569,39 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
       )}
       {denunciando && (
         <DenunciarDialog groupId={groupId} postId={post.id} onClose={() => setDenunciando(false)} />
+      )}
+      {bloqueando && (
+        <BlockDialog
+          groupId={groupId}
+          postId={post.id}
+          name={post.author.displayName}
+          onClose={() => setBloqueando(false)}
+        />
+      )}
+      {fixando && (
+        <Dialog open onOpenChange={(o) => !o && setFixando(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Fixar no topo</DialogTitle>
+              <DialogDescription>
+                Entra no carrossel de avisos do mural, com até 3 fixados.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              {PIN_DAY_OPTIONS.map((o) => (
+                <Button
+                  key={o.label}
+                  variant="outline"
+                  className="justify-start"
+                  disabled={fixar.isPending}
+                  onClick={() => fixar.mutate(o.days)}
+                >
+                  {o.days ? `Por ${o.label}` : o.label}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
       <ConfirmDialog
         open={confirmar !== null}
