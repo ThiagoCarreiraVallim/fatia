@@ -21,9 +21,15 @@ Pranchas: `/home/thiago/Documentos/pessoal/fatia/.canvas/project/Pn-01-Visao.dc.
 
 ## Feito
 
-- (nada ainda)
+- migration `20261119100000_panel_overview_announcement_email` (joinVia, alsoEmail, contas, notifiedAt,
+  PushTicket.announcementId, User.announcementEmailOptOutAt).
+- API: `sharing/panel.service.ts` + `panel.controller.ts` (`GET groups/:id/panel/counts`, `/overview?days=`,
+  `/search?q=`), permissões `panel.overview`/`panel.search` (+PERMISSIONS.md). Spec `panel.integration.spec.ts`.
+- API: comunicado com e-mail (`notifications/announcement-email.service.ts` + controller público
+  `email/announcements/subscription`), limite semanal, `settings`/`recent`, contas pushSent/Delivered/emailSent.
+  Spec `announcement-delivery.integration.spec.ts`. Envs no compose, .env.example e .env.production.example.
 
 ## Falta
 
-- migration, API (overview, counts, search, e-mail, limite, métricas), api-client, web (shell, ⌘K,
-  visão geral, comunicado lateral), isolamento, docs.
+- user-isolation.spec (bloco #398), export LGPD (opt-out do e-mail?), api-client, web (shell, ⌘K, visão geral,
+  comunicado lateral, página /descadastro), REDESIGN_PROGRESS, lint/typecheck/testes.
