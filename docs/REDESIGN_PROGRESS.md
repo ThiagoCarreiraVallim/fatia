@@ -135,7 +135,7 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
   - o T8 e o T21 abrem no app como folhas a 85% da tela, como as outras do app, e não em tela cheia;
   - a imagem do exercício é um placeholder.
 
-## Etapa 5: Treino B e Progresso (em andamento)
+## Etapa 5: Treino B e Progresso (`mergeado`, PRs #437, #438 e #439)
 
 | Issue | Título                   | Estado           | Superfícies                                                   |
 | ----- | ------------------------ | ---------------- | ------------------------------------------------------------- |
@@ -207,7 +207,7 @@ Pendências da #382 (branch `redesign/382-progresso`, migration `20261116050000_
 - **Dica da constância:** é só o lado bom. O "Sábado é o que mais falha" da prancha saiu.
 - **Ainda não conferido:** as capturas contra as pranchas. O dono faz a passada visual.
 
-## Etapa 6: IA, plano e MCP (em andamento)
+## Etapa 6: IA, plano e MCP (`mergeado`, PRs #440, #441, #442, #444 e sobras #445)
 
 | Issue | Título                                                 | Estado           | Superfícies                                                     |
 | ----- | ------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
@@ -368,14 +368,14 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Parar antes do primeiro token:** mostra "Resposta interrompida" com Continuar, no web e no app.
 - **Pendência:** essa linha não volta ao recarregar a conversa. A API não grava turno vazio (`completeTurn`), e as duas telas descartam linha vazia do histórico. Parar no meio da resposta volta normalmente.
 
-## Etapa 7: Comunidade no app (em andamento)
+## Etapa 7: Comunidade no app (`mergeado`, PRs #446, #447, #448 e #449)
 
-| Issue | Título                                                                | Estado           | Superfícies                                              |
-| ----- | --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
-| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446)  | api, db, MCP (1 tool nova), api-client, web, app         |
-| #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | mergeado (#447)  | api, db, MCP, api-client, web, app, docs                 |
-| #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
-| #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app         |
+| Issue | Título                                                                | Estado          | Superfícies                                              |
+| ----- | --------------------------------------------------------------------- | --------------- | -------------------------------------------------------- |
+| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446) | api, db, MCP (1 tool nova), api-client, web, app         |
+| #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | mergeado (#447) | api, db, MCP, api-client, web, app, docs                 |
+| #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | mergeado (#448) | api, db, MCP (1 tool nova), agente, api-client, web, app |
+| #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | mergeado (#449) | api, db, MCP (1 tool nova), api-client, web, app         |
 
 #393 (branch `redesign/393-comunidades`, migration `20261118100000_community_entry_code_benefits`; nenhuma env nova):
 
@@ -530,11 +530,11 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
+| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | mergeado     |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
-| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | em andamento |
-| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | em andamento |
-| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | em andamento |
+| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | mergeado     |
+| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | mergeado     |
+| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | mergeado     |
 | 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | em andamento |
 | 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
 | 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
