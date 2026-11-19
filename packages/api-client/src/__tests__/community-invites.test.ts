@@ -198,3 +198,11 @@ describe('lista de membros (Pn-04)', () => {
     ).toBe('1 convite reenviado · 2 não saíram (cedo demais ou no limite de envios)');
   });
 });
+
+describe('motivos novos do lote (revisão #401)', () => {
+  it('recusou há pouco e teto de envios por e-mail', async () => {
+    const { batchSkipLabel } = await import('../community-panel');
+    expect(batchSkipLabel('declined')).toBe('recusou há menos de 30 dias');
+    expect(batchSkipLabel('limit')).toBe('já recebeu 5 convites em 30 dias');
+  });
+});

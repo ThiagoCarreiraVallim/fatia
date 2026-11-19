@@ -165,7 +165,10 @@ describe('painel › ativação pendente (Pn-22)', () => {
   });
 
   it('WhatsApp gera um link novo e mostra a mensagem pronta para copiar ou abrir', async () => {
-    vi.mocked(orgApi.freshInviteLink).mockResolvedValue({ url: 'http://localhost:3030/c/zz' });
+    vi.mocked(orgApi.freshInviteLink).mockResolvedValue({
+      url: 'http://localhost:3030/c/zz',
+      reused: false,
+    });
     abrir();
     await screen.findByText('bia@x.com');
     await userEvent.click(within(linha('bia@x.com')).getByRole('button', { name: 'WhatsApp' }));
@@ -174,10 +177,28 @@ describe('painel › ativação pendente (Pn-22)', () => {
     expect(dialogo).toHaveTextContent(
       'Oi! Entra na Academia Demo no Fatia para acompanhar seus treinos com a equipe: http://localhost:3030/c/zz',
     );
+    expect(dialogo).toHaveTextContent('O link do e-mail anterior deixou de valer');
     expect(within(dialogo).getByRole('link', { name: 'Abrir WhatsApp' })).toHaveAttribute(
       'href',
       expect.stringContaining('https://wa.me/?text='),
     );
+  });
+
+  it('WhatsApp de novo em 10 minutos: o mesmo link, e o aviso diz que nada mudou', async () => {
+    vi.mocked(orgApi.freshInviteLink).mockResolvedValue({
+      url: 'http://localhost:3030/c/zz',
+      reused: true,
+    });
+    abrir();
+    await screen.findByText('bia@x.com');
+    // O botão avisa antes: gerar link novo invalida o anterior.
+    expect(within(linha('bia@x.com')).getByRole('button', { name: 'WhatsApp' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('invalida o link anterior'),
+    );
+    await userEvent.click(within(linha('bia@x.com')).getByRole('button', { name: 'WhatsApp' }));
+    const dialogo = await screen.findByRole('dialog');
+    expect(dialogo).toHaveTextContent('É o mesmo link de há pouco');
   });
 
   it('vazia: todos aceitaram', async () => {

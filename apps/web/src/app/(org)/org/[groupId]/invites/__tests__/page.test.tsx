@@ -63,7 +63,6 @@ const linhaConvite = (p: Partial<InviteOverviewRow> = {}): InviteOverviewRow => 
   url: 'http://localhost:3030/c/rec',
   accompaniedByName: null,
   joined: 38,
-  activated: { value: 31, percent: 82 },
   ...p,
 });
 
@@ -76,7 +75,6 @@ const LINHAS = [
     maxUses: 10,
     uses: 3,
     joined: null,
-    activated: null,
     expiresAt: '2026-12-15T15:00:00.000Z',
   }),
   linhaConvite({
@@ -89,7 +87,6 @@ const LINHAS = [
     uses: 0,
     url: null,
     joined: null,
-    activated: null,
     expiresAt: '2026-12-08T15:00:00.000Z',
   }),
   linhaConvite({
@@ -102,7 +99,6 @@ const LINHAS = [
     uses: 0,
     url: null,
     joined: null,
-    activated: null,
     status: 'expired',
     expiresAt: '2026-11-10T15:00:00.000Z',
   }),
@@ -115,7 +111,7 @@ function abrir(g: MyGroup = grupo()) {
       activeLinks: 2,
       notAccepted: 7,
       joinedLast30Days: null,
-      activated48h: { value: 31, percent: 71 },
+      activated48h: { percent: 71 },
     },
     invites: LINHAS,
   });
@@ -158,7 +154,8 @@ describe('painel › convites (Pn-06)', () => {
     const rec = linha('Recepção');
     expect(rec).toHaveTextContent('QR · recepção');
     expect(rec).toHaveTextContent('38 · sem limite');
-    expect(rec).toHaveTextContent('31 · 82%');
+    // Ativação não sai por convite (revisão #401): só no cartão, em percentual.
+    expect(screen.queryByRole('columnheader', { name: 'Ativaram' })).toBeNull();
     expect(rec).toHaveTextContent('sem prazo');
     const ana = linha('Indicação da Ana');
     expect(ana).toHaveTextContent('3 de 10');
@@ -254,6 +251,33 @@ describe('painel › convites (Pn-06)', () => {
     );
     expect(toast).toHaveBeenCalledWith('1 convite enviado · 1 pulado');
     expect(await within(p).findByText('ana@x.com: já tem convite aberto')).toBeInTheDocument();
+  });
+
+  it('convite de equipe: sem "Sem prazo" nem "Sem limite", e sai com limite e 30 dias', async () => {
+    vi.mocked(orgApi.createInvite).mockResolvedValue({
+      invite: base({ id: 'i8', role: 'PROFESSIONAL' }),
+      url: 'http://localhost:3030/c/eq',
+      emailSent: false,
+    });
+    abrir();
+    await screen.findByText('Recepção');
+    await userEvent.click(screen.getByRole('button', { name: 'Novo link' }));
+    const p = painel();
+    await userEvent.click(within(p).getByRole('button', { name: 'Sem prazo' }));
+    await userEvent.click(within(p).getByRole('button', { name: 'Profissional' }));
+    expect(within(p).queryByRole('button', { name: 'Sem prazo' })).toBeNull();
+    expect(within(p).queryByRole('button', { name: 'Sem limite' })).toBeNull();
+    expect(p).toHaveTextContent('Convite de equipe vence em até 30 dias');
+    await userEvent.click(within(p).getByRole('button', { name: 'Criar link' }));
+    await waitFor(() =>
+      expect(orgApi.createInvite).toHaveBeenCalledWith('g1', {
+        role: 'PROFESSIONAL',
+        label: 'Recepção',
+        origin: 'QR',
+        maxUses: 1,
+        expiresInDays: 30,
+      }),
+    );
   });
 
   it('o profissional convida só membro, sem assento, e só pode se pôr como acompanhante', async () => {
