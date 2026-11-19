@@ -11,8 +11,7 @@
         "EXPO_PUBLIC_API_URL": "https://api.fat.ia.br",
         "EXPO_PUBLIC_LOGTO_ENDPOINT": "https://auth.fat.ia.br",
         "EXPO_PUBLIC_LOGTO_AUDIENCE": "https://api.fat.ia.br",
-        "EXPO_PUBLIC_IAP_ENABLED": "false",
-        "APP_VARIANT": "preview"
+        "EXPO_PUBLIC_IAP_ENABLED": "false"
       },
       "android": { "buildType": "apk" },
       "ios": { "simulator": false }
@@ -23,7 +22,8 @@
         "EXPO_PUBLIC_API_URL": "https://api.fat.ia.br",
         "EXPO_PUBLIC_LOGTO_ENDPOINT": "https://auth.fat.ia.br",
         "EXPO_PUBLIC_LOGTO_AUDIENCE": "https://api.fat.ia.br",
-        "EXPO_PUBLIC_IAP_ENABLED": "false"
+        "EXPO_PUBLIC_IAP_ENABLED": "false",
+        "APP_VARIANT": "preview"
       },
       "android": { "buildType": "apk" }
     },
