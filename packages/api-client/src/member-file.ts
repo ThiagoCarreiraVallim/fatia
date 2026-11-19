@@ -370,11 +370,13 @@ export const planOrderApi = {
     ),
 };
 
-export const moveWithin = (
-  _all: string[],
-  _subset: string[],
-  _id: string,
-  _d: number,
-): string[] => {
-  throw new Error('não implementado');
-};
+/**
+ * A lista do app (#402) mistura planos e circuitos, mas cada aba reordena só
+ * os seus: move dentro do subconjunto e põe o resto depois, na ordem de antes.
+ */
+export function moveWithin(all: string[], subset: string[], id: string, delta: number): string[] {
+  const inSubset = all.filter((x) => subset.includes(x));
+  const moved = moveId(inSubset, id, delta);
+  if (moved === inSubset) return all;
+  return [...moved, ...all.filter((x) => !subset.includes(x))];
+}
