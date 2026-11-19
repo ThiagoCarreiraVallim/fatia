@@ -7,6 +7,7 @@ import {
   challengeKindProblem,
   challengeProblem,
   challengeUsesSteps,
+  pointsDayNote,
   STEPS_CLOSED_TEXT,
   STEPS_SYNC_AVAILABLE,
   challengeScoreLabel,
@@ -183,5 +184,17 @@ describe('passos fechados até a sync de saúde (#395)', () => {
       ),
     ).toBe(true);
     expect(challengeUsesSteps(c({ kind: 'WATER', metric: 'WATER_ML' }))).toBe(false);
+  });
+});
+
+describe('nota dos pontos do dia', () => {
+  it('cita só os itens automáticos da tabela', () => {
+    expect(pointsDayNote({ workout: 3, water: 1, protein: 1 }, 5)).toBe(
+      'Máximo de 5 pontos por dia. Os pontos de água e proteína entram sozinhos.',
+    );
+    expect(pointsDayNote({ workout: 3, kcal: 1 }, 4)).toBe(
+      'Máximo de 4 pontos por dia. Os pontos de calorias entram sozinhos.',
+    );
+    expect(pointsDayNote({ workout: 3 }, 3)).toBe('Máximo de 3 pontos por dia.');
   });
 });
