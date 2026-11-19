@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyGroup, ReviewSessionView } from '@fatia/api-client';
@@ -189,11 +189,44 @@ describe('Sessão feita no painel (#399, Pn-35)', () => {
     expect(await screen.findByText('Ana não compartilha Treino')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Só ela pode ligar em Comunidade → Sobre. A equipe vê só que a sessão aconteceu, sem detalhes.',
+        'Só a pessoa pode ligar em Comunidade → Sobre. A equipe vê só que a sessão aconteceu, sem detalhes.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Ficha/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enviar ao aluno' })).not.toBeInTheDocument();
+  });
+
+  it('F10: tocar na reação atual tira a reação', async () => {
+    const user = userEvent.setup();
+    const minha = {
+      id: 'f1',
+      authorName: 'Helena Prado',
+      reaction: 'STRONG' as const,
+      body: 'Recorde!',
+      createdAt: '2026-11-18T22:05:00.000Z',
+      updatedAt: '2026-11-18T22:05:00.000Z',
+      isMine: true,
+    };
+    vi.mocked(reviewApi.session).mockResolvedValue({ ...detalhe, feedback: [minha] });
+    vi.mocked(reviewApi.sendFeedback).mockResolvedValue({ ...minha, reaction: null });
+    renderWithClient(<ReviewSessionPage />);
+    const forca = await screen.findByRole('button', { name: /💪/ });
+    expect(forca).toHaveAttribute('aria-pressed', 'true');
+    await user.click(forca);
+    expect(forca).toHaveAttribute('aria-pressed', 'false');
+    await user.click(screen.getByRole('button', { name: 'Enviar ao aluno' }));
+    expect(reviewApi.sendFeedback).toHaveBeenCalledWith('g1', 's1', { reaction: null });
+  });
+
+  it('F8: o contador e o limite contam emoji como um caractere, como a API', async () => {
+    renderWithClient(<ReviewSessionPage />);
+    const caixa = await screen.findByLabelText('Comentário para a Ana');
+    fireEvent.change(caixa, { target: { value: '💪'.repeat(500) } });
+    expect(screen.getByText('500/500')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar ao aluno' })).toBeEnabled();
+    fireEvent.change(caixa, { target: { value: '💪'.repeat(501) } });
+    expect(screen.getByText('501/500')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar ao aluno' })).toBeDisabled();
   });
 });

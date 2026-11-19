@@ -221,4 +221,33 @@ describe('Para revisar (#399, Pn-02)', () => {
     expect(screen.getByText(/7 dias sem registrar/)).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Aviso diário/ })).toBeInTheDocument();
   });
+
+  it('F10: a fila com erro não derruba a página nem a aba Em risco', async () => {
+    const user = userEvent.setup();
+    vi.mocked(reviewApi.queue).mockRejectedValue(new Error('500'));
+    renderWithClient(<ReviewPage />);
+    expect(await screen.findByText('Não deu para abrir a fila.')).toBeInTheDocument();
+    await user.click(await screen.findByRole('tab', { name: /Em risco · 1/ }));
+    expect(await screen.findByRole('row', { name: /Júlia Reis/ })).toBeInTheDocument();
+  });
+
+  it('F9: o seletor vai até 60 e mostra o limite atual mesmo fora das opções', async () => {
+    const user = userEvent.setup();
+    vi.mocked(reviewApi.atRisk).mockResolvedValue({ ...risco, riskDays: 45 });
+    const { unmount } = renderWithClient(<ReviewPage />);
+    await user.click(await screen.findByRole('tab', { name: /Em risco/ }));
+    expect(
+      (await screen.findByLabelText<HTMLSelectElement>('Entra na lista depois de')).value,
+    ).toBe('45');
+    unmount();
+    // 33 não está na lista: gravado pelo MCP ou por outra tela, aparece igual.
+    vi.mocked(reviewApi.atRisk).mockResolvedValue({ ...risco, riskDays: 33 });
+    renderWithClient(<ReviewPage />);
+    await user.click(await screen.findByRole('tab', { name: /Em risco/ }));
+    const select = await screen.findByLabelText<HTMLSelectElement>('Entra na lista depois de');
+    expect(select.value).toBe('33');
+    expect(
+      within(select).getByRole('option', { name: '60 dias sem registrar' }),
+    ).toBeInTheDocument();
+  });
 });
