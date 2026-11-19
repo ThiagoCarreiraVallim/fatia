@@ -186,6 +186,21 @@ describe('Sobre (Cm-04)', () => {
         'America/Sao_Paulo',
       ),
     ).toBe('Helena Prado abriu Treino · hoje 10:12');
+    // A abertura da ficha (#402) não tem categoria.
+    expect(
+      accessLogLine(
+        {
+          at: '2026-11-17T13:12:00Z',
+          action: 'open_member_file',
+          scope: null,
+          denied: false,
+          professionalName: 'Helena Prado',
+          groupId: 'g1',
+        },
+        agora,
+        'America/Sao_Paulo',
+      ),
+    ).toBe('Helena Prado abriu sua ficha · hoje 10:12');
     expect(
       accessLogLine(
         {

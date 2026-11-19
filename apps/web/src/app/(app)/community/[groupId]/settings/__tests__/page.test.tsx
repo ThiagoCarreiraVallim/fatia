@@ -23,10 +23,11 @@ vi.mock('@fatia/api-client', async () => {
       leave: vi.fn(),
     },
     benefitsApi: { list: vi.fn() },
+    myNotesApi: { list: vi.fn().mockResolvedValue([]) },
   };
 });
 
-import { benefitsApi, groupsApi, type TeamMemberView } from '@fatia/api-client';
+import { benefitsApi, groupsApi, myNotesApi, type TeamMemberView } from '@fatia/api-client';
 import CommunitySettingsPage from '../page';
 
 const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
@@ -104,7 +105,10 @@ function renderPage(
 }
 
 describe('/community/[groupId]/settings (Cm-04)', () => {
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(myNotesApi.list).mockResolvedValue([]);
+  });
 
   it('mostra quem é a comunidade, o PRO pago e quem olhou', async () => {
     renderPage();
@@ -256,5 +260,32 @@ describe('/community/[groupId]/settings (Cm-04)', () => {
   it('a equipe não tem o obrigatório travado', async () => {
     renderPage(grupo({ role: 'PROFESSIONAL', requiredSharingScopes: ['NUTRITION'] }));
     expect(await screen.findByRole('switch', { name: 'Alimentação' })).toBeEnabled();
+  });
+
+  it('mostra as anotações da equipe só para leitura (#402)', async () => {
+    vi.mocked(myNotesApi.list).mockResolvedValue([
+      {
+        id: 'n1',
+        text: 'Joelho direito: evitar agachamento profundo.',
+        authorName: 'Bia',
+        createdAt: '2026-10-16T13:00:00Z',
+        updatedAt: '2026-10-16T13:00:00Z',
+      },
+    ]);
+    renderPage();
+    const sec = await screen.findByRole('region', { name: 'Anotações da equipe' });
+    expect(
+      within(sec).getByText('Joelho direito: evitar agachamento profundo.'),
+    ).toBeInTheDocument();
+    expect(within(sec).getByText(/^Bia · /)).toBeInTheDocument();
+    expect(within(sec).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(sec).queryByRole('button')).not.toBeInTheDocument();
+    expect(myNotesApi.list).toHaveBeenCalledWith('g1');
+  });
+
+  it('sem anotação, a seção não aparece', async () => {
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Sair da comunidade' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Anotações da equipe' })).not.toBeInTheDocument();
   });
 });

@@ -21,7 +21,7 @@ const SCOPE_ORDER: ShareScope[] = [
   'GOALS',
 ];
 
-function ReadingBody({ reading }: { reading: StudentReading }) {
+export function ReadingBody({ reading }: { reading: StudentReading }) {
   switch (reading.scope) {
     case 'WORKOUT':
       return (
@@ -242,6 +242,34 @@ export function MemberReading({
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Uma categoria só, numa aba da ficha (#402). A leitura é a mesma da tela
+ * antiga: auditada, uma linha na trilha da pessoa por categoria aberta.
+ */
+export function ScopeReading({ membershipId, scope }: { membershipId: string; scope: ShareScope }) {
+  const leitura = useQuery({
+    queryKey: ['professional', 'student', membershipId, scope],
+    queryFn: () => professionalApi.readStudent(membershipId, scope),
+  });
+  if (leitura.isLoading) return <Skeleton className="h-40 rounded-2xl bg-card" />;
+  if (leitura.isError || !leitura.data) {
+    return (
+      <p className="rounded-2xl border border-subtle bg-card p-4 text-xs text-muted-foreground">
+        Não foi possível ler esta categoria. Se a pessoa desligou o compartilhamento, a aba ganha o
+        cadeado quando a página recarregar.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <ReadingBody reading={leitura.data.reading} />
+      <p className="text-[11px] text-muted-foreground">
+        Datas no fuso da pessoa ({leitura.data.timezone}).
+      </p>
     </div>
   );
 }

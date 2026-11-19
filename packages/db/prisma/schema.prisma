@@ -88,6 +88,11 @@ model User {
   /// próprio e-mail, sem login. Nulo = recebe (se `ANNOUNCEMENTS` estiver ligado).
   announcementEmailOptOutAt DateTime?
 
+  /// Quando a pessoa reordenou os planos de treino no app (#402). Nulo = a
+  /// ordem ainda é a que a equipe definiu; depois disso a ordem é dela, e
+  /// reordenar no painel só muda as ofertas, não a lista do app.
+  plansOrderedAt DateTime?
+
   /// Busca na web no chat (#384): o ícone do topo liga e desliga. Ligada só vale depois do
   /// aceite da primeira busca (`AiConsent` WEB_SEARCH); desligada, a IA nem oferece a busca.
   webSearchEnabled Boolean @default(true)
@@ -128,6 +133,10 @@ model User {
   nutritionPlans         NutritionPlan[]    @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
   nutritionPlansAuthored NutritionPlan[]    @relation("NutritionPlanAuthor")
+  /// Anotações da equipe sobre a pessoa (#402). Ela vê, só leitura.
+  memberNotes            MemberNote[]       @relation("MemberNoteSubject")
+  /// Anotações que a pessoa, como equipe, escreveu sobre membros (#402).
+  memberNotesAuthored    MemberNote[]       @relation("MemberNoteAuthor")
 
   conversations   Conversation[]
   memories        UserMemory[]
@@ -902,6 +911,9 @@ model WorkoutPlan {
   /// Sessão que virou este plano no "Salvar como plano" (#381). Torna o salvar
   /// idempotente (um plano por sessão); apagar a sessão não apaga o plano.
   fromSessionId  String?
+  /// Ordem na lista de planos do app (#402): o primeiro é o treino de hoje.
+  /// Nulo = depois dos ordenados, por data de criação.
+  position       Int?
   createdAt      DateTime        @default(now())
 
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1292,25 +1304,65 @@ enum PlanSchedule {
 /// O conteúdo mora nas versões (`PlanOfferVersion`): atualizar é versão nova, e
 /// nada muda no plano do aluno sem o aceite dela (ADR 014: a cópia é dele).
 model PlanOffer {
-  id        String   @id @default(uuid())
-  userId    String
+  id               String    @id @default(uuid())
+  userId           String
   /// Quem enviou. Nulo quando apagou a conta: a oferta fica, sem o nome.
-  authorId  String?
+  authorId         String?
   /// Comunidade em que a oferta foi enviada. Exercício dela viaja por referência.
-  groupId   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  groupId          String?
+  /// Ordem na ficha (#402): a equipe define a ordem inicial, que vai para a
+  /// cópia no aceite enquanto a pessoa não reordenou no app. Nulo = no fim.
+  position         Int?
+  /// Modelo da biblioteca da comunidade de onde a oferta saiu (#402). Só
+  /// proveniência ("já com a Ana"); o retrato é a versão.
+  sourceTemplateId String?
+  /// "Terminar hoje" (#402): as sessões da agenda a partir de amanhã saem e o
+  /// plano fica em "Terminados" na ficha. A cópia continua com a pessoa.
+  endedAt          DateTime?
+  /// "Apagar da Ana" (#402): a cópia sai da conta dela e a oferta some da
+  /// ficha e do app. A linha fica, para o export dela; o que ela registrou fica.
+  removedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user     User               @relation("PlanOfferSubject", fields: [userId], references: [id], onDelete: Cascade)
-  author   User?              @relation("PlanOfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  group    Group?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  versions PlanOfferVersion[]
+  user           User               @relation("PlanOfferSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author         User?              @relation("PlanOfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  group          Group?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  sourceTemplate GroupPlanTemplate? @relation("OfferFromTemplate", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  versions       PlanOfferVersion[]
   /// O plano que o aceite criou na conta do aluno.
-  plans    WorkoutPlan[]      @relation("PlanFromOffer")
+  plans          WorkoutPlan[]      @relation("PlanFromOffer")
 
   @@index([userId])
   @@index([authorId])
-  @@index([groupId])
+  @@index([groupId, userId])
+  @@index([sourceTemplateId])
+}
+
+/// Anotação da equipe sobre um membro (#402, parte da #301). Não é privada: a
+/// pessoa vê, só leitura, e a ficha avisa "O aluno vê estas anotações". Mora na
+/// comunidade e some quando a pessoa sai dela (ou é removida); some também com
+/// a conta dela. O autor apagar a conta deixa a nota sem nome.
+model MemberNote {
+  id               String   @id @default(uuid())
+  groupId          String
+  subjectUserId    String
+  authorId         String?
+  /// Texto puro, até 2.000 caracteres.
+  text             String
+  /// Sempre `true` por ora (decisão da #402); o campo deixa explícito que a
+  /// nota não é segredo da equipe.
+  visibleToSubject Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  subject User  @relation("MemberNoteSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  author  User? @relation("MemberNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, subjectUserId, createdAt])
+  @@index([subjectUserId])
+  @@index([authorId])
 }
 
 /// Uma versão da oferta: o retrato congelado do plano (`plan-snapshot.ts`), as
@@ -1673,6 +1725,8 @@ model Group {
   nutritionPlans         NutritionPlan[]
   /// Planos de treino que a equipe mandou a alunos (#379).
   planOffers             PlanOffer[]
+  /// Anotações da equipe sobre os membros (#402).
+  memberNotes            MemberNote[]
   /// Quem publica no mural (Fase 8b, ADR 032).
   postPolicy             PostPolicy             @default(ALL_MEMBERS)
   posts                  GroupPost[]
@@ -1810,7 +1864,12 @@ model ProfessionalAccessLog {
   /// conseguindo responder "quem olhou meu dado".
   professionalId String
   subjectUserId  String
-  scope          ShareScope
+  /// Nulo só na abertura da ficha (#402, "open_member_file"): abrir não lê categoria.
+  scope          ShareScope?
+  /// Comunidade em que a leitura aconteceu (#402), da associação lida. String
+  /// pura como `professionalId`: a trilha sobrevive à comunidade. Nulo nas
+  /// linhas antigas, que ficam fora do histórico da ficha.
+  groupId        String?
   /// Vocabulário do produto: "list_workout_sessions", "get_student_progress".
   action         String
   denied         Boolean    @default(false)
@@ -1820,6 +1879,7 @@ model ProfessionalAccessLog {
   subject User              @relation("AccessLogSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
 
   @@index([subjectUserId, at])
+  @@index([subjectUserId, groupId, at])
   @@index([professionalId, at])
   @@index([linkId, at])
 }
@@ -2477,6 +2537,8 @@ model GroupPlanTemplate {
   mealCopies    MealTemplate[]     @relation("MealFromTemplate")
   /// As metas que este modelo substituiu na conta de quem adotou (#396).
   goalsReplaced UserGoalsHistory[]
+  /// Ofertas de treino a uma pessoa que saíram deste modelo (#402, "já com a Ana").
+  offers        PlanOffer[]        @relation("OfferFromTemplate")
 
   @@index([groupId, publishedAt])
 }

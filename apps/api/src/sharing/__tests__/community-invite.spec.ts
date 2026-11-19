@@ -110,6 +110,28 @@ describe('community:invite (banco real)', () => {
       },
     });
 
+    // O que a #402 deixa na comunidade sobre a pessoa: anotação e plano esperando aceite.
+    await prisma.memberNote.create({
+      data: { groupId, subjectUserId: pessoa, authorId: dona, text: 'nota' },
+    });
+    const oferta = await prisma.planOffer.create({
+      data: {
+        groupId,
+        userId: pessoa,
+        authorId: dona,
+        versions: {
+          create: {
+            version: 1,
+            title: 'Plano',
+            snapshot: {},
+            snapshotVersion: 1,
+            schedule: 'FLEXIBLE',
+          },
+        },
+      },
+      include: { versions: true },
+    });
+
     const msg = await runCommunityInvite(scriptDb, {
       slug: stamp,
       purge: true,
@@ -124,5 +146,10 @@ describe('community:invite (banco real)', () => {
     const restantes = await prisma.groupInvite.findMany({ where: { groupId } });
     expect(restantes.map((i) => i.email)).toEqual(['outra@test.local']);
     expect(await prisma.groupMembership.count({ where: { groupId, userId: dona } })).toBe(1);
+    expect(await prisma.memberNote.count({ where: { groupId, subjectUserId: pessoa } })).toBe(0);
+    expect(
+      (await prisma.planOfferVersion.findUniqueOrThrow({ where: { id: oferta.versions[0]!.id } }))
+        .status,
+    ).toBe('SUPERSEDED');
   });
 });

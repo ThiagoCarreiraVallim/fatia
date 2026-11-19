@@ -84,7 +84,8 @@ export class ForYouService {
 
     const [ofertas, planos, comunicados, modelos, dicas] = await Promise.all([
       this.prisma.planOffer.findMany({
-        where: { userId, groupId },
+        // A oferta que a equipe apagou pela ficha (#402) some daqui também.
+        where: { userId, groupId, removedAt: null },
         include: {
           author: { select: { name: true } },
           versions: { orderBy: { version: 'desc' }, take: 1 },

@@ -102,7 +102,7 @@ describe('WorkoutPlanService', () => {
   });
 
   describe('list', () => {
-    it('returns only the user own plans sorted by createdAt asc', async () => {
+    it('returns only the user own plans in their order, then by createdAt asc', async () => {
       prisma.workoutPlan.findMany.mockResolvedValue([]);
 
       await service.list(userId);
@@ -110,7 +110,7 @@ describe('WorkoutPlanService', () => {
       expect(prisma.workoutPlan.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { userId },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ position: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
         }),
       );
     });

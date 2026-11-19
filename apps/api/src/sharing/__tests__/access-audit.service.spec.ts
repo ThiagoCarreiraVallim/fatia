@@ -33,6 +33,7 @@ describe('AccessAuditService', () => {
       professionalId: PRO,
       subjectUserId: SUBJECT,
       scope: ShareScope.NUTRITION,
+      groupId: 'group-1',
       action: 'list_meals',
       denied: false,
     });
@@ -44,6 +45,7 @@ describe('AccessAuditService', () => {
     expect(Object.keys(data).sort()).toEqual([
       'action',
       'denied',
+      'groupId',
       'linkId',
       'professionalId',
       'scope',
@@ -67,6 +69,7 @@ describe('AccessAuditService', () => {
         professionalId: PRO,
         subjectUserId: SUBJECT,
         scope: ShareScope.WORKOUT,
+        groupId: 'group-1',
         action: 'x',
         denied: true,
       })

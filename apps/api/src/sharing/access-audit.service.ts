@@ -7,7 +7,10 @@ export interface AccessAuditEntry {
   linkId: string | null;
   professionalId: string;
   subjectUserId: string;
-  scope: ShareScope;
+  /** Nulo só na abertura da ficha (#402): abrir não lê categoria. */
+  scope: ShareScope | null;
+  /** A comunidade da associação lida (#402): o histórico da ficha filtra por ela. */
+  groupId: string;
   /** Vocabulário do produto: "list_workout_sessions", "get_student_progress". */
   action: string;
   denied: boolean;

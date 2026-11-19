@@ -117,6 +117,18 @@ export const GROUP_PERMISSIONS = {
    * um, então um papel só com esta ação (a Recepção, #404) vê só nomes.
    */
   'panel.search': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
+  /**
+   * A ficha da pessoa (#402): planos que a equipe mandou, anotações, agenda
+   * planejada e quem abriu a ficha. Dado de saúde segue o vínculo, nunca o papel.
+   */
+  'member.file': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
+  /**
+   * Mandar, terminar, apagar e reordenar os planos de uma pessoa (#402). Mandar
+   * também exige `ProfessionalLink` ativo; apagar é do autor ou do dono.
+   */
+  'member.plans': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
+  /** Anotar na ficha (#402). A pessoa vê a anotação; editar é do autor ou do dono. */
+  'member.note': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /** Ver os descontos de parceiros da comunidade (#393). */
   'benefit.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   /**

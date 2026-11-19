@@ -118,6 +118,7 @@ describe('ProfessionalAccessService.assertReadable', () => {
       professionalId: PRO,
       subjectUserId: SUBJECT,
       scope: ShareScope.WORKOUT,
+      groupId: 'grupo-1',
       action: 'get_strength_progress',
       denied: false,
     });
@@ -138,6 +139,7 @@ describe('ProfessionalAccessService.assertReadable', () => {
       professionalId: PRO,
       subjectUserId: SUBJECT,
       scope: ShareScope.NUTRITION,
+      groupId: 'grupo-1',
       action: 'get_nutrition_summary',
       denied: true,
     });

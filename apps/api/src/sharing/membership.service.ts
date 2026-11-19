@@ -384,7 +384,7 @@ export class MembershipService {
         subjectUserId: userId,
         denied: false,
         professionalId: { in: equipe.map((m) => m.userId) },
-        link: { groupId },
+        OR: [{ groupId }, { groupId: null, link: { groupId } }],
       },
       _max: { at: true },
     });
@@ -708,6 +708,13 @@ export class MembershipService {
       }),
       // Os comunicados que a pessoa agendou não saem depois que ela saiu (#394).
       cancelScheduledAnnouncementsOp(this.prisma, membershipId, agora),
+      // As anotações da equipe sobre ela moram na comunidade e saem com ela (#402).
+      this.prisma.memberNote.deleteMany({ where: { groupId, subjectUserId: userId } }),
+      // Plano que esperava o aceite não se responde mais (#402); o aceito é dela.
+      this.prisma.planOfferVersion.updateMany({
+        where: { status: 'PENDING', offer: { groupId, userId } },
+        data: { status: 'SUPERSEDED', respondedAt: agora },
+      }),
     ]);
 
     // As fotos de prova dos check-ins dela nesta comunidade saem na hora (ADR 044 §7).
