@@ -11,6 +11,7 @@ import {
   memberPlanWhen,
   memberWeekCards,
   moveId,
+  moveWithin,
   myNotesApi,
   planOrderApi,
   type MemberFile,
@@ -79,6 +80,19 @@ describe('planos na ficha (Pn-05p)', () => {
     expect(moveId(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c']);
     expect(moveId(['a', 'b', 'c'], 'c', 1)).toEqual(['a', 'b', 'c']);
     expect(moveId(['a', 'b', 'c'], 'x', 1)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('ordem dos planos no app (#402)', () => {
+  it('move dentro da aba, e a outra aba fica no fim na ordem de antes', () => {
+    // a, c e d são planos; b é circuito.
+    expect(moveWithin(['a', 'b', 'c', 'd'], ['a', 'c', 'd'], 'c', -1)).toEqual([
+      'c',
+      'a',
+      'd',
+      'b',
+    ]);
+    expect(moveWithin(['a', 'b', 'c'], ['a', 'c'], 'a', -1)).toEqual(['a', 'b', 'c']);
   });
 });
 

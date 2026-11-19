@@ -369,3 +369,12 @@ export const planOrderApi = {
       json('PUT', { planIds }),
     ),
 };
+
+export const moveWithin = (
+  _all: string[],
+  _subset: string[],
+  _id: string,
+  _d: number,
+): string[] => {
+  throw new Error('não implementado');
+};
