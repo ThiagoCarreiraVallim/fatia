@@ -130,6 +130,7 @@ export class ProfessionalAccessService {
       professionalId,
       subjectUserId: membership.userId,
       scope,
+      groupId: membership.groupId,
       action,
       denied: link === null,
     });
@@ -137,5 +138,42 @@ export class ProfessionalAccessService {
     if (!link) throw new NotFoundException(NOT_FOUND);
 
     return membership.userId;
+  }
+
+  /**
+   * "Abriu a ficha" (#402): a linha de abertura, sem categoria. Abrir a ficha
+   * não lê dado de saúde (cada categoria passa por `assertReadable`), mas a
+   * pessoa vê em "Quem olhou seus dados" que a equipe abriu. Quem chama já
+   * conferiu o papel e a associação na comunidade da URL; aqui só se grava,
+   * pela mesma porta da trilha.
+   */
+  async recordFileOpen(
+    professionalId: string,
+    membershipId: string,
+    action: string,
+  ): Promise<void> {
+    const membership = await this.prisma.groupMembership.findUnique({
+      where: { id: membershipId },
+      select: { userId: true, groupId: true },
+    });
+    if (!membership) throw new NotFoundException(NOT_FOUND);
+    const link = await this.prisma.professionalLink.findFirst({
+      where: {
+        professionalId,
+        subjectUserId: membership.userId,
+        groupId: membership.groupId,
+        revokedAt: null,
+      },
+      select: { id: true },
+    });
+    await this.audit.record({
+      linkId: link?.id ?? null,
+      professionalId,
+      subjectUserId: membership.userId,
+      scope: null,
+      groupId: membership.groupId,
+      action,
+      denied: false,
+    });
   }
 }

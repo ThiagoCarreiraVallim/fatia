@@ -384,7 +384,7 @@ export class MembershipService {
         subjectUserId: userId,
         denied: false,
         professionalId: { in: equipe.map((m) => m.userId) },
-        link: { groupId },
+        OR: [{ groupId }, { groupId: null, link: { groupId } }],
       },
       _max: { at: true },
     });

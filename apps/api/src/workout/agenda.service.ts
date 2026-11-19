@@ -102,7 +102,7 @@ export class AgendaService {
       throw new BadRequestException(`A agenda mostra até ${MAX_AGENDA_DAYS} dias por vez.`);
     }
 
-    const plans = await this.acceptedPlans(userId);
+    const plans = await this.acceptedPlans(userId, timezone);
     const sessions = await this.prisma.plannedSession.findMany({
       where: { userId, date: { gte: start, lte: end } },
       include: { plan: { select: { name: true } } },
@@ -158,7 +158,8 @@ export class AgendaService {
     const calendar = plans
       .filter((p) => p.schedule === 'CALENDAR' && p.startDate && p.endDate)
       .sort((a, b) => (a.startDate! < b.startDate! ? 1 : -1));
-    const current = calendar.find((p) => p.startDate! <= today && today <= p.endDate!) ?? null;
+    const current =
+      calendar.find((p) => !p.ended && p.startDate! <= today && today <= p.endDate!) ?? null;
     const calendarPlan = current
       ? {
           planId: current.planId,
@@ -170,11 +171,13 @@ export class AgendaService {
           endDate: current.endDate!,
         }
       : null;
-    const upcoming = calendar.some((p) => p.startDate! > today);
+    const upcoming = calendar.some((p) => !p.ended && p.startDate! > today);
     const last =
       !current && !upcoming
         ? (calendar.find(
-            (p) => p.endDate! < today && daysBetween(p.endDate!, today) <= ENDED_VISIBLE_DAYS,
+            (p) =>
+              (p.ended ? p.endDate! <= today : p.endDate! < today) &&
+              daysBetween(p.endDate!, today) <= ENDED_VISIBLE_DAYS,
           ) ?? null)
         : null;
     const ended = last ? await this.endedSummary(userId, timezone, last) : null;
@@ -208,7 +211,9 @@ export class AgendaService {
       include: { plan: { select: { name: true } } },
     });
     if (!session) throw new NotFoundException(SESSION_NOT_FOUND);
-    const accepted = (await this.acceptedPlans(userId)).find((p) => p.planId === session.planId);
+    const accepted = (await this.acceptedPlans(userId, timezone)).find(
+      (p) => p.planId === session.planId,
+    );
     if (!accepted || accepted.schedule !== 'CALENDAR' || !accepted.endDate) {
       throw new ConflictException(NO_DATES);
     }
@@ -241,9 +246,9 @@ export class AgendaService {
   }
 
   /** Os planos da pessoa que vieram de uma oferta aceita, com a agenda da versão em uso. */
-  private async acceptedPlans(userId: string) {
+  private async acceptedPlans(userId: string, timezone: string) {
     const offers = await this.prisma.planOffer.findMany({
-      where: { userId, versions: { some: { status: 'ACCEPTED' } } },
+      where: { userId, removedAt: null, versions: { some: { status: 'ACCEPTED' } } },
       include: {
         author: { select: { name: true } },
         // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
@@ -255,6 +260,11 @@ export class AgendaService {
       const version = offer.versions[0];
       const plan = offer.plans[0];
       if (!version || !plan) return [];
+      const planned =
+        version.startDate && version.weeks ? planEndDate(version.startDate, version.weeks) : null;
+      // "Terminar hoje" na ficha (#402): o plano acaba no dia em que a equipe
+      // terminou, e não aparece mais como vigente.
+      const endedOn = offer.endedAt ? dateInTz(offer.endedAt, timezone) : null;
       return [
         {
           planId: plan.id,
@@ -263,10 +273,8 @@ export class AgendaService {
           schedule: version.schedule,
           startDate: version.startDate,
           weeks: version.weeks,
-          endDate:
-            version.startDate && version.weeks
-              ? planEndDate(version.startDate, version.weeks)
-              : null,
+          endDate: planned && endedOn && endedOn < planned ? endedOn : planned,
+          ended: endedOn !== null,
         },
       ];
     });

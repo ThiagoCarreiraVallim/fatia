@@ -318,7 +318,11 @@ export class ConsentService {
     const linhas = await this.prisma.professionalAccessLog.findMany({
       // Filtro pela comunidade passa pelo vínculo: a tela da comunidade mostra
       // só quem dela olhou. O `subjectUserId` continua sendo a trava.
-      where: { subjectUserId, ...(groupId ? { link: { groupId } } : {}) },
+      // Desde a #402 a linha guarda a comunidade; a antiga cai no vínculo.
+      where: {
+        subjectUserId,
+        ...(groupId ? { OR: [{ groupId }, { groupId: null, link: { groupId } }] } : {}),
+      },
       orderBy: { at: 'desc' },
       take: Math.min(Math.max(limit, 1), LOG_MAX_PAGE_SIZE),
       select: {
@@ -327,6 +331,7 @@ export class ConsentService {
         scope: true,
         denied: true,
         professionalId: true,
+        groupId: true,
         link: { select: { groupId: true } },
       },
     });
@@ -351,7 +356,7 @@ export class ConsentService {
       scope: linha.scope,
       denied: linha.denied,
       professionalName: nomes.get(linha.professionalId) ?? null,
-      groupId: linha.link?.groupId ?? null,
+      groupId: linha.groupId ?? linha.link?.groupId ?? null,
     }));
   }
 }

@@ -12,7 +12,7 @@ import {
 } from '../progress/helpers/date-tz';
 import { ProgressService } from '../progress/progress.service';
 import { MAX_AGENDA_DAYS } from '../workout/agenda.service';
-import { planEndDate, plannedState } from '../workout/helpers/planned-schedule';
+import { planEndDate, plannedState, scheduleDates } from '../workout/helpers/planned-schedule';
 import { MEMBER_NOT_FOUND, resolveMemberTarget, type MemberFileTarget } from './member-file-target';
 import type {
   MemberAccessEntry,
@@ -30,6 +30,8 @@ import { ProfessionalAccessService } from './professional-access.service';
 
 /** Nome da operação na trilha da pessoa: é o que ela lê em "Quem olhou seus dados". */
 const FILE_ACTION = 'get_member_file';
+/** A linha de abertura da ficha, sem categoria. */
+const OPEN_ACTION = 'open_member_file';
 const AGENDA_ACTION = 'get_member_agenda';
 /** Linhas do "Histórico de acesso à ficha". */
 const ACCESS_LOG_SIZE = 10;
@@ -116,13 +118,11 @@ export class MemberFileService {
     const mine = links.find((l) => l.professionalId === viewerId);
     const granted = mine?.scopes ?? [];
 
-    // Uma leitura por categoria, e só das liberadas: cada uma vira UMA linha
-    // na trilha da pessoa, com o nome desta operação.
-    const read = async (scope: ShareScope) => {
-      if (!granted.includes(scope)) return false;
-      await this.access.assertReadable(viewerId, membershipId, scope, FILE_ACTION);
-      return true;
-    };
+    // "Tudo fica no histórico de acesso da Ana": a abertura vira uma linha, e
+    // cada categoria que a ficha tenta mostrar passa pela porta única, liberada
+    // ou não. A trancada vira tentativa negada, e nada dela é lido.
+    await this.access.recordFileOpen(viewerId, membershipId, OPEN_ACTION);
+    const read = (scope: ShareScope) => this.tryRead(viewerId, membershipId, scope, FILE_ACTION);
     const canWorkout = await read(ShareScope.WORKOUT);
     const canNutrition = await read(ShareScope.NUTRITION);
     const canBody = await read(ShareScope.BODY);
@@ -157,12 +157,7 @@ export class MemberFileService {
         weighins: false,
       }),
       this.notes.listFor(viewerId, target.viewerRole, groupId, subjectId),
-      this.accessLog(
-        viewerId,
-        subjectId,
-        groupId,
-        team.map((m) => m.userId),
-      ),
+      this.accessLog(viewerId, subjectId, groupId),
     ]);
 
     return {
@@ -225,21 +220,7 @@ export class MemberFileService {
       throw new BadRequestException(`A agenda mostra até ${MAX_AGENDA_DAYS} dias por vez.`);
     }
 
-    const link = await this.prisma.professionalLink.findFirst({
-      where: {
-        subjectUserId: target.subjectUserId,
-        professionalId: viewerId,
-        groupId,
-        revokedAt: null,
-      },
-      select: { scopes: true },
-    });
-    const granted = link?.scopes ?? [];
-    const read = async (scope: ShareScope) => {
-      if (!granted.includes(scope)) return false;
-      await this.access.assertReadable(viewerId, membershipId, scope, AGENDA_ACTION);
-      return true;
-    };
+    const read = (scope: ShareScope) => this.tryRead(viewerId, membershipId, scope, AGENDA_ACTION);
     const done = await read(ShareScope.WORKOUT);
     const weighins = await read(ShareScope.BODY);
 
@@ -258,6 +239,22 @@ export class MemberFileService {
   }
 
   // ---------------------------------------------------------------- internos
+
+  /** Uma categoria pela porta única: `true` se liberada; a negada fica na trilha. */
+  private async tryRead(
+    viewerId: string,
+    membershipId: string,
+    scope: ShareScope,
+    action: string,
+  ): Promise<boolean> {
+    try {
+      await this.access.assertReadable(viewerId, membershipId, scope, action);
+      return true;
+    } catch (error) {
+      if (error instanceof NotFoundException) return false;
+      throw error;
+    }
+  }
 
   private async nutritionWeek(
     ctx: { userId: string; timezone: string },
@@ -430,23 +427,30 @@ export class MemberFileService {
     show: { done: boolean; weighins: boolean },
   ): Promise<MemberAgenda['days']> {
     const today = todayInTz(tz);
-    const sessions = await this.prisma.plannedSession.findMany({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-        // Só o que esta comunidade planejou: plano de outra academia não aparece.
-        plan: { is: { userId, fromOffer: { is: { groupId } } } },
-      },
-      include: { plan: { select: { name: true } } },
-      orderBy: [{ date: 'asc' }, { order: 'asc' }],
-    });
+    // Com Treino liberado, a agenda é a da cópia dela (nome e dias remarcados).
+    // Sem, só o que a equipe mandou: título e dias calculados da versão aceita,
+    // nunca o nome nem os dias da cópia, que são dado de Treino dela.
+    const sessions = show.done
+      ? (
+          await this.prisma.plannedSession.findMany({
+            where: {
+              userId,
+              date: { gte: start, lte: end },
+              // Só o que esta comunidade planejou: plano de outra academia não aparece.
+              plan: { is: { userId, fromOffer: { is: { groupId } } } },
+            },
+            include: { plan: { select: { name: true } } },
+            orderBy: [{ date: 'asc' }, { order: 'asc' }],
+          })
+        ).map((s) => ({ date: s.date, planId: s.planId, title: s.plan.name, order: s.order }))
+      : await this.versionSessions(userId, tz, groupId, start, end);
     const range = { gte: dayBoundsInTz(start, tz).start, lt: dayBoundsInTz(end, tz).end };
     const doneKeys = new Set<string>();
     if (show.done && sessions.length > 0) {
       const finished = await this.prisma.workoutSession.findMany({
         where: {
           userId,
-          planId: { in: [...new Set(sessions.map((s) => s.planId))] },
+          planId: { in: [...new Set(sessions.map((s) => s.planId!))] },
           completedAt: range,
         },
         select: { planId: true, completedAt: true },
@@ -469,7 +473,7 @@ export class MemberFileService {
         .filter((s) => s.date === date)
         .map((s) => ({
           kind: 'planned' as const,
-          title: s.plan.name,
+          title: s.title,
           // Sem Treino liberado, todo dia é só "planejado": "não feito" diria
           // o que a pessoa não fez.
           state: show.done
@@ -494,6 +498,46 @@ export class MemberFileService {
   }
 
   /**
+   * Os dias que a equipe planejou, pela versão aceita de cada oferta desta
+   * comunidade (#402): o que a ficha mostra sem Treino liberado. Terminada
+   * para no dia em que terminou; apagada não aparece.
+   */
+  private async versionSessions(
+    userId: string,
+    tz: string,
+    groupId: string,
+    start: string,
+    end: string,
+  ): Promise<Array<{ date: string; planId: null; title: string; order: number }>> {
+    const offers = await this.prisma.planOffer.findMany({
+      where: { userId, groupId, removedAt: null, versions: { some: { status: 'ACCEPTED' } } },
+      select: {
+        endedAt: true,
+        versions: {
+          where: { status: 'ACCEPTED', schedule: 'CALENDAR' },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { title: true, startDate: true, weeks: true, weekdays: true },
+        },
+      },
+      orderBy: [{ position: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
+    });
+    const rows: Array<{ date: string; planId: null; title: string; order: number }> = [];
+    for (const o of offers) {
+      const v = o.versions[0];
+      if (!v?.startDate || !v.weeks) continue;
+      const endedOn = o.endedAt ? dateInTz(o.endedAt, tz) : null;
+      scheduleDates({ startDate: v.startDate, weeks: v.weeks, weekdays: v.weekdays }).forEach(
+        (date, i) => {
+          if (date < start || date > end || (endedOn && date > endedOn)) return;
+          rows.push({ date, planId: null, title: v.title, order: i + 1 });
+        },
+      );
+    }
+    return rows.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1));
+  }
+
+  /**
    * "Histórico de acesso à ficha": as leituras da equipe desta comunidade,
    * inclusive as negadas (que não têm vínculo, então são achadas pela equipe).
    */
@@ -501,13 +545,11 @@ export class MemberFileService {
     viewerId: string,
     subjectId: string,
     groupId: string,
-    teamIds: string[],
   ): Promise<MemberAccessEntry[]> {
+    // Só o que aconteceu NESTA comunidade, pela coluna gravada na leitura. A
+    // linha antiga, sem comunidade, fica fora: não dá para saber de onde veio.
     const rows = await this.prisma.professionalAccessLog.findMany({
-      where: {
-        subjectUserId: subjectId,
-        OR: [{ link: { groupId } }, { linkId: null, professionalId: { in: teamIds } }],
-      },
+      where: { subjectUserId: subjectId, groupId },
       orderBy: { at: 'desc' },
       take: ACCESS_LOG_SIZE,
       select: { at: true, scope: true, action: true, denied: true, professionalId: true },

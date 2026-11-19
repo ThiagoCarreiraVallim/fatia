@@ -56,7 +56,13 @@ export function parseInviteArgs(argv: string[]): InviteArgs {
 
 type Prisma = Pick<
   PrismaClient,
-  'user' | 'group' | 'groupInvite' | 'groupMembership' | 'professionalLink'
+  | 'user'
+  | 'group'
+  | 'groupInvite'
+  | 'groupMembership'
+  | 'professionalLink'
+  | 'memberNote'
+  | 'planOfferVersion'
 >;
 
 export async function runCommunityInvite(
@@ -82,6 +88,13 @@ export async function runCommunityInvite(
         groupId: group.id,
         OR: [{ subjectUserId: user.id }, { professionalId: user.id }],
       },
+    });
+    // O mesmo que sair da comunidade faz (#402): as anotações da equipe sobre
+    // ela saem, e o plano que esperava aceite não se responde mais.
+    await prisma.memberNote.deleteMany({ where: { groupId: group.id, subjectUserId: user.id } });
+    await prisma.planOfferVersion.updateMany({
+      where: { status: 'PENDING', offer: { groupId: group.id, userId: user.id } },
+      data: { status: 'SUPERSEDED', respondedAt: now },
     });
     const memberships = await prisma.groupMembership.deleteMany({
       where: { groupId: group.id, userId: user.id },

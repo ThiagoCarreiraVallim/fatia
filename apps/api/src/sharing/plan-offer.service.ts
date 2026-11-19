@@ -43,6 +43,27 @@ import {
 const OFFER_NOT_FOUND = 'Plan offer not found';
 const MEMBERSHIP_NOT_FOUND = 'Membership not found';
 const OFFER_UNAVAILABLE = 'Esse plano não está mais disponível';
+const OFFER_ENDED = 'Esse plano já terminou para a pessoa: mande um novo.';
+
+/**
+ * Enfileira quem mexe na ordem dos planos de uma pessoa numa comunidade
+ * (#402): enviar (posição nova) e reordenar na ficha. Solta no fim da transação.
+ */
+async function lockMemberOrder(db: Prisma.TransactionClient, userId: string, groupId: string) {
+  const key = `plan-offer-order:${userId}:${groupId}`;
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+}
+
+/**
+ * Trava a linha da pessoa e lê se ela já reordenou no app. O reordenar dela
+ * (`WorkoutPlanService.reorder`) grava `plansOrderedAt` antes das posições, na
+ * mesma linha: com a trava, a equipe lê o valor já gravado e não sobrescreve.
+ */
+async function lockSubject(db: Prisma.TransactionClient, userId: string) {
+  const rows = await db.$queryRaw<Array<{ plansOrderedAt: Date | null }>>`
+    SELECT "plansOrderedAt" FROM "User" WHERE id = ${userId} FOR UPDATE`;
+  return rows[0] ?? null;
+}
 const ALREADY_ANSWERED =
   'Essa versão do plano já foi respondida ou substituída. Atualize a tela para ver a atual.';
 
@@ -213,15 +234,29 @@ export class PlanOfferService {
     input: SendPlanOfferDto,
   ): Promise<{ id: string; versionId: string; version: number }> {
     const ctx = await this.assertCanSend(authorId, membershipId);
+    // Apagada pela ficha (#402) é como se não existisse; terminada não recebe versão nova.
     const offer = await this.prisma.planOffer.findFirst({
-      where: { id: offerId, userId: ctx.studentId, groupId: ctx.groupId, authorId },
-      select: { id: true },
+      where: {
+        id: offerId,
+        userId: ctx.studentId,
+        groupId: ctx.groupId,
+        authorId,
+        removedAt: null,
+      },
+      select: { id: true, endedAt: true },
     });
     if (!offer) throw new NotFoundException(OFFER_NOT_FOUND);
+    if (offer.endedAt) throw new ConflictException(OFFER_ENDED);
     const content = await this.versionContent(authorId, input);
 
     const created = await this.inTransaction(async (db) => {
       await this.lockOffer(db, offerId);
+      // Relida com a trava: "Terminar hoje" ou "Apagar" podem ter chegado no meio.
+      const still = await db.planOffer.findFirst({
+        where: { id: offerId, removedAt: null, endedAt: null },
+        select: { id: true },
+      });
+      if (!still) throw new ConflictException(OFFER_ENDED);
       const last = await db.planOfferVersion.findFirst({
         where: { offerId },
         orderBy: { version: 'desc' },
@@ -265,20 +300,25 @@ export class PlanOfferService {
       ? await this.templateSource(groupId, input.templateId)
       : await this.planSource(authorId, input.planId!);
     const content = this.scheduleContent(source, input);
-    const last = await this.prisma.planOffer.aggregate({
-      where: { userId: ctx.studentId, groupId, removedAt: null },
-      _max: { position: true },
-    });
-    const offer = await this.prisma.planOffer.create({
-      data: {
-        userId: ctx.studentId,
-        authorId,
-        groupId,
-        position: (last._max.position ?? -1) + 1,
-        sourceTemplateId: input.templateId ?? null,
-        versions: { create: { version: 1, ...content } },
-      },
-      include: { versions: true },
+    // A posição é "a última + 1": dois envios ao mesmo tempo leriam a mesma
+    // última. A trava por pessoa e comunidade enfileira os dois.
+    const offer = await this.inTransaction(async (db) => {
+      await lockMemberOrder(db, ctx.studentId, groupId);
+      const last = await db.planOffer.aggregate({
+        where: { userId: ctx.studentId, groupId, removedAt: null },
+        _max: { position: true },
+      });
+      return db.planOffer.create({
+        data: {
+          userId: ctx.studentId,
+          authorId,
+          groupId,
+          position: (last._max.position ?? -1) + 1,
+          sourceTemplateId: input.templateId ?? null,
+          versions: { create: { version: 1, ...content } },
+        },
+        include: { versions: true },
+      });
     });
     this.notifications.notify(
       [ctx.studentId],
@@ -387,30 +427,37 @@ export class PlanOfferService {
       membershipId,
       'member.plans',
     );
-    const unique = [...new Set(offerIds)];
-    const found = await this.prisma.planOffer.findMany({
-      where: { id: { in: unique }, userId: target.subjectUserId, groupId, removedAt: null },
-      select: { id: true },
+    const subjectId = target.subjectUserId;
+    await this.inTransaction(async (db) => {
+      await lockMemberOrder(db, subjectId, groupId);
+      const current = await db.planOffer.findMany({
+        where: { userId: subjectId, groupId, removedAt: null },
+        select: { id: true },
+      });
+      const ids = new Set(current.map((o) => o.id));
+      // Id de outra pessoa (ou já apagado) responde como inexistente.
+      if (offerIds.some((id) => !ids.has(id))) throw new NotFoundException(OFFER_NOT_FOUND);
+      // A lista é a ordem inteira: faltar um deixaria duas posições iguais.
+      if (new Set(offerIds).size !== offerIds.length || offerIds.length !== ids.size) {
+        throw new BadRequestException(
+          'Mande todos os planos da pessoa, cada um uma vez, na ordem nova.',
+        );
+      }
+      for (const [position, id] of offerIds.entries()) {
+        await db.planOffer.update({ where: { id }, data: { position } });
+      }
+      // A ordem da pessoa nunca é sobrescrita: a linha dela fica travada e a
+      // cópia só muda enquanto `plansOrderedAt` está vazio, lido aqui dentro.
+      const subject = await lockSubject(db, subjectId);
+      if (subject?.plansOrderedAt) return;
+      for (const [position, id] of offerIds.entries()) {
+        await db.workoutPlan.updateMany({
+          where: { userId: subjectId, fromOfferId: id, user: { plansOrderedAt: null } },
+          data: { position },
+        });
+      }
     });
-    if (found.length !== unique.length) throw new NotFoundException(OFFER_NOT_FOUND);
-    const subject = await this.prisma.user.findUnique({
-      where: { id: target.subjectUserId },
-      select: { plansOrderedAt: true },
-    });
-    await this.prisma.$transaction([
-      ...unique.map((id, position) =>
-        this.prisma.planOffer.update({ where: { id }, data: { position } }),
-      ),
-      ...(subject?.plansOrderedAt
-        ? []
-        : unique.map((id, position) =>
-            this.prisma.workoutPlan.updateMany({
-              where: { userId: target.subjectUserId, fromOfferId: id },
-              data: { position },
-            }),
-          )),
-    ]);
-    return { offerIds: unique };
+    return { offerIds };
   }
 
   /** O retrato de um modelo de treino da biblioteca desta comunidade. */
@@ -565,7 +612,7 @@ export class PlanOfferService {
           data: { status: 'SUPERSEDED', respondedAt: now },
         }),
         ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
-        ...(await this.positionWrites(userId, planId, offer.position)),
+        ...this.positionWrites(userId, planId, offer.position),
       ]);
     } catch (error) {
       await this.prisma.planOfferVersion.update({
@@ -789,15 +836,15 @@ export class PlanOfferService {
    * A ordem que a equipe deu na ficha vai para a cópia (#402), enquanto a
    * pessoa não reordenou os planos no app. Depois a ordem é dela.
    */
-  private async positionWrites(userId: string, planId: string, position: number | null) {
+  private positionWrites(userId: string, planId: string, position: number | null) {
     if (position === null) return [];
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { plansOrderedAt: true },
-    });
-    if (!user || user.plansOrderedAt) return [];
+    // Condicionado na própria escrita: se a pessoa reordenou no meio do aceite,
+    // a ordem dela fica (o `plansOrderedAt` é lido junto com a escrita).
     return [
-      this.prisma.workoutPlan.updateMany({ where: { id: planId, userId }, data: { position } }),
+      this.prisma.workoutPlan.updateMany({
+        where: { id: planId, userId, user: { plansOrderedAt: null } },
+        data: { position },
+      }),
     ];
   }
 

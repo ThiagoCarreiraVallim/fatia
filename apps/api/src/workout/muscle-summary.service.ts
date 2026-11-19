@@ -7,6 +7,7 @@ import {
   type CanonicalMuscleGroup,
 } from './helpers/muscle-group';
 import { isCardioExercise } from './helpers/is-cardio';
+import { PLAN_ORDER } from './workout-plan.service';
 
 /**
  * Séries por grupo na semana que o card "Séries da semana" usa como meta. É um
@@ -199,7 +200,8 @@ export class MuscleSummaryService {
       }),
       this.prisma.workoutPlan.findMany({
         where: { userId },
-        orderBy: { createdAt: 'asc' },
+        // A ordem da pessoa (#402): o primeiro da lista é o primeiro da rotação.
+        orderBy: PLAN_ORDER,
         select: { id: true, name: true, exercises: { select: { exercise: exerciseSelect } } },
       }),
       this.prisma.workoutSession.findMany({

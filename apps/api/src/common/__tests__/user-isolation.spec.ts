@@ -5164,7 +5164,10 @@ describe('isolamento entre usuários', () => {
       expect(JSON.stringify(naH)).not.toContain('Nota da G');
       // A leitura da G (o pro abriu a ficha da A lá) não aparece no histórico da H.
       await ficha.file(owned.pro, f.g, f.aInG);
-      expect((await ficha.file(owned.userB, f.h, f.aInH)).accessLog).toEqual([]);
+      // Na H só ficam as linhas do próprio B (a abertura e as negadas da H).
+      const logH = (await ficha.file(owned.userB, f.h, f.aInH)).accessLog;
+      expect(logH.length).toBeGreaterThan(0);
+      expect(logH.every((l) => l.isMe)).toBe(true);
     });
 
     it('oferta e anotação da A não se mexem pela H nem pela associação do B', async () => {

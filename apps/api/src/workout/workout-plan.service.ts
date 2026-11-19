@@ -48,7 +48,8 @@ const PLAN_INCLUDE = {
 type PlanRow = Prisma.WorkoutPlanGetPayload<{ include: typeof PLAN_INCLUDE }>;
 
 /** Ordem da lista (#402): a que a pessoa ou a equipe deu; sem ordem, por criação. */
-const PLAN_ORDER = [
+/** A ordem dos planos da pessoa (#402): a dela, ou a da equipe, e depois a de criação. */
+export const PLAN_ORDER = [
   { position: { sort: 'asc', nulls: 'last' } },
   { createdAt: 'asc' },
 ] satisfies Prisma.WorkoutPlanOrderByWithRelationInput[];
@@ -314,11 +315,13 @@ export class WorkoutPlanService {
     });
     if (owned.length !== unique.length) throw new NotFoundException('Plan not found');
     const rest = (await this.order(userId)).planIds.filter((id) => !unique.includes(id));
+    // `plansOrderedAt` primeiro: trava a linha da pessoa, e a ficha (que trava
+    // a mesma linha antes de mexer nas cópias) passa a ver que a ordem é dela.
     await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { plansOrderedAt: new Date() } }),
       ...[...unique, ...rest].map((id, position) =>
         this.prisma.workoutPlan.updateMany({ where: { id, userId }, data: { position } }),
       ),
-      this.prisma.user.update({ where: { id: userId }, data: { plansOrderedAt: new Date() } }),
     ]);
     return this.order(userId);
   }
