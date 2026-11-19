@@ -118,14 +118,14 @@ export function FilePlans({
           </p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table aria-label="Treino" className="w-full min-w-[640px] text-left text-sm">
+            <table aria-label="Treino" className="w-full text-left text-sm">
               <thead className="text-[11px] text-muted-foreground">
                 <tr>
                   <th className="w-8 py-2 font-semibold">#</th>
                   <th className="py-2 font-semibold">Plano</th>
-                  <th className="py-2 font-semibold">Quando</th>
+                  <th className="hidden py-2 font-semibold md:table-cell">Quando</th>
                   <th className="py-2 font-semibold">Status</th>
-                  <th className="py-2 font-semibold">Andamento</th>
+                  <th className="hidden py-2 font-semibold md:table-cell">Andamento</th>
                   <th className="py-2 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
@@ -149,8 +149,14 @@ export function FilePlans({
                             .filter(Boolean)
                             .join(' · ')}
                         </span>
+                        {/* No celular, Quando vai sob o nome. */}
+                        <span className="mt-0.5 block text-xs text-muted-foreground md:hidden">
+                          {memberPlanWhen(p)}
+                        </span>
                       </td>
-                      <td className="py-2 text-xs text-foreground">{memberPlanWhen(p)}</td>
+                      <td className="hidden py-2 text-xs text-foreground md:table-cell">
+                        {memberPlanWhen(p)}
+                      </td>
                       <td className="py-2">
                         <span
                           className={cn(
@@ -161,7 +167,7 @@ export function FilePlans({
                           {st.label}
                         </span>
                       </td>
-                      <td className="py-2 text-xs text-muted-foreground">
+                      <td className="hidden py-2 text-xs text-muted-foreground md:table-cell">
                         {memberPlanProgress(p, file.name)}
                       </td>
                       <td className="py-2">

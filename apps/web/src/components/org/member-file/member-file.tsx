@@ -125,7 +125,11 @@ export function MemberFile({ groupId, membershipId }: { groupId: string; members
       panel.open({
         title: `Adicionar plano para a ${first}`,
         subtitle: 'treino da biblioteca',
-        body: <AddPlanForm file={file} firstName={first} onDone={close} />,
+        body: (
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <AddPlanForm file={file} firstName={first} onDone={close} />
+          </div>
+        ),
       });
     } else {
       setInlineAdd(true);
@@ -148,7 +152,8 @@ export function MemberFile({ groupId, membershipId }: { groupId: string; members
         >
           {initials(file.name)}
         </div>
-        <div className="min-w-0 flex-1">
+        {/* Largura mínima: no celular o botão desce para a linha de baixo em vez de espremer o nome. */}
+        <div className="min-w-[12rem] flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-display text-xl font-bold text-foreground">{file.name}</h1>
             {file.proByGroup && (
