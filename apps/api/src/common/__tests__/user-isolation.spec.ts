@@ -72,6 +72,7 @@ import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { MemberFileService } from '../../sharing/member-file.service';
 import { MemberNoteService } from '../../sharing/member-note.service';
+import { ReviewService } from '../../sharing/review.service';
 import { PostService } from '../../sharing/post.service';
 import { BlockService } from '../../sharing/block.service';
 import { AgendaService } from '../../workout/agenda.service';
@@ -5228,6 +5229,153 @@ describe('isolamento entre usuários', () => {
         (await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } })).plansOrderedAt,
       ).toBeNull();
       await prisma.workoutPlan.delete({ where: { id: daA.id } });
+    });
+  });
+
+  describe('para revisar, em risco e sessão feita (#399)', () => {
+    const fila = new ReviewService(prisma, access, sessions, silentNotifications);
+    const r = { g: '', h: '', sessA: '', sessB: '', metaA: '' };
+
+    beforeAll(async () => {
+      const stamp = `revisar-${Date.now()}`;
+      // Na G o pro é dono e A e B são membros; a A dá Treino e Metas ao pro.
+      const g = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Revisar G',
+          slug: `${stamp}-g`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+      });
+      // Na H o B é o dono e a A é membro, sem vínculo com ele.
+      const h = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Revisar H',
+          slug: `${stamp}-h`,
+          ownerId: owned.userB,
+          memberships: {
+            create: [
+              { userId: owned.userB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+      });
+      r.g = g.id;
+      r.h = h.id;
+      await prisma.professionalLink.create({
+        data: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          groupId: g.id,
+          scopes: [ShareScope.WORKOUT, ShareScope.GOALS],
+        },
+      });
+      const fim = new Date(Date.now() - 3_600_000);
+      r.sessA = (
+        await prisma.workoutSession.create({
+          data: {
+            userId: owned.userA,
+            startedAt: new Date(fim.getTime() - 3_600_000),
+            completedAt: fim,
+          },
+        })
+      ).id;
+      r.sessB = (
+        await prisma.workoutSession.create({
+          data: {
+            userId: owned.userB,
+            startedAt: new Date(fim.getTime() - 3_600_000),
+            completedAt: fim,
+          },
+        })
+      ).id;
+      r.metaA = (
+        await prisma.goal.create({
+          data: {
+            userId: owned.userA,
+            kind: 'custom',
+            title: 'Meta da A (#399)',
+            startValue: 0,
+            targetValue: 1,
+            unit: 'x',
+            status: 'completed',
+            completedAt: fim,
+          },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.workoutSession.deleteMany({ where: { id: { in: [r.sessA, r.sessB] } } });
+      await prisma.goal.deleteMany({ where: { id: r.metaA } });
+      await prisma.group.deleteMany({ where: { id: { in: [r.g, r.h] } } });
+    });
+
+    it('a fila e o em risco do dono da H não trazem nada da A, que não deu vínculo a ele', async () => {
+      const q = await fila.queue(owned.userB, r.h);
+      expect(JSON.stringify(q)).not.toContain(r.sessA);
+      expect(JSON.stringify(q)).not.toContain(r.metaA);
+      expect((await fila.atRisk(owned.userB, r.h)).rows).toEqual([]);
+      // Na G, o B é só membro: nem abre.
+      await expect(fila.queue(owned.userB, r.g)).rejects.toThrow(ForbiddenException);
+      await expect(fila.atRisk(owned.userB, r.g)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('a fila do pro traz a A (com vínculo) e nunca o B (sem vínculo)', async () => {
+      const q = await fila.queue(owned.pro, r.g);
+      const refs = q.items.map((i) => i.refId);
+      expect(refs).toEqual(expect.arrayContaining([r.sessA, r.metaA]));
+      expect(refs).not.toContain(r.sessB);
+      const risco = await fila.atRisk(owned.pro, r.g);
+      expect(JSON.stringify(risco)).not.toContain(owned.userB);
+    });
+
+    it('a sessão e o comentário só pela comunidade da URL e com Treino liberado', async () => {
+      // O dono da H usa o id da sessão da A com a URL da H: sem vínculo, nada de detalhe.
+      expect((await fila.session(owned.userB, r.h, r.sessA)).shared).toBe(false);
+      await expect(
+        fila.sendFeedback(owned.userB, r.h, r.sessA, { reaction: 'CLAP' }),
+      ).rejects.toThrow(NotFoundException);
+      // O pro não abre a sessão do B (sem vínculo) nem a da A pela H.
+      expect((await fila.session(owned.pro, r.g, r.sessB)).shared).toBe(false);
+      await expect(fila.session(owned.pro, r.h, r.sessA)).rejects.toThrow(NotFoundException);
+      await expect(fila.sendFeedback(owned.pro, r.g, r.sessB, { body: 'oi' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(
+        await prisma.sessionFeedback.count({ where: { sessionId: { in: [r.sessA, r.sessB] } } }),
+      ).toBe(0);
+    });
+
+    it('"visto" não marca item de outra pessoa nem pela comunidade errada', async () => {
+      await expect(fila.markSeen(owned.userB, r.h, 'WORKOUT', r.sessA)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(fila.markSeen(owned.userB, r.h, 'GOAL', r.metaA)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(fila.markSeen(owned.pro, r.g, 'WORKOUT', r.sessB)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(
+        await prisma.reviewSeen.count({ where: { refId: { in: [r.sessA, r.sessB, r.metaA] } } }),
+      ).toBe(0);
+    });
+
+    it('o comentário na sessão da A só a A lê', async () => {
+      await fila.sendFeedback(owned.pro, r.g, r.sessA, { body: 'Boa (#399)' });
+      expect((await sessions.summary(owned.userA, r.sessA)).feedback).toHaveLength(1);
+      await expect(sessions.summary(owned.userB, r.sessA)).rejects.toThrow(NotFoundException);
+      await expect(sessions.findById(owned.userB, r.sessA)).rejects.toThrow(NotFoundException);
     });
   });
 
