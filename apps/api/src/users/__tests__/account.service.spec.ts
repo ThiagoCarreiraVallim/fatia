@@ -35,7 +35,8 @@ const makePrisma = () => ({
   plannedSession: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
-  groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
+  groupInvite: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
+  groupAuditLog: { findMany: jest.fn().mockResolvedValue([]) },
   groupPlanTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   groupTip: { findMany: jest.fn().mockResolvedValue([]) },
   groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
@@ -103,6 +104,10 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // Só a linha da própria pessoa, com o consentimento e o assento (ADR 025/026).
   memberships: 'communityMemberships',
   invitesCreated: 'invitesCreated',
+  // Convites que a pessoa recebeu e aceitou (#401): comunidade, papel e datas.
+  invitesAccepted: 'invitesReceived',
+  // Ações em massa que a pessoa fez num painel (#401): o que fez, quando e em quantos.
+  groupAuditLogs: 'panelActions',
   planTemplates: 'contentPublished',
   tipsAuthored: 'contentPublished',
   guidesAuthored: 'contentPublished',
@@ -470,6 +475,23 @@ describe('AccountService', () => {
       expect(logto.deleteUser).toHaveBeenCalledWith('logto|abc');
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-A' } });
       expect(result).toMatchObject({ deleted: true, logtoIdentityDeleted: true });
+    });
+
+    it('apaga o e-mail da pessoa dos convites que ela recebeu, e o convite em aberto deixa de valer (#401)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+
+      await service.deleteAccount('user-A', DELETE_CONFIRMATION);
+
+      const chamadas = prisma.groupInvite.updateMany.mock.calls.map(
+        (c: unknown[]) => c[0] as { where: Record<string, unknown>; data: Record<string, unknown> },
+      );
+      const doEmail = { equals: 'a@test.local', mode: 'insensitive' };
+      // Em aberto: some o e-mail E o convite é revogado (sem e-mail ele viraria link aberto).
+      expect(chamadas).toContainEqual({
+        where: { email: doEmail, revokedAt: null },
+        data: { email: null, revokedAt: expect.any(Date) },
+      });
+      expect(chamadas).toContainEqual({ where: { email: doEmail }, data: { email: null } });
     });
 
     it('apaga o Logto ANTES do banco — identidade órfã reprovisionaria conta vazia', async () => {

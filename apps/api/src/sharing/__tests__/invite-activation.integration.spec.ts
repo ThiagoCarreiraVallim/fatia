@@ -494,8 +494,8 @@ describe('convites, ativação e membros (#401, integração)', () => {
       expect(v.cards.activeLinks).toBe(2);
       expect(v.cards.joinedLast30Days).toBe(14);
       expect(v.cards.activated48h).toEqual({ value: 7, percent: 58 });
-      // O e-mail ainda não aceito: lista visível, total pequeno escondido.
-      expect(v.cards.notAccepted).toBeNull();
+      // Nenhum e-mail sem aceite: zero aparece (balde vazio não esconde ninguém).
+      expect(v.cards.notAccepted).toBe(0);
     });
 
     it('o profissional não vê convite de equipe, nem a comunidade de outro dono', async () => {
