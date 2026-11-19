@@ -20,7 +20,7 @@ import {
   type Challenge,
   type MyGroup,
   type PointItem,
-  type ReviewItem,
+  type CheckinReviewItem,
   type StepSource,
 } from '@fatia/api-client';
 import { ChallengeStatusBadge, KindIcon } from '@/components/challenges/challenge-ui';
@@ -412,14 +412,14 @@ function NewChallenge({ g, today, onDone }: { g: MyGroup; today: string; onDone:
   );
 }
 
-const TYPE_LABEL: Record<ReviewItem['type'], string> = {
+const TYPE_LABEL: Record<CheckinReviewItem['type'], string> = {
   photo: 'foto',
   water: 'água',
   steps: 'passos',
 };
 
 /** Um item da fila: a foto (só a equipe vê), o porquê, e Vale ou Anular com motivo. */
-function ReviewCard({ g, item }: { g: MyGroup; item: ReviewItem }) {
+function ReviewCard({ g, item }: { g: MyGroup; item: CheckinReviewItem }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [voiding, setVoiding] = useState(false);

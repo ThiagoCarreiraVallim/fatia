@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Challenge, MyGroup, ReviewItem } from '@fatia/api-client';
+import type { Challenge, MyGroup, CheckinReviewItem } from '@fatia/api-client';
 import { challenge, detail, reviewItem, rules } from '@/components/challenges/__tests__/fixtures';
 import { grupo, renderWithClient } from '../../__tests__/helpers';
 
@@ -29,7 +29,7 @@ import OrgChallengesPage from '../page';
 
 const c = (p: Partial<Challenge>): Challenge => challenge({ canManage: true, ...p });
 
-function open(challenges: Challenge[] = [], queue: ReviewItem[] = []) {
+function open(challenges: Challenge[] = [], queue: CheckinReviewItem[] = []) {
   ctx.group = grupo({ role: 'OWNER' });
   vi.mocked(challengesApi.list).mockResolvedValue({ today: '2026-10-18', challenges });
   vi.mocked(challengesApi.create).mockResolvedValue(detail());

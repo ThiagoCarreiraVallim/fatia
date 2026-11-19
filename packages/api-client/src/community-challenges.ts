@@ -255,7 +255,7 @@ export interface CheckinEligibility {
   rules: { minWorkoutMinutes: number; windowHours: number };
 }
 
-export interface ReviewItem {
+export interface CheckinReviewItem {
   id: string;
   challengeId: string;
   challengeTitle: string;
@@ -275,7 +275,7 @@ export interface ReviewItem {
 }
 
 export interface ReviewQueue {
-  items: ReviewItem[];
+  items: CheckinReviewItem[];
   /** Quantos esperam ao todo, em todas as páginas. */
   open: number;
   /** O teto de sinalizações de membros abertas por desafio. */

@@ -4,7 +4,7 @@ import type {
   ChallengeDetail,
   ChallengeRules,
   MyParticipation,
-  ReviewItem,
+  CheckinReviewItem,
 } from '@fatia/api-client';
 
 /** Fábricas dos testes de desafio (membro e painel). */
@@ -78,7 +78,7 @@ export const activity = (p: Partial<ActivityItem> = {}): ActivityItem => ({
   ...p,
 });
 
-export const reviewItem = (p: Partial<ReviewItem> = {}): ReviewItem => ({
+export const reviewItem = (p: Partial<CheckinReviewItem> = {}): CheckinReviewItem => ({
   id: 'k1',
   challengeId: 'c1',
   challengeTitle: '30 dias de treino',

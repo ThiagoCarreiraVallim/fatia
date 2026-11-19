@@ -26,7 +26,7 @@ import {
   type ChallengeMetric,
   type PointItem,
   type PointsTable,
-  type ReviewItem,
+  type CheckinReviewItem,
   type StepSource,
 } from '@fatia/api-client';
 import {
@@ -828,14 +828,14 @@ function ChallengeForm({
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function reviewWhen(item: ReviewItem): string {
+function reviewWhen(item: CheckinReviewItem): string {
   const day = challengePeriod({ startDate: item.date, endDate: item.date });
   if (!item.capturedAt) return day;
   const t = new Date(item.capturedAt);
   return `${day} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
 }
 
-const REVIEW_TYPE_LABEL: Record<ReviewItem['type'], string> = {
+const REVIEW_TYPE_LABEL: Record<CheckinReviewItem['type'], string> = {
   photo: 'foto',
   water: 'água',
   steps: 'passos',
@@ -847,7 +847,7 @@ function ReviewRow({
   onDone,
 }: {
   groupId: string;
-  item: ReviewItem;
+  item: CheckinReviewItem;
   onDone: () => void;
 }) {
   const [voiding, setVoiding] = useState(false);
