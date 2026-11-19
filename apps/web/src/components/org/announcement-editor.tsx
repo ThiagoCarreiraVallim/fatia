@@ -136,6 +136,9 @@ export function AnnouncementEditor({
             : 'Comunicado publicado no mural.',
       );
       void qc.invalidateQueries({ queryKey: orgKeys.announcements(group.id) });
+      // O contador da semana mudou (está sob a chave de comunicados, mas fica explícito).
+      void qc.invalidateQueries({ queryKey: orgKeys.announcementSettings(group.id) });
+      void qc.invalidateQueries({ queryKey: orgKeys.announcementsRecent(group.id) });
       void qc.invalidateQueries({ queryKey: communityKeys.feed(group.id) });
       onDone();
     },

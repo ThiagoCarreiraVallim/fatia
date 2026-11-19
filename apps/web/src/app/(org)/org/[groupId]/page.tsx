@@ -495,6 +495,8 @@ export default function OrgOverviewPage() {
       : null;
 
   const v = visao.data;
+  // A série termina ontem: o dia de hoje não sai enquanto anda (a diferença de
+  // uma hora para outra entregaria quem treinou agora).
   const hoje = useMemo(() => {
     const a = v?.aggregates?.activity;
     if (!a) return null;
@@ -563,14 +565,14 @@ export default function OrgOverviewPage() {
         />
         {ag && (
           <Kpi
-            titulo="Treinos hoje"
+            titulo="Treinos ontem"
             valor={hoje?.treinos === null || !hoje ? '—' : hoje.treinos.toLocaleString('pt-BR')}
             tendencia={variacao === null ? null : `${variacao > 0 ? '+' : ''}${variacao}%`}
             linha={
               hoje?.treinos === null || !hoje
                 ? 'Oculto com menos de 5 pessoas'
                 : variacao === null
-                  ? 'Registrados hoje'
+                  ? 'Registrados ontem'
                   : `${variacao >= 0 ? 'Mais' : 'Menos'} que no mesmo dia da semana passada`
             }
             detalhe={

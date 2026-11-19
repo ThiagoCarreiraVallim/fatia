@@ -19,7 +19,7 @@ async function change(formData: FormData) {
   const subscribed = formData.get('subscribed') === 'true';
   const r = await setAnnouncementSubscription(t, subscribed);
   redirect(
-    `/descadastro?${new URLSearchParams({ t, ...(r ? { ok: subscribed ? 'on' : 'off' } : { erro: '1' }) })}`,
+    `/descadastro?${new URLSearchParams({ t, ...(r.kind === 'ok' ? { ok: subscribed ? 'on' : 'off' } : { erro: '1' }) })}`,
   );
 }
 
@@ -37,7 +37,20 @@ export default async function AnnouncementUnsubscribePage({
   const { t = '', ok, erro } = await searchParams;
   const estado = await fetchAnnouncementSubscription(t);
 
-  if (!estado) {
+  if (estado.kind === 'unavailable') {
+    // 429 e 5xx: o link pode estar certo, então não dizemos que é inválido.
+    return (
+      <div className="mx-auto max-w-md space-y-3">
+        <h1 className="font-display text-2xl font-bold">Não deu agora</h1>
+        <p className="text-muted-foreground">
+          Não conseguimos abrir sua preferência neste momento. Tente de novo em alguns minutos pelo
+          mesmo link.
+        </p>
+      </div>
+    );
+  }
+
+  if (estado.kind === 'invalid') {
     return (
       <div className="mx-auto max-w-md space-y-3">
         <h1 className="font-display text-2xl font-bold">Link inválido</h1>
@@ -57,7 +70,7 @@ export default async function AnnouncementUnsubscribePage({
       <h1 className="font-display text-2xl font-bold">E-mail de comunicados</h1>
       {erro && (
         <p role="alert" className="text-sm text-danger">
-          Não deu para salvar agora. Tente de novo.
+          Não deu agora. Tente de novo.
         </p>
       )}
       {ok === 'off' && (

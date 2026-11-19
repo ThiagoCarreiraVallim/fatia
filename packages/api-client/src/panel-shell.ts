@@ -41,6 +41,8 @@ export interface NewThisWeek {
   total: number;
   viaInvite: number;
   viaPage: number;
+  /** Quem entrou sem origem gravada (antes da #398). */
+  viaUnknown: number;
 }
 
 export interface PanelOverview {
@@ -182,6 +184,7 @@ export function newThisWeekLabel(n: NewThisWeek): string {
   const partes = [
     n.viaInvite ? `${n.viaInvite} por convite` : null,
     n.viaPage ? `${n.viaPage} pela página` : null,
+    n.viaUnknown ? `${n.viaUnknown} sem origem` : null,
   ].filter(Boolean);
   return partes.length ? `${quantos} · ${partes.join(', ')}` : quantos;
 }
@@ -326,7 +329,10 @@ export function pushQuotaHint(s: AnnouncementSettings): string {
   return `${s.pushUsedThisWeek} de ${s.pushWeeklyLimit} avisos da semana usados`;
 }
 
-/** "12 notificações · 10 entregues · 8 e-mails". */
+/**
+ * "12 notificações · 10 entregues no celular · 8 e-mails". Mandadas somam
+ * celular e navegador; entregues só o celular (o navegador não tem recibo).
+ */
 export function announcementDeliveryLine(a: {
   push: boolean;
   alsoEmail: boolean;
@@ -338,7 +344,9 @@ export function announcementDeliveryLine(a: {
   const partes: string[] = [];
   if (a.push) {
     partes.push(a.pushSent === 1 ? '1 notificação' : `${a.pushSent} notificações`);
-    partes.push(`${a.pushDelivered} ${a.pushDelivered === 1 ? 'entregue' : 'entregues'}`);
+    partes.push(
+      `${a.pushDelivered} ${a.pushDelivered === 1 ? 'entregue' : 'entregues'} no celular`,
+    );
   }
   if (a.alsoEmail) partes.push(a.emailSent === 1 ? '1 e-mail' : `${a.emailSent} e-mails`);
   return partes.join(' · ');

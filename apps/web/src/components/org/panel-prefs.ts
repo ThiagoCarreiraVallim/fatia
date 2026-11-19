@@ -59,3 +59,21 @@ export function readOverviewColumns(membershipId: string): string[] | null {
 }
 export const writeOverviewColumns = (membershipId: string, columns: string[]) =>
   write(COLUMNS_KEY(membershipId), { columns });
+
+/**
+ * Apaga as preferências do painel deste navegador (`fatia:panel:*`). Vai junto
+ * com o "Sair": os recentes da busca têm nomes de membros, e o próximo a usar
+ * o navegador não deve vê-los.
+ */
+export function clearPanelPrefs(): void {
+  try {
+    const chaves: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k?.startsWith('fatia:panel:')) chaves.push(k);
+    }
+    for (const k of chaves) window.localStorage.removeItem(k);
+  } catch {
+    // Sem armazenamento, nada a limpar.
+  }
+}

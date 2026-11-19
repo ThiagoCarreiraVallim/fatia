@@ -57,7 +57,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { useTopBarCurrentTitle } from '@/components/layout/app-top-bar';
-import { leaveWebPush } from '@/components/profile/sign-out-button';
+import { signOutOfThisBrowser } from '@/components/profile/sign-out-button';
 import { cn } from '@/lib/utils';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { orgKeys } from '@/components/community/query-keys';
@@ -470,13 +470,7 @@ function UserMenu({ role, collapsed }: { role: MyGroup['role']; collapsed: boole
       .slice(0, 2)
       .map((p) => p[0]!.toUpperCase())
       .join('') || '·';
-  const sair = async () => {
-    await Promise.race([
-      leaveWebPush().catch(() => undefined),
-      new Promise((r) => setTimeout(r, 3000)),
-    ]);
-    window.location.assign('/api/logto/sign-out');
-  };
+  const sair = () => signOutOfThisBrowser();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

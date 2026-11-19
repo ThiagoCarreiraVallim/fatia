@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { ConfirmSheet } from '@/components/ui/confirm-sheet';
 import { Icon } from '@/components/ui/icon';
 
+import { clearPanelPrefs } from '@/components/org/panel-prefs';
+
 const SIGN_OUT_URL = '/api/logto/sign-out';
 
 /** Quanto esperar o navegador sair dos avisos antes de sair da conta assim mesmo. */
@@ -29,6 +31,20 @@ export async function leaveWebPush(): Promise<void> {
 }
 
 /**
+ * Sai da conta neste navegador: tira dos avisos (com a sessão viva), apaga as
+ * preferências do painel (`fatia:panel:*`, #398) e vai ao handler de saída.
+ * Usado pelo "Sair" de Você e pelo menu do perfil do painel.
+ */
+export async function signOutOfThisBrowser(): Promise<void> {
+  await Promise.race([
+    leaveWebPush().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, PUSH_TIMEOUT_MS)),
+  ]);
+  clearPanelPrefs();
+  window.location.assign(SIGN_OUT_URL);
+}
+
+/**
  * "Sair da conta" com confirmação em folha (prancha Al-V1): o botão fica no fim
  * de Você, e um toque errado obrigava a entrar de novo. Botão e não `<Link>`: o
  * Next prefetcharia o handler de saída, que limpa a sessão antes do clique.
@@ -39,11 +55,7 @@ export function SignOutButton() {
 
   const signOut = async () => {
     setLeaving(true);
-    await Promise.race([
-      leaveWebPush().catch(() => undefined),
-      new Promise((resolve) => setTimeout(resolve, PUSH_TIMEOUT_MS)),
-    ]);
-    window.location.assign(SIGN_OUT_URL);
+    await signOutOfThisBrowser();
   };
 
   return (
