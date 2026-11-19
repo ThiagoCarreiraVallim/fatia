@@ -22,6 +22,11 @@ export function announcementUnsubscribeToken(userId: string, secret: string): st
   return `${Buffer.from(userId).toString('base64url')}.${assinatura(userId, secret)}`;
 }
 
+/** O token do link de descadastro do e-mail mensal do relatório (#400). */
+export function reportUnsubscribeToken(_userId: string, _secret: string): string {
+  throw new Error('não implementado');
+}
+
 /** O id da pessoa do token, ou `null` se a assinatura não confere. */
 export function readAnnouncementUnsubscribeToken(token: string, secret: string): string | null {
   const [id64, sig] = token.split('.');
@@ -183,7 +188,7 @@ export class AnnouncementEmailService {
   }
 
   /** Para a página do link: a pessoa recebe hoje? */
-  async status(token: string): Promise<{ subscribed: boolean }> {
+  async status(token: string): Promise<{ subscribed: boolean; kind?: 'announcements' | 'report' }> {
     const u = await this.prisma.user.findUnique({
       where: { id: this.userOf(token) },
       select: { announcementEmailOptOutAt: true },
