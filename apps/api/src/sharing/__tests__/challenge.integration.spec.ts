@@ -66,11 +66,15 @@ describe('desafios da comunidade (integração)', () => {
 
   const hoje = () => todayInTz(SP);
 
-  /** Um desafio já em andamento: marca para hoje e recua a janela no banco. */
+  /**
+   * Um desafio de antes (`METRIC`) já em andamento: marca para hoje e recua a
+   * janela no banco. A métrica vai direto no banco: as que somam ml ou passos
+   * não se criam mais (#395), mas as linhas antigas continuam pontuando.
+   */
   async function emAndamento(groupId: string, autor: string, metric: ChallengeMetric, dias = 3) {
     const c = await challenges.create(autor, groupId, {
       title: 'Semana ativa',
-      metric,
+      metric: 'ACTIVE_DAYS',
       startDate: hoje(),
       endDate: hoje(),
     });
@@ -78,6 +82,7 @@ describe('desafios da comunidade (integração)', () => {
     await prisma.groupChallenge.update({
       where: { id: c.id },
       data: {
+        metric,
         startsAt: dayBoundsInTz(inicio, SP).start,
         endsAt: dayBoundsInTz(hoje(), SP).end,
       },
@@ -101,20 +106,23 @@ describe('desafios da comunidade (integração)', () => {
       const estranho = await pessoa('Estranho');
       const base = {
         title: 'Mais água',
-        metric: 'WATER_ML' as const,
+        kind: 'WATER' as const,
         startDate: hoje(),
         endDate: addDaysIso(hoje(), 6),
       };
 
       expect(await challenges.create(a.dono, a.groupId, base)).toMatchObject({
         title: 'Mais água',
+        kind: 'WATER',
         status: 'running',
         startDate: hoje(),
         endDate: addDaysIso(hoje(), 6),
+        totalDays: 7,
         participants: 0,
         canManage: true,
+        canReview: true,
         me: null,
-        leaderboard: null,
+        leaderboard: [],
       });
       await expect(challenges.create(a.prof, a.groupId, base)).resolves.toMatchObject({
         canManage: true,
@@ -129,7 +137,7 @@ describe('desafios da comunidade (integração)', () => {
 
     it('recusa começo no passado, fim antes do começo e mais de 90 dias', async () => {
       const a = await comunidade();
-      const base = { title: 'Passos', metric: 'STEPS' as const };
+      const base = { title: 'Água', kind: 'WATER' as const };
       for (const datas of [
         { startDate: addDaysIso(hoje(), -1), endDate: hoje() },
         { startDate: addDaysIso(hoje(), 2), endDate: addDaysIso(hoje(), 1) },
@@ -162,7 +170,7 @@ describe('desafios da comunidade (integração)', () => {
       await expect(
         challenges.update(a.prof, a.groupId, marcado.id, {
           title: 'Meu',
-          metric: 'STEPS',
+          kind: 'STEPS',
           startDate: amanha,
           endDate: amanha,
         }),
@@ -179,7 +187,7 @@ describe('desafios da comunidade (integração)', () => {
       await expect(
         challenges.update(a.dono, a.groupId, andando, {
           title: 'X y z',
-          metric: 'STEPS',
+          kind: 'STEPS',
           startDate: hoje(),
           endDate: hoje(),
         }),
@@ -193,8 +201,82 @@ describe('desafios da comunidade (integração)', () => {
     });
   });
 
+  describe('passos fechados até a sync de saúde (#395)', () => {
+    const datas = () => ({ startDate: addDaysIso(hoje(), 1), endDate: addDaysIso(hoje(), 7) });
+
+    it('não cria desafio de passos nem item de passos nos pontos, com 400 claro', async () => {
+      const a = await comunidade();
+      for (const ruim of [
+        { kind: 'STEPS' as const },
+        { kind: 'STEPS' as const, stepsGoal: 8000, allowedStepSources: ['GARMIN' as const] },
+        { kind: 'POINTS' as const, pointsTable: { workout: 2, steps: 1 } },
+      ]) {
+        const erro = await challenges
+          .create(a.dono, a.groupId, { title: 'Passos', ...datas(), ...ruim })
+          .catch((e: unknown) => e);
+        expect(erro).toBeInstanceOf(BadRequestException);
+        expect((erro as BadRequestException).message).toMatch(/sincroniza/i);
+      }
+      // Passos com 0 ponto não é item de passos: a tabela segue valendo.
+      const misto = await challenges.create(a.dono, a.groupId, {
+        title: 'Misto',
+        ...datas(),
+        kind: 'POINTS',
+        pointsTable: { workout: 2, steps: 0 },
+      });
+      expect(misto.rules.pointsTable).toEqual({ workout: 2 });
+      expect(
+        await prisma.groupChallenge.count({ where: { groupId: a.groupId, title: 'Passos' } }),
+      ).toBe(0);
+    });
+
+    it('não vira passos ao editar; o desafio de passos que já existe aparece e se edita', async () => {
+      const a = await comunidade();
+      const agua = await challenges.create(a.dono, a.groupId, {
+        title: 'Água',
+        kind: 'WATER',
+        ...datas(),
+      });
+      for (const ruim of [
+        { kind: 'STEPS' as const },
+        { kind: 'POINTS' as const, pointsTable: { water: 1, steps: 1 } },
+      ]) {
+        await expect(
+          challenges.update(a.dono, a.groupId, agua.id, { title: 'Água', ...datas(), ...ruim }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+
+      // Um de passos de antes do bloqueio, marcado para amanhã.
+      const antigo = await challenges.create(a.dono, a.groupId, {
+        title: 'Passos',
+        kind: 'WATER',
+        ...datas(),
+      });
+      await prisma.groupChallenge.update({
+        where: { id: antigo.id },
+        data: {
+          kind: 'STEPS',
+          metric: 'STEPS',
+          waterGoalMl: null,
+          dailyCap: null,
+          stepsGoal: 8000,
+        },
+      });
+      const lista = await challenges.list(a.membro, a.groupId);
+      expect(lista.challenges.map((c) => c.kind)).toContain('STEPS');
+      await expect(
+        challenges.update(a.dono, a.groupId, antigo.id, {
+          title: 'Passos da semana',
+          kind: 'STEPS',
+          stepsGoal: 9000,
+          ...datas(),
+        }),
+      ).resolves.toMatchObject({ kind: 'STEPS', title: 'Passos da semana' });
+    });
+  });
+
   describe('membro', () => {
-    it('entra com apelido, vê o ranking com a própria linha marcada; quem não entrou não vê', async () => {
+    it('entra com apelido, vê o ranking com a própria linha marcada; nos de antes que somam ml, quem não entrou não vê', async () => {
       const a = await comunidade();
       const outro = await entra(a.groupId, 'MEMBER');
       const id = await emAndamento(a.groupId, a.dono, 'WATER_ML');
@@ -214,7 +296,7 @@ describe('desafios da comunidade (integração)', () => {
       const dentro = await challenges.join(a.membro, a.groupId, id, '  Ana   Lima ');
       expect(dentro.me).toMatchObject({ displayName: 'Ana Lima', score: 800, rank: 1 });
       expect(dentro.leaderboard).toEqual([
-        { displayName: 'Ana Lima', score: 800, rank: 1, isMe: true, medal: null },
+        { displayName: 'Ana Lima', score: 800, rank: 1, isMe: true, medal: null, streak: 0 },
       ]);
 
       // Quem não entrou continua fora do placar, por mais água que tenha bebido.
@@ -240,6 +322,7 @@ describe('desafios da comunidade (integração)', () => {
         'medal',
         'rank',
         'score',
+        'streak',
       ]);
     });
 

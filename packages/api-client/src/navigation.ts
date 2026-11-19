@@ -442,6 +442,12 @@ export const ROUTES: readonly RouteDef[] = [
     title: 'Desafio',
     parent: '/community/:id/challenges',
   },
+  // Check-in com foto (Cm-18, #395): só no app, em tela cheia, volta ao desafio.
+  {
+    pattern: '/community/:id/challenges/:challengeId/checkin',
+    title: 'Check-in',
+    parent: '/community/:id/challenges/:challengeId',
+  },
   {
     pattern: '/community/:id/content/:templateId',
     title: 'Plano da academia',

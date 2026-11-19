@@ -83,6 +83,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `offer.create`         | não   | sim          | não     | não    |
 | `challenge.manage`     | sim   | sim          | sim     | não    |
 | `challenge.join`       | sim   | sim          | sim     | sim    |
+| `challenge.review`     | sim   | sim          | sim     | não    |
 | `post.read`            | sim   | sim          | sim     | sim    |
 | `post.create`          | sim   | sim          | sim     | sim    |
 | `announcement.publish` | sim   | sim          | não     | não    |
@@ -129,6 +130,13 @@ futura:
   equipe marca, muda antes de começar, encerra e apaga antes de começar; o autor mexe no dele e
   quem tem `content.moderate` no de qualquer um. Participar é opt-in e o **ranking só vai para quem
   participa** — a equipe vê quantos entraram, não o placar, a menos que entre também.
+  No redesign (#395, ADR 044 e 047) quem é da comunidade e não entrou também vê o ranking e as
+  regras (apelido, dias ou pontos, sequência), nunca foto nem ml, passos ou gramas.
+- **Revisão de check-in (#395, ADR 044 e 047): `challenge.review` é da equipe.** Abre a fila
+  "Para revisar" (check-ins com foto e dias de água ou passos fora do padrão) e decide "Vale" ou
+  "Anular" com motivo. É a única ação que mostra a foto de prova a alguém além da própria pessoa.
+  Sinalizar "Não parece válido" é de quem participa do desafio, por `challenge.join`, sem ver a
+  foto.
 - **Mural (Fase 8b, ADR 032): `post.read` e `post.create` são de todos; moderar é
   `content.moderate`; banir é `member.ban`, só do dono.** `post.create` abre para `MEMBER` na
   tabela, mas a comunidade pode fechar o mural para a equipe (`Group.postPolicy = TEAM_ONLY`,
@@ -184,6 +192,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `offer.create`         | não                  |
 | `challenge.manage`     | não                  |
 | `challenge.join`       | não                  |
+| `challenge.review`     | não                  |
 | `post.read`            | não                  |
 | `post.create`          | não                  |
 | `announcement.publish` | não                  |

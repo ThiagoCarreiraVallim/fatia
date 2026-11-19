@@ -538,10 +538,10 @@ describe('buildScoreboard', () => {
     ]);
 
     expect(placar).toEqual([
-      { displayName: 'Ana', score: 30, rank: 1, isMe: true },
-      { displayName: 'Bruno', score: 10, rank: 2, isMe: false },
-      { displayName: 'Carla', score: 10, rank: 2, isMe: false },
-      { displayName: 'Dedé', score: 5, rank: 4, isMe: false },
+      { displayName: 'Ana', score: 30, rank: 1, isMe: true, streak: 0 },
+      { displayName: 'Bruno', score: 10, rank: 2, isMe: false, streak: 0 },
+      { displayName: 'Carla', score: 10, rank: 2, isMe: false, streak: 0 },
+      { displayName: 'Dedé', score: 5, rank: 4, isMe: false, streak: 0 },
     ]);
   });
 
@@ -557,12 +557,19 @@ describe('buildScoreboard', () => {
     expect(placar.map((l) => l.displayName)).toEqual(['Ana', 'Zoe']);
   });
 
-  it('a linha que vai para a tela tem exatamente quatro chaves', () => {
-    const placar = buildScoreboard([{ displayName: 'Ana', score: 30, isMe: true }]);
+  it('a linha que vai para a tela tem exatamente cinco chaves', () => {
+    const placar = buildScoreboard([{ displayName: 'Ana', score: 30, isMe: true, streak: 4 }]);
 
     // Não é preciosismo de DTO: é a fronteira em que um `include` distraído
     // transformaria um placar de atividade num vazamento de registro. `isMe` é a
-    // marca de quem lê, não identidade de ninguém.
-    expect(Object.keys(placar[0]).sort()).toEqual(['displayName', 'isMe', 'rank', 'score']);
+    // marca de quem lê, não identidade de ninguém. A sequência (#395) é dias.
+    expect(Object.keys(placar[0]).sort()).toEqual([
+      'displayName',
+      'isMe',
+      'rank',
+      'score',
+      'streak',
+    ]);
+    expect(placar[0]!.streak).toBe(4);
   });
 });

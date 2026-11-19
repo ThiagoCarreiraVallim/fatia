@@ -574,7 +574,7 @@ test.describe('painel da comunidade', () => {
     await appears(page.getByText('Semana ativa'));
     await snap(page, '102-painel-desafios');
     await page.getByRole('button', { name: 'Novo desafio' }).click();
-    await appears(page.getByRole('radio', { name: /Calorias na meta/ }));
+    await appears(page.getByRole('radio', { name: /Pontos \(misto\)/ }));
     await snap(page, '103-painel-desafio-novo');
     await page.goto(`/community/${id}/challenges`);
     await appears(page.getByRole('link', { name: /Maratona de treinos/ }));

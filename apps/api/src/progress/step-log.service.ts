@@ -20,7 +20,9 @@ export class StepLogService {
         userId,
         date,
         steps: dto.steps,
-        source: dto.source ?? StepSource.MANUAL,
+        // A fonte nunca vem do corpo (#395, ADR 047): esta é a rota de registro à
+        // mão (app, web e `log_steps`). Fonte automática só por uma rota de sync.
+        source: StepSource.MANUAL,
         notes: dto.notes ?? null,
       },
     });
@@ -41,6 +43,8 @@ export class StepLogService {
         ...(dto.steps !== undefined && { steps: dto.steps }),
         ...(dto.date && { date: dto.date }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
+        // A edição tem hora (#395 I4): editado depois do prazo do dia não conta em desafio.
+        ...((dto.date !== undefined || dto.steps !== undefined) && { editedAt: new Date() }),
       },
     });
   }

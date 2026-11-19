@@ -416,15 +416,21 @@ export class WorkoutSessionService {
     // dois "Finalizar" ao mesmo tempo — duplo toque, a web e o app — leem a
     // sessão aberta juntos, e sem a condição o segundo trocaria o horário do
     // primeiro. Um `completedAt` explícito é correção e vale sempre.
+    // `serverCompletedAt` é a hora em que o servidor viu o fim (#395 I3): a
+    // correção do `completedAt` não a muda, e o desafio mede por ela.
     if (requested) {
       await this.prisma.workoutSession.update({
         where: { id },
-        data: { completedAt: requested },
+        data: {
+          completedAt: requested,
+          serverCompletedAt: session.serverCompletedAt ?? new Date(),
+        },
       });
     } else {
+      const agora = new Date();
       await this.prisma.workoutSession.updateMany({
         where: { id, userId, completedAt: null },
-        data: { completedAt: new Date() },
+        data: { completedAt: agora, serverCompletedAt: agora },
       });
     }
 

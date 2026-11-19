@@ -10,7 +10,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {
   MediaKind,
@@ -41,6 +41,13 @@ export const MEDIA_PURPOSES = {
   post_image: { kinds: [MediaKind.IMAGE], action: 'post.create' },
   /** O logo do parceiro num benefício (#393). */
   benefit_logo: { kinds: [MediaKind.IMAGE], action: 'benefit.manage' },
+  /**
+   * A foto de prova do check-in de desafio (#395, ADR 044 e 047). Fica no
+   * prefixo da comunidade, mas só a própria pessoa e a equipe que revisa a veem:
+   * o `ChallengeCheckinService` confere que quem a liga ao check-in é quem a
+   * enviou.
+   */
+  challenge_checkin: { kinds: [MediaKind.IMAGE], action: 'challenge.join' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
 /**
@@ -553,6 +560,17 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     return true;
   }
 
+  /**
+   * SHA-256 do arquivo guardado (#395): a mesma foto não vale dois check-ins.
+   * Sem bucket, `null`.
+   */
+  async sha256Of(file: Pick<MediaFile, 'key'>): Promise<string | null> {
+    if (!this.store) return null;
+    return createHash('sha256')
+      .update(await this.store.get(file.key))
+      .digest('hex');
+  }
+
   /** URL assinada para quem a rota já autorizou a ver o conteúdo. */
   async view(file: MediaFile): Promise<MediaView> {
     return {
@@ -610,6 +628,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             guidePhotoOf: { is: null },
             postImageOf: { is: null },
             benefitLogoOf: { is: null },
+            checkinPhotoOf: { is: null },
             userAvatarOf: { is: null },
             mealPhotoOf: { is: null },
             chatMessageId: null,
@@ -670,6 +689,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           { group: { ownerId: userId } },
           // As imagens dos posts dela: o post cai junto com a conta (ADR 032).
           { postImageOf: { post: { author: { userId } } } },
+          // As fotos de prova dos check-ins dela (ADR 044 §7): apagar a conta apaga na hora.
+          { uploaderId: userId, purpose: 'challenge_checkin' },
         ],
       },
       select: { id: true, key: true },

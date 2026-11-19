@@ -89,3 +89,9 @@ podem ter check-in com foto, como **prova** vista só pela pessoa e pela equipe 
 no ranking, no mural, nos agregados nem para os outros participantes. Foto de corpo continua
 proibida, e o ranking continua só de constância e aderência à própria meta. Peso e medida
 continuam fora como métrica.
+
+## Nota — tipos de desafio (#395, ADR 047, 2026-11-18)
+
+Os tipos `WATER` e `STEPS` contam **dias na meta**, e os desafios que somavam ml ou passos
+(`METRIC` com `WATER_ML`/`STEPS`) não podem mais ser criados — fecha o "Não mitigado" do
+`THREAT_MODEL.md` §16 para os desafios novos. Os antigos continuam pontuando como antes.

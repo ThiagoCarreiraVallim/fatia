@@ -30,6 +30,8 @@ const IMPORTS_PERMITIDOS = [
   '../progress/helpers/date-tz',
   // A aderência à meta de nutrição (ADR 027): só datas, sem inferência.
   '../nutrition/daily-adherence.service',
+  // Os tipos do banco (`StepSource`), só tipo: os desafios do redesign (#395).
+  '@fatia/db',
 ];
 
 /**

@@ -9,6 +9,7 @@ import { SocialModule } from '../social/social.module';
 import { StorageModule } from '../storage/storage.module';
 import { ChallengeController } from './challenge.controller';
 import { ChallengeService } from './challenge.service';
+import { ChallengeCheckinService } from './challenge-checkin.service';
 import { ModerationController } from './moderation.controller';
 import { PostController } from './post.controller';
 import { AnnouncementController } from './announcement.controller';
@@ -50,6 +51,7 @@ import { StudentViewService } from './student-view.service';
 import { ConsentController } from './consent.controller';
 import { ProfessionalController } from './professional.controller';
 import { ListGroupBenefitsTool } from './mcp/list-group-benefits.tool';
+import { GetMyChallengeProgressTool } from './mcp/get-my-challenge-progress.tool';
 import { ListGroupExerciseGuidesTool } from './mcp/list-group-exercise-guides.tool';
 import { BenefitController } from './benefit.controller';
 import { BenefitService } from './benefit.service';
@@ -152,6 +154,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     GroupExerciseService,
     GroupAgentService,
     ChallengeService,
+    ChallengeCheckinService,
     PostService,
     AnnouncementService,
     BlockService,
@@ -177,6 +180,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ListGroupExerciseGuidesTool,
     ListGroupChallengesTool,
     GetChallengeLeaderboardTool,
+    GetMyChallengeProgressTool,
     JoinGroupChallengeTool,
     ListGroupPostsTool,
     GetGroupPollTool,

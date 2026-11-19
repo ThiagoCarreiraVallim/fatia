@@ -84,3 +84,11 @@ nunca no ranking.**
   equipe pediu a revisão.
 - **Guardar a foto enquanto o desafio existir.** Rejeitada: a prova só importa até a revisão
   fechar; 30 dias depois do fim cobrem a contestação.
+
+## Nota — implementação (#395, 2026-11-18)
+
+A [ADR 047](./047-checkin-com-foto-aceite-e-fila.md) registra como a #395 implementou esta decisão:
+o aceite próprio (`photoConsentAt`/`photoConsentVersion`, em vez de "entrar é o aceite" do item 8),
+a permissão `challenge.review` (mesmos papéis de `challenge.manage`, item 1), o limite de
+sinalizações, o teto da fila, os sinais do servidor e a regra de que um borrão, se um dia existir,
+nasce no servidor. Nenhuma foto é servida a quem não é a pessoa nem a equipe.

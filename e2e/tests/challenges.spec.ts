@@ -46,14 +46,14 @@ test.describe('desafios da comunidade', () => {
       await dona.goto(`/org/${id}/challenges`);
       await dona.getByRole('button', { name: 'Novo desafio' }).click();
       await dona.getByLabel('Título').fill(titulo);
-      await dona.getByRole('radio', { name: /Água/ }).check();
+      await dona.getByRole('radio', { name: /^Água/ }).check();
       const inicio = await dona.getByLabel('Começa em').inputValue();
       const fim = new Date(Date.parse(`${inicio}T12:00:00Z`) + 6 * 86_400_000)
         .toISOString()
         .slice(0, 10);
       await dona.getByLabel('Termina em').fill(fim);
-      await dona.getByRole('button', { name: 'Marcar desafio' }).click();
-      await expect(dona.getByText('Desafio marcado.')).toBeVisible();
+      await dona.getByRole('button', { name: 'Agendar desafio' }).click();
+      await expect(dona.getByText('Desafio agendado.')).toBeVisible();
       const cartao = dona.getByRole('listitem').filter({ hasText: titulo });
       await expect(cartao.getByText('Em andamento')).toBeVisible();
 
@@ -65,16 +65,24 @@ test.describe('desafios da comunidade', () => {
         .getByRole('navigation', { name: 'Seções da comunidade' })
         .getByRole('link', { name: 'Desafios' })
         .click();
-      await page.getByRole('link', { name: new RegExp(titulo) }).click();
-      await expect(
-        page.getByText('O ranking aparece para quem participa.', { exact: false }),
-      ).toBeVisible();
+      // Para olhar: o cartão leva ao desafio, onde quem não participa vê ranking e regras.
+      await page
+        .getByRole('listitem')
+        .filter({ hasText: titulo })
+        .getByRole('link', { name: 'Ver desafio' })
+        .click();
+      await expect(page.getByRole('tab', { name: 'Regras' })).toBeVisible();
 
-      await page.getByRole('button', { name: 'Participar' }).click();
+      await page.getByRole('button', { name: 'Participar do desafio' }).click();
       const apelido = page.getByLabel('Como aparecer no ranking');
       await apelido.fill('Demo E2E');
-      await page.getByRole('dialog').getByRole('button', { name: 'Participar' }).click();
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: /Participar como/ })
+        .click();
       await expect(page.getByText('Você entrou no desafio.')).toBeVisible();
+      // Quem participa abre na Atividade; o ranking fica na aba ao lado.
+      await page.getByRole('tab', { name: 'Ranking' }).click();
       const ranking = page.getByRole('list', { name: 'Ranking' });
       await expect(ranking.getByText('Demo E2E')).toBeVisible();
       await expect(ranking.getByText('(você)')).toBeVisible();
@@ -83,7 +91,7 @@ test.describe('desafios da comunidade', () => {
       await page.getByRole('button', { name: 'Sair do desafio' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Sair' }).click();
       await expect(page.getByText('Você saiu do desafio.')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Participar' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Participar do desafio' })).toBeVisible();
 
       // Dona encerra: o desafio fecha para todos.
       await dona.reload();

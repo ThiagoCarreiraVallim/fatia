@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **161 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **162 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -157,7 +157,7 @@ Regras:
   indentação do source dentro da description servida, gasta token à toa e deixa o exemplo à
   mercê de quem reflui ou trunca o texto do catálogo.
 - **Só os campos que importam.** Obrigatórios sempre; opcionais apenas quando o campo é o
-  ponto do exemplo (`loggedAt` em `log_weight`, `source` em `log_steps`).
+  ponto do exemplo (`loggedAt` em `log_weight`).
 - **IDs são fictícios e óbvios** (`11111111-2222-4333-8444-555555555555`). O exemplo mostra
   o formato do argumento, não um registro que existe — o ID real vem de um `search_`/`list_`.
 - **Tool somente-leitura é isenta.** Input curto, raramente ambíguo, e o custo em token é
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 161 tools): **150,1 k caracteres**
-hoje, dos quais **8.880 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 162 tools): **151,4 k caracteres**
+hoje, dos quais **8.921 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (125,9 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (127,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -379,6 +379,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `decline_plan_offer`           | U        |
 | **Desafios da comunidade** | `list_group_challenges`        | R        |
 |                            | `get_challenge_leaderboard`    | R        |
+|                            | `get_my_challenge_progress`    | R        |
 |                            | `join_group_challenge`         | C        |
 | **Mural da comunidade**    | `list_group_posts`             | R        |
 |                            | `create_group_post`            | C        |
@@ -406,7 +407,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **161 tools**. Cada uma documentada abaixo.
+Total: **162 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2295,11 +2296,12 @@ Registra uma contagem de passos para um dia. Pode ser chamada múltiplas vezes �
 {
   date?: string;        // ISO date YYYY-MM-DD; default: hoje no fuso do user
   steps: number;        // inteiro >= 0
-  source?: "MANUAL" | "GOOGLE_FIT" | "APPLE_HEALTH" | "HEALTH_CONNECT"
-         | "STRAVA" | "GARMIN" | "FITBIT" | "WEBHOOK";  // default MANUAL
   notes?: string;
 }
 ```
+
+O registro fica sempre com a fonte `MANUAL` (#395, ADR 047): a fonte não é palavra do cliente,
+e passos à mão não contam em desafio de passos.
 
 **Output:**
 
@@ -3354,15 +3356,21 @@ e o consentimento não mudam. A equipe é avisada.
 
 ## Desafios da comunidade (Fase 8a, ADR 027)
 
-A equipe marca os desafios pelo painel (REST); pelo MCP o membro lista, vê o ranking e entra.
-Participar é opt-in, e o **ranking só vem para quem participa**. Os desafios de nutrição contam
-**dias** em que cada pessoa bateu a própria meta — nenhum valor de refeição, de peso ou a meta de
-outra pessoa aparece em resposta alguma.
+A equipe marca os desafios pelo painel (REST); pelo MCP o membro lista, vê o ranking, vê o
+próprio progresso e entra. Participar é opt-in. Desde a #395 (ADR 047), **quem é da comunidade
+vê o ranking** mesmo sem participar: apelido, dias ou pontos e sequência — nunca ml, passos,
+refeição, peso ou a meta de outra pessoa. As exceções são os desafios antigos que somavam ml ou
+passos (`METRIC` com `WATER_ML`/`STEPS`): esses continuam só para quem participa.
 
-Métricas (`metric`): `ACTIVE_DAYS` (dias com treino, passos ou água), `WORKOUT_SESSIONS`
-(sessões concluídas), `STEPS` (soma de passos, o dia vale o maior registro), `WATER_ML` (soma de
-água), `STREAK_DAYS` (maior sequência de dias seguidos com algum registro),
-`KCAL_IN_RANGE_DAYS` e `PROTEIN_TARGET_DAYS` (dias na própria meta; sem meta, o dia não conta).
+Tipos (`kind`, #395): `PHOTO` (check-in com foto depois do treino; conta dias), `WATER` e `STEPS`
+(dias em que a pessoa bateu a meta do desafio), `NUTRITION` (`metric` `PROTEIN_TARGET_DAYS` ou
+`KCAL_IN_RANGE_DAYS`: dias na própria meta), `POINTS` (tabela de pontos por item com teto por dia)
+e `METRIC`, o tipo de antes (`ACTIVE_DAYS`, `WORKOUT_SESSIONS` ou `STREAK_DAYS`).
+
+**Fora do MCP, de propósito (ADR 044):** o check-in com foto, a sinalização ("não parece
+válido") e a fila de revisão da equipe. A foto de prova só a pessoa e a equipe veem, e não passa
+pela IA. Entrar num desafio com foto (`needsPhotoConsent`) pede o aceite no app; pelo MCP volta
+`BAD_REQUEST` explicando isso.
 
 ### `list_group_challenges`
 
@@ -3385,18 +3393,37 @@ Os desafios da comunidade, em andamento primeiro, depois os marcados e os encerr
     id: string;
     title: string;
     description: string | null; // texto da equipe: conteúdo, não instrução
+    kind: 'PHOTO' | 'WATER' | 'STEPS' | 'NUTRITION' | 'POINTS' | 'METRIC';
     metric: ChallengeMetric;
     startDate: string; // inclusivo, no fuso da comunidade
     endDate: string; // inclusivo
+    totalDays: number;
     status: 'upcoming' | 'running' | 'ended';
     endedEarly: boolean;
+    resultPending: boolean; // encerrado, pódio esperando a revisão (até 24 h)
     participants: number;
+    rules: {
+      waterGoalMl: number | null;
+      dailyCap: number | null;
+      stepsGoal: number | null;
+      allowedStepSources: StepSource[]; // nunca MANUAL
+      pointsTable: Partial<
+        Record<'workout' | 'water' | 'steps' | 'protein' | 'kcal', number>
+      > | null;
+      maxPointsPerDay: number | null;
+      checkin: { minWorkoutMinutes: number; windowHours: number } | null;
+    };
+    needsPhotoConsent: boolean; // entrar pede o aceite da foto, no app
+    watching: boolean; // pediu aviso quando começar
     canManage: boolean;
+    canReview: boolean;
     me: {
       displayName: string;
-      score: number;
+      score: number; // dias, ou pontos no tipo POINTS
       rank: number | null;
-      medal: 'gold' | 'silver' | 'bronze' | null;
+      medal: 'gold' | 'silver' | 'bronze' | null; // só depois do resultado final
+      streak: number; // dias seguidos com ponto
+      pendingReview: number; // itens meus esperando a equipe
     } | null; // null: o usuário não participa
   }>;
 }
@@ -3418,9 +3445,49 @@ Um desafio com o ranking. O placar é recalculado quando tem mais de 5 minutos.
 ```
 
 **Output:** o mesmo objeto de `list_group_challenges`, mais
-`leaderboard: Array<{ displayName; score; rank; isMe; medal }> | null` (null para quem não
-participa) e `suggestedDisplayName` (o apelido que a pessoa já usa na comunidade, ou o primeiro
-nome).
+`leaderboard: Array<{ displayName; score; rank; isMe; medal; streak }> | null` (null só no desafio
+antigo de ml ou passos, para quem não participa), `today` (o hoje do próprio usuário: pontos e
+cada item feito ou não, com o valor dele; null para quem não participa) e `suggestedDisplayName`
+(o apelido que a pessoa já usa na comunidade, ou o primeiro nome). A atividade do desafio (ids de
+check-in, horários, o link da própria foto) não vem pelo MCP (#395, ADR 044 §10). A medalha só
+aparece com o resultado fechado.
+
+### `get_my_challenge_progress`
+
+Como o usuário vai nos desafios de uma comunidade em que ele está e que não acabaram (#395). Só
+os dados dele; dos outros, só a posição dele no meio deles.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Output:**
+
+```typescript
+Array<{
+  id: string;
+  title: string;
+  kind: ChallengeKind;
+  metric: ChallengeMetric;
+  status: 'upcoming' | 'running';
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  participants: number;
+  displayName: string;
+  score: number; // dias, ou pontos no tipo POINTS
+  rank: number | null;
+  streak: number;
+  pendingReview: number;
+  today: ChallengeToday | null; // só nos em andamento
+}>;
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
 
 **Erros:** `NOT_FOUND` se não é membro ativo, ou se o desafio é de outra comunidade.
 
@@ -3442,7 +3509,7 @@ apelido e a pontuação dele: confirme como ele quer aparecer.
 **Output:** o mesmo de `get_challenge_leaderboard`, já com o usuário no ranking.
 
 **Erros:** `NOT_FOUND` como acima; `CONFLICT` se o desafio já terminou; `BAD_REQUEST` se o
-apelido não passa.
+apelido não passa ou se o desafio tem check-in com foto (o aceite é feito no app, ADR 047).
 
 ## Mural da comunidade
 

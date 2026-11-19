@@ -307,7 +307,7 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
     before: (db, input, userId) =>
       db.waterLog.findFirst({
         where: { id: texto(input.id), userId },
-        select: { date: true, ml: true, loggedAt: true, notes: true },
+        select: { date: true, ml: true, loggedAt: true, notes: true, editedAt: true },
       }),
     async revert(db, { input, before }, userId) {
       const r = retrato(before);
@@ -318,6 +318,8 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
           ml: Number(r.ml),
           loggedAt: data(r.loggedAt) ?? undefined,
           notes: (r.notes as string | null) ?? null,
+          // A marca de edição volta junto: o registro desfeito é o de antes (#395 I4).
+          editedAt: data(r.editedAt),
         },
       });
       exigirUma(count);
@@ -370,7 +372,14 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
     before: (db, input, userId) =>
       db.stepLog.findFirst({
         where: { id: texto(input.stepLogId), userId },
-        select: { date: true, steps: true, source: true, loggedAt: true, notes: true },
+        select: {
+          date: true,
+          steps: true,
+          source: true,
+          loggedAt: true,
+          notes: true,
+          editedAt: true,
+        },
       }),
     async revert(db, { input, before }, userId) {
       const r = retrato(before);
@@ -382,6 +391,7 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
           source: r.source as StepSource,
           loggedAt: data(r.loggedAt) ?? undefined,
           notes: (r.notes as string | null) ?? null,
+          editedAt: data(r.editedAt),
         },
       });
       exigirUma(count);

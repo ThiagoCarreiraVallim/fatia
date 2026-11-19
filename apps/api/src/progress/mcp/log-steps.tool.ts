@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { StepSource } from '@prisma/client';
 import { StepLogService } from '../step-log.service';
 import {
   McpTool,
@@ -20,20 +19,19 @@ export class LogStepsTool implements McpToolDef {
   readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Registra uma contagem de passos para um dia. Múltiplos logs por dia são permitidos — o servidor considera o maior valor (ADR 007). ' +
-    'Exemplo: {"date":"2026-07-29","steps":9420,"source":"MANUAL"}';
+    'O registro fica como manual (passos à mão não contam em desafio de passos). ' +
+    'Exemplo: {"date":"2026-07-29","steps":9420}';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje no fuso do user'),
     steps: z.number().int().min(0).describe('Total de passos do dia'),
-    source: z
-      .nativeEnum(StepSource)
-      .optional()
-      .describe('Origem do dado (default MANUAL). Ex.: GOOGLE_FIT, APPLE_HEALTH, STRAVA'),
     notes: z.string().max(500).optional().describe('Observações do registro'),
   } as const;
   execute(
-    input: { date?: string; steps: number; source?: StepSource; notes?: string },
+    input: { date?: string; steps: number; notes?: string },
     { userId, timezone }: McpToolContext,
   ) {
-    return this.steps.logWithDayTotal(input, userId, timezone);
+    // Só o que o schema oferece: um `source` que chegue mesmo assim fica de fora.
+    const { date, steps, notes } = input;
+    return this.steps.logWithDayTotal({ date, steps, notes }, userId, timezone);
   }
 }

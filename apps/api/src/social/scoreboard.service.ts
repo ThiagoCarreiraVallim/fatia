@@ -2,7 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { DailyAdherenceService, type AdherenceDays } from '../nutrition/daily-adherence.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
+import type { StepSource } from '@fatia/db';
 import type { ChallengeMetric } from './challenge-metric';
+import {
+  stepDays,
+  waterDays,
+  type DayFacts,
+  type StepEntry,
+  type WaterEntry,
+} from './challenge-days';
 
 /**
  * Janela e métrica do desafio. `startsAt` é inclusivo; `endsAt`, exclusivo.
@@ -39,6 +47,21 @@ export interface ChallengeParticipant {
   timezone: string;
 }
 
+/** O que os desafios por dia (#395) pedem de cada participante. */
+export interface DayFactsRequest {
+  water?: { goal: number; cap: number };
+  steps?: { goal: number; allowed: readonly StepSource[] };
+  nutrition?: boolean;
+}
+
+/** Os dias de cada participante: só datas, nunca quanto. */
+export interface ParticipantDayFacts {
+  water: DayFacts;
+  steps: DayFacts;
+  protein: Set<string>;
+  kcal: Set<string>;
+}
+
 /** Uma linha do placar como ela sai para os outros membros. Nada além disto. */
 export interface ScoreboardEntry {
   displayName: string;
@@ -50,6 +73,8 @@ export interface ScoreboardEntry {
    * leitor recebe `true` só na própria linha.
    */
   isMe: boolean;
+  /** Dias seguidos com ponto (#395). Só dias, como a pontuação. */
+  streak: number;
 }
 
 /**
@@ -139,6 +164,71 @@ export class ScoreboardService {
       membershipId: p.membershipId,
       score: scores.get(p.userId) ?? 0,
     }));
+  }
+
+  /**
+   * Os dias na meta de cada participante, para os desafios do redesign (#395):
+   * água (soma até o teto, registro só até as 3 h do dia seguinte), passos (o
+   * maior do dia, só das fontes aceitas) e nutrição (dias na PRÓPRIA meta, pela
+   * aderência). Devolve **datas**, e os dias fora do padrão com um motivo sem
+   * número.
+   *
+   * Mesma pré-condição de `recompute`: `participants` sai do desafio da URL.
+   */
+  async dayFacts(
+    challenge: ChallengeWindow,
+    participants: readonly ChallengeParticipant[],
+    request: DayFactsRequest,
+  ): Promise<Map<string, ParticipantDayFacts>> {
+    const resultado = new Map<string, ParticipantDayFacts>();
+    if (participants.length === 0) return resultado;
+    const where = this.whereDiaLocal(challenge, participants);
+    const { first, last } = localWindow(challenge);
+    const [agua, passos, aderencia] = await Promise.all([
+      request.water
+        ? this.prisma.waterLog.findMany({
+            where,
+            select: { userId: true, date: true, ml: true, loggedAt: true, editedAt: true },
+          })
+        : Promise.resolve<Array<{ userId: string } & WaterEntry>>([]),
+      request.steps
+        ? this.prisma.stepLog.findMany({
+            where,
+            select: {
+              userId: true,
+              date: true,
+              steps: true,
+              source: true,
+              loggedAt: true,
+              editedAt: true,
+            },
+          })
+        : Promise.resolve<Array<{ userId: string } & StepEntry>>([]),
+      request.nutrition
+        ? this.adherence.forDays(participants, first, last)
+        : Promise.resolve(new Map<string, AdherenceDays>()),
+    ]);
+    const vazioFatos = (): DayFacts => ({ met: new Set(), suspicious: new Map() });
+    for (const p of participants) {
+      const nutri = aderencia.get(p.userId);
+      resultado.set(p.userId, {
+        water: request.water
+          ? waterDays(
+              agua.filter((l) => l.userId === p.userId),
+              { ...request.water, timezone: p.timezone },
+            )
+          : vazioFatos(),
+        steps: request.steps
+          ? stepDays(
+              passos.filter((l) => l.userId === p.userId),
+              { ...request.steps, timezone: p.timezone },
+            )
+          : vazioFatos(),
+        protein: nutri?.proteinTarget ?? new Set(),
+        kcal: nutri?.kcalInRange ?? new Set(),
+      });
+    }
+    return resultado;
   }
 
   /**
@@ -431,7 +521,7 @@ export class ScoreboardService {
  * nada mais — `isMe` é a marca de quem lê, decidida por quem chama.
  */
 export function buildScoreboard(
-  linhas: ReadonlyArray<{ displayName: string; score: number; isMe: boolean }>,
+  linhas: ReadonlyArray<{ displayName: string; score: number; isMe: boolean; streak?: number }>,
 ): ScoreboardEntry[] {
   // Desempate por nome só para a ordem ser determinística entre duas leituras
   // iguais — a posição de empatados é a mesma, o que muda é quem aparece antes.
@@ -446,7 +536,13 @@ export function buildScoreboard(
       posicao = indice + 1;
       pontuacaoAnterior = linha.score;
     }
-    return { displayName: linha.displayName, score: linha.score, rank: posicao, isMe: linha.isMe };
+    return {
+      displayName: linha.displayName,
+      score: linha.score,
+      rank: posicao,
+      isMe: linha.isMe,
+      streak: linha.streak ?? 0,
+    };
   });
 }
 

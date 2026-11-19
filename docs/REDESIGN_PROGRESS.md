@@ -375,6 +375,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446)  | api, db, MCP (1 tool nova), api-client, web, app         |
 | #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | mergeado (#447)  | api, db, MCP, api-client, web, app, docs                 |
 | #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
+| #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
 
 #393 (branch `redesign/393-comunidades`, migration `20261118100000_community_entry_code_benefits`; nenhuma env nova):
 
@@ -452,6 +453,40 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Conferência visual (2026-11-18):** prints lado a lado prancha | web | app de Cm-12 a Cm-16 e do "Pôr num treino", escuro e claro na web, em `~/.cache/fatia-vis/396/cmp-*.png`. Corrigido na passada: cabeçalho "Plano da academia" com os selos de tipo e nível e o nome grande (Cm-13); cabeçalho "Guia da academia", músculo e equipamento em selos e a dica com as iniciais de quem escreveu (Cm-16); avatar na assinatura da dica (Cm-15); "agora" e "plano" em colunas na folha do app (Cm-14). Menu escondido sob todas as folhas (adotar, água, Como fazer, Pôr num treino); sem texto escuro no escuro.
 - **Desvios visuais de propósito:** o topo da comunidade segue o das outras abas (nome e o (i) de Sobre, e não avatar e botão "Sobre"); na web, as abas Planos/Dicas/Exercícios ficam compactas, como nas outras telas da web; o plano sem capa não tem o degradê da prancha; na web, "O que entra na sua conta?" é o diálogo central do projeto, e no app é folha; na web, "Registrar água" fica logo depois do texto (no app, preso ao pé); o vídeo toca na própria página na web e abre no navegador no app; a legenda do "Como fazer" embaixo dos botões saiu (o botão já diz o que faz).
 - **Falta:** tela do histórico de metas; o e2e `content.spec.ts` foi ajustado à dica em tela própria e ao aviso "Em Meus planos", mas não rodou aqui.
+
+#395 (branch `redesign/395-desafios`, parte da `redesign/393-comunidades`; migration `20261118300000_challenge_kinds_checkins_review` e `20261118300100_challenge_review_hardening`; nenhuma env nova):
+
+- **Decisões (orquestrador, conciliadas com a ADR 044 que o dono já tinha aceitado):**
+  - **ADR nova [047](./ADR/047-checkin-com-foto-aceite-e-fila.md)**, que complementa a 044. Foto de check-in é prova: só a pessoa e a equipe com `challenge.review` (mesmos papéis de `challenge.manage`) a veem; nada de "Também postar no mural".
+  - **Consentimento próprio:** `photoConsentAt`/`photoConsentVersion` no participante, fora do `ShareScope`; desafio `PHOTO`/`POINTS` não entra sem `acceptPhotoTerms` (nem pelo MCP).
+  - **Desfoque no servidor** virou regra: se um dia houver versão borrada, nasce no servidor. Hoje nenhuma foto é servida a outro participante ou visitante (ADR 044 §1).
+  - **Membros sinalizam** "Não parece válido" sem ver a foto, com o desafio em andamento, até 3 a cada 24 h (429), sempre com a mesma resposta; **fila com teto** de 50 itens abertos de membros por desafio (cheia, a sinalização fica guardada e o check-in segue valendo). Sinais do servidor, que sempre entram: treino editado depois do check-in, água lançada de uma vez de madrugada em 3+ dias, salto de 10 mil passos em 15 min (motivo sem número).
+  - **Passos fechados — libera junto com a sync de saúde:** enquanto o app não sincronizar Apple Saúde/Health Connect, a API recusa (400) criar desafio `STEPS` ou item de passos nos pontos, e os painéis web e do app não oferecem os dois (`STEPS_SYNC_AVAILABLE`). Os de passos que já existem continuam aparecendo e editáveis. ADR 047 §7.
+  - **Revisão adversarial (depois do primeiro fechamento):** fonte dos passos sempre `MANUAL` na rota manual e no `log_steps` (o app ainda não sincroniza Saúde/Health Connect, então nenhum passo conta em desafio `STEPS` por enquanto); um treino vale um check-in por desafio, dia no fuso do desafio; duração e janela pelo relógio do servidor (`serverCompletedAt`); medalha só com o resultado fechado; quem revisa não decide o próprio check-in; "Vale" regrava o retrato do treino; água e passos editados depois do prazo não contam (`editedAt`); MCP sem a `activity`; fila paginada; horário só na própria linha; desafio antigo de ml/passos editável antes de começar; pódio da web e do app sem 0, com empate e troféu legível. Migration extra `20261118300100_challenge_review_hardening`.
+- **Tipos (`ChallengeKind`):** `PHOTO`, `WATER`, `STEPS`, `NUTRITION`, `POINTS` e `METRIC` (o de antes). Água e passos contam **dias na meta** (com teto diário de ml; passos à mão nunca contam; leitura fora do prazo, dia + 3 h, ignorada). Pontos: tabela 0..5 por item (treino, água, passos, proteína, kcal) com máximo por dia. `METRIC` com `WATER_ML`/`STEPS` não se cria mais (os antigos seguem pontuando).
+- **Check-in (Cm-18):** treino da própria pessoa concluído nas últimas 2 h, 20 min ou mais, gravado até 60 s depois do fim (`WorkoutSession.createdAt` novo), um por dia, foto da própria pessoa com propósito `challenge_checkin` e sem uso, mesma imagem (SHA-256) recusada no desafio, carimbo do servidor. Só pelo app (câmera, sem galeria); a web explica que é pelo app.
+- **Ranking e resultado:** quem é da comunidade vê o ranking (apelido, dias/pontos, sequência), inclusive sem participar, menos nos `METRIC` antigos de ml/passos. Pódio e medalhas só depois da fila esvaziar ou 24 h após o fim (`resultPending`). Aviso "Me avise quando começar" (`GroupChallengeWatcher`) e aviso de começo a quem participa.
+- **Retenção:** foto apagada ao anular, ao sair do desafio ou da comunidade, ao apagar a conta, e 30 dias depois de `finalizedAt`; a limpeza de órfãos da mídia não toca foto de check-in. Export LGPD leva tipo, aceite, check-ins (com link da foto no arquivo baixado), sinalizações feitas (sem quem foi sinalizado).
+- **Permissão nova:** `challenge.review` (`permissions.ts` e `docs/PERMISSIONS.md`).
+- **MCP:** `get_my_challenge_progress` nova (leitura, cartão lista) — 162 tools com as da #394 e a da #396, `SHA_ENTIDADE` novo; `list_group_challenges` e `get_challenge_leaderboard` falam de tipos e dias, cartão em dias/pts. Sem tool de check-in, sinalização ou revisão (ADR 044 §10).
+- **Isolamento:** `user-isolation.spec.ts` (bloco #395) cobre foto de outra pessoa e de outra comunidade, treino alheio no corpo, fila para membro, sinalizar e decidir pela URL de outro desafio/comunidade, foto nunca vista pela colega e o export.
+- **Desvios de propósito:**
+  - "Anunciar no mural": o post automático de desafio criado veio com a #394. O "pódio no mural" segue fora (a #394 registrou que depende do pódio fechado e do consentimento do apelido).
+  - Sem o selo "com relógio" nos passos.
+  - A fila da equipe mostra foto, legenda e se o treino está ligado, não o nome e a duração do treino.
+  - O motivo do item na fila nunca traz valor (ml, passos).
+- **Passada visual (web 390 e 1440, escuro e claro; app no emulador, escuro):** prancha | web | app em `~/.cache/fatia-vis/395/cmp-*.png` (Cm-08, 09, 10, 11, 17, 17b, 17c, 18, Pn-13 e Pn-13 no celular). Corrigido nela:
+  - o check-in do app subia 14 bytes no Expo Go (a pasta da câmera tem "%40" no nome e o `fetch(uri)` decodificava o caminho): a foto agora vai pelo base64 da câmera;
+  - abrir outro desafio por link deixava a gaveta de entrar aberta (aparecia até em desafio encerrado): a tela tem a chave do desafio;
+  - a fila da equipe e a atividade de quem não participa diziam "ontem" para o item de hoje depois das 21 h (o hoje vinha em UTC);
+  - a nota de "Seus pontos de hoje" citava passos e nutrição mesmo fora da tabela;
+  - no painel web a 1440, o campo de data esmagava o título e os rótulos dos tipos vazavam do cartão: título em linha própria e tipos em 3 colunas (a Pn-13 tem 4).
+- **Desvios de propósito vistos na passada:**
+  - A foto do check-in de outra pessoa não aparece na atividade (a Cm-17 mostra a foto): ADR 044 §1 e 047, foto é prova e só a pessoa e a equipe veem.
+  - Na web, entrar no desafio é um diálogo no centro, não a folha da Cm-09; o check-in é só pelo app.
+  - Empatados com 0 no ranking dividem a posição e o círculo da posição leva a cor dela; a medalha só sai com pontos.
+  - A explicação geral do tipo Pontos ainda cita passos, que o tipo aceita quando a sync de saúde existir.
+  - No emulador, a câmera virtual mostra a cena no visor, mas a foto sai preta (limite do emulador; o arquivo é um JPEG válido).
 
 ## Etapas seguintes
 

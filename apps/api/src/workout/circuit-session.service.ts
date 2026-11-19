@@ -134,7 +134,8 @@ export class CircuitSessionService {
       const { count } = await tx.workoutSession.updateMany({
         where: { id: sessionId, userId, completedAt: attach ? { not: null } : null },
         data: {
-          ...(attach ? {} : { completedAt: new Date() }),
+          // O fim pelo relógio do servidor (#395 I3) vai junto.
+          ...(attach ? {} : { completedAt: new Date(), serverCompletedAt: new Date() }),
           circuit: next as unknown as Prisma.InputJsonValue,
           ...(extra.feeling !== undefined ? { feeling: extra.feeling } : {}),
           ...(extra.notes !== undefined ? { notes: extra.notes } : {}),
@@ -242,6 +243,8 @@ export class CircuitSessionService {
           planName: plan.name,
           startedAt,
           completedAt,
+          // Lançado com o resultado pronto: para o servidor, fechou agora (#395 I3).
+          serverCompletedAt: new Date(),
           feeling: dto.feeling ?? null,
           notes: dto.notes ?? null,
           circuit: json as unknown as Prisma.InputJsonValue,

@@ -70,13 +70,20 @@ import {
  * `filter` e o bloqueio em `list_group_posts`: muda o braço A.
  * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
  * O merge da main (#385, `save_memory` com `category`) na #393 juntou os dois: braço A novo, braço B o da #385.
+ * A #395 acrescentou `get_my_challenge_progress` (só leitura, sem intenção) e reescreveu as
+ * descrições das tools de desafio: muda o braço A. Na revisão, `log_steps` perdeu o `source`
+ * (a fonte não vem do cliente): muda de novo. O merge da main com a #393 (#446, que trouxe a
+ * #385) e o aviso de passos fechados no `list_group_challenges` mudam os dois braços.
+ * O merge da #393 na #394 juntou os dois braços A; o merge da main (#394, #447) na #395
+ * junta de novo.
  * A #396 acrescentou `list_group_exercise_guides` (só leitura, sem intenção) e mudou a descrição
  * de `adopt_group_plan` (as partes separadas e o histórico das metas): muda o braço A. O merge
  * da main (#393 via #446) na #396 juntou: braço A novo, braço B o da main. O merge da #393 na
  * #394 juntou os dois braços A, e o da main (#394 via #447) na #396 juntou de novo o braço A.
+ * O merge da main (#396 via #448) na #395 junta os braços de novo.
  */
 
-const SHA_ENTIDADE = '27bd7a946bc40aaa880cb124354e0aa6e328d510399e0910f21dd3828fa2f97e';
+const SHA_ENTIDADE = 'afde7b5a6200084a165715fdaa0416ed78fc73f367ba6d89e587b62f8329369a';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

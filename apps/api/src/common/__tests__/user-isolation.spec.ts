@@ -38,7 +38,7 @@ import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
 import { MealCopyService } from '../../nutrition/meal-copy.service';
 import { MealTemplateService } from '../../nutrition/meal-template.service';
-import { dateInTz } from '../../progress/helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz } from '../../progress/helpers/date-tz';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
 import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
@@ -84,6 +84,9 @@ import { McpConnectionRecorder, McpConnectionService } from '../../auth/mcp-conn
 import { OAuthFacadeService } from '../../auth/oauth-facade.service';
 import { UserProvisioningService } from '../../auth/user-provisioning.service';
 import { UsersController } from '../../users/users.controller';
+import { ScoreboardService } from '../../social/scoreboard.service';
+import { ChallengeService } from '../../sharing/challenge.service';
+import { ChallengeCheckinService } from '../../sharing/challenge-checkin.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -4447,6 +4450,256 @@ describe('isolamento entre usuários', () => {
       await expect(
         memberships.teamForMember(owned.userA, owned.grupoDoProId),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('desafios: check-in com foto, sinalização e fila de revisão (#395)', () => {
+    const checkinStore = new MemoryObjectStore();
+    const checkinMedia = new MediaService(prisma, checkinStore);
+    const scoreboard = new ScoreboardService(prisma, new DailyAdherenceService(prisma));
+    const challenges = new ChallengeService(prisma, scoreboard, silentNotifications, checkinMedia);
+    const checkins = new ChallengeCheckinService(
+      prisma,
+      challenges,
+      checkinMedia,
+      silentNotifications,
+    );
+    const ids = { desafio: '', outroDesafio: '', desafioDoPro: '', checkinA: '', fotoColega: '' };
+    let cor = 0;
+
+    async function foto(userId: string, groupId: string) {
+      cor += 1;
+      const body = await sharp({
+        create: { width: 32, height: 32, channels: 3, background: { r: cor, g: 90, b: 40 } },
+      })
+        .jpeg()
+        .toBuffer();
+      const r = await checkinMedia.requestUpload(userId, {
+        purpose: 'challenge_checkin',
+        groupId,
+        mime: 'image/jpeg',
+        bytes: body.length,
+      });
+      const file = await prisma.mediaFile.findUniqueOrThrow({ where: { id: r.fileId } });
+      checkinStore.upload(file.key, body, 'image/jpeg');
+      await checkinMedia.confirm(userId, r.fileId);
+      return r.fileId;
+    }
+
+    /** Treino de 50 min, terminado há 5 min, gravado ao começar. */
+    async function treino(userId: string) {
+      const fim = new Date(Date.now() - 5 * 60_000);
+      const inicio = new Date(fim.getTime() - 50 * 60_000);
+      return prisma.workoutSession.create({
+        data: {
+          userId,
+          startedAt: inicio,
+          completedAt: fim,
+          createdAt: inicio,
+          serverCompletedAt: fim,
+        },
+      });
+    }
+
+    /** Desafio de foto já em andamento (começou ontem). */
+    async function emAndamento(autor: string, groupId: string) {
+      const hoje = todayInTz(TZ);
+      const c = await challenges.create(autor, groupId, {
+        title: 'Iso 395',
+        kind: 'PHOTO',
+        startDate: hoje,
+        endDate: addDaysIso(hoje, 5),
+      });
+      await prisma.groupChallenge.update({
+        where: { id: c.id },
+        data: { startsAt: dayBoundsInTz(addDaysIso(hoje, -1), TZ).start },
+      });
+      return c.id;
+    }
+
+    beforeAll(async () => {
+      ids.desafio = await emAndamento(owned.userB, owned.groupId);
+      ids.outroDesafio = await emAndamento(owned.userB, owned.groupId);
+      ids.desafioDoPro = await emAndamento(owned.pro, owned.grupoDoProId);
+      for (const id of [ids.desafio, ids.outroDesafio]) {
+        await challenges.join(owned.userA, owned.groupId, id, 'Ana', { acceptPhotoTerms: true });
+        await challenges.join(owned.colega, owned.groupId, id, 'Cola', {
+          acceptPhotoTerms: true,
+        });
+      }
+      await challenges.join(owned.userB, owned.grupoDoProId, ids.desafioDoPro, 'Bia', {
+        acceptPhotoTerms: true,
+      });
+      await treino(owned.userA);
+      await checkins.create(owned.userA, owned.groupId, ids.desafio, {
+        photoFileId: await foto(owned.userA, owned.groupId),
+      });
+      ids.checkinA = (await prisma.challengeCheckin.findFirstOrThrow({
+        where: { participant: { challengeId: ids.desafio, membership: { userId: owned.userA } } },
+      }))!.id;
+      ids.fotoColega = await foto(owned.colega, owned.groupId);
+    });
+
+    afterAll(async () => {
+      await prisma.groupChallenge.deleteMany({
+        where: { id: { in: [ids.desafio, ids.outroDesafio, ids.desafioDoPro] } },
+      });
+    });
+
+    it('a foto de outra pessoa não vira o check-in de quem a pede', async () => {
+      await treino(owned.userA);
+      await expect(
+        checkins.create(owned.userA, owned.groupId, ids.outroDesafio, {
+          photoFileId: ids.fotoColega,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // A foto já usada pelo user-A também não serve de novo, nem em outro desafio.
+      const usada = await prisma.challengeCheckin.findUniqueOrThrow({
+        where: { id: ids.checkinA },
+      });
+      await expect(
+        checkins.create(owned.userA, owned.groupId, ids.outroDesafio, {
+          photoFileId: usada.photoFileId!,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('a foto subida para outra comunidade não serve aqui, e o treino da colega não é do user-A', async () => {
+      // O user-B sobe a foto para a academia dele e tenta usá-la no grupo do pro.
+      const daAcademia = await foto(owned.userB, owned.groupId);
+      await treino(owned.userB);
+      await expect(
+        checkins.create(owned.userB, owned.grupoDoProId, ids.desafioDoPro, {
+          photoFileId: daAcademia,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      // O id do treino da colega no corpo: o servidor não o acha para o user-A.
+      const daColega = await treino(owned.colega);
+      const e = await checkins.eligibility(
+        owned.userA,
+        owned.groupId,
+        ids.outroDesafio,
+        daColega.id,
+      );
+      expect(e.workout?.id).not.toBe(daColega.id);
+    });
+
+    it('o membro não abre a fila de revisão, nem a do desafio', async () => {
+      await expect(checkins.queue(owned.userA, owned.groupId)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(checkins.queue(owned.colega, owned.groupId, ids.desafio)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      // O dono de outra comunidade não lê a fila desta pelo id do desafio.
+      await expect(
+        checkins.queue(owned.pro, owned.grupoDoProId, ids.desafio),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('sinalizar pela URL de outro desafio ou de outra comunidade não acha o check-in', async () => {
+      await expect(
+        checkins.flag(owned.colega, owned.groupId, ids.outroDesafio, ids.checkinA),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        checkins.flag(owned.userB, owned.grupoDoProId, ids.desafioDoPro, ids.checkinA),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(await prisma.challengeCheckinFlag.count({ where: { checkinId: ids.checkinA } })).toBe(
+        0,
+      );
+    });
+
+    it('a equipe de outra comunidade não decide o check-in pela URL dela', async () => {
+      await checkins.flag(owned.colega, owned.groupId, ids.desafio, ids.checkinA);
+      await expect(
+        checkins.resolve(owned.pro, owned.grupoDoProId, ids.desafioDoPro, ids.checkinA, {
+          decision: 'void',
+          reason: 'Foto de outra academia',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // Nem pelo outro desafio da mesma academia.
+      await expect(
+        checkins.resolve(owned.pro, owned.groupId, ids.outroDesafio, ids.checkinA, {
+          decision: 'void',
+          reason: 'Desafio errado',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // E o membro não decide nem o do próprio desafio.
+      await expect(
+        checkins.resolve(owned.colega, owned.groupId, ids.desafio, ids.checkinA, {
+          decision: 'void',
+          reason: 'Não gostei',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      const intacto = await prisma.challengeCheckin.findUniqueOrThrow({
+        where: { id: ids.checkinA },
+      });
+      expect(intacto.status).toBe('FLAGGED');
+      expect(intacto.photoFileId).not.toBeNull();
+    });
+
+    it('o export do user-A leva o check-in e a foto dele; o da colega, só o que ela fez', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+        [],
+        checkinMedia,
+      );
+      const deA = await conta.exportData(owned.userA, { photoLinks: true });
+      const naAcademia = deA.communityMemberships.find((m) => m.group.name === 'Academia B')!;
+      const entrada = naAcademia.challengeEntries.find((e) => e.checkins.length > 0)!;
+      expect(entrada).toMatchObject({
+        challenge: { kind: 'PHOTO' },
+        photoConsentVersion: expect.any(String),
+      });
+      expect(entrada.checkins).toEqual([
+        expect.objectContaining({
+          type: 'PHOTO',
+          photo: expect.objectContaining({
+            mime: expect.stringMatching(/^image\//),
+            url: expect.any(String),
+          }),
+        }),
+      ]);
+      expect(JSON.stringify(entrada)).not.toContain(ids.checkinA);
+
+      const daColega = await conta.exportData(owned.colega, { photoLinks: true });
+      const dela = daColega.communityMemberships.flatMap((m) => m.challengeEntries);
+      expect(dela.flatMap((e) => e.checkins)).toEqual([]);
+      // A sinalização é dela (o que ela fez), sem a foto nem o nome de quem foi sinalizado.
+      await prisma.challengeCheckinFlag.upsert({
+        where: {
+          checkinId_membershipId: {
+            checkinId: ids.checkinA,
+            membershipId: (await prisma.groupMembership.findFirstOrThrow({
+              where: { groupId: owned.groupId, userId: owned.colega },
+            }))!.id,
+          },
+        },
+        create: {
+          checkinId: ids.checkinA,
+          membershipId: (await prisma.groupMembership.findFirstOrThrow({
+            where: { groupId: owned.groupId, userId: owned.colega },
+          }))!.id,
+        },
+        update: {},
+      });
+      const flags = (await conta.exportData(owned.colega)).communityMemberships.flatMap(
+        (m) => m.checkinFlags,
+      );
+      expect(flags).toEqual([{ createdAt: expect.any(Date), challenge: 'Iso 395' }]);
+      expect(JSON.stringify(flags)).not.toMatch(/Ana|image\/jpeg/);
+    });
+
+    it('a colega vê o dia do user-A, nunca a foto dele', async () => {
+      const visto = await challenges.get(owned.colega, owned.groupId, ids.desafio);
+      const itemDoA = visto.activity.filter((i) => !i.isMe);
+      expect(itemDoA.length).toBeGreaterThan(0);
+      expect(JSON.stringify(visto)).not.toMatch(/photoUrl":"/);
+      const proprio = await challenges.get(owned.userA, owned.groupId, ids.desafio);
+      expect(proprio.activity.some((i) => i.isMe && i.photoUrl)).toBe(true);
     });
   });
 

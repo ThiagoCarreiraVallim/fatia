@@ -95,6 +95,8 @@ model User {
   /// As metas do dia anteriores a cada troca (#396). É dado da pessoa.
   goalsHistory           UserGoalsHistory[]
   authoredChallenges     GroupChallenge[]   @relation("ChallengeAuthor")
+  /// Check-ins de desafio que a pessoa revisou como equipe (#395).
+  reviewedCheckins       ChallengeCheckin[] @relation("CheckinReviewer")
   personalGoals          Goal[]
   meals                  Meal[]
   workoutPlans           WorkoutPlan[]
@@ -1066,16 +1068,23 @@ model FavoriteExercise {
 }
 
 model WorkoutSession {
-  id          String    @id @default(uuid())
-  userId      String
-  planId      String? // null = treino livre (ou o plano foi apagado: ver `fromPlan`)
+  id                String    @id @default(uuid())
+  userId            String
+  planId            String? // null = treino livre (ou o plano foi apagado: ver `fromPlan`)
   /// Retrato do plano ao começar (#381): o plano pode ser apagado depois (a FK
   /// vira nula), e a sessão segue sendo "de plano", com o nome que tinha.
-  fromPlan    Boolean   @default(false)
-  planName    String?
-  startedAt   DateTime
-  completedAt DateTime?
-  notes       String?
+  fromPlan          Boolean   @default(false)
+  planName          String?
+  startedAt         DateTime
+  completedAt       DateTime?
+  notes             String?
+  /// Quando a sessão foi gravada (#395). Treino lançado depois do fim (gravado
+  /// depois de `completedAt`) não libera check-in de desafio. As sessões de
+  /// antes da migration ficam com o instante da migration.
+  createdAt         DateTime  @default(now())
+  /// Quando o servidor fechou a sessão (#395), qualquer que seja o `completedAt`
+  /// pedido. A duração que vale no desafio é de `createdAt` até aqui.
+  serverCompletedAt DateTime?
 
   // Ajustes desta sessão sobre o plano, sem mexer no plano: a ordem em que a
   // pessoa decidiu fazer os exercícios (ids, na ordem; vazio = a do plano) e os
@@ -1097,11 +1106,13 @@ model WorkoutSession {
   /// cada exercício continuam em `SessionSet`, para estatística e "previous".
   circuit Json?
 
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan       WorkoutPlan?    @relation("SessionPlan", fields: [planId], references: [id])
-  sets       SessionSet[]
-  checkin    WorkoutCheckin?
-  savedPlans WorkoutPlan[]   @relation("PlanFromSession")
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan              WorkoutPlan?       @relation("SessionPlan", fields: [planId], references: [id])
+  sets              SessionSet[]
+  checkin           WorkoutCheckin?
+  savedPlans        WorkoutPlan[]      @relation("PlanFromSession")
+  /// Check-ins de desafio ligados a este treino (#395).
+  challengeCheckins ChallengeCheckin[]
   // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
   // aberta por pessoa (#350). O Prisma não o descreve: está na migration
   // 20261026120000_one_open_workout_session.
@@ -1374,6 +1385,8 @@ model StepLog {
   steps    Int
   source   StepSource @default(MANUAL)
   loggedAt DateTime   @default(now())
+  /// Última edição (#395): editado depois do prazo do dia não conta em desafio.
+  editedAt DateTime?
   notes    String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1416,12 +1429,14 @@ model WeightLog {
 // Hidratação. Múltiplos logs por dia esperados (cada copo é um log).
 // Política do "valor do dia" = SOMA (diferente de StepLog, que é MAX).
 model WaterLog {
-  id       String   @id @default(uuid())
+  id       String    @id @default(uuid())
   userId   String
   // YYYY-MM-DD no fuso do usuário.
   date     String
   ml       Int
-  loggedAt DateTime @default(now())
+  loggedAt DateTime  @default(now())
+  /// Última edição (#395): editado depois do prazo do dia não conta em desafio.
+  editedAt DateTime?
   notes    String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1703,6 +1718,10 @@ model GroupMembership {
   user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   seatAssignments  GroupSeatAssignment[]
   challengeEntries GroupChallengeParticipant[]
+  /// Sinalizações "Não parece válido" feitas pela pessoa (#395).
+  checkinFlags     ChallengeCheckinFlag[]
+  /// "Me avise quando começar" (#395).
+  challengeWatches GroupChallengeWatcher[]
   /// O mural (Fase 8b): o que a pessoa publicou, reagiu, comentou e denunciou.
   posts            GroupPost[]                 @relation("PostAuthor")
   postsRemoved     GroupPost[]                 @relation("PostRemovedBy")
@@ -2380,6 +2399,8 @@ model MediaFile {
   benefitLogoOf  GroupPartnerBenefit?     @relation("BenefitLogo")
   userAvatarOf   User?                    @relation("UserAvatar")
   mealPhotoOf    Meal?                    @relation("MealPhoto")
+  /// A foto de prova de um check-in de desafio (ADR 044 e 047, #395).
+  checkinPhotoOf ChallengeCheckin?        @relation("CheckinPhoto")
 
   /// Foto do chat (ADR 046): a mensagem da pessoa que a levou, e a ordem nela.
   /// `SetNull` e não `Cascade`: apagar a conversa apaga as mensagens no banco,
@@ -2569,33 +2590,92 @@ enum ChallengeMetric {
   STREAK_DAYS
 }
 
+/// O tipo do desafio no redesign (#395, ADR 044). `METRIC` é o desafio de antes,
+/// medido pela `metric`; os outros contam **dias** (ou pontos por dia), nunca
+/// ml, passos ou gramas de alguém.
+enum ChallengeKind {
+  /// Medido pela `metric` (treinos, dias ativos, sequência e os de antes).
+  METRIC
+  /// Check-in com foto depois de um treino registrado: 1 dia por check-in válido.
+  PHOTO
+  /// Dias com a água na meta do desafio.
+  WATER
+  /// Dias com os passos na meta, só das fontes aceitas.
+  STEPS
+  /// Dias na meta de nutrição da própria pessoa (proteína ou faixa de kcal, pela `metric`).
+  NUTRITION
+  /// Pontos por dia, pela tabela, com teto diário.
+  POINTS
+}
+
+/// O que um registro de prova cobre (#395): a foto do treino, ou um dia de água
+/// ou de passos que o sistema mandou para revisão.
+enum ChallengeCheckinType {
+  PHOTO
+  WATER
+  STEPS
+}
+
+/// `VALID` conta; `FLAGGED` espera a equipe e não conta; `VOIDED` foi anulado.
+enum ChallengeCheckinStatus {
+  VALID
+  FLAGGED
+  VOIDED
+}
+
+/// Quem mandou para a fila: o sistema (regra) ou um participante.
+enum ChallengeFlagSource {
+  SYSTEM
+  MEMBER
+}
+
 /// Um desafio que a equipe marca. A janela é única para todo participante, no
 /// fuso da comunidade (`ScoreboardService`).
 model GroupChallenge {
-  id           String          @id @default(uuid())
-  groupId      String
+  id                 String          @id @default(uuid())
+  groupId            String
   /// Quem marcou. Sai da equipe ou apaga a conta: o desafio fica.
-  authorId     String?
-  title        String
-  description  String?
-  metric       ChallengeMetric
+  authorId           String?
+  title              String
+  description        String?
+  metric             ChallengeMetric
+  /// Tipo do redesign (#395). `METRIC` = o desafio de antes.
+  kind               ChallengeKind   @default(METRIC)
+  /// Pontos por item no tipo `POINTS`: `{ workout, water, steps, protein, kcal }`
+  /// (0 a 5 cada; 0 ou ausente = não vale).
+  pointsTable        Json?
+  /// Teto de pontos por dia no tipo `POINTS`.
+  maxPointsPerDay    Int?
+  /// Meta de água do dia, em ml (tipos `WATER` e `POINTS`).
+  waterGoalMl        Int?
+  /// Meta de passos do dia (tipos `STEPS` e `POINTS`).
+  stepsGoal          Int?
+  /// Teto diário de água que conta, em ml (4 L por padrão).
+  dailyCap           Int?
+  /// Fontes de passos aceitas. Vazio = todas menos `MANUAL`; `MANUAL` nunca conta.
+  allowedStepSources StepSource[]    @default([])
+  /// Aviso de começo já mandado (a quem pediu "Me avise" e a quem já entrou).
+  startNotifiedAt    DateTime?
+  /// Fotos dos check-ins apagadas pela retenção (30 dias depois do fim, ADR 044).
+  photosPurgedAt     DateTime?
   /// Meia-noite do primeiro dia, no fuso da comunidade (inclusivo).
-  startsAt     DateTime
+  startsAt           DateTime
   /// Virada do último dia (exclusivo). Encerrar antes grava o instante.
-  endsAt       DateTime
+  endsAt             DateTime
   /// Fuso da comunidade quando o desafio foi marcado.
-  timezone     String
-  endedEarlyAt DateTime?
+  timezone           String
+  endedEarlyAt       DateTime?
   /// Último recálculo do placar (recalcula na leitura quando fica velho).
-  scoredAt     DateTime?
+  scoredAt           DateTime?
   /// Placar fechado e posições finais gravadas.
-  finalizedAt  DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  finalizedAt        DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   group        Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
   author       User?                       @relation("ChallengeAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   participants GroupChallengeParticipant[]
+  watchers     GroupChallengeWatcher[]
 
   @@index([groupId, endsAt])
   @@index([finalizedAt, endsAt])
@@ -2603,22 +2683,117 @@ model GroupChallenge {
 
 /// Quem entrou no desafio (opt-in). A linha é a inscrição: sair apaga.
 model GroupChallengeParticipant {
-  id           String   @id @default(uuid())
-  challengeId  String
+  id                  String    @id @default(uuid())
+  challengeId         String
   /// Pela associação, e não pelo usuário: sair da comunidade tira do placar.
-  membershipId String
+  membershipId        String
   /// Como a pessoa aparece no ranking.
-  displayName  String
+  displayName         String
   /// Contagem da métrica. Nunca um valor de refeição ou de corpo (ADR 027).
-  score        Int      @default(0)
+  score               Int       @default(0)
   /// Posição gravada ao encerrar (empate divide a posição).
-  finalRank    Int?
-  joinedAt     DateTime @default(now())
+  finalRank           Int?
+  /// Dias seguidos contando até o último dia com ponto (#395). Só dias.
+  streak              Int       @default(0)
+  /// Aceite da foto de check-in (ADR 047): categoria própria, fora do
+  /// `ShareScope`. Exigido para entrar em desafio `PHOTO` ou `POINTS`.
+  photoConsentVersion String?
+  photoConsentAt      DateTime?
+  joinedAt            DateTime  @default(now())
+
+  challenge  GroupChallenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  membership GroupMembership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  checkins   ChallengeCheckin[]
+  dayScores  ChallengeDayScore[]
+
+  @@unique([challengeId, membershipId])
+  @@index([membershipId])
+}
+
+/// Prova de um dia num desafio (#395, ADR 044): o check-in com foto ligado a um
+/// treino, ou o dia de água ou de passos que a regra mandou para revisão. Um por
+/// pessoa, tipo e dia. Sair do desafio apaga (e a foto sai do bucket antes).
+model ChallengeCheckin {
+  id                 String                 @id @default(uuid())
+  participantId      String
+  type               ChallengeCheckinType
+  /// Dia local da pessoa (YYYY-MM-DD) a que o registro pertence.
+  date               String
+  /// O treino que liberou o check-in. Apagar o treino solta (e manda para revisão).
+  workoutSessionId   String?
+  /// Retrato do treino no check-in (início, fim e séries): mudou, volta à revisão.
+  workoutFingerprint String?
+  /// A foto de prova. Só a pessoa e a equipe que revisa veem (ADR 044).
+  photoFileId        String?                @unique
+  /// SHA-256 da foto guardada: a mesma foto não vale duas vezes no desafio.
+  photoHash          String?
+  /// Carimbo do servidor, nunca do aparelho.
+  capturedAt         DateTime               @default(now())
+  caption            String?
+  status             ChallengeCheckinStatus @default(VALID)
+  flagSource         ChallengeFlagSource?
+  /// Por que foi para a fila (regra do sistema, ou "sinalizado por N participantes").
+  flagReason         String?
+  flaggedAt          DateTime?
+  reviewedById       String?
+  reviewedAt         DateTime?
+  /// Motivo da equipe ao anular, mandado à pessoa.
+  reason             String?
+  createdAt          DateTime               @default(now())
+
+  participant    GroupChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  workoutSession WorkoutSession?           @relation(fields: [workoutSessionId], references: [id], onDelete: SetNull)
+  photoFile      MediaFile?                @relation("CheckinPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  reviewedBy     User?                     @relation("CheckinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  flags          ChallengeCheckinFlag[]
+
+  @@unique([participantId, type, date])
+  /// Um treino vale um check-in no desafio (#395 B2).
+  @@unique([participantId, workoutSessionId])
+  @@index([status])
+  @@index([workoutSessionId])
+}
+
+/// "Não parece válido" (#395): quem sinalizou, para contar e limitar. Quem foi
+/// sinalizado nunca vê quem sinalizou.
+model ChallengeCheckinFlag {
+  id           String   @id @default(uuid())
+  checkinId    String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  checkin    ChallengeCheckin @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+  membership GroupMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([checkinId, membershipId])
+  @@index([membershipId, createdAt])
+}
+
+/// Pontos de cada dia de cada participante (#395), regravados a cada recálculo.
+/// `parts` diz o que valeu no dia (`workout`, `water`, `steps`, `protein`,
+/// `kcal`, `day`), nunca quanto.
+model ChallengeDayScore {
+  id            String   @id @default(uuid())
+  participantId String
+  date          String
+  points        Int
+  parts         String[] @default([])
+
+  participant GroupChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, date])
+}
+
+/// "Me avise quando começar" (#395): avisado no começo, junto de quem já entrou.
+model GroupChallengeWatcher {
+  challengeId  String
+  membershipId String
+  createdAt    DateTime @default(now())
 
   challenge  GroupChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
-  @@unique([challengeId, membershipId])
+  @@id([challengeId, membershipId])
   @@index([membershipId])
 }
 
