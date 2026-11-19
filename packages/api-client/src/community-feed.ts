@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import { markdownLitePlainText } from './markdown-lite';
 import type { MediaView } from './community-content';
 import type { GroupRole } from './community';
 
@@ -487,6 +488,13 @@ export function pollClosesLabel(
 }
 
 /** O selo do aviso fixado. */
+/** O nome do aviso nas listas (Moderação): o título, ou a primeira linha do texto sem marcação. */
+export function pinHeadline(post: { title?: string | null; body: string }): string {
+  if (post.title) return post.title;
+  const primeira = post.body.split('\n').find((l) => l.trim()) ?? '';
+  return markdownLitePlainText(primeira).trim() || 'Aviso';
+}
+
 export function pinDeadlineLabel(pinnedUntil: string | null | undefined): string {
   if (!pinnedUntil) return 'Fixado';
   const d = new Date(pinnedUntil);

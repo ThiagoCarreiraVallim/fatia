@@ -11,6 +11,7 @@ import {
   feedApi,
   moderationApi,
   pinDeadlineLabel,
+  pinHeadline,
   orgApi,
   POST_POLICY_LABEL,
   relativeTime,
@@ -157,7 +158,7 @@ export default function OrgModerationPage() {
               <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <span className="min-w-0 text-sm">
                   <span className="block truncate font-semibold">
-                    {`${i + 1}. ${p.title ?? p.body.split('\n')[0] ?? ''}`}
+                    {`${i + 1}. ${pinHeadline(p)}`}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {`${p.author.displayName} · ${pinDeadlineLabel(p.pinnedUntil).toLowerCase()}`}

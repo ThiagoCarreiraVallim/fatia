@@ -8,6 +8,7 @@ import {
   feedApi,
   moderationApi,
   pinDeadlineLabel,
+  pinHeadline,
   orgApi,
   POST_POLICY_LABEL,
   relativeTime,
@@ -149,7 +150,7 @@ function Moderacao({ g }: { g: MyGroup }) {
           fixados.map((p, i) => (
             <View key={p.id} className="gap-2 border-t border-border pt-2">
               <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
-                {`${i + 1}. ${p.title ?? p.body.split('\n')[0] ?? ''}`}
+                {`${i + 1}. ${pinHeadline(p)}`}
               </Text>
               <Text className="text-xs text-muted-foreground">
                 {`${p.author.displayName} · ${pinDeadlineLabel(p.pinnedUntil).toLowerCase()}`}
