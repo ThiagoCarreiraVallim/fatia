@@ -28,11 +28,21 @@ const APP_LINKS_HOST = process.env.APP_LINKS_HOST;
  */
 const GOOGLE_SERVICES_JSON = process.env.GOOGLE_SERVICES_JSON;
 
+/**
+ * Variante do build. O APK de teste (`preview` no eas.json) sai com outro pacote
+ * Android para instalar ao lado de qualquer resto do oficial: um `br.ia.fat.app`
+ * assinado com outra chave (build local, outro perfil do aparelho) faz o Android
+ * recusar a instalação com "conflito com pacote existente", e esse resto às vezes
+ * não aparece em lugar nenhum para a pessoa remover. O scheme não muda: o retorno
+ * do login no Logto depende dele.
+ */
+const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
+
 /** O projeto `@fat.ia.br/fatia` na EAS. */
 const EAS_PROJECT_ID = 'f2f556bd-db04-4057-a788-246f00c145df';
 
 const config: ExpoConfig = {
-  name: 'Fatia',
+  name: IS_PREVIEW ? 'Fatia (teste)' : 'Fatia',
   slug: 'fatia',
   // A conta da EAS dona do projeto (organização), e não a de quem roda o build.
   owner: process.env.EAS_OWNER ?? 'fat.ia.br',
@@ -54,7 +64,7 @@ const config: ExpoConfig = {
     ...(APP_LINKS_HOST && { associatedDomains: [`applinks:${APP_LINKS_HOST}`] }),
   },
   android: {
-    package: 'br.ia.fat.app',
+    package: IS_PREVIEW ? 'br.ia.fat.app.preview' : 'br.ia.fat.app',
     ...(GOOGLE_SERVICES_JSON && { googleServicesFile: GOOGLE_SERVICES_JSON }),
     ...(APP_LINKS_HOST && {
       intentFilters: [
