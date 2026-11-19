@@ -19,6 +19,7 @@ import {
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import { Button, Input, LoadingState, cn } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
+import { linkInviteForm, linkInviteInput } from '@/community/link-invite-form';
 
 const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
 
@@ -48,12 +49,7 @@ function Convites({ g }: { g: MyGroup }) {
     queryFn: () => orgApi.invites(g.id),
   });
   const criarLink = useMutation({
-    mutationFn: () =>
-      orgApi.createInvite(g.id, {
-        role: papelLink,
-        ...(usos ? { maxUses: Number(usos) } : {}),
-        expiresInDays: 7,
-      }),
+    mutationFn: () => orgApi.createInvite(g.id, linkInviteInput(papelLink, usos)),
     onSuccess: (r) => {
       setLink(r.url);
       refrescar();
@@ -157,16 +153,25 @@ function Convites({ g }: { g: MyGroup }) {
 
       <PanelCard title="Link de convite">
         {papeis.length > 1 ? (
-          <Choice label="Entra como" options={papeis} value={papelLink} onChange={setPapelLink} />
+          <Choice
+            label="Entra como"
+            options={papeis}
+            value={papelLink}
+            onChange={(r) => {
+              setPapelLink(r);
+              // Equipe começa com 1 uso; membro volta para "sem limite".
+              setUsos(linkInviteForm(r).defaultUses);
+            }}
+          />
         ) : null}
         <Input
           value={usos}
           onChangeText={(v) => setUsos(v.replace(/\D/g, '').slice(0, 4))}
           keyboardType="number-pad"
-          placeholder="Limite de usos (vazio = sem limite)"
+          placeholder={linkInviteForm(papelLink).usesPlaceholder}
           accessibilityLabel="Limite de usos"
         />
-        <Text className="text-xs text-muted-foreground">Vale por 7 dias.</Text>
+        <Text className="text-xs text-muted-foreground">{linkInviteForm(papelLink).validity}</Text>
         <Button loading={criarLink.isPending} onPress={() => criarLink.mutate()}>
           Criar link
         </Button>
