@@ -495,7 +495,8 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
 | #398  | Painel: layout novo, visão geral e busca ⌘K       | mergeado (#451)  | api, db, api-client, web, docs         |
 | #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452)  | api, db, api-client, web, mobile, docs |
-| #401  | Painel: membros, convites e ativação pendente     | pronto na branch | api, db, api-client, web, mobile, docs |
+| #401  | Painel: membros, convites e ativação pendente     | mergeado (#453)  | api, db, api-client, web, mobile, docs |
+| #399  | Painel: para revisar, em risco e sessão feita     | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -630,6 +631,55 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
     - "Status" de Membros é texto, sem o ponto colorido da prancha.
     - "Copiar" na linha do link e "Copiar link geral" só aparecem com `INVITE_LINK_SECRET`, que o dev não tem.
 - **Falta (dependências):** aceitar o convite na web redesenhada (#416) e a recusa no Onb-E1 (#372; a API já existe). Assentos em massa seguem a regra atual até a #403. Os papéis novos de equipe ficam para a #404.
+
+#399 (branch `redesign/399-para-revisar`; migration `20261119400000_review_queue`; nenhuma env nova; nenhuma tool nova no MCP: `get_workout_session` passa a trazer `feedback`, o comentário da equipe, só leitura):
+
+- **Decisões (orquestrador):**
+  - **Sem chat no Fatia** (#306 e a etapa 2 da #338): a conversa é no WhatsApp, pelo link `wa.me` com texto pronto. [ADR 048](./ADR/048-sem-chat-entre-equipe-e-aluno.md), que entra nos não-objetivos do PRD e tira do THREAT_MODEL o vetor "mensagem entre contas" (vetor 22 descreve o que ficou). #306 já estava fechada como não planejada; ganhou o comentário com a ADR.
+  - **Comentário por sessão** (#303): reação 💪🔥👏❤️ e/ou até 500 caracteres (`SessionFeedback`), um por pessoa da equipe, sessão e comunidade, editável por quem escreveu. Comentário **por exercício** fica como melhoria futura.
+  - **O aluno não responde no app**: vê "Da sua equipe" no histórico do treino (web e app, só leitura) e recebe o aviso "Helena comentou seu treino"; a resposta vai pelo WhatsApp.
+- **Para revisar** (`/org/<id>/review`, Pn-02; permissão nova `panel.review`, dono e profissional, em `permissions.ts` e `PERMISSIONS.md`; item "Para revisar" no grupo Acompanhar do menu):
+  - `GET groups/:id/review`: os últimos 7 dias dos membros ativos **com vínculo com quem olha** — treino concluído e meta concluída (cada um pelo `assertReadable`, ação `list_review_queue`; só os escopos que o vínculo tem, para não encher a trilha de negadas) e plano mandado por esta comunidade que foi aceito ou recusado (sem escopo: é resposta à oferta).
+  - Abas Para revisar · N e Revisados · N pelo "Visto" de cada um (`ReviewSeen`, `POST review/:kind/:refId/seen`); comentar a sessão também marca visto ("depois de comentar, sai da fila"). Filtros Tudo, Treinos, Respostas e planos; vazio "Nada aqui com este filtro.". Colunas Membro, Tipo, O que aconteceu, Compartilha, com "Ver sessão" (treino) ou "Abrir ficha" e o WhatsApp quando a pessoa autorizou.
+  - Sem contador no menu: exigiria ler dado de saúde a cada tela.
+- **Em risco** (aba da mesma tela, também em `/org/<id>/review/at-risk`; `GET groups/:id/at-risk`):
+  - Só quem tem vínculo com quem olha. Para cada um, o último registro de Treino, Alimentação, Corpo e Hábitos que ele libera (`assertReadable`, `list_at_risk`), em dias no fuso da comunidade; sem registro nenhum, conta da entrada. Sinais: "parado" (nada há N dias), "sumiu" (2× o limite), "sem treino" (registra outras coisas, mas não treina) e "não começou". "Chamar no WhatsApp" com texto pronto.
+  - O limite (3 a 60 dias, padrão 7, `Group.riskDays`) é do dono (`PATCH at-risk/settings` com `group.update`); o profissional vê "Entra na lista depois de N dias sem registrar.".
+  - **Aviso diário** opcional, por pessoa (`PUT at-risk/digest`, `GroupMembership.riskDigest`): a partir das 9 h no fuso da comunidade, um push "N alunos precisam de atenção." contando as mesmas linhas que ela vê; uma vez por dia (`riskDigestOn` reivindicado com `updateMany`).
+  - **Privacidade:** não há agregado novo. A lista nominal é o que o vínculo já libera (o vínculo é o consentimento, e toda leitura fica na trilha); por isso não depende do `statsOptIn`. Os números das abas e do aviso contam só linhas que a pessoa já vê pelo nome, então nada se infere por diferença e o `binarySplit` não se aplica.
+- **Sessão feita** (`/org/<id>/review/sessions/<sessionId>`, Pn-35 e Pn-35b; `GET review/sessions/:id` e `POST …/feedback`): duração, séries, volume com a comparação, "Como foi" (check-in), exercícios com melhor série e recorde, nota da pessoa, reações e comentário com "Enviar ao aluno", "enviado à Ana", "Ficha da Ana" e WhatsApp. Sem Treino liberado: só "Ana não compartilha Treino" e o texto da prancha. Comentar exige `WORKOUT`.
+- **Dados e LGPD:** `SessionFeedback` e `ReviewSeen` saem quando a pessoa deixa a comunidade (mesma transação de `endMembership`, ex-`encerrar`), com a sessão, a comunidade e a conta; autor apagado vira nulo. Entram no export (`sessionFeedback` recebido, `sessionFeedbackWritten`, `reviewSeen`) e na `DATA_RETENTION.md`.
+- **Isolamento:** sessão, meta e oferta precisam ser de membro ativo do grupo da URL (senão 404, igual a inexistente); o "Visto" resolve o titular pelo id e confere a membership no mesmo grupo. Coberto em `review.integration.spec.ts` e no bloco #399 do `user-isolation.spec.ts`.
+- **Correções da revisão adversarial:**
+  - **Comentário por comunidade (F1):** a chave única é (sessão, autor, comunidade), na própria migration `20261119400000` (não tinha ido para produção). Reagir em B nunca move nem troca o comentário de A; "comentado" na fila e o anterior do envio são lidos só na comunidade da URL. O aluno pode ter um comentário de cada comunidade.
+  - **Corrida e aviso (F2, F3):** ler o anterior e gravar correm numa transação sob `pg_advisory_xact_lock` por (sessão, autor, comunidade), sem `include` no upsert (o nome do autor vem numa leitura à parte); quatro envios simultâneos dão um comentário e um aviso. O aviso sai pelo resultado da transação, só no primeiro envio e quando o texto aparece pela primeira vez; editar o texto ou trocar a reação não avisa.
+  - **O comentário é do aluno (F4):** fica mesmo depois que o autor sai da comunidade (sem nome se apagar a conta); sai quando o aluno sai.
+  - **"Visto" órfão (F5):** apagar a sessão ou a meta (e o Desfazer da IA que as apaga) apaga o `ReviewSeen` delas na mesma transação.
+  - **Toque no aviso diário (F6):** o aviso leva a `/org/<id>/review/at-risk`, caminho sem `?` que o `notificationTarget` e o service worker aceitam (o filtro não foi alargado). No app, que ainda não tem a tela (#414), o toque em `/org/<id>/review…` cai no painel da comunidade (`mobilePushTarget`).
+  - **Aba sem tela no app (F7):** "Para revisar" sai das abas do painel no celular até a #414 (`mobilePanelSections`); um teste confere que toda aba exibida tem arquivo de rota.
+  - **Limite do comentário (F8):** contado por code point na API, no DTO e na tela (contador `n/500`), como o `char_length` do CHECK.
+  - **Limite do em risco (F9):** as opções vão de 3 a 60 e sempre incluem o valor atual.
+  - **Tela (F10):** a fila e o Em risco carregam e erram cada um na sua aba; tocar na reação atual tira a reação; Pn-35b diz "Só a pessoa pode ligar".
+  - **Em risco:** associação antiga sem `joinedAt` conta da criação dela ("não começou"); no aviso diário, a falha de uma pessoa vira log e não para as outras.
+  - **Resposta a plano sem vínculo:** mantida, coerente com a ficha da #402 (a resposta é à oferta da comunidade, não dado de saúde); o `PERMISSIONS.md` explica.
+  - Cobertas em `review-fixes.integration.spec.ts` (API), `review-queue-fixes.test.ts` (api-client), nos testes das telas (web) e em `panel-sections.test.ts` e `push-target.test.ts` (app). O teste antigo do aviso diário dependia da hora do dia e foi corrigido.
+- **Passada visual** (web 1440 e 390, escuro e claro, e app no emulador, contra Pn-02, Pn-35, Pn-35b e Al-T11; prints em `~/.cache/fatia-vis/399/cmp-*.png`):
+  - Corrigido com teste: a rota `/review/at-risk` aparecia na migalha como "Para revisar › Detalhe" e agora diz "Em risco" (e o título do mapa de rotas também); treino sem série dizia "0 séries" na fila.
+  - Corrigido no visual: no celular a fila e o Em risco viraram cartões (nome e ações em cima, o que aconteceu embaixo, sem cabeçalho), em vez de quatro colunas espremidas com nome cortado; a sessão feita ficou em duas colunas no computador, com "Reação e comentário" ao lado, como na prancha, e "Enviar ao aluno" sempre à vista; o nome do exercício quebra linha em vez de cortar; a etiqueta "não começou" não quebra; "Visto" ficou discreto, como na prancha, e a ação principal da linha é a de abrir.
+  - Conferido: abas e filtros, Revisados, filtro vazio "Nada aqui com este filtro.", Em risco pela aba e pela rota própria, comentário e reação enviados pela tela ("enviado à Carla", a sessão foi para Revisados), Pn-35b com o texto neutro, contador `n/500`; nada de texto escuro no modo escuro; nenhum menu cobre botão. No app, o cartão "Da sua equipe" no fim do histórico do treino, acima de "Repetir", e o painel da comunidade sem as abas "Para revisar" e "Ativação pendente".
+  - Desvios de propósito: Pn-35b não mostra o nome do plano nem a data da sessão (a prancha mostra): sem Treino liberado, a equipe não vê dado do treino. Sem "+% vs sessão anterior" quando não há sessão anterior comparável. As abas da fila seguem o tamanho do resto do painel (#398), menores que as da prancha.
+  - Dados de demo para os prints (uma sessão da Carla com séries e check-in, uma do Bruno com comentário para o app, os comentários e as linhas da trilha geradas) foram apagados; contagens iguais antes e depois (`demo-rows.txt`).
+- **Desvios de propósito:**
+  - Filtros Avaliações, Alimentação e Desafios da prancha não aparecem: ainda não há o que mostrar neles.
+  - Check-ins sinalizados de desafio não entram na fila: já vivem em Desafios, com contador próprio.
+- **Falta:**
+  - #391: questionários na fila.
+  - #383: avaliações.
+  - #390: visitas.
+  - "Saiu do desafio" (a linha do participante é apagada ao sair), sinais de alimentação e "programa terminando".
+  - Comentário por exercício (#303) e resposta do aluno no app (fora pela ADR 048).
+  - WhatsApp pela Cloud API (#338 etapa 2, fora pela ADR 048).
+  - O app do painel (#414).
 
 ## Etapas seguintes
 

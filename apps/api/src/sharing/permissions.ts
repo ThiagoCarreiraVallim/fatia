@@ -135,6 +135,12 @@ export const GROUP_PERMISSIONS = {
   'member.plans': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /** Anotar na ficha (#402). A pessoa vê a anotação; editar é do autor ou do dono. */
   'member.note': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
+  /**
+   * "Para revisar", "Em risco" e a sessão feita (#399). O papel abre a tela;
+   * cada pessoa só aparece com vínculo ativo com quem olha, e cada dado de
+   * saúde passa pela porta de leitura. Comentar exige Treino liberado.
+   */
+  'panel.review': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /** Ver os descontos de parceiros da comunidade (#393). */
   'benefit.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   /**

@@ -102,7 +102,14 @@ export interface PanelNavGroup {
  * da prancha que ainda não têm tela (Para revisar, Relatório, Agenda...) entram com as issues delas.
  */
 const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string][] }[] = [
-  { key: 'track', label: 'Acompanhar', items: [['overview', 'Visão geral']] },
+  {
+    key: 'track',
+    label: 'Acompanhar',
+    items: [
+      ['overview', 'Visão geral'],
+      ['review', 'Para revisar'],
+    ],
+  },
   {
     key: 'people',
     label: 'Pessoas',

@@ -103,7 +103,13 @@ export class GoalsService {
 
   async delete(id: string, userId: string) {
     await this.assertOwned(id, userId);
-    await this.prisma.goal.delete({ where: { id } });
+    // O "Visto" da equipe (#399) aponta para a meta só pelo id: sai junto.
+    await this.prisma.$transaction([
+      this.prisma.reviewSeen.deleteMany({
+        where: { kind: 'GOAL', refId: id, subjectUserId: userId },
+      }),
+      this.prisma.goal.delete({ where: { id } }),
+    ]);
     return { deleted: true as const };
   }
 

@@ -46,7 +46,7 @@ function cleanText(text: string): string {
  *
  * Não são privadas: a pessoa lê as dela no app (`mine`), e a ficha avisa "O
  * aluno vê estas anotações". Moram na comunidade (`groupId`) e somem quando a
- * pessoa sai dela (`MembershipService.encerrar`). Escrever é `member.note`;
+ * pessoa sai dela (`MembershipService.endMembership`). Escrever é `member.note`;
  * editar e apagar é do autor ou do dono.
  */
 @Injectable()

@@ -9,11 +9,11 @@ import {
   canOpenPanel,
   groupsApi,
   panelHref,
-  panelSections,
   type MyGroup,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, DrawerLayer, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { mobilePanelSections } from './panel-sections';
 
 /** Chaves do painel: tudo sob `['community', 'org', groupId]`, como na web. */
 export const orgKeys = {
@@ -127,7 +127,7 @@ export function OrgPanel({
           contentContainerClassName="gap-2 px-5 pt-3"
           accessibilityRole="tablist"
         >
-          {panelSections(g.role).map((s) => {
+          {mobilePanelSections(g.role).map((s) => {
             const on = s.section === ativa;
             return (
               <Pressable

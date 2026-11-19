@@ -21,6 +21,7 @@ export type Db = Pick<
   | 'sessionSet'
   | 'goal'
   | 'userMemory'
+  | 'reviewSeen'
 >;
 
 /**
@@ -411,6 +412,10 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
       }
       const { count } = await db.workoutSession.deleteMany({ where: { id, userId } });
       exigirUma(count);
+      // O "Visto" da equipe (#399) aponta só pelo id: não pode sobrar órfão.
+      await db.reviewSeen.deleteMany({
+        where: { kind: 'WORKOUT', refId: id, subjectUserId: userId },
+      });
     },
   },
   log_set: {
@@ -465,10 +470,10 @@ export const AUTO_UNDO: Readonly<Record<string, UndoSpec>> = {
     entity: 'goal',
     target: doResultado(),
     async revert(db, { result }, userId) {
-      const { count } = await db.goal.deleteMany({
-        where: { id: idDoResultado()(result), userId },
-      });
+      const id = idDoResultado()(result);
+      const { count } = await db.goal.deleteMany({ where: { id, userId } });
       exigirUma(count);
+      await db.reviewSeen.deleteMany({ where: { kind: 'GOAL', refId: id, subjectUserId: userId } });
     },
   },
   update_goal: goalSnapshot(),

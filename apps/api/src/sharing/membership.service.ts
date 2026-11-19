@@ -652,7 +652,7 @@ export class MembershipService {
       );
     }
 
-    return this.encerrar(membership.id, groupId, userId, MembershipStatus.LEFT, 'left_group');
+    return this.endMembership(membership.id, groupId, userId, MembershipStatus.LEFT, 'left_group');
   }
 
   /**
@@ -683,7 +683,7 @@ export class MembershipService {
       throw new ConflictException('O dono não pode ser removido do próprio grupo');
     }
 
-    return this.encerrar(
+    return this.endMembership(
       alvo.id,
       groupId,
       alvo.userId,
@@ -715,7 +715,7 @@ export class MembershipService {
         revokedLinks: 0,
       };
     }
-    return this.encerrar(
+    return this.endMembership(
       alvo.id,
       groupId,
       alvo.userId,
@@ -764,7 +764,7 @@ export class MembershipService {
    *
    * Array e não transação interativa (pgbouncer, ADR 010).
    */
-  private async encerrar(
+  private async endMembership(
     membershipId: string,
     groupId: string,
     userId: string,
@@ -798,6 +798,12 @@ export class MembershipService {
       this.prisma.planOfferVersion.updateMany({
         where: { status: 'PENDING', offer: { groupId, userId } },
         data: { status: 'SUPERSEDED', respondedAt: agora },
+      }),
+      // Reação e comentário da equipe nos treinos dela moram na comunidade (#399).
+      this.prisma.sessionFeedback.deleteMany({ where: { groupId, session: { userId } } }),
+      // O "Visto" sobre ela, e o que ela viu se era da equipe (#399).
+      this.prisma.reviewSeen.deleteMany({
+        where: { groupId, OR: [{ subjectUserId: userId }, { userId }] },
       }),
     ]);
 

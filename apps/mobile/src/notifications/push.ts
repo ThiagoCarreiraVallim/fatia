@@ -10,7 +10,7 @@ import { Notifications as NotificationsModule } from './native';
  * O push da comunidade (Fase 8c, ADR 033) do lado do aparelho: permissão,
  * canal, token da Expo e o cadastro na API. Como o adaptador do descanso, nada
  * aqui é coberto por teste automatizado — módulo nativo não monta no harness em
- * Node. Para onde o toque leva é `notificationTarget`, testado no api-client.
+ * Node. Para onde o toque leva é `mobilePushTarget` (`notificationTarget` mais o desvio das telas que o app não tem).
  */
 
 /** O mesmo canal que a API manda em `channelId` (`push.service.ts`). */

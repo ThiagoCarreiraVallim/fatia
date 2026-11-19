@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { notificationTarget } from '@fatia/api-client';
 import { Notifications, useLastNotificationResponse } from './native';
 import { enablePush, pushDeviceId } from './push';
+import { mobilePushTarget } from './push-target';
 
 /**
  * Dentro da sessão: refaz o cadastro do aparelho se a pessoa já ligou os
@@ -22,7 +22,7 @@ export function usePush(ready: boolean) {
 
   useEffect(() => {
     if (!ready || !ultimo) return;
-    const destino = notificationTarget(ultimo.notification.request.content.data);
+    const destino = mobilePushTarget(ultimo.notification.request.content.data);
     // Limpa para o mesmo toque não abrir a tela de novo no próximo início.
     Notifications?.clearLastNotificationResponse();
     if (destino) router.push(destino as never);

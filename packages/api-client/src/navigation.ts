@@ -467,6 +467,13 @@ export const ROUTES: readonly RouteDef[] = [
   // O painel da equipe: voltar sai do painel para a comunidade, e a seção
   // dentro dele volta à Visão geral. `:id` no `parent` é o mesmo da rota.
   { pattern: '/org/:id', title: 'Painel', parent: '/community/:id' },
+  { pattern: '/org/:id/review', title: 'Para revisar', parent: '/org/:id' },
+  { pattern: '/org/:id/review/at-risk', title: 'Em risco', parent: '/org/:id' },
+  {
+    pattern: '/org/:id/review/sessions/:sessionId',
+    title: 'Sessão',
+    parent: '/org/:id/review',
+  },
   { pattern: '/org/:id/members', title: 'Membros', parent: '/org/:id' },
   { pattern: '/org/:id/members/:membershipId', title: 'Membro', parent: '/org/:id/members' },
   { pattern: '/org/:id/invites', title: 'Convites', parent: '/org/:id' },
