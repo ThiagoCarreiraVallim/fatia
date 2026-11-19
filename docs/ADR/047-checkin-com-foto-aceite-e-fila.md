@@ -68,6 +68,12 @@ para visitante e dizia que "entrar é o aceite". Esta ADR concilia as duas.
    própria, a única que grava fonte automática — e mesmo assim **a fonte automática continua
    dependendo do cliente** (o app declara que leu do Saúde); o servidor não tem como atestar.
    O detector de salto e o prazo do dia são o que resta contra a fraude.
+   **Até lá, passos ficam fechados — libera junto com a sync de saúde:** a API recusa com 400
+   (mensagem que explica o porquê) criar desafio `STEPS` ou pôr o item `steps` com ponto num
+   `POINTS`, e não deixa um desafio virar passos ao ser editado. Os painéis web e do app não
+   oferecem o tipo nem o item (`STEPS_SYNC_AVAILABLE` no client e na API). O MCP não cria
+   desafio; o `list_group_challenges` avisa que os de passos ainda não contam. Os desafios de
+   passos que já existem seguem aparecendo e se editam antes de começar, sem perder os passos.
 8. **MCP.** Continua sem check-in, sinalização ou revisão (ADR 044 §10).
    `get_my_challenge_progress` lê só o progresso do próprio usuário.
 
