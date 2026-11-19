@@ -22,8 +22,13 @@ Pranchas baixadas em `.canvas/project` do checkout principal: Pn-02-Revisar, Pn-
 
 ## Feito
 
-- (nada ainda)
+- db: migration `20261119400000_review_queue` (ReviewSeen, SessionFeedback, Group.riskDays, GroupMembership.riskDigest/riskDigestOn).
+- api: `ReviewService`/`ReviewController` (GET review, POST review/:kind/:refId/seen, GET/POST review/sessions/:id[/feedback], GET at-risk, PATCH at-risk/settings, PUT at-risk/digest), permissão `panel.review`, feedback no summary/findById (MCP get_workout_session), export, saída da comunidade (encerrar → endMembership). Testes: review.integration.spec + bloco #399 no user-isolation. API inteira verde.
+- Rodar testes da API: `cd apps/api && npx dotenv -e ../../.env -- npx jest --maxWorkers=4`.
 
 ## Falta
 
-- tudo
+- api-client (tipos, reviewApi, rótulos, NAV 'review', feedback no WorkoutSessionSummary) — teste vermelho primeiro.
+- web: /org/[g]/review (abas, filtros, tabela, em risco), /org/[g]/review/sessions/[id] (Pn-35/35b), comentário no histórico do aluno.
+- mobile: comentário no histórico (workout/history/[id].tsx).
+- docs: ADR 048, THREAT_MODEL, DATA_RETENTION, REDESIGN_PROGRESS (linha + bloco #399), fechar #306.
