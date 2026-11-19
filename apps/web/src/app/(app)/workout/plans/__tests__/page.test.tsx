@@ -32,10 +32,11 @@ vi.mock('@fatia/api-client', async () => {
       getActiveBlock: vi.fn(),
       getActiveSession: vi.fn().mockResolvedValue(null),
     },
+    planOrderApi: { get: vi.fn(), set: vi.fn() },
   };
 });
 
-import { workoutApi } from '@fatia/api-client';
+import { planOrderApi, workoutApi } from '@fatia/api-client';
 
 const listPlans = vi.mocked(workoutApi.listPlans);
 const deletePlan = vi.mocked(workoutApi.deletePlan);
@@ -214,5 +215,27 @@ describe('PlansPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Planos' }));
     expect(await screen.findByText('Push')).toBeInTheDocument();
     expect(screen.queryByText('AMRAP 12')).toBeNull();
+  });
+
+  it('Ordenar: sobe um plano e manda a ordem inteira, com os circuitos no fim (#402)', async () => {
+    const PULL = { id: 'p2', name: 'Pull', exercises: [] } as unknown as WorkoutPlan;
+    const CIRC = {
+      id: 'c1',
+      name: 'HIIT',
+      kind: 'CIRCUIT',
+      exercises: [],
+    } as unknown as WorkoutPlan;
+    listPlans.mockResolvedValue([PUSH, CIRC, PULL]);
+    vi.mocked(planOrderApi.set).mockResolvedValue({
+      planIds: ['p2', 'p1', 'c1'],
+      customized: true,
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Ordenar' }));
+    expect(screen.getByRole('button', { name: 'Subir Push' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Subir Pull' }));
+    await waitFor(() => expect(planOrderApi.set).toHaveBeenCalledWith(['p2', 'p1', 'c1']));
+    await userEvent.click(screen.getByRole('button', { name: 'Pronto' }));
+    expect(screen.queryByRole('button', { name: 'Subir Pull' })).not.toBeInTheDocument();
   });
 });
