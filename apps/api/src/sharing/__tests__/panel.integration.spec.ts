@@ -289,7 +289,8 @@ describe('painel base (#398, integração)', () => {
     it('com 5 ou mais no opt-in, o lado pequeno do indicador some pelo suppress', async () => {
       const a = await comunidade();
       const gente = [];
-      for (let i = 0; i < 8; i++) gente.push(await membro(a.groupId, `Aluno ${i}`, { optIn: true }));
+      for (let i = 0; i < 8; i++)
+        gente.push(await membro(a.groupId, `Aluno ${i}`, { optIn: true }));
       // 3 treinaram, 5 não: o lado de 3 é pequeno, e o de 5 sozinho entregaria o outro.
       for (const m of gente.slice(0, 3)) await treino(m.userId, 2);
       const v = await panel.overview(a.dono, a.groupId, 7);
@@ -300,7 +301,8 @@ describe('painel base (#398, integração)', () => {
 
     it('"0 treinaram" e "0 registraram" também são pequenos: somem', async () => {
       const a = await comunidade();
-      for (let i = 0; i < 6; i++) await membro(a.groupId, `Novo ${i}`, { diasAtras: 5, optIn: true });
+      for (let i = 0; i < 6; i++)
+        await membro(a.groupId, `Novo ${i}`, { diasAtras: 5, optIn: true });
       const v = await panel.overview(a.dono, a.groupId, 7);
       expect(v.aggregates!.active7d).toEqual({ value: null, percent: null });
       expect(v.aggregates!.notLoggedYet).toBeNull();

@@ -237,9 +237,9 @@ describe('entrega do comunicado (#398, integração)', () => {
         where: { announcementId: quarto.id },
       });
       expect(quarto.pushSkipped).toBe(true);
-      expect(await prisma.announcementDispatch.count({ where: { announcementId: quarto.id } })).toBe(
-        0,
-      );
+      expect(
+        await prisma.announcementDispatch.count({ where: { announcementId: quarto.id } }),
+      ).toBe(0);
       expect(post.id).toBeTruthy();
     });
 

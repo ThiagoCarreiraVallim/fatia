@@ -137,9 +137,9 @@ describe('AppEnvSchema — segredo do descadastro (#398)', () => {
   const PROD = { ...BASE, NODE_ENV: 'production' };
 
   it('vazio desliga o e-mail de comunicado e sobe', () => {
-    expect(AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: '' }).EMAIL_UNSUBSCRIBE_SECRET).toBe(
-      '',
-    );
+    expect(
+      AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: '' }).EMAIL_UNSUBSCRIBE_SECRET,
+    ).toBe('');
   });
 
   it.each([
@@ -155,12 +155,18 @@ describe('AppEnvSchema — segredo do descadastro (#398)', () => {
   });
 
   it.each([
-    ['hex de 32 bytes (openssl rand -hex 32)', 'a0e5a77089216e0609d9d000b56d62bbabba1b39cbbeeea2e35966652063219b'],
-    ['base64 de 32 bytes (openssl rand -base64 32)', 'tufqZX2NdseMLLdfJcvdhuo18zDvgGL3PuMqxwgtI8I='],
+    [
+      'hex de 32 bytes (openssl rand -hex 32)',
+      'a0e5a77089216e0609d9d000b56d62bbabba1b39cbbeeea2e35966652063219b',
+    ],
+    [
+      'base64 de 32 bytes (openssl rand -base64 32)',
+      'tufqZX2NdseMLLdfJcvdhuo18zDvgGL3PuMqxwgtI8I=',
+    ],
   ])('em produção, %s sobe', (_caso, segredo) => {
-    expect(AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: segredo }).EMAIL_UNSUBSCRIBE_SECRET).toBe(
-      segredo,
-    );
+    expect(
+      AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: segredo }).EMAIL_UNSUBSCRIBE_SECRET,
+    ).toBe(segredo);
   });
 
   it('fora de produção o segredo de teste continua valendo', () => {
