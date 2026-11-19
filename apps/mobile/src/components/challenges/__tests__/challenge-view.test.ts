@@ -15,6 +15,8 @@ import {
   checkinTag,
   clampStep,
   defaultChallengeForm,
+  FORM_KINDS,
+  FORM_POINT_ITEMS,
   doneSummary,
   heroSubtitle,
   heroTitle,
@@ -448,9 +450,16 @@ describe('formulário da equipe (Pn-13)', () => {
     const f = { ...defaultChallengeForm(), title: 'Verão', kind: 'POINTS' as const };
     expect(challengeInputFromForm(f, hoje)).toMatchObject({
       kind: 'POINTS',
-      pointsTable: { workout: 3, water: 1, steps: 1, protein: 1 },
-      maxPointsPerDay: 6,
+      pointsTable: { workout: 3, water: 1, protein: 1 },
+      maxPointsPerDay: 5,
     });
+  });
+
+  it('passos ficam fora do formulário até a sync de saúde (#395)', () => {
+    expect(FORM_KINDS).not.toContain('STEPS');
+    expect(FORM_KINDS).toContain('WATER');
+    expect(FORM_POINT_ITEMS).not.toContain('steps');
+    expect(defaultChallengeForm().points.steps).toBe(0);
   });
 
   it('o máximo por dia nunca passa da soma da tabela', () => {

@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureApiClient, resetApiClient } from '../http';
 import {
   CHALLENGE_KINDS,
+  CREATABLE_CHALLENGE_KINDS,
+  CREATABLE_POINT_ITEMS,
   challengeKindProblem,
+  challengeProblem,
+  challengeUsesSteps,
+  STEPS_CLOSED_TEXT,
+  STEPS_SYNC_AVAILABLE,
   challengeScoreLabel,
   challengeSections,
   CHECKIN_BLOCK_TAG,
@@ -142,5 +148,40 @@ describe('fila de revisão paginada (#395 M5)', () => {
     const urls = fetch.mock.calls.map((c) => String(c[0]));
     expect(urls[0]).toMatch(/\/review\?cursor=c-50$/);
     expect(urls[1]).toMatch(/\/review\?challengeId=d1&cursor=c-50$/);
+  });
+});
+
+describe('passos fechados até a sync de saúde (#395)', () => {
+  const base = { title: 'Passos', startDate: '2026-11-19', endDate: '2026-11-25' };
+
+  it('não se escolhe tipo de passos nem item de passos nos pontos', () => {
+    expect(STEPS_SYNC_AVAILABLE).toBe(false);
+    expect(CREATABLE_CHALLENGE_KINDS).not.toContain('STEPS');
+    expect(CREATABLE_CHALLENGE_KINDS).toContain('WATER');
+    expect(CREATABLE_POINT_ITEMS).not.toContain('steps');
+    expect(CREATABLE_POINT_ITEMS).toContain('water');
+  });
+
+  it('o formulário barra passos com o porquê, menos em quem já contava passos', () => {
+    expect(STEPS_CLOSED_TEXT).toMatch(/Apple Saúde|Health Connect/);
+    const passos = { ...base, kind: 'STEPS' as const };
+    const misto = { ...base, kind: 'POINTS' as const, pointsTable: { workout: 2, steps: 1 } };
+    expect(challengeProblem(passos, '2026-11-18')).toBe(STEPS_CLOSED_TEXT);
+    expect(challengeProblem(misto, '2026-11-18')).toBe(STEPS_CLOSED_TEXT);
+    expect(challengeProblem(passos, '2026-11-18', { keepsSteps: true })).toBeNull();
+    expect(
+      challengeProblem({ ...misto, pointsTable: { workout: 2, steps: 0 } }, '2026-11-18'),
+    ).toBeNull();
+  });
+
+  it('reconhece o desafio que conta passos', () => {
+    expect(challengeUsesSteps(c({ kind: 'STEPS', metric: 'STEPS' }))).toBe(true);
+    expect(challengeUsesSteps(c({ kind: 'METRIC', metric: 'STEPS' }))).toBe(true);
+    expect(
+      challengeUsesSteps(
+        c({ kind: 'POINTS', rules: { ...c({}).rules, pointsTable: { steps: 1 } } }),
+      ),
+    ).toBe(true);
+    expect(challengeUsesSteps(c({ kind: 'WATER', metric: 'WATER_ML' }))).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Challenge, MyGroup, ReviewItem } from '@fatia/api-client';
-import { challenge, detail, reviewItem } from '@/components/challenges/__tests__/fixtures';
+import { challenge, detail, reviewItem, rules } from '@/components/challenges/__tests__/fixtures';
 import { grupo, renderWithClient } from '../../__tests__/helpers';
 
 const ctx = vi.hoisted(() => ({ group: null as MyGroup | null, toast: vi.fn() }));
@@ -78,14 +78,14 @@ describe('painel › desafios (Pn-13)', () => {
     open();
     await fillBasics('Verão em pontos');
     await userEvent.click(screen.getByRole('radio', { name: /Pontos \(misto\)/ }));
-    // Padrão da prancha: treino 3, água 1, passos 1, proteína 1, calorias 0.
-    expect(screen.getByText(/máximo por dia: 6 pts/)).toBeInTheDocument();
+    // Padrão da prancha sem passos (#395): treino 3, água 1, proteína 1, calorias 0.
+    expect(screen.getByText(/máximo por dia: 5 pts/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Mais Treino com check-in' }));
     await userEvent.click(screen.getByRole('button', { name: 'Mais Treino com check-in' }));
     await userEvent.click(screen.getByRole('button', { name: 'Mais Treino com check-in' }));
     await userEvent.click(screen.getByRole('button', { name: 'Menos Proteína na meta' }));
-    expect(screen.getByText(/máximo por dia: 7 pts/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Máximo de pontos por dia')).toHaveValue(7);
+    expect(screen.getByText(/máximo por dia: 6 pts/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Máximo de pontos por dia')).toHaveValue(6);
     // O teto não passa de 5 por item.
     expect(screen.getByRole('button', { name: 'Mais Treino com check-in' })).toBeDisabled();
 
@@ -95,27 +95,47 @@ describe('painel › desafios (Pn-13)', () => {
         'g1',
         expect.objectContaining({
           kind: 'POINTS',
-          pointsTable: { workout: 5, water: 1, steps: 1 },
-          maxPointsPerDay: 7,
+          pointsTable: { workout: 5, water: 1 },
+          maxPointsPerDay: 6,
         }),
       ),
     );
   });
 
-  it('passos: as fontes escolhidas vão sem "Digitado à mão", que fica travado', async () => {
+  it('passos ficam fora do desafio novo até a sync de saúde, com o porquê (#395)', async () => {
     open();
     await fillBasics('10 mil passos');
-    await userEvent.click(screen.getByRole('radio', { name: /^Passos/ }));
-    expect(screen.getByRole('button', { name: /Digitado à mão/ })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Strava' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Agendar desafio' }));
+    expect(screen.queryByRole('radio', { name: /^Passos/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Apple Saúde/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Pontos \(misto\)/ }));
+    expect(screen.queryByRole('button', { name: /Passos na meta/ })).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(challengesApi.create).toHaveBeenCalled());
-    const input = vi.mocked(challengesApi.create).mock.calls[0][1];
-    expect(input).toMatchObject({ kind: 'STEPS', stepsGoal: 10000 });
-    expect(input.allowedStepSources).not.toContain('MANUAL');
-    expect(input.allowedStepSources).not.toContain('STRAVA');
-    expect(input.allowedStepSources).toContain('GARMIN');
+  it('o desafio de passos que já existe segue editável, sem perder os passos', async () => {
+    open([
+      c({
+        id: 'p',
+        title: 'Passos de antes',
+        kind: 'STEPS',
+        metric: 'STEPS',
+        status: 'upcoming',
+        startDate: '2026-10-20',
+        endDate: '2026-10-26',
+        rules: rules({ stepsGoal: 8000, allowedStepSources: ['GARMIN', 'APPLE_HEALTH'] }),
+      }),
+    ]);
+    vi.mocked(challengesApi.update).mockResolvedValue(detail());
+    const item = within((await screen.findByText('Passos de antes')).closest('li') as HTMLElement);
+    await userEvent.click(item.getByRole('button', { name: 'Editar' }));
+    expect(screen.getByRole('radio', { name: /^Passos/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Digitado à mão/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Garmin' }));
+    await userEvent.click(screen.getByRole('button', { name: /Salvar/ }));
+
+    await waitFor(() => expect(challengesApi.update).toHaveBeenCalled());
+    const input = vi.mocked(challengesApi.update).mock.calls[0][2];
+    expect(input).toMatchObject({ kind: 'STEPS', stepsGoal: 8000 });
+    expect(input.allowedStepSources).toEqual(['APPLE_HEALTH']);
   });
 
   it('água: meta e teto em litros viram ml', async () => {
