@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
   ClipboardList,
   Layers,
@@ -18,7 +20,9 @@ import {
   circuitBadge,
   circuitExerciseChips,
   circuitPlanSummary,
+  moveWithin,
   planExerciseChips,
+  planOrderApi,
   planSummaryLine,
   workoutApi,
   type TrainingBlock,
@@ -94,6 +98,26 @@ function PlansAndCircuits() {
     },
   });
 
+  // A ordem é da pessoa (#402): o primeiro é o treino de hoje. A equipe dá a
+  // ordem inicial; depois de reordenar aqui, a lista não muda mais pela ficha.
+  const [ordering, setOrdering] = useState(false);
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => planOrderApi.set(ids),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['workout', 'plans'] }),
+  });
+  const move = (id: string, delta: -1 | 1) => {
+    const all = plans.data?.map((p) => p.id) ?? [];
+    const subset = (plans.data ?? [])
+      .filter((p) => (p.kind === 'CIRCUIT') === circuitsTab)
+      .map((p) => p.id);
+    const next = moveWithin(all, subset, id, delta);
+    if (next === all) return;
+    qc.setQueryData<WorkoutPlan[]>(['workout', 'plans'], (old) =>
+      old ? next.flatMap((pid) => old.filter((p) => p.id === pid)) : old,
+    );
+    reorder.mutate(next);
+  };
+
   const activeBlock = block.data ?? null;
   const shown = plans.data?.filter((p) => (p.kind === 'CIRCUIT') === circuitsTab);
   const starting = start.isPending || startCircuit.isPending;
@@ -107,6 +131,7 @@ function PlansAndCircuits() {
         onChange={(next) => {
           setTab(next);
           setAskId(null);
+          setOrdering(false);
           router.replace(next === 'circuitos' ? '/workout/plans?tab=circuitos' : '/workout/plans', {
             scroll: false,
           });
@@ -164,24 +189,71 @@ function PlansAndCircuits() {
         </p>
       )}
 
-      {shown?.map((plan) => (
-        <PlanCard
-          key={plan.id}
-          plan={plan}
-          circuit={circuitsTab}
-          starting={starting}
-          asking={askId === plan.id}
-          removing={remove.isPending}
-          removeFailed={remove.isError && askId === plan.id}
-          onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
-          onAsk={() => {
-            remove.reset();
-            setAskId(plan.id);
-          }}
-          onCancel={() => setAskId(null)}
-          onDelete={() => remove.mutate(plan.id)}
-        />
-      ))}
+      {shown && shown.length > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            {ordering ? 'O primeiro é o treino de hoje.' : `${shown.length} na ordem do app`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setOrdering((v) => !v)}
+            className="min-h-11 rounded-xl px-3 text-sm font-bold text-primary hover:bg-muted"
+          >
+            {ordering ? 'Pronto' : 'Ordenar'}
+          </button>
+        </div>
+      )}
+      {reorder.isError && (
+        <p role="alert" className="text-sm text-danger">
+          Não deu para salvar a ordem.
+        </p>
+      )}
+
+      {ordering &&
+        shown?.map((plan, i) => (
+          <div key={plan.id} className="flex items-center gap-2 rounded-card bg-card px-4 py-2">
+            <span className="w-5 text-xs text-muted-foreground">{i + 1}</span>
+            <b className="min-w-0 flex-1 truncate text-sm text-foreground">{plan.name}</b>
+            <button
+              type="button"
+              aria-label={`Subir ${plan.name}`}
+              disabled={i === 0}
+              onClick={() => move(plan.id, -1)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-muted disabled:opacity-30"
+            >
+              <ArrowUp size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label={`Descer ${plan.name}`}
+              disabled={i === shown.length - 1}
+              onClick={() => move(plan.id, 1)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-muted disabled:opacity-30"
+            >
+              <ArrowDown size={18} aria-hidden />
+            </button>
+          </div>
+        ))}
+
+      {!ordering &&
+        shown?.map((plan) => (
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            circuit={circuitsTab}
+            starting={starting}
+            asking={askId === plan.id}
+            removing={remove.isPending}
+            removeFailed={remove.isError && askId === plan.id}
+            onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
+            onAsk={() => {
+              remove.reset();
+              setAskId(plan.id);
+            }}
+            onCancel={() => setAskId(null)}
+            onDelete={() => remove.mutate(plan.id)}
+          />
+        ))}
 
       {!circuitsTab && (
         <>
