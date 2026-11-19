@@ -580,8 +580,8 @@ function ChallengeForm({
         <span className="text-xs text-muted-foreground">{FORM_KIND_INFO[d.kind].explain}</span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_160px]">
-        <div className="space-y-1">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1 sm:col-span-2">
           <Label htmlFor="desafio-titulo">Título</Label>
           <Input
             id="desafio-titulo"
@@ -615,7 +615,7 @@ function ChallengeForm({
 
       <fieldset>
         <legend className="mb-2 text-sm font-medium">O que conta</legend>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {kinds.map((k) => (
             <label
               key={k}
@@ -631,9 +631,11 @@ function ChallengeForm({
                 />
                 <KindIcon
                   kind={FORM_KIND_INFO[k].kind}
-                  className="size-7 rounded-lg [&_svg]:size-4"
+                  className="size-7 shrink-0 rounded-lg [&_svg]:size-4"
                 />
-                <span className="text-sm font-semibold">{FORM_KIND_INFO[k].label}</span>
+                <span className="min-w-0 text-sm font-semibold leading-tight">
+                  {FORM_KIND_INFO[k].label}
+                </span>
               </span>
               <span className="text-xs text-muted-foreground">{FORM_KIND_INFO[k].explain}</span>
             </label>
