@@ -73,6 +73,7 @@ import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { MemberFileService } from '../../sharing/member-file.service';
 import { MemberNoteService } from '../../sharing/member-note.service';
 import { ReviewService } from '../../sharing/review.service';
+import { ReportService } from '../../sharing/report.service';
 import { PostService } from '../../sharing/post.service';
 import { BlockService } from '../../sharing/block.service';
 import { AgendaService } from '../../workout/agenda.service';
@@ -5542,6 +5543,80 @@ describe('isolamento entre usuários', () => {
       expect((await sessions.summary(owned.userA, r.sessA)).feedback).toHaveLength(1);
       await expect(sessions.summary(owned.userB, r.sessA)).rejects.toThrow(NotFoundException);
       await expect(sessions.findById(owned.userB, r.sessA)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('relatório do mês e origens dos convites (#400)', () => {
+    const relatorio = new ReportService(prisma);
+    const r = { a: '', b: '', profB: '' };
+
+    beforeAll(async () => {
+      const stamp = `relatorio-${Date.now()}`;
+      // A é a comunidade do pro; B é a do user-B, com uma profissional (a própria A).
+      const a = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Relatório A',
+          slug: `${stamp}-a`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [{ userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE }],
+          },
+        },
+      });
+      const b = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Relatório B',
+          slug: `${stamp}-b`,
+          ownerId: owned.userB,
+          weeklySessionsGoal: 50,
+          memberships: {
+            create: [
+              { userId: owned.userB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              {
+                userId: owned.userA,
+                role: GroupRole.PROFESSIONAL,
+                status: MembershipStatus.ACTIVE,
+              },
+            ],
+          },
+        },
+      });
+      r.a = a.id;
+      r.b = b.id;
+      r.profB = (
+        await prisma.groupMembership.findUniqueOrThrow({
+          where: { groupId_userId: { groupId: b.id, userId: owned.userA } },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [r.a, r.b] } } });
+    });
+
+    it('o dono de A não lê o relatório, as origens nem as configurações de B', async () => {
+      await expect(relatorio.report(owned.pro, r.b)).rejects.toThrow(NotFoundException);
+      await expect(relatorio.origins(owned.pro, r.b, 30)).rejects.toThrow(NotFoundException);
+      await expect(relatorio.settings(owned.pro, r.b)).rejects.toThrow(NotFoundException);
+      await expect(
+        relatorio.updateSettings(owned.pro, r.b, { weeklySessionsGoal: 1 }),
+      ).rejects.toThrow(NotFoundException);
+      // A profissional de B também não: o relatório é do dono.
+      await expect(relatorio.report(owned.userA, r.b)).rejects.toThrow(ForbiddenException);
+      const g = await prisma.group.findUniqueOrThrow({ where: { id: r.b } });
+      expect(g.weeklySessionsGoal).toBe(50);
+    });
+
+    it('a pessoa da equipe de B não é marcada pela URL de A', async () => {
+      await expect(relatorio.setRecipient(owned.pro, r.a, r.profB, true)).rejects.toThrow(
+        NotFoundException,
+      );
+      const m = await prisma.groupMembership.findUniqueOrThrow({ where: { id: r.profB } });
+      expect(m.reportEmail).toBe(false);
+      const meu = await relatorio.settings(owned.pro, r.a);
+      expect(meu.team.map((t) => t.membershipId)).not.toContain(r.profB);
     });
   });
 

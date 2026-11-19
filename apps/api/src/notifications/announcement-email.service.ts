@@ -7,10 +7,27 @@ import { EmailService, type EmailMessage } from './email.service';
 
 /** O segredo curto demais não protege nada: abaixo disto o e-mail fica desligado. */
 const SECRET_MIN = 16;
-const PROPOSITO = 'announcement-email:v1';
 
-function assinatura(userId: string, secret: string): string {
-  return createHmac('sha256', secret).update(`${PROPOSITO}:${userId}`).digest('base64url');
+/**
+ * O que o link descadastra: o comunicado da comunidade (#398) ou o relatório
+ * mensal (#400). O propósito entra na assinatura, então o token de um não
+ * vale para o outro.
+ */
+export type UnsubscribeKind = 'announcements' | 'report';
+const PURPOSE: Record<UnsubscribeKind, string> = {
+  announcements: 'announcement-email:v1',
+  report: 'report-email:v1',
+};
+/** O relatório marca o id do token; o comunicado segue sem marca (os links já mandados valem). */
+const REPORT_PREFIX = 'report:';
+
+function signature(kind: UnsubscribeKind, userId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`${PURPOSE[kind]}:${userId}`).digest('base64url');
+}
+
+function tokenFor(kind: UnsubscribeKind, userId: string, secret: string): string {
+  const id = kind === 'report' ? `${REPORT_PREFIX}${userId}` : userId;
+  return `${Buffer.from(id).toString('base64url')}.${signature(kind, userId, secret)}`;
 }
 
 /**
@@ -19,24 +36,35 @@ function assinatura(userId: string, secret: string): string {
  * ligar ou desligar o e-mail de comunicados de quem ele nomeia.
  */
 export function announcementUnsubscribeToken(userId: string, secret: string): string {
-  return `${Buffer.from(userId).toString('base64url')}.${assinatura(userId, secret)}`;
+  return tokenFor('announcements', userId, secret);
 }
 
 /** O token do link de descadastro do e-mail mensal do relatório (#400). */
-export function reportUnsubscribeToken(_userId: string, _secret: string): string {
-  throw new Error('não implementado');
+export function reportUnsubscribeToken(userId: string, secret: string): string {
+  return tokenFor('report', userId, secret);
 }
 
-/** O id da pessoa do token, ou `null` se a assinatura não confere. */
-export function readAnnouncementUnsubscribeToken(token: string, secret: string): string | null {
+/** A pessoa e o propósito do token, ou `null` se a assinatura não confere. */
+export function readUnsubscribeToken(
+  token: string,
+  secret: string,
+): { userId: string; kind: UnsubscribeKind } | null {
   const [id64, sig] = token.split('.');
   if (!id64 || !sig || token.split('.').length !== 2) return null;
-  const userId = Buffer.from(id64, 'base64url').toString('utf8');
+  const id = Buffer.from(id64, 'base64url').toString('utf8');
+  const kind: UnsubscribeKind = id.startsWith(REPORT_PREFIX) ? 'report' : 'announcements';
+  const userId = kind === 'report' ? id.slice(REPORT_PREFIX.length) : id;
   if (!userId) return null;
-  const esperado = Buffer.from(assinatura(userId, secret));
+  const esperado = Buffer.from(signature(kind, userId, secret));
   const recebido = Buffer.from(sig);
   if (esperado.length !== recebido.length || !timingSafeEqual(esperado, recebido)) return null;
-  return userId;
+  return { userId, kind };
+}
+
+/** O id da pessoa de um token de comunicado, ou `null` (inclusive para o do relatório). */
+export function readAnnouncementUnsubscribeToken(token: string, secret: string): string | null {
+  const r = readUnsubscribeToken(token, secret);
+  return r?.kind === 'announcements' ? r.userId : null;
 }
 
 function escapeHtml(s: string): string {
@@ -187,32 +215,40 @@ export class AnnouncementEmailService {
     return saiu;
   }
 
-  /** Para a página do link: a pessoa recebe hoje? */
-  async status(token: string): Promise<{ subscribed: boolean; kind?: 'announcements' | 'report' }> {
+  /** Para a página do link: a pessoa recebe hoje? E recebe o quê (comunicado ou relatório)? */
+  async status(token: string): Promise<{ subscribed: boolean; kind: UnsubscribeKind }> {
+    const { userId, kind } = this.read(token);
     const u = await this.prisma.user.findUnique({
-      where: { id: this.userOf(token) },
-      select: { announcementEmailOptOutAt: true },
+      where: { id: userId },
+      select: { announcementEmailOptOutAt: true, reportEmailOptOutAt: true },
     });
     if (!u) throw new BadRequestException('Link de descadastro inválido');
-    return { subscribed: u.announcementEmailOptOutAt === null };
+    const saiu = kind === 'report' ? u.reportEmailOptOutAt : u.announcementEmailOptOutAt;
+    return { subscribed: saiu === null, kind };
   }
 
-  /** Liga ou desliga o e-mail de comunicados de quem o token nomeia. Push não muda. */
-  async setSubscribed(token: string, subscribed: boolean): Promise<{ subscribed: boolean }> {
+  /**
+   * Liga ou desliga o e-mail que o token nomeia (comunicados ou o relatório
+   * mensal), só da pessoa dele. Push não muda.
+   */
+  async setSubscribed(
+    token: string,
+    subscribed: boolean,
+  ): Promise<{ subscribed: boolean; kind: UnsubscribeKind }> {
+    const { userId, kind } = this.read(token);
+    const quando = subscribed ? null : new Date();
     const r = await this.prisma.user.updateMany({
-      where: { id: this.userOf(token) },
-      data: { announcementEmailOptOutAt: subscribed ? null : new Date() },
+      where: { id: userId },
+      data:
+        kind === 'report' ? { reportEmailOptOutAt: quando } : { announcementEmailOptOutAt: quando },
     });
     if (r.count === 0) throw new BadRequestException('Link de descadastro inválido');
-    return { subscribed };
+    return { subscribed, kind };
   }
 
-  private userOf(token: string): string {
-    const id =
-      this.secret.length >= SECRET_MIN
-        ? readAnnouncementUnsubscribeToken(token, this.secret)
-        : null;
-    if (!id) throw new BadRequestException('Link de descadastro inválido');
-    return id;
+  private read(token: string): { userId: string; kind: UnsubscribeKind } {
+    const r = this.secret.length >= SECRET_MIN ? readUnsubscribeToken(token, this.secret) : null;
+    if (!r) throw new BadRequestException('Link de descadastro inválido');
+    return r;
   }
 }
