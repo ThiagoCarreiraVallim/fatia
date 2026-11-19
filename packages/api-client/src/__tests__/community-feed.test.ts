@@ -4,6 +4,7 @@ import {
   commentProblem,
   commentsLabel,
   communityTabs,
+  pinHeadline,
   postProblem,
   relativeTime,
   removedNotice,
@@ -58,6 +59,7 @@ describe('mural da comunidade (helpers)', () => {
   it('abas da comunidade: o mural é a raiz, sem aba Início, na web e no app', () => {
     expect(communityTabs('g1').map((t) => [t.tab, t.label, t.href])).toEqual([
       ['feed', 'Mural', '/community/g1'],
+      ['for-you', 'Para você', '/community/g1/for-you'],
       ['challenges', 'Desafios', '/community/g1/challenges'],
       ['content', 'Conteúdo', '/community/g1/content'],
     ]);
@@ -66,5 +68,16 @@ describe('mural da comunidade (helpers)', () => {
     expect(activeCommunityTab('/community/g1/feed')).toBe('feed');
     expect(activeCommunityTab('/community/g1/challenges/c1?x=1')).toBe('challenges');
     expect(activeCommunityTab('/community/g1/content/plans/t1')).toBe('content');
+  });
+});
+
+describe('pinHeadline', () => {
+  it('usa o título; sem título, a primeira linha do texto sem marcação', () => {
+    expect(pinHeadline({ title: 'Feriado', body: 'x' })).toBe('Feriado');
+    expect(pinHeadline({ title: null, body: '**Bem-vindos ao mural!**\nRegras: _respeito_' })).toBe(
+      'Bem-vindos ao mural!',
+    );
+    expect(pinHeadline({ title: null, body: '# Pernas da semana' })).toBe('Pernas da semana');
+    expect(pinHeadline({ title: null, body: '' })).toBe('Aviso');
   });
 });

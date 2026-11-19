@@ -141,6 +141,7 @@ export class AccountService {
       aiWriteModes,
       aiAutoWrites,
       mcpConnections,
+      blocks,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       // As metas de antes de cada troca (#396): de onde a pessoa partiu, e se a
@@ -419,7 +420,10 @@ export class AccountService {
           // denunciou. Os posts e comentários dos outros são dado de terceiro.
           posts: {
             select: {
+              kind: true,
+              title: true,
               body: true,
+              poll: { select: { question: true, closesAt: true } },
               createdAt: true,
               pinnedAt: true,
               removedAt: true,
@@ -433,6 +437,17 @@ export class AccountService {
             orderBy: { createdAt: 'asc' },
           },
           postReactions: { select: { kind: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+          // O voto da própria pessoa nas enquetes (#394): só ela sabe em quê votou.
+          pollVotes: {
+            select: {
+              createdAt: true,
+              updatedAt: true,
+              option: { select: { label: true } },
+              poll: { select: { question: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          postsHidden: { select: { createdAt: true }, orderBy: { createdAt: 'asc' } },
           reportsMade: {
             select: {
               reason: true,
@@ -633,6 +648,13 @@ export class AccountService {
         select: { createdAt: true, lastUsedAt: true, client: { select: { clientName: true } } },
         orderBy: { createdAt: 'asc' },
       }),
+      // Quem a pessoa bloqueou (#394). Quem a bloqueou não entra: o bloqueio é
+      // invisível para quem foi bloqueado.
+      this.prisma.userBlock.findMany({
+        where: { blockerId: userId },
+        select: { label: true, createdAt: true, group: { select: { name: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -706,6 +728,11 @@ export class AccountService {
         connectedAt: c.createdAt,
         lastUsedAt: c.lastUsedAt,
       })),
+      blocks: blocks.map((b) => ({
+        label: b.label,
+        community: b.group?.name ?? null,
+        blockedAt: b.createdAt,
+      })),
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -736,6 +763,8 @@ export class AccountService {
         aiConsents: aiConsents.length,
         aiAutoWrites: aiAutoWrites.length,
         mcpConnections: mcpConnections.length,
+        blocks: blocks.length,
+        pollVotes: communityMemberships.reduce((n, m) => n + m.pollVotes.length, 0),
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

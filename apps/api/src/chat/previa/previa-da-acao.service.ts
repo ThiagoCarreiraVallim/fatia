@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma.service';
 import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
 import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
+import { blockedUserIds } from '../../sharing/block.service';
 import { hashInviteToken } from '../../sharing/invite.service';
 import { reminderTitle } from '../../notifications/reminders/reminder-rules';
 import {
@@ -328,19 +329,70 @@ export class PreviaDaAcaoService {
         return desafio?.title ?? null;
       }
       case 'postDaComunidade': {
-        // Só post no ar de comunidade de que a pessoa é membro ativo: o
-        // comentário num post removido ou alheio falharia.
+        // Só post no ar de comunidade de que a pessoa é membro ativo, e nunca
+        // de quem tem bloqueio com ela (#394): o cartão não mostra o que o
+        // mural esconde.
+        const escondidos = await blockedUserIds(this.prisma, userId);
         const post = await this.prisma.groupPost.findFirst({
           where: {
             id,
             removedAt: null,
             group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+            ...(escondidos.length > 0
+              ? { OR: [{ publishedAs: 'GROUP' }, { author: { userId: { notIn: escondidos } } }] }
+              : {}),
+          },
+          select: { body: true, poll: { select: { question: true } } },
+        });
+        if (!post) return null;
+        const linha = (post.poll?.question ?? post.body).replace(/\s+/g, ' ').trim();
+        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha || 'Post com imagem';
+      }
+      case 'comentarioDaComunidade': {
+        const escondidos = await blockedUserIds(this.prisma, userId);
+        const c = await this.prisma.groupPostComment.findFirst({
+          where: {
+            id,
+            removedAt: null,
+            post: { group: { memberships: { some: { userId, status: 'ACTIVE' } } } },
+            ...(escondidos.length > 0 ? { author: { userId: { notIn: escondidos } } } : {}),
           },
           select: { body: true },
         });
-        if (!post) return null;
-        const linha = post.body.replace(/\s+/g, ' ').trim();
-        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha || 'Post com imagem';
+        if (!c) return null;
+        const linha = c.body.replace(/\s+/g, ' ').trim();
+        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha;
+      }
+      case 'opcaoDaEnquete': {
+        // Mesmo filtro do `postDaComunidade`: a opção da enquete de quem tem
+        // bloqueio com a pessoa não ganha rótulo no cartão.
+        const escondidos = await blockedUserIds(this.prisma, userId);
+        const opcao = await this.prisma.groupPollOption.findFirst({
+          where: {
+            id,
+            poll: {
+              post: {
+                removedAt: null,
+                group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+                ...(escondidos.length > 0
+                  ? {
+                      OR: [{ publishedAs: 'GROUP' }, { author: { userId: { notIn: escondidos } } }],
+                    }
+                  : {}),
+              },
+            },
+          },
+          select: { label: true },
+        });
+        return opcao?.label ?? null;
+      }
+      case 'bloqueio': {
+        // Só o bloqueio que a própria pessoa fez.
+        const b = await this.prisma.userBlock.findFirst({
+          where: { id, blockerId: userId },
+          select: { label: true },
+        });
+        return b?.label ?? null;
       }
       case 'convite': {
         // Convite que não vale mais não ganha nome no cartão: o aceite falharia.

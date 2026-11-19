@@ -49,6 +49,13 @@ export class ModerationController {
     return this.posts.resolveReport(user.id, p.groupId, p.reportId, dto.action);
   }
 
+  /** O painel de enquetes (prancha Pn-26): resultado só com 5 votos. */
+  @Get('polls')
+  @RequireGroupAction('content.publish')
+  polls(@CurrentUser() user: CurrentUserPayload, @Param('groupId', ParseUUIDPipe) groupId: string) {
+    return this.posts.polls(user.id, groupId);
+  }
+
   @Get('removed')
   @RequireGroupAction('content.moderate')
   removed(

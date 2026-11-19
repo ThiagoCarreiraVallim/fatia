@@ -14,6 +14,11 @@ export const communityKeys = {
   /** O mural: a lista paginada, e cada post aberto com os comentários. */
   feed: (groupId: string) => ['community', 'feed', groupId] as const,
   post: (groupId: string, id: string) => ['community', 'feed', groupId, id] as const,
+  /** A lista do mural com um filtro (Tudo, Equipe, Conteúdo novo, Membros). */
+  feedList: (groupId: string, filter: string) =>
+    ['community', 'feed', groupId, 'list', filter] as const,
+  /** A aba Para você e o número dela. */
+  forYou: (groupId: string) => ['community', 'for-you', groupId] as const,
   /** Quem da equipe vê o quê de mim (Sobre). */
   team: (groupId: string) => ['community', 'team', groupId] as const,
   benefits: (groupId: string) => ['community', 'benefits', groupId] as const,
@@ -40,6 +45,9 @@ export const orgKeys = {
   removedPosts: (groupId: string) =>
     ['community', 'org', groupId, 'moderation', 'removed'] as const,
   bans: (groupId: string) => ['community', 'org', groupId, 'moderation', 'bans'] as const,
+  polls: (groupId: string) => ['community', 'org', groupId, 'moderation', 'polls'] as const,
+  announcements: (groupId: string) =>
+    ['community', 'org', groupId, 'moderation', 'announcements'] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

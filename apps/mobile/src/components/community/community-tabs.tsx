@@ -1,16 +1,21 @@
-import { Pressable, ScrollView } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { usePathname, useRouter } from 'expo-router';
-import { activeCommunityTab, communityTabs } from '@fatia/api-client';
+import { activeCommunityTab, communityTabs, forYouApi } from '@fatia/api-client';
+import { forYouKey } from '@/components/feed/feed-ui';
 import { cn } from '@/components/ui';
 
 /**
  * As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`:
- * o mural é a raiz da comunidade, e o resto mora na engrenagem.
+ * o mural é a raiz da comunidade, e o resto mora na engrenagem. Para você leva
+ * o número do que falta; a Agenda chega com a #397.
  */
 export function CommunityTabs({ groupId }: { groupId: string }) {
   const router = useRouter();
   const active = activeCommunityTab(usePathname() ?? '');
+  const forYou = useQuery({ queryKey: forYouKey(groupId), queryFn: () => forYouApi.get(groupId) });
+  const count = forYou.data?.count ?? 0;
   return (
     <ScrollView
       horizontal
@@ -25,9 +30,12 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
             key={t.tab}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
+            accessibilityLabel={
+              t.tab === 'for-you' && count > 0 ? `${t.label}, ${count} para ver` : t.label
+            }
             onPress={() => !on && router.navigate(t.href as never)}
             className={cn(
-              'min-h-[44px] justify-center border-b-2 px-3',
+              'min-h-[44px] flex-row items-center gap-1.5 border-b-2 px-3',
               on ? 'border-primary' : 'border-transparent',
             )}
           >
@@ -39,6 +47,11 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
             >
               {t.label}
             </Text>
+            {t.tab === 'for-you' && count > 0 ? (
+              <View className="h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5">
+                <Text className="text-[11px] font-bold text-primary-foreground">{count}</Text>
+              </View>
+            ) : null}
           </Pressable>
         );
       })}

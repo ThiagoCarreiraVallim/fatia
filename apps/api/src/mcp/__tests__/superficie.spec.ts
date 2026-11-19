@@ -65,14 +65,18 @@ import {
  * `list_achievements`, `list_personal_records` e `update_goal` (nenhuma de intenção): muda o
  * braço A. As duas chegaram juntas no merge da main na #382.
  * O merge da main (#382) na #380 juntou os dois braços A acima.
+ * A #394 acrescentou `get_group_poll`, `vote_group_poll`, `list_blocked_users`, `block_user` e
+ * `unblock_user` (nenhuma destrutiva nem de intenção), a enquete em `create_group_post` e
+ * `filter` e o bloqueio em `list_group_posts`: muda o braço A.
  * A #393 acrescentou `list_group_benefits` (só leitura, sem intenção): muda o braço A.
  * O merge da main (#385, `save_memory` com `category`) na #393 juntou os dois: braço A novo, braço B o da #385.
  * A #396 acrescentou `list_group_exercise_guides` (só leitura, sem intenção) e mudou a descrição
  * de `adopt_group_plan` (as partes separadas e o histórico das metas): muda o braço A. O merge
- * da main (#393 via #446) na #396 juntou: braço A novo, braço B o da main.
+ * da main (#393 via #446) na #396 juntou: braço A novo, braço B o da main. O merge da #393 na
+ * #394 juntou os dois braços A, e o da main (#394 via #447) na #396 juntou de novo o braço A.
  */
 
-const SHA_ENTIDADE = '85bc82ce3ac523fd408c8d6127c3c1520f365987447e966cc7b147ebcf82970f';
+const SHA_ENTIDADE = '27bd7a946bc40aaa880cb124354e0aa6e328d510399e0910f21dd3828fa2f97e';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

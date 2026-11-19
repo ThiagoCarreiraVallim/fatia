@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type GroupRole, type MediaFile } from '@fatia/db';
+import { AutoPostKind, Prisma, type GroupRole, type MediaFile } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { publishAutoPost } from './auto-post';
 import { normalizeSearchText } from '../common/search-text';
 import { MediaService, type MediaView } from '../storage/media.service';
 import {
@@ -168,6 +169,14 @@ export class GroupExerciseService {
     } catch (err) {
       throw this.conflict(err);
     }
+    await publishAutoPost(this.prisma, {
+      groupId,
+      actorUserId: userId,
+      kind: AutoPostKind.EXERCISE,
+      refId: String(exercicio.id),
+      title: exercicio.name,
+      meta: exercicio.muscleGroup,
+    });
     const guia = await this.findGuide(groupId, exercicio.id);
     return this.view(guia, userId, eu);
   }

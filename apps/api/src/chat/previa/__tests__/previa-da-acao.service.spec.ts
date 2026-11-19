@@ -13,6 +13,9 @@ import { LogMealTemplateTool } from '../../../nutrition/mcp/log-meal-template.to
 import { SetGroupSharingTool } from '../../../sharing/mcp/set-group-sharing.tool';
 import { AcceptGroupInviteTool } from '../../../sharing/mcp/accept-group-invite.tool';
 import { JoinGroupChallengeTool } from '../../../sharing/mcp/join-group-challenge.tool';
+import { VoteGroupPollTool } from '../../../sharing/mcp/vote-group-poll.tool';
+import { BlockUserTool } from '../../../sharing/mcp/block-user.tool';
+import { UnblockUserTool } from '../../../sharing/mcp/unblock-user.tool';
 import { CommentOnGroupPostTool } from '../../../sharing/mcp/comment-on-group-post.tool';
 import { hashInviteToken } from '../../../sharing/invite.service';
 import { AcceptNutritionPlanTool } from '../../../nutrition/mcp/accept-nutrition-plan.tool';
@@ -51,6 +54,9 @@ describe('PreviaDaAcaoService', () => {
     AcceptGroupInviteTool,
     JoinGroupChallengeTool,
     CommentOnGroupPostTool,
+    VoteGroupPollTool,
+    BlockUserTool,
+    UnblockUserTool,
     AcceptNutritionPlanTool,
     LogPlanMealTool,
     SwapPlanItemTool,
@@ -794,6 +800,125 @@ describe('PreviaDaAcaoService', () => {
     } finally {
       await prisma.groupPost.deleteMany({ where: { id: { in: [post.id, removido.id] } } });
       await prisma.user.delete({ where: { id: estranho.id } });
+    }
+  });
+
+  it('mural (#394): opção da enquete e bloqueio no cartão; post de quem tem bloqueio não aparece', async () => {
+    const m = await prisma.groupMembership.findFirstOrThrow({
+      where: { groupId: comunidade, userId: dono.id },
+    });
+    const gabi = await prisma.user.create({
+      data: {
+        logtoSub: `previa-gabi-${Date.now()}`,
+        email: `previa-gabi-${Date.now()}@test.local`,
+        name: 'Gabi Torres',
+      },
+    });
+    const mg = await prisma.groupMembership.create({
+      data: { groupId: comunidade, userId: gabi.id, role: 'MEMBER', status: 'ACTIVE' },
+    });
+    const enquete = await prisma.groupPost.create({
+      data: {
+        groupId: comunidade,
+        membershipId: m.id,
+        kind: 'POLL',
+        body: '',
+        poll: {
+          create: {
+            question: 'Qual horário do aulão?',
+            closesAt: new Date(Date.now() + 86_400_000),
+            options: {
+              create: [
+                { label: '8h', order: 0 },
+                { label: '9h', order: 1 },
+              ],
+            },
+          },
+        },
+      },
+      include: { poll: { include: { options: true } } },
+    });
+    const daGabi = await prisma.groupPost.create({
+      data: { groupId: comunidade, membershipId: mg.id, body: 'Recorde no agachamento' },
+    });
+    const extras: string[] = [];
+    try {
+      await expect(
+        previas.previa(dono, 'vote_group_poll', {
+          groupId: comunidade,
+          postId: enquete.id,
+          optionId: enquete.poll!.options[0]!.id,
+        }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [
+          { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
+          { rotulo: 'Post', valor: 'Qual horário do aulão?' },
+          { rotulo: 'Opção', valor: '8h' },
+        ],
+      });
+      const bloquear = await previas.previa(dono, 'block_user', {
+        groupId: comunidade,
+        postId: daGabi.id,
+      });
+      expect(bloquear.valida).toBe(true);
+
+      const b = await prisma.userBlock.create({
+        data: { blockerId: dono.id, blockedId: gabi.id, label: 'Gabi' },
+      });
+      await expect(previas.previa(dono, 'unblock_user', { blockId: b.id })).resolves.toEqual({
+        valida: true,
+        linhas: [{ rotulo: 'Pessoa', valor: 'Gabi' }],
+      });
+      // Com o bloqueio, o post da Gabi não ganha trecho no cartão.
+      const depois = await previas.previa(dono, 'block_user', {
+        groupId: comunidade,
+        postId: daGabi.id,
+      });
+      expect(depois.valida).toBe(false);
+      expect(JSON.stringify(depois)).not.toContain('agachamento');
+      // E o bloqueio de outra pessoa não resolve.
+      const alheio = await previas.previa({ id: gabi.id, timezone: TZ }, 'unblock_user', {
+        blockId: b.id,
+      });
+      expect(alheio.valida).toBe(false);
+
+      // A opção da enquete de quem tem bloqueio também não aparece no cartão,
+      // nem quando o post pedido é outro, visível (o modelo pode trocar ids).
+      const enqueteDaGabi = await prisma.groupPost.create({
+        data: {
+          groupId: comunidade,
+          membershipId: mg.id,
+          kind: 'POLL',
+          body: '',
+          poll: {
+            create: {
+              question: 'Treino de sábado?',
+              closesAt: new Date(Date.now() + 86_400_000),
+              options: {
+                create: [
+                  { label: 'Corrida no parque', order: 0 },
+                  { label: 'Funcional', order: 1 },
+                ],
+              },
+            },
+          },
+        },
+        include: { poll: { include: { options: true } } },
+      });
+      extras.push(enqueteDaGabi.id);
+      const voto = await previas.previa(dono, 'vote_group_poll', {
+        groupId: comunidade,
+        postId: enquete.id,
+        optionId: enqueteDaGabi.poll!.options[0]!.id,
+      });
+      expect(voto.valida).toBe(false);
+      expect(JSON.stringify(voto)).not.toContain('Corrida no parque');
+    } finally {
+      await prisma.groupPost.deleteMany({
+        where: { id: { in: [enquete.id, daGabi.id, ...extras] } },
+      });
+      await prisma.user.delete({ where: { id: gabi.id } });
     }
   });
 

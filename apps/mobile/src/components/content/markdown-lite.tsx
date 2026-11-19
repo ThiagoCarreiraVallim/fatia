@@ -42,6 +42,18 @@ export function MarkdownLite({ source }: { source: string }) {
           <Text key={i} className="text-sm leading-5 text-foreground">
             {inline(b.children)}
           </Text>
+        ) : b.type === 'heading' ? (
+          <Text
+            key={i}
+            accessibilityRole="header"
+            className="text-base font-semibold text-foreground"
+          >
+            {inline(b.children)}
+          </Text>
+        ) : b.type === 'quote' ? (
+          <View key={i} className="border-l-2 border-primary pl-3">
+            <Text className="text-sm leading-5 text-muted-foreground">{inline(b.children)}</Text>
+          </View>
         ) : (
           <View key={i} className="gap-1">
             {b.items.map((item, j) => (

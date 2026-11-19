@@ -17,9 +17,15 @@ export type InlineToken =
 
 export type BlockToken =
   | { type: 'paragraph'; children: InlineToken[] }
-  | { type: 'list'; ordered: boolean; items: InlineToken[][] };
+  | { type: 'list'; ordered: boolean; items: InlineToken[][] }
+  /** `# título` (também `##` e `###`): um nível só, o do mural (#394). */
+  | { type: 'heading'; children: InlineToken[] }
+  /** `> citação`: linhas seguidas viram uma citação. */
+  | { type: 'quote'; children: InlineToken[] };
 
 const ITEM = /^\s*(?:([-*])|(\d{1,3})[.)])\s+(.*)$/;
+const HEADING = /^\s*#{1,3}\s+(.*)$/;
+const QUOTE = /^\s*>\s?(.*)$/;
 
 /** Só `https:`. `http:`, `javascript:`, `data:` e relativos viram texto. */
 export function safeHref(raw: string): string | null {
@@ -35,11 +41,16 @@ export function parseMarkdownLite(source: string): BlockToken[] {
   const blocks: BlockToken[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
+  let quote: string[] = [];
 
   const flushParagraph = () => {
     if (paragraph.length)
       blocks.push({ type: 'paragraph', children: parseInline(paragraph.join(' ')) });
     paragraph = [];
+  };
+  const flushQuote = () => {
+    if (quote.length) blocks.push({ type: 'quote', children: parseInline(quote.join(' ')) });
+    quote = [];
   };
   const flushList = () => {
     if (list) {
@@ -53,8 +64,25 @@ export function parseMarkdownLite(source: string): BlockToken[] {
     if (!line.trim()) {
       flushParagraph();
       flushList();
+      flushQuote();
       continue;
     }
+    const heading = HEADING.exec(line);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      blocks.push({ type: 'heading', children: parseInline(heading[1]!.trim()) });
+      continue;
+    }
+    const citacao = QUOTE.exec(line);
+    if (citacao) {
+      flushParagraph();
+      flushList();
+      quote.push(citacao[1]!.trim());
+      continue;
+    }
+    flushQuote();
     const item = ITEM.exec(line);
     if (item) {
       flushParagraph();
@@ -69,6 +97,7 @@ export function parseMarkdownLite(source: string): BlockToken[] {
   }
   flushParagraph();
   flushList();
+  flushQuote();
   return blocks;
 }
 
@@ -134,6 +163,6 @@ export function markdownLitePlainText(source: string): string {
   const inline = (tokens: InlineToken[]): string =>
     tokens.map((t) => (t.type === 'text' ? t.text : inline(t.children))).join('');
   return parseMarkdownLite(source)
-    .map((b) => (b.type === 'paragraph' ? inline(b.children) : b.items.map(inline).join('; ')))
+    .map((b) => (b.type === 'list' ? b.items.map(inline).join('; ') : inline(b.children)))
     .join(' ');
 }

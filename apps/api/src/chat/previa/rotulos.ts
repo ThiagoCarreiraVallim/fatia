@@ -50,6 +50,19 @@ const listaDeMapa =
           .join(', ')
       : null;
 
+/** A enquete no cartão de `create_group_post`: a pergunta, as opções e o prazo. */
+function pollSummary(valor: unknown): string | null {
+  const { question, options, days } = (valor ?? {}) as {
+    question?: unknown;
+    options?: unknown;
+    days?: unknown;
+  };
+  if (typeof question !== 'string' || !Array.isArray(options)) return null;
+  const opcoes = options.filter((o): o is string => typeof o === 'string').join(', ');
+  const prazo = typeof days === 'number' ? ` · aberta ${days} ${days === 1 ? 'dia' : 'dias'}` : '';
+  return `${question.trim()} — ${opcoes}${prazo}`;
+}
+
 /** `[{label: 'porção', grams: 30}]` → "porção (30 g)". */
 const medidas: Formato = (valor) => {
   if (!Array.isArray(valor) || !valor.length) return null;
@@ -378,6 +391,8 @@ export const CAMPOS: Record<string, Campo> = {
   // O apelido da comunidade vale para o ranking e para o mural.
   displayName: { rotulo: 'Apelido na comunidade', formato: texto },
   body: { rotulo: 'Texto', formato: texto },
+  // Enquete do mural (#394): "Pergunta? — 8h, 9h, 10h · aberta 3 dias".
+  poll: { rotulo: 'Enquete', formato: (valor) => pollSummary(valor) },
   description: { rotulo: 'Descrição', formato: texto },
   content: { rotulo: 'O que lembrar', formato: texto },
   category: { rotulo: 'Categoria', formato: deMapa(CATEGORIA_DA_MEMORIA) },
@@ -593,6 +608,9 @@ export type TipoDeRegistro =
   | 'planoDaComunidade'
   | 'desafioDaComunidade'
   | 'postDaComunidade'
+  | 'comentarioDaComunidade'
+  | 'opcaoDaEnquete'
+  | 'bloqueio'
   | 'lembrete'
   | 'planoAlimentar'
   | 'refeicaoDoPlano'
@@ -617,6 +635,18 @@ export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   join_group_challenge: { groupId: 'comunidade', challengeId: 'desafioDaComunidade' },
   create_group_post: { groupId: 'comunidade' },
   comment_on_group_post: { groupId: 'comunidade', postId: 'postDaComunidade' },
+  // Mural do redesign (#394): enquete e bloqueio.
+  vote_group_poll: {
+    groupId: 'comunidade',
+    postId: 'postDaComunidade',
+    optionId: 'opcaoDaEnquete',
+  },
+  block_user: {
+    groupId: 'comunidade',
+    postId: 'postDaComunidade',
+    commentId: 'comentarioDaComunidade',
+  },
+  unblock_user: { blockId: 'bloqueio' },
   // Plano alimentar do profissional (#376): `planId` aqui não é plano de treino.
   accept_nutrition_plan: { planId: 'planoAlimentar' },
   log_plan_meal: { planMealId: 'refeicaoDoPlano', optionId: 'opcaoDoPlano' },
@@ -664,6 +694,9 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   planoDaComunidade: 'Plano da comunidade',
   desafioDaComunidade: 'Desafio',
   postDaComunidade: 'Post',
+  comentarioDaComunidade: 'Comentário',
+  opcaoDaEnquete: 'Opção',
+  bloqueio: 'Pessoa',
   lembrete: 'Lembrete',
   planoAlimentar: 'Plano alimentar',
   refeicaoDoPlano: 'Refeição do plano',

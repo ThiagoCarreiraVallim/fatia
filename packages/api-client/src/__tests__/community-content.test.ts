@@ -297,6 +297,7 @@ describe('regras do conteúdo', () => {
       'content',
       'exercises',
       'challenges',
+      'announcements',
     ]);
     expect(panelSections('OWNER').map((s) => s.section)).toContain('content');
     expect(panelHref('g1', 'content')).toBe('/org/g1/content');

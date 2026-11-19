@@ -70,6 +70,8 @@ import { AchievementService } from '../../progress/achievement.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
+import { PostService } from '../../sharing/post.service';
+import { BlockService } from '../../sharing/block.service';
 import { AgendaService } from '../../workout/agenda.service';
 import { SubscriptionEntitlementsService } from '../../billing/subscription-entitlements.service';
 import { UserSubscriptionService } from '../../billing/user-subscription.service';
@@ -4182,6 +4184,91 @@ describe('isolamento entre usuários', () => {
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain(o.offerId);
       expect(JSON.stringify(deB)).not.toContain(o.sessionId);
+    });
+  });
+
+  describe('mural: bloqueios e votos (#394)', () => {
+    const mural = new PostService(
+      prisma,
+      new MediaService(prisma, new MemoryObjectStore()),
+      silentNotifications,
+    );
+    const bloqueios = new BlockService(prisma);
+    const m = { groupId: '', otherGroupId: '', postB: '', pollPost: '', blockA: '' };
+
+    beforeAll(async () => {
+      const stamp = `mural394-${Date.now()}`;
+      const criar = (nome: string, slug: string) =>
+        prisma.group.create({
+          data: {
+            type: GroupType.SPONSORED,
+            name: nome,
+            slug: `${stamp}-${slug}`,
+            ownerId: owned.pro,
+            memberships: {
+              create: [
+                { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+                { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+                { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              ],
+            },
+          },
+        });
+      m.groupId = (await criar('Mural A', 'a')).id;
+      m.otherGroupId = (await criar('Mural B', 'b')).id;
+      m.postB = (await mural.create(owned.userB, m.groupId, { body: 'post do B' })).id;
+      const enquete = await mural.create(owned.pro, m.groupId, {
+        kind: 'POLL',
+        poll: { question: 'Horário?', options: ['8h', '9h'], days: 2 },
+      });
+      m.pollPost = enquete.id;
+      await mural.vote(owned.userA, m.groupId, enquete.id, enquete.poll!.options[0]!.id);
+      m.blockA = (await bloqueios.block(owned.userA, { groupId: m.groupId, postId: m.postB })).id;
+    });
+
+    afterAll(async () => {
+      await prisma.userBlock.deleteMany({ where: { id: m.blockA } });
+      await prisma.group.deleteMany({ where: { id: { in: [m.groupId, m.otherGroupId] } } });
+    });
+
+    it('GET /users/me/blocks do B não mostra o bloqueio que o A fez, e o B não desfaz', async () => {
+      expect((await bloqueios.list(owned.userA)).map((b) => b.id)).toEqual([m.blockA]);
+      expect(await bloqueios.list(owned.userB)).toEqual([]);
+      await expect(bloqueios.unblock(owned.userB, m.blockA)).rejects.toThrow(NotFoundException);
+      await expect(bloqueios.unblock(owned.pro, m.blockA)).rejects.toThrow(NotFoundException);
+    });
+
+    it('o bloqueio vale nos dois sentidos e em outra comunidade', async () => {
+      const emB = await mural.create(owned.userB, m.otherGroupId, { body: 'no outro mural' });
+      const visto = await mural.list(owned.userA, m.otherGroupId);
+      expect(visto.posts.map((p) => p.id)).not.toContain(emB.id);
+      const doA = await mural.create(owned.userA, m.otherGroupId, { body: 'do A' });
+      const peloB = await mural.list(owned.userB, m.otherGroupId);
+      expect(peloB.posts.map((p) => p.id)).not.toContain(doA.id);
+    });
+
+    it('o voto do A não aparece para o B nem para a equipe', async () => {
+      const peloB = await mural.get(owned.userB, m.groupId, m.pollPost);
+      expect(peloB.poll!.myOptionId).toBeNull();
+      expect(peloB.poll!.totalVotes).toBeNull();
+      const painel = await mural.polls(owned.pro, m.groupId);
+      expect(JSON.stringify(painel)).not.toContain(owned.userA);
+      expect(painel[0]!.totalVotes).toBeNull();
+    });
+
+    it('o export do A leva o voto e o bloqueio dele; o do B, nenhum dos dois', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      expect(deA.blocks).toHaveLength(1);
+      const votos = deA.communityMemberships.flatMap((x) => x.pollVotes);
+      expect(votos).toEqual([expect.objectContaining({ option: { label: '8h' } })]);
+      const deB = await conta.exportData(owned.userB);
+      expect(deB.blocks).toEqual([]);
+      expect(deB.communityMemberships.flatMap((x) => x.pollVotes)).toEqual([]);
     });
   });
 
