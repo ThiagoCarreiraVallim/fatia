@@ -554,6 +554,12 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A ordem da pessoa é `GET/PUT workout/plans/order`, não `users/me/plans/order`: fica junto das rotas de plano.
   - Não há tabela nova de "plano mandado" com `kind`: o treino reaproveita `PlanOffer`/`PlanOfferVersion` (#379), com campos novos (`position`, `sourceTemplateId`, `endedAt`, `removedAt`), e a alimentação continua no `NutritionPlan` (#376).
   - Sem rascunho, duplicar, editar a cópia, "Criar para a Ana" e mandar dieta: dependem dos editores.
+- **Passada visual** (web 1440 e 390, escuro e claro, e app no emulador, contra Pn-05, Pn-05p, Pn-05q, Pn-05s, Pn-05d, Cm-04 e Al-T6; prints em `~/.cache/fatia-vis/402/cmp-*.png`):
+  - Corrigido: no celular o nome da pessoa ficava espremido ao lado de "Adicionar plano" (o botão agora desce para a linha de baixo); a tabela de planos tinha 640 px fixos e escondia as ações em 390 (Quando e Andamento somem no celular, e Quando vai sob o nome); o formulário "Adicionar plano" no painel lateral não tinha respiro nem rolagem própria.
+  - Acrescentado: "Ordenar" planos também no app web (o celular já tinha), mesma regra e a mesma chamada.
+  - Conferido: o painel lateral empurra a página e não cobre "Adicionar plano"; o diálogo de apagar fica sobre a barra de abas no celular com os três botões visíveis; "Apagar" em `text-danger`; sem texto escuro no modo escuro; aba trancada com cadeado e o estado "Carla não compartilha Corpo".
+  - Desvios de propósito: abas em fichas (o `Segmented` do produto) em vez da barra de abas lisa da prancha; o compartilhado no Resumo em etiquetas e não em lista; a semana da agenda sem altura mínima por dia; telefone, "Pedir avaliação", Visitas e "Criar para a Ana" ficam fora (ver Falta). O lado da pessoa foi conferido com o dono (nota de uma profissional sobre ele e os planos dele), porque a conta demo não é membro da Academia Demo.
+  - Dados de demo criados para os prints (3 ofertas, 5 planos, 3 notas, linhas da trilha, ordem do Bruno) foram apagados; contagens iguais antes e depois.
 - **Falta:**
   - #383: avaliações e "Pedir avaliação" (a aba Corpo mostra o espaço vazio).
   - #397: eventos com "Vou" na agenda.
