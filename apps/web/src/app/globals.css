@@ -419,3 +419,22 @@
     top: 0;
   }
 }
+
+/*
+ * "Baixar PDF" do relatório do mês (#400): a impressão do navegador. Só o
+ * relatório sai no papel; o menu, a barra e os controles (`print:hidden`) somem.
+ */
+@media print {
+  body:has(#month-report) * {
+    visibility: hidden;
+  }
+  body:has(#month-report) #month-report,
+  body:has(#month-report) #month-report * {
+    visibility: visible;
+  }
+  body:has(#month-report) #month-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+}

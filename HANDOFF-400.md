@@ -22,11 +22,11 @@ Pranchas baixadas em `/home/thiago/Documentos/pessoal/fatia/.canvas/project/` (P
 - [x] testes vermelhos (api)
 - [x] api
 - [x] api-client
-- [ ] web
+- [x] web
 - [x] mobile filtro
 - [ ] docs (REDESIGN_PROGRESS bloco #400, PERMISSIONS?, AGGREGATION_POLICY, DATA_RETENTION, export LGPD)
 - [ ] lint/typecheck/testes
 
 ## Próximo passo
 
-Web: ícones no org-shell, páginas report e origins (testes vermelhos primeiro), ?novo=link, descadastro com kind, tirar InsightsCards da visão geral. Depois docs e verificação final.
+Docs (REDESIGN_PROGRESS bloco #400, PERMISSIONS, DATA_RETENTION, AGGREGATION_POLICY) e verificação final (lint/typecheck/testes de api, api-client, web, mobile).
