@@ -4,7 +4,6 @@ import { useLocalSearchParams } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CHALLENGE_DESCRIPTION_MAX,
-  CHALLENGE_KINDS,
   CHALLENGE_TITLE_MAX,
   challengePeriod,
   challengeProblem,
@@ -14,9 +13,10 @@ import {
   maxPointsOf,
   METRIC_INFO,
   POINT_ITEM_INFO,
-  POINT_ITEMS,
   REVIEW_REASON_MAX,
   STEP_SOURCE_LABEL,
+  STEPS_CLOSED_TEXT,
+  STEPS_SYNC_AVAILABLE,
   type Challenge,
   type MyGroup,
   type PointItem,
@@ -28,7 +28,9 @@ import {
   challengeInputFromForm,
   clampStep,
   defaultChallengeForm,
+  FORM_KINDS,
   FORM_LIMITS,
+  FORM_POINT_ITEMS,
   kindShort,
   liters,
   reviewReasonProblem,
@@ -187,7 +189,7 @@ function NewChallenge({ g, today, onDone }: { g: MyGroup; today: string; onDone:
 
       <Row title="O que conta">
         <View accessibilityRole="radiogroup" className="gap-2">
-          {CHALLENGE_KINDS.map((k) => {
+          {FORM_KINDS.map((k) => {
             const on = f.kind === k;
             return (
               <Pressable
@@ -211,6 +213,9 @@ function NewChallenge({ g, today, onDone }: { g: MyGroup; today: string; onDone:
             );
           })}
         </View>
+        {STEPS_SYNC_AVAILABLE ? null : (
+          <Text className="text-xs text-muted-foreground">{STEPS_CLOSED_TEXT}</Text>
+        )}
       </Row>
 
       {f.kind === 'METRIC' ? (
@@ -249,9 +254,9 @@ function NewChallenge({ g, today, onDone }: { g: MyGroup; today: string; onDone:
       {f.kind === 'POINTS' ? (
         <Row
           title="Quanto vale cada coisa"
-          hint="0 tira o item do desafio. O treino precisa do check-in com foto; os passos, do celular ou relógio; a água conta até o teto."
+          hint="0 tira o item do desafio. O treino precisa do check-in com foto; a água conta até o teto."
         >
-          {POINT_ITEMS.map((item) => (
+          {FORM_POINT_ITEMS.map((item) => (
             <View key={item} className="flex-row items-center gap-3">
               <View className="min-w-0 flex-1">
                 <Text className="text-sm text-foreground">{POINT_ITEM_INFO[item].label}</Text>

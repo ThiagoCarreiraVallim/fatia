@@ -21,6 +21,6 @@ Estado: (atualizar a cada commit)
 
 - [x] testes vermelhos API (ffe58798)
 - [x] fix API (assertStepsOpen)
-- [ ] client+web+app (testes vermelhos, depois fix)
+- [x] client+web+app (testes 6e71c007, fix no commit seguinte)
 - [ ] MCP descrição do list, docs ADR 047 e REDESIGN_PROGRESS
 - [ ] merge origin/main, regenerar MCP, lint/typecheck/testes

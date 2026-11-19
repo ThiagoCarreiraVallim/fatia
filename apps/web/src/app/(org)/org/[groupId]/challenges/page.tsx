@@ -10,6 +10,7 @@ import {
   challengePeriod,
   challengeProblem,
   challengesApi,
+  challengeUsesSteps,
   maxPointsOf,
   POINT_ITEM_INFO,
   POINT_ITEMS,
@@ -18,6 +19,8 @@ import {
   REVIEW_REASON_MIN,
   STEP_SOURCE_LABEL,
   STEP_SOURCES,
+  STEPS_CLOSED_TEXT,
+  STEPS_SYNC_AVAILABLE,
   type Challenge,
   type ChallengeInput,
   type ChallengeMetric,
@@ -81,11 +84,14 @@ const FORM_KIND_INFO: Record<
 /** Fontes que podem contar; "Digitado à mão" aparece travado. */
 const COUNTING_SOURCES = STEP_SOURCES.filter((s) => s !== 'MANUAL');
 
-/** Padrão da prancha: treino 3, água, passos e proteína 1, calorias fora. */
+/**
+ * Padrão da prancha: treino 3, água, passos e proteína 1, calorias fora. Passos
+ * ficam em 0 até a sync de saúde (#395, ADR 047 §7).
+ */
 const DEFAULT_POINTS: Record<PointItem, number> = {
   workout: 3,
   water: 1,
-  steps: 1,
+  steps: STEPS_SYNC_AVAILABLE ? 1 : 0,
   protein: 1,
   kcal: 0,
 };
@@ -549,7 +555,12 @@ function ChallengeForm({
   const [d, setD] = useState<Draft>(() => draftOf(challenge, today));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((old) => ({ ...old, [k]: v }));
   const input = inputOf(d);
-  const problem = challengeProblem(input, today) ?? rangeProblem(d, input);
+  // Passos fechados até a sync de saúde; quem já contava passos segue contando.
+  const keepsSteps = challenge !== null && challengeUsesSteps(challenge);
+  const stepsOpen = STEPS_SYNC_AVAILABLE || keepsSteps;
+  const kinds = FORM_KINDS.filter((k) => stepsOpen || k !== 'STEPS');
+  const pointItems = POINT_ITEMS.filter((i) => stepsOpen || i !== 'steps');
+  const problem = challengeProblem(input, today, { keepsSteps }) ?? rangeProblem(d, input);
   const sum = POINT_ITEMS.reduce((s, i) => s + d.points[i], 0);
   const editing = challenge !== null;
 
@@ -605,7 +616,7 @@ function ChallengeForm({
       <fieldset>
         <legend className="mb-2 text-sm font-medium">O que conta</legend>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {FORM_KINDS.map((k) => (
+          {kinds.map((k) => (
             <label
               key={k}
               className="flex cursor-pointer flex-col gap-1 rounded-xl border border-subtle p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
@@ -628,6 +639,7 @@ function ChallengeForm({
             </label>
           ))}
         </div>
+        {!stepsOpen && <p className="mt-2 text-xs text-muted-foreground">{STEPS_CLOSED_TEXT}</p>}
       </fieldset>
 
       {d.kind === 'POINTS' && (
@@ -637,7 +649,7 @@ function ChallengeForm({
             <p className="text-xs font-semibold">{`máximo por dia: ${sum} pts`}</p>
           </div>
           <ul className="divide-y divide-subtle rounded-xl border border-subtle">
-            {POINT_ITEMS.map((i) => (
+            {pointItems.map((i) => (
               <li
                 key={i}
                 className={cn(

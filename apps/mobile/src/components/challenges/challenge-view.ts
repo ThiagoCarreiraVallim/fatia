@@ -7,6 +7,9 @@ import {
   maxPointsOf,
   METRIC_INFO,
   POINT_ITEMS,
+  CREATABLE_CHALLENGE_KINDS,
+  CREATABLE_POINT_ITEMS,
+  STEPS_SYNC_AVAILABLE,
   POINT_VALUE_MAX,
   REVIEW_REASON_MAX,
   REVIEW_REASON_MIN,
@@ -742,6 +745,13 @@ export interface ChallengeForm {
   stepSources: StepSource[];
 }
 
+/**
+ * Os tipos e itens que o formulário oferece: sem passos até a sync de saúde
+ * (#395, ADR 047 §7). O app não edita desafio, então não há o caso de manter.
+ */
+export const FORM_KINDS: readonly ChallengeKind[] = CREATABLE_CHALLENGE_KINDS;
+export const FORM_POINT_ITEMS: readonly PointItem[] = CREATABLE_POINT_ITEMS;
+
 /** As fontes que a equipe pode marcar: todas menos a manual. */
 export const SELECTABLE_STEP_SOURCES = STEP_SOURCES.filter((s) => s !== 'MANUAL');
 
@@ -754,7 +764,7 @@ export function defaultChallengeForm(): ChallengeForm {
     nutritionMetric: 'PROTEIN_TARGET_DAYS',
     start: 'tomorrow',
     duration: '7',
-    points: { workout: 3, water: 1, steps: 1, protein: 1, kcal: 0 },
+    points: { workout: 3, water: 1, steps: STEPS_SYNC_AVAILABLE ? 1 : 0, protein: 1, kcal: 0 },
     maxPointsPerDay: 6,
     waterGoalMl: 2500,
     dailyCap: 4000,

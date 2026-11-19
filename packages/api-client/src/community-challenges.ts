@@ -47,6 +47,36 @@ export type PointItem = (typeof POINT_ITEMS)[number];
 export type PointsTable = Partial<Record<PointItem, number>>;
 export const POINT_VALUE_MAX = 5;
 
+/**
+ * Passos só contam vindos do Apple Saúde, do Health Connect ou de relógio, e o
+ * app ainda não sincroniza nenhum (ADR 047 §7): até a sync de saúde chegar, não
+ * se cria desafio de passos nem item de passos nos pontos. Os que já existem
+ * seguem aparecendo e se editam sem perder os passos. A API confere o mesmo.
+ */
+export const STEPS_SYNC_AVAILABLE = false;
+export const STEPS_CLOSED_TEXT =
+  'Desafio de passos volta quando o app sincronizar com o Apple Saúde ou o Health Connect.';
+/** Os tipos que a equipe pode escolher num desafio novo. */
+export const CREATABLE_CHALLENGE_KINDS: readonly ChallengeKind[] = CHALLENGE_KINDS.filter(
+  (k) => STEPS_SYNC_AVAILABLE || k !== 'STEPS',
+);
+/** Os itens que a tabela de pontos de um desafio novo oferece. */
+export const CREATABLE_POINT_ITEMS: readonly PointItem[] = POINT_ITEMS.filter(
+  (i) => STEPS_SYNC_AVAILABLE || i !== 'steps',
+);
+
+/** Se o desafio conta passos: o tipo de passos, o de antes ou o item nos pontos. */
+export function challengeUsesSteps(c: Pick<Challenge, 'kind' | 'metric' | 'rules'>): boolean {
+  if (c.kind === 'STEPS' || c.metric === 'STEPS') return true;
+  return c.kind === 'POINTS' && (c.rules.pointsTable?.steps ?? 0) > 0;
+}
+
+function inputUsesSteps(input: ChallengeInput): boolean {
+  const kind = input.kind ?? 'METRIC';
+  if (kind === 'STEPS' || input.metric === 'STEPS') return true;
+  return kind === 'POINTS' && (input.pointsTable?.steps ?? 0) > 0;
+}
+
 /** As fontes de passos do banco. `MANUAL` nunca conta em desafio. */
 export const STEP_SOURCES = [
   'APPLE_HEALTH',
@@ -429,7 +459,10 @@ export function challengeSections<C extends Pick<Challenge, 'status' | 'me'>>(li
 }
 
 /** O que impede as regras do tipo, ou `null`. Mesmas regras da API. */
-export function challengeKindProblem(input: ChallengeInput): string | null {
+export function challengeKindProblem(
+  input: ChallengeInput,
+  opts: ChallengeProblemOptions = {},
+): string | null {
   const kind = input.kind ?? 'METRIC';
   if (
     kind === 'METRIC' &&
@@ -456,6 +489,9 @@ export function challengeKindProblem(input: ChallengeInput): string | null {
     input.dailyCap < input.waterGoalMl
   ) {
     return 'O teto do dia não pode ser menor que a meta de água.';
+  }
+  if (!STEPS_SYNC_AVAILABLE && !opts.keepsSteps && inputUsesSteps(input)) {
+    return STEPS_CLOSED_TEXT;
   }
   return null;
 }
@@ -572,8 +608,17 @@ function diasEntre(inicio: string, fim: string): number {
   return Math.round(ms / 86_400_000) + 1;
 }
 
+export interface ChallengeProblemOptions {
+  /** Editando um desafio que já contava passos: segue podendo contar. */
+  keepsSteps?: boolean;
+}
+
 /** O que impede marcar o desafio, ou `null`. Mesmas regras da API. */
-export function challengeProblem(input: ChallengeInput, today: string): string | null {
+export function challengeProblem(
+  input: ChallengeInput,
+  today: string,
+  opts: ChallengeProblemOptions = {},
+): string | null {
   const titulo = input.title.trim();
   if (titulo.length < CHALLENGE_TITLE_MIN) return 'Dê um título ao desafio.';
   if (titulo.length > CHALLENGE_TITLE_MAX)
@@ -587,7 +632,7 @@ export function challengeProblem(input: ChallengeInput, today: string): string |
   if (diasEntre(input.startDate, input.endDate) > CHALLENGE_MAX_DAYS) {
     return `Um desafio dura no máximo ${CHALLENGE_MAX_DAYS} dias.`;
   }
-  return challengeKindProblem(input);
+  return challengeKindProblem(input, opts);
 }
 
 /** O que impede entrar com este apelido, ou `null`. */
