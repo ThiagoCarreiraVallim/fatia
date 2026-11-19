@@ -16,3 +16,13 @@ regexes = ['''^q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c$''']
 description = "Token inventado do link de exportação, base64 de 'foobarbazqux1234567890abcdefghij', nos testes de log e span (8c5a151)"
 regexTarget = "secret"
 regexes = ['''^Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo$''']
+
+[[allowlists]]
+description = "Placeholder do segredo de descadastro que já esteve no .env.example (8d31e56); hoje o placeholder é vazio e a validação recusa esse valor em produção"
+regexTarget = "secret"
+regexes = ['''^troque-por-um-segredo-de-32-caracteres$''']
+
+[[allowlists]]
+description = "Segredo inventado do teste de validação de env (ebe1937)"
+regexTarget = "secret"
+regexes = ['''^segredo-de-teste-1234567890$''']

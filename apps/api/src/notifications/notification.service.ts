@@ -37,6 +37,11 @@ export interface Notice {
   title: string;
   body: string;
   url: string;
+  /**
+   * O comunicado que gerou o aviso (#398): o envio soma em `pushSent` e o
+   * recibo bom da Expo em `pushDelivered`. Não vai para a central nem para o push.
+   */
+  announcementId?: string;
 }
 
 export interface DeviceView {
@@ -436,7 +441,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       where: { createdAt: { lte: new Date(now.getTime() - RECEIPT_DELAY_MS) } },
       orderBy: { createdAt: 'asc' },
       take: 5000,
-      select: { id: true, deviceId: true },
+      select: { id: true, deviceId: true, announcementId: true },
     });
     if (tickets.length === 0) return { read: 0, removedDevices: 0 };
     const recibos = await this.push.receipts(tickets.map((t) => t.id));
@@ -451,6 +456,19 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     }
     if (mortos.size > 0) {
       await this.prisma.userDevice.deleteMany({ where: { id: { in: [...mortos] } } });
+    }
+    // Entregues por comunicado (#398): o recibo "ok" é a Apple ou o Google aceitando.
+    const entregues = new Map<string, number>();
+    for (const t of tickets) {
+      if (t.announcementId && recibos[t.id]?.status === 'ok') {
+        entregues.set(t.announcementId, (entregues.get(t.announcementId) ?? 0) + 1);
+      }
+    }
+    for (const [announcementId, n] of entregues) {
+      await this.prisma.groupAnnouncement.updateMany({
+        where: { id: announcementId },
+        data: { pushDelivered: { increment: n } },
+      });
     }
     const lidos = tickets.filter((t) => recibos[t.id]).map((t) => t.id);
     if (lidos.length > 0) await this.prisma.pushTicket.deleteMany({ where: { id: { in: lidos } } });
@@ -542,10 +560,20 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     const porToken = new Map(devices.map((d) => [d.token, d.id]));
     const tickets = r.tickets.flatMap((t) => {
       const deviceId = porToken.get(t.to);
-      return deviceId ? [{ id: t.id, deviceId }] : [];
+      return deviceId
+        ? [{ id: t.id, deviceId, announcementId: notice.announcementId ?? null }]
+        : [];
     });
     if (tickets.length > 0) {
       await this.prisma.pushTicket.createMany({ data: tickets, skipDuplicates: true });
+    }
+    // Mandadas = celular (ticket da Expo) + navegador (aceito pelo serviço de push).
+    const mandadas = tickets.length + (web.sent ?? 0);
+    if (notice.announcementId && mandadas > 0) {
+      await this.prisma.groupAnnouncement.updateMany({
+        where: { id: notice.announcementId },
+        data: { pushSent: { increment: mandadas } },
+      });
     }
   }
 }

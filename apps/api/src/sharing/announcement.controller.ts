@@ -28,6 +28,26 @@ export class AnnouncementController {
     return this.announcements.list(user.id, groupId);
   }
 
+  /** Limite semanal de avisos e se o e-mail está ligado (#398). */
+  @Get('settings')
+  @RequireGroupAction('announcement.publish')
+  settings(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.announcements.settings(user.id, groupId);
+  }
+
+  /** Os últimos que saíram, com mandadas, entregues e e-mails (#398). */
+  @Get('recent')
+  @RequireGroupAction('announcement.publish')
+  recent(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.announcements.recent(user.id, groupId);
+  }
+
   @Post()
   @RequireGroupAction('announcement.publish')
   @UseGuards(UserThrottlerGuard)

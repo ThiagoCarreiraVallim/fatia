@@ -973,16 +973,18 @@ describe('desafios do redesign: tipos, check-in com foto e revisão (integraçã
       const a = await comunidade();
       const id = await emAndamento(a.groupId, a.dono, { kind: 'WATER', waterGoalMl: 2000 });
       await challenges.join(a.membro, a.groupId, id, 'Ana');
-      const ontem = addDaysIso(hoje(), -1);
+      // Anteontem, e não ontem: o prazo de ontem só fecha 3 h depois da meia-noite
+      // (LATE_GRACE_MS), então o teste falhava de madrugada em São Paulo.
+      const anteontem = addDaysIso(hoje(), -2);
       const log = await prisma.waterLog.create({
         data: {
           userId: a.membro,
-          date: ontem,
+          date: anteontem,
           ml: 500,
-          loggedAt: new Date(dayBoundsInTz(ontem, SP).start.getTime() + 12 * 3600_000),
+          loggedAt: new Date(dayBoundsInTz(anteontem, SP).start.getTime() + 12 * 3600_000),
         },
       });
-      // Hoje, bem depois do prazo de ontem, a pessoa edita o registro para a meta.
+      // Hoje, bem depois do prazo de anteontem, a pessoa edita o registro para a meta.
       await new WaterLogService(prisma).update(log.id, { ml: 2500 }, a.membro, SP);
       expect(
         (await prisma.waterLog.findUniqueOrThrow({ where: { id: log.id } })).editedAt,

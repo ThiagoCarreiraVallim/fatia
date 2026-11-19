@@ -77,4 +77,21 @@ describe('SignOutButton', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sair' }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/api/logto/sign-out'));
   });
+
+  it('limpa as preferências do painel deste navegador (#398)', async () => {
+    window.localStorage.setItem('fatia:panel:nav:mo', '{"collapsed":true}');
+    window.localStorage.setItem('fatia:panel:recent:mo', '{"items":[{"title":"Ana"}]}');
+    window.localStorage.setItem('fatia:panel:overview-columns:mo', '{"columns":[]}');
+    window.localStorage.setItem('fatia:theme', 'dark');
+    const user = userEvent.setup();
+    render(<SignOutButton />);
+    await user.click(screen.getByRole('button', { name: 'Sair da conta' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sair' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/api/logto/sign-out'));
+    expect(Object.keys(window.localStorage).filter((k) => k.startsWith('fatia:panel:'))).toEqual(
+      [],
+    );
+    expect(window.localStorage.getItem('fatia:theme')).toBe('dark');
+    window.localStorage.clear();
+  });
 });

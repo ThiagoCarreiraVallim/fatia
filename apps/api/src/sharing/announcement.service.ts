@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
@@ -12,8 +13,11 @@ import {
   NotificationKind,
   PostAuthorAs,
   type GroupAnnouncement,
+  type Prisma,
 } from '@fatia/db';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
+import { AnnouncementEmailService } from '../notifications/announcement-email.service';
 import { NotificationService, type Notice } from '../notifications/notification.service';
 import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
@@ -37,6 +41,8 @@ const DIA_MS = 86_400_000;
 const NOTICE_BODY_MAX = 140;
 /** Falhas seguidas no mesmo disparo antes de desistir do comunicado. */
 export const ANNOUNCEMENT_MAX_ATTEMPTS = 5;
+/** Avisos (notificação e e-mail) de comunicado por comunidade em 7 dias, sem a env. */
+export const ANNOUNCEMENT_PUSH_WEEKLY_DEFAULT = 3;
 
 export interface AnnouncementInput {
   title: string;
@@ -46,6 +52,8 @@ export interface AnnouncementInput {
   /** Dias no topo; nulo = sem prazo. */
   pinDays: number | null;
   push: boolean;
+  /** Também por e-mail (#398). */
+  alsoEmail?: boolean;
   /** ISO do primeiro disparo; nulo = agora. */
   at: string | null;
   repeat: (typeof ANNOUNCEMENT_REPEATS)[number];
@@ -59,11 +67,25 @@ export interface AnnouncementView {
   pin: boolean;
   pinDays: number | null;
   push: boolean;
+  alsoEmail: boolean;
   repeat: AnnouncementRepeat;
   nextRunAt: Date | null;
   lastRunAt: Date | null;
   createdAt: Date;
   author: string;
+  /** Somados em todos os disparos (#398). */
+  pushSent: number;
+  pushDelivered: number;
+  emailSent: number;
+  /** Publicado agora, mas o limite semanal segurou a notificação e o e-mail. */
+  pushSkipped?: boolean;
+}
+
+/** O que o editor precisa saber antes de mandar (#398). */
+export interface AnnouncementSettings {
+  pushWeeklyLimit: number;
+  pushUsedThisWeek: number;
+  emailAvailable: boolean;
 }
 
 /** O aviso na tela bloqueada: o título e o começo do texto, sem markdown. */
@@ -107,19 +129,34 @@ export function announcementNotice(p: {
  * `NotificationService`. Em nome de uma pessoa, não chega a quem tem bloqueio
  * com ela. Sem dado de saúde: o texto é o que a equipe escreveu.
  *
- * E-mail fica de fora: falta o descadastro com link (registrado no
- * `REDESIGN_PROGRESS.md`).
+ * E-mail (#398): com `alsoEmail`, o mesmo público recebe o comunicado por
+ * e-mail, menos quem desligou `ANNOUNCEMENTS` ou se descadastrou pelo link
+ * (`AnnouncementEmailService`).
+ *
+ * Limite semanal (#398): cada comunidade manda no máximo
+ * `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT` disparos com aviso (notificação ou e-mail)
+ * em 7 dias. Passou disso, o comunicado sai no mural e mais nada. A vaga é
+ * reivindicada com trava por comunidade (dois disparos juntos não furam o
+ * teto), só quando há alguém para avisar, e fica em `AnnouncementDispatch`:
+ * apagar o post ou o comunicado não devolve a vaga.
  */
 @Injectable()
 export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AnnouncementService.name);
   private timer: NodeJS.Timeout | null = null;
+  private readonly weeklyLimit: number;
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly posts: PostService,
     private readonly notifications: NotificationService,
-  ) {}
+    @Optional() private readonly mail?: AnnouncementEmailService,
+    @Optional() config?: ConfigService,
+  ) {
+    const env = Number(config?.get<string | number>('ANNOUNCEMENT_PUSH_WEEKLY_LIMIT'));
+    this.weeklyLimit = Number.isInteger(env) && env >= 0 ? env : ANNOUNCEMENT_PUSH_WEEKLY_DEFAULT;
+  }
 
   onModuleInit(): void {
     this.timer = setInterval(() => {
@@ -132,9 +169,10 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
     this.timer.unref();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    await this.drain();
   }
 
   async create(
@@ -183,18 +221,41 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         pin: input.pin,
         pinDays: input.pin ? input.pinDays : null,
         push: input.push,
+        alsoEmail: Boolean(input.alsoEmail),
         repeat: input.repeat,
         nextRunAt: at,
         anchorAt: at,
       },
       include: { membership: { select: AUTOR } },
     });
-    if (!at) await this.fire(row, agora);
+    const saida = at ? null : await this.fire(row, agora);
     const atual = await this.prisma.groupAnnouncement.findUniqueOrThrow({
       where: { id: row.id },
       include: { membership: { select: AUTOR } },
     });
-    return this.view(atual);
+    return { ...this.view(atual), ...(saida ? { pushSkipped: saida.pushSkipped } : {}) };
+  }
+
+  /** O limite da semana e se o e-mail está ligado nesta instância. */
+  async settings(userId: string, groupId: string): Promise<AnnouncementSettings> {
+    await requireContentRole(this.prisma, userId, groupId, 'announcement.publish');
+    return {
+      pushWeeklyLimit: this.weeklyLimit,
+      pushUsedThisWeek: await this.usedThisWeek(this.prisma, groupId, new Date()),
+      emailAvailable: Boolean(this.mail?.available),
+    };
+  }
+
+  /** Os últimos que já saíram, com as contas de entrega. */
+  async recent(userId: string, groupId: string): Promise<AnnouncementView[]> {
+    await requireContentRole(this.prisma, userId, groupId, 'announcement.publish');
+    const rows = await this.prisma.groupAnnouncement.findMany({
+      where: { groupId, lastRunAt: { not: null } },
+      include: { membership: { select: AUTOR } },
+      orderBy: { lastRunAt: 'desc' },
+      take: 10,
+    });
+    return rows.map((r) => this.view(r));
   }
 
   /** Os agendados (com próximo disparo), o mais próximo primeiro. */
@@ -256,7 +317,7 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         data: { lastRunAt: at, attempts: 0 },
       });
       // O post já saiu: falha no aviso não volta o disparo (sairia duplicado).
-      await this.notify(a).catch((err: unknown) =>
+      await this.notify(a, now).catch((err: unknown) =>
         this.logger.warn({
           event: 'comunicado_sem_aviso',
           announcementId: a.id,
@@ -295,18 +356,59 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async fire(a: GroupAnnouncement, at: Date): Promise<void> {
+  private async fire(a: GroupAnnouncement, at: Date): Promise<{ pushSkipped: boolean }> {
     await this.posts.publishAnnouncement(a, at);
     await this.prisma.groupAnnouncement.update({
       where: { id: a.id },
       data: { lastRunAt: at },
     });
-    await this.notify(a);
+    // O post já saiu: erro no aviso vira log, nunca 500 (o cliente tentaria de
+    // novo e o post sairia duplicado).
+    return this.notify(a, at).catch((err: unknown) => {
+      this.logger.warn({
+        event: 'comunicado_sem_aviso',
+        announcementId: a.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { pushSkipped: false };
+    });
   }
 
-  /** O aviso do comunicado que acabou de sair, se pediu push. */
-  private async notify(a: GroupAnnouncement): Promise<void> {
-    if (!a.push) return;
+  /** Disparos com aviso nos últimos 7 dias, pelo registro próprio (não pelo post). */
+  private usedThisWeek(
+    db: Prisma.TransactionClient | PrismaService,
+    groupId: string,
+    now: Date,
+  ): Promise<number> {
+    return db.announcementDispatch.count({
+      where: { groupId, at: { gt: new Date(now.getTime() - 7 * DIA_MS) } },
+    });
+  }
+
+  /** Reivindica uma vaga da semana para este disparo, com trava por comunidade. */
+  private claimWeeklySlot(
+    a: GroupAnnouncement,
+    now: Date,
+    canais: { push: boolean; email: boolean },
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${`announce-push:${a.groupId}`}))`;
+      if ((await this.usedThisWeek(tx, a.groupId, now)) >= this.weeklyLimit) return false;
+      await tx.announcementDispatch.create({
+        data: { groupId: a.groupId, announcementId: a.id, at: now, ...canais },
+      });
+      return true;
+    });
+  }
+
+  /**
+   * O aviso (notificação e, se pediu, e-mail) do comunicado que acabou de
+   * sair. Primeiro descobre quem recebe; só com alguém para avisar a vaga da
+   * semana é reivindicada, na hora real do disparo (`now`).
+   */
+  private async notify(a: GroupAnnouncement, now: Date): Promise<{ pushSkipped: boolean }> {
+    const porEmail = a.alsoEmail && Boolean(this.mail?.available);
+    if (!a.push && !porEmail) return { pushSkipped: false };
     const [grupo, membros, autor] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({ where: { id: a.groupId }, select: { name: true } }),
       this.prisma.groupMembership.findMany({
@@ -322,17 +424,66 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
       a.publishedAs === PostAuthorAs.PERSON
         ? new Set(await blockedUserIds(this.prisma, autor.userId))
         : new Set<string>();
-    const para = membros.map((m) => m.userId).filter((id) => !fora.has(id));
-    if (para.length === 0) return;
-    this.notifications.notify(
-      para,
-      announcementNotice({
-        groupId: a.groupId,
-        groupName: grupo.name,
-        title: a.title,
-        body: a.body,
-      }),
+    const candidatos = membros.map((m) => m.userId).filter((id) => !fora.has(id));
+    // Quem desligou "Comunicados da comunidade" não recebe push nem e-mail.
+    const desligados = new Set(
+      (
+        await this.prisma.notificationPreference.findMany({
+          where: {
+            userId: { in: candidatos },
+            kind: NotificationKind.ANNOUNCEMENTS,
+            enabled: false,
+          },
+          select: { userId: true },
+        })
+      ).map((p) => p.userId),
     );
+    const para = candidatos.filter((id) => !desligados.has(id));
+    if (para.length === 0) return { pushSkipped: false };
+    if (!(await this.claimWeeklySlot(a, now, { push: a.push, email: porEmail }))) {
+      this.logger.warn({ event: 'comunicado_sem_aviso_limite', announcementId: a.id });
+      return { pushSkipped: true };
+    }
+    if (a.push) {
+      this.notifications.notify(para, {
+        ...announcementNotice({
+          groupId: a.groupId,
+          groupName: grupo.name,
+          title: a.title,
+          body: a.body,
+        }),
+        announcementId: a.id,
+      });
+    }
+    if (porEmail) {
+      // Em segundo plano: uma comunidade grande não segura o pedido nem o job.
+      const envio = this.sendEmails(a, grupo.name, para)
+        .catch((err: unknown) =>
+          this.logger.warn({
+            event: 'comunicado_email_falhou',
+            announcementId: a.id,
+            err: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        .finally(() => this.pending.delete(envio));
+      this.pending.add(envio);
+    }
+    return { pushSkipped: false };
+  }
+
+  private async sendEmails(a: GroupAnnouncement, groupName: string, para: string[]) {
+    const saiu = await this.mail!.send(para, { groupName, title: a.title, body: a.body });
+    if (saiu > 0) {
+      await this.prisma.groupAnnouncement.update({
+        where: { id: a.id },
+        data: { emailSent: { increment: saiu } },
+      });
+    }
+  }
+
+  /** Espera os e-mails em andamento (testes e desligamento da API). */
+  async drain(): Promise<void> {
+    while (this.pending.size > 0) await Promise.all([...this.pending]);
   }
 
   /** O horário pedido: futuro, em bloco de 15 min e até um ano à frente. */
@@ -368,6 +519,10 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
       pin: r.pin,
       pinDays: r.pinDays,
       push: r.push,
+      alsoEmail: r.alsoEmail,
+      pushSent: r.pushSent,
+      pushDelivered: r.pushDelivered,
+      emailSent: r.emailSent,
       repeat: r.repeat,
       nextRunAt: r.nextRunAt,
       lastRunAt: r.lastRunAt,

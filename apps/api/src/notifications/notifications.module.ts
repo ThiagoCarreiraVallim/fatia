@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AnnouncementEmailController } from './announcement-email.controller';
+import { AnnouncementEmailService } from './announcement-email.service';
 import { EmailService } from './email.service';
 import { NotificationService } from './notification.service';
 import { NotificationsController } from './notifications.controller';
@@ -18,9 +20,10 @@ import { UpdateReminderTool } from './reminders/mcp/update-reminder.tool';
 import { DeleteReminderTool } from './reminders/mcp/delete-reminder.tool';
 
 @Module({
-  controllers: [NotificationsController, RemindersController],
+  controllers: [NotificationsController, RemindersController, AnnouncementEmailController],
   providers: [
     EmailService,
+    AnnouncementEmailService,
     PushService,
     WebPushService,
     NotificationService,
@@ -37,6 +40,6 @@ import { DeleteReminderTool } from './reminders/mcp/delete-reminder.tool';
     UpdateReminderTool,
     DeleteReminderTool,
   ],
-  exports: [EmailService, NotificationService, InboxService],
+  exports: [EmailService, AnnouncementEmailService, NotificationService, InboxService],
 })
 export class NotificationsModule {}

@@ -58,6 +58,11 @@ export function useTopBarTitle(title: string | null | undefined) {
   }, [setTitle, title]);
 }
 
+/** O título que a tela pediu (`useTopBarTitle`), para quem desenha outro topo (#398). */
+export function useTopBarCurrentTitle(): string | null {
+  return useTopBarContext()?.title ?? null;
+}
+
 /** Intercepta o "voltar" enquanto a tela estiver montada. Passe uma função estável. */
 export function useTopBarBack(onBack: (() => void) | null) {
   const setBack = useTopBarContext()?.setBack;

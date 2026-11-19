@@ -7,6 +7,8 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html: string;
+  /** Cabeçalhos extras (ex.: `List-Unsubscribe` do comunicado, RFC 8058). */
+  headers?: Record<string, string>;
 }
 
 /**

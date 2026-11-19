@@ -11,13 +11,20 @@ vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    announcementsApi: { list: vi.fn(), create: vi.fn(), cancel: vi.fn() },
+    announcementsApi: {
+      list: vi.fn(),
+      create: vi.fn(),
+      cancel: vi.fn(),
+      settings: vi.fn(),
+      recent: vi.fn(),
+    },
+    usersApi: { me: vi.fn() },
     moderationApi: { polls: vi.fn() },
     feedApi: { create: vi.fn() },
   };
 });
 
-import { announcementsApi, feedApi, moderationApi } from '@fatia/api-client';
+import { announcementsApi, feedApi, moderationApi, usersApi } from '@fatia/api-client';
 import OrgAnnouncementsPage from '../page';
 
 const agendado: Announcement = {
@@ -33,6 +40,10 @@ const agendado: Announcement = {
   lastRunAt: null,
   createdAt: new Date().toISOString(),
   author: 'Bruno',
+  alsoEmail: false,
+  pushSent: 0,
+  pushDelivered: 0,
+  emailSent: 0,
 };
 
 const enquete = (p: Partial<PanelPoll> = {}): PanelPoll => ({
@@ -51,10 +62,16 @@ const enquete = (p: Partial<PanelPoll> = {}): PanelPoll => ({
   ...p,
 });
 
+let ajustes = { pushWeeklyLimit: 3, pushUsedThisWeek: 1, emailAvailable: true };
+let enviados: Announcement[] = [];
+
 function abrir(polls: PanelPoll[] = [enquete()]) {
   ctx.group = grupo({ role: 'PROFESSIONAL', name: 'Academia Demo' });
   vi.mocked(announcementsApi.list).mockResolvedValue([agendado]);
   vi.mocked(moderationApi.polls).mockResolvedValue(polls);
+  vi.mocked(announcementsApi.settings).mockResolvedValue(ajustes);
+  vi.mocked(announcementsApi.recent).mockResolvedValue(enviados);
+  vi.mocked(usersApi.me).mockResolvedValue({ id: 'u1', name: 'Bruno Lima' } as never);
   return renderWithClient(<OrgAnnouncementsPage />);
 }
 
@@ -78,10 +95,91 @@ describe('/org/[groupId]/announcements (Pn-14 e Pn-26)', () => {
         pin: true,
         pinDays: 7,
         push: true,
+        alsoEmail: false,
         at: null,
         repeat: 'NONE',
       }),
     );
+  });
+
+  it('também por e-mail, limite da semana e prévia na tela bloqueada (#398)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(announcementsApi.create).mockResolvedValue({ ...agendado, pushSkipped: true });
+    abrir();
+    await user.click(await screen.findByRole('button', { name: /Novo comunicado/ }));
+    const form = screen.getByRole('form', { name: 'Novo comunicado' });
+    expect(await within(form).findByText('1 de 3 avisos da semana usados')).toBeInTheDocument();
+    expect(within(form).getByRole('radio', { name: 'Bruno Lima' })).toBeInTheDocument();
+    await user.type(within(form).getByRole('textbox', { name: 'Título' }), 'Feriado de sexta');
+    await user.type(within(form).getByRole('textbox', { name: 'Texto' }), 'Abrimos **das 8h**');
+    await user.click(within(form).getByRole('radio', { name: 'Tela bloqueada' }));
+    const trava = within(form).getByLabelText('Prévia na tela bloqueada');
+    expect(within(trava).getByText('FATIA · ACADEMIA DEMO')).toBeInTheDocument();
+    expect(within(trava).getByText('Abrimos das 8h')).toBeInTheDocument();
+    await user.click(within(form).getByRole('switch', { name: 'Também por e-mail' }));
+    await user.click(within(form).getByRole('button', { name: 'Publicar agora' }));
+    await waitFor(() =>
+      expect(announcementsApi.create).toHaveBeenCalledWith(
+        'g1',
+        expect.objectContaining({ alsoEmail: true, push: true }),
+      ),
+    );
+  });
+
+  it('depois de publicar, o contador da semana do editor vem de novo da API', async () => {
+    const user = userEvent.setup();
+    vi.mocked(announcementsApi.create).mockResolvedValue(agendado);
+    abrir();
+    vi.mocked(announcementsApi.settings)
+      .mockResolvedValueOnce({ pushWeeklyLimit: 3, pushUsedThisWeek: 1, emailAvailable: true })
+      .mockResolvedValue({ pushWeeklyLimit: 3, pushUsedThisWeek: 2, emailAvailable: true });
+    await user.click(await screen.findByRole('button', { name: /Novo comunicado/ }));
+    let form = screen.getByRole('form', { name: 'Novo comunicado' });
+    await within(form).findByText('1 de 3 avisos da semana usados');
+    await user.type(within(form).getByRole('textbox', { name: 'Título' }), 'Oi');
+    await user.type(within(form).getByRole('textbox', { name: 'Texto' }), 'Tchau');
+    await user.click(within(form).getByRole('button', { name: 'Publicar agora' }));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Novo comunicado' })).toBeNull());
+    await user.click(screen.getByRole('button', { name: /Novo comunicado/ }));
+    form = screen.getByRole('form', { name: 'Novo comunicado' });
+    expect(await within(form).findByText('2 de 3 avisos da semana usados')).toBeInTheDocument();
+  });
+
+  it('sem e-mail na instalação a chave fica desligada e o limite cheio avisa', async () => {
+    ajustes = { pushWeeklyLimit: 3, pushUsedThisWeek: 3, emailAvailable: false };
+    const user = userEvent.setup();
+    abrir();
+    await user.click(await screen.findByRole('button', { name: /Novo comunicado/ }));
+    const form = screen.getByRole('form', { name: 'Novo comunicado' });
+    expect(
+      await within(form).findByText('Limite de 3 avisos por semana atingido: este sai só no mural'),
+    ).toBeInTheDocument();
+    expect(within(form).getByRole('switch', { name: 'Também por e-mail' })).toBeDisabled();
+    expect(within(form).getByText('E-mail indisponível nesta instalação')).toBeInTheDocument();
+    ajustes = { pushWeeklyLimit: 3, pushUsedThisWeek: 1, emailAvailable: true };
+  });
+
+  it('enviados mostram notificações, entregues e e-mails', async () => {
+    enviados = [
+      {
+        ...agendado,
+        id: 'a2',
+        title: 'Feriado',
+        repeat: 'NONE',
+        nextRunAt: null,
+        lastRunAt: new Date().toISOString(),
+        alsoEmail: true,
+        pushSent: 12,
+        pushDelivered: 10,
+        emailSent: 8,
+      },
+    ];
+    abrir();
+    const lista = await screen.findByRole('list', { name: 'Comunicados enviados' });
+    expect(
+      within(lista).getByText(/12 notificações · 10 entregues no celular · 8 e-mails/),
+    ).toBeInTheDocument();
+    enviados = [];
   });
 
   it('agendar pede um horário de 15 em 15 minutos e deixa repetir', async () => {

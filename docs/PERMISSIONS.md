@@ -89,6 +89,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `announcement.publish` | sim   | sim          | não     | não    |
 | `member.ban`           | sim   | não          | não     | não    |
 | `insights.read`        | sim   | não          | não     | não    |
+| `panel.overview`       | sim   | sim          | não     | não    |
+| `panel.search`         | sim   | sim          | não     | não    |
 | `benefit.read`         | sim   | sim          | sim     | sim    |
 | `benefit.manage`       | sim   | não          | não     | não    |
 
@@ -106,6 +108,13 @@ futura:
 - **`insights.read` é `OWNER` e só.** O painel agregado (#159/#160) é do dono. O profissional já
   tem o caminho individual, com consentimento; dar-lhe também o agregado seria dois caminhos para
   a mesma informação com regras diferentes.
+- **`panel.overview` e `panel.search` (#398) só abrem a porta do painel.** O contador de pedidos
+  segue `member.approve`, o de denúncias `content.moderate`, o da fila de desafios
+  `challenge.review`, convites sem aceite `invite.create`, e os números agregados da Visão geral
+  (ativos em 7 dias, "entraram e ainda não registraram", gráfico) seguem `insights.read`, com o
+  mínimo de 5 e o `statsOptIn`. A busca devolve só nome, papel e situação do membro, telas
+  conforme a ação de cada tela e planos da biblioteca com `content.publish`; nunca dado de saúde.
+  Um papel só com `panel.search` (a Recepção da #404) vê só nomes.
 - **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é
   o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
   convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
@@ -198,6 +207,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `announcement.publish` | não                  |
 | `member.ban`           | não                  |
 | `insights.read`        | não                  |
+| `panel.overview`       | não                  |
+| `panel.search`         | não                  |
 | `benefit.read`         | não                  |
 | `benefit.manage`       | não                  |
 

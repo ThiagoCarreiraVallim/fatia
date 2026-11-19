@@ -132,3 +132,46 @@ describe('AppEnvSchema — plano Free/PRO (ADR 024)', () => {
     expect(() => AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'yes' })).toThrow();
   });
 });
+
+describe('AppEnvSchema — segredo do descadastro (#398)', () => {
+  const PROD = { ...BASE, NODE_ENV: 'production' };
+
+  it('vazio desliga o e-mail de comunicado e sobe', () => {
+    expect(
+      AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: '' }).EMAIL_UNSUBSCRIBE_SECRET,
+    ).toBe('');
+  });
+
+  it.each([
+    ['o placeholder do .env.example', 'troque-por-um-segredo-de-32-caracteres'],
+    ['o placeholder de produção', 'CHANGE_ME_openssl_rand_hex_32'],
+    ['curto', 'a1b2c3d4e5f6a7b8c9d0'],
+    ['frase longa de baixa entropia', 'minha senha secreta do fatia que é bem comprida'],
+    ['hex repetido', '3f'.repeat(32)],
+  ])('em produção, %s derruba o boot', (_caso, segredo) => {
+    expect(() => AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: segredo })).toThrow(
+      /EMAIL_UNSUBSCRIBE_SECRET/,
+    );
+  });
+
+  it.each([
+    [
+      'hex de 32 bytes (openssl rand -hex 32)',
+      'a0e5a77089216e0609d9d000b56d62bbabba1b39cbbeeea2e35966652063219b',
+    ],
+    [
+      'base64 de 32 bytes (openssl rand -base64 32)',
+      'tufqZX2NdseMLLdfJcvdhuo18zDvgGL3PuMqxwgtI8I=',
+    ],
+  ])('em produção, %s sobe', (_caso, segredo) => {
+    expect(
+      AppEnvSchema.parse({ ...PROD, EMAIL_UNSUBSCRIBE_SECRET: segredo }).EMAIL_UNSUBSCRIBE_SECRET,
+    ).toBe(segredo);
+  });
+
+  it('fora de produção o segredo de teste continua valendo', () => {
+    expect(() =>
+      AppEnvSchema.parse({ ...BASE, EMAIL_UNSUBSCRIBE_SECRET: 'segredo-de-teste-1234567890' }),
+    ).not.toThrow();
+  });
+});

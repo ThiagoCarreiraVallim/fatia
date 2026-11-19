@@ -174,6 +174,11 @@ export class AnnouncementDto {
   @IsBoolean()
   push!: boolean;
 
+  /** Também por e-mail (#398); ausente = não. */
+  @IsOptional()
+  @IsBoolean()
+  alsoEmail?: boolean;
+
   /** ISO do primeiro disparo; nulo = agora. */
   @ValidateIf((_, v) => v !== null)
   @IsString()
