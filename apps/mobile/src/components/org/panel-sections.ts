@@ -7,10 +7,15 @@ import {
 
 /**
  * Seções do painel que ainda não têm tela no app: a aba levaria ao "Unmatched
- * Route". "Para revisar" (#399) e "Ativação pendente" (#401) entram com o
- * painel no celular (#414).
+ * Route". "Para revisar" (#399), "Ativação pendente" (#401), "Relatório" e
+ * "Origem dos convites" (#400) entram com o painel no celular (#414).
  */
-export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = ['review', 'activation'];
+export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = [
+  'review',
+  'activation',
+  'report',
+  'origins',
+];
 
 /** As abas do painel no app: as do papel, menos as que não têm tela aqui. */
 export function mobilePanelSections(role: GroupRole): PanelLink[] {

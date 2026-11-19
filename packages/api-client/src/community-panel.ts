@@ -30,9 +30,11 @@ export function groupTypeLabel(type: GroupType): string {
 export type PanelSection =
   | 'overview'
   | 'review'
+  | 'report'
   | 'members'
   | 'invites'
   | 'activation'
+  | 'origins'
   | 'content'
   | 'exercises'
   | 'challenges'
@@ -53,9 +55,11 @@ export interface PanelLink {
 const SECTIONS: Record<PanelSection, PanelLink> = {
   overview: { section: 'overview', label: 'Visão geral', path: '' },
   review: { section: 'review', label: 'Para revisar', path: '/review' },
+  report: { section: 'report', label: 'Relatório', path: '/report' },
   members: { section: 'members', label: 'Membros', path: '/members' },
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
   activation: { section: 'activation', label: 'Ativação pendente', path: '/activation' },
+  origins: { section: 'origins', label: 'Origem dos convites', path: '/origins' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
   challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
