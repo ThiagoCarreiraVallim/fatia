@@ -573,6 +573,21 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **App:** no formulário do link, papel de equipe começa com 1 uso e 30 dias, sem "sem limite" (campo vazio volta para 1); membro segue com vazio = sem limite e 7 dias (`link-invite-form.ts`).
   - **Tipos:** `InvitePreview.expiresAt` passou a ser `string | null`.
   - **Testes novos:** concorrência no reenvio, na renovação e nos assentos (lote e aceite); `url` nulo para link revogado ou vencido; link HMAC revogado recusado no aceite e na prévia (`invite-review.integration.spec.ts`).
+- **Passada visual** (web 1440 e 390, escuro e claro, contra Pn-04, 04b, 04c, 04d, Pn-06, 06b, Pn-22, 22b, 22c, 22d e Ex-01; app contra o formulário da Pn-04c; prints em `~/.cache/fatia-vis/401/cmp-*.png`):
+  - Corrigido:
+    - "Acompanha" (Membros) mostra o nome em etiqueta e "Ninguém" em destaque (`text-warning`) para membro sem acompanhamento, como na Pn-04. A equipe segue com "—".
+    - Convites e Ativação pendente em 390 px: o título não espreme mais o subtítulo ao lado dos botões, as ações da linha empilham e o status da Ativação vai para baixo do e-mail. Nada sai da tela.
+    - Ativação pendente vazia só diz "Todos os convites foram aceitos" quando não há convite sem aceite. Com convites de menos de 2 dias, diz "Nenhum convite parado há 2 dias".
+    - App: o campo do link ganhou o rótulo "Limite de usos" (o "1" do convite de equipe ficava sem contexto).
+  - Conferido:
+    - O painel lateral (pessoa, convite, link com QR) empurra a página e não cobre botão. No celular ocupa a tela com Cancelar/Criar visíveis.
+    - O lote aparece na barra verde.
+    - Não há texto escuro no modo escuro: Revogar e "expirou" usam `text-danger`.
+    - O e-mail Ex-01 sai igual à prancha, em fonte do sistema e com o topo sem degradê (cliente de e-mail).
+  - Desvios que ficam:
+    - A Ativação pendente lista do convite mais antigo para o mais novo (quem espera há mais tempo primeiro); a prancha vai do mais novo.
+    - "Status" de Membros é texto, sem o ponto colorido da prancha.
+    - "Copiar" na linha do link e "Copiar link geral" só aparecem com `INVITE_LINK_SECRET`, que o dev não tem.
 - **Falta (dependências):** aceitar o convite na web redesenhada (#416) e a recusa no Onb-E1 (#372; a API já existe). Assentos em massa seguem a regra atual até a #403. Os papéis novos de equipe ficam para a #404.
 
 ## Etapas seguintes
