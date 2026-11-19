@@ -174,7 +174,7 @@ describe('comunidade (integração)', () => {
       const link = await invites.create(dono, grupo.id, { role: 'MEMBER' });
       await invites.accept(aluna, token(link.url), { scopes: ['NUTRITION'], statsOptIn: false });
 
-      const { url } = await invites.create(dono, grupo.id, { role: 'CREATOR' });
+      const { url } = await invites.create(dono, grupo.id, { role: 'CREATOR', maxUses: 1 });
       const criadora = await pessoa('Criadora');
       await invites.accept(criadora, token(url), { scopes: [], statsOptIn: false });
 
@@ -395,7 +395,7 @@ describe('comunidade (integração)', () => {
 
     it('convite de equipe não deve o obrigatório', async () => {
       const { dono, grupo } = await exigente();
-      const { url } = await invites.create(dono, grupo.id, { role: 'PROFESSIONAL' });
+      const { url } = await invites.create(dono, grupo.id, { role: 'PROFESSIONAL', maxUses: 1 });
       expect((await invites.preview(token(url))).requiredSharingScopes).toEqual([]);
       const pro = await pessoa('Pro');
       await expect(
