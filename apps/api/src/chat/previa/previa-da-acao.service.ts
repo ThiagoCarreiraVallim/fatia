@@ -32,6 +32,41 @@ export type PreviaDaAcao =
 const numero = (valor: number, casas = 1) =>
   valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 
+interface AdocaoArgs {
+  groupId: string;
+  templateId: string;
+  applyGoals?: boolean;
+}
+
+type CampoDaMeta =
+  | 'kcalMin'
+  | 'kcalMax'
+  | 'proteinMinG'
+  | 'proteinMaxG'
+  | 'carbsMinG'
+  | 'carbsMaxG'
+  | 'fatMinG'
+  | 'fatMaxG';
+
+const FAIXAS_DAS_METAS: ReadonlyArray<[string, CampoDaMeta, CampoDaMeta, string]> = [
+  ['Calorias', 'kcalMin', 'kcalMax', 'kcal'],
+  ['Proteína', 'proteinMinG', 'proteinMaxG', 'g'],
+  ['Carboidrato', 'carbsMinG', 'carbsMaxG', 'g'],
+  ['Gordura', 'fatMinG', 'fatMaxG', 'g'],
+];
+
+const faixa = (min: number, max: number) =>
+  min === max ? numero(min, 0) : `${numero(min, 0)}–${numero(max, 0)}`;
+
+/** As metas do retrato de nutrição, ou `null` se ele não traz (ou não é o formato esperado). */
+function metasDoRetrato(snapshot: unknown): Record<CampoDaMeta, number> | null {
+  const goals = (snapshot as { goals?: unknown } | null | undefined)?.goals;
+  if (typeof goals !== 'object' || goals === null) return null;
+  const g = goals as Record<string, unknown>;
+  const campos = FAIXAS_DAS_METAS.flatMap(([, min, max]) => [min, max]);
+  return campos.every((c) => typeof g[c] === 'number') ? (g as Record<CampoDaMeta, number>) : null;
+}
+
 /** Cartão é para ler de relance: depois disso, "e mais N". */
 const MAX_ITENS_DO_MODELO = 5;
 
@@ -117,7 +152,38 @@ export class PreviaDaAcaoService {
       const formatado = definicao.formato ? definicao.formato(valor, ctx) : String(valor);
       if (formatado) linhas.push({ rotulo: definicao.rotulo, valor: formatado });
     }
+    if (nome === 'adopt_group_plan') {
+      linhas.push(...(await this.metasAntesEDepois(usuario.id, lido.data as AdocaoArgs)));
+    }
     return { valida: true, linhas };
+  }
+
+  /**
+   * Trocar as metas pelas de um plano da comunidade sobrescreve as pessoais
+   * (#396): o cartão mostra cada faixa como está e como fica. O modelo é lido
+   * com a mesma restrição do título (publicado, comunidade da URL, membro ativo).
+   */
+  private async metasAntesEDepois(userId: string, args: AdocaoArgs): Promise<LinhaDaPrevia[]> {
+    if (args.applyGoals !== true) return [];
+    const modelo = await this.prisma.groupPlanTemplate.findFirst({
+      where: {
+        id: args.templateId,
+        groupId: args.groupId,
+        kind: 'NUTRITION',
+        publishedAt: { not: null },
+        group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+      },
+      select: { snapshot: true },
+    });
+    const plano = metasDoRetrato(modelo?.snapshot);
+    if (!plano) return [];
+    const agora = await this.prisma.userGoals.findUnique({ where: { userId } });
+    return FAIXAS_DAS_METAS.map(([rotulo, min, max, unidade]) => {
+      const depois = `${faixa(plano[min], plano[max])} ${unidade}`;
+      if (!agora) return { rotulo, valor: `sem meta → ${depois}` };
+      const antes = `${faixa(agora[min], agora[max])} ${unidade}`;
+      return { rotulo, valor: antes === depois ? `${antes} (igual)` : `${antes} → ${depois}` };
+    });
   }
 
   private async itemDeRefeicao(userId: string, item: Record<string, unknown>) {

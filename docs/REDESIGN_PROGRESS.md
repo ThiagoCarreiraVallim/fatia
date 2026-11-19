@@ -370,10 +370,11 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 ## Etapa 7: Comunidade no app (em andamento)
 
-| Issue | Título                                                                | Estado           | Superfícies                                      |
-| ----- | --------------------------------------------------------------------- | ---------------- | ------------------------------------------------ |
-| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
-| #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | pronto na branch | api, db, MCP, api-client, web, app, docs         |
+| Issue | Título                                                                | Estado           | Superfícies                                              |
+| ----- | --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| #393  | Comunidade: minhas comunidades, entrar com código, sobre e benefícios | mergeado (#446)  | api, db, MCP (1 tool nova), api-client, web, app         |
+| #394  | Mural: posts, comunicados, enquetes, denúncia, bloqueio e Para você   | mergeado (#447)  | api, db, MCP, api-client, web, app, docs                 |
+| #396  | Conteúdo da equipe no app: planos, dicas e guias de exercício         | pronto na branch | api, db, MCP (1 tool nova), agente, api-client, web, app |
 | #395  | Desafios: tipos, check-in com foto, pontos, ranking e revisão         | pronto na branch | api, db, MCP (1 tool nova), api-client, web, app |
 
 #393 (branch `redesign/393-comunidades`, migration `20261118100000_community_entry_code_benefits`; nenhuma env nova):
@@ -435,6 +436,24 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - Posts automáticos de resultado de desafio e de membro novo (prancha Pn-14) dependem de dado que ainda não existe (pódio fechado e consentimento do apelido).
   - Aba Agenda (#397).
 
+#396 (branch `redesign/396-conteudo-equipe`, sobre a main com a #393 e a #394; migration `20261118200000_user_goals_history`; nenhuma env nova; nenhuma permissão nova):
+
+- **Decisão: aplicar plano da equipe pede confirmação com o antes e o depois.** Na tela, a folha "O que entra na sua conta?" (Cm-14) mostra as metas de agora ao lado das do plano, e as metas só mudam se a pessoa marcar; marcando, e se já houver metas, avisa "Suas metas de agora ficam no histórico.". No chat, o cartão de confirmação do `adopt_group_plan` com `applyGoals` traz uma linha por faixa ("Calorias: 2500–2800 → 1800–2000", "(igual)", "sem meta → …"). O modo automático da ADR 039 ainda não existe no código, então a tool continua sempre confirmável.
+- **Decisão: o histórico de metas é mantido.** Tabela nova `UserGoalsHistory` com a linha anterior inteira. Todo caminho que troca metas passa por `upsertWithHistory(tx, …)`: tela de metas e MCP (`manual`), onboarding refeito (`manual`), plano da comunidade (`group_plan`, com `templateId` em SetNull e o título) e plano alimentar aceito (`nutrition_plan`). Dentro de uma transação, a linha das metas é travada (`SELECT … FOR UPDATE`) antes de ler o "antes"; só grava histórico se algum campo enviado muda, e duas trocas iguais ao mesmo tempo deixam uma linha só. O `upsert` devolve `{ goals, previous, historyWritten }`; a adoção devolve `previousGoals` e `goalsHistoryWritten`, e a frase "As de antes ficaram no histórico." só sai quando o histórico foi gravado. Entra no export LGPD (`nutritionGoalsHistory`) e em `DATA_RETENTION.md`. Não há tela do histórico ainda. (`store-review-account.ts`, a conta de revisão das lojas, grava metas direto no seed e não passa pelo histórico.)
+- **Aba Conteúdo (Cm-12):** "Planos e dicas" virou "Conteúdo" nas abas da comunidade, com título igual ao nome da comunidade e o (i) para Sobre. Plano: "treino · 4 exercícios · intermediário · Bruno". Dica: "Fixada · hábitos", título e o começo do texto; a dica inteira saiu da lista e abre na própria tela. Exercícios: guia com foto, "pernas · máquina · guia da academia", e embaixo "Equipamentos da academia" (só leitura).
+- **Plano (Cm-13):** "Por Bruno (dono)" com o papel de hoje de quem fez (`authorRole`, `null` se saiu). Exercício com guia da mesma comunidade ganha o selo "guia", que abre o guia da academia (`exerciseId`/`hasGuide` em cada exercício do plano). Adotar treino não sai da tela: aparece "Em Meus planos" com "Abrir" (também no 409 de quem já tinha adotado).
+- **Dica (Cm-15):** `GET /groups/:id/tips/:tipId` (só publicada, da comunidade da URL). Byline "Bruno · dono · 3 nov" no fuso do aparelho. Atalho pelo assunto (`tipShortcut`): água/hidratação abre o registro de água ali mesmo; dica de treino leva ao Treino; o resto não tem botão.
+- **Guia da academia (Cm-16):** `GET /groups/:id/exercises/:exerciseId` e `GET /groups/:id/equipment` (`content.read`). Vídeo (no app, abre no navegador, como no resto do app: sem player nativo para não quebrar o Expo Go), fotos em miniatura (na web, com vídeo, a foto tocada abre embaixo dele), "Dica de Helena", "Como fazer" (o detalhe do Fatia) e "Pôr num treino".
+- **MCP:** `list_group_exercise_guides` (leitura, cartão lista, nunca devolve URL de mídia) — 161 tools, `SHA_ENTIDADE` novo. O prompt do chat cita a tool; a descrição do `adopt_group_plan` diz que as partes são separadas e que as metas antigas ficam no histórico.
+- **Isolamento:** tudo buscado pelo `groupId` da URL com membro ativo; id de dica, guia ou plano de outra comunidade dá 404 pela URL da sua. `user-isolation.spec.ts` cobre quem é de fora, ids cruzados e quem saiu (perde mídia e guia, fica com as cópias de plano e refeições e com o export).
+- **Desvios de propósito:**
+  - "Pôr num treino" abre um seletor dos meus planos (o que já tem o exercício aparece desligado com "já tem"), e não o fluxo Al-T8 da prancha: é um toque a menos e evita repetir o exercício.
+  - O antes e depois mostra quatro faixas (com carboidrato); a prancha mostra três.
+  - O botão Adotar continua logo depois da descrição (decisão anterior de usabilidade), e não preso ao pé da tela.
+- **Conferência visual (2026-11-18):** prints lado a lado prancha | web | app de Cm-12 a Cm-16 e do "Pôr num treino", escuro e claro na web, em `~/.cache/fatia-vis/396/cmp-*.png`. Corrigido na passada: cabeçalho "Plano da academia" com os selos de tipo e nível e o nome grande (Cm-13); cabeçalho "Guia da academia", músculo e equipamento em selos e a dica com as iniciais de quem escreveu (Cm-16); avatar na assinatura da dica (Cm-15); "agora" e "plano" em colunas na folha do app (Cm-14). Menu escondido sob todas as folhas (adotar, água, Como fazer, Pôr num treino); sem texto escuro no escuro.
+- **Desvios visuais de propósito:** o topo da comunidade segue o das outras abas (nome e o (i) de Sobre, e não avatar e botão "Sobre"); na web, as abas Planos/Dicas/Exercícios ficam compactas, como nas outras telas da web; o plano sem capa não tem o degradê da prancha; na web, "O que entra na sua conta?" é o diálogo central do projeto, e no app é folha; na web, "Registrar água" fica logo depois do texto (no app, preso ao pé); o vídeo toca na própria página na web e abre no navegador no app; a legenda do "Como fazer" embaixo dos botões saiu (o botão já diz o que faz).
+- **Falta:** tela do histórico de metas; o e2e `content.spec.ts` foi ajustado à dica em tela própria e ao aviso "Em Meus planos", mas não rodou aqui.
+
 #395 (branch `redesign/395-desafios`, parte da `redesign/393-comunidades`; migration `20261118300000_challenge_kinds_checkins_review` e `20261118300100_challenge_review_hardening`; nenhuma env nova):
 
 - **Decisões (orquestrador, conciliadas com a ADR 044 que o dono já tinha aceitado):**
@@ -449,7 +468,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Ranking e resultado:** quem é da comunidade vê o ranking (apelido, dias/pontos, sequência), inclusive sem participar, menos nos `METRIC` antigos de ml/passos. Pódio e medalhas só depois da fila esvaziar ou 24 h após o fim (`resultPending`). Aviso "Me avise quando começar" (`GroupChallengeWatcher`) e aviso de começo a quem participa.
 - **Retenção:** foto apagada ao anular, ao sair do desafio ou da comunidade, ao apagar a conta, e 30 dias depois de `finalizedAt`; a limpeza de órfãos da mídia não toca foto de check-in. Export LGPD leva tipo, aceite, check-ins (com link da foto no arquivo baixado), sinalizações feitas (sem quem foi sinalizado).
 - **Permissão nova:** `challenge.review` (`permissions.ts` e `docs/PERMISSIONS.md`).
-- **MCP:** `get_my_challenge_progress` nova (leitura, cartão lista) — 161 tools com as da #394, `SHA_ENTIDADE` novo; `list_group_challenges` e `get_challenge_leaderboard` falam de tipos e dias, cartão em dias/pts. Sem tool de check-in, sinalização ou revisão (ADR 044 §10).
+- **MCP:** `get_my_challenge_progress` nova (leitura, cartão lista) — 162 tools com as da #394 e a da #396, `SHA_ENTIDADE` novo; `list_group_challenges` e `get_challenge_leaderboard` falam de tipos e dias, cartão em dias/pts. Sem tool de check-in, sinalização ou revisão (ADR 044 §10).
 - **Isolamento:** `user-isolation.spec.ts` (bloco #395) cobre foto de outra pessoa e de outra comunidade, treino alheio no corpo, fila para membro, sinalizar e decidir pela URL de outro desafio/comunidade, foto nunca vista pela colega e o export.
 - **Desvios de propósito:**
   - "Anunciar no mural": o post automático de desafio criado veio com a #394. O "pódio no mural" segue fora (a #394 registrou que depende do pódio fechado e do consentimento do apelido).

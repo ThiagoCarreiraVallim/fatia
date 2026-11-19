@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import type { GroupRole } from './community';
 import type { MediaView } from './community-content';
 
 /**
@@ -246,6 +247,8 @@ export interface GroupExercise {
   photos: MediaView[];
   tips: string | null;
   authorName: string;
+  /** O papel de hoje de quem escreveu (#396); `null` se saiu. */
+  authorRole: GroupRole | null;
   updatedAt: string;
   /** Só na bancada da equipe. */
   canEdit?: boolean;
@@ -309,6 +312,11 @@ export const groupExerciseApi = {
 
   /** Vitrine do membro. */
   forMember: (groupId: string) => apiFetch<GroupExercise[]>(`${base}/${groupId}/exercises`),
+  /** O guia da academia (Cm-16, #396). */
+  memberGuide: (groupId: string, exerciseId: number) =>
+    apiFetch<GroupExercise>(`${base}/${groupId}/exercises/${exerciseId}`),
+  /** "Equipamentos da academia" na aba Exercícios (Cm-12, #396). */
+  memberEquipment: (groupId: string) => apiFetch<GymEquipmentState>(`${base}/${groupId}/equipment`),
 };
 
 export const VIDEO_MIMES = ['video/mp4', 'video/quicktime'] as const;

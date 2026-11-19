@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { Prisma, UserGoals } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { UpsertGoalsDto } from './dto/goals.dto';
 
@@ -45,6 +46,89 @@ export function assertGoalsValid(dto: UpsertGoalsDto): void {
   }
 }
 
+/**
+ * De onde veio a troca das metas, para o histórico (#396): `manual` (tela de
+ * metas, onboarding, MCP), `group_plan` (plano da comunidade) ou
+ * `nutrition_plan` (plano alimentar aceito).
+ */
+export interface GoalsChangeOrigin {
+  source: 'manual' | 'group_plan' | 'nutrition_plan';
+  templateId?: string | null;
+  templateTitle?: string | null;
+}
+
+/** O que a troca fez: as metas gravadas, as de antes e se o "antes" foi para o histórico. */
+export interface GoalsWriteResult {
+  goals: UserGoals;
+  previous: UserGoals | null;
+  historyWritten: boolean;
+}
+
+const CAMPOS_DAS_METAS = [
+  'kcalMin',
+  'kcalMax',
+  'proteinMinG',
+  'proteinMaxG',
+  'carbsMinG',
+  'carbsMaxG',
+  'fatMinG',
+  'fatMaxG',
+  'weeklyWorkouts',
+  'dailyStepsTarget',
+  'dailyWaterTargetMl',
+] as const;
+
+/**
+ * Grava as metas e, se já havia metas e alguma muda, o "antes" vai para
+ * `UserGoalsHistory` (#396). Roda dentro de uma transação (`db` é o `tx`): a
+ * linha das metas é travada com `FOR UPDATE` antes de ler o "antes", e duas
+ * trocas ao mesmo tempo não gravam o mesmo "antes" duas vezes. Todo caminho
+ * que troca metas passa por aqui (tela, MCP, onboarding, plano da comunidade,
+ * plano alimentar aceito).
+ */
+export async function upsertWithHistory(
+  db: Prisma.TransactionClient,
+  userId: string,
+  dto: UpsertGoalsDto,
+  origin: GoalsChangeOrigin,
+): Promise<GoalsWriteResult> {
+  await db.$queryRaw`SELECT 1 FROM "UserGoals" WHERE "userId" = ${userId} FOR UPDATE`;
+  const previous = (await db.userGoals.findUnique({ where: { userId } })) ?? null;
+  const goals = await db.userGoals.upsert({
+    where: { userId },
+    create: { userId, ...dto },
+    update: dto,
+  });
+  const historyWritten = previous !== null && changes(previous, dto);
+  if (historyWritten) {
+    await db.userGoalsHistory.create({
+      data: {
+        userId,
+        kcalMin: previous.kcalMin,
+        kcalMax: previous.kcalMax,
+        proteinMinG: previous.proteinMinG,
+        proteinMaxG: previous.proteinMaxG,
+        carbsMinG: previous.carbsMinG,
+        carbsMaxG: previous.carbsMaxG,
+        fatMinG: previous.fatMinG,
+        fatMaxG: previous.fatMaxG,
+        weeklyWorkouts: previous.weeklyWorkouts,
+        dailyStepsTarget: previous.dailyStepsTarget,
+        dailyWaterTargetMl: previous.dailyWaterTargetMl,
+        source: origin.source,
+        templateId: origin.templateId ?? null,
+        templateTitle: origin.templateTitle ?? null,
+      },
+    });
+  }
+  return { goals, previous, historyWritten };
+}
+
+/** Algum campo enviado difere do que estava? Campo ausente no envio fica como está. */
+function changes(previous: UserGoals, dto: UpsertGoalsDto): boolean {
+  return CAMPOS_DAS_METAS.some((c) => dto[c] !== undefined && dto[c] !== previous[c]);
+}
+
 @Injectable()
 export class UserGoalsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -53,19 +137,22 @@ export class UserGoalsService {
     return this.prisma.userGoals.findUnique({ where: { userId } });
   }
 
-  async upsert(userId: string, dto: UpsertGoalsDto) {
+  /** Valida, grava com histórico (ver `upsertWithHistory`) e marca a primeira vez. */
+  async upsert(
+    userId: string,
+    dto: UpsertGoalsDto,
+    origin: GoalsChangeOrigin = { source: 'manual' },
+  ): Promise<GoalsWriteResult> {
     assertGoalsValid(dto);
-    const goals = await this.prisma.userGoals.upsert({
-      where: { userId },
-      create: { userId, ...dto },
-      update: dto,
-    });
+    const result = await this.prisma.$transaction((tx) =>
+      upsertWithHistory(tx, userId, dto, origin),
+    );
     // Quem definiu metas por outro caminho (MCP, tela de metas) já passou da
     // primeira vez: o app não deve mandá-lo ao assistente.
     await this.prisma.user.updateMany({
       where: { id: userId, onboardedAt: null },
       data: { onboardedAt: new Date() },
     });
-    return goals;
+    return result;
   }
 }

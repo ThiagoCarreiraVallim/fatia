@@ -76,9 +76,14 @@ import {
  * #385) e o aviso de passos fechados no `list_group_challenges` mudam os dois braços.
  * O merge da #393 na #394 juntou os dois braços A; o merge da main (#394, #447) na #395
  * junta de novo.
+ * A #396 acrescentou `list_group_exercise_guides` (só leitura, sem intenção) e mudou a descrição
+ * de `adopt_group_plan` (as partes separadas e o histórico das metas): muda o braço A. O merge
+ * da main (#393 via #446) na #396 juntou: braço A novo, braço B o da main. O merge da #393 na
+ * #394 juntou os dois braços A, e o da main (#394 via #447) na #396 juntou de novo o braço A.
+ * O merge da main (#396 via #448) na #395 junta os braços de novo.
  */
 
-const SHA_ENTIDADE = 'c4b3dfdd0fc6fe06f348a64c9e448ea53abc4caa01bf99ca1624e10c6a1d6358';
+const SHA_ENTIDADE = '27bd7a946bc40aaa880cb124354e0aa6e328d510399e0910f21dd3828fa2f97e';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

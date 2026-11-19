@@ -40,3 +40,22 @@ export function assertCanEditContent(role: GroupRole, userId: string, authorId: 
     throw new ForbiddenException('Só quem publicou, ou o dono, muda este conteúdo');
   }
 }
+
+/**
+ * O papel de hoje de cada autor nesta comunidade, para o "Bruno (dono)" da
+ * vitrine (#396). Quem saiu ou apagou a conta não tem papel: a tela mostra só
+ * o nome (ou "Equipe").
+ */
+export async function authorRoles(
+  prisma: PrismaService,
+  groupId: string,
+  authorIds: (string | null)[],
+): Promise<Map<string, GroupRole>> {
+  const ids = [...new Set(authorIds.filter((id): id is string => id !== null))];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.groupMembership.findMany({
+    where: { groupId, userId: { in: ids }, status: MembershipStatus.ACTIVE },
+    select: { userId: true, role: true },
+  });
+  return new Map(rows.map((r) => [r.userId, r.role]));
+}

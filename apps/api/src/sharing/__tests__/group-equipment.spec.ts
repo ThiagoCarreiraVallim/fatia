@@ -18,6 +18,8 @@ function makePrisma(role: 'OWNER' | 'PROFESSIONAL' = 'OWNER', custom: string[] =
   return {
     groupMembership: {
       findUnique: jest.fn().mockResolvedValue({ role, status: 'ACTIVE' }),
+      // O papel de hoje de quem escreveu o guia (#396).
+      findMany: jest.fn().mockResolvedValue([{ userId: OWNER, role }]),
     },
     group: {
       update: jest.fn(({ data }) =>

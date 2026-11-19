@@ -1,81 +1,65 @@
 import { useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, PlayCircle } from 'lucide-react-native';
+import { Info } from 'lucide-react-native';
 import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
-import { TemplateCard, TipCard } from '@/components/content/content-cards';
-import { RowChevron } from '@/components/content/content-ui';
+import {
+  GuideRow,
+  GymEquipmentCard,
+  MemberTemplateRow,
+  MemberTipCard,
+} from '@/components/content/member-content';
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { Screen } from '@/components/layout/screen';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { EmptyState, ErrorState, LoadingState, Tabs, TabsList, TabsTrigger } from '@/components/ui';
-import {
-  ExerciseDetailHost,
-  useOpenExerciseDetail,
-} from '@/components/workout/exercise-detail-host';
 import { colors } from '@/theme/colors';
 
 type Aba = 'plans' | 'tips' | 'exercises';
 const ABAS: Aba[] = ['plans', 'tips', 'exercises'];
 
-/** O catálogo da comunidade (Fase 7b); tocar abre o detalhe com o tutorial dela. */
-function CommunityExercises({ groupId }: { groupId: string }) {
-  const abrir = useOpenExerciseDetail();
+/** Os guias de exercício da academia e, embaixo, o equipamento que ela tem. */
+function CommunityGuides({ groupId }: { groupId: string }) {
+  const router = useRouter();
   const lista = useQuery({
     queryKey: ['community', 'exercises', groupId],
     queryFn: () => groupExerciseApi.forMember(groupId),
   });
-  if (lista.isPending) return <LoadingState label="Carregando os exercícios…" />;
-  if (lista.isError) {
-    return <ErrorState error={lista.error} onRetry={() => void lista.refetch()} />;
-  }
-  if (!lista.data.length) {
-    return (
-      <EmptyState
-        title="Nenhum exercício ainda"
-        description="Os exercícios e tutoriais que a equipe gravar aparecem aqui e no seu treino."
-      />
-    );
-  }
+  const equipamento = useQuery({
+    queryKey: ['community', 'exercises', groupId, 'equipment'],
+    queryFn: () => groupExerciseApi.memberEquipment(groupId),
+  });
   return (
     <>
-      {lista.data.map((e) => (
-        <Pressable
-          key={e.exerciseId}
-          accessibilityRole="button"
-          accessibilityLabel={`${e.name}${e.video ? ', com vídeo' : ''}`}
-          onPress={() => abrir(e.exerciseId)}
-          className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
-        >
-          {e.photos[0]?.url ? (
-            <Image
-              source={{ uri: e.photos[0].url }}
-              accessibilityIgnoresInvertColors
-              className="h-14 w-14 rounded-xl"
-            />
-          ) : (
-            <View className="h-14 w-14 items-center justify-center rounded-xl bg-muted">
-              <Dumbbell size={20} color={colors.mutedForeground} />
-            </View>
-          )}
-          <View className="flex-1">
-            <Text numberOfLines={1} className="text-sm font-semibold text-foreground">
-              {e.name}
-            </Text>
-            <Text className="text-xs capitalize text-muted-foreground">
-              {[e.muscleGroup, e.equipment].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
-          {e.video ? <PlayCircle size={20} color={colors.primaryText} /> : null}
-          <RowChevron />
-        </Pressable>
-      ))}
+      {lista.isPending ? (
+        <LoadingState label="Carregando os exercícios…" />
+      ) : lista.isError ? (
+        <ErrorState error={lista.error} onRetry={() => void lista.refetch()} />
+      ) : lista.data.length ? (
+        lista.data.map((e) => (
+          <GuideRow
+            key={e.exerciseId}
+            guide={e}
+            onPress={() => router.push(`/community/${groupId}/content/exercises/${e.exerciseId}`)}
+          />
+        ))
+      ) : (
+        <EmptyState
+          title="Nenhum exercício ainda"
+          description="Os guias que a equipe gravar aparecem aqui e no seu treino."
+        />
+      )}
+      {equipamento.data ? <GymEquipmentCard state={equipamento.data} /> : null}
     </>
   );
 }
 
-/** Equivalente de `apps/web/src/app/(app)/community/[groupId]/content/page.tsx`. */
+/**
+ * A aba Conteúdo da comunidade (Cm-12, #396), equivalente de
+ * `apps/web/src/app/(app)/community/[groupId]/content/page.tsx`: os planos, as
+ * dicas e os guias que a equipe publicou. Cada item abre a própria tela.
+ */
 export default function CommunityContentScreen() {
   const { groupId, tab } = useLocalSearchParams<{ groupId: string; tab?: string }>();
   const router = useRouter();
@@ -102,25 +86,35 @@ export default function CommunityContentScreen() {
   });
 
   return (
-    <ExerciseDetailHost>
-      <Screen
-        title={grupo.data ? `Planos e dicas · ${grupo.data.name}` : 'Planos e dicas'}
-        onRefresh={() => void Promise.all([planos.refetch(), dicas.refetch()])}
-        refreshing={planos.isRefetching || dicas.isRefetching}
-      >
-        <View className="gap-4 px-5 pb-4 pt-4">
-          <CommunityTabs groupId={groupId} />
-          {/* Abas segmentadas, e não pílulas de `Choice`: as pílulas logo abaixo
-              das abas da comunidade pareciam filtro ou escolha de formulário. */}
-          <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
-            <TabsList>
-              <TabsTrigger value="plans">Planos</TabsTrigger>
-              <TabsTrigger value="tips">Dicas</TabsTrigger>
-              <TabsTrigger value="exercises">Exercícios</TabsTrigger>
-            </TabsList>
-          </Tabs>
+    <Screen
+      title={grupo.data?.name ?? 'Conteúdo'}
+      onRefresh={() => void Promise.all([planos.refetch(), dicas.refetch()])}
+      refreshing={planos.isRefetching || dicas.isRefetching}
+      actions={
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Sobre a comunidade"
+          onPress={() => router.push(`/community/${groupId}/settings`)}
+          className={TOP_BAR_ACTION}
+        >
+          <Info size={20} color={colors.mutedForeground} />
+        </Pressable>
+      }
+    >
+      <View className="gap-4 px-5 pb-4 pt-4">
+        <CommunityTabs groupId={groupId} />
+        {/* Abas segmentadas, e não pílulas de `Choice`: as pílulas logo abaixo
+            das abas da comunidade pareciam filtro ou escolha de formulário. */}
+        <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
+          <TabsList>
+            <TabsTrigger value="plans">Planos</TabsTrigger>
+            <TabsTrigger value="tips">Dicas</TabsTrigger>
+            <TabsTrigger value="exercises">Exercícios</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <View className="gap-2">
           {aba === 'exercises' ? (
-            <CommunityExercises groupId={groupId} />
+            <CommunityGuides groupId={groupId} />
           ) : aba === 'plans' ? (
             planos.isPending ? (
               <LoadingState label="Carregando os planos…" />
@@ -128,7 +122,7 @@ export default function CommunityContentScreen() {
               <ErrorState error={planos.error} onRetry={() => void planos.refetch()} />
             ) : planos.data.length ? (
               planos.data.map((t) => (
-                <TemplateCard
+                <MemberTemplateRow
                   key={t.id}
                   template={t}
                   onPress={() => router.push(`/community/${groupId}/content/${t.id}`)}
@@ -145,7 +139,13 @@ export default function CommunityContentScreen() {
           ) : dicas.isError ? (
             <ErrorState error={dicas.error} onRetry={() => void dicas.refetch()} />
           ) : dicas.data.length ? (
-            sortTips(dicas.data).map((d) => <TipCard key={d.id} tip={d} />)
+            sortTips(dicas.data).map((d) => (
+              <MemberTipCard
+                key={d.id}
+                tip={d}
+                onPress={() => router.push(`/community/${groupId}/content/tips/${d.id}`)}
+              />
+            ))
           ) : (
             <EmptyState
               title="Nenhuma dica publicada"
@@ -153,7 +153,7 @@ export default function CommunityContentScreen() {
             />
           )}
         </View>
-      </Screen>
-    </ExerciseDetailHost>
+      </View>
+    </Screen>
   );
 }

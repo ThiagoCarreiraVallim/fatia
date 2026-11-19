@@ -111,4 +111,21 @@ export class GroupExerciseController {
   ) {
     return this.exercises.listForMember(user.id, groupId);
   }
+
+  /** O guia da academia (Cm-16, #396). */
+  @Get('exercises/:exerciseId')
+  @RequireGroupAction('content.read')
+  memberGet(@CurrentUser() user: CurrentUserPayload, @Param() p: GroupExerciseParamDto) {
+    return this.exercises.getForMember(user.id, p.groupId, p.exerciseId);
+  }
+
+  /** "Equipamentos da academia" na aba Exercícios (Cm-12, #396). */
+  @Get('equipment')
+  @RequireGroupAction('content.read')
+  memberEquipment(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.exercises.equipmentForMember(user.id, groupId);
+  }
 }

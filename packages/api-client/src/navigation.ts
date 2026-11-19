@@ -450,7 +450,18 @@ export const ROUTES: readonly RouteDef[] = [
   },
   {
     pattern: '/community/:id/content/:templateId',
-    title: 'Plano pronto',
+    title: 'Plano da academia',
+    parent: '/community/:id/content',
+  },
+  // A dica e o guia da academia (Cm-15, Cm-16, #396) voltam para a aba Conteúdo.
+  {
+    pattern: '/community/:id/content/tips/:tipId',
+    title: 'Dica',
+    parent: '/community/:id/content',
+  },
+  {
+    pattern: '/community/:id/content/exercises/:exerciseId',
+    title: 'Guia da academia',
     parent: '/community/:id/content',
   },
   // O painel da equipe: voltar sai do painel para a comunidade, e a seção

@@ -1,5 +1,5 @@
 import { apiFetch } from './http';
-import type { MyGroup } from './community';
+import type { GroupRole, MyGroup } from './community';
 import type { MealType } from './nutrition';
 
 /**
@@ -65,6 +65,10 @@ export interface SuggestedMeal {
 }
 
 export interface TemplateExercise {
+  /** Para o atalho "guia" (#396); `null` no exercício próprio do autor. */
+  exerciseId: number | null;
+  /** A academia tem guia dela (vídeo, fotos, dica) para este exercício. */
+  hasGuide: boolean;
   name: string;
   muscleGroup: string | null;
   targetSets: number;
@@ -79,6 +83,8 @@ export interface PlanTemplate {
   level: PlanLevel | null;
   cover: MediaView | null;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396); `null` se saiu. */
+  authorRole: GroupRole | null;
   /** `null` = rascunho, visível só para a equipe. */
   publishedAt: string | null;
   updatedAt: string;
@@ -101,6 +107,8 @@ export interface GroupTip {
   image: MediaView | null;
   pinned: boolean;
   authorName: string;
+  /** O papel de hoje do autor nesta comunidade (#396); `null` se saiu. */
+  authorRole: GroupRole | null;
   publishedAt: string | null;
   updatedAt: string;
   canEdit?: boolean;
@@ -137,6 +145,10 @@ export interface AdoptResult {
   goalsApplied: boolean;
   mealsSaved: number;
   mealsAlreadySaved: boolean;
+  /** As metas que valiam antes da troca (#396); ficam também no histórico de metas. */
+  previousGoals: NutritionGoalsInput | null;
+  /** As metas de antes foram para o histórico (havia metas e alguma mudou). */
+  goalsHistoryWritten: boolean;
 }
 
 const base = '/api/groups';
@@ -191,6 +203,8 @@ export const groupContentApi = {
   adopt: (groupId: string, id: string, input: AdoptInput = {}) =>
     apiFetch<AdoptResult>(`${base}/${groupId}/plans/${id}/adopt`, json('POST', input)),
   tips: (groupId: string) => apiFetch<GroupTip[]>(`${base}/${groupId}/tips`),
+  /** A dica aberta (Cm-15, #396). */
+  tip: (groupId: string, id: string) => apiFetch<GroupTip>(`${base}/${groupId}/tips/${id}`),
 };
 
 export interface UploadTicket {

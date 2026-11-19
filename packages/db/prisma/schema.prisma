@@ -92,6 +92,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   goals                  UserGoals?
+  /// As metas do dia anteriores a cada troca (#396). É dado da pessoa.
+  goalsHistory           UserGoalsHistory[]
   authoredChallenges     GroupChallenge[]   @relation("ChallengeAuthor")
   /// Check-ins de desafio que a pessoa revisou como equipe (#395).
   reviewedCheckins       ChallengeCheckin[] @relation("CheckinReviewer")
@@ -374,6 +376,38 @@ model UserGoals {
   updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// As metas do dia como eram antes de cada troca (#396). Trocar as metas pelas de
+// um plano da comunidade sobrescreve as pessoais; a linha guarda o "antes" para a
+// pessoa (e o export) saber de onde veio a mudança. `source` diz o caminho:
+// `group_plan` (adotou um plano da equipe), `nutrition_plan` (aceitou o plano
+// alimentar) ou `manual` (tela de metas, MCP, onboarding). O modelo pode sumir:
+// fica o título, o vínculo vira nulo.
+model UserGoalsHistory {
+  id                 String   @id @default(uuid())
+  userId             String
+  kcalMin            Int
+  kcalMax            Int
+  proteinMinG        Int
+  proteinMaxG        Int
+  carbsMinG          Int
+  carbsMaxG          Int
+  fatMinG            Int
+  fatMaxG            Int
+  weeklyWorkouts     Int
+  dailyStepsTarget   Int
+  dailyWaterTargetMl Int
+  source             String   @default("manual")
+  templateId         String?
+  templateTitle      String?
+  replacedAt         DateTime @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template GroupPlanTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([userId, replacedAt])
+  @@index([templateId])
 }
 
 // ============================================================
@@ -2417,11 +2451,13 @@ model GroupPlanTemplate {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  author        User?          @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  cover         MediaFile?     @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
-  workoutCopies WorkoutPlan[]  @relation("PlanFromTemplate")
-  mealCopies    MealTemplate[] @relation("MealFromTemplate")
+  group         Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author        User?              @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  cover         MediaFile?         @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  workoutCopies WorkoutPlan[]      @relation("PlanFromTemplate")
+  mealCopies    MealTemplate[]     @relation("MealFromTemplate")
+  /// As metas que este modelo substituiu na conta de quem adotou (#396).
+  goalsReplaced UserGoalsHistory[]
 
   @@index([groupId, publishedAt])
 }

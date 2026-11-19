@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Image, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BookOpen, Check } from 'lucide-react-native';
 import {
   adoptResultMessage,
   ApiError,
+  authorWithRole,
   groupContentApi,
   nutritionApi,
   nutritionDiff,
-  planTemplateSummary,
+  PLAN_LEVEL_LABEL,
+  TEMPLATE_KIND_LABEL,
   type AdoptInput,
   type PlanTemplate,
 } from '@fatia/api-client';
@@ -30,13 +33,35 @@ import {
   cn,
 } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
+import { colors } from '@/theme/colors';
 
-function Linha({ esquerda, direita }: { esquerda: string; direita: string }) {
+function Linha({
+  esquerda,
+  direita,
+  onGuide,
+}: {
+  esquerda: string;
+  direita: string;
+  /** Abre o guia da academia deste exercício (#396). */
+  onGuide?: () => void;
+}) {
   return (
-    <View className="flex-row justify-between gap-3 px-4 py-3">
+    <View className="flex-row items-center justify-between gap-3 px-4 py-3">
       <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
         {esquerda}
       </Text>
+      {onGuide ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Guia da academia: ${esquerda.replace(/^\d+\. /, '')}`}
+          onPress={onGuide}
+          hitSlop={8}
+          className="flex-row items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 active:opacity-80"
+        >
+          <BookOpen size={14} color={colors.primaryText} />
+          <Text className="text-xs font-semibold text-primary">guia</Text>
+        </Pressable>
+      ) : null}
       <Text className="text-sm text-muted-foreground">{direita}</Text>
     </View>
   );
@@ -103,15 +128,34 @@ function AdoptNutritionDrawer({
               checked={metas}
               onPress={() => setMetas(!metas)}
             >
+              {/* "agora" e "plano" em colunas, como na prancha Cm-14. */}
+              <View className="flex-row gap-2 pl-8">
+                <Text className="w-24 text-xs text-muted-foreground" />
+                <Text className="flex-1 text-right text-xs text-muted-foreground">agora</Text>
+                <Text className="w-28 text-right text-xs font-sans-bold text-primary">plano</Text>
+              </View>
               {diff.map((l) => (
                 <View key={l.label} className="flex-row gap-2 pl-8">
                   <Text className="w-24 text-xs text-muted-foreground">{l.label}</Text>
-                  <Text className="flex-1 text-xs text-foreground">{`${l.current} → `}</Text>
-                  <Text className={cn('text-xs text-foreground', l.changed && 'font-bold')}>
+                  <Text className="flex-1 text-right text-xs text-muted-foreground">
+                    {l.current}
+                  </Text>
+                  <Text
+                    className={cn(
+                      'w-28 text-right text-xs text-foreground',
+                      l.changed && 'font-sans-bold',
+                    )}
+                  >
                     {l.next}
                   </Text>
                 </View>
               ))}
+              {/* Só há o que guardar se a pessoa já tinha metas. */}
+              {metas && atuais.data ? (
+                <Text className="pl-8 pt-1 text-xs text-muted-foreground">
+                  Suas metas de agora ficam no histórico.
+                </Text>
+              ) : null}
             </CheckableRow>
           ) : null}
         </View>
@@ -133,13 +177,18 @@ function AdoptNutritionDrawer({
   );
 }
 
-/** Equivalente de `apps/web/src/app/(app)/community/[groupId]/content/[templateId]/page.tsx`. */
+/**
+ * Equivalente de `apps/web/src/app/(app)/community/[groupId]/content/[templateId]/page.tsx`
+ * (Cm-13/Cm-14, #396): adotar treino avisa "Em Meus planos" sem sair da tela.
+ */
 export default function CommunityTemplateScreen() {
   const { groupId, templateId } = useLocalSearchParams<{ groupId: string; templateId: string }>();
   const router = useRouter();
   const qc = useQueryClient();
   const toast = useToast();
   const [escolhendo, setEscolhendo] = useState(false);
+  // O plano que acabou de virar seu (ou o que o 409 diz que você já tinha).
+  const [adotadoAgora, setAdotadoAgora] = useState<string | null>(null);
 
   const modelo = useQuery({
     queryKey: ['community', 'plans', groupId, templateId],
@@ -154,7 +203,7 @@ export default function CommunityTemplateScreen() {
       void qc.invalidateQueries({ queryKey: ['community', 'plans', groupId] });
       void qc.invalidateQueries({ queryKey: ['workout'] });
       void qc.invalidateQueries({ queryKey: ['nutrition'] });
-      if (r.planId) router.push(`/workout/plans/${r.planId}`);
+      if (r.planId) setAdotadoAgora(r.planId);
     },
     onError: (err) => {
       const planId =
@@ -162,8 +211,7 @@ export default function CommunityTemplateScreen() {
           ? (err.body as { planId?: string } | undefined)?.planId
           : undefined;
       if (planId) {
-        toast.show({ message: 'Você já adotou este plano.' });
-        router.push(`/workout/plans/${planId}`);
+        setAdotadoAgora(planId);
         return;
       }
       toast.show({ message: apiMessage(err, 'Não deu para adotar agora.') });
@@ -193,12 +241,32 @@ export default function CommunityTemplateScreen() {
 
   // A ação principal logo depois da descrição, e não no fim de uma lista de
   // exercícios ou refeições que podia passar de uma tela.
-  const acao = t.adoptedPlanId ? (
+  const meuPlano = adotadoAgora ?? t.adoptedPlanId;
+  const acao = adotadoAgora ? (
+    <View
+      accessibilityRole="summary"
+      accessibilityLiveRegion="polite"
+      className="flex-row items-center gap-3 rounded-2xl bg-primary/10 p-3"
+    >
+      <Check size={20} color={colors.primaryText} />
+      <View className="flex-1">
+        <Text className="text-sm font-semibold text-foreground">Em Meus planos</Text>
+        <Text className="text-xs text-muted-foreground">
+          A cópia é sua: muda só quando você mudar.
+        </Text>
+      </View>
+      <Button
+        size="sm"
+        variant="outline"
+        onPress={() => router.push(`/workout/plans/${adotadoAgora}`)}
+      >
+        Abrir
+      </Button>
+    </View>
+  ) : meuPlano ? (
     <View className="gap-2">
       <Text className="text-sm text-foreground">Você já adotou este plano.</Text>
-      <Button onPress={() => router.push(`/workout/plans/${t.adoptedPlanId}`)}>
-        Abrir meu plano
-      </Button>
+      <Button onPress={() => router.push(`/workout/plans/${meuPlano}`)}>Abrir meu plano</Button>
     </View>
   ) : (
     <View className="gap-2">
@@ -216,11 +284,7 @@ export default function CommunityTemplateScreen() {
 
   return (
     <>
-      <Screen
-        title={t.title}
-        onRefresh={() => void modelo.refetch()}
-        refreshing={modelo.isRefetching}
-      >
+      <Screen onRefresh={() => void modelo.refetch()} refreshing={modelo.isRefetching}>
         <View className="gap-4 px-5 pb-6 pt-4">
           {t.cover?.url ? (
             <Image
@@ -229,9 +293,28 @@ export default function CommunityTemplateScreen() {
               className="aspect-video w-full rounded-2xl"
             />
           ) : null}
-          <View className="gap-1">
-            <Text className="text-xs text-muted-foreground">{planTemplateSummary(t)}</Text>
-            <Text className="text-xs text-muted-foreground">{`Por ${t.authorName}`}</Text>
+          {/* O topo da prancha Cm-13: os selos do tipo e do nível e o nome grande. */}
+          <View className="gap-2">
+            <View className="flex-row flex-wrap gap-1.5">
+              <View className="rounded-full bg-primary/15 px-2.5 py-0.5">
+                <Text className="text-xs font-sans-bold uppercase tracking-wide text-primary">
+                  {TEMPLATE_KIND_LABEL[t.kind]}
+                </Text>
+              </View>
+              {t.level ? (
+                <View className="rounded-full bg-surface-3 px-2.5 py-0.5">
+                  <Text className="text-xs font-sans-bold uppercase tracking-wide text-muted-foreground">
+                    {PLAN_LEVEL_LABEL[t.level]}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
+              {t.title}
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              {`Por ${authorWithRole(t.authorName, t.authorRole)}`}
+            </Text>
           </View>
           {t.description ? <Text className="text-sm text-foreground">{t.description}</Text> : null}
           {acao}
@@ -248,6 +331,12 @@ export default function CommunityTemplateScreen() {
                     <Linha
                       esquerda={`${i + 1}. ${e.name}`}
                       direita={`${e.targetSets} × ${e.targetReps || '—'}`}
+                      onGuide={
+                        e.hasGuide && e.exerciseId !== null
+                          ? () =>
+                              router.push(`/community/${groupId}/content/exercises/${e.exerciseId}`)
+                          : undefined
+                      }
                     />
                   </View>
                 ))}
