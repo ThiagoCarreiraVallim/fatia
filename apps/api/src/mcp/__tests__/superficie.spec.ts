@@ -83,7 +83,7 @@ import {
  * O merge da main (#396 via #448) na #395 junta os braços de novo.
  */
 
-const SHA_ENTIDADE = '27bd7a946bc40aaa880cb124354e0aa6e328d510399e0910f21dd3828fa2f97e';
+const SHA_ENTIDADE = 'afde7b5a6200084a165715fdaa0416ed78fc73f367ba6d89e587b62f8329369a';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
