@@ -34,7 +34,7 @@ adiado; venda Asaas desligada por flag (`OFFERS_SALES_ENABLED`); paymentUrl do A
 - [x] 2. Direito por janela (red-first)
 - [x] 3. Overview de assentos: graceDaysLeft, faturas com seats, programas
 - [x] 4. Programas API (create/list; sem editar turma depois — fora)
-- [ ] 5. E-mail Ex-04
+- [x] 5. E-mail Ex-04
 - [ ] 6. Pn-30 API + PLAN_ENDED
 - [ ] 7. Ofertas API + webhook + export LGPD
 - [ ] 8. get_me (origem e fim)
