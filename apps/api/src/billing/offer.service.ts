@@ -53,8 +53,8 @@ export interface OfferView {
     revenueCents: number;
     /** O que fica com a comunidade, depois da taxa da plataforma. */
     netCents: number;
-    /** Quem pagou e registrou algo (refeição ou treino) nas 48 h seguintes. */
-    activated48h: number;
+    // Sem "ativaram em 48 h": ler refeições e treinos de quem comprou pede o
+    // consentimento dele, que só a conta da compra (#421) vai trazer.
   };
   /** Pagamentos que falharam (Pn-37b): não recebem o conteúdo novo até pagar. */
   failed: { purchaseId: string; name: string; since: string | null; canResend: boolean }[];
@@ -75,9 +75,6 @@ const OFFER_INCLUDE = {
 
 type OfferRow = Prisma.GroupOfferGetPayload<{ include: typeof OFFER_INCLUDE }>;
 
-const DIA_MS = 86_400_000;
-/** "Ativaram": registraram algo até 48 h depois de pagar. */
-const ATIVACAO_MS = 2 * DIA_MS;
 /** Um reenvio do link por compra a cada hora. */
 const REENVIO_MS = 60 * 60_000;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -309,7 +306,7 @@ export class OfferService {
     const [pagas, falhas] = await Promise.all([
       this.prisma.groupOfferPurchase.findMany({
         where: { offerId: o.id, status: 'PAID' },
-        select: { userId: true, amountCents: true, paidAt: true },
+        select: { amountCents: true },
       }),
       this.prisma.groupOfferPurchase.findMany({
         where: { offerId: o.id, status: 'FAILED' },
@@ -319,16 +316,6 @@ export class OfferService {
     ]);
     const revenueCents = pagas.reduce((s, p) => s + p.amountCents, 0);
     const fee = Math.round((revenueCents * this.feePercent()) / 100);
-    let activated48h = 0;
-    for (const p of pagas) {
-      if (!p.userId || !p.paidAt) continue;
-      const janela = { gte: p.paidAt, lte: new Date(p.paidAt.getTime() + ATIVACAO_MS) };
-      const [refeicao, treino] = await Promise.all([
-        this.prisma.meal.count({ where: { userId: p.userId, createdAt: janela } }),
-        this.prisma.workoutSession.count({ where: { userId: p.userId, startedAt: janela } }),
-      ]);
-      if (refeicao + treino > 0) activated48h += 1;
-    }
     return {
       id: o.id,
       slug: o.slug,
@@ -351,7 +338,6 @@ export class OfferService {
         spotsLeft: o.spots === null ? null : Math.max(0, o.spots - pagas.length),
         revenueCents,
         netCents: revenueCents - fee,
-        activated48h,
       },
       failed: falhas.map((f) => ({
         purchaseId: f.id,
