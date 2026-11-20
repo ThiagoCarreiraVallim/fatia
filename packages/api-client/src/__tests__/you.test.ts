@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BRAZIL_UNITS,
+  withIdentity,
   distanceToMeters,
   formatDistanceIn,
   formatLoad,
@@ -162,5 +163,22 @@ describe('avatarUploadNotice', () => {
   it('com envio disponível (ou API de antes, sem o campo), não diz nada', () => {
     expect(avatarUploadNotice({ mediaUploadEnabled: true })).toBeNull();
     expect(avatarUploadNotice({})).toBeNull();
+  });
+});
+
+describe('withIdentity — o perfil em cache depois do ID token (ADR 050)', () => {
+  const me = { id: 'u1', email: 'sub1@logto.local', name: 'sub1', avatarUrl: null };
+
+  it('troca e-mail e nome e mantém o resto', () => {
+    expect(withIdentity(me, { email: 'ana@x.com', name: 'Ana' })).toEqual({
+      id: 'u1',
+      email: 'ana@x.com',
+      name: 'Ana',
+      avatarUrl: null,
+    });
+  });
+
+  it('sem perfil em cache, não inventa um', () => {
+    expect(withIdentity(undefined, { email: 'ana@x.com', name: 'Ana' })).toBeUndefined();
   });
 });
