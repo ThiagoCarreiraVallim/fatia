@@ -33,6 +33,12 @@ export const MAX_PLAN_NOTES = 200;
 export const MAX_CARDIO_DURATION_SECONDS = 86_400;
 /** 1.000 km. */
 export const MAX_CARDIO_DISTANCE_METERS = 1_000_000;
+/** Editor da equipe (#406): limites dos campos novos da linha. */
+export const MAX_LOAD_PERCENT = 150;
+export const MAX_CARDIO_CALORIES = 5000;
+export const MAX_CARDIO_INCLINE = 40;
+export const MIN_CARDIO_PACE = 60;
+export const MAX_CARDIO_PACE = 1800;
 
 export const DEFAULT_STRENGTH_SETS = 3;
 export const DEFAULT_STRENGTH_REPS = '8-12';

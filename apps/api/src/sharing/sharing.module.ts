@@ -79,6 +79,7 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
 import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
 import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
 import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
+import { PlanCopyService } from './plan-copy.service';
 import { PlanOfferService } from './plan-offer.service';
 import { PlanSendController } from './plan-send.controller';
 import { PlanSendService } from './plan-send.service';
@@ -176,6 +177,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     MemberAdminService,
     TeamService,
     PlanMaterializerService,
+    PlanCopyService,
     PlanOfferService,
     MemberFileService,
     PlanProgramsService,

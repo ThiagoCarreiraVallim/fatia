@@ -297,9 +297,11 @@ describe('PlanMaterializerService.materialize', () => {
   });
 
   it('recusa snapshot de versão desconhecida sem criar plano meio montado', async () => {
-    const doFuturo = { ...snapshotDoAutor(), version: 2 };
+    const doFuturo = { ...snapshotDoAutor(), version: 99 };
 
-    await expect(service.materialize(ADOTANTE, doFuturo)).rejects.toThrow(/versão 2.*apenas a v1/s);
+    await expect(service.materialize(ADOTANTE, doFuturo)).rejects.toThrow(
+      /versão 99.*apenas a v1 e a v2/s,
+    );
     expect(exercises.createCustom).not.toHaveBeenCalled();
     expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });

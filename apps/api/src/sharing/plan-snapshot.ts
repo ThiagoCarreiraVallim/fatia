@@ -6,8 +6,13 @@ import {
   CARDIO_TARGETS,
   LOAD_MODES,
   MAX_CARDIO_DISTANCE_METERS,
+  MAX_CARDIO_CALORIES,
   MAX_CARDIO_DURATION_SECONDS,
+  MAX_CARDIO_INCLINE,
+  MAX_CARDIO_PACE,
   MAX_LOAD_KG,
+  MAX_LOAD_PERCENT,
+  MIN_CARDIO_PACE,
   MAX_PLAN_NOTES,
   MAX_PLAN_SETS,
   MAX_REST_SECONDS,
@@ -84,7 +89,7 @@ const INT4_MAX = 2_147_483_647;
  *   `@Max` (só a tool MCP corta em 20). O antigo `max(50)` reprovava o que o
  *   REST aceitou.
  */
-const prescricao = {
+export const prescricao = {
   order: z.number().int().min(0).max(INT4_MAX),
   targetSets: z.number().int().min(1).max(INT4_MAX),
   targetReps: z.string().max(20),
@@ -102,6 +107,14 @@ const prescricao = {
   cardioDurationSeconds: z.number().int().min(1).max(MAX_CARDIO_DURATION_SECONDS).optional(),
   cardioDistanceMeters: z.number().min(1).max(MAX_CARDIO_DISTANCE_METERS).optional(),
   cardioIntensity: z.enum(CARDIO_INTENSITIES).optional(),
+  // Editor da equipe (#406). Opcionais dentro da v1 pelo mesmo motivo.
+  warmupBefore: z.boolean().optional(),
+  loadPercent: z.number().int().min(1).max(MAX_LOAD_PERCENT).optional(),
+  cardioCalories: z.number().int().min(1).max(MAX_CARDIO_CALORIES).optional(),
+  cardioInclinePercent: z.number().min(0).max(MAX_CARDIO_INCLINE).optional(),
+  cardioZone: z.number().int().min(1).max(5).optional(),
+  cardioPaceSecondsPerKm: z.number().int().min(MIN_CARDIO_PACE).max(MAX_CARDIO_PACE).optional(),
+  cardioRpe: z.number().int().min(1).max(10).optional(),
   sets: z
     .array(
       z.object({
@@ -133,7 +146,7 @@ const prescricao = {
  * Fechar a diferença de verdade é limitar o lado da escrita, o que mexe no
  * schema de duas tools MCP e nos números de payload da prosa — mudança à parte.
  */
-const definicaoCustomSchema = z.object({
+export const definicaoCustomSchema = z.object({
   name: z.string().max(200),
   muscleGroup: muscleGroupSchema,
   equipment: z.string().max(100).optional(),
@@ -262,6 +275,13 @@ export type PlanoParaCongelar = {
     cardioDurationSeconds?: number | null;
     cardioDistanceMeters?: number | null;
     cardioIntensity?: (typeof CARDIO_INTENSITIES)[number] | null;
+    warmupBefore?: boolean;
+    loadPercent?: number | null;
+    cardioCalories?: number | null;
+    cardioInclinePercent?: number | null;
+    cardioZone?: number | null;
+    cardioPaceSecondsPerKm?: number | null;
+    cardioRpe?: number | null;
     sets?: ReadonlyArray<{
       kind: (typeof PLAN_SET_KINDS)[number];
       reps: number;
@@ -331,6 +351,13 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar, groupId?: string): P
         cardioDurationSeconds: item.cardioDurationSeconds ?? null,
         cardioDistanceMeters: item.cardioDistanceMeters ?? null,
         cardioIntensity: item.cardioIntensity ?? null,
+        warmupBefore: item.warmupBefore ? true : null,
+        loadPercent: item.loadPercent ?? null,
+        cardioCalories: item.cardioCalories ?? null,
+        cardioInclinePercent: item.cardioInclinePercent ?? null,
+        cardioZone: item.cardioZone ?? null,
+        cardioPaceSecondsPerKm: item.cardioPaceSecondsPerKm ?? null,
+        cardioRpe: item.cardioRpe ?? null,
         sets: (item.sets ?? []).map((st) => ({
           kind: st.kind,
           reps: st.reps,

@@ -1,7 +1,12 @@
 import type { PlanSchedule } from '@prisma/client';
 import type { PlanSnapshot } from './plan-snapshot';
+import { itemKey, upgradeV1, type PlanExerciseItem, type PlanSnapshotV2 } from './plan-snapshot-v2';
 
-type SnapshotItem = PlanSnapshot['exercises'][number];
+type SnapshotItem = PlanExerciseItem | PlanSnapshot['exercises'][number];
+/** O retrato de qualquer versão: a v1 é lida como v2 de uma sessão só. */
+type AnySnapshot = PlanSnapshot | PlanSnapshotV2;
+
+const asV2 = (snap: AnySnapshot): PlanSnapshotV2 => ('sessions' in snap ? snap : upgradeV1(snap));
 
 /**
  * O que a tela mostra de cada exercício alterado. Os valores vão crus (número,
@@ -26,6 +31,13 @@ export type DiffField =
   | 'cardioDuration'
   | 'cardioDistance'
   | 'cardioIntensity'
+  | 'warmup'
+  | 'loadPercent'
+  | 'cardioCalories'
+  | 'cardioIncline'
+  | 'cardioZone'
+  | 'cardioPace'
+  | 'cardioRpe'
   | 'config';
 
 export interface FieldChange {
@@ -34,8 +46,12 @@ export interface FieldChange {
   after: string | null;
 }
 
-/** O que mudou na versão inteira: nome, ordem dos exercícios e agenda. */
-export type VersionField = 'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays';
+/**
+ * O que mudou na versão inteira: nome, ordem dos exercícios, agenda e, com o
+ * editor da equipe (#406), as sessões (nome, dia, quantas) e os circuitos.
+ */
+export type VersionField =
+  'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'sessions' | 'circuits';
 
 export interface VersionChange {
   field: VersionField;
@@ -60,9 +76,29 @@ export interface PlanDiff {
  * (ele viaja por valor, sem id).
  */
 export function exerciseKey(item: SnapshotItem): string {
-  if (item.source === 'catalog') return `catalog:${item.catalogExerciseId}`;
-  if (item.source === 'group') return `group:${item.groupExerciseId}`;
-  return `custom:${item.exercise.name}`;
+  return itemKey(item as PlanExerciseItem);
+}
+
+/**
+ * Os exercícios do retrato com a chave do "o que mudou", na ordem das sessões.
+ * Com mais de uma sessão (em qualquer dos dois lados), a chave leva a sessão
+ * (`1/catalog:10`): o mesmo exercício em A e em B são dois.
+ */
+export function diffKeys(
+  snap: AnySnapshot,
+  other?: AnySnapshot | null,
+): Array<{ key: string; item: PlanExerciseItem; sessionIndex: number }> {
+  const v2 = asV2(snap);
+  const multi = v2.sessions.length > 1 || (other ? asV2(other).sessions.length > 1 : false);
+  return v2.sessions.flatMap((session, sessionIndex) =>
+    session.items
+      .flatMap((i) => (i.type === 'circuit' ? i.exercises : [i]))
+      .map((item) => ({
+        key: multi ? `${sessionIndex}/${itemKey(item)}` : itemKey(item),
+        item,
+        sessionIndex,
+      })),
+  );
 }
 
 const text = (v: number | string | boolean | undefined | null) =>
@@ -113,12 +149,27 @@ function labelledFields(item: SnapshotItem): Array<[DiffField, string | null]> {
     ['cardioDuration', text(item.cardioDurationSeconds)],
     ['cardioDistance', text(item.cardioDistanceMeters)],
     ['cardioIntensity', text(item.cardioIntensity)],
+    ['warmup', String(item.warmupBefore ?? false)],
+    ['loadPercent', text(item.loadPercent)],
+    ['cardioCalories', text(item.cardioCalories)],
+    ['cardioIncline', text(item.cardioInclinePercent)],
+    ['cardioZone', text(item.cardioZone)],
+    ['cardioPace', text(item.cardioPaceSecondsPerKm)],
+    ['cardioRpe', text(item.cardioRpe)],
   ];
 }
 
 /** As chaves do item que já têm rótulo próprio, mais a ordem (que é da versão). */
 const LABELLED_KEYS = new Set([
   'order',
+  'type',
+  'warmupBefore',
+  'loadPercent',
+  'cardioCalories',
+  'cardioInclinePercent',
+  'cardioZone',
+  'cardioPaceSecondsPerKm',
+  'cardioRpe',
   'targetSets',
   'targetReps',
   'restSeconds',
@@ -158,18 +209,23 @@ function fieldChanges(before: SnapshotItem, after: SnapshotItem): FieldChange[] 
  * Retratos diferentes nunca saem como "nada mudou": o que não tem rótulo
  * próprio cai em `config`.
  */
-export function diffPlanSnapshots(previous: PlanSnapshot | null, next: PlanSnapshot): PlanDiff {
-  if (!previous) return { added: [], removed: [], changed: [], version: [], hasChanges: false };
-  const before = new Map(previous.exercises.map((e) => [exerciseKey(e), e]));
-  const after = new Map(next.exercises.map((e) => [exerciseKey(e), e]));
-  const byOrder = (a: SnapshotItem, b: SnapshotItem) => a.order - b.order;
-  const nextKeys = [...next.exercises].sort(byOrder).map(exerciseKey);
-  const previousKeys = [...previous.exercises].sort(byOrder).map(exerciseKey);
+export function diffPlanSnapshots(
+  previousSnap: AnySnapshot | null,
+  nextSnap: AnySnapshot,
+): PlanDiff {
+  if (!previousSnap) return { added: [], removed: [], changed: [], version: [], hasChanges: false };
+  const previous = asV2(previousSnap);
+  const next = asV2(nextSnap);
+  const prevKeyed = diffKeys(previous, next);
+  const nextKeyed = diffKeys(next, previous);
+  const before = new Map(prevKeyed.map((e) => [e.key, e.item]));
+  const after = new Map(nextKeyed.map((e) => [e.key, e.item]));
+  const nextKeys = nextKeyed.map((e) => e.key);
+  const previousKeys = prevKeyed.map((e) => e.key);
 
   const added = nextKeys.filter((k) => !before.has(k));
   const removed = previousKeys.filter((k) => !after.has(k));
-  const changed = [...next.exercises].sort(byOrder).flatMap((item) => {
-    const key = exerciseKey(item);
+  const changed = nextKeyed.flatMap(({ key, item }) => {
     const old = before.get(key);
     if (!old) return [];
     const fields = fieldChanges(old, item);
@@ -179,6 +235,28 @@ export function diffPlanSnapshots(previous: PlanSnapshot | null, next: PlanSnaps
   const version: VersionChange[] = [];
   if (previous.name !== next.name) {
     version.push({ field: 'title', before: previous.name, after: next.name });
+  }
+  const sessionsText = (snap: PlanSnapshotV2) =>
+    snap.sessions.map((x) => `${x.name.trim()}@${x.weekday ?? ''}`).join('|');
+  if (sessionsText(previous) !== sessionsText(next)) {
+    version.push({
+      field: 'sessions',
+      before: String(previous.sessions.length),
+      after: String(next.sessions.length),
+    });
+  }
+  const circuitsText = (snap: PlanSnapshotV2) =>
+    stable(
+      snap.sessions.map((x) =>
+        x.items.flatMap((i) => {
+          if (i.type !== 'circuit') return [];
+          const { exercises, ...config } = i;
+          return [{ ...config, exercises: exercises.map(itemKey) }];
+        }),
+      ),
+    );
+  if (circuitsText(previous) !== circuitsText(next)) {
+    version.push({ field: 'circuits', before: null, after: null });
   }
   // A sequência dos que ficaram: entrar ou sair um exercício não é troca de ordem.
   const kept = (keys: string[]) => keys.filter((k) => before.has(k) && after.has(k)).join('|');
@@ -195,7 +273,7 @@ export function diffPlanSnapshots(previous: PlanSnapshot | null, next: PlanSnaps
 }
 
 export interface DiffableVersion {
-  snapshot: PlanSnapshot;
+  snapshot: AnySnapshot;
   schedule: PlanSchedule;
   startDate: string | null;
   weeks: number | null;

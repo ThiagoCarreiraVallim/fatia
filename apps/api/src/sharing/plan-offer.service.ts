@@ -20,14 +20,14 @@ import { assertDay } from '../common/dates';
 import { NotificationService } from '../notifications/notification.service';
 import { todayInTz } from '../progress/helpers/date-tz';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
-import { planEndDate, scheduleDates } from '../workout/helpers/planned-schedule';
+import { isoWeekday, planEndDate, scheduleDates } from '../workout/helpers/planned-schedule';
 import { WorkoutPlanService } from '../workout/workout-plan.service';
 import type { SendMemberPlanDto } from './dto/member-file.dto';
 import { MAX_OFFER_NOTE, MAX_OFFER_WEEKS, type SendPlanOfferDto } from './dto/plan-offer.dto';
 import { MAX_CHANGE_NOTE } from './dto/plan-send.dto';
 import { TEAM_ROLES } from './permissions';
-import { PlanMaterializerService } from './plan-materializer.service';
-import { diffOfferVersions, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
+import { PlanMaterializerService, type OfferSessionPlan } from './plan-materializer.service';
+import { diffKeys, diffOfferVersions, type FieldChange, type PlanDiff } from './plan-offer-diff';
 import { activeLinksOf, hasActiveLink, isLinked } from './plan-offer-links';
 import {
   offerAnsweredNotice,
@@ -36,12 +36,17 @@ import {
   offerUpdatedNotice,
 } from './plan-offer-notices';
 import { resolveMemberTarget } from './member-file-target';
+import { buildPlanSnapshot } from './plan-snapshot';
 import {
-  buildPlanSnapshot,
-  PLAN_SNAPSHOT_VERSION,
-  planSnapshotSchema,
-  type PlanSnapshot,
-} from './plan-snapshot';
+  parsePlanSnapshot,
+  PLAN_SNAPSHOT_V2,
+  planSnapshotV2Schema,
+  readPlanSnapshot,
+  sessionExercises,
+  sessionLetter,
+  type PlanExerciseItem,
+  type PlanSnapshotV2,
+} from './plan-snapshot-v2';
 
 /** O lote inteiro numa transação (#405): até 200 pessoas cabem com folga. */
 const BATCH_TIMEOUT_MS = 60_000;
@@ -113,6 +118,8 @@ export interface OfferExerciseView {
   targetSets: number;
   targetReps: string;
   restSeconds: number | null;
+  /** Sessão do plano (#406): "A · Legs". Nulo no plano de uma sessão só. */
+  session: string | null;
   /** Exercício que a versão nova trouxe ("novo" na lista). */
   isNew: boolean;
   /** O que mudou neste exercício em relação à versão aceita. */
@@ -153,8 +160,10 @@ export interface PlanOfferView {
   /** A versão em uso, quando há. */
   accepted: { id: string; version: number; planId: string | null } | null;
   diff: PlanDiff | null;
-  /** O plano que o aceite criou na conta da pessoa. */
+  /** O plano que o aceite criou na conta da pessoa (o da primeira sessão). */
   planId: string | null;
+  /** Os planos de todas as sessões (#406), na ordem. */
+  planIds: string[];
 }
 
 export interface PlanOfferSummary {
@@ -183,17 +192,15 @@ const OFFER_INCLUDE = {
   author: { select: { name: true } },
   group: { select: { id: true, name: true } },
   versions: { orderBy: { version: 'asc' } },
-  plans: { select: { id: true, userId: true } },
+  plans: { select: { id: true, userId: true, sessionIndex: true } },
 } satisfies Prisma.PlanOfferInclude;
 
 type OfferRow = Prisma.PlanOfferGetPayload<{ include: typeof OFFER_INCLUDE }>;
 type VersionRow = OfferRow['versions'][number];
 
-/** O retrato gravado, ou nulo se não valida (versão de uma era futura do produto). */
-function parseSnapshot(snapshot: Prisma.JsonValue): PlanSnapshot | null {
-  const parsed = planSnapshotSchema.safeParse(snapshot);
-  return parsed.success ? parsed.data : null;
-}
+/** O retrato gravado (v1 ou v2, sempre lido como v2), ou nulo se não valida. */
+const parseSnapshot = (snapshot: Prisma.JsonValue): PlanSnapshotV2 | null =>
+  parsePlanSnapshot(snapshot);
 
 /** As versões da oferta, na leitura: a última, a aceita e a que a tela mostra. */
 /** A versão já começou (ou não tem dia de começar): pode estar em uso hoje. */
@@ -331,6 +338,68 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
       [ctx.studentId],
       offerUpdatedNotice({ offerId, authorName: ctx.authorName, title: content.title }),
     );
+    return { id: offerId, versionId: created.id, version: created.version };
+  }
+
+  /**
+   * A versão nova que a edição da cópia de um aluno grava (#406, Pn-09e). Quem
+   * chama já conferiu o papel, a associação e a porta de leitura de Treino de
+   * quem edita. Segue o fluxo de versão: a versão que esperava resposta fica
+   * substituída e a aceita continua em uso até a pessoa aceitar a nova; nada
+   * do que ela registrou muda. `editorId` fica na versão (quem editou).
+   */
+  async writeTeamVersion(
+    offerId: string,
+    studentUserId: string,
+    editorId: string,
+    content: {
+      title: string;
+      snapshot: PlanSnapshotV2;
+      changeNote: string | null;
+      weekdays?: number[];
+    },
+  ): Promise<{ id: string; versionId: string; version: number }> {
+    const created = await this.inTransaction(async (db) => {
+      await this.lockOffer(db, offerId);
+      // Relida com a trava: "Terminar hoje" ou "Apagar" podem ter chegado no meio.
+      const offer = await db.planOffer.findFirst({
+        where: { id: offerId, userId: studentUserId, removedAt: null },
+        select: { endedAt: true },
+      });
+      if (!offer) throw new NotFoundException(OFFER_NOT_FOUND);
+      if (offer.endedAt) throw new ConflictException(OFFER_ENDED);
+      const last = await db.planOfferVersion.findFirst({
+        where: { offerId },
+        orderBy: { version: 'desc' },
+      });
+      if (!last) throw new NotFoundException(OFFER_NOT_FOUND);
+      await db.planOfferVersion.updateMany({
+        where: { offerId, status: 'PENDING' },
+        data: { status: 'SUPERSEDED', respondedAt: new Date() },
+      });
+      return db.planOfferVersion.create({
+        data: {
+          offerId,
+          version: last.version + 1,
+          title: content.title,
+          snapshot: content.snapshot as unknown as Prisma.InputJsonValue,
+          snapshotVersion: PLAN_SNAPSHOT_V2,
+          // A agenda segue a da última versão; no modo Agenda, os dias são os
+          // das sessões (quando todas têm dia).
+          schedule: last.schedule,
+          startDate: last.startDate,
+          weeks: last.weeks,
+          weekdays:
+            last.schedule === 'CALENDAR' && content.weekdays?.length
+              ? content.weekdays
+              : last.weekdays,
+          endDate: last.endDate,
+          note: last.note,
+          changeNote: content.changeNote,
+          authorId: editorId,
+        },
+      });
+    });
     return { id: offerId, versionId: created.id, version: created.version };
   }
 
@@ -535,7 +604,7 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     author: { id: string; name: string },
     groupId: string,
     templateId: string,
-    source: { title: string; snapshot: PlanSnapshot },
+    source: { title: string; snapshot: PlanSnapshotV2 },
     items: Array<{
       userId: string;
       input: Pick<SendMemberPlanDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
@@ -680,7 +749,9 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
   private async planSource(authorId: string, planId: string) {
     // `findById` com o `userId` de quem envia: plano de outra pessoa é 404.
     const plan = await this.plans.findById(authorId, planId);
-    return { title: plan.name, snapshot: buildPlanSnapshot(plan) };
+    const lido = readPlanSnapshot(buildPlanSnapshot(plan));
+    if (!lido.ok) throw new BadRequestException('Este plano não pode ser enviado.');
+    return { title: plan.name, snapshot: lido.snapshot };
   }
 
   /**
@@ -688,14 +759,16 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
    * pode sair da comunidade e o plano continua dela. O modelo da biblioteca
    * guarda o exercício da comunidade por referência, então ele vira custom aqui.
    */
-  private async groupItemsByValue(snap: PlanSnapshot, groupId: string): Promise<PlanSnapshot> {
-    const ids = snap.exercises.flatMap((e) => (e.source === 'group' ? [e.groupExerciseId] : []));
+  async groupItemsByValue(snap: PlanSnapshotV2, groupId: string): Promise<PlanSnapshotV2> {
+    const ids = snap.sessions
+      .flatMap(sessionExercises)
+      .flatMap((e) => (e.source === 'group' ? [e.groupExerciseId] : []));
     if (ids.length === 0) return snap;
     const rows = await this.prisma.exercise.findMany({
       where: { id: { in: ids }, groupOwned: true, groupId },
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
-    const exercises = snap.exercises.map((item) => {
+    const byValue = (item: PlanExerciseItem): PlanExerciseItem => {
       if (item.source !== 'group') return item;
       const ex = byId.get(item.groupExerciseId);
       if (!ex) throw new BadRequestException('Um exercício deste modelo não existe mais.');
@@ -716,9 +789,15 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
           youtubeVideoIdPt: ex.youtubeVideoIdPt,
         }).filter(([, v]) => v !== null && !(Array.isArray(v) && v.length === 0)),
       );
-      return { source: 'custom' as const, exercise: definition, ...base };
-    });
-    const parsed = planSnapshotSchema.safeParse({ ...snap, exercises });
+      return { ...base, source: 'custom' as const, exercise: definition } as PlanExerciseItem;
+    };
+    const sessions = snap.sessions.map((s) => ({
+      ...s,
+      items: s.items.map((i) =>
+        i.type === 'circuit' ? { ...i, exercises: i.exercises.map(byValue) } : byValue(i),
+      ),
+    }));
+    const parsed = planSnapshotV2Schema.safeParse({ ...snap, version: PLAN_SNAPSHOT_V2, sessions });
     if (!parsed.success) throw new BadRequestException('Este modelo não pode ser enviado.');
     return parsed.data;
   }
@@ -796,11 +875,11 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     });
 
     const today = todayInTz(timezone);
-    const planId = this.planOf(offer, userId);
+    const existing = this.plansOf(offer, userId);
     const inUse = offer.versions
       .filter((v) => v.status === 'ACCEPTED' && v.id !== version.id && startedBy(v, today))
       .at(-1);
-    if (planId && inUse && version.schedule === 'CALENDAR' && version.startDate! > today) {
+    if (existing.length && inUse && version.schedule === 'CALENDAR' && version.startDate! > today) {
       // Versão que começa no futuro (revisão do PR #461): a que está em uso
       // segue, com os exercícios e a agenda dela, até a véspera; daí em diante
       // a agenda já é a nova, e `settleScheduledVersions` troca os exercícios
@@ -811,7 +890,13 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
             where: { offerId, status: 'ACCEPTED', id: { notIn: [version.id, inUse.id] } },
             data: { status: 'SUPERSEDED', respondedAt: now },
           }),
-          ...this.agendaWrites(userId, planId, version, version.startDate!),
+          ...this.agendaWrites(
+            userId,
+            existing.map((p) => p.id),
+            this.sessionPlansFor(existing, version),
+            version,
+            version.startDate!,
+          ),
         ]);
       } catch (error) {
         await this.prisma.planOfferVersion.update({
@@ -828,11 +913,12 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     // tudo, ou a versão volta ao que era e a pessoa pode tentar de novo. Nunca
     // ficam duas versões aceitas.
     try {
-      const { planId: materialized, writes } = await this.materializer.offerPlanWrites(
+      const { plans, writes } = await this.materializer.offerPlanWrites(
         userId,
         version.snapshot,
         offerId,
-        planId,
+        existing,
+        today,
       );
       await this.prisma.$transaction([
         ...writes,
@@ -840,8 +926,18 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
           where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
           data: { status: 'SUPERSEDED', respondedAt: now },
         }),
-        ...this.agendaWrites(userId, materialized, version, today),
-        ...this.positionWrites(userId, materialized, offer.position),
+        ...this.agendaWrites(
+          userId,
+          [...existing.map((p) => p.id), ...plans.map((p) => p.id)],
+          plans,
+          version,
+          today,
+        ),
+        ...this.positionWrites(
+          userId,
+          plans.map((p) => p.id),
+          offer.position,
+        ),
       ]);
     } catch (error) {
       await this.prisma.planOfferVersion.update({
@@ -874,13 +970,31 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     let assumiram = 0;
     for (const offer of ofertas) {
       const nova = offer.versions.filter((v) => v.status === 'ACCEPTED').at(-1)!;
-      if (!startedBy(nova, todayInTz(offer.user.timezone))) continue;
-      const { writes } = await this.materializer.offerPlanWrites(
+      const hoje = todayInTz(offer.user.timezone);
+      if (!startedBy(nova, hoje)) continue;
+      const existing = this.plansOf(offer, offer.userId);
+      const { plans, writes } = await this.materializer.offerPlanWrites(
         offer.userId,
         nova.snapshot,
         offer.id,
-        this.planOf(offer, offer.userId),
+        existing,
+        hoje,
       );
+      // A agenda da versão já foi gravada no aceite, com os planos de então.
+      // Se a versão nova trouxe sessão a mais, o plano dela nasce agora: a
+      // agenda de hoje em diante é refeita com os planos certos.
+      const novos = plans.filter((p) => !existing.some((e) => e.id === p.id));
+      if (novos.length) {
+        writes.push(
+          ...this.agendaWrites(
+            offer.userId,
+            [...existing.map((e) => e.id), ...plans.map((p) => p.id)],
+            plans,
+            nova,
+            hoje,
+          ),
+        );
+      }
       await this.prisma.$transaction([
         ...writes,
         this.prisma.planOfferVersion.updateMany({
@@ -1010,7 +1124,7 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
 
   /** A agenda pedida, validada, sobre o retrato já pronto. */
   private scheduleContent(
-    source: { title: string; snapshot: PlanSnapshot },
+    source: { title: string; snapshot: PlanSnapshotV2 },
     input: Pick<SendPlanOfferDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
       endDate?: string | null;
       changeNote?: string | null;
@@ -1026,7 +1140,7 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
       return {
         title: source.title,
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
-        snapshotVersion: PLAN_SNAPSHOT_VERSION,
+        snapshotVersion: PLAN_SNAPSHOT_V2,
         schedule: 'FLEXIBLE' as const,
         startDate: null,
         weeks: null,
@@ -1057,7 +1171,7 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     return {
       title: source.title,
       snapshot: snapshot as unknown as Prisma.InputJsonValue,
-      snapshotVersion: PLAN_SNAPSHOT_VERSION,
+      snapshotVersion: PLAN_SNAPSHOT_V2,
       schedule: 'CALENDAR' as const,
       startDate,
       weeks: input.weeks,
@@ -1084,43 +1198,99 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     return version;
   }
 
-  /** O plano que a oferta criou na conta da pessoa (o `userId` confere de novo). */
+  /**
+   * Os planos que a oferta criou na conta da pessoa (o `userId` confere de
+   * novo), um por sessão (#406), na ordem das sessões.
+   */
+  private plansOf(
+    offer: OfferRow,
+    userId: string,
+  ): Array<{ id: string; sessionIndex: number | null }> {
+    return offer.plans
+      .filter((p) => p.userId === userId)
+      .sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0))
+      .map((p) => ({ id: p.id, sessionIndex: p.sessionIndex }));
+  }
+
+  /** O plano da primeira sessão: o "plano da oferta" de antes da #406. */
   private planOf(offer: OfferRow, userId: string): string | null {
-    return offer.plans.find((p) => p.userId === userId)?.id ?? null;
+    return this.plansOf(offer, userId)[0]?.id ?? null;
   }
 
   /**
-   * A agenda do plano depois do aceite (decisão do dono, #379): de hoje em
+   * Os planos de cada sessão para a agenda de uma versão que ainda não trocou
+   * os exercícios (aceite para o futuro): as sessões já existentes, com o dia
+   * da semana que a versão nova dá a cada uma.
+   */
+  private sessionPlansFor(
+    existing: Array<{ id: string; sessionIndex: number | null }>,
+    version: VersionRow,
+  ): OfferSessionPlan[] {
+    const snap = parseSnapshot(version.snapshot);
+    return existing.map((p) => ({
+      id: p.id,
+      sessionIndex: p.sessionIndex ?? 0,
+      weekday: snap?.sessions[p.sessionIndex ?? 0]?.weekday ?? null,
+    }));
+  }
+
+  /**
+   * A agenda dos planos depois do aceite (decisão do dono, #379): de hoje em
    * diante sai a de antes e entra a desta versão; o que passou fica. Plano
    * flexível não tem linhas, só a próxima sessão calculada na leitura.
+   *
+   * Com sessões (#406), cada dia cai no plano da sessão daquele dia da semana
+   * (modo Agenda); sem dia marcado, as sessões se revezam na ordem (A, B, C…).
    */
-  private agendaWrites(userId: string, planId: string, version: VersionRow, from: string) {
+  private agendaWrites(
+    userId: string,
+    clearPlanIds: string[],
+    plans: OfferSessionPlan[],
+    version: VersionRow,
+    from: string,
+  ) {
     const clear = this.prisma.plannedSession.deleteMany({
-      where: { userId, planId, date: { gte: from } },
+      where: { userId, planId: { in: [...new Set(clearPlanIds)] }, date: { gte: from } },
     });
-    if (version.schedule !== 'CALENDAR' || !version.startDate || !version.weeks) return [clear];
+    if (
+      version.schedule !== 'CALENDAR' ||
+      !version.startDate ||
+      !version.weeks ||
+      plans.length === 0
+    ) {
+      return [clear];
+    }
+    const ordered = [...plans].sort((a, b) => a.sessionIndex - b.sessionIndex);
+    const byWeekday = new Map(
+      ordered.flatMap((p) => (p.weekday !== null ? [[p.weekday, p.id] as const] : [])),
+    );
     const rows = scheduleDates({
       startDate: version.startDate,
       weeks: version.weeks,
       weekdays: version.weekdays,
     })
-      .map((date, i) => ({ date, order: i + 1 }))
+      .map((date, i) => ({
+        date,
+        order: i + 1,
+        planId: byWeekday.get(isoWeekday(date)) ?? ordered[i % ordered.length]!.id,
+      }))
       .filter((row) => row.date >= from)
-      .map((row) => ({ ...row, userId, planId, offerVersionId: version.id }));
+      .map((row) => ({ ...row, userId, offerVersionId: version.id }));
     return [clear, this.prisma.plannedSession.createMany({ data: rows })];
   }
 
   /**
    * A ordem que a equipe deu na ficha vai para a cópia (#402), enquanto a
-   * pessoa não reordenou os planos no app. Depois a ordem é dela.
+   * pessoa não reordenou os planos no app. Depois a ordem é dela. As sessões
+   * da mesma oferta ficam juntas, na ordem delas.
    */
-  private positionWrites(userId: string, planId: string, position: number | null) {
-    if (position === null) return [];
+  private positionWrites(userId: string, planIds: string[], position: number | null) {
+    if (position === null || planIds.length === 0) return [];
     // Condicionado na própria escrita: se a pessoa reordenou no meio do aceite,
     // a ordem dela fica (o `plansOrderedAt` é lido junto com a escrita).
     return [
       this.prisma.workoutPlan.updateMany({
-        where: { id: planId, userId, user: { plansOrderedAt: null } },
+        where: { id: { in: planIds }, userId, user: { plansOrderedAt: null } },
         data: { position },
       }),
     ];
@@ -1160,6 +1330,7 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
         : null;
     const names = await this.namesOf([shownSnap, acceptedSnap]);
     const planId = this.planOf(offer, userId);
+    const planIds = this.plansOf(offer, userId).map((p) => p.id);
     return {
       id: offer.id,
       author: offer.author ? { name: offer.author.name } : null,
@@ -1169,20 +1340,28 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
       accepted: accepted ? { id: accepted.id, version: accepted.version, planId } : null,
       diff,
       planId,
+      planIds,
     };
   }
 
   private versionView(
     row: VersionRow,
-    snap: PlanSnapshot | null,
-    previous: PlanSnapshot | null,
+    snap: PlanSnapshotV2 | null,
+    previous: PlanSnapshotV2 | null,
     diff: PlanDiff | null,
     names: Map<number, { name: string; muscleGroup: string }>,
   ): OfferVersionView {
-    const items = snap ? [...snap.exercises].sort((a, b) => a.order - b.order) : [];
+    const keyed = snap ? diffKeys(snap, previous) : [];
+    const items = keyed.map((k) => k.item);
     const added = new Set(diff?.added ?? []);
     const changed = new Map((diff?.changed ?? []).map((c) => [c.key, c.fields]));
-    const describe = (item: PlanSnapshot['exercises'][number]) => {
+    const multi = (snap?.sessions.length ?? 0) > 1;
+    const sessionLabel = (index: number) => {
+      if (!multi || !snap) return null;
+      const name = snap.sessions[index]?.name.trim();
+      return name ? `${sessionLetter(index)} · ${name}` : `Sessão ${sessionLetter(index)}`;
+    };
+    const describe = (item: PlanExerciseItem) => {
       if (item.source === 'custom') {
         return {
           exerciseId: null,
@@ -1226,30 +1405,27 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
         sets,
         minutes: items.length ? Math.max(5, Math.round(seconds / 300) * 5) : 0,
       },
-      exercises: items.map((item) => {
-        const key = exerciseKey(item);
-        return {
-          key,
-          ...describe(item),
-          targetSets: item.targetSets,
-          targetReps: item.targetReps,
-          restSeconds: item.restSeconds ?? null,
-          isNew: added.has(key),
-          changes: changed.get(key) ?? [],
-        };
-      }),
-      removed: (previous?.exercises ?? [])
-        .filter((item) => removedKeys.has(exerciseKey(item)))
-        .sort((a, b) => a.order - b.order)
-        .map((item) => ({ key: exerciseKey(item), name: describe(item).name })),
+      exercises: keyed.map(({ key, item, sessionIndex }) => ({
+        key,
+        ...describe(item),
+        targetSets: item.targetSets,
+        targetReps: item.targetReps,
+        restSeconds: item.restSeconds ?? null,
+        session: sessionLabel(sessionIndex),
+        isNew: added.has(key),
+        changes: changed.get(key) ?? [],
+      })),
+      removed: (previous ? diffKeys(previous, snap) : [])
+        .filter(({ key }) => removedKeys.has(key))
+        .map(({ key, item }) => ({ key, name: describe(item).name })),
     };
   }
 
   /** Nome e grupo dos exercícios por id: catálogo público, ou da comunidade. */
-  private async namesOf(snaps: Array<PlanSnapshot | null>) {
+  private async namesOf(snaps: Array<PlanSnapshotV2 | null>) {
     const catalog = new Set<number>();
     for (const snap of snaps)
-      for (const item of snap?.exercises ?? [])
+      for (const item of snap?.sessions.flatMap(sessionExercises) ?? [])
         if (item.source === 'catalog') catalog.add(item.catalogExerciseId);
     if (catalog.size === 0) return new Map<number, { name: string; muscleGroup: string }>();
     const rows = await this.prisma.exercise.findMany({

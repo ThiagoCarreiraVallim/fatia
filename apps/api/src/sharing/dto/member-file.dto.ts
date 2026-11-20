@@ -1,3 +1,4 @@
+import { MAX_CHANGE_NOTE } from './plan-send.dto';
 import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -5,6 +6,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsObject,
   IsInt,
   IsOptional,
   IsString,
@@ -76,4 +78,27 @@ export class MemberNoteDto {
 export class MemberAgendaQueryDto {
   @IsOptional() @Matches(DIA, { message: 'from deve ser YYYY-MM-DD' }) from?: string;
   @IsOptional() @Matches(DIA, { message: 'to deve ser YYYY-MM-DD' }) to?: string;
+}
+
+/** Salvar a cópia de um aluno (#406, Pn-09e): uma versão nova pelo fluxo de versão. */
+export class SavePlanCopyDto {
+  /** O documento do editor (sessões e blocos); validado no service. */
+  @IsObject()
+  document!: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_CHANGE_NOTE)
+  changeNote?: string;
+
+  /** "Avisar a Ana no app". Padrão: avisa. */
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 }
