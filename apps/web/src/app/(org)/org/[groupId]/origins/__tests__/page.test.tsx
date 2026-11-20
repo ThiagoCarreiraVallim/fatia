@@ -100,6 +100,20 @@ describe('origem dos convites (#400, Pn-25)', () => {
     expect(reportApi.origins).toHaveBeenCalledWith('g1', 30);
   });
 
+  it('no celular, a tabela vira uma lista de cartões (Pn-25 em 390)', async () => {
+    abrir();
+    const lista = await screen.findByRole('list', { name: 'Origens' });
+    const itens = within(lista).getAllByRole('listitem');
+    expect(itens).toHaveLength(3);
+    expect(within(itens[0]!).getByText('QR · recepção')).toBeInTheDocument();
+    expect(within(itens[0]!).getByText('QR')).toBeInTheDocument();
+    expect(within(itens[0]!).getByText('79%')).toBeInTheDocument();
+    expect(within(itens[0]!).getByText('19 entraram · 15 ativaram')).toBeInTheDocument();
+    expect(within(itens[1]!).getByText('amostra pequena demais para mostrar')).toBeInTheDocument();
+    expect(within(itens[2]!).getByText('Outras origens')).toBeInTheDocument();
+    expect(within(itens[2]!).getByText('7 entraram')).toBeInTheDocument();
+  });
+
   it('o período troca entre 7 e 30 dias', async () => {
     const user = userEvent.setup();
     abrir();
@@ -136,5 +150,7 @@ describe('origem dos convites (#400, Pn-25)', () => {
       '/org/g1/invites?novo=link',
     );
     expect(screen.queryByRole('table')).toBeNull();
+    // Como na Pn-25b: o rodapé de privacidade só acompanha números.
+    expect(screen.queryByText(/Contamos só quem entrou/)).toBeNull();
   });
 });
