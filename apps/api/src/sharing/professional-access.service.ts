@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { MembershipStatus, type ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { AccessAuditService } from './access-audit.service';
-import { canReceiveLink } from './permissions';
+import { canReceiveLink, scopesForSpecialty, seesOnlyAccompanied } from './permissions';
 
 /**
  * Resposta única de recusa. É a mesma string para "membership não existe",
@@ -56,7 +56,13 @@ export class ProfessionalAccessService {
     // tentativa será registrada e de qual titular/grupo o vínculo tem de ser.
     const membership = await this.prisma.groupMembership.findUnique({
       where: { id: membershipId },
-      select: { userId: true, groupId: true, status: true },
+      select: {
+        userId: true,
+        groupId: true,
+        status: true,
+        accompaniedById: true,
+        group: { select: { proSeeOnlyAssigned: true } },
+      },
     });
 
     // Membership inexistente não tem titular a quem atribuir a tentativa —
@@ -85,18 +91,26 @@ export class ProfessionalAccessService {
       membership.status === MembershipStatus.ACTIVE
         ? await this.prisma.groupMembership.findUnique({
             where: { groupId_userId: { groupId: membership.groupId, userId: professionalId } },
-            select: { role: true, status: true },
+            select: { id: true, role: true, status: true, specialty: true },
           })
         : null;
 
     // Só a equipe (`canReceiveLink`: OWNER, PROFESSIONAL, CREATOR — ADR 026).
-    // MEMBER nunca, e não existe ADMIN no enum. Mesmo para a equipe o papel
+    // MEMBER, ADMIN e RECEPTION nunca (ADR 043), mesmo com um vínculo antigo
+    // esquecido no banco. Mesmo para a equipe o papel
     // não autoriza nada: só a deixa chegar ao passo 3, onde quem decide é o
     // vínculo. O `@@unique([groupId, userId])` garante que ninguém acumula
     // papéis para contornar isso: uma pessoa tem um papel só por grupo.
+    //
+    // E dois recortes da #404, que só tiram: a especialidade (nutrição não lê
+    // treino nem hábitos, mesmo com vínculo antigo) e "profissionais veem só
+    // quem acompanham" (o profissional só lê quem aponta para ele).
     const professionalIsActive =
       professionalMembership?.status === MembershipStatus.ACTIVE &&
-      canReceiveLink(professionalMembership.role);
+      canReceiveLink(professionalMembership.role) &&
+      scopesForSpecialty(professionalMembership.specialty).includes(scope) &&
+      (!seesOnlyAccompanied(professionalMembership.role, membership.group.proSeeOnlyAssigned) ||
+        membership.accompaniedById === professionalMembership.id);
 
     // Passo 3 — a autorização propriamente dita. Papel no grupo nunca autoriza
     // sozinho: quem autoriza é o vínculo, e ele é procurado só depois de os

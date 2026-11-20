@@ -33,13 +33,14 @@ describe('menu do painel (#398)', () => {
     const pessoas = nav.find((g) => g.key === 'people')!;
     expect(pessoas.items.map((i) => i.label)).toEqual([
       'Membros',
+      'Equipe e permissões',
       'Convites',
       'Ativação pendente',
       'Origem dos convites',
       'Assentos e faturas',
     ]);
     // Os convites sem aceite contam em Ativação pendente (#401), como na Pn-04.
-    expect(pessoas.items.map((i) => i.count)).toEqual([2, null, 7, null, null]);
+    expect(pessoas.items.map((i) => i.count)).toEqual([2, null, null, 7, null, null]);
     // O relatório do mês (#400) fica em Acompanhar, depois de Para revisar.
     expect(nav.find((g) => g.key === 'track')!.items.map((i) => i.label)).toEqual([
       'Visão geral',

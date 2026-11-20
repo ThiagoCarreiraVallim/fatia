@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Bot, ShieldCheck } from 'lucide-react';
 import { AgentAvatar } from '@/components/chat/agente';
 import {
+  groupCan,
   AGENT_INSTRUCTIONS_MAX,
   AGENT_NAME_MAX,
   ApiError,
@@ -38,15 +39,15 @@ export default function OrgAgentPage() {
   const agente = useQuery({
     queryKey: orgKeys.agent(g.id),
     queryFn: () => groupAgentApi.get(g.id),
-    enabled: g.role === 'OWNER',
+    enabled: groupCan(g, 'group.update'),
   });
 
-  if (g.role !== 'OWNER') {
+  if (!groupCan(g, 'group.update')) {
     return (
       <EmptyState
         icon={Bot}
-        title="Só o dono configura o agente"
-        description="Peça a quem é dono da comunidade para mudar o agente do chat."
+        title="Só o dono e o admin configuram o agente"
+        description="Peça a quem é dono ou admin da comunidade para mudar o agente do chat."
       />
     );
   }

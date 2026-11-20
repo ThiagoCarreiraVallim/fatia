@@ -23,8 +23,18 @@ import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
 import { cancelScheduledAnnouncementsOp } from './announcement-schedule';
 import { findGroupByEntryCode } from './entry-code';
-import { can, canReceiveLink } from './permissions';
+import {
+  can,
+  canManageMember,
+  canReceiveLink,
+  rolesGrantableBy,
+  seesOnlyAccompanied,
+  STAFF_ROLES,
+  type GroupAction,
+  type Specialty,
+} from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
+import { revokeCreatedTeamInvitesOp, specialtyClearedAuditOp } from './team-invites';
 
 /** Mesma resposta para "grupo não existe" e "não sou membro dele" (#92). */
 const NOT_FOUND = 'Group not found';
@@ -125,6 +135,10 @@ function codigoEsgotado(err: unknown): never {
 export interface TeamMemberView {
   name: string;
   role: GroupRole;
+  /** A especialidade do profissional (#404); nula para os outros papéis. */
+  specialty: Specialty | null;
+  /** É quem acompanha quem pergunta (#404, "Acompanhado por"). */
+  accompaniesMe: boolean;
   /** O que ela vê de quem pergunta (vazio = nada). */
   sees: ShareScope[];
   /** A última vez que ela abriu algo de quem pergunta (acesso não negado). */
@@ -271,12 +285,17 @@ export class MembershipService {
    * quando o papel é de equipe.
    */
   async approve(
-    ownerId: string,
+    actorId: string,
     groupId: string,
     membershipId: string,
     role: GrantableRole = GroupRole.MEMBER,
   ): Promise<MembershipResult> {
-    await this.assertOwner(ownerId, groupId);
+    const eu = await this.assertAction(actorId, groupId, 'member.approve');
+    // A recepção aprova no balcão só como membro; o administrador não faz
+    // outro administrador (#404).
+    if (!rolesGrantableBy(eu.role).includes(role)) {
+      throw new ForbiddenException('Seu papel não dá esse papel a quem entra');
+    }
 
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     if (!alvo || alvo.groupId !== groupId || alvo.status !== MembershipStatus.INVITED) {
@@ -290,6 +309,20 @@ export class MembershipService {
       consent: { scopes: alvo.consentScopes, statsOptIn: alvo.statsOptIn },
       at: new Date(),
     });
+    // Aprovar já com papel de equipe é dar papel: vai para a trilha (#404).
+    if (role !== GroupRole.MEMBER) {
+      ops.push(
+        this.prisma.groupAuditLog.create({
+          data: {
+            groupId,
+            actorId,
+            action: 'members.approve',
+            targetCount: 1,
+            payload: { membershipIds: [alvo.id], from: null, to: role },
+          },
+        }),
+      );
+    }
     const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
     const grupo = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
@@ -338,7 +371,7 @@ export class MembershipService {
     const scopes = normalizarEscopos(params.consent.scopes);
     const ativos = await this.prisma.groupMembership.findMany({
       where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },
-      select: { userId: true, role: true, consentScopes: true },
+      select: { userId: true, role: true, consentScopes: true, specialty: true },
     });
 
     const dados = {
@@ -353,6 +386,9 @@ export class MembershipService {
       // relatório (#400) e aviso diário de em risco (#399) recomeçam desligados.
       reportEmail: false,
       riskDigest: false,
+      // Nem a especialidade (#404): quem volta para a equipe recomeça sem ela,
+      // e o leque inverso abaixo sai coerente com isso.
+      specialty: null,
       // Entrada nova (com `via`) reescreve a origem e o responsável: quem volta
       // por outro caminho não herda o de antes. Na aprovação, fica o do pedido.
       ...(params.via
@@ -374,6 +410,7 @@ export class MembershipService {
         groupId,
         scopes,
         receivers: ativos.filter((m) => canReceiveLink(m.role)).map((m) => m.userId),
+        receiverSpecialty: new Map(ativos.map((m) => [m.userId, m.specialty])),
         at,
       }),
     ];
@@ -383,6 +420,7 @@ export class MembershipService {
           groupId,
           teamUserId: userId,
           subjects: ativos.map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          specialty: null,
           at,
         }),
       );
@@ -400,7 +438,7 @@ export class MembershipService {
   async teamForMember(userId: string, groupId: string): Promise<TeamMemberView[]> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { status: true },
+      select: { status: true, accompaniedById: true },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
@@ -409,10 +447,18 @@ export class MembershipService {
         where: {
           groupId,
           status: MembershipStatus.ACTIVE,
-          role: { in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR] },
+          // A equipe toda (#404): administrador e recepção aparecem com "não vê
+          // seus dados", que é a verdade.
+          role: { in: [...STAFF_ROLES] },
           userId: { not: userId },
         },
-        select: { userId: true, role: true, user: { select: { name: true } } },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          specialty: true,
+          user: { select: { name: true } },
+        },
         orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
       }),
       this.prisma.professionalLink.findMany({
@@ -435,6 +481,8 @@ export class MembershipService {
     return equipe.map((m) => ({
       name: m.user.name,
       role: m.role,
+      specialty: m.specialty,
+      accompaniesMe: eu.accompaniedById === m.id,
       sees: normalizarEscopos(escopos.get(m.userId) ?? []),
       lastViewedAt: ultimo.get(m.userId) ?? null,
     }));
@@ -460,10 +508,25 @@ export class MembershipService {
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
-    const veTodos = eu.role === GroupRole.OWNER || eu.role === GroupRole.PROFESSIONAL;
+    // Quem vê o grupo inteiro: o dono, o administrador, o profissional e a
+    // recepção (#404). O que cada um vê de cada pessoa é outra coisa: a
+    // recepção, só nome, papel e situação.
+    const veTodos =
+      eu.role === GroupRole.OWNER ||
+      eu.role === GroupRole.ADMIN ||
+      eu.role === GroupRole.PROFESSIONAL ||
+      eu.role === GroupRole.RECEPTION;
+    const veDetalhe = veTodos && eu.role !== GroupRole.RECEPTION;
+    // "Profissionais veem só quem acompanham" (#404): o profissional vê a
+    // equipe e os membros que apontam para ele.
+    const grupo = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { proSeeOnlyAssigned: true },
+    });
+    const soOsMeus = seesOnlyAccompanied(eu.role, grupo.proSeeOnlyAssigned);
     // Quem saiu só aparece para a equipe que vê todos: nome e data, nada mais.
     const status =
-      veTodos && opts.includeLeft
+      veDetalhe && opts.includeLeft
         ? [
             MembershipStatus.INVITED,
             MembershipStatus.ACTIVE,
@@ -476,14 +539,11 @@ export class MembershipService {
       where: {
         groupId,
         status: { in: status },
-        ...(veTodos
-          ? {}
-          : {
-              OR: [
-                { role: { in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR] } },
-                { userId },
-              ],
-            }),
+        ...(soOsMeus
+          ? { OR: [{ role: { not: GroupRole.MEMBER } }, { accompaniedById: eu.id }, { userId }] }
+          : veTodos
+            ? {}
+            : { OR: [{ role: { in: [...STAFF_ROLES] } }, { userId }] }),
       },
       include: {
         user: { select: { name: true, whatsapp: true, whatsappOptIn: true } },
@@ -495,7 +555,7 @@ export class MembershipService {
 
     // Uma consulta só para todos os vínculos ativos concedidos a quem pergunta
     // neste grupo — e não uma por membro.
-    const vinculos = veTodos
+    const vinculos = veDetalhe
       ? await this.prisma.professionalLink.findMany({
           where: { groupId, professionalId: userId, revokedAt: null },
           select: { subjectUserId: true, scopes: true },
@@ -503,7 +563,9 @@ export class MembershipService {
       : [];
     const porTitular = new Map(vinculos.map((v) => [v.subjectUserId, v.scopes]));
     // O assento que vale, pela regra do portão da IA — e não só "atribuído".
-    const withSeat = veTodos
+    // Assento é cobrança: só quem vê a fatura (#404, o administrador não).
+    const veAssento = veDetalhe && eu.role !== GroupRole.ADMIN;
+    const withSeat = veAssento
       ? await membershipsWithEffectiveSeat(
           this.prisma,
           membros.filter((m) => m.status === MembershipStatus.ACTIVE).map((m) => m.id),
@@ -516,13 +578,13 @@ export class MembershipService {
       role: m.role,
       status: m.status,
       joinedAt: m.joinedAt,
-      ...(veTodos
+      ...(veDetalhe
         ? {
             scopesGrantedToMe:
               m.status === MembershipStatus.ACTIVE || m.status === MembershipStatus.INVITED
                 ? (porTitular.get(m.userId) ?? [])
                 : [],
-            hasAiSeat: withSeat.has(m.id),
+            ...(veAssento ? { hasAiSeat: withSeat.has(m.id) } : {}),
             joinedVia:
               m.joinVia || m.joinedViaInvite
                 ? {
@@ -556,12 +618,12 @@ export class MembershipService {
    * não se promove.
    */
   async changeRole(
-    ownerId: string,
+    actorId: string,
     groupId: string,
     membershipId: string,
     role: GrantableRole,
   ): Promise<MembershipResult> {
-    await this.assertOwner(ownerId, groupId);
+    const eu = await this.assertAction(actorId, groupId, 'member.role');
 
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     // Amarrado ao grupo da URL (#204): ser dono daqui não muda papel em outro grupo.
@@ -570,6 +632,11 @@ export class MembershipService {
     }
     if (alvo.role === GroupRole.OWNER) {
       throw new ConflictException('O papel do dono não muda: transfira a comunidade.');
+    }
+    // O administrador não mexe em outro administrador (nem em si) e não faz
+    // administrador ninguém (#404): é o que impede o escalonamento.
+    if (!canManageMember(eu.role, alvo.role) || !rolesGrantableBy(eu.role).includes(role)) {
+      throw new ForbiddenException('Seu papel não faz essa troca de papel');
     }
     if (alvo.role === role) {
       return {
@@ -582,6 +649,9 @@ export class MembershipService {
     }
 
     const at = new Date();
+    // Especialidade é do profissional (#404): some com o papel, e a troca vai
+    // para a trilha.
+    const especialidade = role === GroupRole.PROFESSIONAL ? alvo.specialty : null;
     const entra = !canReceiveLink(alvo.role) && canReceiveLink(role);
     const sai = canReceiveLink(alvo.role) && !canReceiveLink(role);
     const vinculos: Prisma.PrismaPromise<unknown>[] = [];
@@ -595,11 +665,25 @@ export class MembershipService {
           groupId,
           teamUserId: alvo.userId,
           subjects: outros.map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          specialty: especialidade,
           at,
         }),
       );
     }
     if (sai) vinculos.push(this.links.revokeAsReceiverOp(groupId, alvo.userId, at));
+    // Os convites de equipe que ela criou e o papel novo não dá mais caem (#404).
+    const convites = [revokeCreatedTeamInvitesOp(this.prisma, groupId, alvo.userId, role, at)];
+    const trilhaEspecialidade =
+      alvo.specialty && !especialidade
+        ? [
+            specialtyClearedAuditOp(this.prisma, {
+              groupId,
+              actorId,
+              membershipId: alvo.id,
+              from: alvo.specialty,
+            }),
+          ]
+        : [];
     // Sem o papel de comunicar, os agendados dela não saem mais (#394).
     const cancelaAgendados = !can(role, 'announcement.publish')
       ? [cancelScheduledAnnouncementsOp(this.prisma, alvo.id, at)]
@@ -621,11 +705,24 @@ export class MembershipService {
           reportEmail: false,
           riskDigest: false,
           ...(role !== GroupRole.MEMBER ? { accompaniedById: null } : {}),
+          specialty: especialidade,
         },
       }),
       ...vinculos,
       ...cancelaAgendados,
       ...largaAcompanhados,
+      ...convites,
+      ...trilhaEspecialidade,
+      // Quem mudou o papel de quem, e quando (#404): o dono vê na Equipe.
+      this.prisma.groupAuditLog.create({
+        data: {
+          groupId,
+          actorId,
+          action: 'members.role',
+          targetCount: 1,
+          payload: { membershipIds: [alvo.id], from: alvo.role, to: role },
+        },
+      }),
     ])) as [GroupMembership, ...unknown[]];
 
     return {
@@ -663,7 +760,15 @@ export class MembershipService {
       );
     }
 
-    return this.endMembership(membership.id, groupId, userId, MembershipStatus.LEFT, 'left_group');
+    return this.endMembership(
+      membership.id,
+      groupId,
+      userId,
+      MembershipStatus.LEFT,
+      'left_group',
+      userId,
+      membership.specialty,
+    );
   }
 
   /**
@@ -672,11 +777,11 @@ export class MembershipService {
    * distinguíveis na trilha.
    */
   async removeMember(
-    ownerId: string,
+    actorId: string,
     groupId: string,
     membershipId: string,
   ): Promise<MembershipResult> {
-    await this.assertOwner(ownerId, groupId);
+    const eu = await this.assertAction(actorId, groupId, 'member.remove');
 
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     // `alvo.groupId !== groupId`: o id vem por input e precisa ser amarrado ao
@@ -693,6 +798,9 @@ export class MembershipService {
     if (alvo.role === GroupRole.OWNER) {
       throw new ConflictException('O dono não pode ser removido do próprio grupo');
     }
+    if (!canManageMember(eu.role, alvo.role)) {
+      throw new ForbiddenException('Seu papel não remove esta pessoa');
+    }
 
     return this.endMembership(
       alvo.id,
@@ -700,6 +808,8 @@ export class MembershipService {
       alvo.userId,
       MembershipStatus.REMOVED,
       'membership_removed',
+      actorId,
+      alvo.specialty,
     );
   }
 
@@ -709,13 +819,16 @@ export class MembershipService {
    * o código e o convite não reabrem. Vale também para quem já saiu: banir é
    * sobre voltar.
    */
-  async ban(ownerId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
-    await this.assertOwner(ownerId, groupId);
+  async ban(actorId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
+    const eu = await this.assertAction(actorId, groupId, 'member.ban');
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     // Amarrado ao grupo da URL (#204).
     if (!alvo || alvo.groupId !== groupId) throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
     if (alvo.role === GroupRole.OWNER) {
       throw new ConflictException('O dono não pode ser banido do próprio grupo');
+    }
+    if (!canManageMember(eu.role, alvo.role)) {
+      throw new ForbiddenException('Seu papel não bane esta pessoa');
     }
     if (alvo.status === MembershipStatus.BANNED) {
       return {
@@ -732,15 +845,21 @@ export class MembershipService {
       alvo.userId,
       MembershipStatus.BANNED,
       'membership_removed',
+      actorId,
+      alvo.specialty,
     );
   }
 
   /** Desbanir não põe de volta: a associação fica `REMOVED`, e a pessoa pode pedir de novo. */
-  async unban(ownerId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
-    await this.assertOwner(ownerId, groupId);
+  async unban(actorId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
+    const eu = await this.assertAction(actorId, groupId, 'member.ban');
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     if (!alvo || alvo.groupId !== groupId || alvo.status !== MembershipStatus.BANNED) {
       throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
+    }
+    // O mesmo limite do banir (#404): o admin não desfaz o banimento de outro admin.
+    if (!canManageMember(eu.role, alvo.role)) {
+      throw new ForbiddenException('Seu papel não desfaz o banimento desta pessoa');
     }
     const m = await this.prisma.groupMembership.update({
       where: { id: alvo.id },
@@ -749,8 +868,8 @@ export class MembershipService {
     return { membershipId: m.id, groupId, status: m.status, role: m.role, revokedLinks: 0 };
   }
 
-  async listBanned(ownerId: string, groupId: string) {
-    await this.assertOwner(ownerId, groupId);
+  async listBanned(actorId: string, groupId: string) {
+    await this.assertAction(actorId, groupId, 'member.ban');
     const rows = await this.prisma.groupMembership.findMany({
       where: { groupId, status: MembershipStatus.BANNED },
       select: { id: true, displayName: true, leftAt: true, user: { select: { name: true } } },
@@ -781,13 +900,17 @@ export class MembershipService {
     userId: string,
     status: Extract<MembershipStatus, 'LEFT' | 'REMOVED' | 'BANNED'>,
     reason: 'left_group' | 'membership_removed',
+    /** Quem encerrou e a especialidade que some junto, para a trilha (#404). */
+    actorId: string,
+    specialty: string | null,
   ): Promise<MembershipResult> {
     const agora = new Date();
 
     const [membership, revogados] = await this.prisma.$transaction([
       this.prisma.groupMembership.update({
         where: { id: membershipId },
-        data: { status, leftAt: agora, accompaniedById: null },
+        // A especialidade não sobrevive à saída (#404): quem volta recomeça.
+        data: { status, leftAt: agora, accompaniedById: null, specialty: null },
       }),
       // Sem `professionalId` no filtro de propósito: o vínculo é contextual ao
       // grupo, então sair encerra TODOS os daquele grupo. Filtrar por um
@@ -816,6 +939,18 @@ export class MembershipService {
       this.prisma.reviewSeen.deleteMany({
         where: { groupId, OR: [{ subjectUserId: userId }, { userId }] },
       }),
+      // Os convites de equipe que ela criou não abrem porta depois que saiu (#404).
+      revokeCreatedTeamInvitesOp(this.prisma, groupId, userId, null, agora),
+      ...(specialty
+        ? [
+            specialtyClearedAuditOp(this.prisma, {
+              groupId,
+              actorId,
+              membershipId,
+              from: specialty,
+            }),
+          ]
+        : []),
     ]);
 
     // As fotos de prova dos check-ins dela nesta comunidade saem na hora (ADR 044 §7).
@@ -831,18 +966,24 @@ export class MembershipService {
   }
 
   /**
-   * Só o dono administra. Não-membro recebe `NOT_FOUND` (não pode descobrir que
-   * o grupo existe); membro comum recebe `FORBIDDEN`, porque para ele não há
-   * existência a esconder — ele já está lá dentro.
+   * A matriz de novo, no service (#404: não é mais "só o dono"). Não-membro
+   * recebe `NOT_FOUND` (não pode descobrir que o grupo existe); membro sem o
+   * papel recebe `FORBIDDEN`, porque para ele não há existência a esconder.
    */
-  private async assertOwner(userId: string, groupId: string): Promise<void> {
+  private async assertAction(
+    userId: string,
+    groupId: string,
+    action: GroupAction,
+  ): Promise<{ id: string; role: GroupRole }> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
+      select: { id: true, role: true, status: true },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (eu.role !== GroupRole.OWNER) {
-      throw new ForbiddenException('Apenas o dono do grupo pode fazer isso');
+    if (!can(eu.role, action)) {
+      throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
     }
+    return eu;
   }
 }
 

@@ -46,6 +46,7 @@ export * from './community';
 export * from './community-consent';
 export * from './community-admin';
 export * from './community-panel';
+export * from './community-team';
 export * from './community-invites';
 export * from './panel-shell';
 export * from './community-content';

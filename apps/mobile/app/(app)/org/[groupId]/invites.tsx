@@ -5,6 +5,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import {
+  grantableRolesFor,
   batchResultMessage,
   batchSkipLabel,
   inviteSummary,
@@ -21,12 +22,12 @@ import { Button, Input, LoadingState, cn } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { linkInviteForm, linkInviteInput } from '@/community/link-invite-form';
 
-const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
-
 function Convites({ g }: { g: MyGroup }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const papeis = (g.role === 'OWNER' ? PAPEIS : (['MEMBER'] as GrantableRole[])).map((r) => ({
+  // Cada papel convida para o que pode dar (#404): o dono para tudo, o admin
+  // para tudo menos admin, os demais só membros.
+  const papeis = grantableRolesFor(g.role).map((r) => ({
     value: r,
     label: teamRoleLabel(r),
   }));

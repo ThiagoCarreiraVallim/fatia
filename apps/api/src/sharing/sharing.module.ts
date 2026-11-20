@@ -51,6 +51,7 @@ import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
 import { InviteService } from './invite.service';
 import { MemberAdminService } from './member-admin.service';
+import { TeamService } from './team.service';
 import { BillingModule } from '../billing/billing.module';
 import { MembershipService } from './membership.service';
 import { PlanMaterializerService } from './plan-materializer.service';
@@ -167,6 +168,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     MembershipService,
     InviteService,
     MemberAdminService,
+    TeamService,
     PlanMaterializerService,
     PlanOfferService,
     MemberFileService,

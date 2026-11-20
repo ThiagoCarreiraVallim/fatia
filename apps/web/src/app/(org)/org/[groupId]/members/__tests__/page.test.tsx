@@ -244,6 +244,43 @@ describe('painel › membros (Pn-04)', () => {
     expect(within(p).getByText('Helena')).toBeInTheDocument();
   });
 
+  it('admin distribui e aprova, sem assento nem ficha (#404)', async () => {
+    abrir(grupo({ role: 'ADMIN', membershipId: 'ma' }));
+    await screen.findByText('Márcia');
+    expect(within(linha('Márcia')).getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
+    expect(within(linha('Márcia')).getByRole('button', { name: 'Recusar' })).toBeInTheDocument();
+    expect(seatsApi.get).not.toHaveBeenCalled();
+    expect(within(linha('Carla')).queryByRole('link', { name: /Ficha/ })).toBeNull();
+    await userEvent.click(within(linha('Carla')).getByRole('checkbox'));
+    const massa = screen.getByRole('region', { name: 'Ações em massa' });
+    expect(within(massa).getByLabelText('Trocar responsável')).toBeInTheDocument();
+    expect(within(massa).queryByRole('button', { name: 'Dar assento' })).toBeNull();
+  });
+
+  it('recepção vê nome e situação e aprova, sem recusar, seleção nem ficha (#404)', async () => {
+    abrir(grupo({ role: 'RECEPTION', membershipId: 'mr' }), [
+      membro({ name: 'Carla' }),
+      membro({ name: 'Márcia', status: 'INVITED' }),
+    ]);
+    await screen.findByText('Márcia');
+    expect(within(linha('Márcia')).getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
+    expect(within(linha('Márcia')).queryByRole('button', { name: 'Recusar' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Entrou por' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Compartilha' })).toBeNull();
+    expect(within(linha('Carla')).queryByRole('link', { name: /Ficha/ })).toBeNull();
+  });
+
+  it('"Distribuir" da Equipe chega filtrado por responsável (#404)', async () => {
+    ctx.params = new URLSearchParams('responsavel=mh');
+    abrir();
+    await screen.findByText('Carla');
+    expect(screen.queryByText('Diego')).toBeNull();
+    expect(screen.getByText(/Acompanhados por/)).toHaveTextContent('Acompanhados por Helena');
+    await userEvent.click(screen.getByRole('button', { name: 'Ver todos' }));
+    expect(screen.getByText('Diego')).toBeInTheDocument();
+  });
+
   it('abre filtrado em "Aguardando" pelo atalho da visão geral, e busca sem acento', async () => {
     ctx.params = new URLSearchParams('filtro=pending');
     abrir();

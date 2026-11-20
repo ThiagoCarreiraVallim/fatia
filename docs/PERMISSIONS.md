@@ -63,53 +63,59 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 
 ## Ações administrativas (papel decide)
 
-| Ação                   | OWNER | PROFESSIONAL | CREATOR | MEMBER |
-| ---------------------- | ----- | ------------ | ------- | ------ |
-| `group.read`           | sim   | sim          | sim     | sim    |
-| `group.update`         | sim   | não          | não     | não    |
-| `group.delete`         | sim   | não          | não     | não    |
-| `group.transfer`       | sim   | não          | não     | não    |
-| `invite.create`        | sim   | sim          | não     | não    |
-| `invite.revoke`        | sim   | sim          | não     | não    |
-| `member.list`          | sim   | sim          | sim     | sim    |
-| `member.approve`       | sim   | não          | não     | não    |
-| `member.remove`        | sim   | não          | não     | não    |
-| `member.role`          | sim   | não          | não     | não    |
-| `member.assign`        | sim   | não          | não     | não    |
-| `billing.read`         | sim   | não          | não     | não    |
-| `billing.manage`       | sim   | não          | não     | não    |
-| `content.publish`      | sim   | sim          | sim     | não    |
-| `content.read`         | sim   | sim          | sim     | sim    |
-| `content.moderate`     | sim   | não          | sim     | não    |
-| `offer.create`         | não   | sim          | não     | não    |
-| `challenge.manage`     | sim   | sim          | sim     | não    |
-| `challenge.join`       | sim   | sim          | sim     | sim    |
-| `challenge.review`     | sim   | sim          | sim     | não    |
-| `post.read`            | sim   | sim          | sim     | sim    |
-| `post.create`          | sim   | sim          | sim     | sim    |
-| `announcement.publish` | sim   | sim          | não     | não    |
-| `member.ban`           | sim   | não          | não     | não    |
-| `insights.read`        | sim   | não          | não     | não    |
-| `panel.overview`       | sim   | sim          | não     | não    |
-| `panel.search`         | sim   | sim          | não     | não    |
-| `member.file`          | sim   | sim          | não     | não    |
-| `member.plans`         | sim   | sim          | não     | não    |
-| `member.note`          | sim   | sim          | não     | não    |
-| `panel.review`         | sim   | sim          | não     | não    |
-| `benefit.read`         | sim   | sim          | sim     | sim    |
-| `benefit.manage`       | sim   | não          | não     | não    |
+| Ação                   | OWNER | ADMIN | PROFESSIONAL | CREATOR | RECEPTION | MEMBER |
+| ---------------------- | ----- | ----- | ------------ | ------- | --------- | ------ |
+| `group.read`           | sim   | sim   | sim          | sim     | sim       | sim    |
+| `group.update`         | sim   | sim   | não          | não     | não       | não    |
+| `group.delete`         | sim   | não   | não          | não     | não       | não    |
+| `group.transfer`       | sim   | não   | não          | não     | não       | não    |
+| `group.sharing`        | sim   | não   | não          | não     | não       | não    |
+| `member.grant_reader`  | sim   | não   | não          | não     | não       | não    |
+| `invite.create`        | sim   | sim   | sim          | não     | não       | não    |
+| `invite.revoke`        | sim   | sim   | sim          | não     | não       | não    |
+| `member.list`          | sim   | sim   | sim          | sim     | sim       | sim    |
+| `member.approve`       | sim   | sim   | não          | não     | sim       | não    |
+| `member.remove`        | sim   | sim   | não          | não     | não       | não    |
+| `member.role`          | sim   | sim   | não          | não     | não       | não    |
+| `member.assign`        | sim   | sim   | não          | não     | não       | não    |
+| `billing.read`         | sim   | não   | não          | não     | não       | não    |
+| `billing.manage`       | sim   | não   | não          | não     | não       | não    |
+| `content.publish`      | sim   | sim   | sim          | sim     | não       | não    |
+| `content.read`         | sim   | sim   | sim          | sim     | sim       | sim    |
+| `content.moderate`     | sim   | sim   | não          | não     | não       | não    |
+| `offer.create`         | não   | não   | sim          | não     | não       | não    |
+| `challenge.manage`     | sim   | sim   | sim          | sim     | não       | não    |
+| `challenge.join`       | sim   | sim   | sim          | sim     | sim       | sim    |
+| `challenge.review`     | sim   | sim   | sim          | sim     | não       | não    |
+| `post.read`            | sim   | sim   | sim          | sim     | sim       | sim    |
+| `post.create`          | sim   | sim   | sim          | sim     | sim       | sim    |
+| `announcement.publish` | sim   | sim   | sim          | não     | sim       | não    |
+| `member.ban`           | sim   | sim   | não          | não     | não       | não    |
+| `insights.read`        | sim   | não   | não          | não     | não       | não    |
+| `panel.overview`       | sim   | sim   | sim          | não     | sim       | não    |
+| `panel.search`         | sim   | sim   | sim          | não     | sim       | não    |
+| `member.file`          | sim   | não   | sim          | não     | não       | não    |
+| `member.plans`         | sim   | não   | sim          | não     | não       | não    |
+| `member.note`          | sim   | não   | sim          | não     | não       | não    |
+| `panel.review`         | sim   | não   | sim          | não     | não       | não    |
+| `benefit.read`         | sim   | sim   | sim          | sim     | sim       | sim    |
+| `benefit.manage`       | sim   | não   | não          | não     | não       | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
 futura:
 
 - **`member.list` abre para todo mundo, e isso não é frouxidão.** A matriz decide **se** a rota
-  abre; **o que** cada papel enxerga é projeção do `MembershipService`: `OWNER` e `PROFESSIONAL`
-  veem o grupo inteiro, `MEMBER` e `CREATOR` veem só quem administra ou atende, mais eles mesmos.
+  abre; **o que** cada papel enxerga é projeção do `MembershipService`: `OWNER`, `ADMIN`,
+  `PROFESSIONAL` e `RECEPTION` veem o grupo inteiro, `MEMBER` e `CREATOR` veem só a equipe, mais
+  eles mesmos. A `RECEPTION` recebe de cada pessoa só nome, papel, situação e data de entrada (sem
+  "Entrou por", responsável, WhatsApp, assento nem o que compartilha); o `ADMIN` não recebe o
+  assento (é fatura). Com "profissionais veem só quem acompanham" ligado, o `PROFESSIONAL` vê só
+  os membros de quem é responsável, mais a equipe.
   A lista de alunos de uma academia é informação sobre pessoas e não é do interesse de outro
   aluno — mas fechar a rota para `MEMBER` tiraria dele a tela em que ele confere quem é o
   profissional que está pedindo consentimento.
 - **`billing.read` é `OWNER` e só.** Gerir o negócio não implica ver dado de saúde — e o inverso
-  também: o profissional não vê a fatura.
+  também: o profissional não vê a fatura. O `ADMIN` também não (#403 depende disto).
 - **`insights.read` é `OWNER` e só.** O painel agregado (#159/#160) é do dono. O profissional já
   tem o caminho individual, com consentimento; dar-lhe também o agregado seria dois caminhos para
   a mesma informação com regras diferentes.
@@ -119,11 +125,15 @@ futura:
   (ativos em 7 dias, "entraram e ainda não registraram", gráfico) seguem `insights.read`, com o
   mínimo de 5 e o `statsOptIn`. A busca devolve só nome, papel e situação do membro, telas
   conforme a ação de cada tela e planos da biblioteca com `content.publish`; nunca dado de saúde.
-  Um papel só com `panel.search` (a Recepção da #404) vê só nomes.
+  A `RECEPTION` tem `panel.overview` e `panel.search`, mas nenhuma ação que leia pessoa: vê nomes
+  e situação, e aprova pedidos. Abrir o painel também carimba o "último acesso" da pessoa da
+  equipe (`GroupMembership.panelSeenAt`, no máximo a cada 5 minutos), que a tela Equipe mostra.
 - **Relatório do mês e origens dos convites (#400) seguem `insights.read`** (o dono), sem ação
   nova: são agregados, com o mínimo de 5 e o `statsOptIn`. Mudar a meta da equipe, ligar o e-mail
-  mensal e escolher quem da equipe o recebe é `group.update`; o destinatário marcado precisa ser
-  profissional ou criador ativo da mesma comunidade. Os outros papéis ficam para a #404.
+  mensal e escolher quem da equipe o recebe é `group.update` **mais** `insights.read` (o `ADMIN`
+  tem o primeiro, não o segundo: não mexe num relatório que não vê); o destinatário marcado
+  precisa ser profissional ou criador ativo da mesma comunidade. Toda troca de papel desliga o
+  e-mail do relatório e o resumo de risco da pessoa.
 - **Ficha da pessoa (#402): `member.file`, `member.plans` e `member.note` são do dono e do
   profissional.** Abrir a ficha mostra o que é da equipe (planos que ela mandou, anotações,
   agenda planejada, quem abriu a ficha); dado de saúde continua só pelo vínculo, uma categoria
@@ -140,16 +150,42 @@ futura:
   a comunidade fez, não dado de saúde, e a ficha (#402) já mostra o mesmo estado a quem tem
   `member.plans`; oferta de outra comunidade nunca entra. Ver a sessão feita, reagir e comentar exigem Treino liberado para quem olha; sem ele,
   a tela diz só que não há detalhe. O "Visto" é de cada um. Mudar o limite do em risco é
-  `group.update` (o dono).
-- **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é
-  o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
-  convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
-  como `PROFESSIONAL`).
-- **`member.role` é `OWNER` e só.** Virar equipe é passar a receber o que cada membro consentiu
-  à comunidade, então só quem define a equipe muda papel. Os vínculos acompanham no mesmo commit:
-  quem entra na equipe recebe o leque inverso, quem sai perde tudo que recebia ali
-  (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere.
-- **`member.assign` (#401) é `OWNER` e só.** É escolher quem da equipe acompanha cada membro
+  `group.update` **mais** `panel.review` ou `insights.read` (#404): na prática, o dono. O `ADMIN`
+  edita a comunidade, mas não mexe num número que não vê.
+- **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** O `InviteService` usa
+  `rolesGrantableBy`: o `OWNER` convida para qualquer papel, o `ADMIN` só para `MEMBER` e
+  `RECEPTION`, o `PROFESSIONAL` só `MEMBER`. Ninguém é convidado como `OWNER` — dono se transfere
+  (`group.transfer`, o antigo dono fica na equipe como `PROFESSIONAL`). Assento no convite é
+  `billing.manage`. **Convite de equipe é poder emprestado de quem o criou:** quem sai, ou troca
+  para um papel que não daria mais aquele, leva junto os convites e links de papel de equipe que
+  ainda estavam valendo (no mesmo commit); o de membro fica.
+- **`member.grant_reader` é `OWNER` e só (#404, ADR 043: quem define a equipe é o dono).** Dar
+  papel que recebe vínculo (`PROFESSIONAL`, `CREATOR`) — por convite, link, aprovação ou troca de
+  papel — é abrir o que cada membro consentiu à comunidade. Se o `ADMIN` pudesse, criaria um
+  convite de profissional para uma conta dele e leria os alunos. Ele dá só `MEMBER` e `RECEPTION`.
+- **`group.sharing` é `OWNER` e só (#404).** O que todo membro precisa compartilhar para entrar
+  (`requiredSharingScopes`) decide o que a equipe recebe; o `ADMIN` edita o resto do perfil
+  (`group.update`), não isto.
+- **`member.role` é `OWNER` e `ADMIN` (#404), com limite.** Virar equipe é passar a receber o que
+  cada membro consentiu à comunidade. O `ADMIN` muda o papel de quem não é `ADMIN` nem `OWNER`,
+  e só para `MEMBER` ou `RECEPTION` (`canManageMember` e `rolesGrantableBy`, em `permissions.ts`):
+  assim ele não se promove, não rebaixa um par, não abre leitura para ninguém, e o escalonamento
+  para é no dono. Os vínculos acompanham
+  no mesmo commit: quem entra num papel que recebe (`OWNER`, `PROFESSIONAL`, `CREATOR`) recebe o
+  leque inverso, quem vai para `ADMIN`, `RECEPTION` ou `MEMBER` perde tudo que recebia ali
+  (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere. Toda troca
+  desliga `reportEmail` e `riskDigest` e deixa uma linha `members.role` em `GroupAuditLog`. A
+  especialidade do `PROFESSIONAL` (`PATCH .../members/:id/specialty`) é `member.role` também; ela
+  se apaga quando a pessoa deixa de ser profissional, sai ou vira dona (com linha
+  `members.specialty` na trilha), e o banco garante com um `CHECK` que só profissional tem
+  especialidade. Passar a posse deixa duas linhas `members.role` (os dois lados).
+- **`member.approve` é `OWNER`, `ADMIN` e `RECEPTION`.** Aprovar é pôr para dentro quem pediu;
+  a recepção aprova só como `MEMBER`, o admin como `MEMBER` ou `RECEPTION`. Aprovar já com papel
+  de equipe deixa linha `members.approve` na trilha. Recusar é remover a associação pendente
+  (`member.remove`), que a recepção não tem.
+- **`member.remove` e `member.ban` são `OWNER` e `ADMIN`.** O `ADMIN` não remove, não bane nem
+  desfaz o banimento de outro `ADMIN`; ninguém remove o dono.
+- **`member.assign` (#401) é `OWNER` e `ADMIN`.** É escolher quem da equipe acompanha cada membro
   ("Acompanhado por", "Trocar responsável" em massa). É administração, não leitura: quem lê dado de
   saúde continua sendo o `ProfessionalLink` que o membro deu. No convite, o profissional pode pôr
   a si mesmo como responsável; outro profissional, só o dono. Dar e tirar assento em massa seguem
@@ -164,7 +200,7 @@ futura:
   exercício e gravar tutorial é `content.publish`; o autor muda o dele e quem tem
   `content.moderate` muda o de todos. O membro enxerga o catálogo por `content.read` e pela busca
   de exercícios de sempre. O equipamento da academia é configuração dela: `group.update`.
-- **O agente da comunidade no chat (Fase 7c, ADR 031) é do dono:** `group.update` configura nome,
+- **O agente da comunidade no chat (Fase 7c, ADR 031) é do dono e do admin:** `group.update` configura nome,
   avatar e orientações. Não há ação nova para conversar com ele: qualquer membro ativo escolhe o
   agente ligado da comunidade no chat, e a API confere a associação a cada turno.
 - **Desafios (Fase 8a, ADR 027): `challenge.manage` é da equipe, `challenge.join` de todos.** A
@@ -181,26 +217,35 @@ futura:
 - **Mural (Fase 8b, ADR 032): `post.read` e `post.create` são de todos; moderar é
   `content.moderate`; banir é `member.ban`, só do dono.** `post.create` abre para `MEMBER` na
   tabela, mas a comunidade pode fechar o mural para a equipe (`Group.postPolicy = TEAM_ONLY`,
-  conferido no `PostService` e no pedido de envio da imagem). Reagir, comentar e denunciar são
-  `post.read`. Quem modera remove, restaura e fixa e trata a fila de denúncias, sem saber quem
-  denunciou; banir é mais forte que remover membro e fica com quem remove.
-- **Comunicados (#394): `announcement.publish` é `OWNER` e `PROFESSIONAL`.** Comunicar é mandar
-  notificação a todos (agora, agendado ou repetido) e fixar o aviso no topo; quem comunica também
-  vê os agendados e cancela. Não é moderar: reordenar e desafixar avisos e tratar denúncias seguem
-  em `content.moderate`. O `CREATOR` publica conteúdo, mas não manda aviso no celular de todos. A
-  "recepção" das pranchas não é papel do Fatia; quando for, entra aqui como quem comunica sem
-  moderar. No mural, a equipe toda (`TEAM_ROLES`) publica em nome da comunidade e fixa o próprio
-  post como aviso; o painel de enquetes é `content.publish`.
+  conferido no `PostService` e no pedido de envio da imagem; a equipe ali inclui `ADMIN` e
+  `RECEPTION`). Reagir, comentar e denunciar são `post.read`. Quem modera remove, restaura e fixa e
+  trata a fila de denúncias, sem saber quem denunciou; banir é mais forte que remover membro e fica
+  com quem remove.
+- **Comunicados (#394): `announcement.publish` é `OWNER`, `ADMIN`, `PROFESSIONAL` e `RECEPTION`.**
+  Comunicar é mandar notificação a todos (agora, agendado ou repetido) e fixar o aviso no topo;
+  quem comunica também vê os agendados e cancela. Não é moderar: reordenar e desafixar avisos e
+  tratar denúncias seguem em `content.moderate`. O `CREATOR` publica conteúdo, mas não manda aviso
+  no celular de todos. A `RECEPTION` comunica sem moderar (aviso de horário, feriado). No mural, a
+  equipe toda (`STAFF_ROLES`) publica em nome da comunidade e fixa o próprio post como aviso; o
+  painel de enquetes é `content.publish`.
 - **Benefícios de parceiros (#393): `benefit.read` de todos, `benefit.manage` só do dono.** O
   desconto é acordo comercial da comunidade, como a cobrança. O membro vê só os que valem (e o
   vencido de ontem, sem o cupom); o Fatia não rastreia compra nem passa dado ao parceiro.
-- **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
-  moderação, e acumular seria a mesma armadilha que o resto do documento evita.
+- **`content.moderate` é `OWNER` e `ADMIN` (#404).** Moderar o mural é cuidar da comunidade, que
+  é o trabalho do admin. O `CREATOR` deixou de moderar (a prancha Pn-19 tira, e é o mais
+  restritivo); `PROFESSIONAL` também não: não é papel de moderação, e acumular seria a mesma
+  armadilha que o resto do documento evita.
+- **Equipe e permissões (#404, Pn-19): `GET .../staff` é `member.role`; `GET .../permissions` é
+  `group.read`.** A tela mostra a equipe por papel, a especialidade, quantos cada um acompanha e o
+  último acesso ao painel; o histórico de quem mudou papel, especialidade e responsável é só do
+  dono. A tabela "O que cada papel pode fazer" sai de `PERMISSION_SUMMARY`, calculada desta matriz
+  e de `canReceiveLink` — a mesma fonte do guarda. "Profissionais veem só quem acompanham"
+  (`Group.proSeeOnlyAssigned`) é `group.update`.
 
 **Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
 grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.
 Membro ativo cujo papel não alcança a ação recebe `FORBIDDEN`: ele já está lá dentro, e não há o que
-esconder. A regra é uma só no `GroupRoleGuard`, no `assertOwner` do `GroupService` e do
+esconder. A regra é uma só no `GroupRoleGuard`, no `assertAction` do `GroupService` e do
 `MembershipService` e no `assertManager` do `SeatPoolService` (`billing.manage`: comprar, ajustar,
 cancelar, atribuir e retirar assento), que repetem a checagem para quando o service é chamado sem
 passar pela rota.
@@ -219,6 +264,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.update`         | não                  |
 | `group.delete`         | não                  |
 | `group.transfer`       | não                  |
+| `group.sharing`        | não                  |
+| `member.grant_reader`  | não                  |
 | `invite.create`        | não                  |
 | `invite.revoke`        | não                  |
 | `member.list`          | não                  |
@@ -263,19 +310,33 @@ cobrança viva (#158).
 
 ## Leitura de dado de titular (papel NÃO decide — vínculo decide)
 
-| Escopo        | Quem pode receber vínculo    | Quem NUNCA recebe |
-| ------------- | ---------------------------- | ----------------- |
-| `WORKOUT`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `NUTRITION`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `BODY`        | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `HABITS`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `GOALS`       | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `MEAL_PHOTOS` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| Escopo        | Quem pode receber vínculo    | Quem NUNCA recebe        |
+| ------------- | ---------------------------- | ------------------------ |
+| `WORKOUT`     | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `NUTRITION`   | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `BODY`        | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `HABITS`      | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `GOALS`       | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `MEAL_PHOTOS` | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
 
 Esta tabela é **igual em todas as linhas de propósito**, e é isso que ela tem a dizer: nenhum
-papel lê nada. A equipe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode receber", que
-não é o mesmo que "tem" — sem uma linha de `ProfessionalLink` criada pelo titular, com aquele
-escopo, ativa, no mesmo grupo, a leitura responde o mesmo `NOT_FOUND` que um estranho receberia.
+papel lê nada. A equipe que recebe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode
+receber", que não é o mesmo que "tem" — sem uma linha de `ProfessionalLink` criada pelo titular,
+com aquele escopo, ativa, no mesmo grupo, a leitura responde o mesmo `NOT_FOUND` que um estranho
+receberia. `ADMIN` e `RECEPTION` são equipe, mas **nunca recebem** vínculo ([ADR
+043](./ADR/043-papeis-da-equipe.md)): administrar e atender não pedem dado de saúde.
+
+Dois recortes vêm do papel e da comunidade, e só **estreitam** (#404):
+
+- **Especialidade.** O `PROFESSIONAL` com especialidade nutrição (`GroupMembership.specialty =
+NUTRITION`) só recebe `NUTRITION`, `GOALS`, `BODY` e `MEAL_PHOTOS`; `WORKOUT` e `HABITS` nunca,
+  mesmo que o aluno marque. O recorte vale ao consentir, ao entrar na equipe e ao mudar a
+  especialidade (os vínculos são revogados e recriados já recortados, no mesmo commit); a porta
+  de leitura confere de novo. Trocar de nutrição para outra especialidade não devolve nada: o
+  aluno precisa consentir de novo.
+- **"Profissionais veem só quem acompanham"** (`Group.proSeeOnlyAssigned`). Ligado, o
+  `PROFESSIONAL` só lê quem tem ele como responsável (`accompaniedById`), mesmo com vínculo; a
+  lista, a ficha, Para revisar e Em risco seguem o mesmo filtro. O dono não é afetado.
 
 A ADR 026 abriu a coluna para o dono e o criador: o consentimento passa a ser dado **ao entrar**
 (no convite ou no código), para a equipe toda de uma vez, e não mais um profissional por vez.
@@ -310,7 +371,11 @@ trilha como qualquer outra.
   do outro lado.
 - `apps/api/src/common/__tests__/user-isolation.spec.ts` roda contra Postgres real os casos de
   "papel não lê": `OWNER`, `CREATOR` e `MEMBER` × os cinco escopos, todos recusados mesmo com o
-  usuário sendo membro ativo do grupo do titular.
+  usuário sendo membro ativo do grupo do titular; desde a #404, também `ADMIN` e `RECEPTION`
+  (mesmo com vínculo antigo no banco), o admin tentando se promover ou rebaixar outro admin, e o
+  papel de uma comunidade sem valor na outra.
+- O cliente (`packages/api-client`) tem um espelho da tabela de ações (`ROLE_ACTIONS`), usado só
+  quando a API ainda não mandou `actions`; `role-actions.test.ts` o confere contra esta doc.
 - `apps/api/src/mcp/__tests__/tool-delegation.spec.ts` classifica **toda** tool MCP e reprova a
   que aceitar a associação de outra pessoa sem passar pela porta certa. Desde a #157 ele desce
   também para o service colaborador e exige a **chamada** a `assertReadable`: citar o nome da
@@ -320,30 +385,13 @@ trilha como qualquer outra.
   profissional demitido, todos com a **mesma** mensagem que um estranho recebe, mais o caminho
   feliz e a contagem de linhas de auditoria por escopo lido.
 
-## Planejado pela ADR 043 (#404) — ainda não está no código
+## Papéis da equipe (ADR 043, #404)
 
-Esta seção fica **fora das tabelas que o `permission-matrix.spec.ts` lê**, de propósito: elas
-descrevem o `permissions.ts` de hoje, e uma linha antes do código quebraria o teste (ou, pior,
-mentiria). Quando a #404 e a #374 entrarem, o que está abaixo sobe para as tabelas de cima no
-mesmo PR que muda o código e o enum.
-
-**Papéis novos** ([ADR 043](./ADR/043-papeis-da-equipe.md)):
-
-- **Administrador (`ADMIN` da comunidade)** — membros, convites, conteúdo, moderação, desafios e
-  agenda; não vê faturas (`billing.*`) nem passa a posse (`group.transfer`). **Nunca recebe
-  vínculo.**
-- **Recepção (`RECEPTION`)** — nome, status e check-in de quem chega. **Nunca recebe vínculo.**
-- **Nutricionista** — não é valor de `GroupRole`: é o `PROFESSIONAL` com especialidade nutrição.
-  O vínculo dele só carrega `NUTRITION`, `GOALS`, `BODY` e, se liberada, "Fotos das refeições";
-  `WORKOUT` e `HABITS` nunca, mesmo que o aluno marque.
-
-**Consentimento por papel.** Ao entrar, o aluno escolhe o que cada papel vê (profissionais de
-treino, nutricionista, dono/criador). O vínculo de cada pessoa da equipe leva as categorias do
-papel dela; mudar de papel recalcula os vínculos e nunca acrescenta categoria sem aceite. Com
-"profissionais veem só quem acompanham" ligado, o profissional só lê quem acompanha.
-
-**6ª categoria de leitura — "Fotos das refeições".** Já está na tabela de leitura (#374). Com a
-#404, a coluna "Quem NUNCA recebe" ganha o administrador e a recepção da comunidade.
+`ADMIN` e `RECEPTION` estão nas tabelas de cima, e o nutricionista é o `PROFESSIONAL` com
+especialidade nutrição (ver "Leitura de dado de titular"). O que a ADR 043 previa e ainda não está
+no código: o consentimento **por papel** na entrada (o aluno escolher o que profissionais de
+treino, nutricionista e dono/criador veem, #372) e o check-in da recepção (#390). Até lá, o aluno
+consente para a equipe que recebe, e a especialidade só estreita.
 
 **Plano alimentar do profissional (#376, [ADR 045](./ADR/045-plano-alimentar-autoral.md)).**
 Quem escreve é a equipe (OWNER/PROFESSIONAL/CREATOR ativo na comunidade do aluno); o plano é

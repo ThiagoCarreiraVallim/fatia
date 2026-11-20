@@ -239,7 +239,7 @@ describe('painel › exercícios', () => {
       items: [],
     });
     renderWithClient(<OrgExercisesPage />);
-    expect(await screen.findByText(/Só o dono muda/)).toBeInTheDocument();
+    expect(await screen.findByText(/Só o dono e o admin mudam/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ver equipamento' }));
     const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
     expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();

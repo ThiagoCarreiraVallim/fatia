@@ -21,7 +21,7 @@ import {
   type MediaFile,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { can, TEAM_ROLES, type GroupAction } from '../sharing/permissions';
+import { can, STAFF_ROLES, type GroupAction } from '../sharing/permissions';
 import { OBJECT_STORE, type ObjectStore } from './object-store.port';
 
 /**
@@ -244,7 +244,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       if (!groupId) throw new BadRequestException('Informe a comunidade do arquivo.');
       const action = MEDIA_PURPOSES[input.purpose as GroupMediaPurpose].action;
       const role = await this.assertGroupAction(userId, groupId, action);
-      if (input.purpose === 'post_image' && !TEAM_ROLES.includes(role)) {
+      if (input.purpose === 'post_image' && !STAFF_ROLES.includes(role)) {
         // Mural só da equipe: o bucket não guarda o que não vai virar post.
         const g = await this.prisma.group.findUniqueOrThrow({
           where: { id: groupId },

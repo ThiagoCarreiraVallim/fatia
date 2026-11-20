@@ -35,8 +35,10 @@ export const SCOPE_DETAILS: Record<ShareScope, string> = {
 
 const ROLE_LABEL: Record<GroupRole, string> = {
   OWNER: 'Dono',
+  ADMIN: 'Admin',
   PROFESSIONAL: 'Profissional',
   CREATOR: 'Criador de conteúdo',
+  RECEPTION: 'Recepção',
   MEMBER: 'Membro',
 };
 

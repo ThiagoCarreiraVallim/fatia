@@ -27,6 +27,7 @@ import {
   Search,
   Settings,
   Share2,
+  ShieldCheck,
   ShieldOff,
   Trophy,
   User,
@@ -46,6 +47,7 @@ import {
   PANEL_FOOTER_SECTIONS,
   teamRoleLabel,
   usersApi,
+  type GroupRole,
   type MyGroup,
   type PanelSection,
 } from '@fatia/api-client';
@@ -83,6 +85,7 @@ const ICONE: Record<PanelSection, LucideIcon> = {
   overview: LayoutGrid,
   review: ListChecks,
   members: Users,
+  team: ShieldCheck,
   invites: Link2,
   activation: MailWarning,
   report: FileBarChart,
@@ -98,10 +101,12 @@ const ICONE: Record<PanelSection, LucideIcon> = {
   settings: Settings,
 };
 
-const ROLE_SHORT = {
+const ROLE_SHORT: Record<GroupRole, string> = {
   OWNER: 'dono',
+  ADMIN: 'admin',
   PROFESSIONAL: 'profissional',
   CREATOR: 'criador',
+  RECEPTION: 'recepção',
   MEMBER: 'membro',
 };
 

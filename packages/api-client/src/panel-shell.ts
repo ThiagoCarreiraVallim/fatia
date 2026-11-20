@@ -116,6 +116,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
     label: 'Pessoas',
     items: [
       ['members', 'Membros'],
+      ['team', 'Equipe e permissões'],
       ['invites', 'Convites'],
       ['activation', 'Ativação pendente'],
       ['origins', 'Origem dos convites'],
@@ -246,8 +247,10 @@ export interface SearchEntry {
 
 const ROLE_SUB: Record<GroupRole, string> = {
   OWNER: 'dono',
+  ADMIN: 'admin',
   PROFESSIONAL: 'profissional',
   CREATOR: 'criador',
+  RECEPTION: 'recepção',
   MEMBER: 'membro',
 };
 

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Copy } from 'lucide-react';
 import {
+  groupCan,
   ApiError,
   contentApi,
   joinPolicyLabel,
@@ -49,8 +50,8 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
- * Configurações da comunidade (só o dono): perfil, código de entrada, equipe,
- * passar a comunidade adiante e apagar.
+ * Configurações da comunidade (dono e admin): perfil, código de entrada,
+ * equipe. Passar a comunidade adiante e apagar são só do dono (#404).
  */
 export default function OrgSettingsPage() {
   const g = useOrgGroup();
@@ -178,7 +179,8 @@ export default function OrgSettingsPage() {
           </Button>
         </form>
 
-        <RequiredScopesSection />
+        {/* O que todo membro tem de compartilhar é do dono (#404, `group.sharing`). */}
+        {groupCan(g, 'group.sharing') && <RequiredScopesSection />}
       </div>
 
       <div className="space-y-4">
@@ -224,42 +226,49 @@ export default function OrgSettingsPage() {
             ))}
           </ul>
           <Link
-            href={panelHref(g.id, 'members')}
+            href={panelHref(g.id, 'team')}
             className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
           >
-            Mudar papéis em Membros
+            Mudar papéis em Equipe e permissões
           </Link>
         </section>
 
-        <section
-          aria-labelledby="perigo"
-          className="space-y-3 rounded-2xl border border-danger/40 bg-card p-4"
-        >
-          <h2 id="perigo" className="text-sm font-semibold">
-            Passar adiante ou apagar
-          </h2>
-          <div className="space-y-1">
-            <Label htmlFor="novo-dono">Transferir para</Label>
-            <Select value={novoDono} onValueChange={setNovoDono}>
-              <SelectTrigger id="novo-dono" className="h-11">
-                <SelectValue placeholder="Escolha alguém da comunidade" />
-              </SelectTrigger>
-              <SelectContent>
-                {candidatos.map((m) => (
-                  <SelectItem key={m.membershipId} value={m.membershipId}>
-                    {`${m.name} (${teamRoleLabel(m.role).toLowerCase()})`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button variant="outline" disabled={!novoDono} onClick={() => setTransferindo(true)}>
-            Transferir
-          </Button>
-          <Button variant="ghost" className="w-full text-danger" onClick={() => setApagando(true)}>
-            Apagar a comunidade
-          </Button>
-        </section>
+        {/* Passar a posse e apagar são só do dono; o admin não vê (#404). */}
+        {groupCan(g, 'group.transfer') && (
+          <section
+            aria-labelledby="perigo"
+            className="space-y-3 rounded-2xl border border-danger/40 bg-card p-4"
+          >
+            <h2 id="perigo" className="text-sm font-semibold">
+              Passar adiante ou apagar
+            </h2>
+            <div className="space-y-1">
+              <Label htmlFor="novo-dono">Transferir para</Label>
+              <Select value={novoDono} onValueChange={setNovoDono}>
+                <SelectTrigger id="novo-dono" className="h-11">
+                  <SelectValue placeholder="Escolha alguém da comunidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {candidatos.map((m) => (
+                    <SelectItem key={m.membershipId} value={m.membershipId}>
+                      {`${m.name} (${teamRoleLabel(m.role).toLowerCase()})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" disabled={!novoDono} onClick={() => setTransferindo(true)}>
+              Transferir
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full text-danger"
+              onClick={() => setApagando(true)}
+            >
+              Apagar a comunidade
+            </Button>
+          </section>
+        )}
       </div>
 
       <ConfirmDialog

@@ -158,6 +158,12 @@ describe('lista de membros (Pn-04)', () => {
     expect(memberViaOptions(lista)).toEqual(['Recepção']);
   });
 
+  it('"Distribuir" da Equipe filtra quem a pessoa acompanha (#404)', () => {
+    expect(
+      filterPanelMembers(lista, { tab: 'all', accompaniedBy: 'h' }).map((m) => m.membershipId),
+    ).toEqual(['a']);
+  });
+
   it('contagens das abas', () => {
     expect(memberTabCounts(lista)).toEqual({ all: 5, pending: 1, unassigned: 1, left: 1 });
   });

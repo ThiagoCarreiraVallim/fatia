@@ -463,6 +463,9 @@ export class AccountService {
           displayName: true,
           // Recebe o e-mail mensal do relatório da comunidade (#400, equipe).
           reportEmail: true,
+          // A especialidade, quando é da equipe, e quem a acompanha (#404).
+          specialty: true,
+          accompaniedBy: { select: { user: { select: { name: true } } } },
           seatAssignments: { select: { assignedAt: true, revokedAt: true } },
           // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
           // e a posição dela. O ranking dos outros é dado de terceiro. Desde a

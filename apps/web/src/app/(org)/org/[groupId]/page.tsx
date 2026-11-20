@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, ChevronRight, Clock, Columns3, Plus, Send, Users } from 'lucide-react';
 import {
+  groupCan,
   activationLabel,
   insightsApi,
   newThisWeekLabel,
@@ -677,8 +678,9 @@ export default function OrgOverviewPage() {
         </section>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Os números agregados da comunidade são do dono. Você vê cada membro pelo que ele
-          compartilha com você, em Membros.
+          {groupCan(g, 'member.file')
+            ? 'Os números agregados da comunidade são do dono. Você vê cada membro pelo que ele compartilha com você, em Membros.'
+            : 'Os números agregados da comunidade são do dono. Seu papel não vê dados de alunos.'}
         </p>
       )}
     </div>

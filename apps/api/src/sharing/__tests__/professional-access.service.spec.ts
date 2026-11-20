@@ -33,8 +33,19 @@ describe('ProfessionalAccessService.assertReadable', () => {
     );
   });
 
-  type MembershipDoAluno = { userId: string; groupId: string; status: MembershipStatus } | null;
-  type MembershipDoPro = { role: GroupRole; status: MembershipStatus } | null;
+  type MembershipDoAluno = {
+    userId: string;
+    groupId: string;
+    status: MembershipStatus;
+    accompaniedById?: string | null;
+    group?: { proSeeOnlyAssigned: boolean };
+  } | null;
+  type MembershipDoPro = {
+    id?: string;
+    role: GroupRole;
+    status: MembershipStatus;
+    specialty?: null;
+  } | null;
 
   /**
    * Instala o mock das DUAS leituras de `GroupMembership`: a do aluno (por
@@ -48,11 +59,22 @@ describe('ProfessionalAccessService.assertReadable', () => {
   ) => {
     const aluno =
       overrides.aluno === undefined
-        ? { userId: SUBJECT, groupId: GROUP, status: MembershipStatus.ACTIVE }
+        ? {
+            userId: SUBJECT,
+            groupId: GROUP,
+            status: MembershipStatus.ACTIVE,
+            accompaniedById: null,
+            group: { proSeeOnlyAssigned: false },
+          }
         : overrides.aluno;
     const profissional =
       overrides.profissional === undefined
-        ? { role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE }
+        ? {
+            id: 'm-pro',
+            role: GroupRole.PROFESSIONAL,
+            status: MembershipStatus.ACTIVE,
+            specialty: null,
+          }
         : overrides.profissional;
 
     return prisma.groupMembership.findUnique.mockImplementation(

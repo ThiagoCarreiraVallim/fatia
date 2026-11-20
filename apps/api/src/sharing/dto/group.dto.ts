@@ -27,6 +27,7 @@ import {
   JoinPolicy,
   PostPolicy,
   ShareScope,
+  TeamSpecialty,
 } from '@prisma/client';
 
 /**
@@ -36,10 +37,14 @@ import {
  * operação separada, com confirmação. Fechar a lista aqui é o que impede a
  * aprovação de virar caminho de promoção acidental.
  */
-export const PAPEIS_CONCEDIVEIS = [
+export const GRANTABLE_ROLE_VALUES = [
   GroupRole.MEMBER,
   GroupRole.PROFESSIONAL,
   GroupRole.CREATOR,
+  // A equipe nova da #404 (ADR 043). Quem pode dar cada um é o service
+  // (`rolesGrantableBy`): o DTO só fecha o conjunto.
+  GroupRole.ADMIN,
+  GroupRole.RECEPTION,
 ] as const;
 
 export class CreateGroupDto {
@@ -97,6 +102,9 @@ export class UpdateGroupDto {
   @ArrayMaxSize(Object.keys(ShareScope).length)
   @IsEnum(ShareScope, { each: true })
   requiredSharingScopes?: ShareScope[];
+
+  /** "Profissionais veem só quem acompanham" (#404). */
+  @IsOptional() @IsBoolean() proSeeOnlyAssigned?: boolean;
 }
 
 export class SetAvatarDto {
@@ -145,11 +153,11 @@ export class JoinGroupDto extends JoinConsentDto {
 }
 
 /** Papéis que um convite oferece. Dono não se convida: transfere-se. */
-export const PAPEIS_CONVIDAVEIS = PAPEIS_CONCEDIVEIS;
+export const INVITABLE_ROLE_VALUES = GRANTABLE_ROLE_VALUES;
 
 export class CreateInviteDto {
-  @IsIn(PAPEIS_CONVIDAVEIS as readonly string[])
-  role!: (typeof PAPEIS_CONVIDAVEIS)[number];
+  @IsIn(INVITABLE_ROLE_VALUES as readonly string[])
+  role!: (typeof INVITABLE_ROLE_VALUES)[number];
 
   @IsOptional() @IsEmail() @MaxLength(254) email?: string;
   @IsOptional() @IsInt() @Min(1) @Max(1000) maxUses?: number;
@@ -168,8 +176,8 @@ export class CreateInviteDto {
 
 /** Convite em lote: até um dia inteiro de convites numa chamada. */
 export class BatchInviteDto {
-  @IsIn(PAPEIS_CONVIDAVEIS as readonly string[])
-  role!: (typeof PAPEIS_CONVIDAVEIS)[number];
+  @IsIn(INVITABLE_ROLE_VALUES as readonly string[])
+  role!: (typeof INVITABLE_ROLE_VALUES)[number];
 
   // Strings soltas, e não `@IsEmail({ each })`: o inválido volta em `skipped`
   // com o motivo, em vez de recusar a lista inteira por um erro de digitação.
@@ -263,12 +271,19 @@ export class PreviewGroupDto {
 }
 
 export class ChangeRoleDto {
-  @IsIn(PAPEIS_CONCEDIVEIS as readonly string[])
-  role!: (typeof PAPEIS_CONCEDIVEIS)[number];
+  @IsIn(GRANTABLE_ROLE_VALUES as readonly string[])
+  role!: (typeof GRANTABLE_ROLE_VALUES)[number];
 }
 
 export class ApproveMemberDto {
   @IsOptional()
-  @IsIn(PAPEIS_CONCEDIVEIS as readonly string[])
-  role?: (typeof PAPEIS_CONCEDIVEIS)[number];
+  @IsIn(GRANTABLE_ROLE_VALUES as readonly string[])
+  role?: (typeof GRANTABLE_ROLE_VALUES)[number];
+}
+
+/** A especialidade do profissional (#404); `null` tira. */
+export class SetSpecialtyDto {
+  @ValidateIf((o: SetSpecialtyDto) => o.specialty !== null)
+  @IsEnum(TeamSpecialty)
+  specialty!: TeamSpecialty | null;
 }
