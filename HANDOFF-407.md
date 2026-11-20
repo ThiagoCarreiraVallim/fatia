@@ -13,11 +13,12 @@ Pranchas renderizadas: `~/.cache/fatia-vis/407/board/`.
 
 ## Status
 
-- [ ] schema + migration 20261120600000
-- [ ] snapshot v2 + documento (api)
-- [ ] envio com ajuste por aluno
-- [ ] cópia GET/PUT + isolamento
-- [ ] aceite leva trocas
-- [ ] api-client
+- [x] schema + migration 20261120600000_nutrition_plan_editor
+- [x] snapshot v2 + documento (api) — sharing/nutrition-document.ts, nutrition/helpers/equivalents.ts
+- [x] envio com ajuste por aluno (só com porta de Alimentação aberta; trilha `nutrition_plan_adjust`)
+- [x] cópia GET/PUT + isolamento (sharing/nutrition-copy.service.ts; user-isolation #407)
+- [x] aceite leva trocas e "comi isso" de hoje em diante (carryOver)
+- [x] export sem editedById
+- [x] api-client (nutrition-plan-editor.ts)
 - [ ] web editor + cópia
 - [ ] docs / passada visual
