@@ -33,6 +33,7 @@ import {
   valorMensal,
   vencimentoAvulso,
 } from './seat-pricing';
+import { applyToOfferPurchase } from './offer-purchase-webhook';
 import { listPrograms, type ProgramView } from './program-view';
 import { ASSINATURA_LIDA } from './subscription-entitlements.service';
 import { subscriptionEventChange } from './subscription-events';
@@ -731,6 +732,11 @@ export class SeatPoolService {
             tx.groupProgram.update({ where: { id: programa.id }, data: { chargeStatus } }),
         );
       }
+      const compra = await tx.groupOfferPurchase.findUnique({
+        where: { providerPaymentId: r.paymentId },
+        select: { id: true, status: true },
+      });
+      if (compra) return applyToOfferPurchase(tx, compra, r.event);
     }
     return 'desconhecido';
   }
