@@ -140,3 +140,21 @@ export function embedNavigationAction(
   if (platform.reportsClicks && req.navigationType !== 'click') return 'block';
   return /^https?:\/\//.test(req.url) ? 'browser' : 'block';
 }
+
+export type CommunityVideoRecovery =
+  { action: 'retry'; url: string } | { action: 'browser'; url: string } | { action: 'poster' };
+
+/**
+ * O vídeo da comunidade falhou no player. A URL é assinada e vence: com uma URL
+ * nova, tenta de novo no player uma vez; se ela também falhar (ou não mudou),
+ * abre a nova no navegador; sem URL nova, volta para a capa.
+ */
+export function communityVideoRecovery(s: {
+  failedUrl: string;
+  freshUrl: string | null;
+  retried: boolean;
+}): CommunityVideoRecovery {
+  if (!s.freshUrl) return { action: 'poster' };
+  if (!s.retried && s.freshUrl !== s.failedUrl) return { action: 'retry', url: s.freshUrl };
+  return { action: 'browser', url: s.freshUrl };
+}

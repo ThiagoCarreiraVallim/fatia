@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ExternalLink, Info, Play } from 'lucide-react-native';
 import {
+  communityVideoRecovery,
   exerciseVideoSource,
   signedVideoIsStale,
   workoutApi,
@@ -105,10 +106,34 @@ export function ExerciseVideoHero({
     if (video?.kind === 'youtube') {
       const watch = youtubeWatchUrl(video.id);
       if (watch) void WebBrowser.openBrowserAsync(watch);
-    } else if (url) {
-      void WebBrowser.openBrowserAsync(url);
     }
-  }, [setPlaying, url, video]);
+  }, [setPlaying, video]);
+
+  // O vídeo da comunidade falhou: a URL assinada pode ter vencido. Busca uma
+  // nova antes de tentar de novo ou de abrir o navegador (nunca a vencida).
+  const [retried, setRetried] = useState(false);
+  const communityFailed = useCallback(async () => {
+    if (!url) return fallback();
+    setState('loading');
+    const fresh = await refetch().then(
+      (r) => r.data,
+      () => undefined,
+    );
+    const next = exerciseVideoSource(fresh);
+    const r = communityVideoRecovery({
+      failedUrl: url,
+      freshUrl: next?.kind === 'community' ? next.url : null,
+      retried,
+    });
+    if (r.action === 'retry') {
+      setRetried(true);
+      setUrl(r.url);
+      setPlaying('playing');
+      return;
+    }
+    setPlaying('poster');
+    if (r.action === 'browser') void WebBrowser.openBrowserAsync(r.url);
+  }, [url, fallback, refetch, retried, setPlaying]);
 
   if (!video) return null;
 
@@ -127,6 +152,7 @@ export function ExerciseVideoHero({
         return;
       }
       setUrl(next.url);
+      setRetried(false);
       setPlaying('playing');
     } catch {
       setPlaying('poster');
@@ -145,7 +171,11 @@ export function ExerciseVideoHero({
           {video.kind === 'youtube' ? (
             <YouTubePlayer videoId={video.id} onUnavailable={fallback} />
           ) : url ? (
-            <CommunityVideoPlayer url={url} onUnavailable={fallback} />
+            <CommunityVideoPlayer
+              key={url}
+              url={url}
+              onUnavailable={() => void communityFailed()}
+            />
           ) : null}
         </View>
       ) : (
