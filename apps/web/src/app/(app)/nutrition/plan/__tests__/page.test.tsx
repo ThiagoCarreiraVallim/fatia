@@ -70,6 +70,7 @@ const plan = (over: Partial<NutritionPlan> = {}): NutritionPlan => ({
   author: { name: 'Helena Personal' },
   sentAt: '2026-10-20T10:00:00Z',
   acceptedAt: '2026-10-21T10:00:00Z',
+  changeNote: null,
   goals: {
     kcalMin: 1760,
     kcalMax: 1920,
@@ -312,6 +313,23 @@ describe('Plano alimentar (Al-N5)', () => {
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Aceitar' }));
     await waitFor(() => expect(api.accept).toHaveBeenCalledWith('p2'));
+  });
+
+  it('versão nova mandada pela biblioteca diz o que mudou (#405)', async () => {
+    api.get.mockResolvedValue(
+      overview({
+        pending: plan({
+          id: 'p2',
+          version: 2,
+          status: 'SENT',
+          acceptedAt: null,
+          changeNote: 'Subi a proteína do almoço.',
+        }),
+      }),
+    );
+    renderPage();
+    const novo = await screen.findByRole('region', { name: 'Plano novo' });
+    expect(novo).toHaveTextContent('O que mudou: Subi a proteína do almoço.');
   });
 
   it('o plano novo pode ser visto antes de aceitar, sem trocar nem registrar', async () => {
