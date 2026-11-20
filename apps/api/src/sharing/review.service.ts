@@ -603,7 +603,9 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       } else continue;
       out.push({
         kind: ReviewKind.PLAN_ENDED,
-        refId: o.id,
+        // A versão que terminou, não a oferta: o bloco seguinte, na mesma
+        // oferta, termina de novo e volta à fila sem o "visto" do anterior.
+        refId: st.shown.id,
         membershipId: p.membershipId,
         name: p.name,
         shares: [],
@@ -713,11 +715,11 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       return s?.completedAt ? s.userId : null;
     }
     if (kind === ReviewKind.PLAN_ENDED) {
-      const o = await this.prisma.planOffer.findFirst({
-        where: { id: refId, groupId, removedAt: null },
-        select: { userId: true },
+      const v = await this.prisma.planOfferVersion.findFirst({
+        where: { id: refId, offer: { groupId, removedAt: null } },
+        select: { offer: { select: { userId: true } } },
       });
-      return o?.userId ?? null;
+      return v?.offer.userId ?? null;
     }
     if (kind === ReviewKind.GOAL) {
       const g = await this.prisma.goal.findUnique({
