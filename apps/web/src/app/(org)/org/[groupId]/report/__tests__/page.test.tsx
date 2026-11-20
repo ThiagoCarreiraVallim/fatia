@@ -37,8 +37,7 @@ const cell = (key: string, value: number | null) => ({ key, value, suppressed: v
 
 const relatorio = (p: Partial<MonthReport> = {}): MonthReport => ({
   month: '2026-10',
-  months: ['2026-11', '2026-10', '2026-09'],
-  partial: false,
+  months: ['2026-10', '2026-09', '2026-08'],
   groupName: 'Academia Demo',
   optIn: 97,
   riskDays: 7,
@@ -59,7 +58,7 @@ const relatorio = (p: Partial<MonthReport> = {}): MonthReport => ({
   ],
   weeksAverage: 321,
   weeksOnGoal: { hit: 2, of: 3 },
-  activeByDay: Array.from({ length: 31 }, (_, i) => cell(`2026-10-${i + 1}`, 40 + i)),
+  activeByDay: ['07', '14', '21', '28', '31'].map((d, i) => cell(`2026-10-${d}`, 40 + i * 9)),
   challenges: [
     {
       id: 'c1',
@@ -213,14 +212,15 @@ describe('relatório do mês (#400, Pn-03)', () => {
     await screen.findByRole('heading', { name: 'Relatório de outubro' });
     expect(reportApi.report).toHaveBeenCalledWith('g1', '2026-09');
     const seletor = screen.getByRole('combobox', { name: 'Mês do relatório' });
-    expect(within(seletor).getByRole('option', { name: 'novembro (até ontem)' })).toBeTruthy();
-    await user.selectOptions(seletor, '2026-11');
-    await waitFor(() => expect(reportApi.report).toHaveBeenLastCalledWith('g1', '2026-11'));
-  });
-
-  it('mês em andamento avisa que vai até ontem', async () => {
-    abrir(relatorio({ month: '2026-11', partial: true }));
-    expect(await screen.findByText(/Mês em andamento/)).toBeInTheDocument();
+    // Só meses fechados: o corrente não aparece.
+    expect(
+      within(seletor)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['outubro', 'setembro', 'agosto']);
+    expect(screen.queryByText(/até ontem/)).toBeNull();
+    await user.selectOptions(seletor, '2026-08');
+    await waitFor(() => expect(reportApi.report).toHaveBeenLastCalledWith('g1', '2026-08'));
   });
 
   it('o que não passa do mínimo de 5 diz "amostra pequena", nunca zero', async () => {

@@ -23,8 +23,7 @@ import {
 
 const base = (over: Partial<MonthReport> = {}): MonthReport => ({
   month: '2026-10',
-  months: ['2026-11', '2026-10', '2026-09'],
-  partial: false,
+  months: ['2026-10', '2026-09'],
   groupName: 'Academia Demo',
   optIn: 97,
   riskDays: 7,
@@ -49,8 +48,9 @@ describe('relatório do mês (#400, Pn-03)', () => {
   it('título e meses: o ano só aparece fora do ano corrente', () => {
     expect(reportTitle('2026-10', '2026-11')).toBe('Relatório de outubro');
     expect(reportTitle('2025-12', '2026-11')).toBe('Relatório de dezembro de 2025');
-    expect(reportMonthOption('2026-11', '2026-11')).toBe('novembro (até ontem)');
-    expect(reportMonthOption('2025-12', '2026-11')).toBe('dezembro de 2025');
+    // Só mês fechado: nada de "(até ontem)".
+    expect(reportMonthOption('2026-10', '2026-10')).toBe('outubro');
+    expect(reportMonthOption('2025-12', '2026-10')).toBe('dezembro de 2025');
   });
 
   it('variação: pontos e %, com sinal; sem comparação, nada', () => {
@@ -143,6 +143,18 @@ describe('relatório do mês (#400, Pn-03)', () => {
         percent: null,
       }),
     ).toBe('Feira');
+    expect(
+      originRowName({
+        key: 'other',
+        origin: null,
+        label: null,
+        kind: 'other',
+        joined: 7,
+        activated: null,
+        percent: null,
+      }),
+    ).toBe('Outras origens');
+    expect(originKindLabel('other')).toBe('vários');
     expect(originKindLabel('list')).toBe('lista');
     expect(originKindLabel('qr')).toBe('QR');
   });

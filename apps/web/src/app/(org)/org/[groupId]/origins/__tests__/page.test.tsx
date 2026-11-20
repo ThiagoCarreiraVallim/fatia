@@ -46,11 +46,11 @@ const origens = (p: Partial<InviteOrigins> = {}): InviteOrigins => ({
       percent: null,
     },
     {
-      key: 'c',
-      origin: 'SITE',
+      key: 'other',
+      origin: null,
       label: null,
-      kind: 'link',
-      joined: null,
+      kind: 'other',
+      joined: 7,
       activated: null,
       percent: null,
     },
@@ -88,11 +88,13 @@ describe('origem dos convites (#400, Pn-25)', () => {
     expect(within(linhas[1]!).getByText('79%')).toBeInTheDocument();
     expect(within(linhas[2]!).getByText('Instagram')).toBeInTheDocument();
     expect(within(linhas[2]!).getByText('amostra pequena demais para mostrar')).toBeInTheDocument();
-    expect(within(linhas[3]!).getByText('Site')).toBeInTheDocument();
-    expect(within(linhas[3]!).getByText('menos de 5')).toBeInTheDocument();
+    // As pequenas somadas, sem rótulo (Pn-25c mostrava cada uma: a privacidade vence).
+    expect(within(linhas[3]!).getByText('Outras origens')).toBeInTheDocument();
+    expect(within(linhas[3]!).getByText('vários')).toBeInTheDocument();
+    expect(within(linhas[3]!).getByText('7')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Contamos só quem entrou e quanto ativou. Nada de nome, nada de dado de saúde. Origens com menos de 5 pessoas ficam ocultas.',
+        'Contamos só quem entrou e quanto ativou. Nada de nome, nada de dado de saúde. Origens com menos de 5 pessoas entram juntas em "Outras origens", sem nome, ou não aparecem.',
       ),
     ).toBeInTheDocument();
     expect(reportApi.origins).toHaveBeenCalledWith('g1', 30);
@@ -104,6 +106,20 @@ describe('origem dos convites (#400, Pn-25)', () => {
     await screen.findByRole('table');
     await user.click(screen.getByRole('radio', { name: '7 dias' }));
     await waitFor(() => expect(reportApi.origins).toHaveBeenLastCalledWith('g1', 7));
+  });
+
+  it('número de 30 dias suprimido pela diferença com 7 dias: sem "menos de 5"', async () => {
+    abrir(
+      origens({
+        joined: null,
+        activated: null,
+        percent: null,
+        rows: [{ ...origens().rows[0]!, joined: null, activated: null, percent: null }],
+      }),
+    );
+    const linhas = within(await screen.findByRole('table')).getAllByRole('row');
+    expect(within(linhas[1]!).queryByText('menos de 5')).toBeNull();
+    expect(within(linhas[1]!).getByText('amostra pequena demais para mostrar')).toBeInTheDocument();
   });
 
   it('total pequeno demais sai como amostra pequena, nunca zero', async () => {
