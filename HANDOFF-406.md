@@ -17,5 +17,5 @@ Cada um sai com um commit de teste vermelho e depois a correção.
 - [x] D4: sessionKey estável (snapshot, editor, WorkoutPlan) em vez do sessionIndex
 - [x] P1: baseVersionId no PUT da cópia → 409; a web manda e mostra a mensagem
 - [x] P2: no mapa adoptedOf, ordenar por sessionIndex e ficar com o primeiro
-- [ ] REDESIGN_PROGRESS: editar a cópia (member.plans + porta de leitura) × tirar (autor/dono)
+- [x] REDESIGN_PROGRESS: editar a cópia (member.plans + porta de leitura) × tirar (autor/dono)
 - [ ] lint, tsc e testes; merge main; push; dropar fatia_t406b; apagar este arquivo
