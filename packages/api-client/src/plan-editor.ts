@@ -83,6 +83,11 @@ export interface PlanDocCircuitInput {
 }
 
 export interface PlanDocSessionInput {
+  /**
+   * A chave estável da sessão: volta igual ao salvar, para a versão nova achar
+   * o plano da mesma sessão. Sessão nova vai sem e ganha uma no servidor.
+   */
+  key?: string;
   name: string;
   /** Dia da semana ISO (1 = segunda); nulo no rodízio. */
   weekday?: number | null;
@@ -110,7 +115,12 @@ export interface DocumentCircuitView extends Omit<PlanDocCircuitInput, 'exercise
 export type DocumentItemView = DocumentExerciseView | DocumentCircuitView;
 
 export interface PlanDocumentView {
-  sessions: Array<{ name: string; weekday: number | null; items: DocumentItemView[] }>;
+  sessions: Array<{
+    key?: string;
+    name: string;
+    weekday: number | null;
+    items: DocumentItemView[];
+  }>;
 }
 
 /** A cópia de um aluno no editor (Pn-09e). */

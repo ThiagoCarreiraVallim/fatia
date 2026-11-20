@@ -183,6 +183,14 @@ describe('editor de plano (#406)', () => {
     expect(JSON.stringify(input)).not.toContain('Burpee');
   });
 
+  it('a chave da sessão volta para a API (D4 da revisão do PR #462)', () => {
+    const d = doc();
+    d.sessions[0]!.key = 'chave-a';
+    const input = toDocumentInput(d);
+    expect(input.sessions[0]!.key).toBe('chave-a');
+    expect('key' in input.sessions[1]!).toBe(false);
+  });
+
   it('dica da última série e etiquetas', () => {
     expect(lastSetHint('Ana Lima', { weightKg: 62.5, reps: 8 })).toBe('última da Ana: 62,5 kg × 8');
     expect(lastSetHint('Ana', { weightKg: null, reps: 8 })).toBeNull();

@@ -278,6 +278,23 @@ describe('editor de plano de treino (#406, Pn-09)', () => {
     });
   });
 
+  it('a chave de cada sessão volta ao salvar; a cópia duplicada é sessão nova', async () => {
+    ctx.params = { groupId: 'g1', templateId: 't1' };
+    const comChaves = modelo();
+    comChaves.document!.sessions[0]!.key = 'chave-a';
+    comChaves.document!.sessions[1]!.key = 'chave-b';
+    vi.mocked(contentApi.plan).mockResolvedValue(comChaves);
+    vi.mocked(contentApi.updatePlan).mockResolvedValue(comChaves);
+    renderWithClient(<OrgPlanTemplatePage />);
+    await screen.findByRole('heading', { name: 'Sessão A · Pernas' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicar sessão' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(contentApi.updatePlan).toHaveBeenCalled());
+    const body = vi.mocked(contentApi.updatePlan).mock.calls[0]![2];
+    expect(body.document!.sessions.map((s) => s.key)).toEqual(['chave-a', undefined, 'chave-b']);
+  });
+
   it('sessão vazia segura o salvar e diz por quê', async () => {
     ctx.params = { groupId: 'g1', templateId: 't1' };
     vi.mocked(contentApi.plan).mockResolvedValue(modelo());
