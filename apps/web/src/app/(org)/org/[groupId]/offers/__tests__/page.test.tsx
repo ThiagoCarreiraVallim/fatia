@@ -47,7 +47,7 @@ const oferta = (p: Partial<OfferView> = {}): OfferView => ({
   publishedAt: '2026-11-10T12:00:00Z',
   closedAt: null,
   saleUrl: 'https://fat.ia.br/academia-demo/verao-21',
-  stats: { sales: 18, spotsLeft: 12, revenueCents: 268_200, netCents: 241_380, activated48h: 15 },
+  stats: { sales: 18, spotsLeft: 12, revenueCents: 268_200, netCents: 241_380 },
   failed: [],
   ...p,
 });
@@ -73,7 +73,7 @@ function abrir(lista: Partial<OffersList> = {}) {
 describe('painel › ofertas (Pn-37, Pn-37b, #403)', () => {
   afterEach(() => vi.clearAllMocks());
 
-  it('a oferta ativa: preço, vendas, receita, ativaram e o link de venda', async () => {
+  it('a oferta ativa: preço, vendas, receita e o link de venda, sem "ativaram"', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     abrir();
@@ -85,7 +85,9 @@ describe('painel › ofertas (Pn-37, Pn-37b, #403)', () => {
     expect(within(card).getByText('de 30 vagas')).toBeInTheDocument();
     expect(within(card).getByText('R$ 2.682')).toBeInTheDocument();
     expect(within(card).getByText('R$ 2.413,80 depois da taxa de 10%')).toBeInTheDocument();
-    expect(within(card).getByText('15')).toBeInTheDocument();
+    // Sem consentimento do comprador (até a #421), a tela não diz quem ativou.
+    expect(within(card).queryByText('Ativaram')).not.toBeInTheDocument();
+    expect(within(card).queryByText(/48 h/)).not.toBeInTheDocument();
     expect(
       within(card).getByText(/Plano Inferior v2 · questionário de início/),
     ).toBeInTheDocument();

@@ -390,7 +390,7 @@ const oferta = (extra: Partial<OfferView> = {}): OfferView => ({
   publishedAt: '2026-11-10T12:00:00Z',
   closedAt: null,
   saleUrl: 'https://fat.ia.br/academia-demo/verao-21',
-  stats: { sales: 18, spotsLeft: 12, revenueCents: 268_200, netCents: 241_380, activated48h: 15 },
+  stats: { sales: 18, spotsLeft: 12, revenueCents: 268_200, netCents: 241_380 },
   failed: [],
   ...extra,
 });
