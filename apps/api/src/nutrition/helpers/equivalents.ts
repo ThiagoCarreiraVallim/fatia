@@ -20,6 +20,9 @@ const PORTION_STEP = 0.5;
 /** Sem medida que caiba, as gramas vão de 5 em 5. */
 const GRAMS_STEP = 5;
 const MAX_PORTION_QUANTITY = 20;
+/** Folga das faixas que o plano grava a partir das metas em número. */
+export const KCAL_RANGE = 0.05;
+export const MACRO_RANGE = 0.1;
 
 export interface Per100 {
   kcalPer100g: number;
@@ -59,9 +62,16 @@ export interface GoalRanges {
 
 /** Quanto do macro-chave há em 100 g do alimento. */
 export function keyPer100(food: Per100, key: KeyMacro): number {
-  void food;
-  void key;
-  return 0;
+  switch (key) {
+    case 'carbs':
+      return food.carbsPer100g;
+    case 'protein':
+      return food.proteinPer100g;
+    case 'fat':
+      return food.fatPer100g;
+    case 'kcal':
+      return food.kcalPer100g;
+  }
 }
 
 /** Quanto do macro-chave há nesta quantidade. */
@@ -80,10 +90,29 @@ export function roundToHousehold(
   portions: PortionRef[],
   key: KeyMacro,
 ): Amount {
-  void food;
-  void portions;
-  void key;
-  return { grams: exactGrams, portionLabel: null, portionQuantity: null };
+  const alvo = keyAmount(food, exactGrams, key);
+  let melhor: { amount: Amount; desvio: number } | null = null;
+  for (const p of portions) {
+    if (!(p.grams > 0)) continue;
+    const bruto = exactGrams / p.grams;
+    for (const q of [Math.floor(bruto / PORTION_STEP), Math.ceil(bruto / PORTION_STEP)]) {
+      const quantity = q * PORTION_STEP;
+      if (quantity < PORTION_STEP || quantity > MAX_PORTION_QUANTITY) continue;
+      const grams = Math.round(p.grams * quantity * 10) / 10;
+      const desvio = alvo > 0 ? Math.abs(keyAmount(food, grams, key) - alvo) / alvo : 0;
+      // Folga de arredondamento: 10,0% em ponto flutuante ainda é 10%.
+      if (desvio > EQUIVALENT_TOLERANCE + 1e-9) continue;
+      if (!melhor || desvio < melhor.desvio) {
+        melhor = { amount: { grams, portionLabel: p.label, portionQuantity: quantity }, desvio };
+      }
+    }
+  }
+  if (melhor) return melhor.amount;
+  return {
+    grams: Math.max(GRAMS_STEP, Math.round(exactGrams / GRAMS_STEP) * GRAMS_STEP),
+    portionLabel: null,
+    portionQuantity: null,
+  };
 }
 
 /**
@@ -96,11 +125,9 @@ export function equivalentAmount(
   portions: PortionRef[],
   key: KeyMacro,
 ): Amount | null {
-  void food;
-  void target;
-  void portions;
-  void key;
-  return null;
+  const por100 = keyPer100(food, key);
+  if (!(por100 > 0) || !(target > 0)) return null;
+  return roundToHousehold(food, (target * 100) / por100, portions, key);
 }
 
 /**
@@ -113,10 +140,7 @@ export function scaleAmount(
   factor: number,
   portions: PortionRef[],
 ): Amount {
-  void food;
-  void factor;
-  void portions;
-  return amount;
+  return roundToHousehold(food, amount.grams * factor, portions, 'kcal');
 }
 
 /**
@@ -124,15 +148,23 @@ export function scaleAmount(
  * metas do dia: kcal ±5% (a mesma folga da sugestão de metas) e macros ±10%.
  */
 export function targetsToRanges(t: Targets): GoalRanges {
+  const faixa = (v: number, folga: number) => [
+    Math.round(v * (1 - folga)),
+    Math.round(v * (1 + folga)),
+  ];
+  const [kcalMin, kcalMax] = faixa(t.kcal, KCAL_RANGE);
+  const [proteinMinG, proteinMaxG] = faixa(t.proteinG, MACRO_RANGE);
+  const [carbsMinG, carbsMaxG] = faixa(t.carbsG, MACRO_RANGE);
+  const [fatMinG, fatMaxG] = faixa(t.fatG, MACRO_RANGE);
   return {
-    kcalMin: t.kcal,
-    kcalMax: t.kcal,
-    proteinMinG: t.proteinG,
-    proteinMaxG: t.proteinG,
-    carbsMinG: t.carbsG,
-    carbsMaxG: t.carbsG,
-    fatMinG: t.fatG,
-    fatMaxG: t.fatG,
+    kcalMin: kcalMin!,
+    kcalMax: kcalMax!,
+    proteinMinG: proteinMinG!,
+    proteinMaxG: proteinMaxG!,
+    carbsMinG: carbsMinG!,
+    carbsMaxG: carbsMaxG!,
+    fatMinG: fatMinG!,
+    fatMaxG: fatMaxG!,
   };
 }
 
