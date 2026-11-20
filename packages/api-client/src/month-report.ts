@@ -243,10 +243,10 @@ export function challengeFinishedLabel(row: ReportChallengeRow): string {
   return challengeCountLabel(row.finished);
 }
 
-/** "23 · 4 anulados". */
+/** "23 · 4 anulados"; sem anulação, só "23". */
 export function challengeReviewedLabel(row: ReportChallengeRow): string {
   if (row.reviewed === null) return LESS;
-  if (row.voided === null) return row.reviewed.toLocaleString('pt-BR');
+  if (row.voided === null || row.voided === 0) return row.reviewed.toLocaleString('pt-BR');
   return `${row.reviewed.toLocaleString('pt-BR')} · ${row.voided} ${row.voided === 1 ? 'anulado' : 'anulados'}`;
 }
 
