@@ -18,7 +18,7 @@ Branch `redesign/400-relatorio`. Banco de teste `fatia_t400`. Spec do revisor:
 
 ## Estado
 
-- [ ] testes vermelhos api
+- [x] testes vermelhos api (report-review.integration.spec.ts + ajustes em report e report-email)
 - [ ] correções api + migration
 - [ ] api-client/web (sem "(até ontem)", Outras origens)
 - [ ] docs

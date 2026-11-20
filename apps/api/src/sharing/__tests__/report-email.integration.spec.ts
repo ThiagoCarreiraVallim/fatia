@@ -107,14 +107,14 @@ describe('e-mail mensal do relatório (integração, #400)', () => {
 
   it('não sai no feriado nem antes das 8 h do 1º dia útil', async () => {
     // 2/11/2026 é segunda, Finados.
-    await job.sendMonthlyReports(new Date('2026-11-02T15:00:00Z'));
+    await job.sendMonthlyReports(new Date('2026-11-02T15:00:00Z'), [g.id]);
     // 3/11, 7 h em São Paulo.
-    await job.sendMonthlyReports(new Date('2026-11-03T10:00:00Z'));
+    await job.sendMonthlyReports(new Date('2026-11-03T10:00:00Z'), [g.id]);
     expect(meus()).toHaveLength(0);
   });
 
   it('no 1º dia útil sai o relatório de outubro para o dono e para quem ele marcou', async () => {
-    await job.sendMonthlyReports(new Date('2026-11-03T15:00:00Z'));
+    await job.sendMonthlyReports(new Date('2026-11-03T15:00:00Z'), [g.id]);
     expect(para(g.dono)).toHaveLength(1);
     expect(para(g.marcada)).toHaveLength(1);
     expect(para(g.desmarcada)).toHaveLength(0);
@@ -129,15 +129,15 @@ describe('e-mail mensal do relatório (integração, #400)', () => {
   });
 
   it('o mesmo mês não sai duas vezes, nem com duas instâncias ao mesmo tempo', async () => {
-    await job.sendMonthlyReports(new Date('2026-11-04T15:00:00Z'));
+    await job.sendMonthlyReports(new Date('2026-11-04T15:00:00Z'), [g.id]);
     expect(para(g.dono)).toHaveLength(1);
 
     await prisma.group.update({ where: { id: g.id }, data: { reportEmailMonth: null } });
     const antes = para(g.dono).length;
     await Promise.all([
-      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z')),
-      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z')),
-      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z')),
+      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z'), [g.id]),
+      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z'), [g.id]),
+      job.sendMonthlyReports(new Date('2026-11-05T15:00:00Z'), [g.id]),
     ]);
     expect(para(g.dono).length - antes).toBe(1);
   });
@@ -148,7 +148,8 @@ describe('e-mail mensal do relatório (integração, #400)', () => {
       data: { reportEmailEnabled: false, reportEmailMonth: null },
     });
     const antes = meus().length;
-    await job.sendMonthlyReports(new Date('2026-11-06T15:00:00Z'));
+    // 5/11 é o 3º dia útil: ainda vale, mas desligado não sai.
+    await job.sendMonthlyReports(new Date('2026-11-05T16:00:00Z'), [g.id]);
     expect(meus().length).toBe(antes);
     await prisma.group.update({ where: { id: g.id }, data: { reportEmailEnabled: true } });
   });
@@ -177,7 +178,6 @@ describe('texto do e-mail mensal (#400, Ex-02)', () => {
   const base: MonthReport = {
     month: '2026-10',
     months: ['2026-10'],
-    partial: false,
     groupName: 'Academia Demo',
     optIn: 97,
     riskDays: 7,

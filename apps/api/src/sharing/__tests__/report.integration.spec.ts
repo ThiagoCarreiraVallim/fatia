@@ -161,7 +161,6 @@ describe('relatório do mês e origens (integração, #400)', () => {
     it('membros ativos: base de quem aceitou entrar nas estatísticas, com o mês anterior', async () => {
       const r = await reports.report(g.dono, g.id, '2026-10', NOW);
       expect(r.month).toBe('2026-10');
-      expect(r.partial).toBe(false);
       expect(r.optIn).toBe(12);
       expect(r.activeMembers).toEqual({ value: 7, percent: 58, deltaPts: 16, delta: 2 });
       // 7 × 2 + 5 = 19; as 5 sessões de quem não aceitou ficam de fora.
@@ -182,19 +181,27 @@ describe('relatório do mês e origens (integração, #400)', () => {
 
     it('sessões por bloco de 7 dias: bloco com menos de 5 de um lado fica oculto', async () => {
       const r = await reports.report(g.dono, g.id, '2026-10', NOW);
+      // 15 e 29 ficam ocultos (ninguém treinou: 0 é pequeno). Juntos, ainda não
+      // fecham um bloco seguro: a menor semana visível (22) some junto, e o
+      // total (19) não devolve nenhuma delas por diferença.
       expect(r.weeks.map((w) => [w.key, w.days, w.value, w.suppressed])).toEqual([
         ['1', 7, 7, false],
         ['8', 7, 7, false],
         ['15', 7, null, true],
-        ['22', 7, 5, false],
+        ['22', 7, null, true],
         ['29', 3, null, true],
       ]);
-      expect(r.weeksAverage).toBe(6);
+      expect(r.sessions.total).toBe(19);
+      expect(r.weeksAverage).toBe(7);
       expect(r.weeksOnGoal).toBeNull();
-      // Acumulado por dia: nada antes do dia 5 (0 é pequeno), 7 do dia 5 em diante.
-      expect(r.activeByDay).toHaveLength(31);
-      expect(r.activeByDay[3]).toEqual({ key: '2026-10-04', value: null, suppressed: true });
-      expect(r.activeByDay[30]).toEqual({ key: '2026-10-31', value: 7, suppressed: false });
+      // Acumulado por semana (no último dia de cada bloco): 7 desde a primeira.
+      expect(r.activeByDay).toEqual(
+        ['2026-10-07', '2026-10-14', '2026-10-21', '2026-10-28', '2026-10-31'].map((key) => ({
+          key,
+          value: 7,
+          suppressed: false,
+        })),
+      );
     });
 
     it('desafios: só opt-in conta, e quem terminou some com menos de 5 do outro lado', async () => {
@@ -223,17 +230,16 @@ describe('relatório do mês e origens (integração, #400)', () => {
       expect(s.weeklySessionsGoal).toBe(6);
       const r = await reports.report(g.dono, g.id, '2026-10', NOW);
       expect(r.weeklySessionsGoal).toBe(6);
-      expect(r.weeksOnGoal).toEqual({ hit: 2, of: 3 });
+      expect(r.weeksOnGoal).toEqual({ hit: 2, of: 2 });
       await reports.updateSettings(g.dono, g.id, { weeklySessionsGoal: null });
     });
 
-    it('o mês é nomeado: sem mês abre o anterior; futuro, malformado ou velho demais é 400', async () => {
-      expect((await reports.report(g.dono, g.id, undefined, NOW)).month).toBe('2026-10');
-      const atual = await reports.report(g.dono, g.id, '2026-11', NOW);
-      expect(atual.partial).toBe(true);
-      expect(atual.months[0]).toBe('2026-11');
-      expect(atual.months).toHaveLength(13);
-      for (const ruim of ['2026-12', '2026-13', '26-10', '2025-10']) {
+    it('o mês é nomeado e fechado: sem mês abre o anterior; corrente, futuro, malformado ou velho demais é 400', async () => {
+      const r = await reports.report(g.dono, g.id, undefined, NOW);
+      expect(r.month).toBe('2026-10');
+      expect(r.months[0]).toBe('2026-10');
+      expect(r.months).toHaveLength(12);
+      for (const ruim of ['2026-11', '2026-12', '2026-13', '26-10', '2025-10']) {
         await expect(reports.report(g.dono, g.id, ruim, NOW)).rejects.toBeInstanceOf(
           BadRequestException,
         );
@@ -334,7 +340,7 @@ describe('relatório do mês e origens (integração, #400)', () => {
       );
     });
 
-    it('linha pequena fica oculta e, com uma só oculta, o total também some', async () => {
+    it('linha pequena não aparece nem entra no total; sozinha, não vira "Outras origens"', async () => {
       const r = await reports.origins(o.dono, o.id, 30, NOW);
       const por = Object.fromEntries(r.rows.map((x) => [x.origin, x]));
       expect(por.QR).toMatchObject({
@@ -351,17 +357,29 @@ describe('relatório do mês e origens (integração, #400)', () => {
         activated: null,
         percent: null,
       });
-      expect(por.SITE).toMatchObject({ joined: null, activated: null, percent: null });
-      // Total menos as linhas visíveis daria a linha de 3 pessoas.
-      expect(r.joined).toBeNull();
+      // As 3 do Site (menos de 5) não aparecem, nem somadas no total: total
+      // menos as linhas visíveis devolveria a linha pequena.
+      expect(por.SITE).toBeUndefined();
+      expect(r.rows).toHaveLength(2);
+      expect(r.joined).toBe(16);
+      // Nas linhas sem taxa (Instagram, 3 e 3), um lado tem menos de 5.
       expect(r.activated).toBeNull();
       expect(JSON.stringify(r)).not.toMatch(/Entrou|Antiga|Sem estatística/);
     });
 
-    it('com duas linhas ocultas que somam o bastante, o total volta', async () => {
+    it('com duas linhas pequenas que somam 5 ou mais, sai uma "Outras origens" sem rótulo', async () => {
       convite.d = await link(InviteOrigin.REFERRAL, 'amigos');
       await entraram(convite.d, 4, 2);
       const r = await reports.origins(o.dono, o.id, 30, NOW);
+      expect(r.rows.at(-1)).toMatchObject({
+        key: 'other',
+        origin: null,
+        label: null,
+        kind: 'other',
+        joined: 7,
+        activated: null,
+      });
+      expect(JSON.stringify(r)).not.toMatch(/amigos|SITE|REFERRAL/);
       expect(r.joined).toBe(23);
       // Nas linhas sem taxa: 3 + 0 + 2 ativaram e 3 + 3 + 2 não, os dois lados com 5 ou mais.
       expect(r.activated).toBe(10);
