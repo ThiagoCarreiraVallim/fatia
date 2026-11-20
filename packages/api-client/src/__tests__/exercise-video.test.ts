@@ -5,6 +5,7 @@ import {
   exerciseVideoSource,
   howToMeta,
   isYoutubeEmbedNavigation,
+  embedNavigationAction,
   signedVideoIsStale,
   youtubeEmbedUrl,
   youtubeHeroThumbnails,
@@ -124,5 +125,51 @@ describe('exerciseIdFromParam', () => {
 
   it.each([undefined, '', 'abc', '0', '-3', '4.5', '1e3', ' 7'])('%s é inválido', (raw) => {
     expect(exerciseIdFromParam(raw)).toBeNull();
+  });
+});
+
+/**
+ * A WebView do YouTube só manda ao navegador um toque da pessoa no quadro
+ * principal. Iframes de dentro do embed (anúncio, telemetria) e redirecionamentos
+ * não abrem nada.
+ */
+describe('embedNavigationAction', () => {
+  const embed = 'https://www.youtube-nocookie.com/embed/abc?autoplay=1';
+  const site = 'https://www.youtube.com/watch?v=abc';
+  const ios = { reportsClicks: true };
+  const android = { reportsClicks: false };
+
+  it('o próprio embed carrega', () => {
+    expect(embedNavigationAction({ url: embed, isTopFrame: true }, ios)).toBe('load');
+  });
+
+  it('toque no quadro principal vai ao navegador', () => {
+    expect(
+      embedNavigationAction({ url: site, isTopFrame: true, navigationType: 'click' }, ios),
+    ).toBe('browser');
+    // O Android não diz se foi toque (`navigationType` é sempre `other`).
+    expect(
+      embedNavigationAction({ url: site, isTopFrame: true, navigationType: 'other' }, android),
+    ).toBe('browser');
+  });
+
+  it('no iOS, o quadro principal sem toque é bloqueado sem abrir nada', () => {
+    expect(
+      embedNavigationAction({ url: site, isTopFrame: true, navigationType: 'other' }, ios),
+    ).toBe('block');
+  });
+
+  it('iframe de dentro do embed nunca abre o navegador', () => {
+    expect(
+      embedNavigationAction(
+        {
+          url: 'https://googleads.g.doubleclick.net/x',
+          isTopFrame: false,
+          navigationType: 'click',
+        },
+        ios,
+      ),
+    ).toBe('load');
+    expect(embedNavigationAction({ url: 'intent://x', isTopFrame: false }, android)).toBe('block');
   });
 });
