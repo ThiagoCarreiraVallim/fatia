@@ -225,6 +225,13 @@ exercício. Sem as variáveis abaixo a API sobe igual e o envio responde 503.
 5. Confirme publicando uma dica com imagem pelo painel: a imagem aparece, e abrir o endereço dela sem
    a parte depois do `?` responde 403.
 
+**Sem as cinco variáveis** a API sobe normalmente, mas todo envio pela URL assinada responde 503
+(foto de perfil, imagens do mural e do conteúdo da equipe, vídeo de exercício, check-in com foto). O `GET
+/users/me` devolve `mediaUploadEnabled: false`, e o app e a web escondem "Tirar foto / Galeria" em
+Editar perfil com o aviso de que o envio não está disponível. Depois de preenchê-las e reiniciar a
+API, o campo volta `true` e os botões aparecem. O app nativo envia direto para a URL assinada e não
+depende do CORS acima (que vale só para o navegador).
+
 No dev, o `pnpm dev` sobe o SeaweedFS do compose (`media`, porta 8333) e a API cria o bucket e o CORS
 para `WEB_ORIGIN` ao subir. A faxina de arquivos pendentes ou sem uso roda de hora em hora dentro da
 API (24 h de tolerância).
