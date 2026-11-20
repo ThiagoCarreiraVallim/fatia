@@ -36,7 +36,7 @@ Pn-M4, Cm-20); se sumirem, `Artifact read` do GvL8GtYkJGjK5e4YovhZ3o.
 - [x] 7. api-client (send-plans.ts) + testes
 - [x] 8. Web: biblioteca (Pn-08/08b/08c/08d), página Enviar (Pn-18), oferta do aluno com "O que mudou"
 - [x] 9. Mobile: "O que mudou" na oferta; seção send fora das abas
-- [ ] 10. Passada visual
+- [x] 10. Passada visual
 - [ ] 11. REDESIGN_PROGRESS, merge origin/main, apagar banco e HANDOFF
 
 ## Estado (web pronta)

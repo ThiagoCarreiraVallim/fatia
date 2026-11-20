@@ -775,7 +775,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | ----- | ---------------------------------------------- | ---------------- | -------------------------------------- |
 | #404  | Painel: equipe, papéis e permissões            | pronto na branch | api, db, api-client, web, mobile, docs |
 | #403  | Painel: assentos, faturas, programas e ofertas | pronto na branch | api, db, api-client, web, mobile, docs |
-| #405  | Painel: biblioteca e enviar para alunos        | a fazer          |                                        |
+| #405  | Painel: biblioteca e enviar para alunos        | pronto na branch | api, db, api-client, web, mobile, docs |
 | #406  | Painel: editor de plano de treino              | a fazer          |                                        |
 | #407  | Painel: editor de alimentação                  | a fazer          |                                        |
 | #408  | Painel: dicas e catálogo de exercícios         | a fazer          |                                        |
@@ -850,6 +850,34 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - Com o painel lateral aberto, a receita da oferta virava "R$ 2.6…": os três números da oferta vão para a linha de baixo quando não cabem.
   - Linhas das tabelas e descrição da oferta mais compactas, como na prancha.
   - Fica como está, de propósito: "Novo programa" no lugar de "Ver programas" (criar fica na própria tela), "Quem usa" abaixo das faturas, a faixa "A venda ainda não está ligada" (flag) e a receita "depois da taxa" em vez de "repasse em 2 dias úteis".
+
+#405 (branch `redesign/405-biblioteca-enviar`; migration `20261120400000_plan_library_send`; nenhuma env nova; nenhuma tool nova no MCP, `changeNote` aparece na saída das tools de oferta; sem ADR nova, segue a 014 e a 045):
+
+- **Decisões (orquestrador, a recomendação da própria issue):**
+  - **A oferta individual é o `PlanOffer` da #379** (com `PlanOfferVersion`): nada de tabela nova. Reenviar o mesmo modelo, do mesmo autor, a quem já tem vira versão nova com "o que mudou" (`changeNote`); a pendente vira `SUPERSEDED` e a aceita segue em uso até a pessoa aceitar a nova.
+  - **Plano alimentar vai pelo `NutritionPlan`** (ADR 045, #376): o modelo da biblioteca vira um plano com uma opção por refeição; precisa de metas e de alimentos do catálogo (senão 400 com o motivo), refeição sem tipo vira lanche. `NutritionPlan.sourceTemplateId` e `changeNote` novos.
+  - **Hábito, questionário e recomendação** ficam à vista e desligados ("Chega junto com..."): o modelo deles nasce com a #390/#391, reaproveitando o tipo da oferta.
+  - **"Sem progresso" mostra só o estado**, nunca o motivo.
+  - **Rotas em `groups/:groupId/sends`**: `groups/:id/offers` já é das Ofertas vendidas (#403).
+  - **Rascunho** é `GroupPlanTemplate.draft` (`CHECK`: rascunho não está publicado); "Na comunidade" é o `publishedAt`. Rascunho não publica nem se envia. Plano novo não nasce rascunho: o botão virou "Criar plano" e o rascunho é um interruptor na página do plano.
+  - **"Anunciar no mural"**: `announce` no publicar (true força o post, false não posta, ausente segue o `autoPosts` da comunidade).
+  - **"Com quem"** conta pessoas distintas com cópia (adotou, recebeu oferta não removida, salvou a refeição ou recebeu plano alimentar não cancelado antes do aceite); abaixo de 5, "menos de 5" (`REACH_MIN_CELL`).
+  - **"Enviados recentemente"** mostra só os envios de quem olha; aceito e recusado são de quem enviou. Progresso só pela porta de leitura (Treino, ação `sends.progress`, na trilha da pessoa). Enviar não lê dado de saúde, então não grava `ProfessionalAccessLog`.
+  - **"Depois do plano atual"** começa no dia seguinte ao fim mais distante entre as ofertas vivas na comunidade (fim do calendário ou `endDate` do flexível); sem plano, hoje, no fuso da pessoa. Plano flexível ganhou fim opcional (`PlanOfferVersion.endDate`).
+  - **Descrição das tools do MCP não mudou** (a linha de base da superfície quebraria): `changeNote` só na saída.
+- **API:** `PlanSendService` e `PlanSendController` (`GET groups/:id/sends/recipients`, `GET` e `POST groups/:id/sends`, `POST groups/:id/sends/:id/revoke`; `member.plans`, dono e profissional). Quem pode receber: membro ativo desta comunidade, dentro de "profissionais veem só quem acompanham", com vínculo ativo com quem envia. Um id ruim no lote barra o lote inteiro (404, nada enviado); todas as datas são conferidas antes de enviar a qualquer um. Cancelar: só o autor ou o dono, só o que não foi respondido (409 depois). Publicar e tirar da comunidade não apagam cópia de ninguém; voltar a rascunho com o plano publicado é 409. O export LGPD leva o `changeNote` das versões.
+- **Isolamento:** coberto em `plan-send.integration.spec.ts`, `plan-library.integration.spec.ts` e no bloco "enviar para alunos pela biblioteca (#405)" de `user-isolation.spec.ts` (lote com alguém de outra comunidade não envia nada; o aluno B não lê, não aceita nem cancela a oferta do A; o aluno não lista os envios da equipe).
+- **Cliente e telas:** `plan-library.ts` (biblioteca, "Com quem", filtros, tipos do envio, validação, prévia "Como chega", toast, linhas dos enviados). Web: **Planos e dicas** vira a biblioteca (Pn-08 e Pn-08d): abas Treino, Alimentação e Dicas com contagem, filtros Todos, Na comunidade, Só da equipe e Rascunhos, busca, autor, "Com quem", interruptor "Na comunidade" (ligar abre "Publicar na comunidade" com "Anunciar no mural", Pn-08c; desligar confirma antes) e "Enviar para…" no painel lateral (Pn-08b, com "já tem" e "O que mudou" para quem já tem). Página nova **Enviar para alunos** (Pn-18, Conteúdo › Enviar para alunos, dono e profissional): tipo, plano, para quem ("Todos que eu acompanho"), como segue (calendário ou flexível com fim), começa (hoje, depois do plano atual, escolher data), nota, "Como chega para Ana" e "Enviados recentemente" com estado, progresso e "Cancelar envio". O aluno vê o "o que mudou" na oferta de treino e no plano alimentar novo, na web e no app. No app, a seção Enviar fica fora das abas (entra com a #414).
+- **Fora (vai para outras issues):**
+  - Hábito, questionário e recomendação (#390, #391).
+  - Começo e fim no plano alimentar (vale no aceite, como na #376).
+  - O painel no celular (#414) e o envio pela ficha do aluno no app.
+  - O grupo "Bloco hipertrofia" do Pn-08b (não há grupos de alunos).
+  - Progresso só de treino; o plano alimentar mostra só o estado.
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/405/web/` (web 1440 e 390, escuro e claro) contra Pn-08, Pn-08b, Pn-08c, Pn-08d e Pn-18 (`board/`), com o painel "Enviar" aberto, o diálogo de publicar, a aba Alimentação, a página Enviar com treino e com plano alimentar, e um envio de verdade para o Diego seguido da versão nova com "o que mudou". A API e a web da branch rodaram na worktree (portas 3105 e 3135) contra o banco de dev, com a migration aplicada; o envio e o aviso criados foram apagados (contagens antes e depois em `demo-rows.txt` e `after.txt`). Corrigido:
+  - **Painel lateral:** o formulário não rolava e o botão Enviar ficava cortado; agora rola e os botões ficam fixos embaixo.
+  - A situação na comunidade ("membros podem adotar", "só a equipe envia") foi para baixo do nome do plano, como na prancha, e as colunas não quebram linha com o painel aberto.
+  - Fica como está, de propósito: quem "já tem" continua marcável (vira versão nova com "o que mudou"; a prancha o apaga), o rascunho mostra "Enviar para…" desligado em vez de sumir, "Novo plano" e afins no cabeçalho da página (a barra do topo é a do painel) e o plano escolhido numa lista suspensa em vez de cartões.
 
 ## Etapas seguintes
 
