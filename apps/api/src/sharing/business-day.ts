@@ -46,9 +46,17 @@ export function isBusinessDay(date: string): boolean {
   return !brazilNationalHolidays(d.getUTCFullYear()).has(date);
 }
 
+/** O `n`-ésimo dia útil do mês `YYYY-MM` (o 1º por padrão). */
+export function businessDayOf(month: string, n = 1): string {
+  const d = new Date(`${month}-01T12:00:00Z`);
+  let achados = 0;
+  for (;;) {
+    if (isBusinessDay(ymd(d)) && ++achados === n) return ymd(d);
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+}
+
 /** O 1º dia útil do mês `YYYY-MM`. */
 export function firstBusinessDay(month: string): string {
-  const d = new Date(`${month}-01T12:00:00Z`);
-  while (!isBusinessDay(ymd(d))) d.setUTCDate(d.getUTCDate() + 1);
-  return ymd(d);
+  return businessDayOf(month, 1);
 }

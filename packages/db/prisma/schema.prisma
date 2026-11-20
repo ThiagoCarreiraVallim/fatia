@@ -1839,11 +1839,16 @@ model Group {
   weeklySessionsGoal     Int?
   /// O e-mail mensal do relatório (#400) sai no 1º dia útil. O dono desliga aqui.
   reportEmailEnabled     Boolean                @default(true)
-  /// O último mês (YYYY-MM) cujo relatório saiu por e-mail: reivindicado com
-  /// `updateMany` condicional, então o mesmo mês nunca sai duas vezes.
+  /// O último mês (YYYY-MM) cujo relatório saiu por e-mail: gravado só depois
+  /// do envio. Na migration, as comunidades que já existiam começam no mês
+  /// anterior ao deploy (o 1º e-mail é o do mês do deploy).
   reportEmailMonth       String?
+  /// Lease do envio do mês (#400): quem reivindica grava a hora; outra
+  /// instância só tenta depois que o lease vence. Falha solta o lease.
+  reportEmailClaimedAt   DateTime?
   reviewSeen             ReviewSeen[]
   sessionFeedback        SessionFeedback[]
+  monthReports           MonthReportSnapshot[]
 
   @@index([ownerId])
   @@index([type])
@@ -3584,4 +3589,20 @@ model Reminder {
 
   @@index([userId, createdAt])
   @@index([enabled])
+}
+
+/// O relatório de um mês fechado (#400), calculado uma vez e servido daqui
+/// depois: quem sai da comunidade não muda o número de um mês que passou (e
+/// não se revela pela diferença). Só agregado, já suprimido; sem nenhum id
+/// de pessoa. Sai com a comunidade.
+model MonthReportSnapshot {
+  id        String   @id @default(uuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// YYYY-MM, no fuso da comunidade.
+  month     String
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, month])
 }

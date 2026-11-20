@@ -5,6 +5,7 @@ import {
   InviteOrigin,
   MembershipStatus,
   PlanOfferStatus,
+  Prisma,
   ReviewKind,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
@@ -14,6 +15,7 @@ import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz
 import { requireContentRole } from './content-roles';
 import { binarySplit } from './panel.service';
 import type {
+  FrozenMonthReport,
   InviteOrigins,
   MonthReport,
   OriginKindLabel,
@@ -26,7 +28,7 @@ import type {
 } from './report.types';
 
 export const ORIGINS_DAYS = [7, 30] as const;
-/** Quantos meses para trás o relatório abre, além do atual. */
+/** Quantos meses fechados para trás o relatório abre. */
 export const REPORT_MONTHS_BACK = 12;
 export const WEEKLY_GOAL_MAX = 100_000;
 /** "Voltaram": treinaram de novo depois de 14 dias ou mais sem treinar. */
@@ -84,8 +86,7 @@ interface MonthCore {
   month: string;
   start: Date;
   end: Date;
-  partial: boolean;
-  /** Os dias do período (até ontem no mês atual). */
+  /** Os dias do mês. */
   days: string[];
   participants: Participant[];
   /** Treinos do período, só depois de a pessoa entrar. */
@@ -129,26 +130,69 @@ export class ReportService {
       select: { timezone: true },
     });
     const atual = dateInTz(now, timezone).slice(0, 7);
-    const m = month ?? shiftMonth(atual, -1);
-    // O mês é um período nomeado (AGGREGATION_POLICY §4): nada de janela livre.
-    if (!MONTH.test(m) || m > atual || m < shiftMonth(atual, -REPORT_MONTHS_BACK)) {
+    const ultimo = shiftMonth(atual, -1);
+    const m = month ?? ultimo;
+    // O mês é um período nomeado e fechado (AGGREGATION_POLICY §4): nada de
+    // janela livre, nem do mês corrente, que muda a cada dia e se revela pela
+    // diferença entre um dia e o seguinte.
+    if (!MONTH.test(m) || m > ultimo || m < shiftMonth(atual, -REPORT_MONTHS_BACK)) {
       throw new BadRequestException(
-        `O mês vai de ${shiftMonth(atual, -REPORT_MONTHS_BACK)} a ${atual}.`,
+        `O mês vai de ${shiftMonth(atual, -REPORT_MONTHS_BACK)} a ${ultimo}.`,
       );
     }
     return this.build(groupId, m, now);
   }
 
-  /** O relatório sem conferir papel: a rota já conferiu, e o e-mail mensal também usa. */
+  /**
+   * O relatório de um mês fechado, sem conferir papel (a rota já conferiu, e
+   * o e-mail mensal também usa). Calculado uma vez e gravado
+   * (`MonthReportSnapshot`): quem sai da comunidade depois não muda o mês que
+   * passou, e a saída não se revela pela diferença. Leituras ao mesmo tempo
+   * gravam um retrato só (`skipDuplicates` na chave única) e todas devolvem o
+   * que ficou gravado. Nome, meta e a lista de meses são lidos na hora.
+   */
   async build(groupId: string, month: string, now = new Date()): Promise<MonthReport> {
     const group = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
-      select: { name: true, timezone: true, riskDays: true, weeklySessionsGoal: true },
+      select: { name: true, timezone: true, weeklySessionsGoal: true },
+    });
+    const atual = dateInTz(now, group.timezone).slice(0, 7);
+    if (month >= atual) throw new BadRequestException('Só mês fechado tem relatório.');
+    const onde = { groupId_month: { groupId, month } };
+    let snap = await this.prisma.monthReportSnapshot.findUnique({ where: onde });
+    if (!snap) {
+      const data = await this.compute(groupId, month);
+      await this.prisma.monthReportSnapshot.createMany({
+        data: [{ groupId, month, data: data as unknown as Prisma.InputJsonValue }],
+        skipDuplicates: true,
+      });
+      snap = await this.prisma.monthReportSnapshot.findUniqueOrThrow({ where: onde });
+    }
+    const frozen = snap.data as unknown as FrozenMonthReport;
+    const goal = group.weeklySessionsGoal;
+    const cheias = frozen.weeks.filter((w) => w.days === 7 && !w.suppressed);
+    return {
+      ...frozen,
+      month,
+      months: Array.from({ length: REPORT_MONTHS_BACK }, (_, i) => shiftMonth(atual, -(i + 1))),
+      groupName: group.name,
+      weeklySessionsGoal: goal,
+      weeksOnGoal:
+        goal && cheias.length
+          ? { hit: cheias.filter((w) => w.value! >= goal).length, of: cheias.length }
+          : null,
+    };
+  }
+
+  /** O cálculo do mês fechado, só na primeira leitura (depois vem do retrato). */
+  private async compute(groupId: string, month: string): Promise<FrozenMonthReport> {
+    const group = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { timezone: true, riskDays: true },
     });
     const tz = group.timezone;
-    const atual = dateInTz(now, tz).slice(0, 7);
-    const cur = await this.core(groupId, tz, month, now, true);
-    const prev = await this.core(groupId, tz, shiftMonth(month, -1), now, false);
+    const cur = await this.core(groupId, tz, month, true);
+    const prev = await this.core(groupId, tz, shiftMonth(month, -1), false);
     const n = cur.participants.length;
     const ids = cur.participants.map((p) => p.userId);
 
@@ -157,30 +201,24 @@ export class ReportService {
       this.atRisk(cur, tz, group.riskDays),
       this.plans(groupId, cur),
       this.reviews(groupId, cur),
-      this.challenges(groupId, cur, now),
+      this.challenges(groupId, cur),
     ]);
 
-    const weeks = this.weeks(cur, n);
+    // O total do mês só sai se as semanas ocultas não voltam por diferença;
+    // o mês anterior passa pela mesma regra antes de virar "vs mês anterior".
+    const { weeks, totalSafe } = this.weeks(cur, n);
+    const prevTotal = this.weeks(prev, prev.participants.length).totalSafe ? prev.total : null;
+    const total = totalSafe ? cur.total : null;
     const cheias = weeks.filter((w) => w.days === 7 && !w.suppressed);
-    const goal = group.weeklySessionsGoal;
 
-    // Delta só entre dois meses fechados: o mês corrente comparado ao anterior inteiro engana.
-    const comparar = !cur.partial;
-    const delta = (a: number | null, b: number | null) =>
-      comparar && a !== null && b !== null ? a - b : null;
+    const delta = (a: number | null, b: number | null) => (a !== null && b !== null ? a - b : null);
     const deltaPct = (a: number | null, b: number | null) =>
-      comparar && a !== null && b !== null && b > 0 ? pct(a - b, b) : null;
-
-    const months = Array.from({ length: REPORT_MONTHS_BACK + 1 }, (_, i) => shiftMonth(atual, -i));
+      a !== null && b !== null && b > 0 ? pct(a - b, b) : null;
 
     return {
       month,
-      months,
-      partial: cur.partial,
-      groupName: group.name,
       optIn: n >= MIN_CELL ? n : null,
       riskDays: group.riskDays,
-      weeklySessionsGoal: goal,
       activeMembers: {
         value: cur.active,
         percent: cur.percent,
@@ -188,9 +226,9 @@ export class ReportService {
         delta: delta(cur.active, prev.active),
       },
       sessions: {
-        total: cur.total,
-        perActive: cur.active ? round1(cur.total! / cur.active) : null,
-        deltaPct: deltaPct(cur.total, prev.total),
+        total,
+        perActive: cur.active && total !== null ? round1(total / cur.active) : null,
+        deltaPct: deltaPct(total, prevTotal),
       },
       trainingDays: {
         perActive: cur.perActiveDays,
@@ -201,14 +239,11 @@ export class ReportService {
       plans,
       reviews,
       weeks,
-      weeksAverage: cheias.length
-        ? Math.round(cheias.reduce((s, w) => s + w.value!, 0) / cheias.length)
-        : null,
-      weeksOnGoal:
-        goal && cheias.length
-          ? { hit: cheias.filter((w) => w.value! >= goal).length, of: cheias.length }
+      weeksAverage:
+        totalSafe && cheias.length
+          ? Math.round(cheias.reduce((s, w) => s + w.value!, 0) / cheias.length)
           : null,
-      activeByDay: this.activeByDay(cur, n),
+      activeByDay: this.activeByWeek(cur, n),
       challenges: challenges.rows,
       challengeLift: this.lift(cur, ids, challenges.participants),
     };
@@ -216,25 +251,18 @@ export class ReportService {
 
   // ------------------------------------------------------------ o mês
 
+  /** O mês fechado inteiro, no fuso da comunidade. */
   private async core(
     groupId: string,
     tz: string,
     month: string,
-    now: Date,
     withEarlier: boolean,
   ): Promise<MonthCore & { earlier: Session[] }> {
     const start = dayBoundsInTz(`${month}-01`, tz).start;
-    const fimDoMes = dayBoundsInTz(`${shiftMonth(month, 1)}-01`, tz).start;
-    // O mês corrente vai até ontem: o dia que anda mudaria o número de uma hora para outra.
-    const hoje = dateInTz(now, tz);
-    const inicioDeHoje = dayBoundsInTz(hoje, tz).start;
-    const end = fimDoMes > inicioDeHoje ? inicioDeHoje : fimDoMes;
-    const partial = fimDoMes > inicioDeHoje;
-    const ultimo = partial ? addDaysIso(hoje, -1) : `${month}-${daysInMonth(month)}`;
+    const end = dayBoundsInTz(`${shiftMonth(month, 1)}-01`, tz).start;
+    const ultimo = `${month}-${daysInMonth(month)}`;
     const days: string[] = [];
-    for (let d = `${month}-01`; d <= ultimo && d.startsWith(month); d = addDaysIso(d, 1)) {
-      days.push(d);
-    }
+    for (let d = `${month}-01`; d <= ultimo; d = addDaysIso(d, 1)) days.push(d);
 
     const rows = await this.prisma.groupMembership.findMany({
       where: {
@@ -287,7 +315,6 @@ export class ReportService {
       month,
       start,
       end,
-      partial,
       days,
       participants,
       sessions,
@@ -453,7 +480,6 @@ export class ReportService {
   private async challenges(
     groupId: string,
     cur: MonthCore,
-    now: Date,
   ): Promise<{ rows: ReportChallengeRow[]; participants: Set<string> }> {
     const n = cur.participants.length;
     const porMembership = new Map(cur.participants.map((p) => [p.membershipId, p.userId]));
@@ -482,7 +508,8 @@ export class ReportService {
       for (const p of d.participants) todos.add(porMembership.get(p.membershipId)!);
       const p = d.participants.length;
       const participants = binarySplit(p, n - p);
-      const acabou = (d.endedEarlyAt ?? d.endsAt) <= now;
+      // "Em andamento" é no fim do mês: o retrato não muda depois.
+      const acabou = (d.endedEarlyAt ?? d.endsAt) <= cur.end;
       const pontuaram = d.participants.filter((x) => x.score > 0).length;
       const finished: ReportChallengeRow['finished'] = !acabou
         ? 'running'
@@ -520,33 +547,72 @@ export class ReportService {
     return f > 0 ? round1(media(dentro) / f) : null;
   }
 
-  /** Blocos de 7 dias a partir do dia 1 (o último pode ser curto). */
-  private weeks(cur: MonthCore, n: number): ReportWeek[] {
-    const out: ReportWeek[] = [];
+  /**
+   * Blocos de 7 dias a partir do dia 1 (o último pode ser curto). Bloco com
+   * menos de 5 de um lado (treinou / não treinou) fica oculto.
+   *
+   * Supressão complementar (AGGREGATION_POLICY §2): o total do mês menos as
+   * semanas visíveis devolve a soma das ocultas. Ela só pode sair se quem
+   * treinou nas semanas ocultas, somadas, passa pela regra de dois lados. Se
+   * não passa, a menor semana visível some junto; se ainda não passa, o total
+   * (e o que se tira dele) não sai (`totalSafe = false`).
+   */
+  private weeks(cur: MonthCore, n: number): { weeks: ReportWeek[]; totalSafe: boolean } {
+    const blocos: (ReportWeek & { people: Set<string> })[] = [];
     for (let i = 0; i < cur.days.length; i += 7) {
       const bloco = new Set(cur.days.slice(i, i + 7));
       const doBloco = cur.sessions.filter((s) => bloco.has(s.day));
-      const gente = new Set(doBloco.map((s) => s.userId)).size;
-      const ok = binarySplit(gente, n - gente) !== null;
-      out.push({
+      const people = new Set(doBloco.map((s) => s.userId));
+      const ok = binarySplit(people.size, n - people.size) !== null;
+      blocos.push({
         key: String(i + 1),
         days: bloco.size,
         value: ok ? doBloco.length : null,
         suppressed: !ok,
+        people,
       });
     }
-    return out;
+    const seguro = (ws: { people: Set<string> }[]) => {
+      const u = new Set(ws.flatMap((w) => [...w.people]));
+      return binarySplit(u.size, n - u.size) !== null;
+    };
+    let totalSafe = true;
+    const ocultas = blocos.filter((w) => w.suppressed);
+    if (ocultas.length && !seguro(ocultas)) {
+      const menor = blocos
+        .filter((w) => !w.suppressed)
+        .reduce<(typeof blocos)[number] | null>(
+          (m, w) => (m === null || w.value! < m.value! ? w : m),
+          null,
+        );
+      if (menor && seguro([...ocultas, menor])) {
+        menor.value = null;
+        menor.suppressed = true;
+      } else {
+        totalSafe = false;
+      }
+    }
+    return { weeks: blocos.map(({ people: _p, ...w }) => w), totalSafe };
   }
 
-  /** Membros ativos acumulados até cada dia do mês. */
-  private activeByDay(cur: MonthCore, n: number): ReportCell[] {
+  /**
+   * Membros ativos acumulados no último dia de cada bloco de 7 dias. Por
+   * semana, não por dia: a diferença entre dois dias seguidos isolaria a
+   * primeira vez de uma pessoa (a diferença entre semanas ainda pode ser
+   * pequena: contagem de pessoas, ver AGGREGATION_POLICY, "O que não está
+   * protegido").
+   */
+  private activeByWeek(cur: MonthCore, n: number): ReportCell[] {
     const primeiro = new Map<string, string>();
     for (const s of cur.sessions) {
-      const d = s.day;
       const atual = primeiro.get(s.userId);
-      if (!atual || d < atual) primeiro.set(s.userId, d);
+      if (!atual || s.day < atual) primeiro.set(s.userId, s.day);
     }
-    return cur.days.map((key) => {
+    const fins: string[] = [];
+    for (let i = 0; i < cur.days.length; i += 7) {
+      fins.push(cur.days[Math.min(i + 6, cur.days.length - 1)]!);
+    }
+    return fins.map((key) => {
       const ate = [...primeiro.values()].filter((d) => d <= key).length;
       const v = binarySplit(ate, n - ate);
       return { key, value: v, suppressed: v === null };
@@ -560,10 +626,16 @@ export class ReportService {
    * com nome ou origem, nos últimos 7 ou 30 dias inteiros (até ontem, no fuso
    * da comunidade), quantos entraram e quantos treinaram em até 48 h.
    *
-   * Linha com menos de 5 fica oculta. O total só sai se o que ficou oculto
-   * for um bloco seguro (AGGREGATION_POLICY §2: duas linhas ou mais, 5 ou mais
-   * pessoas, e folga de 5): senão, total menos as linhas visíveis devolveria a
-   * linha pequena. A taxa total segue a mesma ideia sobre as linhas sem taxa.
+   * - Linha com menos de 5 não aparece com rótulo: as pequenas somam numa
+   *   "Outras origens" sem rótulo, e se a soma também é menor que 5 elas saem
+   *   de tudo, inclusive do total (que é sempre a soma das linhas mostradas).
+   *   Uma linha de uma pessoa só ("Convite da Ana") revelaria que ela aceitou
+   *   entrar nas estatísticas.
+   * - Nos 30 dias, cada linha (e o total) é comparada com a dos 7 dias: se a
+   *   diferença de quem entrou é de 1 a 4, ou a de ativou / não ativou não é
+   *   0 e 0 ou 5 e 5 ou mais, o número dos 30 dias não sai (os 7 dias, mais
+   *   recentes, ficam).
+   * - A taxa total só sai se as linhas sem taxa somam 5 ou mais de cada lado.
    */
   async origins(
     viewerId: string,
@@ -576,6 +648,68 @@ export class ReportService {
       where: { id: groupId },
       select: { timezone: true },
     });
+    const linhas = consolidateOrigins(await this.originLines(groupId, timezone, days, now));
+    const curtas =
+      days === 30 ? consolidateOrigins(await this.originLines(groupId, timezone, 7, now)) : null;
+    const soma = (ls: OriginLine[]) =>
+      ls.reduce((t, l) => ({ e: t.e + l.e, a: t.a + l.a, b: t.b + l.b }), { e: 0, a: 0, b: 0 });
+
+    /** A diferença para os 7 dias não isola ninguém? */
+    const difere = (
+      l: { e: number; a: number; b: number },
+      c: { e: number; a: number; b: number } | undefined,
+    ) => {
+      if (!curtas) return { joined: true, act: true };
+      const k = c ?? { e: 0, a: 0, b: 0 };
+      const dE = l.e - k.e;
+      const dA = l.a - k.a;
+      const dB = l.b - k.b;
+      return {
+        joined: dE === 0 || dE >= MIN_CELL,
+        act: (dA === 0 && dB === 0) || (dA >= MIN_CELL && dB >= MIN_CELL),
+      };
+    };
+    const porChave = new Map((curtas ?? []).map((l) => [l.key, l]));
+
+    // Uma linha suprimida pela diferença voltaria pelo total menos as outras.
+    let semEntrada = false;
+    let semAtivacao = false;
+    const rows: OriginRow[] = linhas.map(({ e, a, b, ...l }) => {
+      const d = difere({ e, a, b }, porChave.get(l.key));
+      if (!d.joined) semEntrada = true;
+      if (!d.act && binarySplit(a, b) !== null) semAtivacao = true;
+      const joined = d.joined ? e : null;
+      const activated = joined !== null && d.act ? binarySplit(a, b) : null;
+      return { ...l, joined, activated, percent: activated === null ? null : pct(a, a + b) };
+    });
+
+    const t = soma(linhas);
+    const dt = difere(t, curtas ? soma(curtas) : undefined);
+    const joined = !semEntrada && dt.joined ? t.e : null;
+    const semTaxa = linhas.filter((_, i) => rows[i]!.activated === null);
+    const resto = soma(semTaxa);
+    const taxaSegura =
+      joined !== null &&
+      !semAtivacao &&
+      dt.act &&
+      binarySplit(t.a, t.b) !== null &&
+      (semTaxa.length === 0 || (resto.a >= MIN_CELL && resto.b >= MIN_CELL));
+    return {
+      days,
+      joined,
+      activated: taxaSegura ? t.a : null,
+      percent: taxaSegura ? pct(t.a, t.a + t.b) : null,
+      rows,
+    };
+  }
+
+  /** Quem entrou por convite com nome ou origem no período, por linha (sem supressão). */
+  private async originLines(
+    groupId: string,
+    timezone: string,
+    days: OriginsDays,
+    now: Date,
+  ): Promise<OriginLine[]> {
     const hoje = dateInTz(now, timezone);
     const fim = dayBoundsInTz(hoje, timezone).start;
     const inicio = dayBoundsInTz(addDaysIso(hoje, -days), timezone).start;
@@ -605,12 +739,7 @@ export class ReportService {
         })
       : [];
 
-    type Linha = Omit<OriginRow, 'joined' | 'activated' | 'percent'> & {
-      e: number;
-      a: number;
-      b: number;
-    };
-    const linhas = new Map<string, Linha>();
+    const linhas = new Map<string, OriginLine>();
     for (const m of entradas) {
       const c = m.joinedViaInvite!;
       const kind = originKind(c);
@@ -632,39 +761,7 @@ export class ReportService {
       }
       linhas.set(key, l);
     }
-
-    const rows: OriginRow[] = [...linhas.values()]
-      .sort((x, y) => y.e - x.e || (x.label ?? '').localeCompare(y.label ?? ''))
-      .map(({ e, a, b, ...l }) => {
-        const joined = e >= MIN_CELL ? e : null;
-        const activated = joined !== null ? binarySplit(a, b) : null;
-        return { ...l, joined, activated, percent: activated === null ? null : pct(a, a + b) };
-      });
-
-    const todas = [...linhas.values()];
-    const ocultas = todas.filter((l) => l.e < MIN_CELL);
-    const somaOculta = ocultas.reduce((s, l) => s + l.e, 0);
-    const blocoSeguro =
-      ocultas.length === 0 ||
-      (ocultas.length >= 2 && somaOculta >= MIN_CELL && somaOculta - ocultas.length >= MIN_CELL);
-    const joined = blocoSeguro ? todas.reduce((s, l) => s + l.e, 0) : null;
-
-    const A = todas.reduce((s, l) => s + l.a, 0);
-    const B = todas.reduce((s, l) => s + l.b, 0);
-    const semTaxa = todas.filter((l) => l.e < MIN_CELL || binarySplit(l.a, l.b) === null);
-    const restoA = semTaxa.reduce((s, l) => s + l.a, 0);
-    const restoB = semTaxa.reduce((s, l) => s + l.b, 0);
-    const taxaSegura =
-      joined !== null &&
-      binarySplit(A, B) !== null &&
-      (semTaxa.length === 0 || (restoA >= MIN_CELL && restoB >= MIN_CELL));
-    return {
-      days,
-      joined,
-      activated: taxaSegura ? A : null,
-      percent: taxaSegura ? pct(A, A + B) : null,
-      rows,
-    };
+    return [...linhas.values()];
   }
 
   // ------------------------------------------------------------ configurações
@@ -754,6 +851,35 @@ export class ReportService {
       })),
     };
   }
+}
+
+type OriginLine = Omit<OriginRow, 'joined' | 'activated' | 'percent'> & {
+  /** Entraram, ativaram e não ativaram (só quem já fechou as 48 h). */
+  e: number;
+  a: number;
+  b: number;
+};
+
+/**
+ * As linhas com 5 ou mais, da maior para a menor, e as pequenas somadas numa
+ * "Outras origens" sem rótulo, no fim; se a soma tem menos de 5, ela não sai.
+ */
+function consolidateOrigins(linhas: OriginLine[]): OriginLine[] {
+  const grandes = linhas
+    .filter((l) => l.e >= MIN_CELL)
+    .sort((x, y) => y.e - x.e || (x.label ?? '').localeCompare(y.label ?? ''));
+  const outras = linhas
+    .filter((l) => l.e < MIN_CELL)
+    .reduce((t, l) => ({ ...t, e: t.e + l.e, a: t.a + l.a, b: t.b + l.b }), {
+      key: 'other',
+      origin: null,
+      label: null,
+      kind: 'other',
+      e: 0,
+      a: 0,
+      b: 0,
+    } as OriginLine);
+  return outras.e >= MIN_CELL ? [...grandes, outras] : grandes;
 }
 
 /** O "Tipo" da tabela de origens: QR, link, lista, e-mail ou código. */

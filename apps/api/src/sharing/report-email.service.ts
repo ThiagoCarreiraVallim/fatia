@@ -12,12 +12,16 @@ import { hourInTz } from '../insights/helpers/time-buckets';
 import { reportUnsubscribeToken } from '../notifications/announcement-email.service';
 import { EmailService, type EmailMessage } from '../notifications/email.service';
 import { dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
-import { firstBusinessDay } from './business-day';
+import { businessDayOf } from './business-day';
 import { ReportService, shiftMonth } from './report.service';
 import type { MonthReport } from './report.types';
 
 /** O e-mail sai a partir desta hora do 1º dia útil, no fuso da comunidade. */
 export const REPORT_EMAIL_HOUR = 8;
+/** Servidor fora no 1º dia útil: o e-mail ainda sai até o 3º; depois, o mês é pulado. */
+export const REPORT_EMAIL_LAST_BUSINESS_DAY = 3;
+/** Quanto vale a reivindicação de um envio antes de outra instância poder tentar. */
+const LEASE_MS = 15 * 60_000;
 const EVERY_MS = 30 * 60_000;
 const SECRET_MIN = 16;
 const SMALL = 'amostra pequena demais para mostrar';
@@ -134,15 +138,21 @@ export function reportEmail(p: {
  * O e-mail mensal do relatório (#400, Ex-02). No 1º dia útil do mês (segunda
  * a sexta, fora feriado nacional), a partir das 8 h no fuso da comunidade,
  * sai o relatório do mês que acabou para o dono e para quem da equipe ele
- * marcou. Se o servidor estiver fora nesse dia, sai no próximo passe do mês.
+ * marcou. Se o servidor estiver fora nesse dia, sai no próximo passe até o 3º
+ * dia útil; depois disso o mês é pulado (relatório velho chegando no meio do
+ * mês confunde mais do que ajuda).
  *
- * Uma vez por comunidade e mês: o mês é reivindicado na própria linha do grupo
- * (`updateMany` condicional em `reportEmailMonth`) antes de montar o e-mail,
- * então duas instâncias nunca mandam o mesmo mês. Se o envio falhar depois de
- * reivindicar, o mês fica perdido: melhor que mandar duas vezes.
+ * Uma vez por comunidade e mês, com lease: o envio é reivindicado na linha do
+ * grupo (`reportEmailClaimedAt`, `updateMany` condicional), e só outra
+ * instância cujo lease venceu tenta de novo. O mês (`reportEmailMonth`) é
+ * gravado só depois do envio; se o envio falha, o lease é solto e o passe
+ * seguinte tenta. Se o processo cai no meio do envio, o lease vence em 15 min
+ * e o e-mail pode sair duas vezes para quem já tinha recebido (raro, e melhor
+ * do que perder o mês).
  *
  * Sem SMTP ou sem o segredo do descadastro, nada sai (e nada é reivindicado):
- * e-mail sem descadastro não vai.
+ * e-mail sem descadastro não vai. Erro numa comunidade (fuso inválido, banco)
+ * vira log e não para as outras.
  */
 @Injectable()
 export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
@@ -181,39 +191,23 @@ export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
     return Boolean(this.email?.enabled) && this.secret.length >= SECRET_MIN;
   }
 
-  /** Manda o relatório do mês anterior a cada comunidade no dia dela; devolve quantas. */
-  async sendMonthlyReports(now: Date): Promise<number> {
+  /**
+   * Manda o relatório do mês anterior a cada comunidade no dia dela; devolve
+   * quantas receberam. `only` restringe as comunidades (testes).
+   */
+  async sendMonthlyReports(now: Date, only?: string[]): Promise<number> {
     if (!this.available) return 0;
     const grupos = await this.prisma.group.findMany({
-      where: { reportEmailEnabled: true },
+      where: { reportEmailEnabled: true, ...(only ? { id: { in: only } } : {}) },
       select: { id: true, timezone: true, createdAt: true, reportEmailMonth: true },
     });
     let sent = 0;
     for (const g of grupos) {
-      const hoje = dateInTz(now, g.timezone);
-      const mes = hoje.slice(0, 7);
-      const anterior = shiftMonth(mes, -1);
-      if (g.reportEmailMonth && g.reportEmailMonth >= anterior) continue;
-      const diaUtil = firstBusinessDay(mes);
-      if (hoje < diaUtil) continue;
-      if (hoje === diaUtil && hourInTz(now, g.timezone) < REPORT_EMAIL_HOUR) continue;
-      // Comunidade criada neste mês não tem mês anterior para contar.
-      if (g.createdAt >= dayBoundsInTz(`${mes}-01`, g.timezone).start) continue;
-
-      const claimed = await this.prisma.group.updateMany({
-        where: {
-          id: g.id,
-          reportEmailEnabled: true,
-          OR: [{ reportEmailMonth: null }, { reportEmailMonth: { lt: anterior } }],
-        },
-        data: { reportEmailMonth: anterior },
-      });
-      if (claimed.count === 0) continue;
       try {
-        if (await this.sendOne(g.id, anterior, now)) sent += 1;
+        if (await this.sendGroup(g, now)) sent += 1;
       } catch (err) {
         this.logger.warn(
-          `Relatório de ${anterior} da comunidade ${g.id} não saiu: ${
+          `Relatório mensal da comunidade ${g.id} não saiu: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
@@ -222,7 +216,59 @@ export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
     return sent;
   }
 
-  private async sendOne(groupId: string, month: string, now: Date): Promise<boolean> {
+  private async sendGroup(
+    g: { id: string; timezone: string; createdAt: Date; reportEmailMonth: string | null },
+    now: Date,
+  ): Promise<boolean> {
+    const hoje = dateInTz(now, g.timezone);
+    const mes = hoje.slice(0, 7);
+    const anterior = shiftMonth(mes, -1);
+    if (g.reportEmailMonth && g.reportEmailMonth >= anterior) return false;
+    const primeiro = businessDayOf(mes, 1);
+    if (hoje < primeiro || hoje > businessDayOf(mes, REPORT_EMAIL_LAST_BUSINESS_DAY)) return false;
+    if (hoje === primeiro && hourInTz(now, g.timezone) < REPORT_EMAIL_HOUR) return false;
+    // Comunidade criada neste mês não tem mês anterior para contar.
+    if (g.createdAt >= dayBoundsInTz(`${mes}-01`, g.timezone).start) return false;
+
+    const claimed = await this.prisma.group.updateMany({
+      where: {
+        id: g.id,
+        reportEmailEnabled: true,
+        AND: [
+          { OR: [{ reportEmailMonth: null }, { reportEmailMonth: { lt: anterior } }] },
+          {
+            OR: [
+              { reportEmailClaimedAt: null },
+              { reportEmailClaimedAt: { lt: new Date(now.getTime() - LEASE_MS) } },
+            ],
+          },
+        ],
+      },
+      data: { reportEmailClaimedAt: now },
+    });
+    if (claimed.count === 0) return false;
+
+    let result: 'sent' | 'none' | 'failed' = 'failed';
+    try {
+      result = await this.sendOne(g.id, anterior, now);
+    } finally {
+      // Só o dono do lease solta; o mês fica gravado se alguém recebeu (ou não havia a quem mandar).
+      await this.prisma.group.updateMany({
+        where: { id: g.id, reportEmailClaimedAt: now },
+        data:
+          result === 'failed'
+            ? { reportEmailClaimedAt: null }
+            : { reportEmailClaimedAt: null, reportEmailMonth: anterior },
+      });
+    }
+    return result === 'sent';
+  }
+
+  private async sendOne(
+    groupId: string,
+    month: string,
+    now: Date,
+  ): Promise<'sent' | 'none' | 'failed'> {
     const quem = await this.prisma.groupMembership.findMany({
       where: {
         groupId,
@@ -235,12 +281,14 @@ export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
       },
       select: { user: { select: { id: true, email: true } } },
     });
-    if (!quem.length) return false;
+    if (!quem.length) return 'none';
     const report = await this.reports.build(groupId, month, now);
     const panelUrl = `${this.origin}/org/${groupId}/report?month=${month}`;
     let algum = false;
+    let tentou = false;
     for (const { user } of quem) {
       if (!user.email) continue;
+      tentou = true;
       const t = reportUnsubscribeToken(user.id, this.secret);
       const ok = await this.email!.send(
         reportEmail({
@@ -253,6 +301,7 @@ export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
       );
       algum ||= ok;
     }
-    return algum;
+    if (!tentou) return 'none';
+    return algum ? 'sent' : 'failed';
   }
 }

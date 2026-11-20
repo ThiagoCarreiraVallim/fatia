@@ -39,10 +39,8 @@ export interface ReportChallengeRow {
 export interface MonthReport {
   /** O mês do relatório, `YYYY-MM`, no fuso da comunidade. */
   month: string;
-  /** Os meses que dá para abrir (o atual e os 12 anteriores), do mais novo. */
+  /** Os meses que dá para abrir (só fechados: os 12 anteriores ao atual), do mais novo. */
   months: string[];
-  /** O mês ainda não acabou: os números vão até ontem. */
-  partial: boolean;
   groupName: string;
   /** Quantos aceitaram entrar nas estatísticas; `null` = menos de 5. */
   optIn: number | null;
@@ -81,7 +79,10 @@ export interface MonthReport {
   weeksAverage: number | null;
   /** Blocos de 7 dias que bateram a meta, dos publicados. */
   weeksOnGoal: { hit: number; of: number } | null;
-  /** Membros ativos acumulados no mês, por dia. */
+  /**
+   * Membros ativos acumulados no mês, no último dia de cada bloco de 7 dias
+   * (por semana, não por dia: um dia a mais isolaria a 1ª vez de uma pessoa).
+   */
   activeByDay: ReportCell[];
   challenges: ReportChallengeRow[];
   /** "Quem participa de algum desafio registra 2,1× mais dias". */
@@ -89,14 +90,15 @@ export interface MonthReport {
 }
 
 export type OriginsDays = 7 | 30;
-export type OriginKindLabel = 'qr' | 'link' | 'list' | 'email' | 'code';
+/** `other`: "Outras origens", a soma das linhas com menos de 5 pessoas, sem rótulo. */
+export type OriginKindLabel = 'qr' | 'link' | 'list' | 'email' | 'code' | 'other';
 
 export interface OriginRow {
   key: string;
   origin: InviteOrigin | null;
   label: string | null;
   kind: OriginKindLabel;
-  /** Entraram (opt-in) no período; `null` = amostra pequena. */
+  /** Entraram (opt-in) no período; `null` = suprimido (diferença com o outro período). */
   joined: number | null;
   /** Ativaram em 48 h; `null` = menos de 5 de um lado. */
   activated: number | null;
@@ -127,3 +129,9 @@ export interface ReportSettings {
   emailAvailable: boolean;
   team: ReportTeamMember[];
 }
+
+/** O que fica gravado do mês fechado: o resto (nome, meta, meses) é lido na hora. */
+export type FrozenMonthReport = Omit<
+  MonthReport,
+  'months' | 'groupName' | 'weeklySessionsGoal' | 'weeksOnGoal'
+>;
