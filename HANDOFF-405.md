@@ -19,7 +19,7 @@ Branch `redesign/405-biblioteca-enviar` (já no remoto, PR #461 aberto). Banco `
 
 ## Passos
 
-- [ ] 1. Testes vermelhos (plan-send-review.integration.spec.ts + ajuste do spec antigo)
-- [ ] 2. Implementação API
-- [ ] 3. api-client/web: `openEnded` desliga "Depois do plano atual"
+- [x] 1. Testes vermelhos (plan-send-review.integration.spec.ts + ajuste do spec antigo)
+- [x] 2. Implementação API
+- [x] 3. api-client/web: `openEnded` desliga "Depois do plano atual"
 - [ ] 4. Verdes (api, api-client, web, mobile), docs, merge origin/main, push

@@ -104,6 +104,10 @@ export function SendPlanForm({
   );
   const names = selected.map((id) => byId.get(id)?.name ?? '').filter(Boolean);
   const needsChange = selected.some((id) => byId.get(id)?.alreadyHas);
+  // Quem segue um flexível sem fim não tem "depois do plano atual" (#461): a
+  // opção desliga e a escolha volta para "Hoje".
+  const openEnded = selected.map((id) => byId.get(id)).filter((r) => r?.openEnded);
+  const startValue: SendStart = openEnded.length && start === 'AFTER_CURRENT' ? 'TODAY' : start;
   const workout = kind === 'WORKOUT';
 
   const toggle = (id: string) =>
@@ -129,7 +133,7 @@ export function SendPlanForm({
       templateId: chosen?.id ?? null,
       membershipIds: selected,
       schedule,
-      start,
+      start: startValue,
       startDate,
       weeks: Number(weeks) || null,
       weekdays,
@@ -142,8 +146,8 @@ export function SendPlanForm({
     if (workout) {
       body.schedule = schedule;
       if (schedule === 'CALENDAR') {
-        body.start = start;
-        if (start === 'DATE') body.startDate = startDate;
+        body.start = startValue;
+        if (startValue === 'DATE') body.startDate = startDate;
         body.weeks = Number(weeks);
         body.weekdays = [...weekdays].sort((a, b) => a - b);
       } else if (endDate) {
@@ -336,11 +340,22 @@ export function SendPlanForm({
                 <span className="text-sm font-semibold">Começa</span>
                 <Segmented
                   label="Começa"
-                  options={SEND_STARTS.map((s) => ({ value: s.key, label: s.label }))}
-                  value={start}
+                  options={SEND_STARTS.map((s) => ({
+                    value: s.key,
+                    label: s.label,
+                    disabled: s.key === 'AFTER_CURRENT' && openEnded.length > 0,
+                  }))}
+                  value={startValue}
                   onChange={setStart}
                 />
-                {start === 'DATE' && (
+                {openEnded.length > 0 && (
+                  <p className="text-xs text-warning">
+                    {openEnded.length === 1
+                      ? `${firstName(openEnded[0]!.name)} segue um plano flexível sem data de fim: não há "depois" para esperar. Escolha hoje ou uma data.`
+                      : `${openEnded.length} pessoas seguem um plano flexível sem data de fim: não há "depois" para esperar. Escolha hoje ou uma data.`}
+                  </p>
+                )}
+                {startValue === 'DATE' && (
                   <Input
                     aria-label="Dia de começar"
                     id={ids.start}
@@ -349,7 +364,7 @@ export function SendPlanForm({
                     onChange={(e) => setStartDate(e.target.value)}
                   />
                 )}
-                {start === 'AFTER_CURRENT' && (
+                {startValue === 'AFTER_CURRENT' && (
                   <p className="text-xs text-muted-foreground">
                     Para cada pessoa, no dia seguinte ao fim do plano que ela segue agora; quem não
                     tem plano começa hoje.

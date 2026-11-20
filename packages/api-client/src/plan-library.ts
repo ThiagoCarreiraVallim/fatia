@@ -27,8 +27,13 @@ export interface SendRecipient {
   accompaniedByMe: boolean;
   /** Tem plano esperando resposta ou em andamento nesta comunidade. */
   hasPlan: boolean;
-  /** Já tem este modelo: o envio vira versão nova ("o que mudou"). */
+  /**
+   * Já tem este modelo de quem envia: o envio vira versão nova ("o que
+   * mudou"). O mesmo modelo mandado por outra pessoa da equipe não conta.
+   */
   alreadyHas: boolean;
+  /** Segue um plano flexível sem fim: "depois do plano atual" não vale para ela. */
+  openEnded: boolean;
 }
 
 export type SendStart = 'TODAY' | 'AFTER_CURRENT' | 'DATE';

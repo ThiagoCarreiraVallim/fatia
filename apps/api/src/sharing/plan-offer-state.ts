@@ -41,7 +41,12 @@ export function offerState<V extends OfferVersionState>(
 ): OfferState<V> | null {
   const latest = versions.at(-1);
   if (!latest) return null;
-  const accepted = versions.filter((v) => v.status === 'ACCEPTED').at(-1) ?? null;
+  // Com duas aceitas, a mais nova começa no futuro (revisão do PR #461): até
+  // lá vale a que já started.
+  const aceitas = versions.filter((v) => v.status === 'ACCEPTED');
+  const started = (v: V) => v.schedule !== 'CALENDAR' || !v.startDate || v.startDate <= today;
+  const accepted =
+    (aceitas.length > 1 ? aceitas.filter(started).at(-1) : undefined) ?? aceitas.at(-1) ?? null;
   const shown = accepted ?? latest;
   const endDate =
     shown.schedule === 'CALENDAR' && shown.startDate && shown.weeks

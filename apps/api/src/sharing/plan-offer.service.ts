@@ -3,7 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import {
   GroupRole,
@@ -39,6 +42,33 @@ import {
   planSnapshotSchema,
   type PlanSnapshot,
 } from './plan-snapshot';
+
+/** O lote inteiro numa transação (#405): até 200 pessoas cabem com folga. */
+const BATCH_TIMEOUT_MS = 60_000;
+/** De quanto em quanto tempo a versão aceita para o futuro assume (I1 do PR #461). */
+const SETTLE_EVERY_MS = 60 * 60 * 1000;
+
+/**
+ * A oferta que um reenvio do mesmo modelo, pelo mesmo autor, transforma em
+ * versão nova (#405). É também o "já tem" da tela: os dois leem daqui, para a
+ * marca e o envio nunca discordarem. Recusada conta (vira versão nova, com o
+ * recado); apagada ou terminada, não.
+ */
+export function resendTargetWhere(
+  userId: string,
+  groupId: string,
+  authorId: string,
+  templateId: string,
+): Prisma.PlanOfferWhereInput {
+  return {
+    userId,
+    groupId,
+    authorId,
+    sourceTemplateId: templateId,
+    removedAt: null,
+    endedAt: null,
+  };
+}
 
 /** Recusa única: oferta ou versão alheia ou inexistente (#92). */
 const OFFER_NOT_FOUND = 'Plan offer not found';
@@ -166,6 +196,11 @@ function parseSnapshot(snapshot: Prisma.JsonValue): PlanSnapshot | null {
 }
 
 /** As versões da oferta, na leitura: a última, a aceita e a que a tela mostra. */
+/** A versão já começou (ou não tem dia de começar): pode estar em uso hoje. */
+function startedBy(v: { schedule: PlanSchedule; startDate: string | null }, today: string) {
+  return v.schedule !== 'CALENDAR' || !v.startDate || v.startDate <= today;
+}
+
 function versionsOf(offer: OfferRow) {
   const latest = offer.versions.at(-1)!;
   // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
@@ -192,13 +227,32 @@ function versionsOf(offer: OfferRow) {
  * mexe no vínculo nem no consentimento.
  */
 @Injectable()
-export class PlanOfferService {
+export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PlanOfferService.name);
+  private timer: NodeJS.Timeout | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly materializer: PlanMaterializerService,
     private readonly notifications: NotificationService,
     private readonly plans: WorkoutPlanService,
   ) {}
+
+  onModuleInit(): void {
+    // `unref`: o timer não segura o processo (nem o jest) só por existir.
+    this.timer = setInterval(() => {
+      void this.settleScheduledVersions().catch((err: unknown) =>
+        this.logger.warn(
+          `Versões agendadas não assumiram: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }, SETTLE_EVERY_MS);
+    this.timer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
 
   // ---------------------------------------------------------------- equipe
 
@@ -464,81 +518,116 @@ export class PlanOfferService {
   }
 
   /**
-   * Um modelo da biblioteca para UMA pessoa, pelo envio em lote (#405). Quem
-   * chama já conferiu o papel, a associação desta comunidade e o vínculo ativo
-   * com quem envia, e já validou as datas.
+   * Um modelo da biblioteca para várias pessoas, pelo envio em lote (#405).
+   * Quem chama já conferiu o papel, a associação desta comunidade e o vínculo
+   * ativo com quem envia, e já validou as datas.
    *
-   * Se quem envia já mandou este modelo à pessoa (oferta viva, nem apagada nem
-   * terminada), sai uma versão nova da mesma oferta, com "o que mudou": a
-   * versão que esperava resposta fica substituída e a aceita continua em uso
-   * até o novo aceite. Senão, nasce uma oferta no fim da ordem da ficha.
+   * O lote é uma transação só (revisão do PR #461): ou todo mundo recebe, ou
+   * ninguém. As travas por pessoa saem em ordem de `userId`, então dois lotes
+   * ao mesmo tempo nunca se esperam em círculo. Os avisos vão depois do commit.
+   *
+   * Se quem envia já mandou este modelo à pessoa (`resendTargetWhere`: o mesmo
+   * critério do "já tem"), sai uma versão nova da mesma oferta, com "o que
+   * mudou": a versão que esperava resposta fica substituída e a aceita continua
+   * em uso até o novo aceite. Senão, nasce uma oferta no fim da ordem da ficha.
    */
-  async sendTemplateTo(
+  async sendTemplateBatch(
     author: { id: string; name: string },
+    groupId: string,
+    templateId: string,
+    source: { title: string; snapshot: PlanSnapshot },
+    items: Array<{
+      userId: string;
+      input: Pick<SendMemberPlanDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
+        endDate?: string | null;
+        changeNote?: string | null;
+      };
+    }>,
+  ): Promise<Array<{ id: string; versionId: string; version: number; kind: 'new' | 'update' }>> {
+    const contents = items.map((i) => this.scheduleContent(source, i.input));
+    const results = await this.inTransaction(
+      async (db) => {
+        for (const userId of [...new Set(items.map((i) => i.userId))].sort()) {
+          await lockMemberOrder(db, userId, groupId);
+        }
+        const out: Array<{
+          id: string;
+          versionId: string;
+          version: number;
+          kind: 'new' | 'update';
+        }> = [];
+        for (const [i, item] of items.entries()) {
+          out.push(
+            await this.writeTemplateVersion(
+              db,
+              author.id,
+              groupId,
+              item.userId,
+              templateId,
+              contents[i]!,
+            ),
+          );
+        }
+        return out;
+      },
+      { timeout: BATCH_TIMEOUT_MS },
+    );
+    results.forEach((r, i) => {
+      const notice = r.kind === 'update' ? offerUpdatedNotice : offerSentNotice;
+      this.notifications.notify(
+        [items[i]!.userId],
+        notice({ offerId: r.id, authorName: author.name, title: contents[i]!.title }),
+      );
+    });
+    return results;
+  }
+
+  private async writeTemplateVersion(
+    db: Prisma.TransactionClient,
+    authorId: string,
     groupId: string,
     studentUserId: string,
     templateId: string,
-    source: { title: string; snapshot: PlanSnapshot },
-    input: Pick<SendMemberPlanDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
-      endDate?: string | null;
-      changeNote?: string | null;
-    },
+    content: ReturnType<PlanOfferService['scheduleContent']>,
   ): Promise<{ id: string; versionId: string; version: number; kind: 'new' | 'update' }> {
-    const content = this.scheduleContent(source, input);
-    const result = await this.inTransaction(async (db) => {
-      await lockMemberOrder(db, studentUserId, groupId);
-      const existing = await db.planOffer.findFirst({
-        where: {
-          userId: studentUserId,
-          groupId,
-          authorId: author.id,
-          sourceTemplateId: templateId,
-          removedAt: null,
-          endedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      });
-      if (existing) {
-        await this.lockOffer(db, existing.id);
-        const last = await db.planOfferVersion.findFirst({
-          where: { offerId: existing.id },
-          orderBy: { version: 'desc' },
-          select: { version: true },
-        });
-        await db.planOfferVersion.updateMany({
-          where: { offerId: existing.id, status: 'PENDING' },
-          data: { status: 'SUPERSEDED', respondedAt: new Date() },
-        });
-        const v = await db.planOfferVersion.create({
-          data: { offerId: existing.id, version: (last?.version ?? 0) + 1, ...content },
-        });
-        return { id: existing.id, versionId: v.id, version: v.version, kind: 'update' as const };
-      }
-      const last = await db.planOffer.aggregate({
-        where: { userId: studentUserId, groupId, removedAt: null },
-        _max: { position: true },
-      });
-      // Na primeira versão não há o que mudou.
-      const offer = await db.planOffer.create({
-        data: {
-          userId: studentUserId,
-          authorId: author.id,
-          groupId,
-          position: (last._max.position ?? -1) + 1,
-          sourceTemplateId: templateId,
-          versions: { create: { version: 1, ...content, changeNote: null } },
-        },
-        include: { versions: true },
-      });
-      return { id: offer.id, versionId: offer.versions[0]!.id, version: 1, kind: 'new' as const };
+    const existing = await db.planOffer.findFirst({
+      where: resendTargetWhere(studentUserId, groupId, authorId, templateId),
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
     });
-    const notice = result.kind === 'update' ? offerUpdatedNotice : offerSentNotice;
-    this.notifications.notify(
-      [studentUserId],
-      notice({ offerId: result.id, authorName: author.name, title: content.title }),
-    );
-    return result;
+    if (existing) {
+      await this.lockOffer(db, existing.id);
+      const last = await db.planOfferVersion.findFirst({
+        where: { offerId: existing.id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      await db.planOfferVersion.updateMany({
+        where: { offerId: existing.id, status: 'PENDING' },
+        data: { status: 'SUPERSEDED', respondedAt: new Date() },
+      });
+      const v = await db.planOfferVersion.create({
+        data: { offerId: existing.id, version: (last?.version ?? 0) + 1, ...content },
+      });
+      return { id: existing.id, versionId: v.id, version: v.version, kind: 'update' };
+    }
+    const last = await db.planOffer.aggregate({
+      where: { userId: studentUserId, groupId, removedAt: null },
+      _max: { position: true },
+    });
+    // Na primeira versão não há o que mudou.
+    const offer = await db.planOffer.create({
+      data: {
+        userId: studentUserId,
+        authorId,
+        groupId,
+        position: (last._max.position ?? -1) + 1,
+        sourceTemplateId: templateId,
+        versions: { create: { version: 1, ...content, changeNote: null } },
+      },
+      include: { versions: true },
+    });
+    return { id: offer.id, versionId: offer.versions[0]!.id, version: 1, kind: 'new' };
   }
 
   /**
@@ -706,15 +795,44 @@ export class PlanOfferService {
       respondedAt: now,
     });
 
+    const today = todayInTz(timezone);
+    const planId = this.planOf(offer, userId);
+    const inUse = offer.versions
+      .filter((v) => v.status === 'ACCEPTED' && v.id !== version.id && startedBy(v, today))
+      .at(-1);
+    if (planId && inUse && version.schedule === 'CALENDAR' && version.startDate! > today) {
+      // Versão que começa no futuro (revisão do PR #461): a que está em uso
+      // segue, com os exercícios e a agenda dela, até a véspera; daí em diante
+      // a agenda já é a nova, e `settleScheduledVersions` troca os exercícios
+      // e substitui a antiga quando o dia chega.
+      try {
+        await this.prisma.$transaction([
+          this.prisma.planOfferVersion.updateMany({
+            where: { offerId, status: 'ACCEPTED', id: { notIn: [version.id, inUse.id] } },
+            data: { status: 'SUPERSEDED', respondedAt: now },
+          }),
+          ...this.agendaWrites(userId, planId, version, version.startDate!),
+        ]);
+      } catch (error) {
+        await this.prisma.planOfferVersion.update({
+          where: { id: version.id },
+          data: { status: version.status, respondedAt: version.respondedAt },
+        });
+        throw error;
+      }
+      await this.notifyTeam(offer, userId, version.title, 'accepted');
+      return this.view(await this.findOffer(userId, offerId), userId);
+    }
+
     // Plano, troca de versão e agenda vão numa transação de lote só: ou entra
     // tudo, ou a versão volta ao que era e a pessoa pode tentar de novo. Nunca
     // ficam duas versões aceitas.
     try {
-      const { planId, writes } = await this.materializer.offerPlanWrites(
+      const { planId: materialized, writes } = await this.materializer.offerPlanWrites(
         userId,
         version.snapshot,
         offerId,
-        this.planOf(offer, userId),
+        planId,
       );
       await this.prisma.$transaction([
         ...writes,
@@ -722,8 +840,8 @@ export class PlanOfferService {
           where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
           data: { status: 'SUPERSEDED', respondedAt: now },
         }),
-        ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
-        ...this.positionWrites(userId, planId, offer.position),
+        ...this.agendaWrites(userId, materialized, version, today),
+        ...this.positionWrites(userId, materialized, offer.position),
       ]);
     } catch (error) {
       await this.prisma.planOfferVersion.update({
@@ -735,6 +853,44 @@ export class PlanOfferService {
 
     await this.notifyTeam(offer, userId, version.title, 'accepted');
     return this.view(await this.findOffer(userId, offerId), userId);
+  }
+
+  /**
+   * A versão aceita para o futuro assume no dia dela (I1 do PR #461): troca os
+   * exercícios do plano da pessoa e substitui a que estava em uso. A agenda já
+   * foi gravada no aceite. Roda de hora em hora; devolve quantas assumiram.
+   */
+  async settleScheduledVersions(): Promise<number> {
+    const duplas = await this.prisma.planOfferVersion.groupBy({
+      by: ['offerId'],
+      where: { status: 'ACCEPTED' },
+      having: { offerId: { _count: { gt: 1 } } },
+    });
+    if (duplas.length === 0) return 0;
+    const ofertas = await this.prisma.planOffer.findMany({
+      where: { id: { in: duplas.map((d) => d.offerId) }, removedAt: null },
+      include: { ...OFFER_INCLUDE, user: { select: { timezone: true } } },
+    });
+    let assumiram = 0;
+    for (const offer of ofertas) {
+      const nova = offer.versions.filter((v) => v.status === 'ACCEPTED').at(-1)!;
+      if (!startedBy(nova, todayInTz(offer.user.timezone))) continue;
+      const { writes } = await this.materializer.offerPlanWrites(
+        offer.userId,
+        nova.snapshot,
+        offer.id,
+        this.planOf(offer, offer.userId),
+      );
+      await this.prisma.$transaction([
+        ...writes,
+        this.prisma.planOfferVersion.updateMany({
+          where: { offerId: offer.id, status: 'ACCEPTED', id: { not: nova.id } },
+          data: { status: 'SUPERSEDED', respondedAt: new Date() },
+        }),
+      ]);
+      assumiram += 1;
+    }
+    return assumiram;
   }
 
   /** Recusa a versão. Numa atualização, é "manter a versão atual". */
@@ -938,9 +1094,9 @@ export class PlanOfferService {
    * diante sai a de antes e entra a desta versão; o que passou fica. Plano
    * flexível não tem linhas, só a próxima sessão calculada na leitura.
    */
-  private agendaWrites(userId: string, planId: string, version: VersionRow, today: string) {
+  private agendaWrites(userId: string, planId: string, version: VersionRow, from: string) {
     const clear = this.prisma.plannedSession.deleteMany({
-      where: { userId, planId, date: { gte: today } },
+      where: { userId, planId, date: { gte: from } },
     });
     if (version.schedule !== 'CALENDAR' || !version.startDate || !version.weeks) return [clear];
     const rows = scheduleDates({
@@ -949,7 +1105,7 @@ export class PlanOfferService {
       weekdays: version.weekdays,
     })
       .map((date, i) => ({ date, order: i + 1 }))
-      .filter((row) => row.date >= today)
+      .filter((row) => row.date >= from)
       .map((row) => ({ ...row, userId, planId, offerVersionId: version.id }));
     return [clear, this.prisma.plannedSession.createMany({ data: rows })];
   }
@@ -1103,9 +1259,12 @@ export class PlanOfferService {
     return new Map(rows.map((r) => [r.id, { name: r.name, muscleGroup: r.muscleGroup }]));
   }
 
-  private async inTransaction<T>(fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  private async inTransaction<T>(
+    fn: (db: Prisma.TransactionClient) => Promise<T>,
+    options?: { timeout: number },
+  ): Promise<T> {
     try {
-      return await this.prisma.$transaction(fn);
+      return await this.prisma.$transaction(fn, options);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('A oferta mudou ao mesmo tempo em outro lugar. Tente de novo.');

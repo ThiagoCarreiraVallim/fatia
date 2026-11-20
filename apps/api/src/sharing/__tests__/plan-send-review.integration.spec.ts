@@ -291,9 +291,7 @@ describe('enviar para alunos: revisão do PR #461 (banco real)', () => {
 
       // Quando o dia chega, a v2 assume e a v1 sai.
       await prisma.planOfferVersion.update({ where: { id: v2.id }, data: { startDate: today } });
-      await (
-        offers as unknown as { settleScheduledVersions(): Promise<void> }
-      ).settleScheduledVersions();
+      expect(await offers.settleScheduledVersions()).toBeGreaterThanOrEqual(1);
       const depois = await prisma.planOfferVersion.findMany({
         where: { offerId: of.id },
         orderBy: { version: 'asc' },

@@ -146,7 +146,7 @@ futura:
   A biblioteca (ver, publicar, rascunho, "Com quem") continua `content.publish`. Cada pessoa de
   um envio em lote precisa ser membro ativo da comunidade da URL, dentro do "profissionais veem
   só quem acompanham", e ter `ProfessionalLink` ativo com quem envia; um id que falhe barra o
-  lote inteiro, como inexistente. "Enviados recentemente" mostra só os envios de quem olha, com
+  lote inteiro, como inexistente. O lote grava numa transação só: ou todos recebem, ou ninguém. "Enviados recentemente" mostra só os envios de quem olha, com
   a resposta (que já chega a quem mandou); o progresso é dado de Treino e só sai pela porta de
   leitura, com registro na trilha; sem Treino liberado, "sem progresso", sem dizer o motivo.
   Cancelar o envio sem resposta é do autor ou do dono. "Com quem" é só contagem, e abaixo de 5

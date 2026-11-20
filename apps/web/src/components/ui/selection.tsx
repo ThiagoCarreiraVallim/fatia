@@ -40,6 +40,7 @@ export function Chip({ selected = false, tone = 'default', className, ...props }
 export interface SegmentedOption<T extends string> {
   value: T;
   label: string;
+  disabled?: boolean;
 }
 
 /** Segmentado (Dia · Semana · Mês; kg · lb): um grupo de rádio com teclas de seta. */
@@ -69,7 +70,11 @@ export function Segmented<T extends string>({
           : 0;
     if (!delta) return;
     e.preventDefault();
-    const next = (index + delta + options.length) % options.length;
+    let next = (index + delta + options.length) % options.length;
+    // Opção desligada não se escolhe pelas setas também.
+    while (options[next].disabled && next !== index) {
+      next = (next + delta + options.length) % options.length;
+    }
     onChange(options[next].value);
     refs.current[next]?.focus();
   };
@@ -90,11 +95,12 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={on}
+            disabled={o.disabled}
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
-              'relative h-[38px] flex-1 rounded-chip text-sm font-semibold transition-colors duration-fast after:absolute after:-inset-y-[3px] after:inset-x-0',
+              'relative h-[38px] flex-1 rounded-chip text-sm font-semibold transition-colors duration-fast after:absolute after:-inset-y-[3px] after:inset-x-0 disabled:opacity-40',
               on
                 ? tone === 'primary'
                   ? 'bg-primary text-primary-foreground'

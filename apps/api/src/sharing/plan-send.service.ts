@@ -23,7 +23,7 @@ import { requireContentRole } from './content-roles';
 import type { SendPlansDto } from './dto/plan-send.dto';
 import { parseNutritionSnapshot } from './nutrition-snapshot';
 import { nutritionPlanSentNotice } from './plan-offer-notices';
-import { PlanOfferService } from './plan-offer.service';
+import { PlanOfferService, resendTargetWhere } from './plan-offer.service';
 import { offerState, type OfferVersionState } from './plan-offer-state';
 import { offerProgress } from './plan-programs.service';
 import { ProfessionalAccessService } from './professional-access.service';
@@ -36,8 +36,17 @@ export interface SendRecipient {
   accompaniedByMe: boolean;
   /** Tem plano desta comunidade esperando resposta ou em andamento. */
   hasPlan: boolean;
-  /** Já tem uma cópia (ou a oferta) do modelo pedido: o envio vira versão nova. */
+  /**
+   * Já tem este modelo DE QUEM OLHA, e o envio vira versão nova com "o que
+   * mudou" (o mesmo critério do envio: `resendTargetWhere`). O mesmo modelo
+   * mandado por outra pessoa da equipe não conta: é envio novo.
+   */
   alreadyHas: boolean;
+  /**
+   * Segue um plano flexível sem data de fim (fora o deste modelo de quem
+   * olha): "depois do plano atual" não tem dia para começar.
+   */
+  openEnded: boolean;
 }
 
 export interface SendRecipientsView {
@@ -145,6 +154,7 @@ export class PlanSendService {
     const nutricao = tpl?.kind === PlanTemplateKind.NUTRITION;
     const comPlano = new Set<string>();
     const jaTem = new Set<string>();
+    let semFim = new Set<string>();
     if (nutricao) {
       const planos = await this.prisma.nutritionPlan.findMany({
         where: {
@@ -152,18 +162,25 @@ export class PlanSendService {
           userId: { in: userIds },
           status: { in: [NutritionPlanStatus.SENT, NutritionPlanStatus.ACCEPTED] },
         },
-        select: { userId: true, sourceTemplateId: true },
+        select: { userId: true, authorId: true, sourceTemplateId: true },
       });
       for (const p of planos) {
         comPlano.add(p.userId);
-        if (tpl && p.sourceTemplateId === tpl.id) jaTem.add(p.userId);
+        // O mesmo critério de `NutritionPlanService.sendFromTemplate`.
+        if (tpl && p.sourceTemplateId === tpl.id && p.authorId === viewerId) jaTem.add(p.userId);
       }
     } else {
-      const vivas = await this.liveOffers(groupId, userIds);
-      for (const o of vivas) {
-        comPlano.add(o.userId);
-        if (tpl && o.sourceTemplateId === tpl.id) jaTem.add(o.userId);
+      for (const o of await this.liveOffers(groupId, userIds)) comPlano.add(o.userId);
+      if (tpl) {
+        const meus = await this.prisma.planOffer.findMany({
+          where: {
+            OR: userIds.map((id) => resendTargetWhere(id, groupId, viewerId, tpl.id)),
+          },
+          select: { userId: true },
+        });
+        for (const o of meus) jaTem.add(o.userId);
       }
+      semFim = (await this.currentEnds(groupId, userIds, viewerId, tpl?.id ?? null)).openEnded;
     }
 
     return {
@@ -174,6 +191,7 @@ export class PlanSendService {
           accompaniedByMe: Boolean(eu && p.accompaniedById === eu.id),
           hasPlan: comPlano.has(p.userId),
           alreadyHas: jaTem.has(p.userId),
+          openEnded: semFim.has(p.userId),
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     };
@@ -206,9 +224,11 @@ export class PlanSendService {
     const source = await this.offers.templateSource(groupId, templateId);
     // As datas de todo mundo antes de gravar a primeira: um 400 não deixa o
     // lote pela metade.
-    const fins = await this.currentEnds(
+    const atuais = await this.currentEnds(
       groupId,
       alvos.map((a) => a.userId),
+      autor.id,
+      templateId,
     );
     const planos = alvos.map((a) => {
       const hoje = todayInTz(a.timezone);
@@ -225,21 +245,28 @@ export class PlanSendService {
         startDate = assertDay(input.startDate, 'startDate');
         if (startDate < hoje) throw new BadRequestException('Escolha um dia de hoje em diante.');
       } else if (input.start === 'AFTER_CURRENT') {
-        const fim = fins.get(a.userId);
+        // Flexível sem fim não tem "depois" (revisão do PR #461): a tela tira a
+        // opção para essa pessoa, e a API recusa em vez de começar hoje calada.
+        if (atuais.openEnded.has(a.userId)) {
+          throw new BadRequestException(
+            `${a.name} segue um plano flexível sem data de fim: escolha o dia de começar.`,
+          );
+        }
+        const fim = atuais.ends.get(a.userId);
         if (fim && fim >= hoje) startDate = addDaysIso(fim, 1);
       }
       return { alvo: a, startDate, endDate: null };
     });
 
-    const results: SendResultItem[] = [];
-    for (const p of planos) {
-      const r = await this.offers.sendTemplateTo(
-        autor,
-        groupId,
-        p.alvo.userId,
-        templateId,
-        source,
-        {
+    // O lote inteiro numa transação: ou todo mundo recebe, ou ninguém.
+    const feitos = await this.offers.sendTemplateBatch(
+      autor,
+      groupId,
+      templateId,
+      source,
+      planos.map((p) => ({
+        userId: p.alvo.userId,
+        input: {
           schedule,
           startDate: p.startDate,
           weeks: input.weeks,
@@ -248,15 +275,16 @@ export class PlanSendService {
           note: input.note,
           changeNote: input.changeNote,
         },
-      );
-      results.push({
-        membershipId: p.alvo.membershipId,
+      })),
+    );
+    return {
+      results: feitos.map((r, i) => ({
+        membershipId: planos[i]!.alvo.membershipId,
         id: r.id,
         version: r.version,
         kind: r.kind,
-      });
-    }
-    return { results };
+      })),
+    };
   }
 
   private async sendNutrition(
@@ -267,36 +295,28 @@ export class PlanSendService {
     input: SendPlansDto,
   ): Promise<SendResult> {
     const plano = this.nutritionInput(tpl.snapshot, input.note);
-    const anteriores = await this.prisma.nutritionPlan.findMany({
-      where: {
-        authorId: autor.id,
-        groupId,
-        sourceTemplateId: tpl.id,
-        userId: { in: alvos.map((a) => a.userId) },
-        status: { in: [NutritionPlanStatus.SENT, NutritionPlanStatus.ACCEPTED] },
-      },
-      select: { userId: true },
-    });
-    const jaTinha = new Set(anteriores.map((a) => a.userId));
-    const results: SendResultItem[] = [];
-    for (const a of alvos) {
-      const v = await this.nutritionPlans.send(autor.id, a.membershipId, plano, {
-        sourceTemplateId: tpl.id,
-        changeNote: input.changeNote ?? null,
-      });
-      const update = jaTinha.has(a.userId);
-      this.notifications.notify(
-        [a.userId],
-        nutritionPlanSentNotice({ authorName: autor.name, update }),
-      );
-      results.push({
-        membershipId: a.membershipId,
-        id: v.id,
-        version: v.version,
-        kind: update ? 'update' : 'new',
-      });
-    }
-    return { results };
+    // Uma transação para o lote; versão e "o que mudou" só do mesmo modelo.
+    const feitos = await this.nutritionPlans.sendFromTemplate(
+      autor.id,
+      alvos.map((a) => a.membershipId),
+      plano,
+      { sourceTemplateId: tpl.id, changeNote: input.changeNote ?? null },
+    );
+    return {
+      results: feitos.map(({ plan, update }, i) => {
+        const a = alvos[i]!;
+        this.notifications.notify(
+          [a.userId],
+          nutritionPlanSentNotice({ authorName: autor.name, update }),
+        );
+        return {
+          membershipId: a.membershipId,
+          id: plan.id,
+          version: plan.version,
+          kind: update ? ('update' as const) : ('new' as const),
+        };
+      }),
+    };
   }
 
   /**
@@ -549,7 +569,12 @@ export class PlanSendService {
     for (const id of pedidos) {
       const m = pode.get(id);
       if (!m) throw new NotFoundException(MEMBER_NOT_FOUND);
-      out.push({ membershipId: m.id, userId: m.userId, timezone: m.user.timezone });
+      out.push({
+        membershipId: m.id,
+        userId: m.userId,
+        timezone: m.user.timezone,
+        name: m.user.name,
+      });
     }
     return out;
   }
@@ -560,6 +585,7 @@ export class PlanSendService {
       where: { groupId, userId: { in: userIds }, removedAt: null, endedAt: null },
       select: {
         userId: true,
+        authorId: true,
         sourceTemplateId: true,
         user: { select: { timezone: true } },
         versions: { orderBy: { version: 'asc' } },
@@ -573,16 +599,31 @@ export class PlanSendService {
       .filter((o) => o.state && LIVE.has(o.state.status));
   }
 
-  /** "Depois do plano atual": o último dia do plano vivo de cada pessoa, nesta comunidade. */
-  private async currentEnds(groupId: string, userIds: string[]): Promise<Map<string, string>> {
-    const fins = new Map<string, string>();
+  /**
+   * "Depois do plano atual": o último dia do plano vivo de cada pessoa, nesta
+   * comunidade, e quem segue um flexível sem fim. A oferta que este envio vai
+   * transformar em versão nova (o mesmo modelo, do mesmo autor) não conta: a
+   * versão nova a substitui (revisão do PR #461).
+   */
+  private async currentEnds(
+    groupId: string,
+    userIds: string[],
+    authorId: string,
+    templateId: string | null,
+  ): Promise<{ ends: Map<string, string>; openEnded: Set<string> }> {
+    const ends = new Map<string, string>();
+    const openEnded = new Set<string>();
     for (const o of await this.liveOffers(groupId, userIds)) {
+      if (templateId && o.authorId === authorId && o.sourceTemplateId === templateId) continue;
       const fim = o.state?.endDate;
-      if (!fim) continue;
-      const atual = fins.get(o.userId);
-      if (!atual || fim > atual) fins.set(o.userId, fim);
+      if (!fim) {
+        if (o.state?.shown.schedule === 'FLEXIBLE') openEnded.add(o.userId);
+        continue;
+      }
+      const atual = ends.get(o.userId);
+      if (!atual || fim > atual) ends.set(o.userId, fim);
     }
-    return fins;
+    return { ends, openEnded };
   }
 
   private async canReadWorkout(viewerId: string, membershipId: string): Promise<boolean> {
@@ -600,4 +641,5 @@ interface Recipient {
   membershipId: string;
   userId: string;
   timezone: string;
+  name: string;
 }
