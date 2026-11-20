@@ -204,7 +204,7 @@ describe('nome provisório na comunidade (ADR 050)', () => {
     expect(needsCommunityName({ ...me, nickname: 'Aninha' })).toBe(false);
     expect(needsCommunityName({ ...me, nameIsProvisional: false })).toBe(false);
     // API de antes, sem o campo: não pergunta.
-    expect(needsCommunityName({ name: 'Ana', email: 'a@x.com', nickname: null })).toBe(false);
+    expect(needsCommunityName({ name: 'Ana', nickname: null })).toBe(false);
     expect(needsCommunityName(undefined)).toBe(false);
   });
 
