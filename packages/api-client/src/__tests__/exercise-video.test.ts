@@ -6,6 +6,7 @@ import {
   howToMeta,
   isYoutubeEmbedNavigation,
   embedNavigationAction,
+  communityVideoRecovery,
   signedVideoIsStale,
   youtubeEmbedUrl,
   youtubeHeroThumbnails,
@@ -171,5 +172,35 @@ describe('embedNavigationAction', () => {
       ),
     ).toBe('load');
     expect(embedNavigationAction({ url: 'intent://x', isTopFrame: false }, android)).toBe('block');
+  });
+});
+
+/**
+ * O vídeo da comunidade toca por URL assinada de vida curta. Se o player falha
+ * (URL vencida), busca uma URL nova antes de tentar de novo ou abrir o navegador.
+ */
+describe('communityVideoRecovery', () => {
+  it('com URL nova, tenta de novo no player uma vez', () => {
+    expect(communityVideoRecovery({ failedUrl: 'u1', freshUrl: 'u2', retried: false })).toEqual({
+      action: 'retry',
+      url: 'u2',
+    });
+  });
+
+  it('se a URL nova também falha, abre a nova no navegador (nunca a vencida)', () => {
+    expect(communityVideoRecovery({ failedUrl: 'u2', freshUrl: 'u3', retried: true })).toEqual({
+      action: 'browser',
+      url: 'u3',
+    });
+    expect(communityVideoRecovery({ failedUrl: 'u1', freshUrl: 'u1', retried: false })).toEqual({
+      action: 'browser',
+      url: 'u1',
+    });
+  });
+
+  it('sem URL nova (o vídeo saiu ou a busca falhou), volta para a capa', () => {
+    expect(communityVideoRecovery({ failedUrl: 'u1', freshUrl: null, retried: false })).toEqual({
+      action: 'poster',
+    });
   });
 });
