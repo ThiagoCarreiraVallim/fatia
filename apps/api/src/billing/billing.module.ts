@@ -5,6 +5,8 @@ import { BillingReminderJob } from './billing-reminder-job.service';
 import { GroupRoleGuard } from '../sharing/guards/group-role.guard';
 import { BillingController } from './billing.controller';
 import { RevenueCatService } from './revenuecat/revenuecat.service';
+import { OfferController } from './offer.controller';
+import { OfferService } from './offer.service';
 import { ProgramController } from './program.controller';
 import { ProgramService } from './program.service';
 import { SeatController } from './seat.controller';
@@ -32,7 +34,7 @@ import {
 @Module({
   // Os avisos de cobrança e de fim do teste (#386) saem por push e e-mail.
   imports: [NotificationsModule],
-  controllers: [BillingController, SeatController, ProgramController],
+  controllers: [BillingController, SeatController, ProgramController, OfferController],
   providers: [
     { provide: BillingEntitlements, useClass: StaticEntitlementsService },
     { provide: AiEntitlements, useClass: SubscriptionEntitlementsService },
@@ -56,6 +58,7 @@ import {
     UserSubscriptionService,
     SeatPoolService,
     ProgramService,
+    OfferService,
     RevenueCatService,
     BillingReminderJob,
     GroupRoleGuard,

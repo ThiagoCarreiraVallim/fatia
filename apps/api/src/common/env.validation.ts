@@ -134,6 +134,14 @@ export const AppEnvSchema = z
     // Preço de um assento de comunidade por mês (ADR 025). Vale para compras e
     // aumentos novos; o pool guarda o preço com que foi comprado.
     BILLING_SEAT_MONTHLY_CENTS: z.coerce.number().int().positive().default(1490),
+    // Ofertas da comunidade (#403): a venda pelo Asaas (checkout público, #421)
+    // só liga com true. Desligada, o painel cria e publica, mas não vende.
+    OFFERS_SALES_ENABLED: z
+      .enum(['true', 'false', '1', '0', ''])
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
+    // Taxa da plataforma sobre cada venda de oferta, em %. 0 até decidir o valor.
+    OFFERS_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(50).default(0),
 
     // RevenueCat (compra dentro do app, Apple e Google). Vazio = webhook recusa e
     // o app não oferece compra. `REVENUECAT_WEBHOOK_AUTH` é o valor do header
