@@ -566,12 +566,6 @@ export default function ReportPage() {
         </Button>
       </div>
 
-      {r.partial && (
-        <p className="text-sm text-muted-foreground">
-          Mês em andamento: os números vão até ontem e não comparam com o mês anterior.
-        </p>
-      )}
-
       <ul
         aria-label="Resumo do mês"
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4"

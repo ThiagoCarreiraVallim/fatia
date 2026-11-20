@@ -20,6 +20,6 @@ Branch `redesign/400-relatorio`. Banco de teste `fatia_t400`. Spec do revisor:
 
 - [x] testes vermelhos api (report-review.integration.spec.ts + ajustes em report e report-email)
 - [x] correções api + migration (feita no fatia_t400 recriado)
-- [ ] api-client/web (sem "(até ontem)", Outras origens)
+- [x] api-client/web (sem "(até ontem)", Outras origens)
 - [ ] docs
 - [ ] merge origin/main, banco recriado, lint/typecheck/testes

@@ -23,7 +23,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 const num = (n: number) => n.toLocaleString('pt-BR');
-const LESS = 'menos de 5';
 
 /**
  * Origem dos convites (#400, Pn-25): de onde vem quem entra (links e QRs com
@@ -154,14 +153,12 @@ export default function OriginsPage() {
                   <tr key={o.key} className="border-b border-subtle last:border-0">
                     <td className="p-3 font-semibold">{originRowName(o)}</td>
                     <td className="p-3 text-muted-foreground">{originKindLabel(o.kind)}</td>
-                    <td className="p-3 tabular-nums">{o.joined === null ? LESS : num(o.joined)}</td>
+                    <td className="p-3 tabular-nums">{o.joined === null ? '—' : num(o.joined)}</td>
                     <td className="p-3 tabular-nums">
                       {o.activated === null ? '—' : num(o.activated)}
                     </td>
                     <td className="p-3">
-                      {o.joined === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : o.percent === null ? (
+                      {o.percent === null ? (
                         <span className="text-xs text-muted-foreground">{SMALL_SAMPLE}</span>
                       ) : (
                         <b className="tabular-nums">{`${o.percent}%`}</b>
@@ -177,7 +174,7 @@ export default function OriginsPage() {
 
       <p className="text-xs text-muted-foreground">
         Contamos só quem entrou e quanto ativou. Nada de nome, nada de dado de saúde. Origens com
-        menos de 5 pessoas ficam ocultas.
+        menos de 5 pessoas entram juntas em &quot;Outras origens&quot;, sem nome, ou não aparecem.
       </p>
     </div>
   );

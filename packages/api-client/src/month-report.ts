@@ -33,8 +33,8 @@ export interface ReportChallengeRow {
 
 export interface MonthReport {
   month: string;
+  /** Só meses fechados, do mais novo. */
   months: string[];
-  partial: boolean;
   groupName: string;
   optIn: number | null;
   riskDays: number;
@@ -65,7 +65,8 @@ export interface MonthReport {
 }
 
 export type OriginsDays = 7 | 30;
-export type OriginKindLabel = 'qr' | 'link' | 'list' | 'email' | 'code';
+/** `other`: "Outras origens", as linhas com menos de 5 somadas, sem rótulo. */
+export type OriginKindLabel = 'qr' | 'link' | 'list' | 'email' | 'code' | 'other';
 
 export interface OriginRow {
   key: string;
@@ -154,14 +155,14 @@ function monthLabel(month: string, current: string): string {
     : `${mesDe(month)} de ${month.slice(0, 4)}`;
 }
 
-/** "Relatório de outubro" (Pn-03). `current` é o mês corrente (o primeiro de `months`). */
+/** "Relatório de outubro" (Pn-03). `current` é o mês de referência (o primeiro de `months`). */
 export function reportTitle(month: string, current: string): string {
   return `Relatório de ${monthLabel(month, current)}`;
 }
 
-/** A opção do seletor de mês: o corrente avisa que vai até ontem. */
+/** A opção do seletor de mês (só meses fechados): o ano só fora do ano de referência. */
 export function reportMonthOption(month: string, current: string): string {
-  return month === current ? `${mesDe(month)} (até ontem)` : monthLabel(month, current);
+  return monthLabel(month, current);
 }
 
 /** `10.3` → "10,3"; inteiro sai sem vírgula. */
@@ -265,6 +266,7 @@ const KIND_LABEL: Record<OriginKindLabel, string> = {
   list: 'lista',
   email: 'e-mail',
   code: 'código',
+  other: 'vários',
 };
 
 export function originKindLabel(kind: OriginKindLabel): string {
@@ -273,6 +275,7 @@ export function originKindLabel(kind: OriginKindLabel): string {
 
 /** "QR · recepção", "Instagram" ou só o nome, quando o link não tem origem. */
 export function originRowName(row: OriginRow): string {
+  if (row.kind === 'other') return 'Outras origens';
   if (!row.origin) return row.label ?? 'Sem nome';
   // O rótulo do QR no formulário já diz "recepção"; aqui o nome do link completa.
   const origem = row.origin === 'QR' ? 'QR' : inviteOriginLabel(row.origin);
