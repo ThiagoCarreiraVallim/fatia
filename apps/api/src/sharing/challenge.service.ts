@@ -547,6 +547,15 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.groupChallengeParticipant.deleteMany({
       where: { challengeId: row.id, membershipId: m.membershipId },
     });
+    // Quem sai devolve o assento do programa do desafio (#403); a vaga vai para
+    // o próximo que estiver nele.
+    await this.programs
+      ?.syncChallenge(row.id, now)
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `Assento do programa do desafio falhou: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
     return { left: true };
   }
 

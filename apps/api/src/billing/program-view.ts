@@ -22,15 +22,25 @@ export interface ProgramView {
   startDate: string;
   endDate: string;
   amountCents: number;
-  /** `PENDING` aguardando, `ACTIVE` paga ou sem cobrança, `PAST_DUE` vencida. */
+  /**
+   * `PENDING` aguardando, `ACTIVE` paga ou sem cobrança, `PAST_DUE` vencida,
+   * `CANCELED` estornada, contestada ou apagada (o PRO acabou).
+   */
   chargeStatus: SubscriptionStatus;
   status: ProgramStatus;
 }
 
-export type ProgramStatus = 'SCHEDULED' | 'ACTIVE' | 'ENDED';
+export type ProgramStatus = 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELED';
 
-/** O status sai das datas, como o direito: nada grava "terminou". */
-export function programStatus(p: { startsAt: Date; endsAt: Date }, now: Date): ProgramStatus {
+/**
+ * O status sai das datas, como o direito: nada grava "terminou". Cobrança
+ * estornada, contestada ou apagada encerra o programa, como no direito.
+ */
+export function programStatus(
+  p: { startsAt: Date; endsAt: Date; chargeStatus: SubscriptionStatus },
+  now: Date,
+): ProgramStatus {
+  if (p.chargeStatus === 'CANCELED' || p.chargeStatus === 'EXPIRED') return 'CANCELED';
   if (now < p.startsAt) return 'SCHEDULED';
   if (now >= p.endsAt) return 'ENDED';
   return 'ACTIVE';

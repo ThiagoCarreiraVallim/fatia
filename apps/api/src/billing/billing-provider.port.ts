@@ -173,4 +173,6 @@ export interface SeatProvider {
   createSubscriptionCharge(
     entrada: EntradaDeCobrancaDaAssinatura,
   ): Promise<{ providerChargeId: string; url: string | null }>;
+  /** Apaga uma avulsa ainda não paga (a que ficou sem o registro que a explica). */
+  cancelCharge(providerChargeId: string): Promise<void>;
 }

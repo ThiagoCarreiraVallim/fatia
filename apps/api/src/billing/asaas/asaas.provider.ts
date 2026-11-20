@@ -276,6 +276,10 @@ export class AsaasProvider implements BillingProvider, SubscriptionProvider, Sea
     return { providerChargeId: cobranca.id, url: cobranca.invoiceUrl ?? null };
   }
 
+  async cancelCharge(providerChargeId: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/v3/payments/${encodeURIComponent(providerChargeId)}`);
+  }
+
   async cancelSubscription(providerSubscriptionId: string): Promise<void> {
     await this.request<unknown>(
       'DELETE',

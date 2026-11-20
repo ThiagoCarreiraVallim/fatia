@@ -54,6 +54,7 @@ function provedorFalso() {
       providerChargeId: `pay_adj_${Date.now()}_${++n}`,
       url: 'https://sandbox.asaas.com/i/adj',
     })),
+    cancelCharge: jest.fn(async (_id: string) => undefined),
     verifySubscriptionWebhook: real.verifySubscriptionWebhook.bind(real),
   } satisfies SeatProvider & SubscriptionProvider;
 }

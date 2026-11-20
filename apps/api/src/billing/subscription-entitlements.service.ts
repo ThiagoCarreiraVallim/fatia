@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import {
   INSTANCIA_LIBERADA,
@@ -37,7 +38,7 @@ const SEAT_AS_SUBSCRIPTION = {
   membershipId: true,
   assignedAt: true,
   endsAt: true,
-  program: { select: { name: true } },
+  program: { select: { name: true, chargeStatus: true } },
   pool: { select: POOL_AS_SUBSCRIPTION },
 } as const;
 
@@ -58,28 +59,42 @@ function seatInWindow(now: Date) {
 type SeatRow = {
   assignedAt: Date;
   endsAt: Date | null;
-  program: { name: string } | null;
+  program: { name: string; chargeStatus: SubscriptionStatus } | null;
   pool: PoolRow;
 };
 
 /**
- * Um assento lido como assinatura. O de programa (#403) é pago pelo programa e
- * acaba no fim dele: se o fim vem antes do fim do período do pool, ele é o fim
- * mostrado ("PRO até 30/11 · Programa Verão 21"). O atraso do pool continua
- * valendo do mesmo jeito.
+ * Um assento lido como assinatura. O de programa (#403) é cobrança avulsa e
+ * vale pela janela do próprio programa: o fim e o cancelamento do pool não
+ * contam ("PRO até 30/11 · Programa Verão 21"). Estornada, contestada ou
+ * apagada, a cobrança do programa encerra o PRO; vencida (ou o pool em
+ * atraso) segue a carência do pool, como o resto dos assentos.
  */
 function seatAsSubscription(seat: SeatRow): AssinaturaLida {
   const base = poolAsSubscription(seat.pool, seat.assignedAt, 'SEAT');
-  if (!seat.program && !seat.endsAt) return base;
+  if (seat.program) {
+    const cobranca = seat.program.chargeStatus;
+    const status: SubscriptionStatus =
+      cobranca === 'CANCELED' || cobranca === 'EXPIRED'
+        ? 'EXPIRED'
+        : cobranca === 'PAST_DUE' || seat.pool.status === 'PAST_DUE'
+          ? 'PAST_DUE'
+          : 'ACTIVE';
+    return {
+      ...base,
+      status,
+      currentPeriodEnd: seat.endsAt,
+      cancelAtPeriodEnd: true,
+      graceEndsAt: status === 'PAST_DUE' ? seat.pool.graceEndsAt : null,
+      paidBy: 'PROGRAM',
+      programName: seat.program.name,
+      programEndsAt: seat.endsAt,
+    };
+  }
+  if (!seat.endsAt) return base;
   const fimDoPool = seat.pool.currentPeriodEnd;
-  const acabaAntes = seat.endsAt && (!fimDoPool || seat.endsAt <= fimDoPool);
-  return {
-    ...base,
-    ...(acabaAntes ? { currentPeriodEnd: seat.endsAt, cancelAtPeriodEnd: true } : {}),
-    ...(seat.program
-      ? { paidBy: 'PROGRAM' as const, programName: seat.program.name, programEndsAt: seat.endsAt }
-      : {}),
-  };
+  const acabaAntes = !fimDoPool || seat.endsAt <= fimDoPool;
+  return acabaAntes ? { ...base, currentPeriodEnd: seat.endsAt, cancelAtPeriodEnd: true } : base;
 }
 
 type PoolRow = Omit<AssinaturaLida, 'source' | 'interval' | 'createdAt' | 'group'> & {

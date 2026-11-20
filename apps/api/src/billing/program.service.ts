@@ -87,8 +87,13 @@ export class ProgramService {
     if (dias > MAX_DIAS) throw new BadRequestException('Um programa dura no máximo um ano.');
 
     const pool = await this.prisma.groupSeatPool.findUnique({ where: { groupId } });
-    if (!pool || pool.status === 'CANCELED' || pool.status === 'EXPIRED') {
-      throw new NotFoundException('Esta comunidade não tem assentos ativos.');
+    if (!pool) throw new NotFoundException('Esta comunidade não tem assentos ativos.');
+    // O programa é cobrado na assinatura dos assentos: cancelada (ou de saída
+    // no fim do período), não há onde cobrar.
+    if (pool.status === 'CANCELED' || pool.status === 'EXPIRED' || pool.cancelAtPeriodEnd) {
+      throw new ConflictException(
+        'Os assentos desta comunidade foram cancelados. Reative a assinatura antes de criar um programa.',
+      );
     }
     if (pool.status === 'PENDING') {
       throw new ConflictException('Os programas ficam disponíveis depois do primeiro pagamento.');
@@ -159,41 +164,56 @@ export class ProgramService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.groupProgram.create({
-        data: {
-          id,
-          groupId,
-          poolId: pool.id,
-          name,
-          note: input.note?.trim() || null,
-          kind: input.kind,
-          challengeId,
-          seats: input.seats,
-          startsAt,
-          endsAt,
-          unitPriceCents: unit,
-          amountCents,
-          providerChargeId,
-          chargeStatus: providerChargeId ? 'PENDING' : 'ACTIVE',
-          createdById: actorId,
-        },
-      });
-      if (input.kind === 'CLASS') {
-        await tx.groupSeatAssignment.createMany({
-          data: membros.map((membershipId) => ({
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.groupProgram.create({
+          data: {
+            id,
+            groupId,
             poolId: pool.id,
-            programId: id,
-            membershipId,
+            name,
+            note: input.note?.trim() || null,
+            kind: input.kind,
+            challengeId,
+            seats: input.seats,
             startsAt,
             endsAt,
-            assignedById: actorId,
-          })),
+            unitPriceCents: unit,
+            amountCents,
+            providerChargeId,
+            chargeStatus: providerChargeId ? 'PENDING' : 'ACTIVE',
+            createdById: actorId,
+          },
         });
-      } else {
-        await this.fillFromChallenge(tx, id);
+        if (input.kind === 'CLASS') {
+          await tx.groupSeatAssignment.createMany({
+            data: membros.map((membershipId) => ({
+              poolId: pool.id,
+              programId: id,
+              membershipId,
+              startsAt,
+              endsAt,
+              assignedById: actorId,
+            })),
+          });
+        } else {
+          await this.fillFromChallenge(tx, id);
+        }
+      });
+    } catch (err) {
+      // Sem o programa gravado, a cobrança não explica nada: sai do Asaas.
+      if (providerChargeId && this.provedor) {
+        await this.provedor.cancelCharge(providerChargeId).catch((e: unknown) =>
+          this.logger.error({
+            event: 'cobranca_de_programa_orfa',
+            groupId,
+            providerChargeId,
+            err: (e as Error).name,
+          }),
+        );
       }
-    });
+      throw err;
+    }
     this.logger.log({ event: 'programa_criado', groupId, kind: input.kind, seats: input.seats });
     const [view] = await listPrograms(this.prisma, groupId, now, { id });
     return view!;
@@ -232,6 +252,23 @@ export class ProgramService {
       },
     });
     if (!p.challengeId) return 0;
+    const participantes = (
+      await tx.groupChallengeParticipant.findMany({
+        where: {
+          challengeId: p.challengeId,
+          // A membership é da mesma comunidade do programa, e ativa.
+          membership: { groupId: p.groupId, status: 'ACTIVE' },
+        },
+        orderBy: { joinedAt: 'asc' },
+        select: { membershipId: true },
+      })
+    ).map((x) => x.membershipId);
+    // Quem saiu do desafio (ou da comunidade) devolve o assento: a vaga é de
+    // quem está no desafio.
+    await tx.groupSeatAssignment.updateMany({
+      where: { programId, revokedAt: null, membershipId: { notIn: participantes } },
+      data: { revokedAt: new Date() },
+    });
     const usados = await tx.groupSeatAssignment.findMany({
       where: { programId, revokedAt: null },
       select: { membershipId: true },
@@ -239,19 +276,7 @@ export class ProgramService {
     const livres = p.seats - usados.length;
     if (livres <= 0) return 0;
     const ja = new Set(usados.map((u) => u.membershipId));
-    const participantes = await tx.groupChallengeParticipant.findMany({
-      where: {
-        challengeId: p.challengeId,
-        // A membership é da mesma comunidade do programa, e ativa.
-        membership: { groupId: p.groupId, status: 'ACTIVE' },
-      },
-      orderBy: { joinedAt: 'asc' },
-      select: { membershipId: true },
-    });
-    const novos = participantes
-      .map((x) => x.membershipId)
-      .filter((m) => !ja.has(m))
-      .slice(0, livres);
+    const novos = participantes.filter((m) => !ja.has(m)).slice(0, livres);
     if (!novos.length) return 0;
     await tx.groupSeatAssignment.createMany({
       data: novos.map((membershipId) => ({
