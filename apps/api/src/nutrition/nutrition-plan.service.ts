@@ -620,6 +620,8 @@ export class NutritionPlanService {
           // O teto de refeições salvas vale também aqui. O que não couber fica
           // só no plano, que continua registrando pelo "comi isso".
           if (room <= 0) continue;
+          // Refeição "sem sugestão" (#407) não vira refeição salva vazia.
+          if (option.items.length === 0) continue;
           const suffix = meal.options.length > 1 ? ` · opção ${option.position + 1}` : '';
           const tag = ` (plano v${plan.version})`;
           const room4name = MAX_TEMPLATE_NAME - suffix.length - tag.length;
