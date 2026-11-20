@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prefillForNextSet } from '../workout/set-prefill';
+import { prefillForNextSet, restoreSetDraft, setDraftKey } from '../workout/set-prefill';
 import type { PrescribedSet, SessionSet } from '../workout';
 
 const prescription: PrescribedSet = {
@@ -140,5 +140,37 @@ describe('prefillForNextSet', () => {
       weightKg: null,
       reps: 12,
     });
+  });
+});
+
+/**
+ * "Como fazer" é outra tela: a sessão guiada pode ser remontada na volta. O que
+ * a pessoa digitou para a série em andamento fica num rascunho por exercício.
+ */
+describe('restoreSetDraft — o rascunho da série volta depois do "Como fazer"', () => {
+  const draft = {
+    doneSets: 2,
+    weightKg: 42.5,
+    reps: 9,
+    feeling: 3,
+    touched: true,
+    prefill: { weightKg: 40, reps: 10 },
+  };
+
+  it('volta para a mesma série', () => {
+    expect(restoreSetDraft(draft, 2)).toEqual(draft);
+  });
+
+  it('depois de outra série registrada, o rascunho velho não vale', () => {
+    expect(restoreSetDraft(draft, 3)).toBeNull();
+  });
+
+  it('sem rascunho, nada', () => {
+    expect(restoreSetDraft(undefined, 0)).toBeNull();
+  });
+
+  it('a chave é da sessão e do exercício', () => {
+    expect(setDraftKey('s1', 7)).toEqual(['workout', 'set-draft', 's1', 7]);
+    expect(setDraftKey('s1', 7)).not.toEqual(setDraftKey('s1', 8));
   });
 });
