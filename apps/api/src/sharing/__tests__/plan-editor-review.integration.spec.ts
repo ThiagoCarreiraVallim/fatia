@@ -39,7 +39,7 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
   let cardio = 0;
   let coach = '';
   let gid = '';
-  void [content, today, addDaysIso, () => cardio]; // os casos D2-D4 vêm a seguir
+  void [today, addDaysIso]; // os casos D2 e D4 vêm a seguir
   async function student() {
     const id = await person();
     await prisma.professionalLink.create({
@@ -167,5 +167,48 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
     await plans.updatePlanExercise(ana, plan.id, pe.id, { loadMode: 'WEIGHT' });
     const row = await prisma.workoutPlanExercise.findUniqueOrThrow({ where: { id: pe.id } });
     expect(row).toMatchObject({ loadMode: 'WEIGHT', loadPercent: null });
+  });
+
+  it('D3: documento do editor com duas intensidades de cardio (zona e RPE) é recusado como no REST', async () => {
+    const owner = await person();
+    const g = await prisma.group.create({
+      data: { type: 'SPONSORED', name: 'G', slug: `${stamp}-g`, ownerId: owner, autoPosts: [] },
+    });
+    await prisma.groupMembership.create({
+      data: { groupId: g.id, userId: owner, role: 'OWNER', status: 'ACTIVE' },
+    });
+    const doc = {
+      sessions: [
+        {
+          name: 'C',
+          items: [
+            {
+              type: 'exercise',
+              exerciseId: cardio,
+              targetSets: 1,
+              targetReps: '1',
+              cardioTarget: 'CALORIES',
+              cardioZone: 2,
+              cardioRpe: 9,
+            },
+          ],
+        },
+      ],
+    };
+    await expect(
+      content.createWorkoutTemplate(owner, g.id, { title: 'x', document: doc }),
+    ).rejects.toThrow(/intensidade/);
+    // Meta por calorias sem as calorias, também como no REST.
+    const semCalorias = structuredClone(doc);
+    delete (semCalorias.sessions[0]!.items[0] as Record<string, unknown>).cardioRpe;
+    await expect(
+      content.createWorkoutTemplate(owner, g.id, { title: 'x', document: semCalorias }),
+    ).rejects.toThrow(/calorias/);
+    // Completo, passa.
+    const ok = structuredClone(semCalorias);
+    (ok.sessions[0]!.items[0] as Record<string, unknown>).cardioCalories = 300;
+    await expect(
+      content.createWorkoutTemplate(owner, g.id, { title: 'x', document: ok }),
+    ).resolves.toBeDefined();
   });
 });
