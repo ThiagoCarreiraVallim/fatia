@@ -754,8 +754,16 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **E-mail:** no deploy, outubro sairia em 19/11 para todas as comunidades (migration grava o mês anterior; limite até o 3º dia útil); falha no envio perdia o mês (lease); erro de uma comunidade travava as outras (try por comunidade).
   - **Marca de destinatário** sobrevivia a sair, voltar ou trocar de papel; o aviso diário da #399 tinha o mesmo padrão. As duas zeram.
   - **Ativos por dia:** a diferença entre dois dias isolava a 1ª vez de alguém; agora é por semana. As diferenças que sobram (entre semanas, "sem treino" menos quem nunca treinou) são contagens de pessoas e estão em "O que não está protegido".
+- **Passada visual (2026-11-19):** prints em `~/.cache/fatia-vis/400/cmp-<prancha>.<tema>.png` (prancha | web 1440 | web 390, escuro e claro) para Pn-03, Pn-25, Pn-25b, Pn-25c e Ex-02 (e-mail renderizado pelo `reportEmail`), e `cmp-PDF.png` com a impressão do "Baixar PDF". Dados mínimos por SQL no banco de dev, apagados no fim (contagens antes e depois em `demo-rows.txt`). Corrigido:
+  - O "Baixar PDF" no tema escuro saía com texto claro no papel branco. A impressão usa os tokens do tema claro.
+  - "Revisados" mostrava "0 · 0 anulados"; sem anulação sai só o número.
+  - Origens no celular: a tabela de 5 colunas cortava a taxa em 390. Vira uma lista de cartões (nome, tipo, "N entraram · N ativaram", taxa); a tabela fica do `sm` para cima.
+  - Origens: tipo em etiqueta contornada e a taxa com barra, como na Pn-25.
+  - Pn-25b: o rodapé de privacidade só aparece com números (some no estado vazio).
+  - Gráficos: média de sessões e membros ativos em número grande, "+12 no mês" em selo, área sob a linha e o eixo do tempo (começo, meio e fim). A nota da célula suprimida dizia "Dias"; a série é por semana.
+  - Conferido: o menu não cobre botões (no 390 o fim da página passa da barra de baixo); nada de texto escuro no escuro; a impressão esconde menu, seletor e ajustes.
+  - Desvios que ficam: 7 cartões em vez de 8 (visitas e avaliações, ver acima); selos de variação neutros como na #398; sem 90 dias nas origens; no e-mail, "sem treino há 7+ dias" no lugar de "sem registro".
 - **Falta:**
-  - Passada visual e prints (web e e-mail).
   - Os cartões de visitas (#390) e avaliações (#383).
   - Os outros papéis vendo o relatório (#404).
   - O add-on de insights (#293 → #403).
