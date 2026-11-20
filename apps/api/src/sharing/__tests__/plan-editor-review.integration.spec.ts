@@ -39,7 +39,6 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
   let cardio = 0;
   let coach = '';
   let gid = '';
-  void [today, addDaysIso]; // os casos D2 e D4 vêm a seguir
   async function student() {
     const id = await person();
     await prisma.professionalLink.create({
@@ -210,5 +209,85 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
     await expect(
       content.createWorkoutTemplate(owner, g.id, { title: 'x', document: ok }),
     ).resolves.toBeDefined();
+  });
+
+  it('D2: versão aceita para o futuro com uma sessão a menos: a agenda futura fica só nos planos da versão nova', async () => {
+    const ana = await student();
+    const v1Start = addDaysIso(today, -21);
+    const twoSessions = {
+      version: 2,
+      name: 'AB',
+      sessions: [
+        { name: 'A', items: [item(ex[0]!)] },
+        { name: 'B', items: [item(ex[1]!)] },
+      ],
+    };
+    const offer = await prisma.planOffer.create({
+      data: {
+        userId: ana,
+        authorId: coach,
+        groupId: gid,
+        versions: {
+          create: {
+            version: 1,
+            title: 'AB',
+            snapshotVersion: 2,
+            schedule: 'CALENDAR',
+            startDate: v1Start,
+            weeks: 8,
+            weekdays: [1, 2, 3, 4, 5],
+            snapshot: twoSessions,
+          },
+        },
+      },
+      include: { versions: true },
+    });
+    await offers.accept(ana, offer.id, offer.versions[0]!.id, TZ);
+    const before = await prisma.workoutPlan.findMany({
+      where: { userId: ana, fromOfferId: offer.id },
+    });
+    expect(before).toHaveLength(2);
+
+    // v2: uma sessão só, começando daqui a 7 dias.
+    const v2Start = addDaysIso(today, 7);
+    const v2 = await prisma.planOfferVersion.create({
+      data: {
+        offerId: offer.id,
+        version: 2,
+        title: 'A',
+        snapshotVersion: 2,
+        schedule: 'CALENDAR',
+        startDate: v2Start,
+        weeks: 4,
+        weekdays: [1, 2, 3, 4, 5],
+        snapshot: { version: 2, name: 'A', sessions: [{ name: 'A', items: [item(ex[2]!)] }] },
+      },
+    });
+    await offers.accept(ana, offer.id, v2.id, TZ);
+    // No aceite, a agenda futura da v2 já fica só no plano da sessão que ela tem.
+    const pa = before.find((p) => p.sessionIndex === 0)!;
+    const accepted = await prisma.plannedSession.findMany({
+      where: { userId: ana, offerVersionId: v2.id },
+      select: { planId: true },
+    });
+    expect(accepted.length).toBe(20);
+    expect(new Set(accepted.map((r) => r.planId))).toEqual(new Set([pa.id]));
+    // O tempo passa: a v2 começa hoje e o job assume.
+    await prisma.planOfferVersion.update({ where: { id: v2.id }, data: { startDate: today } });
+    await offers.settleScheduledVersions();
+
+    const linked = new Set(
+      (await prisma.workoutPlan.findMany({ where: { userId: ana, fromOfferId: offer.id } })).map(
+        (p) => p.id,
+      ),
+    );
+    const future = await prisma.plannedSession.findMany({
+      where: { userId: ana, date: { gte: v2Start }, offerVersionId: v2.id },
+      include: { plan: { select: { name: true, fromOfferId: true } } },
+    });
+    const total = 4 * 5;
+    const stray = future.filter((r) => !linked.has(r.planId));
+    expect(future.length).toBeGreaterThan(total - 6); // a agenda da v2 existe inteira
+    expect(stray).toHaveLength(0);
   });
 });
