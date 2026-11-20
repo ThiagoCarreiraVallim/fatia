@@ -57,7 +57,11 @@ export const assentos = (p: Partial<SeatsOverview> = {}): SeatsOverview => ({
     paymentUrl: null,
     monthlyCents: 2980,
     nextMonthlyCents: 2980,
+    graceDaysLeft: null,
   },
+  nextInvoice: null,
+  overdueInvoice: null,
+  programs: [],
   assigned: 1,
   assignments: [
     { membershipId: 'm-Carla', name: 'Carla', assignedAt: '2026-10-03T00:00:00Z', ownPro: false },
