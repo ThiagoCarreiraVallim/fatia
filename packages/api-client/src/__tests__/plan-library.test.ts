@@ -272,7 +272,7 @@ describe('sendsApi', () => {
       resolveUrl: (path) => `http://x${path}`,
       fetch: fetchMock as unknown as typeof globalThis.fetch,
     });
-    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
   });
   afterEach(() => {
     resetApiClient();

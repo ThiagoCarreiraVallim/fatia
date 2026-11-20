@@ -120,6 +120,8 @@ export interface GroupTip {
 }
 
 export interface TemplateMetaInput {
+  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
+  draft?: boolean;
   title?: string;
   description?: string | null;
   level?: PlanLevel | null;
@@ -179,10 +181,11 @@ export const contentApi = {
   ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/nutrition`, json('POST', input)),
   updatePlan: (groupId: string, id: string, input: UpdateTemplateInput) =>
     apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/${id}`, json('PATCH', input)),
-  publishPlan: (groupId: string, id: string, published: boolean) =>
+  /** `announce` (#405): "Anunciar no mural"; sem ele, vale a configuração da comunidade. */
+  publishPlan: (groupId: string, id: string, published: boolean, announce?: boolean) =>
     apiFetch<PlanTemplate>(
       `${base}/${groupId}/content/plans/${id}/publish`,
-      json('POST', { published }),
+      json('POST', announce === undefined ? { published } : { published, announce }),
     ),
   deletePlan: (groupId: string, id: string) =>
     apiFetch<{ id: string }>(`${base}/${groupId}/content/plans/${id}`, json('DELETE')),

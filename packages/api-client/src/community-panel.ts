@@ -36,6 +36,7 @@ export type PanelSection =
   | 'invites'
   | 'activation'
   | 'origins'
+  | 'send'
   | 'content'
   | 'programs'
   | 'exercises'
@@ -64,6 +65,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
   activation: { section: 'activation', label: 'Ativação pendente', path: '/activation' },
   origins: { section: 'origins', label: 'Origem dos convites', path: '/origins' },
+  send: { section: 'send', label: 'Enviar para alunos', path: '/send' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   programs: { section: 'programs', label: 'Programas', path: '/programs' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
@@ -123,6 +125,8 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.members,
       SECTIONS.invites,
       SECTIONS.activation,
+      // Enviar para alunos (#405, `member.plans`): dono e profissional.
+      SECTIONS.send,
       SECTIONS.content,
       // Os planos com começo e fim, por aluno (#403, `member.file`).
       SECTIONS.programs,

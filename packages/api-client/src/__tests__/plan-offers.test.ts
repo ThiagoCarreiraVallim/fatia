@@ -38,6 +38,7 @@ const version = (over: Partial<OfferVersion> = {}): OfferVersion => ({
   weeks: 4,
   weekdays: [1, 4],
   note: null,
+  changeNote: null,
   sentAt: '2025-11-10T12:12:00.000Z',
   respondedAt: null,
   summary: { exercises: 4, sets: 14, minutes: 40 },
