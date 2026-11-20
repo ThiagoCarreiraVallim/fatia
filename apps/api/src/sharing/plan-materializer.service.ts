@@ -137,6 +137,23 @@ interface SessionPlanData {
  * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
  * do profissional (#379) grava `fromOfferId` (`offerPlanWrites`).
  */
+/**
+ * O retrato v1 traz a `order` do autor; a v2 é posicional. Na v1 (uma sessão,
+ * sem bloco de circuito) a cópia guarda a `order` que o autor prescreveu, como
+ * antes da #406: adotar não inventa numeração no meio do caminho.
+ */
+function keepV1Order(raw: unknown, sessions: SessionPlanData[]): SessionPlanData[] {
+  const v1 = raw as { version?: unknown; exercises?: Array<{ order?: unknown }> } | null;
+  if (v1?.version !== 1 || !Array.isArray(v1.exercises) || sessions.length !== 1) return sessions;
+  const orders = v1.exercises
+    .map((e) => e.order)
+    .filter((o): o is number => typeof o === 'number')
+    .sort((a, b) => a - b);
+  const [only] = sessions;
+  if (!only || only.circuits.length || orders.length !== only.exercises.length) return sessions;
+  return [{ ...only, exercises: only.exercises.map((e, i) => ({ ...e, order: orders[i]! })) }];
+}
+
 @Injectable()
 export class PlanMaterializerService {
   constructor(
@@ -168,7 +185,7 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
-    const sessions = await this.buildSessions(userId, snap, groupId);
+    const sessions = keepV1Order(snapshot, await this.buildSessions(userId, snap, groupId));
     const multi = sessions.length > 1;
     const creates = sessions.map((s) => {
       // Id daqui só quando há bloco de circuito: o exercício dele aponta para o plano.
@@ -233,7 +250,7 @@ export class PlanMaterializerService {
         throw new NotFoundException('Plan not found');
       }
     }
-    const sessions = await this.buildSessions(userId, snap);
+    const sessions = keepV1Order(snapshot, await this.buildSessions(userId, snap));
     const bySession = new Map<number, string>();
     for (const e of existing) {
       const idx = e.sessionIndex ?? 0;
