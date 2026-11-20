@@ -1,3 +1,4 @@
+import { estimate1RM } from './helpers/estimate-1rm';
 import {
   BadRequestException,
   ConflictException,
@@ -276,7 +277,7 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new NotFoundException('Session not found');
-    return { ...this.shapeSession(session), feedback: await this.feedbackFor(session.id) };
+    return { ...(await this.shapeSession(session)), feedback: await this.feedbackFor(session.id) };
   }
 
   /** Reação e comentário da equipe na sessão (#399). Quem chama já conferiu o dono. */
@@ -303,7 +304,7 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
       orderBy: { startedAt: 'desc' },
     });
-    return session ? this.shapeSession(session) : null;
+    return session ? await this.shapeSession(session) : null;
   }
 
   /**
@@ -514,7 +515,7 @@ export class WorkoutSessionService {
       data: dto,
       include: SESSION_INCLUDE,
     });
-    return this.shapeSession(session);
+    return await this.shapeSession(session);
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -752,13 +753,44 @@ export class WorkoutSessionService {
     return null;
   }
 
-  private shapeSession(session: SessionWithRelations) {
+  /**
+   * 1RM estimado da pessoa por exercício (#406): a melhor série de força dela
+   * (Epley, como no histórico do exercício). Só do `userId` da sessão.
+   */
+  private async estimated1RMs(userId: string, exerciseIds: number[]): Promise<Map<number, number>> {
+    const best = new Map<number, number>();
+    if (exerciseIds.length === 0) return best;
+    const sets = await this.prisma.sessionSet.findMany({
+      where: {
+        exerciseId: { in: exerciseIds },
+        session: { userId, completedAt: { not: null } },
+        weightKg: { gt: 0 },
+        reps: { gt: 0 },
+      },
+      select: { exerciseId: true, weightKg: true, reps: true },
+    });
+    for (const s of sets) {
+      const e = estimate1RM(s.weightKg!, s.reps!);
+      if (e > (best.get(s.exerciseId) ?? 0)) best.set(s.exerciseId, e);
+    }
+    return best;
+  }
+
+  private async shapeSession(session: SessionWithRelations) {
     const { plan, ...rest } = session;
     // O que a pessoa tirou deste treino some daqui, e não só da tela do app:
     // web, MCP e o resumo do fim leem a mesma lista, e o progresso "3/5
     // exercícios" contaria o removido como pendente para sempre.
     const removed = new Set(session.removedExerciseIds ?? []);
     const kept = plan ? plan.exercises.filter((pe) => !removed.has(pe.exerciseId)) : [];
+    const oneRm = await this.estimated1RMs(
+      session.userId,
+      kept.filter((pe) => pe.loadMode === 'PERCENT_1RM').map((pe) => pe.exerciseId),
+    );
+    const percentKg = (exerciseId: number, percent: number | null) => {
+      const e = oneRm.get(exerciseId);
+      return e && percent ? Math.round(((e * percent) / 100) * 2) / 2 : null;
+    };
     const plannedExercises: PlannedExerciseView[] = kept.map((pe, i) => ({
       planExerciseId: pe.id,
       exerciseId: pe.exerciseId,
@@ -771,7 +803,8 @@ export class WorkoutSessionService {
       loadMode: pe.loadMode,
       startLoadKg: pe.startLoadKg,
       loadPercent: pe.loadPercent,
-      percentLoadKg: null,
+      percentLoadKg:
+        pe.loadMode === 'PERCENT_1RM' ? percentKg(pe.exerciseId, pe.loadPercent) : null,
       warmupBefore: pe.warmupBefore,
       restSeconds: pe.restSeconds,
       technique: pe.technique,
