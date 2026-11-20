@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@fatia/api-client';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
+import { IdentitySync } from '@/auth/identity-sync';
 import { installMobileApiTransport } from '@/api/transport';
 import { colors } from '@/theme/colors';
 import { ThemeProvider, useStoredThemePreference } from '@/theme/theme-provider';
@@ -114,6 +115,7 @@ export default function RootLayout() {
           <AuthProvider>
             <ApiBridge>
               <QueryClientProvider client={queryClient}>
+                <IdentitySync />
                 <ToastProvider>
                   <Stack
                     screenOptions={{
@@ -126,6 +128,8 @@ export default function RootLayout() {
                   >
                     <Stack.Screen name="(app)" />
                     <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+                    {/* "Esqueci minha senha" abre com ou sem sessão (Você → Trocar senha). */}
+                    <Stack.Screen name="forgot-password" />
                     {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
                     <Stack.Screen name="c/[token]" />
                   </Stack>

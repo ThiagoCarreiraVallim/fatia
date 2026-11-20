@@ -60,7 +60,7 @@ export default function YouScreen() {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const { signIn, signOut } = useAuth();
+  const { signOut } = useAuth();
   const [heightOpen, setHeightOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -166,8 +166,10 @@ export default function YouScreen() {
             icon={icon}
             label={item.label}
             subtitle="Enviamos um código para o seu e-mail"
-            // O "esqueci minha senha" do Logto, no navegador do sistema.
-            onPress={() => void signIn('reset_password')}
+            // Código no e-mail e senha nova dentro do app (ADR 050).
+            onPress={() =>
+              router.push({ pathname: '/forgot-password', params: { email: user?.email ?? '' } })
+            }
           />
         );
       }

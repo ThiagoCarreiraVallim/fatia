@@ -44,7 +44,6 @@ import {
   type SaveOnboardingInput,
 } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
-import { takePendingName } from '@/auth/pending-name';
 import {
   comprar as purchasePackage,
   inAppPurchaseAvailable,
@@ -136,21 +135,6 @@ export default function OnboardingScreen() {
     enabled: signedIn && Boolean(token),
     retry: false,
   });
-
-  // O nome digitado em "Criar conta" (Onb-01a/01b) vai para o perfil.
-  const nameSent = useRef(false);
-  useEffect(() => {
-    if (nameSent.current || !me.data) return;
-    nameSent.current = true;
-    const current = me.data.name;
-    void takePendingName().then((name) => {
-      if (name && name !== current) {
-        void usersApi
-          .updateMe({ name })
-          .then(() => qc.invalidateQueries({ queryKey: ['users', 'me'] }));
-      }
-    });
-  }, [me.data, qc]);
 
   const [inviteAnswered, setInviteAnswered] = useState(false);
   const activeGroups = (groups.data ?? []).filter((g) => g.status === 'ACTIVE');

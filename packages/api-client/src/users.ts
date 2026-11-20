@@ -42,6 +42,8 @@ export interface MeUser {
   whatsappOptIn: boolean;
   loadUnit: LoadUnit;
   distanceUnit: DistanceUnit;
+  /** Troca de e-mail com código disponível (a API tem a Management API do Logto). */
+  emailChangeEnabled?: boolean;
 }
 
 export interface UpdateMeInput {
@@ -136,6 +138,27 @@ export const usersApi = {
       body: JSON.stringify({ fileId }),
     }),
   removeAvatar: () => apiFetch<MeUser>('/api/users/me/avatar', { method: 'DELETE' }),
+
+  /**
+   * Manda o ID token do login para a API gravar o e-mail e o nome reais
+   * (ADR 050). Só vale o ID token desta conta, emitido para o app.
+   */
+  syncIdentity: (idToken: string) =>
+    apiFetch<{ email: string; name: string }>('/api/users/me/identity', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
+
+  /** Troca de e-mail, parte 1: confere a senha e manda o código ao e-mail novo. */
+  requestEmailChange: (body: { email: string; password: string }) =>
+    apiFetch<void>('/api/users/me/email/code', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Parte 2: o código que chegou no e-mail novo. */
+  confirmEmailChange: (body: { email: string; code: string }) =>
+    apiFetch<{ email: string; name: string }>('/api/users/me/email', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   /**
    * Eliminação (LGPD art. 18, VI). Irreversível.

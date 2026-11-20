@@ -4,81 +4,129 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
-import { signInExtraParams, type FirstScreen, type SignInOptions } from './sign-in-params';
+import {
+  DEFAULT_PASSWORD_POLICY,
+  ExperienceError,
+  buildNativeAuthorizeUrl,
+  completePasswordReset,
+  completeSignup,
+  createExperienceClient,
+  requestPasswordResetCode,
+  requestSignupCode,
+  signInWithPassword as signInWithPasswordFlow,
+  socialTargets,
+  type ExperienceClient,
+  type PasswordPolicy,
+  type PendingCode,
+  type PublicSignInExperience,
+  type SocialTarget,
+} from '@fatia/api-client';
+import { signInExtraParams } from './sign-in-params';
 import { env } from '@/env';
-import { discover, exchangeCode, memoizeDiscovery } from './oidc';
+import { discover, exchangeCode, memoizeDiscovery, revokeToken } from './oidc';
+import { makePkce, type Pkce } from './pkce';
 import { SessionManager, toStoredSession } from './session-manager';
 import { secureTokenStore } from './token-store';
 import { sairDaLoja } from '@/billing/purchases';
 
-// Fecha a aba do navegador do sistema assim que o callback volta. Sem isto, no
-// Android a Custom Tab fica aberta atrás do app.
+// Fecha a aba do navegador do sistema assim que o callback volta (login social).
 WebBrowser.maybeCompleteAuthSession();
 
 /**
  * Caminho de retorno do login. Precisa estar cadastrado como Redirect URI na
- * Application do tipo Native no Logto, exatamente assim: `fatia://auth/callback`.
+ * Application do tipo Native no Logto: `fatia://auth/callback`.
+ *
+ * No login dentro do app (ADR 050) este endereço nunca é aberto — a resposta é
+ * um `form_post` lido pelo `fetch` —, mas o Logto confere que ele está
+ * cadastrado, então é sempre o mesmo, também no Expo Go.
  */
 const REDIRECT_PATH = 'auth/callback';
+const NATIVE_REDIRECT_URI = 'fatia://auth/callback';
 
 /**
- * O mínimo que o app precisa, e nada além.
- *
- * `openid` traz o `sub`, que é como a API resolve a identidade; `offline_access`
- * traz o refresh token. **`profile` e `email` ficam de fora de propósito**: o app
- * nunca lê claim de ID token — o perfil vem de `usersApi.me()`, da nossa própria
- * base — e a API provisiona a partir do `sub`, com fallback quando não há e-mail
- * (`user-provisioning.service.ts`).
- *
- * Pedir escopo que não se usa é pedir ao usuário permissão para dado que não vai
- * ser lido, e é uma tela de consentimento a mais sem contrapartida.
+ * Escopos do login social (navegador). `profile` e `email` entram para o ID
+ * token trazer o e-mail e o nome reais, que a API grava (`/users/me/identity`).
  */
-const SCOPES = ['openid', 'offline_access'];
+const SOCIAL_SCOPES = ['openid', 'offline_access', 'profile', 'email'];
+
+/** Como a sessão foi aberta: o social deixa sessão no navegador do sistema. */
+const VIA_KEY = 'fatia.authVia';
 
 export type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
-
-/**
- * Tela do Logto em que o login começa — o mesmo `first_screen` que o PWA manda
- * por `/api/logto/sign-in?tela=…`. Ausente = tela de entrar. O e-mail digitado
- * e o Google/Apple (Onb-01a/01b) vão em `options` (ver `sign-in-params.ts`).
- */
-export type { FirstScreen, SignInOptions, SocialTarget } from './sign-in-params';
+export type { SocialTarget } from '@fatia/api-client';
 
 interface AuthContextValue {
   status: AuthStatus;
-  /** Abre o navegador do sistema e conclui o login. */
-  signIn(firstScreen?: FirstScreen, options?: Omit<SignInOptions, 'firstScreen'>): Promise<void>;
+  /** Política de senha e conectores sociais do Logto (página pública). */
+  passwordPolicy: PasswordPolicy;
+  socialTargets: SocialTarget[];
+  signInWithPassword(email: string, password: string): Promise<void>;
+  /** Cadastro, parte 1: manda o código ao e-mail. */
+  startSignup(email: string): Promise<void>;
+  /** Cadastro, parte 2: código, senha e nome; entra na conta. */
+  finishSignup(input: { code: string; password: string; name: string }): Promise<void>;
+  startPasswordReset(email: string): Promise<void>;
+  /** Troca a senha; sem sessão, já entra com a senha nova. */
+  finishPasswordReset(input: { code: string; password: string }): Promise<void>;
+  /** Google e Apple: o navegador só para o consentimento do provedor. */
+  signInWithSocial(target: SocialTarget): Promise<void>;
   signOut(): Promise<void>;
-  /** Token válido para a API, renovando se preciso. */
   getAccessToken(): Promise<string | null>;
-  /** Mensagem do último erro de login, para a tela mostrar. */
+  /** ID token da sessão (e-mail e nome reais para a API, ADR 050). */
+  getIdToken(): string | null;
+  /** O nome digitado no cadastro, uma vez. */
+  takeSignupName(): string | null;
+  /** Sobe a cada sessão aberta ou restaurada. */
+  sessionVersion: number;
+  /** Mensagem do último erro do login social, para a tela mostrar. */
   error: string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Uma descoberta por execução do app (o cache e a política de falha estão em
- * `memoizeDiscovery`, no `oidc.ts`).
- *
- * Mora no módulo, e não num `useRef` dentro do provider, porque o endereço
- * descoberto vem de `env.logtoEndpoint` — constante de módulo, sem nada de
- * por-instância. Guardar em ref também fazia o `react-hooks/refs` v7 acusar
- * leitura de ref durante o render: a regra não enxerga dentro do construtor do
- * `SessionManager` e assume que ele poderia chamar `endpoints()` ali. Não chama
- * (`session-manager.ts` só guarda as deps), mas tirar o ref resolve o aviso sem
- * depender dessa aposta.
- */
 const endpoints = memoizeDiscovery(() => discover(env.logtoEndpoint));
+
+const newPkce = () =>
+  makePkce({
+    randomBytes: (n) => Crypto.getRandomBytes(n),
+    sha256Base64: (value) =>
+      Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value, {
+        encoding: Crypto.CryptoEncoding.BASE64,
+      }),
+  });
+
+async function loadExperience(): Promise<PublicSignInExperience> {
+  const res = await fetch(`${env.logtoEndpoint}/api/.well-known/sign-in-exp`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`sign-in-exp ${res.status}`);
+  return (await res.json()) as PublicSignInExperience;
+}
+
+/** Uma interação de cadastro ou recuperação em curso, entre as duas telas. */
+interface PendingFlow {
+  client: ExperienceClient;
+  pending: PendingCode;
+  pkce: Pkce;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [experience, setExperience] = useState<PublicSignInExperience | null>(null);
+  const signup = useRef<PendingFlow | null>(null);
+  const reset = useRef<PendingFlow | null>(null);
+  const signupName = useRef<string | null>(null);
+  /** Sobe a cada sessão aberta ou restaurada: o `IdentitySync` reage a ele. */
+  const [sessionVersion, setSessionVersion] = useState(0);
 
   const manager = useMemo(
     () =>
@@ -97,49 +145,143 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     manager
       .restore()
       .then((session) => {
-        if (!cancelled) setStatus(session ? 'signedIn' : 'signedOut');
+        if (cancelled) return;
+        setStatus(session ? 'signedIn' : 'signedOut');
+        if (session) setSessionVersion((v) => v + 1);
       })
       .catch(() => {
         if (!cancelled) setStatus('signedOut');
       });
+    loadExperience()
+      .then((exp) => {
+        if (!cancelled) setExperience(exp);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [manager]);
 
-  const signIn = useCallback(
-    async (firstScreen?: FirstScreen, options: Omit<SignInOptions, 'firstScreen'> = {}) => {
+  const authorizeUrl = useCallback(async (pkce: Pkce) => {
+    const discovery = await endpoints();
+    return buildNativeAuthorizeUrl({
+      authorizationEndpoint: discovery.authorizationEndpoint,
+      clientId: env.logtoAppId,
+      redirectUri: NATIVE_REDIRECT_URI,
+      codeChallenge: pkce.challenge,
+      state: pkce.state,
+      resource: env.logtoAudience,
+    });
+  }, []);
+
+  /** Troca o `code` do `form_post` pelos tokens e abre a sessão. */
+  const finish = useCallback(
+    async (pkce: Pkce, result: { code: string; state: string }, via: 'app' | 'browser') => {
+      if (result.state !== pkce.state) throw new ExperienceError('oidc.state_mismatch', 400);
+      const discovery = await endpoints();
+      const tokens = await exchangeCode(discovery.tokenEndpoint, {
+        clientId: env.logtoAppId,
+        code: result.code,
+        codeVerifier: pkce.verifier,
+        redirectUri: NATIVE_REDIRECT_URI,
+        resource: env.logtoAudience,
+      });
+      await manager.adopt(toStoredSession(tokens, Date.now()));
+      await SecureStore.setItemAsync(VIA_KEY, via);
+      setStatus('signedIn');
+      setSessionVersion((v) => v + 1);
+    },
+    [manager],
+  );
+
+  const newClient = () => createExperienceClient({ endpoint: env.logtoEndpoint });
+
+  const signInWithPassword = useCallback(
+    async (email: string, password: string) => {
+      const pkce = await newPkce();
+      const result = await signInWithPasswordFlow(newClient(), {
+        authorizeUrl: await authorizeUrl(pkce),
+        email,
+        password,
+      });
+      await finish(pkce, result, 'app');
+    },
+    [authorizeUrl, finish],
+  );
+
+  const startSignup = useCallback(
+    async (email: string) => {
+      const pkce = await newPkce();
+      const client = newClient();
+      const pending = await requestSignupCode(client, {
+        authorizeUrl: await authorizeUrl(pkce),
+        email,
+      });
+      signup.current = { client, pending, pkce };
+    },
+    [authorizeUrl],
+  );
+
+  const finishSignup = useCallback(
+    async (input: { code: string; password: string; name: string }) => {
+      const flow = signup.current;
+      if (!flow) throw new ExperienceError('session.not_found', 400);
+      const result = await completeSignup(flow.client, { ...flow.pending, ...input });
+      signup.current = null;
+      // O nome também vai ao perfil da Fatia (`IdentitySync`), caso este Logto
+      // não guarde o nome no cadastro e o ID token venha sem ele.
+      signupName.current = input.name;
+      await finish(flow.pkce, result, 'app');
+    },
+    [finish],
+  );
+
+  const startPasswordReset = useCallback(
+    async (email: string) => {
+      const pkce = await newPkce();
+      const client = newClient();
+      const pending = await requestPasswordResetCode(client, {
+        authorizeUrl: await authorizeUrl(pkce),
+        email,
+      });
+      reset.current = { client, pending, pkce };
+    },
+    [authorizeUrl],
+  );
+
+  const finishPasswordReset = useCallback(
+    async (input: { code: string; password: string }) => {
+      const flow = reset.current;
+      if (!flow) throw new ExperienceError('session.not_found', 400);
+      await completePasswordReset(flow.client, { ...flow.pending, ...input });
+      reset.current = null;
+      if (status !== 'signedIn') await signInWithPassword(flow.pending.email, input.password);
+    },
+    [signInWithPassword, status],
+  );
+
+  const signInWithSocial = useCallback(
+    async (target: SocialTarget) => {
       setError(null);
       try {
         const discovery = await endpoints();
         const redirectUri = AuthSession.makeRedirectUri({ scheme: 'fatia', path: REDIRECT_PATH });
-
-        // No Expo Go o redirect NÃO é `fatia://auth/callback` — é um `exp://` com
-        // o IP da máquina, que muda de rede para rede. Se ele não estiver
-        // cadastrado no Logto, o login falha com `invalid_redirect_uri` e a
-        // mensagem não diz qual URI tentou. Imprimir aqui é o caminho mais curto
-        // entre o erro e a linha a colar no console do Logto.
         if (__DEV__) console.log('[auth] redirect_uri:', redirectUri);
-
         const request = new AuthSession.AuthRequest({
           clientId: env.logtoAppId,
           redirectUri,
-          scopes: SCOPES,
+          scopes: SOCIAL_SCOPES,
           usePKCE: true,
           codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
-          // RFC 8707: sem isto o Logto emite um token opaco de userinfo em vez de
-          // um JWT com a audience da API, e toda chamada volta 401.
-          extraParams: signInExtraParams(env.logtoAudience, { ...options, firstScreen }),
+          // `direct_sign_in` leva direto ao Google/Apple, sem a tela do Logto.
+          // O botão só aparece com o conector configurado (`socialTargets`).
+          extraParams: signInExtraParams(env.logtoAudience, { social: target }),
         });
-
-        // `promptAsync` usa ASWebAuthenticationSession no iOS e Custom Tabs no
-        // Android — o navegador do sistema, com os cookies e o gerenciador de
-        // senhas da pessoa. Nunca WebView embutida: dentro dela o app conseguiria
-        // ler o que foi digitado na tela de login.
+        // Navegador do sistema (ASWebAuthenticationSession / Custom Tabs), nunca
+        // WebView: o consentimento do provedor é dele.
         const result = await request.promptAsync({
           authorizationEndpoint: discovery.authorizationEndpoint,
         });
-
         if (result.type === 'dismiss' || result.type === 'cancel') return;
         if (result.type !== 'success') {
           setError(
@@ -149,7 +291,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
           return;
         }
-
         const tokens = await exchangeCode(discovery.tokenEndpoint, {
           clientId: env.logtoAppId,
           code: result.params.code,
@@ -157,9 +298,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           redirectUri,
           resource: env.logtoAudience,
         });
-
         await manager.adopt(toStoredSession(tokens, Date.now()));
+        await SecureStore.setItemAsync(VIA_KEY, 'browser');
         setStatus('signedIn');
+        setSessionVersion((v) => v + 1);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Falha ao autenticar');
       }
@@ -171,14 +313,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Limpa o cofre primeiro. Se a chamada ao Logto falhar por rede, o token
     // local já saiu — sair pela metade é pior que sair sem avisar o servidor.
     const idToken = manager.current?.idToken ?? null;
+    const refreshToken = manager.current?.refreshToken ?? null;
+    const via = await SecureStore.getItemAsync(VIA_KEY).catch(() => null);
     await manager.clear();
+    await SecureStore.deleteItemAsync(VIA_KEY).catch(() => undefined);
     // A próxima pessoa no aparelho não herda a compra da loja (ADR 024).
     await sairDaLoja();
     setStatus('signedOut');
     try {
-      const { endSessionEndpoint } = await endpoints();
-      if (endSessionEndpoint && idToken) {
-        const url = new URL(endSessionEndpoint);
+      const discovery = await endpoints();
+      if (refreshToken && discovery.revocationEndpoint) {
+        await revokeToken(discovery.revocationEndpoint, {
+          clientId: env.logtoAppId,
+          token: refreshToken,
+        });
+      }
+      // Só o login social deixa sessão no navegador do sistema; sem encerrá-la,
+      // o próximo "Google" entraria direto na mesma conta.
+      if (via === 'browser' && discovery.endSessionEndpoint && idToken) {
+        const url = new URL(discovery.endSessionEndpoint);
         url.searchParams.set('id_token_hint', idToken);
         url.searchParams.set(
           'post_logout_redirect_uri',
@@ -192,10 +345,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [manager]);
 
   const getAccessToken = useCallback(() => manager.getAccessToken(), [manager]);
+  const getIdToken = useCallback(() => manager.current?.idToken ?? null, [manager]);
+  const takeSignupName = useCallback(() => {
+    const name = signupName.current;
+    signupName.current = null;
+    return name;
+  }, []);
 
-  const value = useMemo(
-    () => ({ status, signIn, signOut, getAccessToken, error }),
-    [status, signIn, signOut, getAccessToken, error],
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      status,
+      passwordPolicy: experience?.passwordPolicy ?? DEFAULT_PASSWORD_POLICY,
+      socialTargets: experience ? socialTargets(experience) : [],
+      signInWithPassword,
+      startSignup,
+      finishSignup,
+      startPasswordReset,
+      finishPasswordReset,
+      signInWithSocial,
+      signOut,
+      getAccessToken,
+      getIdToken,
+      takeSignupName,
+      sessionVersion,
+      error,
+    }),
+    [
+      status,
+      experience,
+      signInWithPassword,
+      startSignup,
+      finishSignup,
+      startPasswordReset,
+      finishPasswordReset,
+      signInWithSocial,
+      signOut,
+      getAccessToken,
+      getIdToken,
+      takeSignupName,
+      sessionVersion,
+      error,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
