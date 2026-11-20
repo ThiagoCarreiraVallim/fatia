@@ -8,4 +8,4 @@ Branch feat/app-auth-motion. Lista do coordenador (itens 1–10 + fim). Cada cor
 
 ## Próximo
 
-1. troca de e-mail amarrada (EmailChangeRequest, migration 20261120200000)
+6 nome provisório, 4 join, 5 virada do dia, 7 rascunho, 8 id inválido, 10 suspeitos; depois merge main, testes, emulador
