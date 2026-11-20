@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { Slot, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { onboardingPending, usersApi } from '@fatia/api-client';
+import { Tabs, useIsFocused, useRouter } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepMountedOnBlur, onboardingPending, usersApi } from '@fatia/api-client';
+import { prefetchTabs } from '@/components/layout/tab-prefetch';
+import { colors } from '@/theme/colors';
 import { peekPendingInvite, takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
@@ -62,6 +64,12 @@ export default function AppLayout() {
   // Avisos no celular (Fase 8c): refaz o cadastro e leva o toque à tela dele.
   usePush(ready);
 
+  // As leituras de cada aba já no cache: a primeira troca de aba abre pronta.
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (ready) prefetchTabs(qc);
+  }, [ready, qc]);
+
   if (status !== 'signedIn') {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -81,15 +89,79 @@ export default function AppLayout() {
         <ConfirmProvider>
           <RestTimerProvider>
             <BottomChromeProvider>
-              {/* A tela atual (o Slot) encolhe até o notch quando o menu da IA abre
+              {/* A tela atual encolhe até o notch quando o menu da IA abre
               (prancha Al-H6c5); a barra de abas some por cima dele. */}
               <AiMenuProvider nav={<BottomNav />}>
-                <Slot />
+                <AppTabs />
               </AiMenuProvider>
             </BottomChromeProvider>
           </RestTimerProvider>
         </ConfirmProvider>
       </DrawerPresenceProvider>
     </ChatProvider>
+  );
+}
+
+/**
+ * Saída pelo lado ao trocar de tela: some e anda um pouco, e a nova entra do
+ * outro lado. Curta, para a troca parecer instantânea.
+ */
+function sceneShift({ current }: { current: { progress: import('react-native').Animated.Value } }) {
+  return {
+    sceneStyle: {
+      opacity: current.progress.interpolate({
+        inputRange: [-1, 0, 1],
+        outputRange: [0, 1, 0],
+      }),
+      transform: [
+        {
+          translateX: current.progress.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [-14, 0, 14],
+          }),
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * Detalhe e tarefa de foco desmontam ao perder o foco (câmera, cronômetro e
+ * tela acesa não seguem rodando escondidos); as cinco abas ficam (item 6).
+ */
+function KeepTabsMounted({ name, children }: { name: string; children: ReactNode }) {
+  const focused = useIsFocused();
+  if (!focused && !keepMountedOnBlur(name)) return null;
+  return <>{children}</>;
+}
+
+/**
+ * As telas do app num navegador de abas, no lugar do antigo `<Slot />` que
+ * desmontava a tela a cada troca (item 6). As abas (Hoje, Nutrição, Treino,
+ * Comunidade, Você) ficam montadas e congeladas fora de foco: voltar a uma é
+ * instantâneo e a rolagem fica onde estava. A barra é a `BottomNav`, desenhada
+ * fora daqui (ela some com o menu da IA e ao rolar), então a do navegador não
+ * existe. O voltar segue o histórico, como no Slot.
+ *
+ * Toda rota de `app/(app)` vira uma "aba" escondida deste navegador sem
+ * registro: rota de foco nova só entra em `FOCUS_ROUTES` (`navigation.ts`).
+ */
+function AppTabs() {
+  return (
+    <Tabs
+      tabBar={() => null}
+      backBehavior="history"
+      screenOptions={{
+        headerShown: false,
+        lazy: true,
+        freezeOnBlur: true,
+        sceneStyle: { backgroundColor: colors.background },
+        sceneStyleInterpolator: sceneShift,
+        transitionSpec: { animation: 'timing', config: { duration: 180 } },
+      }}
+      screenLayout={({ route, children }) => (
+        <KeepTabsMounted name={route.name}>{children}</KeepTabsMounted>
+      )}
+    />
   );
 }

@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { RefreshControl, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TOP_BAR_HEIGHT, TopBar, useTopBarVisible } from './top-bar';
-import { useBottomChrome } from './bottom-nav';
+import { useBottomChrome, useChromeScrollHandler } from './bottom-nav';
 import { screenBottomPadding } from './bottom-space';
 import { colors } from '@/theme/colors';
 import { dockedActionBottom, dockedActionReserve } from '@fatia/api-client';
@@ -58,9 +59,13 @@ export function Screen({
         navVisible: chrome.visible,
         workoutBar: chrome.workoutBar,
       });
+  // A barra de abas desce ao rolar e volta ao subir ou parar (item 4).
+  const onScroll = useChromeScrollHandler();
   const body = scroll ? (
-    <ScrollView
+    <Animated.ScrollView
       className="flex-1"
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       contentContainerStyle={{ paddingTop, paddingBottom }}
       keyboardShouldPersistTaps="handled"
       refreshControl={
@@ -76,7 +81,7 @@ export function Screen({
       }
     >
       {children}
-    </ScrollView>
+    </Animated.ScrollView>
   ) : (
     <View className="flex-1" style={{ paddingTop, paddingBottom }}>
       {children}
