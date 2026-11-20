@@ -62,11 +62,12 @@ function shortDate(iso: string | null | undefined): string {
   return format(d, 'd MMM', { locale: ptBR }).replace('.', '');
 }
 
-export function ExerciseHowTo({ exerciseId }: { exerciseId: number }) {
+/** `exerciseId` nulo: a rota não trouxe um exercício válido. */
+export function ExerciseHowTo({ exerciseId }: { exerciseId: number | null }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const detail = useExerciseDetail(exerciseId);
+  const detail = useExerciseDetail(exerciseId ?? 0);
   const exercise = detail.data ?? null;
   const [editing, setEditing] = useState<Exercise | null>(null);
   const [tab, setTab] = useState<Tab>('steps');
@@ -147,7 +148,7 @@ export function ExerciseHowTo({ exerciseId }: { exerciseId: number }) {
         <View style={{ height: HERO_HEIGHT }} className="w-full bg-card" />
         {overlay}
         <View className="px-5 pt-4">
-          {detail.isError ? (
+          {exerciseId == null || detail.isError ? (
             <Text className="text-sm text-danger">
               Não foi possível abrir o exercício. Volte e tente de novo.
             </Text>

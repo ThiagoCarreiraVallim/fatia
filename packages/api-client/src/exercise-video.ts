@@ -109,3 +109,15 @@ export function isYoutubeEmbedNavigation(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * O id de exercício que veio na rota (`/workout/exercise/<id>`). Só inteiro
+ * positivo em dígitos; o resto é `null`, e a tela mostra erro em vez de ficar
+ * carregando uma consulta que nunca sai.
+ */
+export function exerciseIdFromParam(raw: string | string[] | undefined): number | null {
+  const valor = Array.isArray(raw) ? raw[0] : raw;
+  if (!valor || !/^[1-9]\d*$/.test(valor)) return null;
+  const id = Number(valor);
+  return Number.isSafeInteger(id) ? id : null;
+}
