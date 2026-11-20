@@ -91,11 +91,13 @@ export interface SessionSet {
 }
 
 // Configuração do exercício no plano (#378, Al-T21 e Al-T21d).
-export type PlanRepUnit = 'REPS' | 'SECONDS';
-export type PlanLoadMode = 'WEIGHT' | 'BODYWEIGHT';
+/** MAX (até a falha) e METERS (distância) vêm do editor da equipe (#406). */
+export type PlanRepUnit = 'REPS' | 'SECONDS' | 'MAX' | 'METERS';
+/** PERCENT_1RM (% do 1RM estimado) e BAND (elástico) vêm do editor da equipe (#406). */
+export type PlanLoadMode = 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
 export type PlanTechnique = 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
 export type PlanSetKind = 'WARMUP' | 'NORMAL' | 'DROP';
-export type CardioTargetKind = 'TIME' | 'DISTANCE';
+export type CardioTargetKind = 'TIME' | 'DISTANCE' | 'CALORIES';
 export type CardioIntensity = 'LIGHT' | 'MODERATE' | 'VIGOROUS';
 
 /** Uma série da tabela série por série (Al-T21b). `reps` é segundos com `repUnit = SECONDS`. */
@@ -121,6 +123,19 @@ export interface PlanExerciseConfig {
   cardioDurationSeconds: number | null;
   cardioDistanceMeters: number | null;
   cardioIntensity: CardioIntensity | null;
+  // Editor da equipe (#406).
+  /** Com `loadMode` PERCENT_1RM: % do 1RM estimado. */
+  loadPercent?: number | null;
+  /** "Série de aquecimento antes". */
+  warmupBefore?: boolean;
+  cardioCalories?: number | null;
+  cardioInclinePercent?: number | null;
+  /** Zona de FC 1–5; uma intensidade só: zona, ritmo ou esforço. */
+  cardioZone?: number | null;
+  cardioPaceSecondsPerKm?: number | null;
+  cardioRpe?: number | null;
+  /** O bloco de circuito da sessão a que o exercício pertence. */
+  circuitId?: string | null;
 }
 
 /**
@@ -546,6 +561,13 @@ export type PlanExerciseInput = Partial<{
   cardioDurationSeconds: number | null;
   cardioDistanceMeters: number | null;
   cardioIntensity: CardioIntensity | null;
+  loadPercent: number | null;
+  warmupBefore: boolean;
+  cardioCalories: number | null;
+  cardioInclinePercent: number | null;
+  cardioZone: number | null;
+  cardioPaceSecondsPerKm: number | null;
+  cardioRpe: number | null;
   /** Substitui a tabela inteira; `[]` volta a séries iguais. */
   sets: Array<{ kind: PlanSetKind; reps: number; loadKg?: number | null }> | null;
 }>;

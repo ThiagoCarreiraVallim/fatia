@@ -42,14 +42,26 @@ export interface FieldChange {
     | 'cardioDuration'
     | 'cardioDistance'
     | 'cardioIntensity'
+    // Editor da equipe (#406).
+    | 'warmup'
+    | 'loadPercent'
+    | 'cardioCalories'
+    | 'cardioIncline'
+    | 'cardioZone'
+    | 'cardioPace'
+    | 'cardioRpe'
     | 'config';
   before: string | null;
   after: string | null;
 }
 
-/** O que mudou na versão fora de um exercício: nome, ordem e agenda. */
+/**
+ * O que mudou na versão fora de um exercício: nome, ordem, agenda e, com o
+ * editor da equipe (#406), as sessões (quantas, nome e dia) e os circuitos.
+ */
 export interface VersionChange {
-  field: 'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays';
+  field:
+    'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'sessions' | 'circuits';
   before: string | null;
   after: string | null;
 }
@@ -63,6 +75,8 @@ export interface OfferExercise {
   targetSets: number;
   targetReps: string;
   restSeconds: number | null;
+  /** Sessão do plano (#406): "A · Pernas". Nulo no plano de uma sessão só. */
+  session?: string | null;
   isNew: boolean;
   changes: FieldChange[];
 }
@@ -103,7 +117,10 @@ export interface PlanOffer {
   shown: OfferVersion;
   accepted: { id: string; version: number; planId: string | null } | null;
   diff: (PlanDiff & { hasChanges: boolean }) | null;
+  /** O plano da primeira sessão na conta da pessoa. */
   planId: string | null;
+  /** Os planos de todas as sessões (#406), na ordem. */
+  planIds?: string[];
 }
 
 export interface PlanOfferSummary {
@@ -396,6 +413,13 @@ const FIELD_TEXT: Record<
   cardioDuration: { label: 'tempo', value: (v) => minutesText(Number(v)) },
   cardioDistance: { label: 'distância', value: (v) => distanceText(Number(v)) },
   cardioIntensity: { label: 'intensidade', value: (v) => INTENSITY_TEXT[v] ?? v.toLowerCase() },
+  warmup: { label: 'configuração alterada' },
+  loadPercent: { label: 'configuração alterada' },
+  cardioCalories: { label: 'configuração alterada' },
+  cardioIncline: { label: 'configuração alterada' },
+  cardioZone: { label: 'configuração alterada' },
+  cardioPace: { label: 'configuração alterada' },
+  cardioRpe: { label: 'configuração alterada' },
   config: { label: 'configuração alterada' },
 };
 

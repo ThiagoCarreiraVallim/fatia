@@ -39,6 +39,7 @@ export * from './goals';
 export * from './nutrition';
 export * from './nutrition-plan';
 export * from './plan-offers';
+export * from './plan-editor';
 export * from './nutrition-week';
 export * from './progress';
 export * from './progress-screens';

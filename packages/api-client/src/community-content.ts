@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import type { PlanDocumentInput, PlanDocumentView } from './plan-editor';
 import type { GroupRole, MyGroup } from './community';
 import type { MealType } from './nutrition';
 import type { TemplateReach } from './plan-library';
@@ -74,6 +75,8 @@ export interface TemplateExercise {
   muscleGroup: string | null;
   targetSets: number;
   targetReps: string;
+  /** Sessão do plano (#406): "A · Pernas". Nulo no plano de uma sessão só. */
+  session?: string | null;
 }
 
 export interface PlanTemplate {
@@ -101,6 +104,17 @@ export interface PlanTemplate {
   draft?: boolean;
   /** "Com quem" (#405), só na lista da equipe. */
   withWhom?: TemplateReach;
+  // Editor de plano de treino (#406).
+  /** Etiquetas da biblioteca ("hipertrofia"), em minúsculas. */
+  tags?: string[];
+  /** A agenda sugerida para o envio: "Datas" ou "Flexível"; nulo sem sugestão. */
+  schedule?: 'CALENDAR' | 'FLEXIBLE' | null;
+  /** Período sugerido (YYYY-MM-DD). */
+  startDate?: string | null;
+  endDate?: string | null;
+  sessionCount?: number;
+  /** O documento do editor; só na leitura de um modelo pela equipe. */
+  document?: PlanDocumentView | null;
 }
 
 export interface GroupTip {
@@ -128,7 +142,16 @@ export interface TemplateMetaInput {
   coverFileId?: string | null;
 }
 
-export interface UpdateTemplateInput extends TemplateMetaInput {
+/** O que o editor de treino (#406) grava no modelo, além do título e do nível. */
+export interface WorkoutTemplateFields {
+  document?: PlanDocumentInput;
+  tags?: string[];
+  schedule?: 'CALENDAR' | 'FLEXIBLE' | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export interface UpdateTemplateInput extends TemplateMetaInput, WorkoutTemplateFields {
   planId?: string;
   goals?: NutritionGoalsInput | null;
   mealTemplateIds?: string[];
@@ -169,8 +192,16 @@ export const contentApi = {
   plans: (groupId: string) => apiFetch<PlanTemplate[]>(`${base}/${groupId}/content/plans`),
   plan: (groupId: string, id: string) =>
     apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/${id}`),
-  createWorkout: (groupId: string, input: TemplateMetaInput & { planId: string }) =>
-    apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/workout`, json('POST', input)),
+  /** Um plano da conta (`planId`) ou o documento do editor (#406): um dos dois. */
+  createWorkout: (
+    groupId: string,
+    input: TemplateMetaInput &
+      WorkoutTemplateFields &
+      (
+        | { planId: string; document?: undefined }
+        | { planId?: undefined; document: PlanDocumentInput }
+      ),
+  ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/workout`, json('POST', input)),
   createNutrition: (
     groupId: string,
     input: TemplateMetaInput & {
