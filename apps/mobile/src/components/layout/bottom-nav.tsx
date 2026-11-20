@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -18,7 +19,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePathname, useRouter } from 'expo-router';
+import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   PRIMARY_TABS,
@@ -45,6 +46,7 @@ import { aiUsable, useChatAvailability } from './use-ai-state';
 import {
   SCROLL_CHROME,
   chromeAfterIdle,
+  chromeOnFocus,
   initialScrollChrome,
   nextScrollChrome,
 } from './scroll-chrome';
@@ -128,6 +130,13 @@ export function BottomChromeProvider({ children }: { children: ReactNode }) {
 export function useChromeScrollHandler() {
   const motion = useContext(ChromeMotionContext);
   const state = useSharedValue(initialScrollChrome());
+  // As abas ficam montadas: ao voltar a esta tela, a barra já voltou visível
+  // (provider), e o estado desta rolagem não pode continuar "escondida".
+  useFocusEffect(
+    useCallback(() => {
+      state.set(chromeOnFocus(state.get()));
+    }, [state]),
+  );
   return useAnimatedScrollHandler({
     onScroll: (e) => {
       if (!motion) return;

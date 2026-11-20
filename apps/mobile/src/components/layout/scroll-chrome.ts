@@ -61,3 +61,13 @@ export function chromeAfterIdle(state: ScrollChromeState): ScrollChromeState {
   'worklet';
   return { y: state.y, anchor: state.y, hidden: false };
 }
+
+/**
+ * A tela voltou a ter foco (aba montada, ou volta de outra rota): a barra já
+ * voltou visível, então o estado desta rolagem também — a contagem recomeça de
+ * onde a tela está.
+ */
+export function chromeOnFocus(state: ScrollChromeState): ScrollChromeState {
+  'worklet';
+  return chromeAfterIdle(state);
+}
