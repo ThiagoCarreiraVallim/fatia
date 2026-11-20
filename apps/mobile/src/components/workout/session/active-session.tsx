@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import {
   buildExerciseGroups,
+  exerciseDetailPath,
+  exerciseVideoSource,
   muscleGroupLabel,
   orderExerciseGroups,
   pickFocusedGroup,
@@ -16,7 +18,7 @@ import {
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
 import { Button, ConfirmDrawer, DrawerLayer, cn, useConfirm } from '@/components/ui';
-import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
+import { ExerciseDetailContext } from '@/components/workout/exercise-detail-context';
 import { ExerciseHeading, useExerciseDetail } from '@/components/workout/exercise-media';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { groupColorName } from '@/components/workout/workout-home';
@@ -25,7 +27,7 @@ import { ActiveExerciseCard } from './active-exercise-card';
 import { isExerciseComplete, pluralize, targetSetsOf } from './format';
 import { guidedState, isSessionDone, nextOpenIndex } from './guided-session';
 import { isResting, RestPanel } from './rest-panel';
-import { SessionHeader } from './session-header';
+import { SESSION_HEADER_HEIGHT, SessionHeader } from './session-header';
 import {
   SessionDockHost,
   SessionDockProvider,
@@ -117,6 +119,9 @@ export function ActiveSession({
     resting,
     complete: current ? isExerciseComplete(current) : true,
   });
+  // Tudo feito (e fora do descanso): no lugar do "Tudo feito por aqui" vazio,
+  // o treino até aqui, com as séries de cada exercício (prancha Al-T17).
+  const showDone = state !== 'resting' && isSessionDone(groups);
   const nextIndex = index >= 0 ? nextOpenIndex(groups, index) : null;
   const next = nextIndex != null ? groups[nextIndex] : undefined;
   const detail = useExerciseDetail(current?.exerciseId ?? 0);
@@ -178,6 +183,20 @@ export function ActiveSession({
   const groupName = detail.data?.muscleGroup;
   const openOverview = () => router.push(`/workout/session/${session.id}/edit`);
 
+  // "Como fazer" é outra tela (Al-T9). A sessão guiada pode ser remontada na
+  // volta; o pedido de foco (mesmo cache do "Treino atual") a faz reabrir no
+  // exercício em que a pessoa estava.
+  const openHowTo = useCallback(
+    (exerciseId: number) => {
+      requestFocus(exerciseId);
+      router.push(exerciseDetailPath(exerciseId));
+    },
+    [requestFocus, router],
+  );
+
+  // Prancha Al-T3: com vídeo, ele é o fundo do topo e o cabeçalho flutua por cima.
+  const videoTop = !showDone && current != null && exerciseVideoSource(detail.data) != null;
+
   // "1/7" e as setas, na linha da série (prancha `Al-T3d`).
   const exerciseNav = (
     <View className="flex-row items-center gap-1.5">
@@ -225,19 +244,17 @@ export function ActiveSession({
     </Pressable>
   );
   const remaining = groups.filter((g, i) => i !== index && !isExerciseComplete(g));
-  // Tudo feito (e fora do descanso): no lugar do "Tudo feito por aqui" vazio,
-  // o treino até aqui, com as séries de cada exercício (prancha Al-T17).
-  const showDone = state !== 'resting' && isSessionDone(groups);
 
   return (
     <>
-      <ExerciseDetailHost>
+      <ExerciseDetailContext.Provider value={openHowTo}>
         <SessionDockProvider value={dock}>
           <View className="flex-1 bg-background">
             <SessionHeader
               startedAt={session.startedAt}
               onMinimize={exit.leave}
               onFinish={requestFinish}
+              overVideo={videoTop}
             />
             <ScrollView
               ref={scrollRef}
@@ -285,6 +302,11 @@ export function ActiveSession({
                           : muscleGroupLabel(groupName as StrengthMuscleGroup)
                         : null
                     }
+                    bleed={{
+                      top: 20,
+                      side: 20,
+                      header: insets.top + SESSION_HEADER_HEIGHT,
+                    }}
                   />
 
                   {current.isCardio ? (
@@ -403,7 +425,7 @@ export function ActiveSession({
             <SessionDockHost store={dock} bottom={dockPlace.bottom} onHeight={setDockHeight} />
           </View>
         </SessionDockProvider>
-      </ExerciseDetailHost>
+      </ExerciseDetailContext.Provider>
 
       <DrawerLayer>
         <ExerciseSearchDrawer

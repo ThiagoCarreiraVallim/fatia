@@ -23,10 +23,7 @@ import { Text } from '@/components/ui/text';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
 import { useStartSession } from '@/components/workout/use-start-session';
 import { deviceTimezone } from '@/components/workout/offer-view';
-import {
-  ExerciseDetailHost,
-  useOpenExerciseDetail,
-} from '@/components/workout/exercise-detail-host';
+import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-context';
 import { ExerciseGroupLine, ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { colors } from '@/theme/colors';
 
@@ -137,7 +134,7 @@ export default function PlanOfferScreen() {
     ) : null;
 
   return (
-    <ExerciseDetailHost>
+    <>
       <Screen
         refreshing={q.isRefetching}
         onRefresh={() => void q.refetch()}
@@ -165,7 +162,7 @@ export default function PlanOfferScreen() {
           ) : null}
         </View>
       </Screen>
-    </ExerciseDetailHost>
+    </>
   );
 }
 

@@ -17,7 +17,6 @@ import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
-import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { estimatePlanStats, swapAt } from '@/components/workout/workout-stats';
 import { colors } from '@/theme/colors';
@@ -180,7 +179,7 @@ export default function QuickTemplateScreen() {
   }
 
   return (
-    <ExerciseDetailHost>
+    <>
       <Screen
         title={planName}
         actions={
@@ -300,6 +299,6 @@ export default function QuickTemplateScreen() {
         existingExerciseIds={existingIds}
         onAdd={handleAdd}
       />
-    </ExerciseDetailHost>
+    </>
   );
 }
