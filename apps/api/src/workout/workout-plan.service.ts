@@ -26,9 +26,12 @@ import {
   DEFAULT_STRENGTH_REPS,
   DEFAULT_STRENGTH_SETS,
   assertCardioTarget,
+  assertLoadPercent,
   assertRepRange,
   hasCardioInput,
   summarizeSets,
+  type CardioFields,
+  type LoadModeValue,
 } from './helpers/plan-exercise-config';
 
 /** A linha do plano com o exercício e a tabela série por série, na ordem. */
@@ -534,26 +537,29 @@ export class WorkoutPlanService {
   private assertConfig(
     config: Omit<UpdatePlanExerciseDto, 'sets'>,
     cardio: boolean,
-    current: {
-      cardioTarget?: string | null;
-      cardioDurationSeconds?: number | null;
-      cardioDistanceMeters?: number | null;
-      cardioIntensity?: string | null;
-    },
+    current: CardioFields & { loadMode?: LoadModeValue | null; loadPercent?: number | null },
   ): void {
     assertRepRange(config.targetReps);
+    const pick = <K extends keyof typeof config & keyof typeof current>(k: K) =>
+      config[k] !== undefined ? config[k] : current[k];
+    assertLoadPercent({
+      loadMode: pick('loadMode') ?? 'WEIGHT',
+      loadPercent: pick('loadPercent'),
+    });
     if (!cardio) {
       if (hasCardioInput(config)) {
         throw new BadRequestException('Meta de cardio só vale para exercício de cardio.');
       }
       return;
     }
-    const pick = <K extends keyof typeof config & keyof typeof current>(k: K) =>
-      config[k] !== undefined ? config[k] : current[k];
     assertCardioTarget({
-      cardioTarget: pick('cardioTarget') as 'TIME' | 'DISTANCE' | null | undefined,
-      cardioDurationSeconds: pick('cardioDurationSeconds') as number | null | undefined,
-      cardioDistanceMeters: pick('cardioDistanceMeters') as number | null | undefined,
+      cardioTarget: pick('cardioTarget'),
+      cardioDurationSeconds: pick('cardioDurationSeconds'),
+      cardioDistanceMeters: pick('cardioDistanceMeters'),
+      cardioCalories: pick('cardioCalories'),
+      cardioZone: pick('cardioZone'),
+      cardioPaceSecondsPerKm: pick('cardioPaceSecondsPerKm'),
+      cardioRpe: pick('cardioRpe'),
     });
   }
 

@@ -88,13 +88,28 @@ export interface CardioFields {
   cardioDurationSeconds?: number | null;
   cardioDistanceMeters?: number | null;
   cardioIntensity?: CardioIntensityValue | null;
+  // Editor da equipe (#406).
+  cardioCalories?: number | null;
+  cardioInclinePercent?: number | null;
+  cardioZone?: number | null;
+  cardioPaceSecondsPerKm?: number | null;
+  cardioRpe?: number | null;
 }
 
+const CARDIO_KEYS = [
+  'cardioTarget',
+  'cardioDurationSeconds',
+  'cardioDistanceMeters',
+  'cardioIntensity',
+  'cardioCalories',
+  'cardioInclinePercent',
+  'cardioZone',
+  'cardioPaceSecondsPerKm',
+  'cardioRpe',
+] as const;
+
 export const hasCardioInput = (dto: CardioFields): boolean =>
-  (dto.cardioTarget ?? null) !== null ||
-  (dto.cardioDurationSeconds ?? null) !== null ||
-  (dto.cardioDistanceMeters ?? null) !== null ||
-  (dto.cardioIntensity ?? null) !== null;
+  CARDIO_KEYS.some((k) => (dto[k] ?? null) !== null);
 
 /**
  * A meta de cardio depois da gravação (o que já estava, com o que chegou por
@@ -107,5 +122,23 @@ export function assertCardioTarget(merged: CardioFields): void {
   }
   if (merged.cardioTarget === 'TIME' && !merged.cardioDurationSeconds) {
     throw new BadRequestException('Meta por tempo precisa da duração.');
+  }
+  if (merged.cardioTarget === 'CALORIES' && !merged.cardioCalories) {
+    throw new BadRequestException('Meta por calorias precisa das calorias.');
+  }
+  // Pn-09d: a intensidade é por zona, por ritmo ou por esforço, uma das três.
+  const intensities = [merged.cardioZone, merged.cardioPaceSecondsPerKm, merged.cardioRpe];
+  if (intensities.filter((v) => (v ?? null) !== null).length > 1) {
+    throw new BadRequestException('Escolha uma intensidade: zona, ritmo ou esforço.');
+  }
+}
+
+/** `loadPercent` só existe no modo "% de 1RM" (#406). */
+export function assertLoadPercent(merged: {
+  loadMode?: LoadModeValue | null;
+  loadPercent?: number | null;
+}): void {
+  if ((merged.loadPercent ?? null) !== null && merged.loadMode !== 'PERCENT_1RM') {
+    throw new BadRequestException('A % de 1RM vale só com a carga em % de 1RM.');
   }
 }
