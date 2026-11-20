@@ -1,4 +1,5 @@
--- Editor de plano de treino da equipe (#406): sessões como planos (sessionIndex),
+-- Editor de plano de treino da equipe (#406): sessões como planos (sessionIndex e
+-- a chave estável sessionKey),
 -- circuito dentro da sessão, campos novos da linha, etiquetas e período do modelo
 -- e quem escreveu cada versão da oferta.
 
@@ -18,6 +19,7 @@ ALTER TYPE "CardioTargetKind" ADD VALUE 'CALORIES';
 
 -- AlterTable
 ALTER TABLE "WorkoutPlan" ADD COLUMN     "sessionIndex" INTEGER;
+ALTER TABLE "WorkoutPlan" ADD COLUMN     "sessionKey" TEXT;
 
 -- AlterTable
 ALTER TABLE "WorkoutPlanExercise" ADD COLUMN     "cardioCalories" INTEGER,

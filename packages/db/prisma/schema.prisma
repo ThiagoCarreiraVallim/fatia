@@ -945,6 +945,10 @@ model WorkoutPlan {
   /// vira um plano por sessão na conta da pessoa, todos com o mesmo
   /// `fromOfferId` (ou `fromTemplateId`). 0 = a primeira. Nulo = plano solto.
   sessionIndex   Int?
+  /// A chave estável da sessão no retrato (#406): é por ela que a versão nova
+  /// acha o plano da mesma sessão, mesmo com sessões tiradas ou trocadas de
+  /// ordem. Nula no retrato antigo, que casa pela posição.
+  sessionKey     String?
   createdAt      DateTime        @default(now())
 
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -116,6 +116,8 @@ export type DocumentCircuitView = Omit<PlanCircuitBlock, 'exercises'> & {
 
 export interface PlanDocumentView {
   sessions: Array<{
+    /** A chave estável da sessão (#406): volta igual ao salvar. */
+    key?: string;
     name: string;
     weekday: number | null;
     items: Array<DocumentExerciseView | DocumentCircuitView>;

@@ -31,6 +31,8 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
     new MediaService(prisma, new MemoryObjectStore()),
   );
   const TZ = 'America/Sao_Paulo';
+  const KEY_A = '0a0a0a0a-0000-4000-8000-00000000000a';
+  const KEY_B = '0b0b0b0b-0000-4000-8000-00000000000b';
   const today = todayInTz(TZ);
   const stamp = `rev406-${Date.now()}`;
   const users: string[] = [];
@@ -289,5 +291,120 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
     const stray = future.filter((r) => !linked.has(r.planId));
     expect(future.length).toBeGreaterThan(total - 6); // a agenda da v2 existe inteira
     expect(stray).toHaveLength(0);
+  });
+
+  // D4: a sessão é casada pela chave estável, não pela posição.
+  async function keyedOffer(ana: string) {
+    const offer = await prisma.planOffer.create({
+      data: {
+        userId: ana,
+        authorId: coach,
+        groupId: gid,
+        versions: {
+          create: {
+            version: 1,
+            title: 'AB',
+            snapshotVersion: 2,
+            schedule: 'FLEXIBLE',
+            snapshot: {
+              version: 2,
+              name: 'AB',
+              sessions: [
+                { key: KEY_A, name: 'A', items: [item(ex[0]!)] },
+                { key: KEY_B, name: 'B', items: [item(ex[1]!)] },
+              ],
+            },
+          },
+        },
+      },
+      include: { versions: true },
+    });
+    await offers.accept(ana, offer.id, offer.versions[0]!.id, TZ);
+    const [pa, pb] = await Promise.all(
+      [KEY_A, KEY_B].map((sessionKey) =>
+        prisma.workoutPlan.findFirstOrThrow({
+          where: { userId: ana, fromOfferId: offer.id, sessionKey },
+        }),
+      ),
+    );
+    return { offer, pa: pa!, pb: pb! };
+  }
+
+  async function nextVersion(offerId: string, version: number, sessions: unknown[]) {
+    return prisma.planOfferVersion.create({
+      data: {
+        offerId,
+        version,
+        title: 'v',
+        snapshotVersion: 2,
+        schedule: 'FLEXIBLE',
+        snapshot: { version: 2, name: 'v', sessions } as never,
+      },
+    });
+  }
+
+  const exercisesOf = async (planId: string) =>
+    (await prisma.workoutPlanExercise.findMany({ where: { planId } })).map((e) => e.exerciseId);
+
+  it('D4: tirar a sessão A na cópia: A fica com a pessoa, solta, e B segue no plano de B', async () => {
+    const ana = await student();
+    const { offer, pa, pb } = await keyedOffer(ana);
+    await prisma.workoutSession.create({
+      data: { userId: ana, planId: pa.id, startedAt: new Date(), completedAt: new Date() },
+    });
+    const v2 = await nextVersion(offer.id, 2, [{ key: KEY_B, name: 'B', items: [item(ex[1]!)] }]);
+    await offers.accept(ana, offer.id, v2.id, TZ);
+
+    const a = await prisma.workoutPlan.findUniqueOrThrow({ where: { id: pa.id } });
+    expect(a.fromOfferId).toBeNull();
+    expect(await exercisesOf(pa.id)).toEqual([ex[0]]);
+    const b = await prisma.workoutPlan.findUniqueOrThrow({ where: { id: pb.id } });
+    expect(b.fromOfferId).toBe(offer.id);
+    expect(await exercisesOf(pb.id)).toEqual([ex[1]]);
+  });
+
+  it('D4: sessão que sai sem histórico é apagada; trocar a ordem não troca os planos', async () => {
+    const ana = await student();
+    const { offer, pa, pb } = await keyedOffer(ana);
+    const v2 = await nextVersion(offer.id, 2, [
+      { key: KEY_B, name: 'B', items: [item(ex[1]!)] },
+      { key: KEY_A, name: 'A', items: [item(ex[0]!)] },
+    ]);
+    await offers.accept(ana, offer.id, v2.id, TZ);
+    expect(await exercisesOf(pa.id)).toEqual([ex[0]]);
+    expect(await exercisesOf(pb.id)).toEqual([ex[1]]);
+
+    const v3 = await nextVersion(offer.id, 3, [{ key: KEY_B, name: 'B', items: [item(ex[1]!)] }]);
+    await offers.accept(ana, offer.id, v3.id, TZ);
+    expect(await prisma.workoutPlan.findUnique({ where: { id: pa.id } })).toBeNull();
+    expect(await exercisesOf(pb.id)).toEqual([ex[1]]);
+  });
+
+  it('D4: o editor dá chave a cada sessão e a chave volta na leitura', async () => {
+    const owner = await person();
+    const g = await prisma.group.create({
+      data: { type: 'SPONSORED', name: 'G4', slug: `${stamp}-g4`, ownerId: owner, autoPosts: [] },
+    });
+    await prisma.groupMembership.create({
+      data: { groupId: g.id, userId: owner, role: 'OWNER', status: 'ACTIVE' },
+    });
+    const ref = (id: number) => ({
+      type: 'exercise',
+      exerciseId: id,
+      targetSets: 3,
+      targetReps: '10',
+    });
+    const doc = {
+      sessions: [
+        { name: 'A', items: [ref(ex[0]!)] },
+        { key: KEY_B, name: 'B', items: [ref(ex[1]!)] },
+      ],
+    };
+    const t = await content.createWorkoutTemplate(owner, g.id, { title: 'x', document: doc });
+    const row = await prisma.groupPlanTemplate.findUniqueOrThrow({ where: { id: t.id } });
+    const keys = (row.snapshot as { sessions: Array<{ key?: string }> }).sessions.map((s) => s.key);
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).toBe(KEY_B);
+    expect(t.document?.sessions.map((s) => s.key)).toEqual(keys);
   });
 });
