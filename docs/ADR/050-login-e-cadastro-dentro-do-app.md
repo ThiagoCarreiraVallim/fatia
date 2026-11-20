@@ -19,8 +19,12 @@ lugar do nome — o "e-mail aleatório" de que o usuário reclamou.
 
 1. **Experience API do Logto (`/api/experience`)**, feita para sign-in nativo. O app:
    - abre a autorização OIDC por `fetch` (PKCE S256, `response_mode=form_post`, escopos
-     `openid offline_access profile email`), e o cookie da interação fica no cookie jar nativo
-     (`credentials: 'include'`, que o iOS exige);
+     `openid offline_access profile email`). O cookie da interação fica num jar do próprio
+     cliente, não no nativo: o `expo/fetch` com `credentials: 'omit'` e `redirect: 'manual'`, e
+     o 303 do authorize seguido à mão. O jar nativo do Android (okhttp `JavaNetCookieJar`) corta
+     o cookie na vírgula, e o `_interaction` do Logto 1.3x é JSON com vírgula
+     (`{"<app>":"…","_legacy":"…"}`); com ele o cadastro caía em `session.not_found`. O 1.30
+     ainda usa um valor simples, mas o upgrade quebraria o app sem este jar;
    - roda verificar → identificar → perfil → `submit`, consente pelo próprio app (cliente
      first-party, como a tela do Logto faz) e lê `code` e `state` do HTML do `form_post`;
    - troca o `code` pelo token exatamente como antes.
