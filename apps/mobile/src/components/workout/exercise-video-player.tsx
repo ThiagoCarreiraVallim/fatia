@@ -1,8 +1,8 @@
 import { Component, useEffect, type ComponentType, type ReactNode } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { requireOptionalNativeModule } from 'expo';
-import { isYoutubeEmbedNavigation, youtubeEmbedUrl } from '@fatia/api-client';
+import { embedNavigationAction, youtubeEmbedUrl } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 
 /**
@@ -99,10 +99,14 @@ export function YouTubePlayer({
             <ActivityIndicator color={colors.foreground} />
           </View>
         )}
-        onShouldStartLoadWithRequest={(req: { url: string }) => {
-          if (isYoutubeEmbedNavigation(req.url)) return true;
-          void WebBrowser.openBrowserAsync(req.url);
-          return false;
+        onShouldStartLoadWithRequest={(req: {
+          url: string;
+          isTopFrame?: boolean;
+          navigationType?: string;
+        }) => {
+          const action = embedNavigationAction(req, { reportsClicks: Platform.OS === 'ios' });
+          if (action === 'browser') void WebBrowser.openBrowserAsync(req.url);
+          return action === 'load';
         }}
         onError={onUnavailable}
       />

@@ -121,3 +121,22 @@ export function exerciseIdFromParam(raw: string | string[] | undefined): number 
   const id = Number(valor);
   return Number.isSafeInteger(id) ? id : null;
 }
+
+export type EmbedNavigationAction = 'load' | 'browser' | 'block';
+
+/**
+ * O que a WebView do player faz com uma navegação. O embed carrega. Iframe de
+ * dentro dele (anúncio, telemetria) carrega se for https e nunca abre nada. No
+ * quadro principal, só um toque da pessoa vai ao navegador do sistema;
+ * redirecionamento sem toque é bloqueado. O Android não informa o toque
+ * (`navigationType` é sempre `other`): lá, o quadro principal conta como toque.
+ */
+export function embedNavigationAction(
+  req: { url: string; isTopFrame?: boolean; navigationType?: string },
+  platform: { reportsClicks: boolean },
+): EmbedNavigationAction {
+  if (isYoutubeEmbedNavigation(req.url)) return 'load';
+  if (req.isTopFrame === false) return req.url.startsWith('https://') ? 'load' : 'block';
+  if (platform.reportsClicks && req.navigationType !== 'click') return 'block';
+  return /^https?:\/\//.test(req.url) ? 'browser' : 'block';
+}
