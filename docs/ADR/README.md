@@ -54,6 +54,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [046](./046-foto-do-chat-guardada.md)                                  | A foto do chat é guardada, enquanto a conversa existir               | Accepted                               |
 | [047](./047-checkin-com-foto-aceite-e-fila.md)                         | Check-in com foto: aceite próprio, sinais do servidor e fila         | Accepted (complementa 044)             |
 | [048](./048-sem-chat-entre-equipe-e-aluno.md)                          | Sem chat entre equipe e aluno: a conversa é no WhatsApp              | Accepted                               |
+| [050](./050-login-e-cadastro-dentro-do-app.md)                         | Login, cadastro e "esqueci a senha" dentro do app (Experience API)   | Accepted (revê parte da 008)           |
 
 ## Template
 

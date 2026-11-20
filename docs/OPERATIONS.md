@@ -198,6 +198,97 @@ o **Tempo** (o trace só passa a valer de verdade quando o `apps/agent` da ADR 0
 dois processos no caminho de uma requisição), depois o **Loki** — que economiza ~250 MiB e ainda
 deixa métrica, painel e o `docker logs` com rotação.
 
+## Login no app — o que o Logto de produção precisa (ADR 050)
+
+O app faz cadastro, login e "esqueci a senha" em telas próprias, pela Experience API do Logto. Foi
+conferido contra o **Logto 1.30** (o da produção) e o 1.36 (o do dev): os três fluxos funcionam nas
+duas versões, sem M2M. **Não é preciso atualizar o Logto.**
+
+### Na API (Dokploy)
+
+- `LOGTO_MOBILE_APP_ID` = o App ID do app **Native** "Fatia Mobile" no Logto (o mesmo
+  `EXPO_PUBLIC_LOGTO_APP_ID` do build do app). A API aceita o ID token do login com este `aud` e
+  grava o e-mail e o nome reais (`POST /users/me/identity`). Vazio = a conta de quem entra sem M2M
+  continua com `<sub>@logto.local`.
+- `LOGTO_M2M_APP_ID` / `LOGTO_M2M_APP_SECRET` (opcional, **precisa do M2M**): sem eles o login, o
+  cadastro e o e-mail real funcionam; ficam desligados só o nome editado no app indo para o Logto e
+  a troca de e-mail (a tela diz que não está disponível neste servidor). Para criar: console do
+  Logto → _Applications → Create → Machine-to-machine_, e atribuir a role
+  **Logto Management API access**.
+
+### No Logto (console ou `pnpm logto:bootstrap`)
+
+1. **App Native "Fatia Mobile"** com o redirect `fatia://auth/callback`. O login dentro do app nunca
+   abre esse endereço, mas o Logto confere que ele está cadastrado.
+2. **Conector de e-mail (SMTP)** — sem ele não há cadastro (o Logto exige e-mail verificado para
+   cadastro por e-mail) nem "esqueci a senha". No console: _Connectors → Email → SMTP_.
+3. **Experiência de login:** cadastro por **e-mail** com senha e verificação; login por e-mail e
+   senha; "esqueci a senha" por código no e-mail.
+4. **Google e Apple** (opcional): ver abaixo. Sem conector, o botão some no app e na web.
+
+O `pnpm logto:bootstrap` faz 1 a 4 sozinho, mas **ele mesmo precisa do M2M** (usa a Management API).
+Ele roda da sua máquina, com um `.env` apontando para a produção — as variáveis abaixo são lidas **só
+pelo script** (`scripts/logto-bootstrap.ts`), por isso **não** estão no `docker-compose.prod.yml`:
+
+```env
+NODE_ENV=production                  # não cria os usuários de teste
+LOGTO_ENDPOINT=https://auth.<DOMAIN>
+LOGTO_AUDIENCE=https://api.<DOMAIN>
+LOGTO_BASE_URL=https://app.<DOMAIN>
+API_PUBLIC_URL=https://api.<DOMAIN>
+LOGTO_M2M_APP_ID=...
+LOGTO_M2M_APP_SECRET=...
+EMAIL_SMTP_HOST=smtp.resend.com      # o mesmo provedor do MAIL_SMTP_URL da API
+EMAIL_SMTP_PORT=465
+EMAIL_SMTP_USER=resend
+EMAIL_SMTP_PASS=<chave>
+EMAIL_SMTP_SECURE=true
+EMAIL_FROM=Fatia <nao-responda@<DOMAIN>>
+LOGTO_GOOGLE_CLIENT_ID=...           # opcional
+LOGTO_GOOGLE_CLIENT_SECRET=...
+LOGTO_APPLE_SERVICE_ID=...           # opcional
+LOGTO_APPLE_TEAM_ID=...
+LOGTO_APPLE_KEY_ID=...
+LOGTO_APPLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+```
+
+Cuidados com o bootstrap em produção: ele acha os apps **pelo nome** ("Fatia Web", "Fatia MCP",
+"Fatia Mobile") — com outro nome ele cria um app novo — e **reaplica** as redirect URIs, apagando
+as que não forem as dele. Se os apps de produção têm outros nomes, faça os passos 2 a 4 no console.
+
+### Google
+
+1. Google Cloud Console → _APIs e serviços → Tela de consentimento OAuth_: tipo externo, nome Fatia,
+   domínio `<DOMAIN>`, escopos `openid`, `email`, `profile`.
+2. _Credenciais → Criar credenciais → ID do cliente OAuth_, tipo **Aplicativo da Web**.
+3. **URI de redirecionamento autorizado:** `https://auth.<DOMAIN>/callback/<id do conector>`. O id
+   aparece no console do Logto (_Connectors → Social → Google_) depois do primeiro bootstrap; até lá,
+   crie o conector pelo bootstrap, copie o id, cadastre a URI e pronto.
+4. Copie o ID e a chave secreta para `LOGTO_GOOGLE_CLIENT_ID` / `LOGTO_GOOGLE_CLIENT_SECRET` e rode
+   `pnpm logto:bootstrap`.
+
+### Apple
+
+1. Apple Developer → _Certificates, Identifiers & Profiles → Identifiers_: um **Services ID** (por
+   exemplo `br.ia.fat.signin`) com **Sign in with Apple** ligado; em _Configure_, o domínio
+   `auth.<DOMAIN>` e o Return URL `https://auth.<DOMAIN>/callback/<id do conector>`.
+2. _Keys → +_: uma chave com **Sign in with Apple**, ligada ao App ID principal. Baixe o `.p8` (só
+   dá uma vez) e anote o **Key ID**.
+3. O **Team ID** está no canto superior direito da conta.
+4. Preencha `LOGTO_APPLE_SERVICE_ID`, `LOGTO_APPLE_TEAM_ID`, `LOGTO_APPLE_KEY_ID` e
+   `LOGTO_APPLE_PRIVATE_KEY` (o conteúdo do `.p8` numa linha só, com `\n` no lugar das quebras) e
+   rode `pnpm logto:bootstrap`.
+
+O nome da pessoa vem do provedor (o Google sempre manda; a Apple só no primeiro consentimento) e
+chega à Fatia pelo ID token.
+
+### Atualizar o Logto (se um dia for preciso)
+
+Não é preciso para a ADR 050. Se for, faça backup da database `logto`, troque `LOGTO_VERSION` no
+Dokploy e, antes de subir a versão nova, rode as alterations do banco com a imagem nova:
+`docker run --rm -e DB_URL=... svhd/logto:<versão> npm run cli db alteration deploy <versão>`.
+Depois rode `pnpm --filter @fatia/api-client test` e o roteiro de login do `TESTAR_O_APP.md`.
+
 ## Mídia da comunidade — bucket R2 (ADR 028)
 
 Imagens publicadas pela comunidade (dica, capa de plano, avatar) e, a partir da Fase 7b, vídeos de

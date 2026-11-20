@@ -30,6 +30,16 @@ Pacote de melhorias do app (itens 1 a 8 do pedido). Um PR só, branch `feat/app-
   - `app-auth-motion-video`: item 8.
   - `app-auth-motion-misc`: itens 3 e 7.
 
+## Feito (itens 1 e 2)
+
+- api-client `auth-experience.ts` (+testes), live contra Logto 1.36 e 1.30 (container
+  `fatia-logto130-spike` na 3101, database `logto130` — apagar no fim).
+- API: `POST /users/me/identity`, troca de e-mail (M2M), nome ao Logto (M2M), `LOGTO_MOBILE_APP_ID`.
+  Provado com API do worktree na 3010 (`scratchpad/run-api.sh`), sem M2M.
+- Mobile: telas de conta, código, esqueci a senha, trocar e-mail; IdentitySync.
+- Web: botões sociais só com conector.
+- Docs: ADR 050, OPERATIONS, LOCAL_AUTH, TESTAR_O_APP.
+
 ## Próximo passo
 
-Implementar o fluxo nativo em `packages/api-client` (testável) e as telas do app.
+Validar no emulador (Metro 8082, API 3010); depois mergear os forks nav/video/misc.
