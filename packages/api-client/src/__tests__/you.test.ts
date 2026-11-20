@@ -27,6 +27,8 @@ import {
   objectiveSummary,
   stepHeight,
   youHeaderLine,
+  needsCommunityName,
+  communityNameProblem,
 } from '../you';
 import { DELETE_ACCOUNT_CONFIRMATION, isDeleteConfirmed } from '../users';
 
@@ -180,5 +182,36 @@ describe('withIdentity — o perfil em cache depois do ID token (ADR 050)', () =
 
   it('sem perfil em cache, não inventa um', () => {
     expect(withIdentity(undefined, { email: 'ana@x.com', name: 'Ana' })).toBeUndefined();
+  });
+});
+
+describe('nome provisório na comunidade (ADR 050)', () => {
+  const me = {
+    name: 'k3j9x2',
+    email: 'k3j9x2@logto.local',
+    nickname: null,
+    nameIsProvisional: true,
+  };
+
+  it('enquanto o nome é provisório, os outros leem "Membro"', () => {
+    expect(communityName(me)).toBe('Membro');
+    expect(communityName({ ...me, nickname: 'Aninha' })).toBe('Aninha');
+    expect(communityName({ ...me, name: 'Ana Souza', nameIsProvisional: false })).toBe('Ana');
+  });
+
+  it('pede o nome antes do primeiro post ou desafio só enquanto for provisório e sem apelido', () => {
+    expect(needsCommunityName(me)).toBe(true);
+    expect(needsCommunityName({ ...me, nickname: 'Aninha' })).toBe(false);
+    expect(needsCommunityName({ ...me, nameIsProvisional: false })).toBe(false);
+    // API de antes, sem o campo: não pergunta.
+    expect(needsCommunityName({ name: 'Ana', email: 'a@x.com', nickname: null })).toBe(false);
+    expect(needsCommunityName(undefined)).toBe(false);
+  });
+
+  it('o nome digitado não pode ser vazio nem o pedaço do e-mail', () => {
+    expect(communityNameProblem('  ', me)).toMatch(/nome/);
+    expect(communityNameProblem('k3j9x2', me)).toMatch(/nome/);
+    expect(communityNameProblem('x'.repeat(121), me)).toMatch(/120/);
+    expect(communityNameProblem(' Ana Souza ', me)).toBeNull();
   });
 });
