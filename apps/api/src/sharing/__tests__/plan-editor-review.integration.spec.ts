@@ -407,4 +407,46 @@ describe('editor de plano: revisão do PR #462 (#406)', () => {
     expect(keys[1]).toBe(KEY_B);
     expect(t.document?.sessions.map((s) => s.key)).toEqual(keys);
   });
+
+  it('P2: o plano adotado de um modelo com sessões é o da sessão A', async () => {
+    const owner = await person();
+    const g = await prisma.group.create({
+      data: { type: 'SPONSORED', name: 'G5', slug: `${stamp}-g5`, ownerId: owner, autoPosts: [] },
+    });
+    const ana = await person();
+    await prisma.groupMembership.createMany({
+      data: [
+        { groupId: g.id, userId: owner, role: 'OWNER', status: 'ACTIVE' },
+        { groupId: g.id, userId: ana, role: 'MEMBER', status: 'ACTIVE' },
+      ],
+    });
+    const ref = (id: number) => ({
+      type: 'exercise',
+      exerciseId: id,
+      targetSets: 3,
+      targetReps: '10',
+    });
+    const t = await content.createWorkoutTemplate(owner, g.id, {
+      title: 'ABC',
+      document: {
+        sessions: [
+          { name: 'A', items: [ref(ex[0]!)] },
+          { name: 'B', items: [ref(ex[1]!)] },
+          { name: 'C', items: [ref(ex[2]!)] },
+        ],
+      },
+    });
+    await prisma.groupPlanTemplate.update({
+      where: { id: t.id },
+      data: { publishedAt: new Date() },
+    });
+    const row = await prisma.groupPlanTemplate.findUniqueOrThrow({ where: { id: t.id } });
+    await materializer.materialize(ana, row.snapshot, t.id, g.id);
+    const a = await prisma.workoutPlan.findFirstOrThrow({
+      where: { userId: ana, fromTemplateId: t.id, sessionIndex: 0 },
+    });
+    const list = await content.listWorkoutTemplatesForMe(ana);
+    const mine = list.flatMap((x) => x.templates).find((x) => x.id === t.id);
+    expect(mine?.adoptedPlanId).toBe(a.id);
+  });
 });
