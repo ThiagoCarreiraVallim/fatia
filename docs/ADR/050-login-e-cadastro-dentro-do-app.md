@@ -41,7 +41,10 @@ lugar do nome — o "e-mail aleatório" de que o usuário reclamou.
    `POST /users/me/identity`. A API confere assinatura (JWKS do Logto), `iss`, `aud` igual ao app
    mobile (`LOGTO_MOBILE_APP_ID`) e `sub` igual ao do access token; um ID token de outra conta
    responde 403 e nada é gravado. Grava o e-mail verificado e, se o nome ainda for o provisório, o
-   nome. Quem está com `@logto.local` é corrigido no próximo login.
+   nome. Quem está com `@logto.local` é corrigido no próximo login **com senha ou social**: uma
+   sessão aberta pela versão antiga do app só pediu `openid offline_access`, e o ID token que o
+   refresh devolve continua sem `email` e `name` até a pessoa sair e entrar de novo (ou até haver
+   M2M, que lê o perfil no Logto).
 
 5. **Google e Apple** continuam no navegador, só para o consentimento do provedor
    (`direct_sign_in`, sem a tela do Logto). O botão só aparece com o conector configurado, lido da

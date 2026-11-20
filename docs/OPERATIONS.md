@@ -209,7 +209,8 @@ duas versões, sem M2M. **Não é preciso atualizar o Logto.**
 - `LOGTO_MOBILE_APP_ID` = o App ID do app **Native** "Fatia Mobile" no Logto (o mesmo
   `EXPO_PUBLIC_LOGTO_APP_ID` do build do app). A API aceita o ID token do login com este `aud` e
   grava o e-mail e o nome reais (`POST /users/me/identity`). Vazio = a conta de quem entra sem M2M
-  continua com `<sub>@logto.local`.
+  continua com `<sub>@logto.local`. Quem já estava logado pela versão antiga do app só é corrigido
+  quando sair e entrar de novo: aquela sessão não pediu os escopos `profile email`.
 - `LOGTO_M2M_APP_ID` / `LOGTO_M2M_APP_SECRET` (opcional, **precisa do M2M**): sem eles o login, o
   cadastro e o e-mail real funcionam; ficam desligados só o nome editado no app indo para o Logto e
   a troca de e-mail (a tela diz que não está disponível neste servidor). Para criar: console do
