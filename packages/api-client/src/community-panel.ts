@@ -37,12 +37,14 @@ export type PanelSection =
   | 'activation'
   | 'origins'
   | 'content'
+  | 'programs'
   | 'exercises'
   | 'challenges'
   | 'moderation'
   | 'announcements'
   | 'agent'
   | 'seats'
+  | 'offers'
   | 'benefits'
   | 'settings';
 
@@ -63,6 +65,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   activation: { section: 'activation', label: 'Ativação pendente', path: '/activation' },
   origins: { section: 'origins', label: 'Origem dos convites', path: '/origins' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
+  programs: { section: 'programs', label: 'Programas', path: '/programs' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
   challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
   moderation: { section: 'moderation', label: 'Moderação', path: '/moderation' },
@@ -73,6 +76,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   },
   agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
+  offers: { section: 'offers', label: 'Ofertas', path: '/offers' },
   benefits: { section: 'benefits', label: 'Benefícios', path: '/benefits' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
@@ -120,6 +124,8 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.invites,
       SECTIONS.activation,
       SECTIONS.content,
+      // Os planos com começo e fim, por aluno (#403, `member.file`).
+      SECTIONS.programs,
       SECTIONS.exercises,
       SECTIONS.challenges,
       // Comunicar é do dono e do profissional (`announcement.publish`, #394).

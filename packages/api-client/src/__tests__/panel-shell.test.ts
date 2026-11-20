@@ -54,8 +54,14 @@ describe('menu do painel (#398)', () => {
       'Comunicados e enquetes',
       'Desafios',
       'Benefícios',
+      'Ofertas',
     ]);
     expect(comunidade.count).toBe(4);
+    expect(nav.find((g) => g.key === 'content')!.items.map((i) => i.label)).toEqual([
+      'Planos e dicas',
+      'Programas',
+      'Exercícios',
+    ]);
   });
 
   it('profissional: sem assentos, moderação, benefícios, agente nem configurações; grupo vazio some', () => {

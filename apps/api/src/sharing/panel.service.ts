@@ -114,6 +114,8 @@ export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] 
   { key: 'origins', label: 'Origem dos convites', group: 'Pessoas', action: 'insights.read' },
   { key: 'seats', label: 'Assentos e faturas', group: 'Pessoas', action: 'billing.read' },
   { key: 'content', label: 'Planos e dicas', group: 'Conteúdo', action: 'content.publish' },
+  // Os planos com começo e fim, por aluno (#403, Pn-30).
+  { key: 'programs', label: 'Programas', group: 'Conteúdo', action: 'member.file' },
   { key: 'exercises', label: 'Exercícios', group: 'Conteúdo', action: 'content.publish' },
   { key: 'moderation', label: 'Mural e avisos', group: 'Comunidade', action: 'content.moderate' },
   {
@@ -124,6 +126,8 @@ export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] 
   },
   { key: 'challenges', label: 'Desafios', group: 'Comunidade', action: 'challenge.manage' },
   { key: 'benefits', label: 'Benefícios', group: 'Comunidade', action: 'benefit.manage' },
+  // O que a comunidade vende (#403, Pn-37): dinheiro, só o dono.
+  { key: 'offers', label: 'Ofertas', group: 'Comunidade', action: 'billing.read' },
   { key: 'agent', label: 'Agente da comunidade', group: 'IA', action: 'group.update' },
   { key: 'settings', label: 'Configurações', group: 'Conta', action: 'group.update' },
 ];
