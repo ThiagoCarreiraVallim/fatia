@@ -1,6 +1,7 @@
 import { apiFetch } from './http';
 import type { GroupRole, MyGroup } from './community';
 import type { MealType } from './nutrition';
+import type { TemplateReach } from './plan-library';
 
 /**
  * Planos prontos, dicas e mídia da comunidade (Fase 7a). A equipe publica pelo
@@ -96,6 +97,10 @@ export interface PlanTemplate {
   /** Só para a equipe. */
   sourcePlanId?: string | null;
   canEdit?: boolean;
+  /** Rascunho (#405), só para a equipe: não vai para a comunidade nem é enviado. */
+  draft?: boolean;
+  /** "Com quem" (#405), só na lista da equipe. */
+  withWhom?: TemplateReach;
 }
 
 export interface GroupTip {
