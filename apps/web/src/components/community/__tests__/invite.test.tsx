@@ -50,7 +50,7 @@ describe('convite', () => {
   });
 
   it('sem sessão (Onb-01a): capa da comunidade, quem convidou e a conta, voltando ao link', () => {
-    render(<InviteSignedOut token={TOKEN} preview={PREVIEW} />);
+    render(<InviteSignedOut token={TOKEN} preview={PREVIEW} socialTargets={['google', 'apple']} />);
     expect(screen.getByRole('heading', { name: 'Academia Demo' })).toBeInTheDocument();
     expect(screen.getByText('Ana te convidou')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Crie sua conta para entrar' })).toBeInTheDocument();

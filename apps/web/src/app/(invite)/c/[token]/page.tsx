@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { INVITE_UNAVAILABLE, InviteAccept, InviteSignedOut } from '@/components/community/invite';
 import { getCurrentUser } from '@/lib/auth-server';
 import { fetchInvitePreview } from '@/lib/invite-preview';
+import { loadSocialTargets } from '@/lib/social-targets';
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -13,7 +14,11 @@ type Props = { params: Promise<{ token: string }> };
  */
 export default async function InvitePage({ params }: Props) {
   const { token } = await params;
-  const [user, preview] = await Promise.all([getCurrentUser(), fetchInvitePreview(token)]);
+  const [user, preview, socialTargets] = await Promise.all([
+    getCurrentUser(),
+    fetchInvitePreview(token),
+    loadSocialTargets(),
+  ]);
 
   if (!preview) {
     return (
@@ -31,6 +36,6 @@ export default async function InvitePage({ params }: Props) {
   return user ? (
     <InviteAccept token={token} preview={preview} />
   ) : (
-    <InviteSignedOut token={token} preview={preview} />
+    <InviteSignedOut token={token} preview={preview} socialTargets={socialTargets} />
   );
 }
