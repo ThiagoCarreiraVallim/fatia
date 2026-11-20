@@ -542,10 +542,17 @@ export class WorkoutPlanService {
     assertRepRange(config.targetReps);
     const pick = <K extends keyof typeof config & keyof typeof current>(k: K) =>
       config[k] !== undefined ? config[k] : current[k];
-    assertLoadPercent({
-      loadMode: pick('loadMode') ?? 'WEIGHT',
-      loadPercent: pick('loadPercent'),
-    });
+    // Recusa só a % que veio NESTA escrita com outra carga. A guardada sai
+    // quando a carga deixa de ser % de 1RM: o app e o MCP mandam só o
+    // `loadMode` ao trocar, sem saber da % antiga.
+    assertLoadPercent({ loadMode: pick('loadMode') ?? 'WEIGHT', loadPercent: config.loadPercent });
+    if (
+      (pick('loadMode') ?? 'WEIGHT') !== 'PERCENT_1RM' &&
+      config.loadPercent === undefined &&
+      (current.loadPercent ?? null) !== null
+    ) {
+      config.loadPercent = null;
+    }
     if (!cardio) {
       if (hasCardioInput(config)) {
         throw new BadRequestException('Meta de cardio só vale para exercício de cardio.');

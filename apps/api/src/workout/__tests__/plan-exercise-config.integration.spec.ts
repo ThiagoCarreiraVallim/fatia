@@ -388,15 +388,12 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
     await expect(
       plans.updatePlanExercise(userId, plan.id, a.id, { cardioZone: 3 }),
     ).rejects.toThrow(BadRequestException);
-    // % de 1RM só no modo % de 1RM.
+    // % de 1RM só no modo % de 1RM: mandar a % com outra carga é 400.
     await expect(
-      plans.updatePlanExercise(userId, plan.id, a.id, { loadMode: 'WEIGHT' }),
+      plans.updatePlanExercise(userId, plan.id, a.id, { loadMode: 'WEIGHT', loadPercent: 70 }),
     ).rejects.toThrow(BadRequestException);
-    // Voltar para kg limpando o %: vale.
-    const kg = await plans.updatePlanExercise(userId, plan.id, a.id, {
-      loadMode: 'WEIGHT',
-      loadPercent: null,
-    });
+    // Voltar para kg só com o loadMode (o app e o MCP): a % guardada sai.
+    const kg = await plans.updatePlanExercise(userId, plan.id, a.id, { loadMode: 'WEIGHT' });
     expect(kg).toMatchObject({ loadMode: 'WEIGHT', loadPercent: null });
   });
 
