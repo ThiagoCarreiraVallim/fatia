@@ -51,7 +51,8 @@ class TemplateMetaDto {
 
 /**
  * O editor de treino (#406): o plano inteiro (`document`, conferido pelo
- * schema do editor no service), etiquetas, agenda e período.
+ * schema do editor no service), etiquetas, agenda e período. No plano
+ * alimentar (#407), `document` é o documento do editor de alimentação.
  */
 class WorkoutFieldsDto extends TemplateMetaDto {
   @IsOptional() @IsObject() document?: Record<string, unknown>;
@@ -77,6 +78,9 @@ export class CreateNutritionTemplateDto extends TemplateMetaDto {
   @IsString()
   @MaxLength(100)
   declare title: string;
+
+  /** O editor (#407): metas, refeições com opções e grupos; conferido no service. */
+  @IsOptional() @IsObject() document?: Record<string, unknown>;
 
   @IsOptional()
   @ValidateNested()

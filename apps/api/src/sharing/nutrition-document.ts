@@ -22,6 +22,7 @@ import {
 } from '../nutrition/helpers/equivalents';
 import {
   NUTRITION_SNAPSHOT_VERSION,
+  nutritionGoalsSchema,
   nutritionSnapshotSchema,
   type NutritionGoals,
   type SuggestedMealItem,
@@ -92,7 +93,7 @@ const mealSnapSchema = z.object({
 });
 export type NutritionMealSnap = z.infer<typeof mealSnapSchema>;
 
-const groupSnapSchema = z.object({
+export const groupSnapSchema = z.object({
   key: chave,
   name: z.string().min(1).max(MAX_GROUP_NAME),
   keyMacro: z.enum(KEY_MACROS),
@@ -144,6 +145,11 @@ export const nutritionSnapshotV2Schema = z
     adjustToStudent: z.boolean(),
     meals: z.array(mealSnapSchema).max(MAX_PLAN_MEALS),
     groups: z.array(groupSnapSchema).max(MAX_EQUIVALENCE_GROUPS),
+    /**
+     * As faixas exatas do retrato v1, só na leitura: o modelo antigo é enviado
+     * com as faixas que o autor escreveu, não com as refeitas das metas.
+     */
+    ranges: nutritionGoalsSchema.optional(),
   })
   .superRefine(checkRefs);
 export type NutritionSnapshotV2 = z.infer<typeof nutritionSnapshotV2Schema>;
@@ -203,7 +209,7 @@ export const nutritionDocumentSchema = z
 export type NutritionDocument = z.infer<typeof nutritionDocumentSchema>;
 
 /** O que a equipe lê no editor: o retrato com nomes e macros, sem a versão. */
-export type NutritionDocumentView = Omit<NutritionSnapshotV2, 'version'>;
+export type NutritionDocumentView = Omit<NutritionSnapshotV2, 'version' | 'ranges'>;
 
 export function parseNutritionDocument(raw: unknown): NutritionDocument {
   const parsed = nutritionDocumentSchema.safeParse(raw);
@@ -233,6 +239,7 @@ export function upgradeNutritionV1(
       ],
     })),
     groups: [],
+    ...(snap.goals ? { ranges: snap.goals } : {}),
   };
 }
 
@@ -259,8 +266,9 @@ export function readNutritionSnapshot(raw: unknown): NutritionSnapshotV2 {
 }
 
 export function nutritionDocumentView(snap: NutritionSnapshotV2): NutritionDocumentView {
-  const { version, ...rest } = snap;
+  const { version, ranges, ...rest } = snap;
   void version;
+  void ranges;
   return rest;
 }
 
@@ -497,7 +505,10 @@ export function buildNutritionSendInput(
   });
 
   return {
-    goals: targetsToRanges(scaleTargets(snap.targets, factor)),
+    goals:
+      snap.ranges && factor === 1
+        ? snap.ranges
+        : targetsToRanges(scaleTargets(snap.targets, factor)),
     applyGoals: true,
     note: opts.note?.trim() || undefined,
     equivalenceGroups: snap.groups,

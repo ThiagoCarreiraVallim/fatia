@@ -19,12 +19,14 @@ import {
   MemberNoteDto,
   RemoveMemberPlanQueryDto,
   ReorderMemberPlansDto,
+  SaveNutritionCopyDto,
   SavePlanCopyDto,
   SendMemberPlanDto,
 } from './dto/member-file.dto';
 import { GroupRoleGuard } from './guards/group-role.guard';
 import { MemberFileService } from './member-file.service';
 import { MemberNoteService } from './member-note.service';
+import { NutritionCopyService } from './nutrition-copy.service';
 import { PlanCopyService } from './plan-copy.service';
 import { PlanOfferService } from './plan-offer.service';
 
@@ -44,6 +46,7 @@ export class MemberFileController {
     private readonly offers: PlanOfferService,
     private readonly notes: MemberNoteService,
     private readonly copies: PlanCopyService,
+    private readonly nutritionCopies: NutritionCopyService,
   ) {}
 
   @Get('file')
@@ -112,6 +115,31 @@ export class MemberFileController {
     @Body() dto: SavePlanCopyDto,
   ) {
     return this.copies.save(user.id, groupId, membershipId, offerId, dto);
+  }
+
+  /** A cópia do plano alimentar no editor (#407, Pn-24c). Porta de leitura de Alimentação. */
+  @Get('nutrition-plans/:planId/copy')
+  @RequireGroupAction('member.plans')
+  nutritionCopy(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+  ) {
+    return this.nutritionCopies.get(user.id, groupId, membershipId, planId);
+  }
+
+  /** "Salvar na cópia da Ana": versão nova; a pessoa vê o que mudou e aceita. */
+  @Put('nutrition-plans/:planId/copy')
+  @RequireGroupAction('member.plans')
+  saveNutritionCopy(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Body() dto: SaveNutritionCopyDto,
+  ) {
+    return this.nutritionCopies.save(user.id, groupId, membershipId, planId, dto);
   }
 
   @Delete('plans/:offerId')

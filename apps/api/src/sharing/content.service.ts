@@ -51,7 +51,15 @@ import {
   snapshotToDocument,
   type PlanDocumentView,
 } from './plan-document';
-import type { NutritionDocumentView } from './nutrition-document';
+import {
+  documentToNutritionSnapshot,
+  legacyNutritionView,
+  NUTRITION_SNAPSHOT_V2,
+  nutritionDocumentView,
+  parseNutritionDocument,
+  readNutritionSnapshot,
+  type NutritionDocumentView,
+} from './nutrition-document';
 import { assertDay } from '../common/dates';
 
 export const TIP_CATEGORIES = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'] as const;
@@ -428,11 +436,27 @@ export class ContentService {
     input: CreateNutritionTemplateInput,
   ): Promise<TemplateView> {
     const eu = await this.assertPublisher(userId, groupId);
-    const snapshot = await this.buildNutrition(
-      userId,
-      input.goals ?? null,
-      input.mealTemplateIds ?? [],
-    );
+    let snapshot: unknown;
+    let snapshotVersion = NUTRITION_SNAPSHOT_VERSION;
+    if (input.document !== undefined) {
+      if (input.goals !== undefined || input.mealTemplateIds !== undefined) {
+        throw new BadRequestException(
+          'Monte o plano no editor ou use metas e refeições salvas, um dos dois.',
+        );
+      }
+      // O editor (#407): metas, refeições com opções e grupos de equivalentes.
+      snapshot = await documentToNutritionSnapshot(
+        this.prisma,
+        parseNutritionDocument(input.document),
+      );
+      snapshotVersion = NUTRITION_SNAPSHOT_V2;
+    } else {
+      snapshot = await this.buildNutrition(
+        userId,
+        input.goals ?? null,
+        input.mealTemplateIds ?? [],
+      );
+    }
     const coverFileId = await this.resolveCover(groupId, input.coverFileId);
     const row = await this.prisma.groupPlanTemplate.create({
       data: {
@@ -443,8 +467,8 @@ export class ContentService {
         description: this.description(input.description),
         level: this.level(input.level),
         coverFileId,
-        snapshot: snapshot as unknown as Prisma.InputJsonValue,
-        snapshotVersion: NUTRITION_SNAPSHOT_VERSION,
+        snapshot: snapshot as Prisma.InputJsonValue,
+        snapshotVersion,
         draft: input.draft === true,
       },
       include: TEMPLATE_INCLUDE,
@@ -505,7 +529,7 @@ export class ContentService {
       }
       Object.assign(data, this.workoutFields(input));
     } else {
-      if (input.planId !== undefined || input.document !== undefined) {
+      if (input.planId !== undefined) {
         throw new BadRequestException('Plano de treino só entra em modelo de treino.');
       }
       if (
@@ -516,7 +540,22 @@ export class ContentService {
       ) {
         throw new BadRequestException('Etiquetas, agenda e período são do plano de treino.');
       }
-      if (input.goals !== undefined || input.mealTemplateIds !== undefined) {
+      const legado = input.goals !== undefined || input.mealTemplateIds !== undefined;
+      if (input.document !== undefined) {
+        if (legado) {
+          throw new BadRequestException(
+            'Mande o plano do editor ou metas e refeições salvas, um dos dois.',
+          );
+        }
+        data.snapshot = (await documentToNutritionSnapshot(
+          this.prisma,
+          parseNutritionDocument(input.document),
+        )) as unknown as Prisma.InputJsonValue;
+        data.snapshotVersion = NUTRITION_SNAPSHOT_V2;
+      } else if (legado && atual.snapshotVersion === NUTRITION_SNAPSHOT_V2) {
+        // O retrato do editor não volta ao formato da Fase 7 por um PATCH parcial.
+        throw new BadRequestException('Este plano é do editor: mande o plano inteiro.');
+      } else if (legado) {
         const anterior = parseNutritionSnapshot(atual.snapshot, true);
         const snapshot =
           input.mealTemplateIds !== undefined
@@ -838,7 +877,8 @@ export class ContentService {
       };
     }
 
-    const snap = parseNutritionSnapshot(modelo.snapshot, false);
+    // v1 como foi gravado; v2 (#407) pela primeira opção de cada refeição.
+    const snap = legacyNutritionView(modelo.snapshot);
     const applyGoals = input.applyGoals === true && snap.goals !== null;
     const saveMeals = input.saveMeals !== false && snap.meals.length > 0;
     if (!applyGoals && !saveMeals) {
@@ -1106,9 +1146,12 @@ export class ContentService {
       };
     }
 
-    const snap = parseNutritionSnapshot(row.snapshot, false);
+    const snap = legacyNutritionView(row.snapshot);
     return {
       ...base,
+      ...(teamRole && withDocument
+        ? { nutritionDocument: nutritionDocumentView(readNutritionSnapshot(row.snapshot)) }
+        : {}),
       exercises: [],
       goals: snap.goals,
       meals: snap.meals.map((m) => ({

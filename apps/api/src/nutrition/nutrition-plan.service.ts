@@ -313,26 +313,59 @@ export class NutritionPlanService {
   async sendFromTemplate(
     authorId: string,
     membershipIds: string[],
-    input: SendNutritionPlanInput,
+    inputs: SendNutritionPlanInput[],
     origin: { sourceTemplateId: string; changeNote?: string | null },
   ): Promise<Array<{ plan: NutritionPlanView; update: boolean }>> {
     const students: Array<{ userId: string; groupId: string }> = [];
     for (const id of membershipIds) students.push(await this.receiver(authorId, id));
-    const meals = await this.prepareMeals(input);
+    // Cada pessoa com o seu plano: o ajuste às kcal dela (#407) muda as quantidades.
+    const prepared = await Promise.all(inputs.map((input) => this.prepareMeals(input)));
     const out = await this.prisma.$transaction(
       async (db) => {
         for (const userId of [...new Set(students.map((s) => s.userId))].sort()) {
           await lockPlanOf(db, userId);
         }
         const written = [];
-        for (const student of students) {
-          written.push(await this.writePlan(db, authorId, student, input, meals, origin));
+        for (const [i, student] of students.entries()) {
+          written.push(
+            await this.writePlan(db, authorId, student, inputs[i]!, prepared[i]!, origin),
+          );
         }
         return written;
       },
       { timeout: 60_000 },
     );
     return out.map((w) => ({ plan: this.view(w.plan, new Map(), new Map()), update: w.update }));
+  }
+
+  /**
+   * Uma versão nova pela cópia do aluno (#407, Pn-24c): a mesma linhagem
+   * (aluno, autor e modelo), com quem editou e o "o que mudou". A versão
+   * aceita segue em uso até a pessoa aceitar a nova; a que esperava aceite
+   * sai. `baseVersionId` é a versão que o editor abriu: se outra foi salva
+   * depois, 409 e nada muda.
+   */
+  async writeCopyVersion(
+    authorId: string,
+    student: { userId: string; groupId: string },
+    input: SendNutritionPlanInput,
+    origin: {
+      sourceTemplateId: string | null;
+      changeNote: string | null;
+      editedById: string;
+      baseVersionId?: string;
+    },
+  ): Promise<{ plan: NutritionPlanView; update: boolean }> {
+    const meals = await this.prepareMeals(input);
+    const w = await this.prisma.$transaction((db) =>
+      this.writePlan(db, authorId, student, input, meals, {
+        sourceTemplateId: origin.sourceTemplateId ?? undefined,
+        changeNote: origin.changeNote,
+        editedById: origin.editedById,
+        baseVersionId: origin.baseVersionId,
+      }),
+    );
+    return { plan: this.view(w.plan, new Map(), new Map()), update: w.update };
   }
 
   /** O aluno que recebe e quem envia, da equipe ativa da mesma comunidade. */
@@ -387,6 +420,8 @@ export class NutritionPlanService {
       mealType: meal.mealType,
       name: meal.name.trim(),
       position: mealPos,
+      time: meal.time ?? null,
+      key: meal.key ?? null,
       options: {
         create: meal.options.map((option, optionPos) => ({
           position: optionPos,
@@ -395,6 +430,8 @@ export class NutritionPlanService {
               ...resolve(item),
               position: itemPos,
               equivalenceGroup: item.equivalenceGroup?.trim() || null,
+              key: item.key ?? null,
+              groupKey: item.groupKey ?? null,
               equivalents: {
                 create: (item.equivalents ?? []).map((eq, eqPos) => ({
                   ...resolve(eq),
@@ -420,7 +457,12 @@ export class NutritionPlanService {
     student: { userId: string; groupId: string },
     input: SendNutritionPlanInput,
     meals: Awaited<ReturnType<NutritionPlanService['prepareMeals']>>,
-    origin: { sourceTemplateId?: string; changeNote?: string | null },
+    origin: {
+      sourceTemplateId?: string;
+      changeNote?: string | null;
+      editedById?: string;
+      baseVersionId?: string;
+    },
   ) {
     await lockPlanOf(db, student.userId);
     const last = await db.nutritionPlan.findFirst({
@@ -430,6 +472,17 @@ export class NutritionPlanService {
     });
     // Pela biblioteca, só o mesmo modelo conta como versão anterior.
     const mesmo = origin.sourceTemplateId ? { sourceTemplateId: origin.sourceTemplateId } : {};
+    if (origin.baseVersionId) {
+      // Duas pessoas da equipe na mesma cópia: a segunda não sobrescreve a primeira.
+      const ultima = await db.nutritionPlan.findFirst({
+        where: { userId: student.userId, authorId, ...mesmo },
+        orderBy: { version: 'desc' },
+        select: { id: true },
+      });
+      if (ultima && ultima.id !== origin.baseVersionId) {
+        throw new ConflictException('Outra pessoa salvou esta cópia; recarregue.');
+      }
+    }
     const previous = origin.sourceTemplateId
       ? await db.nutritionPlan.findFirst({
           where: {
@@ -458,6 +511,10 @@ export class NutritionPlanService {
         // A primeira versão não tem o que mudou.
         changeNote: previous ? origin.changeNote?.trim() || null : null,
         sourceTemplateId: origin.sourceTemplateId ?? null,
+        editedById: origin.editedById ?? null,
+        ...(input.equivalenceGroups !== undefined
+          ? { equivalenceGroups: input.equivalenceGroups as Prisma.InputJsonValue }
+          : {}),
         meals: { create: meals },
       },
       include: PLAN_INCLUDE,
@@ -513,6 +570,11 @@ export class NutritionPlanService {
     // Já aceito ou substituído: 409, e nada muda (o mesmo que o segundo toque
     // ao mesmo tempo recebe, lá dentro da transação).
     if (plan.status !== 'SENT') throw new ConflictException(PLAN_ALREADY_HANDLED);
+    const owner = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    const today = todayInTz(owner.timezone);
 
     await this.inTransaction(async (db) => {
       // Primeiro, e dentro da transação: trava a linha e confere que o plano
@@ -525,6 +587,10 @@ export class NutritionPlanService {
       });
       if (claimed.count !== 1) throw new ConflictException(PLAN_ALREADY_HANDLED);
 
+      const previous = await db.nutritionPlan.findFirst({
+        where: { userId, status: 'ACCEPTED' },
+        select: { id: true },
+      });
       const fromPrevious = await db.nutritionPlanOption.findMany({
         where: { meal: { plan: { userId, status: 'ACCEPTED' } }, mealTemplateId: { not: null } },
         select: { mealTemplateId: true },
@@ -540,6 +606,7 @@ export class NutritionPlanService {
         where: { id: plan.id },
         data: { status: 'ACCEPTED', acceptedAt: now },
       });
+      if (previous) await this.carryOver(db, previous.id, plan, today);
 
       if (plan.applyGoals) {
         const goals = goalsOf(plan);
@@ -590,6 +657,66 @@ export class NutritionPlanService {
   }
 
   /**
+   * O que a pessoa já fez de hoje em diante no plano que sai segue na versão
+   * nova (#407, "as trocas que ela já fez continuam"): a troca e o "comi isso"
+   * passam a apontar o item e a refeição de mesma chave (`key`, ou o id no
+   * plano sem chave, que é a chave que a cópia devolve). Nada se apaga: é a
+   * mesma linha, com o vínculo trocado. Sem par na versão nova (alimento ou
+   * equivalente que saiu), fica no plano antigo, como histórico.
+   */
+  private async carryOver(
+    db: Prisma.TransactionClient,
+    previousId: string,
+    next: PlanRow,
+    today: string,
+  ): Promise<void> {
+    const nextMeals = new Map(next.meals.map((m) => [m.key ?? m.id, m]));
+    const nextItems = new Map(
+      next.meals.flatMap((m) => m.options.flatMap((o) => o.items.map((i) => [i.key ?? i.id, i]))),
+    );
+    const swaps = await db.nutritionSwap.findMany({
+      where: { planId: previousId, date: { gte: today }, undoneAt: null },
+      include: { item: true, equivalent: { select: { foodId: true } } },
+    });
+    for (const swap of swaps) {
+      const item = nextItems.get(swap.item.key ?? swap.item.id);
+      if (!item || item.foodId !== swap.item.foodId) continue;
+      const eq = item.equivalents.find((e) => e.foodId === swap.equivalent.foodId);
+      if (!eq) continue;
+      await db.nutritionSwap.update({
+        where: { id: swap.id },
+        data: { planId: next.id, itemId: item.id, equivalentId: eq.id },
+      });
+    }
+
+    const logs = await db.nutritionPlanLog.findMany({
+      where: { planMeal: { planId: previousId }, date: { gte: today } },
+      include: {
+        planMeal: { select: { id: true, key: true } },
+        option: { select: { position: true, items: { select: { id: true, key: true } } } },
+      },
+    });
+    for (const log of logs) {
+      const meal = nextMeals.get(log.planMeal.key ?? log.planMeal.id);
+      const option = meal?.options.find((o) => o.position === log.option.position);
+      if (!option) continue;
+      const keyOf = new Map(log.option.items.map((i) => [i.id, i.key ?? i.id]));
+      const idOfKey = new Map(option.items.map((i) => [i.key ?? i.id, i.id]));
+      const links: Record<string, string> = {};
+      for (const [oldItemId, mealItemId] of Object.entries(
+        (log.itemLinks ?? {}) as Record<string, string>,
+      )) {
+        const novo = idOfKey.get(keyOf.get(oldItemId) ?? '');
+        if (novo) links[novo] = mealItemId;
+      }
+      await db.nutritionPlanLog.update({
+        where: { id: log.id },
+        data: { planMealId: meal!.id, optionId: option.id, itemLinks: links },
+      });
+    }
+  }
+
+  /**
    * "Comi isso": registra a opção da refeição do plano no diário, com as trocas
    * do dia aplicadas. Passa por `MealService.createResolved`, o mesmo caminho da
    * refeição salva (`log_meal_template`).
@@ -621,6 +748,11 @@ export class NutritionPlanService {
     }
     if (!option) throw new NotFoundException(PLAN_NOT_FOUND);
     const chosen = option;
+    if (chosen.items.length === 0) {
+      throw new BadRequestException(
+        `${planMeal.name} não tem sugestão no plano: registre o que comeu pela busca.`,
+      );
+    }
 
     const eatenAt = dto.eatenAt ? parseInstant(dto.eatenAt, 'eatenAt') : new Date();
     const date = dateInTz(eatenAt, timezone);
@@ -850,8 +982,9 @@ export class NutritionPlanService {
         throw new BadRequestException(`Cada refeição tem de 1 a ${MAX_OPTIONS} opções.`);
       }
       for (const option of meal.options) {
-        if (option.items.length === 0 || option.items.length > MAX_TEMPLATE_ITEMS) {
-          throw new BadRequestException(`Cada opção tem de 1 a ${MAX_TEMPLATE_ITEMS} alimentos.`);
+        // Opção vazia é a refeição "sem sugestão" do editor (#407, Pn-24b).
+        if (option.items.length > MAX_TEMPLATE_ITEMS) {
+          throw new BadRequestException(`Cada opção tem até ${MAX_TEMPLATE_ITEMS} alimentos.`);
         }
         for (const item of option.items) {
           if ((item.equivalents?.length ?? 0) > MAX_EQUIVALENTS) {
@@ -975,7 +1108,7 @@ export class NutritionPlanService {
         mealType: meal.mealType,
         name: meal.name,
         position: meal.position,
-        time: null,
+        time: meal.time,
         logged: logs.get(meal.id) ?? null,
         options: meal.options.map((option) => {
           const eaten = option.items.map((item) => {
