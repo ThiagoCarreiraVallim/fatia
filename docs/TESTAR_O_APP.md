@@ -6,9 +6,12 @@ e o roteiro de teste. Os detalhes de máquina (toolchain Android, firewall, prob
 no [README do app](../apps/mobile/README.md); o runbook de publicação, em
 [OPERATIONS → Release do app nativo](./OPERATIONS.md#release-do-app-nativo).
 
-> **Login:** o app entra com **e-mail e senha** pelo Logto, igual à web (ADR 008). Não existe
-> "Entrar com Apple" nem "Entrar com Google". As contas da Apple e do Google deste guia são as de
-> **desenvolvedor**, para gerar e distribuir o app.
+> **Login:** criar conta (nome, e-mail, senha e o código do e-mail), entrar e "esqueci minha senha"
+> são telas do próprio app, sem a tela do Logto ([ADR 050](./ADR/050-login-e-cadastro-dentro-do-app.md)).
+> Google e Apple só aparecem quando o Logto tem o conector configurado
+> ([OPERATIONS](./OPERATIONS.md#login-no-app--o-que-o-logto-de-produção-precisa-adr-050)). As
+> contas da Apple e do Google das seções 2.2 e 2.3 são as de **desenvolvedor**, para gerar e
+> distribuir o app.
 
 ---
 
@@ -149,8 +152,11 @@ O app usa uma Application do tipo **Native** (pública, com PKCE), separada da w
 - **Produção:** no console do Logto → Applications → Create → **Native**, nome `Fatia Mobile`,
   _Redirect URI_ e _Post sign-out redirect URI_ `fatia://auth/callback`. O App ID vira
   `EXPO_PUBLIC_LOGTO_APP_ID` nas variáveis da Expo.
-- **Expo Go:** cadastre também o endereço `exp://…/--/auth/callback` que o Metro imprime na linha
-  `[auth] redirect_uri:` ao tocar em Entrar (muda com o IP da rede).
+- **Expo Go:** o login com e-mail e senha não precisa de nada a mais (usa sempre
+  `fatia://auth/callback`, que nunca é aberto). Só o Google e a Apple, que passam pelo navegador,
+  precisam do endereço `exp://…/--/auth/callback` que o Metro imprime na linha
+  `[auth] redirect_uri:` (muda com o IP da rede).
+- **API:** `LOGTO_MOBILE_APP_ID` com o mesmo App ID, para o e-mail e o nome reais chegarem ao perfil.
 
 ### 2.7 Langfuse (grátis no plano Hobby) — ver o que o chat fez
 
@@ -262,6 +268,11 @@ Siga a lista [O que ainda precisa de aparelho](./MOBILE_PARITY.md#o-que-ainda-pr
 do MOBILE_PARITY, que cobre login, Nutrição, treino, comunidade, painel, mural, avisos, compra e
 chat item por item. Uma ordem que rende:
 
+0. **Conta nova, no app:** "Criar conta" com nome, e-mail e uma senha fraca (aparece a regra em
+   português) → senha boa → o código chega no e-mail (no dev, <http://localhost:8025>) → a conta
+   abre e Você → Editar perfil mostra o e-mail e o nome digitados (nada de `@logto.local`). Sair →
+   "Entrar" com senha errada ("E-mail ou senha incorretos") e com a certa → sair → "Esqueci minha
+   senha" → código → senha nova → já entra.
 1. **Expo Go, conta demo:** login → assistente de primeira vez → as cinco abas embaixo (Hoje,
    Nutrição, Treino, Comunidade, Você) → botão redondo da IA → "O que vamos registrar?": uma água
    manual e uma refeição ditada → registrar refeição (busca, código de barras, foto) → treino com

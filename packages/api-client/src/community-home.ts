@@ -258,3 +258,27 @@ export const LEAVE_COPY = {
 } as const;
 
 export const PRO_PAID_NOTE = 'A academia paga seu PRO. Se sair, volta ao Free sem perder nada.';
+
+/**
+ * O pedido de abrir a folha "Tenho código" que veio na navegação
+ * (`/community?join=1&code=…`). A aba fica montada, então cada `key` nova é um
+ * pedido novo; `null` = a navegação não pediu nada.
+ */
+export function joinSheetRequest(params: {
+  join?: string;
+  code?: string;
+}): { key: string; code: string | null } | null {
+  const code = params.code?.trim() || null;
+  if (params.join !== '1' && !code) return null;
+  return { key: `${params.join ?? ''}|${code ?? ''}`, code };
+}
+
+/** O código a procurar sozinho agora: o que veio no link, se ainda não foi procurado. */
+export function autoLookCode(s: {
+  open: boolean;
+  initialCode: string | null | undefined;
+  lookedFor: string | null;
+}): string | null {
+  if (!s.open || !s.initialCode || s.initialCode === s.lookedFor) return null;
+  return s.initialCode;
+}

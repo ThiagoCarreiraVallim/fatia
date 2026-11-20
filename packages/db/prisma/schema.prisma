@@ -48,6 +48,9 @@ model User {
   /// Quando os três primeiros passos ficaram prontos: o cartão some no dia
   /// seguinte, no fuso da pessoa.
   firstStepsDoneAt DateTime?
+  /// Quando o e-mail foi trocado no app (ADR 050): um ID token emitido antes
+  /// disso traz o e-mail velho e não pode desfazer a troca.
+  emailChangedAt   DateTime?
 
   // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
   // CPF e cartão ficam no Asaas, nunca aqui.
@@ -202,6 +205,8 @@ model User {
   linksAsSubject      ProfessionalLink[]      @relation("LinkSubject")
   linksAsProfessional ProfessionalLink[]      @relation("LinkProfessional")
   accessLogs          ProfessionalAccessLog[] @relation("AccessLogSubject")
+
+  emailChangeRequests EmailChangeRequest[]
 
   @@index([logtoSub])
 }
@@ -3775,6 +3780,26 @@ model Reminder {
 
   @@index([userId, createdAt])
   @@index([enabled])
+}
+
+/// Troca de e-mail, parte 1 (ADR 050): a senha conferida vira um pedido desta
+/// conta para este e-mail. O código do Logto é por e-mail, não por pessoa; sem
+/// o pedido, um access token roubado trocaria o e-mail com um código pedido
+/// por outra conta. Vale 15 minutos e é de uso único; as linhas antigas também
+/// contam o limite por pessoa e por destino.
+model EmailChangeRequest {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email      String
+  /// SHA-256 do nonce devolvido ao app; o nonce em si nunca é guardado.
+  nonceHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
 }
 
 /// O relatório de um mês fechado (#400), calculado uma vez e servido daqui

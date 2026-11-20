@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@fatia/api-client';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
+import { IdentitySync } from '@/auth/identity-sync';
 import { installMobileApiTransport } from '@/api/transport';
 import { colors } from '@/theme/colors';
 import { ThemeProvider, useStoredThemePreference } from '@/theme/theme-provider';
@@ -88,6 +89,7 @@ function ApiBridge({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
+  const clearQueries = useCallback(() => queryClient.clear(), [queryClient]);
   const preference = useStoredThemePreference();
   // Erro ao carregar fonte não pode travar o app na splash: segue na do sistema.
   const [fontsLoaded, fontError] = useFonts({
@@ -111,9 +113,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
         <ThemeProvider initialPreference={preference}>
-          <AuthProvider>
+          <AuthProvider onSignedOut={clearQueries}>
             <ApiBridge>
               <QueryClientProvider client={queryClient}>
+                <IdentitySync />
                 <ToastProvider>
                   <Stack
                     screenOptions={{
@@ -126,6 +129,8 @@ export default function RootLayout() {
                   >
                     <Stack.Screen name="(app)" />
                     <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+                    {/* "Esqueci minha senha" abre com ou sem sessão (Você → Trocar senha). */}
+                    <Stack.Screen name="forgot-password" />
                     {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
                     <Stack.Screen name="c/[token]" />
                   </Stack>

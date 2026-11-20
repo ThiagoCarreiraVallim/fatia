@@ -3,7 +3,6 @@ import { Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, X } from 'lucide-react-native';
 import {
-  displayNameProblem,
   feedApi,
   POLL_MAX_OPTIONS,
   POLL_MIN_VOTES,
@@ -18,12 +17,16 @@ import {
 import type { ImageValue } from '@/components/content/image-field';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { PhotosField } from '@/components/content/photos-field';
+import {
+  CommunityNameField,
+  useCommunityNameGate,
+} from '@/components/community/community-name-field';
 import { apiMessage } from '@/components/org/org-panel';
 import { Button, Input, Segmented, Switch } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { colors } from '@/theme/colors';
-import { feedKey, NicknameField, type MyName } from './feed-ui';
+import { feedKey, type MyName } from './feed-ui';
 
 const POLL_DAYS = [
   { value: '1', label: '1 dia' },
@@ -66,15 +69,18 @@ export function Composer({
   const [vista, setVista] = useState<'write' | 'preview'>('write');
   const [texto, setTexto] = useState('');
   const [imagens, setImagens] = useState<ImageValue[]>([]);
-  const [apelido, setApelido] = useState(me.suggested);
   const [pergunta, setPergunta] = useState('');
   const [opcoes, setOpcoes] = useState<string[]>(['', '']);
   const [dias, setDias] = useState('3');
   const [comoGrupo, setComoGrupo] = useState<'me' | 'group'>('me');
   const [fixar, setFixar] = useState(false);
+  const nome = useCommunityNameGate();
+  // Em nome da comunidade não aparece o nome de ninguém.
+  const pedeNome = nome.needed && !(team && comoGrupo === 'group');
 
   const publicar = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (pedeNome) await nome.save();
       const input: CreatePostInput =
         tipo === 'POLL'
           ? {
@@ -87,7 +93,6 @@ export function Composer({
               ...(texto.trim() ? { body: texto.trim() } : {}),
             }
           : { body: texto.trim(), imageFileIds: imagens.map((i) => i.fileId) };
-      if (!me.displayName) input.displayName = apelido.trim();
       if (team) {
         if (comoGrupo === 'group') input.publishedAs = 'GROUP';
         if (fixar) {
@@ -115,7 +120,7 @@ export function Composer({
 
   const problema =
     (tipo === 'POLL' ? pollProblem(pergunta, opcoes) : postProblem(texto, imagens.length)) ??
-    (me.displayName ? null : displayNameProblem(apelido));
+    (pedeNome ? nome.problem : null);
   const escreveu =
     tipo === 'POLL'
       ? pergunta.trim().length > 0 || opcoes.some((o) => o.trim())
@@ -132,7 +137,7 @@ export function Composer({
           label="Publicar como"
           value={comoGrupo}
           options={[
-            { value: 'me', label: me.displayName ? `Eu, ${me.displayName}` : 'Eu' },
+            { value: 'me', label: `Eu, ${me.displayName}` },
             { value: 'group', label: team.groupName },
           ]}
           onChange={setComoGrupo}
@@ -279,7 +284,8 @@ export function Composer({
         </View>
       ) : null}
 
-      {!me.displayName && escreveu ? <NicknameField value={apelido} onChange={setApelido} /> : null}
+      {pedeNome ? <CommunityNameField gate={nome} /> : null}
+
       {problema && escreveu ? (
         <Text accessibilityRole="alert" className="text-sm text-danger">
           {problema}

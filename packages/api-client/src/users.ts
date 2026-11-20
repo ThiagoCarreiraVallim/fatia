@@ -35,6 +35,11 @@ export interface MeUser {
   /** URL assinada de curta duração; nulo = iniciais. */
   avatarUrl: string | null;
   avatarVisibility: AvatarVisibility;
+  /**
+   * O servidor aceita envio de foto (bucket configurado). Falso = "Tirar foto" e
+   * "Galeria" ficam desligados. Ausente na API de antes: trate como disponível.
+   */
+  mediaUploadEnabled?: boolean;
   /** "Guardar fotos das refeições" (ADR 038). Nulo = ainda não respondeu. */
   keepMealPhotos: boolean | null;
   /** Só dígitos, com o DDI (`5565998123456`). */
@@ -42,6 +47,14 @@ export interface MeUser {
   whatsappOptIn: boolean;
   loadUnit: LoadUnit;
   distanceUnit: DistanceUnit;
+  /** Troca de e-mail com código disponível (a API tem a Management API do Logto). */
+  emailChangeEnabled?: boolean;
+  /**
+   * O nome ainda é o que o provisionamento inventou: na comunidade sai "Membro"
+   * e o app pede o nome antes do primeiro post ou desafio. Ausente na API de
+   * antes.
+   */
+  nameIsProvisional?: boolean;
 }
 
 export interface UpdateMeInput {
@@ -136,6 +149,30 @@ export const usersApi = {
       body: JSON.stringify({ fileId }),
     }),
   removeAvatar: () => apiFetch<MeUser>('/api/users/me/avatar', { method: 'DELETE' }),
+
+  /**
+   * Manda o ID token do login para a API gravar o e-mail e o nome reais
+   * (ADR 050). Só vale o ID token desta conta, emitido para o app.
+   */
+  syncIdentity: (idToken: string) =>
+    apiFetch<{ email: string; name: string }>('/api/users/me/identity', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
+
+  /** Troca de e-mail, parte 1: confere a senha e manda o código ao e-mail novo. */
+  requestEmailChange: (body: { email: string; password: string }) =>
+    apiFetch<{ requestToken: string }>('/api/users/me/email/code', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Parte 2: o código que chegou no e-mail novo, com o `requestToken` da parte 1. */
+  confirmEmailChange: (body: { email: string; code: string; requestToken: string }) =>
+    apiFetch<{ email: string; name: string }>('/api/users/me/email', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   /**
    * Eliminação (LGPD art. 18, VI). Irreversível.

@@ -86,9 +86,38 @@ export function initialsOf(name: string | null | undefined): string {
     .join('');
 }
 
-/** O nome que os outros membros leem: o apelido, senão o primeiro nome. */
-export function communityName(me: Pick<MeUser, 'name' | 'nickname'>): string {
-  return me.nickname?.trim() || me.name.trim().split(/\s+/)[0] || me.name;
+type CommunityNameOf = Pick<MeUser, 'name' | 'nickname'> &
+  Partial<Pick<MeUser, 'nameIsProvisional'>>;
+
+/**
+ * O nome que os outros membros leem: o apelido, senão o primeiro nome. Enquanto
+ * o nome é o que o provisionamento inventou (o `sub`, o pedaço do e-mail), é
+ * "Membro" — igual à API (ADR 050).
+ */
+export function communityName(me: CommunityNameOf): string {
+  const apelido = me.nickname?.trim();
+  if (apelido) return apelido;
+  if (me.nameIsProvisional) return 'Membro';
+  return me.name.trim().split(/\s+/)[0] || me.name;
+}
+
+/** O nome do perfil (o mesmo limite da API). */
+export const PROFILE_NAME_MAX = 120;
+
+/**
+ * Pedir o nome antes do primeiro post ou da entrada num desafio: só enquanto o
+ * nome for provisório e não houver apelido. Salvo no perfil, não pergunta mais.
+ */
+export function needsCommunityName(me: CommunityNameOf | null | undefined): boolean {
+  return !!me && me.nameIsProvisional === true && !me.nickname?.trim();
+}
+
+/** O que impede o nome digitado; `null` quando serve. */
+export function communityNameProblem(name: string, me: Pick<MeUser, 'email'>): string | null {
+  const nome = name.trim();
+  if (!nome || nome === me.email.split('@')[0]) return 'Escreva seu nome como quer aparecer.';
+  if (nome.length > PROFILE_NAME_MAX) return `Use até ${PROFILE_NAME_MAX} caracteres.`;
+  return null;
 }
 
 /** `ana@email.com · nas comunidades: Ana` (cabeçalho de Você). */
@@ -105,6 +134,13 @@ export function avatarVisibilityText(v: AvatarVisibility): string {
   return v === 'COMMUNITIES'
     ? 'Membros e equipe das comunidades em que você está veem a foto. Fora delas, ninguém.'
     : 'Os outros membros veem suas iniciais; só a equipe vê a foto.';
+}
+
+/** Por que a foto não pode ser trocada agora; `null` quando pode. */
+export function avatarUploadNotice(me: Pick<MeUser, 'mediaUploadEnabled'>): string | null {
+  return me.mediaUploadEnabled === false
+    ? 'O envio de fotos não está disponível neste servidor agora. Por enquanto, você aparece com as iniciais.'
+    : null;
 }
 
 export function whatsappOptInText(on: boolean): string {
@@ -178,4 +214,16 @@ export const HEIGHT_MIN_CM = 100;
 export const HEIGHT_MAX_CM = 250;
 export function stepHeight(cm: number, delta: number): number {
   return Math.min(HEIGHT_MAX_CM, Math.max(HEIGHT_MIN_CM, Math.round(cm) + delta));
+}
+
+/**
+ * O perfil em cache com o e-mail e o nome que a API acabou de gravar pelo ID
+ * token (ADR 050). Escrito direto no cache: a tela não espera um refetch para
+ * trocar o `<sub>@logto.local` pelo e-mail real.
+ */
+export function withIdentity<T extends { email: string; name: string }>(
+  me: T | undefined,
+  identity: { email: string; name: string },
+): T | undefined {
+  return me ? { ...me, email: identity.email, name: identity.name } : undefined;
 }

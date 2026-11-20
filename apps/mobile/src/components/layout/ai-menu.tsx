@@ -11,7 +11,6 @@ import {
 import {
   BackHandler,
   KeyboardAvoidingView,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -25,7 +24,8 @@ import Animated, {
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
+  withSpring,
+  cancelAnimation,
   type SharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -36,7 +36,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { easing } from '@fatia/design';
 import {
   AI_DRAWER_MANUAL_ITEMS,
-  AI_MENU_DRAG_CLOSE_PX,
   AI_PRO_TEASER,
   aiMenuBackLabel,
   aiMenuFrame,
@@ -67,7 +66,19 @@ import { useChatSession } from '@/chat/chat-provider';
 import { useDictation } from '@/chat/dictation';
 import { useKeyboardOverlap } from '@/chat/use-keyboard-overlap';
 import { colors } from '@/theme/colors';
-import { AI_MENU_MOTION, menuBackdrop, navChrome, notchLayout } from './ai-menu-frame';
+import {
+  AI_MENU_MOTION,
+  AI_MENU_SPRING,
+  backdropProgress,
+  dragDistance,
+  dragProgress,
+  handleOpacity,
+  menuBackdrop,
+  navChrome,
+  notchLayout,
+  settleTarget,
+} from './ai-menu-frame';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { aiLocked, aiUsable, useChatAvailability, useDrawerConversations } from './use-ai-state';
 
 type Target = 'water' | 'weight' | 'steps' | { meal: { day: string; type: MealType } };
@@ -187,36 +198,56 @@ export function AiMenuProvider({ children, nav }: { children: ReactNode; nav: Re
   );
 }
 
+/** "Voltar para Nutrição": só quem aparece com o menu aberto lê a rota. */
+function useBackLabel(): string {
+  return aiMenuBackLabel(usePathname() ?? '/');
+}
+
+/**
+ * O palco do menu (item 5). Um progresso só, `progress` (0 = tela cheia, 1 =
+ * tela encolhida no notch), dirige a tela, o menu atrás, a barra de abas e a
+ * alcinha. O botão da IA e o voltar levam a mola até a ponta; o dedo no notch
+ * arrasta o mesmo valor, e ao soltar a mola herda a velocidade do gesto.
+ * Interromper no meio e voltar não dá salto: a mola sempre parte de onde está.
+ *
+ * Não lê a rota: com as abas montadas, re-renderizar aqui a cada troca de tela
+ * não serve a nada (o rótulo do voltar mora em quem o mostra).
+ */
 function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode }) {
-  const { isOpen, close, mounted, unmount } = useContext(AiMenuContext);
-  const pathname = usePathname() ?? '/';
+  const { isOpen, open: openMenu, close, mounted, unmount } = useContext(AiMenuContext);
   const window = useWindowDimensions();
   const [size, setSize] = useState({ width: window.width, height: window.height });
   const [typing, setTyping] = useState(false);
   const keyboard = typing && isOpen;
 
   const progress = useSharedValue(0);
-  const backdrop = useSharedValue(0);
-  const navFade = useSharedValue(0);
-  const navMove = useSharedValue(0);
+  /** Para onde a mola vai agora: o efeito e o gesto não disputam a animação. */
+  const target = useSharedValue(0);
   const kb = useSharedValue(0);
 
-  useEffect(() => {
-    const target = isOpen ? 1 : 0;
-    progress.value = withTiming(target, timing(AI_MENU_MOTION.notch, easing.notch), (done) => {
-      // O menu desmonta quando a tela termina de voltar.
-      if (done && target === 0) scheduleOnRN(unmount);
-    });
-    backdrop.value = withDelay(
-      AI_MENU_MOTION.menuDelay,
-      withTiming(target, timing(AI_MENU_MOTION.menu, easing.ease)),
-    );
-    navFade.value = withTiming(target, timing(AI_MENU_MOTION.navFade, easing.ease));
-    navMove.value = withTiming(target, timing(AI_MENU_MOTION.navMove, easing.ease));
-  }, [isOpen, progress, backdrop, navFade, navMove, unmount]);
+  const settle = useCallback(
+    (to: 0 | 1, velocity = 0) => {
+      'worklet';
+      target.set(to);
+      progress.set(
+        withSpring(to, { ...AI_MENU_SPRING, velocity }, (finished) => {
+          // O menu desmonta quando a tela termina de voltar.
+          if (finished && to === 0 && target.value === 0) scheduleOnRN(unmount);
+        }),
+      );
+    },
+    [progress, target, unmount],
+  );
 
   useEffect(() => {
-    kb.value = withTiming(keyboard ? 1 : 0, timing(AI_MENU_MOTION.header, easing.ease));
+    const to = isOpen ? 1 : 0;
+    // O gesto já mandou a mola para cá (com a velocidade do dedo).
+    if (target.value === to) return;
+    settle(to);
+  }, [isOpen, settle, target]);
+
+  useEffect(() => {
+    kb.set(withTiming(keyboard ? 1 : 0, timing(AI_MENU_MOTION.header, easing.ease)));
   }, [keyboard, kb]);
 
   const { width, height } = size;
@@ -231,6 +262,11 @@ function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode })
   const open = below(aiMenuFrame(width));
   const withKeyboard = below(aiMenuFrame(width, { keyboard: true }));
 
+  // O recorte arredondado muda de proporção (janela → notch), e isso só o
+  // layout faz: escalar o recorte deformaria os cantos e o conteúdo. Por isso
+  // a moldura anima top/left/right/height — uma view cujo único filho tem
+  // tamanho fixo, então nada mais é refeito — e a tela dentro dela anima só
+  // transform (sobe e encolhe).
   const frontStyle = useAnimatedStyle(() => {
     const l = notchLayout(progress.value, kb.value, open, withKeyboard, height);
     return {
@@ -246,18 +282,16 @@ function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode })
     return { transform: [{ translateY: l.translateY }, { scale: l.scale }] };
   });
   const menuStyle = useAnimatedStyle(() => {
-    const b = menuBackdrop(backdrop.value);
+    const b = menuBackdrop(backdropProgress(progress.value));
     return {
       opacity: b.opacity,
       transform: [{ translateY: b.translateY }, { scale: b.scale }],
     };
   });
-  const navStyle = useAnimatedStyle(() => ({
-    opacity: navChrome(navFade.value).opacity,
-    transform: [{ translateY: navChrome(navMove.value).translateY }],
-  }));
-
-  const backLabel = aiMenuBackLabel(pathname);
+  const navStyle = useAnimatedStyle(() => {
+    const n = navChrome(progress.value);
+    return { opacity: n.opacity, transform: [{ translateY: n.translateY }] };
+  });
 
   return (
     <View
@@ -276,7 +310,6 @@ function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode })
             kb={kb}
             from={open.headerTop}
             to={withKeyboard.headerTop}
-            backLabel={backLabel}
             keyboard={keyboard}
             onTyping={setTyping}
           />
@@ -309,13 +342,16 @@ function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode })
         </Animated.View>
       </Animated.View>
 
-      {isOpen ? (
+      {mounted ? (
         <NotchHandle
-          label={backLabel}
-          onClose={close}
+          progress={progress}
           kb={kb}
           open={open}
           withKeyboard={withKeyboard}
+          height={height}
+          settle={settle}
+          onOpen={openMenu}
+          onClose={close}
         />
       ) : null}
 
@@ -332,50 +368,81 @@ function AiMenuStage({ children, nav }: { children: ReactNode; nav: ReactNode })
 }
 
 /**
- * O notch inteiro é um botão que volta para a tela: tocar ou arrastar para
- * baixo fecha. A alcinha embaixo é o sinal de que dá para puxar.
+ * O notch é a própria tela encolhida, e é ela que se pega: tocar volta; arrastar
+ * para baixo faz a tela crescer junto com o dedo até a janela inteira, e soltar
+ * completa ou devolve com mola, pela posição e pela velocidade. Pegar no meio
+ * de uma animação para a mola e continua dali.
+ *
+ * Fica montada enquanto o menu existe e segue o mesmo retângulo da tela, com a
+ * alcinha acendendo pelo mesmo progresso: nada aparece de repente.
  */
 function NotchHandle({
-  label,
-  onClose,
+  progress,
   kb,
   open,
   withKeyboard,
+  height,
+  settle,
+  onOpen,
+  onClose,
 }: {
-  label: string;
-  onClose: () => void;
+  progress: SharedValue<number>;
   kb: SharedValue<number>;
   open: AiMenuFrame;
   withKeyboard: AiMenuFrame;
+  height: number;
+  settle: (to: 0 | 1, velocity?: number) => void;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
+  const label = useBackLabel();
+  const start = useSharedValue(0);
+  const distance = dragDistance(open, height);
+
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activeOffsetY([-8, 8])
+      .failOffsetX([-24, 24])
+      .onStart(() => {
+        cancelAnimation(progress);
+        start.set(progress.value);
+      })
+      .onUpdate((e) => {
+        progress.set(dragProgress(start.value, e.translationY, distance));
+      })
+      .onEnd((e) => {
+        const velocity = -e.velocityY / distance;
+        const to = settleTarget(progress.value, velocity);
+        settle(to, velocity);
+        scheduleOnRN(to === 1 ? onOpen : onClose);
+      });
+    const tap = Gesture.Tap().onEnd((_e, success) => {
+      if (success) scheduleOnRN(onClose);
+    });
+    return Gesture.Race(pan, tap);
+  }, [progress, start, distance, settle, onOpen, onClose]);
+
   const style = useAnimatedStyle(() => {
-    const height = open.height + (withKeyboard.height - open.height) * kb.value;
-    return { top: open.top, left: open.inset, right: open.inset, height };
+    const l = notchLayout(progress.value, kb.value, open, withKeyboard, height);
+    return { top: l.top, left: l.left, right: l.right, height: l.height };
   });
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderRelease: (_e, g) => {
-          if (g.dy > AI_MENU_DRAG_CLOSE_PX) onClose();
-        },
-      }),
-    [onClose],
-  );
+  const grabber = useAnimatedStyle(() => ({ opacity: 0.35 * handleOpacity(progress.value) }));
+
   return (
-    <Animated.View style={[styles.notch, style]} {...pan.panHandlers}>
-      <Pressable
+    <GestureDetector gesture={gesture}>
+      <Animated.View
+        accessible
         accessibilityRole="button"
         accessibilityLabel={label}
-        onPress={onClose}
-        style={StyleSheet.absoluteFill}
+        onAccessibilityTap={onClose}
+        style={[styles.notch, style]}
       >
-        <View
-          style={[styles.grabber, { backgroundColor: colors.foreground }]}
+        <Animated.View
+          style={[styles.grabber, { backgroundColor: colors.foreground }, grabber]}
           pointerEvents="none"
         />
-      </Pressable>
-    </Animated.View>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -404,7 +471,6 @@ function AiMenuPanel({
   kb,
   from,
   to,
-  backLabel,
   keyboard,
   onTyping,
 }: {
@@ -412,11 +478,11 @@ function AiMenuPanel({
   kb: SharedValue<number>;
   from: number;
   to: number;
-  backLabel: string;
   keyboard: boolean;
   onTyping: (on: boolean) => void;
 }) {
   const { close, go, pick } = useContext(AiMenuContext);
+  const backLabel = useBackLabel();
   const insets = useSafeAreaInsets();
   const { ref: areaDoTeclado, overlap: tecladoCobre } = useKeyboardOverlap(
     Platform.OS === 'android',
@@ -874,7 +940,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    opacity: 0.35,
   },
   header: { position: 'absolute', left: 0, right: 0, zIndex: 1 },
   body: { position: 'absolute', left: 0, right: 0, bottom: 0 },

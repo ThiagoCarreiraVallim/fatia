@@ -47,6 +47,7 @@ function build(opts: {
   store: TokenStore;
   refresh?: ReturnType<typeof vi.fn>;
   onSessionEnded?: () => void;
+  onTokens?: (s: StoredSession) => void;
   now?: number;
 }) {
   const onSessionEnded = vi.fn(opts.onSessionEnded);
@@ -61,6 +62,7 @@ function build(opts: {
     clientId: 'app-nativo',
     resource: 'https://api.exemplo',
     onSessionEnded,
+    onTokens: opts.onTokens,
     now: () => opts.now ?? NOW,
     refresh: (opts.refresh ?? vi.fn()) as never,
   });
@@ -191,5 +193,35 @@ describe('toStoredSession', () => {
       idToken: 'id-2',
       expiresAt: NOW + 120_000,
     });
+  });
+});
+
+describe('SessionManager — tokens novos para o IdentitySync (ADR 050)', () => {
+  it('avisa os tokens do refresh, mas não os que vieram do cofre no restore', async () => {
+    const onTokens = vi.fn();
+    const refresh = vi.fn().mockResolvedValue(tokenResponse());
+    const { manager } = build({
+      store: memoryStore(session({ expiresAt: NOW - 1 })),
+      refresh,
+      onTokens,
+    });
+    await manager.restore();
+    expect(onTokens).not.toHaveBeenCalled();
+
+    await manager.getAccessToken();
+    expect(onTokens).toHaveBeenCalledTimes(1);
+    expect(onTokens.mock.calls[0]![0]).toMatchObject({ idToken: 'id-2' });
+  });
+
+  it('forceRefresh renova mesmo com o token ainda válido (depois da troca de e-mail)', async () => {
+    const onTokens = vi.fn();
+    const refresh = vi.fn().mockResolvedValue(tokenResponse({ id_token: 'id-com-email-novo' }));
+    const { manager } = build({ store: memoryStore(session()), refresh, onTokens });
+    await manager.restore();
+
+    await expect(manager.forceRefresh()).resolves.toBe('access-novo');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(manager.current?.idToken).toBe('id-com-email-novo');
+    expect(onTokens).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,14 +4,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   challengePeriod,
   challengesApi,
-  DISPLAY_NAME_MAX,
-  displayNameProblem,
   KIND_INFO,
   PHOTO_CONSENT_TEXT,
   type Challenge,
   type ChallengeDetail,
 } from '@fatia/api-client';
-import { DrawerInput } from '@/components/nutrition/drawer-input';
+import {
+  CommunityNameField,
+  useCommunityNameGate,
+} from '@/components/community/community-name-field';
 import { apiMessage } from '@/components/org/org-panel';
 import {
   Button,
@@ -34,9 +35,9 @@ export const challengeKey = (groupId: string, id: string) =>
 export const challengeListKey = (groupId: string) => ['community', 'challenges', groupId] as const;
 
 /**
- * Participar de um desafio (Cm-09): o apelido do ranking, o que conta e, nos
- * desafios com foto, o aceite da foto de check-in (ADR 047). Sem o aceite o
- * botão fica desligado: a API recusa a entrada sem ele.
+ * Participar de um desafio (Cm-09): o que conta e, nos desafios com foto, o
+ * aceite da foto de check-in (ADR 047). Sem o aceite o botão fica desligado: a
+ * API recusa a entrada sem ele. O nome no ranking é o do perfil, sem pergunta.
  */
 export function JoinChallengeDrawer({
   groupId,
@@ -48,15 +49,15 @@ export function JoinChallengeDrawer({
 }: {
   groupId: string;
   challenge: Challenge | null;
-  /** O apelido sugerido (o do último desafio ou o primeiro nome). */
+  /** O nome no ranking: o da comunidade, senão o do perfil (a API resolve). */
   suggestedName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onJoined?: (detail: ChallengeDetail) => void;
 }) {
   if (!challenge) return null;
-  // O formulário só monta com a folha aberta: cada abertura começa do apelido
-  // sugerido e sem o aceite marcado.
+  // O formulário só monta com a folha aberta: cada abertura começa sem o aceite
+  // marcado.
   return (
     <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
       <JoinForm
@@ -85,27 +86,28 @@ function JoinForm({
 }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [name, setName] = useState(suggestedName);
   const [consent, setConsent] = useState(false);
+  const nome = useCommunityNameGate();
 
   const join = useMutation({
-    mutationFn: () =>
-      challengesApi.join(groupId, c.id, name.trim(), {
+    mutationFn: async () => {
+      await nome.save();
+      return challengesApi.join(groupId, c.id, undefined, {
         acceptPhotoTerms: c.needsPhotoConsent ? consent : undefined,
-      }),
+      });
+    },
     onSuccess: (d) => {
       qc.setQueryData(challengeKey(groupId, d.id), d);
       void qc.invalidateQueries({ queryKey: challengeListKey(groupId), exact: true });
       onClose();
-      toast.show({ message: `Você entrou como ${d.me?.displayName ?? name.trim()}.` });
+      toast.show({ message: `Você entrou como ${d.me?.displayName ?? suggestedName}.` });
       onJoined?.(d);
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para entrar agora.') }),
   });
 
-  const problem = displayNameProblem(name);
   const needsConsent = c.needsPhotoConsent;
-  const blocked = Boolean(problem) || (needsConsent && !consent);
+  const blocked = (needsConsent && !consent) || Boolean(nome.problem);
   const privacy = privacyLine(c);
 
   return (
@@ -113,7 +115,7 @@ function JoinForm({
       <DrawerHeader>
         <DrawerTitle>{`Participar de ${c.title}`}</DrawerTitle>
         <DrawerDescription>
-          Os participantes veem seu apelido e sua pontuação. Você pode sair enquanto o desafio não
+          Os participantes veem seu nome e sua pontuação. Você pode sair enquanto o desafio não
           acabar.
         </DrawerDescription>
       </DrawerHeader>
@@ -121,24 +123,19 @@ function JoinForm({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 14 }}
       >
-        <View className="gap-1">
-          <DrawerInput
-            label="Como aparecer no ranking"
-            value={name}
-            onChangeText={setName}
-            maxLength={DISPLAY_NAME_MAX}
-            autoCapitalize="words"
-            filled
-          />
-          <Text className="text-xs text-muted-foreground">
-            Vale para os próximos desafios desta comunidade.
-          </Text>
-          {problem && name.trim() ? (
-            <Text accessibilityRole="alert" className="text-sm text-danger">
-              {problem}
-            </Text>
-          ) : null}
-        </View>
+        {nome.needed ? (
+          <CommunityNameField gate={nome} />
+        ) : (
+          <View className="flex-row items-center gap-3 rounded-card bg-card p-4">
+            <Icon name="user" size={20} color={colors.mutedForeground} />
+            <View className="flex-1 gap-0.5">
+              <Text className="text-sm text-foreground">{`No ranking: ${suggestedName}`}</Text>
+              <Text className="text-xs text-muted-foreground">
+                É o nome do seu perfil. Para trocar, vá em Você → Editar perfil.
+              </Text>
+            </View>
+          </View>
+        )}
 
         <View className="flex-row items-start gap-3 rounded-card bg-card p-4">
           <Icon name={KIND_INFO[c.kind].icon} size={20} color={colors.primaryText} />
@@ -172,7 +169,7 @@ function JoinForm({
       </DrawerScrollView>
       <DrawerFooter className="pb-8">
         <Button size="xl" disabled={blocked} loading={join.isPending} onPress={() => join.mutate()}>
-          {`Participar como ${name.trim() || '…'}`}
+          {nome.needed ? 'Participar' : `Participar como ${suggestedName}`}
         </Button>
         {needsConsent && !consent ? (
           <Text className="text-center text-xs text-muted-foreground">

@@ -193,27 +193,20 @@ describe('/community/[groupId] (o mural)', () => {
     expect(feedApi.react).toHaveBeenLastCalledWith('g1', 'p1', 'FIRE');
   });
 
-  it('publicar na primeira vez pede o apelido, sugerido pelo primeiro nome', async () => {
+  it('o primeiro post sai com o nome do perfil, sem pedir apelido', async () => {
     const user = userEvent.setup();
     vi.mocked(feedApi.create).mockResolvedValue(post({ id: 'novo' }));
+    // A API de antes mandava `displayName: null` a quem nunca escreveu.
     renderPage(pagina({ displayName: null, suggestedDisplayName: 'Carla', posts: [] }));
-    expect(await screen.findByText('O mural está vazio')).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Escreva para a comunidade…' }));
     await user.type(
       screen.getByRole('textbox', { name: 'O que você quer contar para a comunidade?' }),
       'Oi, gente',
     );
-    const apelido = screen.getByRole('textbox', { name: 'Seu apelido no mural' });
-    expect(apelido).toHaveValue('Carla');
-    await user.clear(apelido);
-    await user.type(apelido, 'Cacá');
+    expect(screen.queryByRole('textbox', { name: 'Seu apelido no mural' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Publicar' }));
     await waitFor(() =>
-      expect(feedApi.create).toHaveBeenCalledWith('g1', {
-        body: 'Oi, gente',
-        imageFileIds: [],
-        displayName: 'Cacá',
-      }),
+      expect(feedApi.create).toHaveBeenCalledWith('g1', { body: 'Oi, gente', imageFileIds: [] }),
     );
   });
 
@@ -600,9 +593,7 @@ describe('/community/[groupId] (o mural)', () => {
     expect(within(lista).getByText('Equipe')).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Escreva um comentário' }), 'Valeu');
     await user.click(screen.getByRole('button', { name: 'Enviar' }));
-    await waitFor(() =>
-      expect(feedApi.comment).toHaveBeenCalledWith('g1', 'p1', 'Valeu', undefined),
-    );
+    await waitFor(() => expect(feedApi.comment).toHaveBeenCalledWith('g1', 'p1', 'Valeu'));
   });
 
   it('mais antigos carregam pela próxima página', async () => {

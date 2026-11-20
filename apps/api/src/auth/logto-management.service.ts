@@ -13,6 +13,13 @@ import { ConfigService } from '@nestjs/config';
  * transformaria "não configurei a Management API" em "ninguém consegue apagar a
  * conta", que é o pior dos dois lados.
  */
+/** Há app M2M da Management API? (o perfil também pergunta, sem o service). */
+export function logtoManagementConfigured(config: Pick<ConfigService, 'get'>): boolean {
+  return Boolean(
+    config.get<string>('LOGTO_M2M_APP_ID') && config.get<string>('LOGTO_M2M_APP_SECRET'),
+  );
+}
+
 @Injectable()
 export class LogtoManagementService {
   private readonly logger = new Logger(LogtoManagementService.name);
@@ -21,10 +28,7 @@ export class LogtoManagementService {
 
   /** True se as credenciais da Management API estão configuradas. */
   isConfigured(): boolean {
-    return Boolean(
-      this.config.get<string>('LOGTO_M2M_APP_ID') &&
-      this.config.get<string>('LOGTO_M2M_APP_SECRET'),
-    );
+    return logtoManagementConfigured(this.config);
   }
 
   /**
@@ -97,6 +101,87 @@ export class LogtoManagementService {
     } catch (err) {
       this.logger.warn(
         `Erro ao ler perfil no Logto: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  /** O nome editado no app, também no Logto (ID token e tela do Logto). */
+  async updateUserName(logtoSub: string, name: string): Promise<boolean> {
+    const res = await this.request('PATCH', `/api/users/${encodeURIComponent(logtoSub)}`, { name });
+    return res?.ok ?? false;
+  }
+
+  /** Confere a senha atual (troca de e-mail). `false` também quando o Logto falha. */
+  async verifyPassword(logtoSub: string, password: string): Promise<boolean> {
+    const res = await this.request(
+      'POST',
+      `/api/users/${encodeURIComponent(logtoSub)}/password/verify`,
+      { password },
+    );
+    return res?.status === 204 || res?.status === 200;
+  }
+
+  /** Código de verificação para um e-mail, pelo conector SMTP do Logto. */
+  async sendEmailCode(email: string): Promise<void> {
+    const res = await this.request('POST', '/api/verification-codes', { email });
+    if (!res?.ok) throw new Error(`Logto não enviou o código (${res?.status ?? 'sem resposta'})`);
+  }
+
+  async verifyEmailCode(email: string, verificationCode: string): Promise<boolean> {
+    const res = await this.request('POST', '/api/verification-codes/verify', {
+      email,
+      verificationCode,
+    });
+    return res?.ok ?? false;
+  }
+
+  /**
+   * O `sub` da conta do Logto com este e-mail principal, ou `null`. Lança se o
+   * Logto não responder: quem chama decide fechar (não arriscar).
+   */
+  async findUserIdByEmail(email: string): Promise<string | null> {
+    const q = new URLSearchParams({ 'search.primaryEmail': email, 'mode.primaryEmail': 'exact' });
+    const res = await this.request('GET', `/api/users?${q.toString()}`);
+    if (!res?.ok) throw new Error(`Logto não respondeu a busca (${res?.status ?? 'sem resposta'})`);
+    const users = (await res.json()) as Array<{ id: string; primaryEmail?: string | null }>;
+    const hit = users.find((u) => u.primaryEmail?.toLowerCase() === email);
+    return hit?.id ?? null;
+  }
+
+  async updatePrimaryEmail(
+    logtoSub: string,
+    primaryEmail: string,
+  ): Promise<'ok' | 'in_use' | 'failed'> {
+    const res = await this.request('PATCH', `/api/users/${encodeURIComponent(logtoSub)}`, {
+      primaryEmail,
+    });
+    if (res?.ok) return 'ok';
+    if (res?.status === 422) return 'in_use';
+    return 'failed';
+  }
+
+  /** Uma chamada autenticada à Management API; `null` sem credenciais ou sem rede. */
+  private async request(method: string, path: string, body?: unknown): Promise<Response | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const token = await this.fetchAccessToken();
+      if (!token) return null;
+      const res = await fetch(`${this.endpoint()}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (!res.ok && res.status >= 500) {
+        this.logger.warn(`Management API ${method} ${path.split('/')[2]}: ${res.status}`);
+      }
+      return res;
+    } catch (err) {
+      this.logger.warn(
+        `Erro na Management API: ${err instanceof Error ? err.message : String(err)}`,
       );
       return null;
     }

@@ -27,10 +27,7 @@ import {
 } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import {
-  ExerciseDetailHost,
-  useOpenExerciseDetail,
-} from '@/components/workout/exercise-detail-host';
+import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-context';
 import { colors } from '@/theme/colors';
 
 /** Escolhe um dos meus planos para receber o exercício; o que já tem avisa. */
@@ -116,7 +113,7 @@ function PlanPickerDrawer({
 }
 
 function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: number }) {
-  const abrirComoFazer = useOpenExerciseDetail();
+  const openHowTo = useOpenExerciseDetail();
   const [foto, setFoto] = useState(0);
   const [escolhendo, setEscolhendo] = useState(false);
   const [abrindo, setAbrindo] = useState(false);
@@ -176,7 +173,7 @@ function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: numbe
               variant="outline"
               accessibilityLabel="Como fazer"
               className="flex-1 flex-row gap-2"
-              onPress={() => abrirComoFazer(exerciseId)}
+              onPress={() => openHowTo(exerciseId)}
             >
               <BookOpen size={18} color={colors.foreground} />
               <Text className="font-sans-semibold text-sm text-foreground">Como fazer</Text>
@@ -309,8 +306,8 @@ function GuideBody({ groupId, exerciseId }: { groupId: string; exerciseId: numbe
 export default function CommunityGuideScreen() {
   const { groupId, exerciseId } = useLocalSearchParams<{ groupId: string; exerciseId: string }>();
   return (
-    <ExerciseDetailHost>
+    <>
       <GuideBody groupId={groupId} exerciseId={Number(exerciseId)} />
-    </ExerciseDetailHost>
+    </>
   );
 }

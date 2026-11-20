@@ -12,39 +12,54 @@ import { colors } from '@/theme/colors';
  * pílula no meio e, à direita, o check que finaliza. O "Treino atual" (`Al-T17`)
  * abre pelo "Todas ›" ao lado das séries.
  */
+/** Altura do cabeçalho abaixo da área segura: 8 + botão de 44 + 12. */
+export const SESSION_HEADER_HEIGHT = 64;
+
 export function SessionHeader({
   startedAt,
   onMinimize,
   onFinish,
+  overVideo = false,
 }: {
   startedAt: string;
   onMinimize: () => void;
   onFinish: () => void;
+  /**
+   * Prancha `Al-T3`: o vídeo do exercício fica no fundo do topo, e o
+   * cabeçalho flutua por cima dele, com os botões escuros translúcidos.
+   */
+  overVideo?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const clock = useClock(startedAt);
+  const button = overVideo ? 'bg-black/60' : 'bg-muted';
+  const ink = overVideo ? '#fff' : colors.foreground;
   return (
     <View
       style={{ paddingTop: insets.top + 8 }}
-      className="flex-row items-center justify-between gap-2 bg-background px-4 pb-3"
+      className={
+        overVideo
+          ? 'absolute inset-x-0 top-0 z-10 flex-row items-center justify-between gap-2 px-4 pb-3'
+          : 'flex-row items-center justify-between gap-2 bg-background px-4 pb-3'
+      }
     >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Minimizar treino"
         accessibilityHint="O treino continua na barra de baixo"
         onPress={onMinimize}
-        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
+        className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
       >
-        <ChevronDown size={20} color={colors.foreground} />
+        <ChevronDown size={20} color={ink} />
       </Pressable>
       <View
         accessible
         accessibilityLabel={`Tempo de treino ${clock}`}
-        className="h-9 flex-row items-center gap-2 rounded-full bg-muted px-3.5"
+        className={`h-9 flex-row items-center gap-2 rounded-full ${button} px-3.5`}
       >
         <View className="h-2 w-2 rounded-full bg-primary" />
         <Text
-          className="font-sans-bold text-[15px] text-foreground"
+          className={`font-sans-bold text-[15px] ${overVideo ? 'text-white' : 'text-foreground'}`}
           style={{ fontVariant: ['tabular-nums'] }}
         >
           {clock}
@@ -54,9 +69,9 @@ export function SessionHeader({
         accessibilityRole="button"
         accessibilityLabel="Finalizar treino"
         onPress={onFinish}
-        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
+        className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
       >
-        <Check size={20} color={colors.foreground} />
+        <Check size={20} color={ink} />
       </Pressable>
     </View>
   );

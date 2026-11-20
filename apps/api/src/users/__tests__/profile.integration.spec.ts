@@ -83,6 +83,41 @@ describe('Você: perfil, conta e novidades (integração)', () => {
   });
 
   describe('foto de perfil', () => {
+    it('o perfil diz se o envio de foto está disponível', async () => {
+      const id = await pessoa();
+      expect((await profile.getMe(id)).mediaUploadEnabled).toBe(true);
+      const semBucket = new ProfileService(prisma, new MediaService(prisma, null));
+      expect((await semBucket.getMe(id)).mediaUploadEnabled).toBe(false);
+    });
+
+    it('diz se o nome ainda é provisório (o sub ou o pedaço do e-mail), sem expor o sub', async () => {
+      const real = await pessoa('Ana Souza');
+      expect((await profile.getMe(real)).nameIsProvisional).toBe(false);
+      const sub = await pessoa('x');
+      const row = await prisma.user.update({
+        where: { id: sub },
+        data: { name: `${stamp}-${n}` },
+      });
+      const me = await profile.getMe(sub);
+      expect(row.name).toBe(row.logtoSub);
+      expect(me.nameIsProvisional).toBe(true);
+      expect(me).not.toHaveProperty('logtoSub');
+    });
+
+    it('toda resposta de perfil diz se a troca de e-mail existe (também a da foto)', async () => {
+      const id = await pessoa();
+      const comM2m = new ProfileService(prisma, media, {
+        get: (k: string) => ({ LOGTO_M2M_APP_ID: 'm2m', LOGTO_M2M_APP_SECRET: 's' })[k],
+      } as never);
+      expect((await comM2m.getMe(id)).emailChangeEnabled).toBe(true);
+      const fileId = await enviaFoto(id);
+      // A tela grava a resposta da foto no cache do perfil: sem o campo, o
+      // "Trocar e-mail" sumia depois de trocar a foto.
+      expect((await comM2m.setAvatar(id, fileId)).emailChangeEnabled).toBe(true);
+      expect((await comM2m.removeAvatar(id)).emailChangeEnabled).toBe(true);
+      expect((await profile.getMe(id)).emailChangeEnabled).toBe(false);
+    });
+
     it('sai sem EXIF, em WebP, guardada como arquivo pessoal', async () => {
       const ana = await pessoa();
       // O que chega tem EXIF: sem isto, o teste passaria com qualquer imagem.

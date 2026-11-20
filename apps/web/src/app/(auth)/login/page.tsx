@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AccountForm } from '@/components/auth/account-form';
 import { safeNextPath } from '@/lib/next-path';
+import { loadSocialTargets } from '@/lib/social-targets';
 
 type Props = { searchParams: Promise<{ next?: string; modo?: string }> };
 
@@ -12,6 +13,7 @@ type Props = { searchParams: Promise<{ next?: string; modo?: string }> };
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
+  const socialTargets = await loadSocialTargets();
 
   return (
     <div className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-3.5 overflow-hidden px-6 pb-8 pt-[calc(env(safe-area-inset-top)+3rem)]">
@@ -33,7 +35,11 @@ export default async function LoginPage({ searchParams }: Props) {
         </h1>
       </div>
       <div className="mt-2">
-        <AccountForm next={next} mode={params.modo === 'entrar' ? 'login' : 'create'} />
+        <AccountForm
+          next={next}
+          mode={params.modo === 'entrar' ? 'login' : 'create'}
+          socialTargets={socialTargets}
+        />
       </div>
       <div className="flex-1" />
       <p className="text-center text-xs text-faint">

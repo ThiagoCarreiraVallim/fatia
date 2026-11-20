@@ -2,7 +2,9 @@
 
 **Status:** Accepted  
 **Data:** 2026-05-09  
-**Supersedes:** ADR 003 (Auth dupla JWT + Bearer)
+**Supersedes:** ADR 003 (Auth dupla JWT + Bearer)  
+**Revista por:** [ADR 050](./050-login-e-cadastro-dentro-do-app.md) — no app, login, cadastro e
+recuperação de senha passam a ser telas do próprio app, pela Experience API do Logto
 
 ## Contexto
 
