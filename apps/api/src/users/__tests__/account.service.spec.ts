@@ -169,6 +169,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   nutritionPlansAuthored:
     'Planos alimentares que a pessoa escreveu como profissional (#376): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
+  nutritionPlansEdited:
+    'Versões de plano alimentar que a pessoa salvou na cópia de um aluno (#407): dado do ' +
+    'aluno, que sai no export DELE sem o id de quem editou. Apagar a conta só zera o editor.',
   memberNotesAuthored:
     'Anotações que a pessoa, como equipe, escreveu sobre outros membros (#402): dado de terceiro.',
   reviewSeenAbout:

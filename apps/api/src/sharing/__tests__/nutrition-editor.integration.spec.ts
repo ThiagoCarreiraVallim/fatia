@@ -10,6 +10,9 @@ import { MediaService } from '../../storage/media.service';
 import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { ExerciseService } from '../../workout/exercise.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
+import { AccountService } from '../../users/account.service';
 import { AccessAuditService } from '../access-audit.service';
 import { ContentService } from '../content.service';
 import { NutritionCopyService } from '../nutrition-copy.service';
@@ -332,6 +335,14 @@ describe('editor de plano alimentar (#407, banco real)', () => {
     await expect(nutritionPlans.logMeal(u.ana!, cafe.id, {}, TZ)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+    // Nem vira refeição salva vazia.
+    const salvas = await prisma.mealTemplate.findMany({
+      where: { userId: u.ana! },
+      select: { name: true },
+    });
+    expect(salvas.map((x) => x.name)).toEqual(
+      expect.not.arrayContaining([expect.stringContaining('Café da manhã')]),
+    );
   });
 
   let arrozV1 = '';
@@ -450,6 +461,23 @@ describe('editor de plano alimentar (#407, banco real)', () => {
     // A troca é a mesma linha, só passou a apontar a versão nova: nada se apagou.
     expect(await prisma.nutritionSwap.count({ where: { plan: { userId: u.ana! } } })).toBe(1);
     expect(await prisma.nutritionPlanItem.count({ where: { id: arrozV1 } })).toBe(1);
+  });
+
+  it('o export da Ana leva o horário e as trocas, sem o id de quem editou a cópia', async () => {
+    const conta = new AccountService(
+      prisma,
+      {} as LogtoManagementService,
+      {} as CheckpointPurgeService,
+    );
+    const exp = await conta.exportData(u.ana!);
+    const json = JSON.stringify(exp);
+    expect(json).not.toContain(u.helena!);
+    const planos = exp.nutritionPlans as unknown as Array<{
+      meals: Array<{ time: string | null }>;
+      swaps: unknown[];
+    }>;
+    expect(planos.some((p) => p.meals.some((x) => x.time === '12:30'))).toBe(true);
+    expect(planos.flatMap((p) => p.swaps)).toHaveLength(1);
   });
 
   describe('isolamento', () => {
