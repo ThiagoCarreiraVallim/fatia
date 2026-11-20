@@ -81,7 +81,7 @@ describe('painel › agente', () => {
   it('profissional não configura: a página diz que é do dono e nem busca', async () => {
     abrir('PROFESSIONAL');
 
-    expect(screen.getByText('Só o dono configura o agente')).toBeInTheDocument();
+    expect(screen.getByText('Só o dono e o admin configuram o agente')).toBeInTheDocument();
     expect(groupAgentApi.get).not.toHaveBeenCalled();
   });
 });

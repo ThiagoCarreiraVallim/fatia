@@ -35,7 +35,7 @@ import {
 import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
 import { COMMUNITY_NAME_USER_SELECT, cleanDisplayName, communityName } from './display-name';
-import { can, TEAM_ROLES } from './permissions';
+import { can, STAFF_ROLES, TEAM_ROLES } from './permissions';
 
 /** Quem agendou saiu ou perdeu o papel: os próximos disparos não saem mais. */
 export class AnnouncementAuthorGone extends ConflictException {}
@@ -315,7 +315,7 @@ function filterWhere(filter: FeedFilter): Prisma.GroupPostWhereInput {
   if (filter === 'team') {
     return {
       kind: { not: PostKind.AUTO },
-      OR: [{ publishedAs: PostAuthorAs.GROUP }, { author: { role: { in: [...TEAM_ROLES] } } }],
+      OR: [{ publishedAs: PostAuthorAs.GROUP }, { author: { role: { in: [...STAFF_ROLES] } } }],
     };
   }
   if (filter === 'members') {
@@ -440,7 +440,7 @@ export class PostService {
       policy: eu.group.policy,
       canPost: this.canPost(eu.role, eu.group.policy),
       canModerate: eu.moderates,
-      isTeam: TEAM_ROLES.includes(eu.role),
+      isTeam: STAFF_ROLES.includes(eu.role),
       groupName: eu.group.name,
       // Sempre preenchido: o nome vem do perfil, e o app não pergunta mais.
       displayName: myName(eu),
@@ -503,7 +503,7 @@ export class PostService {
     if (!this.canPost(eu.role, eu.group.policy)) {
       throw new ForbiddenException('Nesta comunidade, só a equipe publica no mural');
     }
-    const equipe = TEAM_ROLES.includes(eu.role);
+    const equipe = STAFF_ROLES.includes(eu.role);
     const comoGrupo = input.publishedAs === 'GROUP';
     if ((comoGrupo || input.pin) && !equipe) {
       throw new ForbiddenException('Só a equipe publica como a comunidade e fixa avisos');
@@ -1113,7 +1113,7 @@ export class PostService {
           author: {
             displayName: this.nameOf(autor),
             membershipId: autor.id,
-            team: TEAM_ROLES.includes(autor.role),
+            team: STAFF_ROLES.includes(autor.role),
           },
           reasons: {},
           notes: [],
@@ -1224,7 +1224,7 @@ export class PostService {
   }
 
   private canPost(role: GroupRole, policy: PostPolicy): boolean {
-    return policy === PostPolicy.ALL_MEMBERS || TEAM_ROLES.includes(role);
+    return policy === PostPolicy.ALL_MEMBERS || STAFF_ROLES.includes(role);
   }
 
   private canClosePoll(eu: Eu, authorMembershipId: string): boolean {
@@ -1536,9 +1536,11 @@ export class PostService {
     const podeVer =
       a.user.avatarVisibility === AvatarVisibility.COMMUNITIES ||
       isMe ||
+      // Foto restrita a quem acompanha: a equipe que recebe vínculo, não a
+      // recepção nem o administrador (#404).
       TEAM_ROLES.includes(eu.role);
     const foto = podeVer ? await this.media.viewOrNull(a.user.avatarFile) : null;
-    const team = TEAM_ROLES.includes(a.role);
+    const team = STAFF_ROLES.includes(a.role);
     return {
       avatarUrl: foto?.url ?? null,
       displayName: this.nameOf(a),

@@ -489,15 +489,15 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - A explicação geral do tipo Pontos ainda cita passos, que o tipo aceita quando a sync de saúde existir.
   - No emulador, a câmera virtual mostra a cena no visor, mas a foto sai preta (limite do emulador; o arquivo é um JPEG válido).
 
-## Etapa 8: Painel base (em andamento)
+## Etapa 8: Painel base (`mergeado`, PRs #451, #452, #453, #455 e #456)
 
-| Issue | Título                                            | Estado           | Superfícies                            |
-| ----- | ------------------------------------------------- | ---------------- | -------------------------------------- |
-| #398  | Painel: layout novo, visão geral e busca ⌘K       | mergeado (#451)  | api, db, api-client, web, docs         |
-| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452)  | api, db, api-client, web, mobile, docs |
-| #401  | Painel: membros, convites e ativação pendente     | mergeado (#453)  | api, db, api-client, web, mobile, docs |
-| #399  | Painel: para revisar, em risco e sessão feita     | pronto na branch | api, db, api-client, web, mobile, docs |
-| #400  | Painel: relatório do mês e origens dos convites   | pronto na branch | api, db, api-client, web, mobile, docs |
+| Issue | Título                                            | Estado          | Superfícies                            |
+| ----- | ------------------------------------------------- | --------------- | -------------------------------------- |
+| #398  | Painel: layout novo, visão geral e busca ⌘K       | mergeado (#451) | api, db, api-client, web, docs         |
+| #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452) | api, db, api-client, web, mobile, docs |
+| #401  | Painel: membros, convites e ativação pendente     | mergeado (#453) | api, db, api-client, web, mobile, docs |
+| #399  | Painel: para revisar, em risco e sessão feita     | mergeado (#455) | api, db, api-client, web, mobile, docs |
+| #400  | Painel: relatório do mês e origens dos convites   | mergeado (#456) | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -769,6 +769,58 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - O add-on de insights (#293 → #403).
   - Cancelamentos manuais (#316).
 
+## Etapa 9: Painel: conta e conteúdo (em andamento)
+
+| Issue | Título                                         | Estado           | Superfícies                            |
+| ----- | ---------------------------------------------- | ---------------- | -------------------------------------- |
+| #404  | Painel: equipe, papéis e permissões            | pronto na branch | api, db, api-client, web, mobile, docs |
+| #403  | Painel: assentos, faturas, programas e ofertas | a fazer          |                                        |
+| #405  | Painel: biblioteca e enviar para alunos        | a fazer          |                                        |
+| #406  | Painel: editor de plano de treino              | a fazer          |                                        |
+| #407  | Painel: editor de alimentação                  | a fazer          |                                        |
+| #408  | Painel: dicas e catálogo de exercícios         | a fazer          |                                        |
+
+#404 (branch `redesign/404-equipe-papeis`; migration `20261120100000_team_roles`; nenhuma env nova; nenhuma tool nova no MCP; sem ADR nova, segue a 043):
+
+- **Decisões (orquestrador):**
+  - A **recepção nunca vê dado de aluno**: só nome, situação e (com a #390) check-in. Barrado no servidor: a lista de membros devolve à recepção só `membershipId`, nome, papel, situação e entrada; ela não tem `member.file`, `member.plans`, `panel.review` nem recebe vínculo.
+  - **Especialidade é campo do `PROFESSIONAL`** (`GroupMembership.specialty`: personal, nutricionista, fisioterapeuta, outra) e recorta as categorias do vínculo (ADR 043, #313): nutricionista só Alimentação, Metas, Corpo e Fotos das refeições.
+  - **Admin convida, remove e troca papel**, mas não vê assentos nem faturas (#403), não passa a posse, não apaga e não dá `ADMIN`. Só o dono.
+  - **Só o dono dá papel que recebe vínculo** (profissional e criador), por convite, link, aprovação ou troca de papel (`member.grant_reader`, ADR 043: quem define a equipe é o dono). O admin dá só membro e recepção. Sem isso, o admin criava um convite de profissional para uma conta dele e lia os alunos (revisão adversarial). O que é obrigatório compartilhar também é só do dono (`group.sharing`).
+  - **A fila de check-ins dos desafios ignora "profissionais veem só quem acompanham"**: segue a ADR 044, e o desafio é da comunidade, não de um aluno acompanhado.
+  - **"Distribuir alunos"** é a ação em massa "Trocar responsável" de Membros (#401). O botão Distribuir da Equipe abre Membros filtrado por quem a pessoa acompanha (`?responsavel=`).
+  - A tabela de permissões segue a prancha; no ambíguo, o mais restritivo (abaixo).
+  - A #403 depende desta: `billing.*` fica só com o dono, pronto para ela.
+- **Ordem de autoridade:** ADR 043 > prancha Pn-19 > o mais restritivo. Desvios da tabela da prancha:
+  - **Admin não vê dado de aluno** (a prancha marca ✓ em "Ver dados compartilhados"): ADR 043 diz que admin nunca recebe vínculo.
+  - **Criador continua recebendo vínculo e cuidando de desafios** (prancha marca —): ADR 026/043 o mantêm na equipe que recebe.
+  - **Criador deixa de moderar o mural** (antes `content.moderate` era dono e criador): a prancha tira, e é o mais restritivo.
+  - Linhas **"Conversar com alunos"** e **"Pedir e registrar avaliações"** saem da tabela: não há chat entre equipe e aluno (ADR 048) e avaliação é a #383.
+  - **Comunicado** (`announcement.publish`): dono, admin, profissional e recepção; o criador não (como na #394).
+  - Mudar o relatório do mês (meta, e-mail, destinatário) exige `group.update` **e** `insights.read`: o admin não mexe num relatório que não vê.
+  - **Histórico da equipe** (quem mudou papel, especialidade, responsável e "profissionais veem") só o dono vê.
+  - A troca de papel continua em `PATCH /groups/:groupId/members/:membershipId` (rota existente).
+- **API:** `GroupRole` ganhou `ADMIN` e `RECEPTION`; `Group.proSeeOnlyAssigned` ("Profissionais veem só quem acompanham"); `GroupMembership.panelSeenAt` ("último acesso", carimbado pelos contadores do menu, no máximo a cada 5 minutos). Matriz em `permissions.ts` com `STAFF_ROLES` (a equipe toda), `TEAM_ROLES` (quem recebe vínculo), `rolesGrantableBy` e `canManageMember` (admin não mexe em admin nem no dono, não dá admin). Rotas novas: `GET groups/:id/staff` (`member.role`), `GET groups/:id/permissions` (`group.read`, a tabela calculada da matriz) e `PATCH groups/:id/members/:membershipId/specialty` (`member.role`; recorta os vínculos na mesma transação). `GET /groups` devolve `actions`, `specialty` e `proSeeOnlyAssigned` de quem pergunta. Toda troca de papel zera `reportEmail` e `riskDigest` e grava `members.role` no `GroupAuditLog`; especialidade grava `members.specialty`, responsável `members.accompany`. A porta de leitura confere especialidade e "só quem acompanham" a cada leitura; lista, ficha, Para revisar e Em risco seguem o mesmo filtro. O export LGPD leva a especialidade e quem acompanha a pessoa.
+- **Correções da revisão adversarial** (cobertas em `team-review.integration.spec.ts`, contra Postgres real):
+  - **Vínculo ressuscitado (bloqueador):** trocar a especialidade lia os vínculos fora da transação e recriava sem condição; se o aluno revogasse no meio, o vínculo voltava. Agora cada vínculo é revogado e recriado num só comando (a linha nova só nasce se a revogação casou no commit). O leque inverso só cria vínculo se o membro continua ativo e com o mesmo consentimento lido; o consentimento da comunidade, só para quem ainda é da equipe que recebe e com a especialidade lida.
+  - **Especialidade que sobrevivia:** zera ao sair, ao voltar e ao virar dono (com linha `members.specialty` na trilha), e o leque inverso de toda entrada na equipe passa a especialidade. `CHECK` no banco: só profissional tem especialidade (na própria migration `20261120100000`).
+  - **Admin abrindo dado de aluno** por conta alternativa: ver decisão acima.
+  - **Convite de equipe órfão:** quem sai, ou troca para um papel que não daria mais aquele, leva junto os convites e links de papel de equipe pendentes que criou; o de membro fica.
+  - **Limite do em risco:** exige `panel.review` ou `insights.read` além de `group.update` (o admin não mexe).
+  - **Trilha:** aprovar com papel de equipe (`members.approve`), os dois lados da posse (`members.role`) e o "só quem acompanham" na mesma transação da mudança. Passar a posse também desliga `reportEmail` e `riskDigest` dos dois lados.
+  - **Desbanir** segue o limite do banir: o admin não desfaz o banimento de outro admin.
+- **Cliente e telas:** `groupCan(grupo, ação)` (com `ROLE_ACTIONS`, espelho conferido contra `docs/PERMISSIONS.md`) troca os `role === 'OWNER'` do painel. Tela nova **Equipe e permissões** (web, em Pessoas): equipe por papel com busca ("Ninguém da equipe com esse nome."), pessoa escolhida com último acesso, papel (o dono: "O dono não muda de papel aqui..."), especialidade, quantos acompanha e Distribuir; tabela "O que cada papel pode fazer" vinda da API; "Profissionais veem"; "Convidar para a equipe" (Convites com papel de equipe, `?novo=equipe`); histórico só do dono. Membros, painel da pessoa, Convites, Configurações, Agente e Exercícios seguem a ação do papel. Admin e recepção abrem o painel; o menu de cada papel sai de `panelSections`. No app, a seção Equipe fica fora das abas (`mobilePanelSections`, entra com a #414); Membros e Convites seguem as mesmas ações.
+- **Fora (vai para outras issues):**
+  - Check-in e a tela da recepção (Pn-20, #390). Recusar pedido de entrada continua com dono e admin (`member.remove`); a recepção só aprova.
+  - Consentimento por papel na entrada (#372) e o "Ver como membro" com faixa.
+  - Atividade da equipe no painel (quem fez o quê por dia) e a seção Equipe no celular (#414).
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/404/cmp-<tela>.<tema>.png` (prancha | web 1440 | web 390, escuro e claro): Pn-19 com a pessoa escolhida (nutricionista e recepção), a tabela de permissões e o histórico vistos pelo dono; Pn-19 e Membros vistos por um admin e por uma recepção (a recepção vê o aviso "Só o dono e o admin cuidam da equipe" e Membros só com nome e situação); Configurações pelo admin (sem passar a posse, apagar nem o que é obrigatório compartilhar). Dados mínimos por SQL no banco de dev (admin, recepção e nutricionista na comunidade do Bruno; o usuário demo de observador), apagados no fim (contagens antes e depois em `demo-rows.txt`). Corrigido:
+  - **Selo do papel** com a cor da prancha (dono, admin, profissional, criador, recepção), com os selos do DS.
+  - **Celular:** tocar alguém da equipe rola até o painel da pessoa, que fica abaixo da lista (antes nada parecia mudar).
+  - **Tabela no celular:** a coluna "Ação" fica fixa e quebra linha ao rolar de lado; antes só Dono e meia coluna de Admin apareciam, sem rótulo ao rolar.
+  - **Histórico:** especialidade nova sai "pôs Renata como nutricionista", e a que some "tirou a especialidade de X (era personal)", em vez de "de — para".
+  - Conferido: o menu de baixo e o treino em andamento não cobrem botões (o fim da página rola acima deles) e não há texto escuro no escuro. A prancha marca o "Convidar para a equipe" na barra do topo; na web ele fica no cabeçalho da página, porque a barra do topo é a do painel (#398). O "N" no canto é o indicador do Next em dev.
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
@@ -778,8 +830,8 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | mergeado     |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | mergeado     |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | mergeado     |
-| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | em andamento |
-| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
+| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | mergeado     |
+| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | em andamento |
 | 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
 | 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer      |
 | 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer      |

@@ -38,6 +38,9 @@ export const orgKeys = {
   pendingInvites: (groupId: string, origin: string | undefined, q: string, page: number) =>
     ['community', 'org', groupId, 'invites', 'pending', origin ?? 'all', q, page] as const,
   seats: (groupId: string) => ['community', 'org', groupId, 'seats'] as const,
+  /** A tela Equipe e permissões (#404). */
+  staff: (groupId: string) => ['community', 'org', groupId, 'staff'] as const,
+  permissions: (groupId: string) => ['community', 'org', groupId, 'permissions'] as const,
   invoices: (groupId: string) => ['community', 'org', groupId, 'invoices'] as const,
   contentPlans: (groupId: string) => ['community', 'org', groupId, 'content', 'plans'] as const,
   contentPlan: (groupId: string, id: string) =>

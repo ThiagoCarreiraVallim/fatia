@@ -56,7 +56,7 @@ describe('mural da comunidade (integração)', () => {
     return user.id;
   }
 
-  async function entra(groupId: string, role: 'MEMBER' | 'PROFESSIONAL' | 'CREATOR') {
+  async function entra(groupId: string, role: 'MEMBER' | 'PROFESSIONAL' | 'CREATOR' | 'ADMIN') {
     const id = await pessoa(role === 'MEMBER' ? 'Membro' : 'Equipe');
     await prisma.groupMembership.create({
       data: { groupId, userId: id, role, status: 'ACTIVE', joinedAt: new Date() },
@@ -358,17 +358,18 @@ describe('mural da comunidade (integração)', () => {
       expect((await posts.list(a.outro, a.groupId)).posts.map((p) => p.id)).toEqual([post.id]);
     });
 
-    it('membro e profissional não moderam; criador modera', async () => {
+    it('membro, profissional e criador não moderam; admin modera (#404)', async () => {
       const a = await comunidade();
       const criador = await entra(a.groupId, 'CREATOR');
+      const admin = await entra(a.groupId, 'ADMIN');
       const post = await posts.create(a.membro, a.groupId, { body: 'x' });
-      for (const quem of [a.outro, a.prof]) {
+      for (const quem of [a.outro, a.prof, criador]) {
         await expect(posts.moderatePost(quem, a.groupId, post.id, 'remove')).rejects.toBeInstanceOf(
           ForbiddenException,
         );
         await expect(posts.reports(quem, a.groupId)).rejects.toBeInstanceOf(ForbiddenException);
       }
-      await posts.moderatePost(criador, a.groupId, post.id, 'pin');
+      await posts.moderatePost(admin, a.groupId, post.id, 'pin');
       expect((await posts.list(a.outro, a.groupId)).pins[0]).toMatchObject({ pinned: true });
     });
 

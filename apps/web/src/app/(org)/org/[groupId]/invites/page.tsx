@@ -16,6 +16,7 @@ import {
   orgApi,
   panelHref,
   teamRoleLabel,
+  type GrantableRole,
   type InviteOverviewRow,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
@@ -79,11 +80,19 @@ export default function OrgInvitesPage() {
   });
 
   const fechar = () => (painel ? painel.close() : setEmLinha(null));
-  const abrir = (mode: InviteMode) => {
+  const abrir = (mode: InviteMode, role: GrantableRole = 'MEMBER') => {
     const c: SidePanelContent = {
       title: mode === 'link' ? 'Novo link de convite' : 'Convidar por e-mail',
       subtitle: 'Convites · quem entra por convite pula a aprovação',
-      body: <InvitePanel key={mode} group={g} initialMode={mode} onDone={fechar} />,
+      body: (
+        <InvitePanel
+          key={`${mode}-${role}`}
+          group={g}
+          initialMode={mode}
+          initialRole={role}
+          onDone={fechar}
+        />
+      ),
     };
     if (painel) painel.open(c);
     else setEmLinha(c);
@@ -94,9 +103,10 @@ export default function OrgInvitesPage() {
   const novo = useSearchParams().get('novo');
   const abriuNovo = useRef(false);
   useEffect(() => {
-    if (novo !== 'link' || abriuNovo.current) return;
+    if ((novo !== 'link' && novo !== 'equipe') || abriuNovo.current) return;
     abriuNovo.current = true;
-    abrir('link');
+    // "Convidar para a equipe" da tela Equipe (#404) chega com `?novo=equipe`.
+    abrir('link', novo === 'equipe' ? 'PROFESSIONAL' : 'MEMBER');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novo]);
 

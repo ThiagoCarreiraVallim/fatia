@@ -48,6 +48,7 @@ describe('quem abre o painel e com que seções', () => {
       'review',
       'report',
       'members',
+      'team',
       'invites',
       'activation',
       'origins',
@@ -76,11 +77,30 @@ describe('quem abre o painel e com que seções', () => {
     expect(panelSections('MEMBER')).toEqual([]);
   });
 
+  it('admin cuida de tudo menos assentos, relatório e benefícios; recepção vê membros e comunicados (#404)', () => {
+    const admin = panelSections('ADMIN').map((s) => s.section);
+    expect(admin).toEqual(
+      expect.arrayContaining(['members', 'team', 'invites', 'moderation', 'settings']),
+    );
+    for (const fora of ['seats', 'report', 'origins', 'benefits', 'review']) {
+      expect(admin).not.toContain(fora);
+    }
+    expect(panelSections('RECEPTION').map((s) => s.section)).toEqual([
+      'overview',
+      'members',
+      'announcements',
+    ]);
+    expect(panelSections('PROFESSIONAL').map((s) => s.section)).not.toContain('team');
+  });
+
   it('só equipe ativa abre o painel', () => {
     expect(canOpenPanel({ role: 'OWNER', status: 'ACTIVE' })).toBe(true);
     expect(canOpenPanel({ role: 'PROFESSIONAL', status: 'ACTIVE' })).toBe(true);
     expect(canOpenPanel({ role: 'PROFESSIONAL', status: 'INVITED' })).toBe(false);
     expect(canOpenPanel({ role: 'MEMBER', status: 'ACTIVE' })).toBe(false);
+    expect(canOpenPanel({ role: 'ADMIN', status: 'ACTIVE' })).toBe(true);
+    expect(canOpenPanel({ role: 'RECEPTION', status: 'ACTIVE' })).toBe(true);
+    expect(canOpenPanel({ role: 'CREATOR', status: 'ACTIVE' })).toBe(false);
   });
 
   it('caminhos e seção ativa', () => {

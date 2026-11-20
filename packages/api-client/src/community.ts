@@ -11,7 +11,49 @@ import type { ShareScope } from './sharing';
  */
 
 export type GroupType = 'SPONSORED' | 'SOCIAL';
-export type GroupRole = 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+export type GroupRole = 'OWNER' | 'ADMIN' | 'PROFESSIONAL' | 'CREATOR' | 'RECEPTION' | 'MEMBER';
+/** A especialidade de quem é profissional (#404). Nutrição recorta o que recebe. */
+export type TeamSpecialty = 'TRAINING' | 'NUTRITION' | 'PHYSIO' | 'OTHER';
+/**
+ * As ações administrativas do papel, como a API decide (`docs/PERMISSIONS.md`).
+ * A tela só esconde o que a API já recusaria.
+ */
+export type GroupAction =
+  | 'group.read'
+  | 'group.update'
+  | 'group.delete'
+  | 'group.transfer'
+  | 'group.sharing'
+  | 'member.grant_reader'
+  | 'invite.create'
+  | 'invite.revoke'
+  | 'member.list'
+  | 'member.approve'
+  | 'member.remove'
+  | 'member.role'
+  | 'member.assign'
+  | 'billing.read'
+  | 'billing.manage'
+  | 'content.publish'
+  | 'content.read'
+  | 'content.moderate'
+  | 'offer.create'
+  | 'challenge.manage'
+  | 'challenge.join'
+  | 'challenge.review'
+  | 'post.read'
+  | 'post.create'
+  | 'announcement.publish'
+  | 'member.ban'
+  | 'insights.read'
+  | 'panel.overview'
+  | 'panel.search'
+  | 'member.file'
+  | 'member.plans'
+  | 'member.note'
+  | 'panel.review'
+  | 'benefit.read'
+  | 'benefit.manage';
 export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'LEFT' | 'REMOVED' | 'BANNED';
 export type JoinPolicy = 'OPEN' | 'APPROVAL' | 'INVITE_ONLY';
 /** Igual a `GroupVisibility` do painel (`community-admin.ts`). */
@@ -66,12 +108,150 @@ export interface MyGroup {
   forYouCount: number;
   /** A posição no desafio em andamento em que a pessoa entrou. */
   challenge: { id: string; title: string; rank: number } | null;
+  /** O que o papel de quem pergunta pode fazer aqui (#404). Ausente em API antiga. */
+  actions?: GroupAction[];
+  /** A especialidade, quando quem pergunta é profissional. */
+  specialty?: TeamSpecialty | null;
+  /** Profissionais veem só quem acompanham (#404). */
+  proSeeOnlyAssigned?: boolean;
+}
+
+/**
+ * O que cada papel faz, espelho de `docs/PERMISSIONS.md` para quando a API
+ * ainda não mandou `actions` (resposta antiga em cache). Um teste confere com
+ * a doc; a API continua sendo o portão.
+ */
+export const ROLE_ACTIONS: Record<GroupRole, readonly GroupAction[]> = {
+  OWNER: [
+    'group.read',
+    'group.update',
+    'group.delete',
+    'group.transfer',
+    'group.sharing',
+    'member.grant_reader',
+    'invite.create',
+    'invite.revoke',
+    'member.list',
+    'member.approve',
+    'member.remove',
+    'member.role',
+    'member.assign',
+    'billing.read',
+    'billing.manage',
+    'content.publish',
+    'content.read',
+    'content.moderate',
+    'challenge.manage',
+    'challenge.join',
+    'challenge.review',
+    'post.read',
+    'post.create',
+    'announcement.publish',
+    'member.ban',
+    'insights.read',
+    'panel.overview',
+    'panel.search',
+    'member.file',
+    'member.plans',
+    'member.note',
+    'panel.review',
+    'benefit.read',
+    'benefit.manage',
+  ],
+  ADMIN: [
+    'group.read',
+    'group.update',
+    'invite.create',
+    'invite.revoke',
+    'member.list',
+    'member.approve',
+    'member.remove',
+    'member.role',
+    'member.assign',
+    'content.publish',
+    'content.read',
+    'content.moderate',
+    'challenge.manage',
+    'challenge.join',
+    'challenge.review',
+    'post.read',
+    'post.create',
+    'announcement.publish',
+    'member.ban',
+    'panel.overview',
+    'panel.search',
+    'benefit.read',
+  ],
+  PROFESSIONAL: [
+    'group.read',
+    'invite.create',
+    'invite.revoke',
+    'member.list',
+    'content.publish',
+    'content.read',
+    'offer.create',
+    'challenge.manage',
+    'challenge.join',
+    'challenge.review',
+    'post.read',
+    'post.create',
+    'announcement.publish',
+    'panel.overview',
+    'panel.search',
+    'member.file',
+    'member.plans',
+    'member.note',
+    'panel.review',
+    'benefit.read',
+  ],
+  CREATOR: [
+    'group.read',
+    'member.list',
+    'content.publish',
+    'content.read',
+    'challenge.manage',
+    'challenge.join',
+    'challenge.review',
+    'post.read',
+    'post.create',
+    'benefit.read',
+  ],
+  RECEPTION: [
+    'group.read',
+    'member.list',
+    'member.approve',
+    'content.read',
+    'challenge.join',
+    'post.read',
+    'post.create',
+    'announcement.publish',
+    'panel.overview',
+    'panel.search',
+    'benefit.read',
+  ],
+  MEMBER: [
+    'group.read',
+    'member.list',
+    'content.read',
+    'challenge.join',
+    'post.read',
+    'post.create',
+    'benefit.read',
+  ],
+};
+
+/** O papel de quem pergunta faz isto? Sem `actions` (API antiga), pelo espelho da matriz. */
+export function groupCan(group: Pick<MyGroup, 'role' | 'actions'>, action: GroupAction): boolean {
+  return (group.actions ?? ROLE_ACTIONS[group.role]).includes(action);
 }
 
 /** Uma pessoa da equipe vista pelo membro (Cm-04): o que vê dele e quando olhou. */
 export interface TeamMemberView {
   name: string;
   role: GroupRole;
+  specialty?: TeamSpecialty | null;
+  /** É quem acompanha a pessoa nesta comunidade. */
+  accompaniesMe?: boolean;
   sees: ShareScope[];
   lastViewedAt: string | null;
 }
@@ -151,6 +331,8 @@ export interface AccessLogEntry {
   denied: boolean;
   /** `null` se a conta de quem olhou já não existe. */
   professionalName: string | null;
+  /** O papel de quem olhou na comunidade (#404). */
+  professionalRole?: GroupRole | null;
   groupId: string | null;
 }
 

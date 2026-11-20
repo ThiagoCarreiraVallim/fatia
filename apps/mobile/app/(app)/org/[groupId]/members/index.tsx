@@ -5,6 +5,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Crown } from 'lucide-react-native';
 import {
+  grantableRolesFor,
+  groupCan,
   filterMembers,
   hasFreeSeat,
   orgApi,
@@ -36,7 +38,6 @@ const FILTROS: { value: MemberFilter; label: string }[] = [
   { value: 'pending', label: 'Aguardando' },
   { value: 'team', label: 'Equipe' },
 ];
-const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
 
 function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
   const router = useRouter();
@@ -44,7 +45,14 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
   const toast = useToast();
   const confirm = useConfirm();
   const actionSheet = useActionSheet();
-  const dono = g.role === 'OWNER';
+  // Cada ação segue o papel (#404): assento é do dono; aprovar, também da
+  // recepção; papel e remover, do dono e do admin.
+  const fatura = groupCan(g, 'billing.manage');
+  const aprova = groupCan(g, 'member.approve');
+  const recusa = groupCan(g, 'member.remove');
+  const lePessoa = groupCan(g, 'member.file');
+  const gerencia = (m: PanelMember) =>
+    recusa && m.role !== 'OWNER' && !(g.role === 'ADMIN' && m.role === 'ADMIN');
   const [filtro, setFiltro] = useState<MemberFilter>(
     inicial === 'pending' || inicial === 'team' ? inicial : 'all',
   );
@@ -57,7 +65,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
   const assentos = useQuery({
     queryKey: orgKeys.seats(g.id),
     queryFn: () => seatsApi.get(g.id),
-    enabled: dono,
+    enabled: fatura,
   });
   const refrescar = () => void qc.invalidateQueries({ queryKey: orgKeys.all(g.id) });
   const falhou = (padrao: string) => (err: unknown) =>
@@ -105,11 +113,15 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
   const vaga = assentos.data ? hasFreeSeat(assentos.data) : false;
 
   const manageMember = (m: PanelMember) => {
-    const options: ActionSheetOption[] = PAPEIS.filter((r) => r !== m.role).map((r) => ({
-      label: `Tornar ${teamRoleLabel(r).toLowerCase()}`,
-      onPress: () => papel.mutate({ m, role: r }),
-    }));
-    if (m.hasAiSeat) {
+    const options: ActionSheetOption[] = grantableRolesFor(g.role)
+      .filter((r) => r !== m.role)
+      .map((r) => ({
+        label: `Tornar ${teamRoleLabel(r).toLowerCase()}`,
+        onPress: () => papel.mutate({ m, role: r }),
+      }));
+    if (!fatura) {
+      // Sem assento: o admin não mexe em fatura.
+    } else if (m.hasAiSeat) {
       options.push({
         label: 'Tirar assento PRO',
         onPress: () => assento.mutate({ m, dar: false }),
@@ -155,7 +167,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
           {lista.map((m, i) => {
             const pendente = m.status === 'INVITED';
             const escopos = m.scopesGrantedToMe ?? [];
-            const leitura = !pendente && escopos.length > 0;
+            const leitura = lePessoa && !pendente && escopos.length > 0;
             return (
               <View
                 key={m.membershipId}
@@ -179,7 +191,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                     <Text className="text-xs text-muted-foreground">
                       {pendente ? 'Aguardando aprovação' : teamRoleLabel(m.role)}
                     </Text>
-                    {!pendente && m.role !== 'OWNER' ? (
+                    {!pendente && m.role !== 'OWNER' && lePessoa ? (
                       <Text className="text-xs text-muted-foreground">
                         {escopos.length
                           ? `Compartilha: ${escopos.map((s) => SHARE_SCOPE_LABEL[s]).join(', ')}`
@@ -189,31 +201,33 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                   </View>
                   {leitura ? <ChevronRight size={18} color={colors.mutedForeground} /> : null}
                 </Pressable>
-                {pendente && dono ? (
+                {pendente && aprova ? (
                   <View className="flex-row gap-2">
                     <Button size="sm" onPress={() => aprovar.mutate(m)}>
                       Aprovar
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onPress={() =>
-                        confirm({
-                          title: `Recusar o pedido de ${m.name}?`,
-                          description:
-                            'A pessoa pode pedir de novo depois, pelo código ou por um convite.',
-                          confirmLabel: 'Recusar',
-                          cancelLabel: 'Voltar',
-                          destructive: true,
-                          onConfirm: () => remover.mutate(m),
-                        })
-                      }
-                    >
-                      Recusar
-                    </Button>
+                    {recusa ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onPress={() =>
+                          confirm({
+                            title: `Recusar o pedido de ${m.name}?`,
+                            description:
+                              'A pessoa pode pedir de novo depois, pelo código ou por um convite.',
+                            confirmLabel: 'Recusar',
+                            cancelLabel: 'Voltar',
+                            destructive: true,
+                            onConfirm: () => remover.mutate(m),
+                          })
+                        }
+                      >
+                        Recusar
+                      </Button>
+                    ) : null}
                   </View>
                 ) : null}
-                {!pendente && dono && m.role !== 'OWNER' ? (
+                {!pendente && gerencia(m) ? (
                   <Button size="sm" variant="outline" onPress={() => manageMember(m)}>
                     Gerenciar
                   </Button>

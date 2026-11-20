@@ -200,8 +200,22 @@ describe('minhas comunidades (integração)', () => {
 
       const equipe = await memberships.teamForMember(ana, grupo.id);
       expect(equipe).toEqual([
-        { name: 'Dona', role: 'OWNER', sees: ['WORKOUT'], lastViewedAt: null },
-        { name: 'Helena', role: 'PROFESSIONAL', sees: ['WORKOUT'], lastViewedAt: viu },
+        {
+          name: 'Dona',
+          role: 'OWNER',
+          specialty: null,
+          accompaniesMe: false,
+          sees: ['WORKOUT'],
+          lastViewedAt: null,
+        },
+        {
+          name: 'Helena',
+          role: 'PROFESSIONAL',
+          specialty: null,
+          accompaniesMe: false,
+          sees: ['WORKOUT'],
+          lastViewedAt: viu,
+        },
       ]);
       // Outros alunos nunca aparecem.
       expect(JSON.stringify(equipe)).not.toMatch(/Bia|Aluna/);

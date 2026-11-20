@@ -147,6 +147,7 @@ const TEAM_AUTHOR = 'Equipe';
 
 const ROLE_SHORT: Partial<Record<GroupRole, string>> = {
   OWNER: 'dono',
+  ADMIN: 'admin',
   PROFESSIONAL: 'profissional',
   CREATOR: 'criador de conteúdo',
 };

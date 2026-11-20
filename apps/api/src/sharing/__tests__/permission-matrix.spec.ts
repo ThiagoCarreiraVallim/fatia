@@ -74,13 +74,17 @@ describe('matriz de papéis (docs/PERMISSIONS.md × permissions.ts)', () => {
     // igualdade abaixo passaria comparando nada com nada.
     expect(administrativas.rows.length).toBeGreaterThan(5);
     expect(leitura.rows.length).toBeGreaterThan(1);
+    // Na ordem do enum (#404): a equipe, da mais ampla à recepção, e o membro.
     expect(administrativas.header).toEqual([
       'Ação',
-      GroupRole.OWNER,
-      GroupRole.PROFESSIONAL,
-      GroupRole.CREATOR,
-      GroupRole.MEMBER,
+      'OWNER',
+      'ADMIN',
+      'PROFESSIONAL',
+      'CREATOR',
+      'RECEPTION',
+      'MEMBER',
     ]);
+    expect(administrativas.header.slice(1).sort()).toEqual(Object.values(GroupRole).sort());
   });
 
   it('não tem ação na doc que o código desconheça, nem o contrário', () => {
@@ -143,15 +147,13 @@ describe('matriz de papéis (docs/PERMISSIONS.md × permissions.ts)', () => {
       const listados = podem.split(',').map((p) => p.trim());
       expect([escopo, listados]).toEqual([escopo, [...ROLES_ELIGIBLE_FOR_LINK]]);
 
-      // A coluna "quem NUNCA recebe" tem de ser o complemento exato, mais o
-      // `ADMIN` de plataforma — que não é papel de grupo e por isso não sairia
-      // do enum sozinho. Escrever "OWNER, MEMBER" e esquecer `CREATOR` daria uma
-      // doc que parece completa e deixa um papel sem resposta.
+      // A coluna "quem NUNCA recebe" tem de ser o complemento exato do enum
+      // (#404: administrador e recepção da comunidade entram nela, ADR 043).
+      // Escrever "MEMBER" e esquecer `RECEPTION` daria uma doc que parece
+      // completa e deixa um papel sem resposta. O `ADMIN` de plataforma tem o
+      // mesmo nome e a mesma resposta: nunca.
       const complemento = Object.values(GroupRole).filter((papel) => !canReceiveLink(papel));
-      expect([escopo, nunca.split(',').map((p) => p.trim())]).toEqual([
-        escopo,
-        [...complemento, 'ADMIN'],
-      ]);
+      expect([escopo, nunca.split(',').map((p) => p.trim())]).toEqual([escopo, complemento]);
     }
   });
 });

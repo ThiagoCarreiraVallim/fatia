@@ -32,6 +32,7 @@ export type PanelSection =
   | 'review'
   | 'report'
   | 'members'
+  | 'team'
   | 'invites'
   | 'activation'
   | 'origins'
@@ -57,6 +58,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   review: { section: 'review', label: 'Para revisar', path: '/review' },
   report: { section: 'report', label: 'Relatório', path: '/report' },
   members: { section: 'members', label: 'Membros', path: '/members' },
+  team: { section: 'team', label: 'Equipe e permissões', path: '/team' },
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
   activation: { section: 'activation', label: 'Ativação pendente', path: '/activation' },
   origins: { section: 'origins', label: 'Origem dos convites', path: '/origins' },
@@ -75,17 +77,41 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
 
+/** Os papéis que abrem o painel: quem administra, atende ou recebe (#404). */
+export const PANEL_ROLES: readonly GroupRole[] = ['OWNER', 'ADMIN', 'PROFESSIONAL', 'RECEPTION'];
+
 /** Quem administra ou atende abre o painel. */
 export function canOpenPanel(group: Pick<MyGroup, 'role' | 'status'>): boolean {
-  return group.status === 'ACTIVE' && (group.role === 'OWNER' || group.role === 'PROFESSIONAL');
+  return group.status === 'ACTIVE' && PANEL_ROLES.includes(group.role);
 }
 
 /**
- * As seções do painel para o papel: o profissional cuida de membros, convites,
- * conteúdo, exercícios e desafios.
+ * As seções do painel para o papel (a mesma matriz da API, `PANEL_SCREENS`):
+ * o admin cuida de tudo menos assentos, faturas, relatório e benefícios; o
+ * profissional cuida de membros, convites, conteúdo, exercícios e desafios; a
+ * recepção vê Membros (nome e situação) e aprova entradas (#404).
  */
 export function panelSections(role: GroupRole): PanelLink[] {
   if (role === 'OWNER') return Object.values(SECTIONS);
+  if (role === 'ADMIN') {
+    return [
+      SECTIONS.overview,
+      SECTIONS.members,
+      SECTIONS.team,
+      SECTIONS.invites,
+      SECTIONS.activation,
+      SECTIONS.content,
+      SECTIONS.exercises,
+      SECTIONS.challenges,
+      SECTIONS.moderation,
+      SECTIONS.announcements,
+      SECTIONS.agent,
+      SECTIONS.settings,
+    ];
+  }
+  if (role === 'RECEPTION') {
+    return [SECTIONS.overview, SECTIONS.members, SECTIONS.announcements];
+  }
   if (role === 'PROFESSIONAL') {
     return [
       SECTIONS.overview,

@@ -116,7 +116,7 @@ export function GymEquipmentDialog({
           <DialogDescription>
             {canEdit
               ? `O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre. ${checked.size + custom.length} marcado(s).`
-              : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+              : 'Só o dono e o admin mudam. O filtro "Na minha academia" usa esta lista.'}
           </DialogDescription>
         </DialogHeader>
         <div className="relative">

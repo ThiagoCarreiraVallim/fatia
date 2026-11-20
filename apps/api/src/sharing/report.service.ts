@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import {
   ChallengeCheckinStatus,
   GroupRole,
@@ -13,6 +19,7 @@ import { MIN_CELL } from '../insights/aggregation.service';
 import { AnnouncementEmailService } from '../notifications/announcement-email.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from './content-roles';
+import { can } from './permissions';
 import { binarySplit } from './panel.service';
 import type {
   FrozenMonthReport,
@@ -767,7 +774,7 @@ export class ReportService {
   // ------------------------------------------------------------ configurações
 
   async settings(viewerId: string, groupId: string): Promise<ReportSettings> {
-    await requireContentRole(this.prisma, viewerId, groupId, 'group.update', WRITE_FORBIDDEN);
+    await this.requireReportSettings(viewerId, groupId);
     return this.settingsOf(groupId);
   }
 
@@ -776,7 +783,7 @@ export class ReportService {
     groupId: string,
     input: { weeklySessionsGoal?: number | null; reportEmailEnabled?: boolean },
   ): Promise<ReportSettings> {
-    await requireContentRole(this.prisma, viewerId, groupId, 'group.update', WRITE_FORBIDDEN);
+    await this.requireReportSettings(viewerId, groupId);
     const meta = input.weeklySessionsGoal;
     if (
       meta !== undefined &&
@@ -809,7 +816,7 @@ export class ReportService {
     membershipId: string,
     enabled: boolean,
   ): Promise<ReportSettings> {
-    await requireContentRole(this.prisma, viewerId, groupId, 'group.update', WRITE_FORBIDDEN);
+    await this.requireReportSettings(viewerId, groupId);
     const r = await this.prisma.groupMembership.updateMany({
       where: {
         id: membershipId,
@@ -821,6 +828,22 @@ export class ReportService {
     });
     if (r.count === 0) throw new NotFoundException('Pessoa da equipe não encontrada');
     return this.settingsOf(groupId);
+  }
+
+  /**
+   * Mexer no relatório é `group.update` e também `insights.read` (#404): o
+   * administrador configura a comunidade, mas não vê o relatório, então não
+   * escolhe meta nem quem o recebe.
+   */
+  private async requireReportSettings(viewerId: string, groupId: string): Promise<void> {
+    const role = await requireContentRole(
+      this.prisma,
+      viewerId,
+      groupId,
+      'group.update',
+      WRITE_FORBIDDEN,
+    );
+    if (!can(role, 'insights.read')) throw new ForbiddenException(WRITE_FORBIDDEN);
   }
 
   private async settingsOf(groupId: string): Promise<ReportSettings> {

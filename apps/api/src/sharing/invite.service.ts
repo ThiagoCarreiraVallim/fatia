@@ -35,13 +35,14 @@ import { assertJoinMeetsRequiredScopes } from './consent-scopes';
 import { newEntryCode } from './entry-code';
 import {
   activationPendingWhere,
+  inviteReachWhere,
   inviteKind,
   inviteStatus,
   notExpiredWhere,
   type InviteKind,
   type InviteStatus,
 } from './invite-state';
-import { can, TEAM_ROLES, type GroupAction } from './permissions';
+import { can, rolesGrantableBy, TEAM_ROLES, type GroupAction } from './permissions';
 import {
   assertNotBanned,
   MembershipService,
@@ -567,7 +568,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         revokedAt: null,
         declinedAt: null,
         ...notExpiredWhere(agora),
-        ...this.alcance(eu.role),
+        ...this.inviteReach(eu.role),
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -591,7 +592,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const linhas = await this.prisma.groupInvite.findMany({
       where: {
         groupId,
-        ...this.alcance(eu.role),
+        ...this.inviteReach(eu.role),
         OR: [
           { AND: [{ revokedAt: null, declinedAt: null }, notExpiredWhere(now)] },
           { createdAt: { gte: desde } },
@@ -741,7 +742,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   async revoke(actorId: string, groupId: string, inviteId: string): Promise<InviteView> {
     const eu = await this.assertCan(actorId, groupId, 'invite.revoke');
     const revogado = await this.prisma.groupInvite.updateMany({
-      where: { id: inviteId, groupId, revokedAt: null, ...this.alcance(eu.role) },
+      where: { id: inviteId, groupId, revokedAt: null, ...this.inviteReach(eu.role) },
       data: { revokedAt: new Date() },
     });
     if (revogado.count === 0) throw new NotFoundException(INVITE_NOT_FOUND);
@@ -759,7 +760,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const eu = await this.assertCan(actorId, groupId, 'invite.create');
     const agora = new Date();
     const convite = await this.prisma.groupInvite.findFirst({
-      where: { id: inviteId, groupId, ...this.alcance(eu.role) },
+      where: { id: inviteId, groupId, ...this.inviteReach(eu.role) },
     });
     const motivo = this.resendBlock(convite, agora);
     if (motivo === 'not_found' || motivo === 'expired')
@@ -786,7 +787,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     }
     const agora = new Date();
     const achados = await this.prisma.groupInvite.findMany({
-      where: { id: { in: unicos }, groupId, ...this.alcance(eu.role) },
+      where: { id: { in: unicos }, groupId, ...this.inviteReach(eu.role) },
     });
     const porId = new Map(achados.map((c) => [c.id, c]));
     const result: ResendManyResult = { sent: [], skipped: [] };
@@ -819,7 +820,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       where: {
         id: inviteId,
         groupId,
-        ...this.alcance(eu.role),
+        ...this.inviteReach(eu.role),
         email: { not: null },
         code: null,
         uses: 0,
@@ -876,7 +877,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const eu = await this.assertCan(actorId, groupId, 'invite.create');
     const agora = new Date();
     const convite = await this.prisma.groupInvite.findFirst({
-      where: { id: inviteId, groupId, ...this.alcance(eu.role), email: { not: null }, code: null },
+      where: {
+        id: inviteId,
+        groupId,
+        ...this.inviteReach(eu.role),
+        email: { not: null },
+        code: null,
+      },
     });
     if (!convite) throw new NotFoundException(INVITE_NOT_FOUND);
     if (inviteStatus(convite, agora) !== 'active') {
@@ -1120,13 +1127,17 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     input: { role: InvitableRole; giveSeat?: boolean; accompaniedByMembershipId?: string | null },
   ) {
     const eu = await this.assertCan(actorId, groupId, 'invite.create');
-    if (eu.role === GroupRole.PROFESSIONAL && input.role !== GroupRole.MEMBER) {
-      throw new ForbiddenException(
-        'Profissionais convidam só membros; a equipe é o dono quem define',
-      );
-    }
     if ((input.role as GroupRole) === GroupRole.OWNER) {
       throw new ForbiddenException('Ninguém é convidado como dono');
+    }
+    // O profissional convida só membros; o administrador, qualquer papel menos
+    // o de administrador (#404). Quem define a equipe é o dono.
+    if (!rolesGrantableBy(eu.role).includes(input.role)) {
+      throw new ForbiddenException(
+        eu.role === GroupRole.PROFESSIONAL
+          ? 'Profissionais convidam só membros; a equipe é o dono quem define'
+          : 'Seu papel não convida para esse papel',
+      );
     }
     if (input.giveSeat && !can(eu.role, 'billing.manage')) {
       throw new ForbiddenException('Só o dono dá assento PRO');
@@ -1159,7 +1170,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, userId: true },
     });
     if (!m) throw new NotFoundException('Profissional não encontrado nesta comunidade');
-    if (role !== GroupRole.OWNER && m.userId !== actorId) {
+    // Escolher outro responsável é `member.assign` (o dono e o administrador, #404).
+    if (!can(role, 'member.assign') && m.userId !== actorId) {
       throw new ForbiddenException('Profissionais só põem a si mesmos como responsável');
     }
     return m.id;
@@ -1169,7 +1181,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   private waitingWhere(groupId: string, role: GroupRole): Prisma.GroupInviteWhereInput {
     return {
       groupId,
-      ...this.alcance(role),
+      ...this.inviteReach(role),
       email: { not: null },
       code: null,
       uses: 0,
@@ -1187,7 +1199,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   ): Prisma.GroupInviteWhereInput {
     return {
       groupId,
-      ...this.alcance(role),
+      ...this.inviteReach(role),
       code: null,
       createdAt: { gte: since },
       OR: [{ email: { not: null } }, { acceptedById: { not: null } }],
@@ -1442,9 +1454,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     return token && hashInviteToken(token) === l.tokenHash ? this.url(token) : null;
   }
 
-  /** Que convites a pessoa da equipe administra: o dono, todos; o profissional, os de membro. */
-  private alcance(role: GroupRole): { role?: GroupRole } {
-    return role === GroupRole.OWNER ? {} : { role: GroupRole.MEMBER };
+  /**
+   * Que convites a pessoa da equipe administra: os dos papéis que ela pode dar
+   * (#404). O dono, todos; o administrador, todos menos os de administrador; o
+   * profissional, os de membro.
+   */
+  private inviteReach(role: GroupRole): { role: { in: GroupRole[] } } {
+    return inviteReachWhere(role);
   }
 
   /** Cabem mais `quantos` convites hoje nesta comunidade? Senão, 429 dizendo quantos cabem. */

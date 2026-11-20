@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Dumbbell, Image as ImageIcon, Plus, Search, Video } from 'lucide-react';
 import {
+  groupCan,
   groupExerciseApi,
   workoutApi,
   type GroupExercise,
@@ -100,7 +101,9 @@ export default function OrgExercisesPage() {
       )}
 
       {/* Depois da lista, como no app: é o que se mexe uma vez e se consulta pouco. */}
-      {list.data && <EquipmentCard groupId={g.id} canEdit={g.role === 'OWNER'} saved={list.data} />}
+      {list.data && (
+        <EquipmentCard groupId={g.id} canEdit={groupCan(g, 'group.update')} saved={list.data} />
+      )}
 
       <Drawer open={choosingKind} onOpenChange={setChoosingKind}>
         <DrawerContent className="px-4 pb-6">
@@ -199,7 +202,7 @@ function EquipmentCard({
           <p className="text-xs text-muted-foreground">
             {canEdit
               ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
-              : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+              : 'Só o dono e o admin mudam. O filtro "Na minha academia" usa esta lista.'}
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setOpen(true)}>

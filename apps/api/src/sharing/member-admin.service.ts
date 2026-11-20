@@ -57,10 +57,22 @@ export class MemberAdminService {
     if (alvo!.role !== GroupRole.MEMBER) throw new BadRequestException(ONLY_MEMBERS_ACCOMPANIED);
     const acompanhante = await this.accompanier(groupId, accompaniedByMembershipId);
     if (acompanhante === alvo!.id) throw new BadRequestException('Ninguém acompanha a si mesmo');
-    await this.prisma.groupMembership.update({
-      where: { id: alvo!.id },
-      data: { accompaniedById: acompanhante },
-    });
+    // A troca e a trilha juntas (#404: quem trocou o responsável de quem, e quando).
+    await this.prisma.$transaction([
+      this.prisma.groupMembership.update({
+        where: { id: alvo!.id },
+        data: { accompaniedById: acompanhante },
+      }),
+      this.prisma.groupAuditLog.create({
+        data: {
+          groupId,
+          actorId,
+          action: 'members.accompany',
+          targetCount: 1,
+          payload: { membershipIds: [alvo!.id], accompaniedById: acompanhante },
+        },
+      }),
+    ]);
     return { membershipId: alvo!.id, accompaniedById: acompanhante };
   }
 

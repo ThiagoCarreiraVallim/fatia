@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,6 +24,7 @@ import { WorkoutSessionService } from '../workout/workout-session.service';
 import { requireContentRole } from './content-roles';
 import { firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
+import { accompaniedOnly } from './team-reach';
 import { ProfessionalAccessService } from './professional-access.service';
 import type {
   AtRiskRow,
@@ -215,9 +217,10 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
         answers.map((a) => a.offer.userId),
       );
       const scopesOf = new Map(linked.map((m) => [m.userId, m.scopes]));
+      const meus = await accompaniedOnly(this.prisma, viewerId, groupId);
       for (const a of answers) {
         const p = people.get(a.offer.userId);
-        if (!p) continue;
+        if (!p || (meus && !meus.has(p.membershipId))) continue;
         items.push({
           kind: ReviewKind.PLAN_RESPONSE,
           refId: a.id,
@@ -436,13 +439,13 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     groupId: string,
     days: number,
   ): Promise<{ riskDays: number }> {
-    await requireContentRole(
-      this.prisma,
-      viewerId,
-      groupId,
-      'group.update',
-      'Só o dono muda o limite do em risco',
-    );
+    const LIMITE = 'Só o dono muda o limite do em risco';
+    const role = await requireContentRole(this.prisma, viewerId, groupId, 'group.update', LIMITE);
+    // Mudar o limite é de quem vê o em risco (#404): o admin edita a
+    // comunidade, mas não mexe num número que não enxerga.
+    if (!can(role, 'panel.review') && !can(role, 'insights.read')) {
+      throw new ForbiddenException(LIMITE);
+    }
     if (!Number.isInteger(days) || days < RISK_DAYS_MIN || days > RISK_DAYS_MAX) {
       throw new BadRequestException(`O limite vai de ${RISK_DAYS_MIN} a ${RISK_DAYS_MAX} dias.`);
     }
@@ -557,8 +560,11 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       scopes.set(l.subjectUserId, set);
     }
     const people = await this.members(groupId, [...scopes.keys()]);
+    // "Profissionais veem só quem acompanham" (#404): a lista é a mesma da porta.
+    const meus = await accompaniedOnly(this.prisma, viewerId, groupId);
     return [...people.values()]
       .filter((p) => p.userId !== viewerId)
+      .filter((p) => !meus || meus.has(p.membershipId))
       .map((p) => ({ ...p, scopes: [...(scopes.get(p.userId) ?? [])].sort() }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }

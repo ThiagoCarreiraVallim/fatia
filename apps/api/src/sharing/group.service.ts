@@ -15,6 +15,7 @@ import {
   type AutoPostKind,
   type GroupAiMode,
   type GroupMembership,
+  type Prisma,
   type GroupVisibility,
   type JoinPolicy,
   type MediaFile,
@@ -30,8 +31,16 @@ import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { normalizarEscopos } from './consent-scopes';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
-import { canReceiveLink, TEAM_ROLES } from './permissions';
+import {
+  actionsOf,
+  can,
+  canReceiveLink,
+  TEAM_ROLES,
+  type GroupAction,
+  type Specialty,
+} from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
+import { revokeCreatedTeamInvitesOp, specialtyClearedAuditOp } from './team-invites';
 
 /** Resposta única para grupo que não existe e para grupo de que não sou membro (#92). */
 const NOT_FOUND = 'Group not found';
@@ -76,6 +85,8 @@ export interface UpdateGroupInput {
    * não passa a dever o que nunca compartilhou (`consent-scopes.ts`).
    */
   requiredSharingScopes?: ShareScope[];
+  /** "Profissionais veem só quem acompanham" (#404). */
+  proSeeOnlyAssigned?: boolean;
 }
 
 export interface GroupSummary {
@@ -87,6 +98,16 @@ export interface GroupSummary {
   joinPolicy: JoinPolicy;
   /** Papel de quem está perguntando. Nunca o papel de outra pessoa. */
   role: GroupRole;
+  /**
+   * O que o papel de quem pergunta faz aqui, da matriz (#404): a tela esconde o
+   * que não alcança sem ter de repetir a matriz. Vazio enquanto pendente, fora
+   * `group.read`. A API continua sendo o portão.
+   */
+  actions: GroupAction[];
+  /** A especialidade de quem pergunta, se for profissional (#404). */
+  specialty: Specialty | null;
+  /** "Profissionais veem só quem acompanham" (#404). */
+  proSeeOnlyAssigned: boolean;
   status: MembershipStatus;
   membershipId: string;
   joinedAt: Date | null;
@@ -185,6 +206,9 @@ function toSummary(
     description: m.group.description,
     joinPolicy: m.group.joinPolicy,
     role: m.role,
+    actions: m.status === MembershipStatus.ACTIVE ? actionsOf(m.role) : ['group.read'],
+    specialty: m.specialty,
+    proSeeOnlyAssigned: m.group.proSeeOnlyAssigned,
     status: m.status,
     membershipId: m.id,
     joinedAt: m.joinedAt,
@@ -456,19 +480,50 @@ export class GroupService {
   }
 
   /** Perfil da comunidade. O guarda já conferiu `group.update`; o dono de novo aqui. */
-  async update(ownerId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
-    await this.assertOwner(ownerId, groupId);
+  async update(actorId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
+    const eu = await this.assertAction(actorId, groupId, 'group.update');
     const { requiredSharingScopes, autoPosts, ...resto } = input;
-    return this.prisma.group.update({
-      where: { id: groupId },
-      data: {
-        ...resto,
-        ...(requiredSharingScopes
-          ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
-          : {}),
-        ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
-      },
-    });
+    // O que todo membro precisa compartilhar decide o que a equipe recebe: é
+    // do dono, que define a equipe (#404, ADR 043).
+    if (requiredSharingScopes !== undefined && !can(eu.role, 'group.sharing')) {
+      throw new ForbiddenException('Só o dono muda o que é obrigatório compartilhar');
+    }
+    const trilha: Prisma.PrismaPromise<unknown>[] = [];
+    if (input.proSeeOnlyAssigned !== undefined) {
+      const atual = await this.prisma.group.findUniqueOrThrow({
+        where: { id: groupId },
+        select: { proSeeOnlyAssigned: true },
+      });
+      // Quem ligou ou desligou o "só quem acompanham", e quando (#404), no
+      // mesmo commit da mudança.
+      if (atual.proSeeOnlyAssigned !== input.proSeeOnlyAssigned) {
+        trilha.push(
+          this.prisma.groupAuditLog.create({
+            data: {
+              groupId,
+              actorId,
+              action: 'group.pro_see_only_assigned',
+              targetCount: 0,
+              payload: { value: input.proSeeOnlyAssigned },
+            },
+          }),
+        );
+      }
+    }
+    const [grupo] = (await this.prisma.$transaction([
+      this.prisma.group.update({
+        where: { id: groupId },
+        data: {
+          ...resto,
+          ...(requiredSharingScopes
+            ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
+            : {}),
+          ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
+        },
+      }),
+      ...trilha,
+    ])) as [Group, ...unknown[]];
+    return grupo;
   }
 
   /**
@@ -476,7 +531,7 @@ export class GroupService {
    * comunidade como avatar; o anterior é apagado do bucket.
    */
   async setAvatar(ownerId: string, groupId: string, fileId: string | null): Promise<GroupSummary> {
-    await this.assertOwner(ownerId, groupId);
+    await this.assertAction(ownerId, groupId, 'group.update');
     if (fileId && !this.media) throw new NotFoundException('File not found');
     const atual = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
@@ -501,7 +556,7 @@ export class GroupService {
    * saúde de ninguém, que nunca esteve sob o grupo.
    */
   async remove(ownerId: string, groupId: string): Promise<{ id: string }> {
-    await this.assertOwner(ownerId, groupId);
+    await this.assertAction(ownerId, groupId, 'group.delete');
     for (const gancho of this.ganchos ?? []) await gancho.beforeDelete(groupId);
     await this.prisma.group.delete({ where: { id: groupId } });
     return { id: groupId };
@@ -517,7 +572,7 @@ export class GroupService {
     groupId: string,
     membershipId: string,
   ): Promise<GroupSummary> {
-    const eu = await this.assertOwner(ownerId, groupId);
+    const eu = await this.assertAction(ownerId, groupId, 'group.transfer');
     const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
     if (!alvo || alvo.groupId !== groupId || alvo.status !== MembershipStatus.ACTIVE) {
       throw new NotFoundException('Membership not found');
@@ -536,37 +591,76 @@ export class GroupService {
               select: { userId: true, consentScopes: true },
             })
           ).map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          specialty: null,
           at,
         });
 
+    // Os dois lados da posse vão para a trilha como troca de papel (#404), e a
+    // especialidade que o novo dono deixa também.
+    const papel = (membershipId: string, from: GroupRole, to: GroupRole) =>
+      this.prisma.groupAuditLog.create({
+        data: {
+          groupId,
+          actorId: ownerId,
+          action: 'members.role',
+          targetCount: 1,
+          payload: { membershipIds: [membershipId], from, to },
+        },
+      });
     await this.prisma.$transaction([
       this.prisma.groupMembership.update({
         where: { id: eu.id },
-        data: { role: GroupRole.PROFESSIONAL },
+        // Papel novo, escolhas novas (#400, #399), como em toda troca de papel.
+        data: { role: GroupRole.PROFESSIONAL, reportEmail: false, riskDigest: false },
       }),
+      // Especialidade é do profissional (#404): o novo dono deixa a dela.
       this.prisma.groupMembership.update({
         where: { id: alvo.id },
-        data: { role: GroupRole.OWNER },
+        data: {
+          role: GroupRole.OWNER,
+          specialty: null,
+          accompaniedById: null,
+          reportEmail: false,
+          riskDigest: false,
+        },
       }),
       this.prisma.group.update({ where: { id: groupId }, data: { ownerId: alvo.userId } }),
       ...leque,
+      // O antigo dono vira profissional: os convites de equipe dele caem.
+      revokeCreatedTeamInvitesOp(this.prisma, groupId, ownerId, GroupRole.PROFESSIONAL, at),
+      papel(alvo.id, alvo.role, GroupRole.OWNER),
+      papel(eu.id, GroupRole.OWNER, GroupRole.PROFESSIONAL),
+      ...(alvo.specialty
+        ? [
+            specialtyClearedAuditOp(this.prisma, {
+              groupId,
+              actorId: ownerId,
+              membershipId: alvo.id,
+              from: alvo.specialty,
+            }),
+          ]
+        : []),
     ]);
     return this.findByIdForMember(ownerId, groupId);
   }
 
   /**
-   * Só o dono administra. Não-membro recebe `NOT_FOUND` (não pode descobrir que
-   * o grupo existe); membro comum recebe `FORBIDDEN`, porque para ele não há
-   * existência a esconder. A mesma regra do `GroupRoleGuard` e do
-   * `MembershipService` (`docs/PERMISSIONS.md`).
+   * A matriz de novo, no service (#404: o administrador também edita; passar a
+   * posse e apagar seguem do dono). Não-membro recebe `NOT_FOUND` (não pode
+   * descobrir que o grupo existe); membro sem o papel recebe `FORBIDDEN`. A
+   * mesma regra do `GroupRoleGuard` (`docs/PERMISSIONS.md`).
    */
-  private async assertOwner(userId: string, groupId: string): Promise<GroupMembership> {
+  private async assertAction(
+    userId: string,
+    groupId: string,
+    action: GroupAction,
+  ): Promise<GroupMembership> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (eu.role !== GroupRole.OWNER) {
-      throw new ForbiddenException('Apenas o dono do grupo pode fazer isso');
+    if (!can(eu.role, action)) {
+      throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
     }
     return eu;
   }
