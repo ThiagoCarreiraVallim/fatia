@@ -14,6 +14,8 @@ import {
   requestSignupCode,
   signInWithPassword,
   socialTargets,
+  normalizePasswordPolicy,
+  DEFAULT_PASSWORD_POLICY,
   type PasswordPolicy,
 } from '../auth-experience';
 
@@ -499,5 +501,36 @@ describe('cookie da interação no próprio cliente', () => {
     await client.submit();
 
     expect(logto.calls[2]!.cookie).toBe('b=2');
+  });
+});
+
+describe('normalizePasswordPolicy', () => {
+  it('completa a política vazia que o Logto de produção devolve', () => {
+    const p = normalizePasswordPolicy({});
+    expect(p).toEqual(DEFAULT_PASSWORD_POLICY);
+    expect(passwordIssues(p, 'curta', {})).toContain('too_short');
+  });
+
+  it('usa o padrão quando a política não vem', () => {
+    expect(normalizePasswordPolicy(undefined)).toEqual(DEFAULT_PASSWORD_POLICY);
+    expect(normalizePasswordPolicy(null)).toEqual(DEFAULT_PASSWORD_POLICY);
+  });
+
+  it('mantém o que veio e completa só o que falta', () => {
+    const p = normalizePasswordPolicy({ length: { min: 12 }, rejects: { words: ['fatia'] } });
+    expect(p.length).toEqual({ min: 12, max: 256 });
+    expect(p.characterTypes).toEqual({ min: 1 });
+    expect(p.rejects).toEqual({
+      pwned: true,
+      repetitionAndSequence: true,
+      userInfo: true,
+      words: ['fatia'],
+    });
+  });
+
+  it('ignora valores de tipo errado', () => {
+    const p = normalizePasswordPolicy({ length: { min: 'x', max: -1 }, rejects: { words: 'a' } });
+    expect(p.length).toEqual({ min: 8, max: 256 });
+    expect(p.rejects.words).toEqual([]);
   });
 });
