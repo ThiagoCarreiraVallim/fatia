@@ -86,6 +86,11 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
     return enviados;
   }
 
+  /** Fatura dos assentos vencida (#403, Ex-04): e-mail ao dono, uma vez por fatura. */
+  async notifySeatInvoicesOverdue(_now: Date): Promise<number> {
+    return 0;
+  }
+
   private dueSubscriptions(now: Date) {
     return this.prisma.userSubscription.findMany({
       where: {
