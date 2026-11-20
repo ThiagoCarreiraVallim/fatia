@@ -73,6 +73,7 @@ import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanCopyService } from '../../sharing/plan-copy.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { PlanSendService } from '../../sharing/plan-send.service';
+import { NutritionCopyService } from '../../sharing/nutrition-copy.service';
 import { MemberFileService } from '../../sharing/member-file.service';
 import { MemberNoteService } from '../../sharing/member-note.service';
 import { ReviewService } from '../../sharing/review.service';
@@ -4531,6 +4532,183 @@ describe('isolamento entre usuários', () => {
         copies.save(owned.pro, s.groupId, s.membershipA, s.offerA, { document: doc(s.daOutra) }),
       ).rejects.toThrow(BadRequestException);
       expect(await prisma.planOfferVersion.count({ where: { offerId: s.offerA } })).toBe(antes);
+    });
+  });
+
+  describe('editor de plano alimentar e a cópia do aluno (#407)', () => {
+    const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
+    const nutriCopies = new NutritionCopyService(
+      prisma,
+      nutritionPlans,
+      access,
+      silentNotifications,
+    );
+    const content = new ContentService(
+      prisma,
+      plans,
+      mealTemplates,
+      userGoals,
+      new PlanMaterializerService(prisma, exercises),
+      new MediaService(prisma, new MemoryObjectStore()),
+    );
+    const s = {
+      groupId: '',
+      outroGrupo: '',
+      membershipA: '',
+      membershipB: '',
+      membershipFora: '',
+      planoA: '',
+      planoFora: '',
+      base: 0,
+      doB: 0,
+    };
+    const doc = (foodId: number) => ({
+      targets: { kcal: 2000, proteinG: 150, carbsG: 210, fatG: 60 },
+      meals: [{ name: 'Almoço', options: [{ items: [{ foodId, grams: 100 }] }] }],
+      groups: [],
+    });
+
+    beforeAll(async () => {
+      const stamp = `nutri-ed-${Date.now()}`;
+      const grupo = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Dieta do Pro',
+          slug: `${stamp}-ed`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      const outro = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Outra da dieta',
+          slug: `${stamp}-outra`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      s.groupId = grupo.id;
+      s.outroGrupo = outro.id;
+      s.membershipA = grupo.memberships.find((m) => m.userId === owned.userA)!.id;
+      s.membershipB = grupo.memberships.find((m) => m.userId === owned.userB)!.id;
+      s.membershipFora = outro.memberships.find((m) => m.userId === owned.userB)!.id;
+      await prisma.professionalLink.createMany({
+        data: [
+          { subjectUserId: owned.userA, professionalId: owned.pro, groupId: grupo.id },
+          { subjectUserId: owned.userB, professionalId: owned.pro, groupId: outro.id },
+        ].map((l) => ({ ...l, scopes: [ShareScope.NUTRITION] })),
+      });
+      s.base = (
+        await prisma.food.findFirstOrThrow({
+          where: { createdByUserId: null, carbsPer100g: { gt: 0 } },
+          select: { id: true },
+        })
+      ).id;
+      s.doB = (
+        await prisma.food.create({
+          data: {
+            name: `Do B ${stamp}`,
+            searchName: `do b ${stamp}`,
+            source: 'CUSTOM',
+            createdByUserId: owned.userB,
+            kcalPer100g: 100,
+            proteinPer100g: 10,
+            carbsPer100g: 10,
+            fatPer100g: 1,
+          },
+        })
+      ).id;
+      const sends = new PlanSendService(
+        prisma,
+        {} as PlanOfferService,
+        nutritionPlans,
+        silentNotifications,
+        access,
+      );
+      const tpl = await content.createNutritionTemplate(owned.pro, grupo.id, {
+        title: 'Dieta A',
+        document: doc(s.base),
+      });
+      s.planoA = (
+        await sends.send(owned.pro, grupo.id, {
+          templateId: tpl.id,
+          membershipIds: [s.membershipA],
+        })
+      ).results[0]!.id;
+      const tplFora = await content.createNutritionTemplate(owned.pro, outro.id, {
+        title: 'Dieta da outra',
+        document: doc(s.base),
+      });
+      s.planoFora = (
+        await sends.send(owned.pro, outro.id, {
+          templateId: tplFora.id,
+          membershipIds: [s.membershipFora],
+        })
+      ).results[0]!.id;
+    });
+
+    afterAll(async () => {
+      await prisma.nutritionPlan.deleteMany({ where: { id: { in: [s.planoA, s.planoFora] } } });
+      await prisma.group.deleteMany({ where: { id: { in: [s.groupId, s.outroGrupo] } } });
+      await prisma.food.deleteMany({ where: { id: s.doB } });
+    });
+
+    it('o modelo não aceita o alimento pessoal de outra pessoa (ADR 045)', async () => {
+      await expect(
+        content.createNutritionTemplate(owned.pro, s.groupId, {
+          title: 'X',
+          document: doc(s.doB),
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('a cópia só abre pela ficha da própria pessoa, nesta comunidade', async () => {
+      // Plano do A pela ficha do B; plano da outra comunidade por esta.
+      await expect(nutriCopies.get(owned.pro, s.groupId, s.membershipB, s.planoA)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(
+        nutriCopies.get(owned.pro, s.groupId, s.membershipA, s.planoFora),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        nutriCopies.get(owned.pro, s.groupId, s.membershipFora, s.planoFora),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        nutriCopies.save(owned.pro, s.groupId, s.membershipB, s.planoA, { document: doc(s.base) }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('membro não edita a cópia de ninguém, nem a própria pelo painel', async () => {
+      await expect(
+        nutriCopies.get(owned.userA, s.groupId, s.membershipA, s.planoA),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        nutriCopies.save(owned.userB, s.groupId, s.membershipA, s.planoA, {
+          document: doc(s.base),
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('salvar a cópia com alimento pessoal de outra pessoa é 404 e não grava versão', async () => {
+      const antes = await prisma.nutritionPlan.count({ where: { userId: owned.userA } });
+      await expect(
+        nutriCopies.save(owned.pro, s.groupId, s.membershipA, s.planoA, { document: doc(s.doB) }),
+      ).rejects.toThrow(NotFoundException);
+      expect(await prisma.nutritionPlan.count({ where: { userId: owned.userA } })).toBe(antes);
     });
   });
 
