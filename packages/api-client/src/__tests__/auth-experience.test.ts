@@ -8,6 +8,7 @@ import {
   experienceErrorMessage,
   parseFormPostCallback,
   passwordIssueMessage,
+  splitSetCookie,
   passwordIssues,
   requestPasswordResetCode,
   requestSignupCode,
@@ -35,14 +36,21 @@ interface Call {
   url: string;
   body: unknown;
   credentials: RequestCredentials | undefined;
+  redirect: RequestRedirect | undefined;
+  cookie: string | null;
 }
 
-type Reply = { status: number; body?: unknown; text?: string };
+type Reply = {
+  status: number;
+  body?: unknown;
+  text?: string;
+  location?: string;
+  setCookie?: string[];
+};
 
 /**
- * Um Logto de mentira: responde por "MÉTODO caminho" e grava as chamadas. O
- * fetch do app segue redirects sozinho, então cada resposta aqui já é a do fim
- * da cadeia, como no aparelho.
+ * Um Logto de mentira: responde por "MÉTODO caminho" e grava as chamadas. Não
+ * segue redirect: o cliente pede `redirect: 'manual'` e segue sozinho.
  */
 function fakeLogto(routes: Record<string, Reply | Reply[]>) {
   const calls: Call[] = [];
@@ -58,12 +66,17 @@ function fakeLogto(routes: Record<string, Reply | Reply[]>) {
       url: input,
       body: init.body ? JSON.parse(String(init.body)) : undefined,
       credentials: init.credentials,
+      redirect: init.redirect,
+      cookie: new Headers(init.headers).get('cookie'),
     });
     const queue = queues.get(key);
     const reply = queue && queue.length > 1 ? queue.shift()! : queue?.[0];
     if (!reply) throw new Error(`rota inesperada: ${key}`);
     const text = reply.text ?? (reply.body === undefined ? '' : JSON.stringify(reply.body));
-    return new Response(text || null, { status: reply.status });
+    const headers = new Headers();
+    if (reply.location) headers.set('location', reply.location);
+    for (const c of reply.setCookie ?? []) headers.append('set-cookie', c);
+    return new Response(text || null, { status: reply.status, headers });
   };
   return { calls, fetch: fetchImpl as unknown as typeof fetch };
 }
@@ -102,23 +115,26 @@ describe('parseFormPostCallback', () => {
   });
 
   it('lê também o erro devolvido pelo servidor', () => {
-    const html = FORM_POST.replace('name="code" value="abc-123_x"', 'name="error" value="access_denied"');
+    const html = FORM_POST.replace(
+      'name="code" value="abc-123_x"',
+      'name="error" value="access_denied"',
+    );
     expect(() => parseFormPostCallback(html)).toThrow(ExperienceError);
   });
 });
 
 describe('passwordIssues — as mesmas regras do Logto, sem a consulta de vazamento', () => {
   it('aceita uma senha boa', () => {
-    expect(passwordIssues(POLICY, 'Xq7!pera-uva-42', { email: 'maria@x.com', name: 'Maria' })).toEqual(
-      [],
-    );
+    expect(
+      passwordIssues(POLICY, 'Xq7!pera-uva-42', { email: 'maria@x.com', name: 'Maria' }),
+    ).toEqual([]);
   });
 
   it('acusa tamanho mínimo e máximo', () => {
     expect(passwordIssues(POLICY, 'ab1', {})).toContain('too_short');
-    expect(passwordIssues({ ...POLICY, length: { min: 8, max: 10 } }, 'abcdefghijkx9', {})).toContain(
-      'too_long',
-    );
+    expect(
+      passwordIssues({ ...POLICY, length: { min: 8, max: 10 } }, 'abcdefghijkx9', {}),
+    ).toContain('too_long');
   });
 
   it('recusa acento e cedilha, que o Logto não aceita', () => {
@@ -249,8 +265,10 @@ describe('fluxos da Experience API', () => {
       password: 'segredo',
     });
     expect(logto.calls[3]!.body).toEqual({ verificationId: 'v1' });
-    // iOS só manda o cookie da interação com credentials: 'include'.
-    expect(logto.calls.every((c) => c.credentials === 'include')).toBe(true);
+    // O cookie da interação fica num jar do próprio cliente, não no nativo.
+    expect(logto.calls.every((c) => c.credentials === 'omit' && c.redirect === 'manual')).toBe(
+      true,
+    );
   });
 
   it('senha errada vira ExperienceError com o código do Logto', async () => {
@@ -293,7 +311,10 @@ describe('fluxos da Experience API', () => {
     });
     const client = createExperienceClient({ endpoint: 'http://logto.test', fetch: logto.fetch });
 
-    const pending = await requestSignupCode(client, { authorizeUrl: AUTHORIZE, email: 'ana@x.com' });
+    const pending = await requestSignupCode(client, {
+      authorizeUrl: AUTHORIZE,
+      email: 'ana@x.com',
+    });
     expect(pending).toEqual({ email: 'ana@x.com', verificationId: 'c1' });
 
     const result = await completeSignup(client, {
@@ -414,5 +435,69 @@ describe('fluxos da Experience API', () => {
     });
     const client = createExperienceClient({ endpoint: 'http://logto.test', fetch: logto.fetch });
     await expect(client.submitAndCollectCode()).rejects.toBeInstanceOf(ExperienceError);
+  });
+});
+
+describe('cookie da interação no próprio cliente', () => {
+  // O Logto 1.3x grava `_interaction` como JSON com vírgula; o cookie jar do
+  // Android (okhttp JavaNetCookieJar) corta o valor na vírgula e a interação some.
+  const INTERACTION =
+    '_interaction={"app":"u1","_legacy":"u1"}; path=/; expires=Fri, 20 Nov 2099 02:33:42 GMT; samesite=lax; httponly';
+
+  it('separa o Set-Cookie que o React Native junta com vírgula', () => {
+    const joined = [
+      '_logto={"appId":"app"}; path=/; samesite=lax',
+      INTERACTION,
+      '_interaction.sig=abc; path=/; expires=Fri, 20 Nov 2099 02:33:42 GMT; httponly',
+    ].join(', ');
+    expect(splitSetCookie(joined)).toEqual([
+      '_logto={"appId":"app"}; path=/; samesite=lax',
+      INTERACTION,
+      '_interaction.sig=abc; path=/; expires=Fri, 20 Nov 2099 02:33:42 GMT; httponly',
+    ]);
+  });
+
+  it('segue o 303 do authorize sozinho, guarda o cookie inteiro e o manda depois', async () => {
+    const logto = fakeLogto({
+      'GET /oidc/auth': {
+        status: 303,
+        location: '/sign-in?app_id=app',
+        setCookie: [INTERACTION, '_interaction.sig=abc; path=/; httponly'],
+      },
+      'GET /sign-in': { status: 200, text: '<html>sign-in</html>' },
+      'PUT /api/experience': { status: 204 },
+    });
+    const client = createExperienceClient({ endpoint: 'http://logto.test', fetch: logto.fetch });
+
+    await client.begin('http://localhost:3001/oidc/auth?client_id=app');
+    await client.start('Register');
+
+    expect(logto.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      // O authorize vem da discovery com o ENDPOINT interno; vai pelo endereço do app.
+      'GET http://logto.test/oidc/auth?client_id=app',
+      'GET http://logto.test/sign-in?app_id=app',
+      'PUT http://logto.test/api/experience',
+    ]);
+    expect(logto.calls[2]!.cookie).toBe(
+      '_interaction={"app":"u1","_legacy":"u1"}; _interaction.sig=abc',
+    );
+  });
+
+  it('esquece o cookie que o Logto expira', async () => {
+    const logto = fakeLogto({
+      'GET /oidc/auth': { status: 200, text: 'x', setCookie: ['a=1; path=/', 'b=2; path=/'] },
+      'PUT /api/experience': {
+        status: 204,
+        setCookie: ['a=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'],
+      },
+      'POST /api/experience/submit': { status: 204 },
+    });
+    const client = createExperienceClient({ endpoint: 'http://logto.test', fetch: logto.fetch });
+
+    await client.begin(AUTHORIZE);
+    await client.start('SignIn');
+    await client.submit();
+
+    expect(logto.calls[2]!.cookie).toBe('b=2');
   });
 });
