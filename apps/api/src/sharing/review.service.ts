@@ -12,6 +12,7 @@ import {
   MembershipStatus,
   NotificationKind,
   PlanOfferStatus,
+  Prisma,
   ReviewKind,
   ShareScope,
   type SessionReaction,
@@ -546,11 +547,6 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Quem deu vínculo ativo a quem olha nesta comunidade, e é membro ativo
-   * dela. O vínculo é procurado pelo par (quem olha, comunidade da URL), nunca
-   * por um id de fora.
-   */
-  /**
    * Planos de calendário desta comunidade que terminaram na janela (#403, Pn-30):
    * "revisar e enviar o próximo". Sem categoria, como a resposta ao plano: é o
    * plano que a própria equipe mandou, e as datas são dela. Só de quem a
@@ -624,6 +620,11 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     return out;
   }
 
+  /**
+   * Quem deu vínculo ativo a quem olha nesta comunidade, e é membro ativo
+   * dela. O vínculo é procurado pelo par (quem olha, comunidade da URL), nunca
+   * por um id de fora.
+   */
   private async linkedMembers(viewerId: string, groupId: string): Promise<LinkedMember[]> {
     const links = await this.prisma.professionalLink.findMany({
       where: { professionalId: viewerId, groupId, revokedAt: null },
@@ -750,19 +751,27 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     return member;
   }
 
-  private seen(
+  private async seen(
     viewerId: string,
     groupId: string,
     subjectUserId: string,
     kind: ReviewKind,
     refId: string,
   ) {
-    return this.prisma.reviewSeen.upsert({
-      where: { userId_groupId_kind_refId: { userId: viewerId, groupId, kind, refId } },
-      create: { userId: viewerId, groupId, subjectUserId, kind, refId },
-      update: {},
-      select: { seenAt: true },
-    });
+    const where = { userId_groupId_kind_refId: { userId: viewerId, groupId, kind, refId } };
+    // Dois envios ao mesmo tempo correm para criar a mesma linha: quem perde
+    // a corrida só lê a que o outro criou.
+    try {
+      return await this.prisma.reviewSeen.upsert({
+        where,
+        create: { userId: viewerId, groupId, subjectUserId, kind, refId },
+        update: {},
+        select: { seenAt: true },
+      });
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') throw e;
+      return this.prisma.reviewSeen.findUniqueOrThrow({ where, select: { seenAt: true } });
+    }
   }
 
   /** As reações e comentários desta comunidade na sessão. */
