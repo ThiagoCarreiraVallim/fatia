@@ -118,6 +118,25 @@ const dica = (p: Partial<GroupTip> = {}): GroupTip => ({
   ...p,
 });
 
+// O cartão de publicação e o rascunho seguem no editor do plano alimentar; o
+// de treino tem o seu (#406, testado em plan-editor).
+const alimentar = (p: Partial<PlanTemplate> = {}): PlanTemplate =>
+  plano({
+    kind: 'NUTRITION',
+    exercises: [],
+    goals: {
+      kcalMin: 1800,
+      kcalMax: 2000,
+      proteinMinG: 120,
+      proteinMaxG: 150,
+      carbsMinG: 180,
+      carbsMaxG: 220,
+      fatMinG: 50,
+      fatMaxG: 70,
+    },
+    ...p,
+  });
+
 describe('painel › planos e dicas', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -365,14 +384,14 @@ describe('painel › planos e dicas', () => {
   it('publica um rascunho; quem não é autor nem dono só lê', async () => {
     ctx.group = grupo();
     ctx.params = { templateId: 't1' };
-    vi.mocked(contentApi.plan).mockResolvedValue(plano());
-    vi.mocked(contentApi.publishPlan).mockResolvedValue(plano({ publishedAt: '2026-10-17' }));
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar());
+    vi.mocked(contentApi.publishPlan).mockResolvedValue(alimentar({ publishedAt: '2026-10-17' }));
     const { unmount } = renderWithClient(<OrgPlanTemplatePage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Publicar para os membros' }));
     await waitFor(() => expect(contentApi.publishPlan).toHaveBeenCalledWith('g1', 't1', true));
     unmount();
 
-    vi.mocked(contentApi.plan).mockResolvedValue(plano({ canEdit: false }));
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar({ canEdit: false }));
     renderWithClient(<OrgPlanTemplatePage />);
     expect(await screen.findByText(/Só quem publicou, ou o dono/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Publicar para os membros' })).toBeNull();
@@ -382,8 +401,8 @@ describe('painel › planos e dicas', () => {
   it('com mudança não salva, publicar espera o salvar', async () => {
     ctx.group = grupo();
     ctx.params = { templateId: 't1' };
-    vi.mocked(contentApi.plan).mockResolvedValue(plano());
-    vi.mocked(contentApi.updatePlan).mockResolvedValue(plano({ title: 'Treino B' }));
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar());
+    vi.mocked(contentApi.updatePlan).mockResolvedValue(alimentar({ title: 'Treino B' }));
     renderWithClient(<OrgPlanTemplatePage />);
 
     const publicar = await screen.findByRole('button', { name: 'Publicar para os membros' });
@@ -403,8 +422,8 @@ describe('painel › planos e dicas', () => {
   it('tirar o plano do ar pede confirmação', async () => {
     ctx.group = grupo();
     ctx.params = { templateId: 't1' };
-    vi.mocked(contentApi.plan).mockResolvedValue(plano({ publishedAt: '2026-10-17' }));
-    vi.mocked(contentApi.publishPlan).mockResolvedValue(plano());
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar({ publishedAt: '2026-10-17' }));
+    vi.mocked(contentApi.publishPlan).mockResolvedValue(alimentar());
     renderWithClient(<OrgPlanTemplatePage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Tirar do ar' }));
@@ -417,8 +436,8 @@ describe('painel › planos e dicas', () => {
   it('rascunho (#405): marcar segura o publicar e dizer por quê', async () => {
     ctx.group = grupo();
     ctx.params = { templateId: 't1' };
-    vi.mocked(contentApi.plan).mockResolvedValue(plano({ draft: false }));
-    vi.mocked(contentApi.updatePlan).mockResolvedValue(plano({ draft: true }));
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar({ draft: false }));
+    vi.mocked(contentApi.updatePlan).mockResolvedValue(alimentar({ draft: true }));
     const { unmount } = renderWithClient(<OrgPlanTemplatePage />);
     fireEvent.click(await screen.findByRole('switch', { name: 'Rascunho' }));
     await waitFor(() =>
@@ -426,7 +445,7 @@ describe('painel › planos e dicas', () => {
     );
     unmount();
 
-    vi.mocked(contentApi.plan).mockResolvedValue(plano({ draft: true }));
+    vi.mocked(contentApi.plan).mockResolvedValue(alimentar({ draft: true }));
     renderWithClient(<OrgPlanTemplatePage />);
     const publicar = await screen.findByRole('button', { name: 'Publicar para os membros' });
     expect(publicar).toBeDisabled();

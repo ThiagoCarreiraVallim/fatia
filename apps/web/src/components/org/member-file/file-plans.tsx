@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Dumbbell, Plus, Trash2, Utensils } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowDown, ArrowUp, Dumbbell, Pencil, Plus, Trash2, Utensils } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   memberFileApi,
@@ -193,6 +194,16 @@ export function FilePlans({
                                 <ArrowDown size={16} aria-hidden />
                               </button>
                             </>
+                          )}
+                          {file.canManagePlans && p.status !== 'ENDED' && (
+                            <Link
+                              href={`/org/${file.groupId}/members/${file.membershipId}/plans/${p.offerId}`}
+                              aria-label={`Editar a cópia de ${p.title}`}
+                              title="Editar a cópia"
+                              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted"
+                            >
+                              <Pencil size={16} aria-hidden />
+                            </Link>
                           )}
                           {p.canRemove && (
                             <button

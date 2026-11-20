@@ -291,6 +291,8 @@ const FOCUS_ROUTES = [
   '/workout/exercise/:id',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
+  // #406 (Pn-09e): editar a cópia de um aluno é editor, com "Salvar" embaixo.
+  '/org/:id/members/:membershipId/plans/:offerId',
   '/org/:id/content/tips/:tipId',
   '/org/:id/exercises/:exerciseId',
 ] as const;
@@ -503,6 +505,11 @@ export const ROUTES: readonly RouteDef[] = [
   },
   { pattern: '/org/:id/members', title: 'Membros', parent: '/org/:id' },
   { pattern: '/org/:id/members/:membershipId', title: 'Membro', parent: '/org/:id/members' },
+  {
+    pattern: '/org/:id/members/:membershipId/plans/:offerId',
+    title: 'Cópia do plano',
+    parent: '/org/:id/members/:membershipId',
+  },
   { pattern: '/org/:id/team', title: 'Equipe e permissões', parent: '/org/:id' },
   { pattern: '/org/:id/invites', title: 'Convites', parent: '/org/:id' },
   { pattern: '/org/:id/activation', title: 'Ativação pendente', parent: '/org/:id' },
