@@ -302,12 +302,15 @@ function MealSection({
   return (
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
-        <Text
-          accessibilityRole="header"
-          className="font-display-semibold text-[22px] text-foreground"
-        >
-          {meal.name}
-        </Text>
+        <View className="flex-row items-baseline gap-2">
+          <Text
+            accessibilityRole="header"
+            className="font-display-semibold text-[22px] text-foreground"
+          >
+            {meal.name}
+          </Text>
+          {meal.time ? <Text className="text-sm text-muted-foreground">{meal.time}</Text> : null}
+        </View>
         {meal.logged ? (
           <View className="flex-row items-center gap-1 rounded-pill bg-primary/15 px-3 py-1">
             <Check size={14} color={colors.primaryText} />
@@ -347,7 +350,9 @@ function MealSection({
               >
                 <Text className="text-sm text-muted-foreground">{optionTitle(o)}</Text>
                 <Text className="mt-1.5 font-sans-semibold text-[17px] leading-6 text-foreground">
-                  {o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')}
+                  {o.items.length
+                    ? o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')
+                    : 'sem sugestão'}
                 </Text>
                 {done ? (
                   <View className="mt-1 flex-row items-center gap-1">
@@ -361,7 +366,14 @@ function MealSection({
         </ScrollView>
       ) : null}
 
-      {option ? (
+      {/* Refeição sem item (#407): o plano deixa livre; não há o que registrar. */}
+      {option && option.items.length === 0 ? (
+        <View className="rounded-card bg-card px-4 py-4">
+          <Text className="text-sm text-muted-foreground">Sem sugestão nesta refeição.</Text>
+        </View>
+      ) : null}
+
+      {option && option.items.length > 0 ? (
         <View className="overflow-hidden rounded-card bg-card px-4">
           {option.items.map((item, i) => (
             <ItemRow
@@ -377,7 +389,7 @@ function MealSection({
         </View>
       ) : null}
 
-      {!readOnly && option && !meal.logged ? (
+      {!readOnly && option && option.items.length > 0 && !meal.logged ? (
         <Button
           size="lg"
           variant="secondary"

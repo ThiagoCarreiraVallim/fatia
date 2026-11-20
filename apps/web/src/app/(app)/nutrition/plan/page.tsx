@@ -268,9 +268,14 @@ function MealSection({
   return (
     <section aria-labelledby={headingId} className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 id={headingId} className="font-display text-[22px] font-semibold">
-          {meal.name}
-        </h2>
+        <span className="flex items-baseline gap-2">
+          <h2 id={headingId} className="font-display text-[22px] font-semibold">
+            {meal.name}
+          </h2>
+          {meal.time && (
+            <span className="text-sm text-muted-foreground tabular-nums">{meal.time}</span>
+          )}
+        </span>
         {meal.logged ? (
           <span className="flex items-center gap-1 rounded-pill bg-primary/15 px-3 py-1 text-[13px] font-extrabold uppercase tracking-[0.04em] text-primary">
             <Check size={14} aria-hidden />
@@ -301,7 +306,9 @@ function MealSection({
               >
                 <span className="block text-sm text-muted-foreground">{optionTitle(o)}</span>
                 <span className="mt-1.5 block text-[17px] font-semibold leading-snug">
-                  {o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')}
+                  {o.items.length
+                    ? o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')
+                    : 'sem sugestão'}
                 </span>
                 {done && (
                   <span className="mt-1 flex items-center gap-1 text-xs font-bold text-primary">
@@ -315,7 +322,14 @@ function MealSection({
         </div>
       )}
 
-      {option && (
+      {/* Refeição sem item (#407): o plano deixa livre; não há o que registrar. */}
+      {option && option.items.length === 0 && (
+        <p className="rounded-card bg-card px-4 py-4 text-sm text-muted-foreground">
+          Sem sugestão nesta refeição.
+        </p>
+      )}
+
+      {option && option.items.length > 0 && (
         <div className="divide-y divide-border overflow-hidden rounded-card bg-card px-4">
           {option.items.map((item) => (
             <ItemRow
@@ -330,7 +344,7 @@ function MealSection({
         </div>
       )}
 
-      {!readOnly && option && !meal.logged && (
+      {!readOnly && option && option.items.length > 0 && !meal.logged && (
         <Button
           size="lg"
           variant="secondary"
