@@ -47,6 +47,12 @@ import { colors } from '@/theme/colors';
  */
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  // `router.replace('/chat/<nova>')` reaproveita a instância da tela: a chave
+  // pela conversa começa a nova do zero (sem o agente escolhido na anterior).
+  return <Conversation key={id} id={id} />;
+}
+
+function Conversation({ id }: { id: string | undefined }) {
   const router = useRouter();
   const sessao = useChatSession();
   const {
