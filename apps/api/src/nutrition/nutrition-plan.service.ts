@@ -77,6 +77,8 @@ export interface PlanMealView {
   mealType: MealType;
   name: string;
   position: number;
+  /** Horário sugerido ("07:00", #407), ou nulo. */
+  time: string | null;
   /** "Comi isso" no dia pedido. */
   logged: { mealId: string; optionId: string } | null;
   options: PlanOptionView[];
@@ -973,6 +975,7 @@ export class NutritionPlanService {
         mealType: meal.mealType,
         name: meal.name,
         position: meal.position,
+        time: null,
         logged: logs.get(meal.id) ?? null,
         options: meal.options.map((option) => {
           const eaten = option.items.map((item) => {

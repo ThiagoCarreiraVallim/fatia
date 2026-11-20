@@ -51,6 +51,7 @@ import {
   snapshotToDocument,
   type PlanDocumentView,
 } from './plan-document';
+import type { NutritionDocumentView } from './nutrition-document';
 import { assertDay } from '../common/dates';
 
 export const TIP_CATEGORIES = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'] as const;
@@ -84,6 +85,9 @@ export interface CreateWorkoutTemplateInput extends TemplateMeta, WorkoutPlanFie
 
 export interface CreateNutritionTemplateInput extends TemplateMeta {
   title: string;
+  /** O editor (#407, Pn-24): metas, refeições com opções e grupos de equivalentes. */
+  document?: unknown;
+  /** Fase 7: metas em faixa e refeições salvas do autor. Sem `document`. */
   goals?: NutritionGoals | null;
   mealTemplateIds?: string[];
 }
@@ -170,6 +174,8 @@ export interface TemplateView {
   sessionCount: number;
   /** Só para a equipe, no treino: o plano inteiro para o editor. */
   document?: PlanDocumentView | null;
+  /** Só para a equipe, na alimentação (#407): o plano inteiro para o editor. */
+  nutritionDocument?: NutritionDocumentView | null;
 }
 
 /** Um grupo da tela Modelos (Al-T23): a comunidade e os modelos de treino dela. */
