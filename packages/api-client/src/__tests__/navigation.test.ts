@@ -132,6 +132,7 @@ describe('navegação', () => {
       '/you/help',
       '/you/delete',
       '/you/blocked',
+      '/you/email',
     ]) {
       expect(routeInfo(path).parent).toBe('/you');
       expect(activeNavKey(path)).toBe('you');
@@ -219,6 +220,7 @@ describe('navegação', () => {
       '/nutrition/goals',
       '/you/edit',
       '/you/delete',
+      '/you/email',
       '/community/new',
       '/onboarding',
       '/org/g1/content/plans/t1',
