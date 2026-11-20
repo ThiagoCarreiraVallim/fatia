@@ -342,7 +342,8 @@ export interface SeatProgram {
   amountCents: number;
   /** `PENDING` aguardando o pagamento, `ACTIVE` pago, `PAST_DUE` vencido. */
   chargeStatus: PoolStatus;
-  status: 'SCHEDULED' | 'ACTIVE' | 'ENDED';
+  /** `CANCELED`: a cobrança foi estornada, contestada ou apagada (o PRO acabou). */
+  status: 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELED';
 }
 
 export interface CreateSeatProgramInput {

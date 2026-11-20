@@ -34,7 +34,6 @@ export interface OfferView {
     spotsLeft: number | null;
     revenueCents: number;
     netCents: number;
-    activated48h: number;
   };
   failed: { purchaseId: string; name: string; since: string | null; canResend: boolean }[];
 }

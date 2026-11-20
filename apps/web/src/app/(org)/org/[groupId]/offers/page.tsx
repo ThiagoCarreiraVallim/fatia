@@ -211,11 +211,6 @@ export default function OrgOffersPage() {
                 value={offerPriceLabel(o.stats.revenueCents)}
                 sub={offerRevenueSub(o, platformFeePercent)}
               />
-              <PanelStat
-                label="Ativaram"
-                value={String(o.stats.activated48h)}
-                sub="registraram nas 48 h"
-              />
             </div>
 
             <div className="rounded-xl border border-subtle p-3">
