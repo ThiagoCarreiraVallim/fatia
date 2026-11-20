@@ -7,6 +7,7 @@ import {
   communityCardBadges,
   communityCardMeta,
   groupsApi,
+  joinSheetRequest,
   PRO_PAID_BADGE,
   type CommunityBadge,
   type MyGroup,
@@ -112,7 +113,16 @@ function RowCard({ g, onPress }: { g: MyGroup; onPress: () => void }) {
 export default function CommunityScreen() {
   const router = useRouter();
   const { join, code } = useLocalSearchParams<{ join?: string; code?: string }>();
-  const [joining, setJoining] = useState(join === '1' || !!code);
+  const pedido = joinSheetRequest({ join, code });
+  const [joining, setJoining] = useState(pedido !== null);
+  // A aba fica montada: um `?join=1&code=` novo chega como parâmetro novo, sem
+  // remontar a tela. Cada pedido abre a folha.
+  const pedidoKey = pedido?.key ?? null;
+  const [pedidoVisto, setPedidoVisto] = useState(pedidoKey);
+  if (pedidoKey !== pedidoVisto) {
+    setPedidoVisto(pedidoKey);
+    if (pedidoKey) setJoining(true);
+  }
   const groups = useQuery({ queryKey: ['community', 'mine'], queryFn: () => groupsApi.mine() });
   const open = (g: MyGroup) => router.push(`/community/${g.id}`);
 
@@ -186,7 +196,7 @@ export default function CommunityScreen() {
             setJoining(o);
             if (!o && (join || code)) router.setParams({ join: undefined, code: undefined });
           }}
-          initialCode={code ?? null}
+          initialCode={pedido?.code ?? null}
           onJoined={(groupId) => router.push(`/community/${groupId}`)}
         />
       </DrawerLayer>

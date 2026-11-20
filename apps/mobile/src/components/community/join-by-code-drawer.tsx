@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crown } from 'lucide-react-native';
@@ -10,6 +10,7 @@ import {
   entryPolicyView,
   groupsApi,
   joinResultMessage,
+  autoLookCode,
   parseCommunityEntry,
   proOfferNote,
   VISIBILITY_WORD,
@@ -147,6 +148,7 @@ export function JoinByCodeDrawer({
   function reset(aberto: boolean) {
     if (!aberto) {
       setCode('');
+      setLookedFor(null);
       setFound(null);
       setSharing(false);
       setInvalid(false);
@@ -166,14 +168,21 @@ export function JoinByCodeDrawer({
     look.mutate(entry);
   }
 
-  // O link do QR abre a folha já com o código: procura uma vez.
-  const autoLooked = useRef(false);
+  // O link do QR abre a folha já com o código: procura uma vez por código. A aba
+  // fica montada, então um link novo traz outro `initialCode` sem remontar.
+  const [lookedFor, setLookedFor] = useState<string | null>(null);
+  const alvo = autoLookCode({ open, initialCode, lookedFor });
+  if (alvo) {
+    setLookedFor(alvo);
+    setCode(alvo);
+    setFound(null);
+    setInvalid(parseCommunityEntry(alvo) === null);
+  }
+  const lookMutate = look.mutate;
   useEffect(() => {
-    if (!open || !initialCode || autoLooked.current) return;
-    autoLooked.current = true;
-    const entry = parseCommunityEntry(initialCode);
-    if (entry) look.mutate(entry);
-  }, [open, initialCode, look]);
+    const entry = lookedFor ? parseCommunityEntry(lookedFor) : null;
+    if (entry) lookMutate(entry);
+  }, [lookedFor, lookMutate]);
 
   const lookError = invalid
     ? ENTRY_INVALID
