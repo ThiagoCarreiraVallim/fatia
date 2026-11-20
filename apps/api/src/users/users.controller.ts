@@ -59,16 +59,16 @@ export class UsersController {
     return this.identity.syncFromIdToken(user.id, dto.idToken);
   }
 
-  /** Troca de e-mail, parte 1: confere a senha e manda o código ao e-mail novo. */
+  /**
+   * Troca de e-mail, parte 1: confere a senha, grava o pedido desta conta e
+   * manda o código ao e-mail novo. Devolve o `requestToken` da parte 2.
+   */
   @Post('me/email/code')
-  @HttpCode(204)
+  @HttpCode(200)
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
-  async requestEmailChange(
-    @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: RequestEmailChangeDto,
-  ): Promise<void> {
-    await this.identity.requestEmailChange(user.id, dto.email, dto.password);
+  requestEmailChange(@CurrentUser() user: CurrentUserPayload, @Body() dto: RequestEmailChangeDto) {
+    return this.identity.requestEmailChange(user.id, dto.email, dto.password);
   }
 
   /** Parte 2: o código recebido; grava no Logto e no perfil. */
@@ -77,7 +77,7 @@ export class UsersController {
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   confirmEmailChange(@CurrentUser() user: CurrentUserPayload, @Body() dto: ConfirmEmailChangeDto) {
-    return this.identity.confirmEmailChange(user.id, dto.email, dto.code);
+    return this.identity.confirmEmailChange(user.id, dto.email, dto.code, dto.requestToken);
   }
 
   /**

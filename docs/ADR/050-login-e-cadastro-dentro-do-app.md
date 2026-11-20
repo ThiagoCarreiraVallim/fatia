@@ -41,14 +41,15 @@ lugar do nome — o "e-mail aleatório" de que o usuário reclamou.
    política vem da página pública do Logto (`/api/.well-known/sign-in-exp`); a checagem de
    vazamento (Have I Been Pwned) fica no Logto, e a mensagem volta traduzida.
 
-4. **E-mail e nome reais pelo ID token.** Depois de cada login o app manda o ID token a
-   `POST /users/me/identity`. A API confere assinatura (JWKS do Logto), `iss`, `aud` igual ao app
+4. **E-mail e nome reais pelo ID token.** Depois de cada login e de cada refresh o app manda o ID
+   token novo a `POST /users/me/identity` — nunca o que estava guardado no cofre ao reabrir o app. A API confere assinatura (JWKS do Logto), `iss`, `aud` igual ao app
    mobile (`LOGTO_MOBILE_APP_ID`) e `sub` igual ao do access token; um ID token de outra conta
    responde 403 e nada é gravado. Grava o e-mail verificado e, se o nome ainda for o provisório, o
    nome. Quem está com `@logto.local` é corrigido no próximo login **com senha ou social**: uma
    sessão aberta pela versão antiga do app só pediu `openid offline_access`, e o ID token que o
    refresh devolve continua sem `email` e `name` até a pessoa sair e entrar de novo (ou até haver
-   M2M, que lê o perfil no Logto).
+   M2M, que lê o perfil no Logto). Depois de uma troca de e-mail a API grava `emailChangedAt`, e
+   o e-mail de um ID token com `iat` anterior é ignorado: um token velho não desfaz a troca.
 
 5. **Google e Apple** continuam no navegador, só para o consentimento do provedor
    (`direct_sign_in`, sem a tela do Logto). O botão só aparece com o conector configurado, lido da
@@ -73,7 +74,12 @@ Mitigações:
 - o Logto continua dono do hash, da política de senha, do bloqueio por tentativas e do limite de
   requisições; a API tem limite por usuário nos endpoints de e-mail;
 - a troca de e-mail pede a senha atual: com um access token roubado, não dá para trocar o e-mail e
-  depois recuperar a senha;
+  depois recuperar a senha. Como o código do Logto é amarrado só ao e-mail (não à pessoa), a senha
+  conferida vira um pedido desta conta para este e-mail (`EmailChangeRequest`: 15 minutos, uso
+  único, hash de um nonce devolvido ao app), e a confirmação só vale com ele. Há limite por pessoa
+  e por e-mail de destino (5 por hora), e um destino que já é de outra conta (na Fatia ou no Logto)
+  responde igual, sem mandar código, para não revelar a conta. A unicidade local é conferida
+  antes de mudar o Logto, e se o banco recusar depois, o Logto volta ao e-mail antigo;
 - o login social continua no navegador do sistema: a senha do Google ou da Apple nunca passa pelo
   app.
 

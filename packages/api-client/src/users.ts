@@ -156,10 +156,13 @@ export const usersApi = {
 
   /** Troca de e-mail, parte 1: confere a senha e manda o código ao e-mail novo. */
   requestEmailChange: (body: { email: string; password: string }) =>
-    apiFetch<void>('/api/users/me/email/code', { method: 'POST', body: JSON.stringify(body) }),
+    apiFetch<{ requestToken: string }>('/api/users/me/email/code', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
-  /** Parte 2: o código que chegou no e-mail novo. */
-  confirmEmailChange: (body: { email: string; code: string }) =>
+  /** Parte 2: o código que chegou no e-mail novo, com o `requestToken` da parte 1. */
+  confirmEmailChange: (body: { email: string; code: string; requestToken: string }) =>
     apiFetch<{ email: string; name: string }>('/api/users/me/email', {
       method: 'POST',
       body: JSON.stringify(body),

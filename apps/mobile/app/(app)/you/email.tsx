@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError, usersApi } from '@fatia/api-client';
+import { useAuth } from '@/auth/auth-context';
 import { ErrorText } from '@/components/auth/account-form';
 import { CodeField, PasswordField } from '@/components/auth/auth-fields';
 import { Screen } from '@/components/layout/screen';
@@ -14,7 +15,7 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 400) return 'Senha ou código incorreto.';
-    if (err.status === 409) return 'Este e-mail já tem conta.';
+    if (err.status === 409) return 'Não foi possível usar este e-mail.';
     if (err.status === 429) return 'Muitas tentativas. Espere um minuto.';
     if (err.status === 503) return 'A troca de e-mail não está disponível agora.';
   }
@@ -28,6 +29,8 @@ function errorMessage(err: unknown): string {
 export default function ChangeEmailScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const auth = useAuth();
+  const [requestToken, setRequestToken] = useState('');
   const [step, setStep] = useState<'form' | 'code'>('form');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,13 +52,16 @@ export default function ChangeEmailScreen() {
 
   const sendCode = () =>
     void run(async () => {
-      await usersApi.requestEmailChange({ email: email.trim(), password });
+      const pending = await usersApi.requestEmailChange({ email: email.trim(), password });
+      setRequestToken(pending.requestToken);
       setStep('code');
     });
 
   const confirm = () =>
     void run(async () => {
-      await usersApi.confirmEmailChange({ email: email.trim(), code });
+      await usersApi.confirmEmailChange({ email: email.trim(), code, requestToken });
+      // O ID token guardado traz o e-mail velho: renova agora (ADR 050).
+      await auth.refreshSession().catch(() => undefined);
       await qc.invalidateQueries({ queryKey: ['users', 'me'] });
       router.back();
     });
@@ -101,7 +107,8 @@ export default function ChangeEmailScreen() {
         ) : (
           <>
             <Text className="text-[15px] text-muted-foreground">
-              Digite o código que chegou em {email.trim().toLowerCase()}.
+              Se {email.trim().toLowerCase()} puder ser usado, o código chega em instantes. Digite
+              aqui.
             </Text>
             <CodeField value={code} onChange={setCode} onSubmit={confirm} />
             <Button size="xl" loading={busy} disabled={code.length < 6} onPress={confirm}>

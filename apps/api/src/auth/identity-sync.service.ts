@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { createHash, randomBytes } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from './logto-management.service';
@@ -24,6 +27,12 @@ interface IdTokenClaims extends JWTPayload {
 
 const cleanName = (raw: string) => raw.replace(/\s+/g, ' ').trim().slice(0, 80);
 const normalizeEmail = (raw: string) => raw.trim().toLowerCase();
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+
+/** Quanto vale um pedido de troca de e-mail (parte 1 → parte 2). */
+const EMAIL_CHANGE_TTL_MS = 15 * 60_000;
+/** Pedidos por hora, por pessoa e por e-mail de destino. */
+const EMAIL_CHANGE_PER_HOUR = 5;
 
 /**
  * O e-mail e o nome reais da pessoa, sem depender da Management API (ADR 050).
@@ -87,7 +96,12 @@ export class IdentitySyncService implements OnModuleInit {
     }
 
     const data: { email?: string; name?: string } = {};
-    if (typeof claims.email === 'string' && claims.email_verified === true) {
+    // Um ID token emitido antes da troca de e-mail no app traz o e-mail velho
+    // (o app guarda o token de login); não pode desfazer a troca.
+    const issuedBeforeChange =
+      user.emailChangedAt instanceof Date &&
+      (typeof claims.iat !== 'number' || claims.iat * 1000 < user.emailChangedAt.getTime());
+    if (typeof claims.email === 'string' && claims.email_verified === true && !issuedBeforeChange) {
       const email = normalizeEmail(claims.email);
       if (email && email !== user.email) data.email = email;
     }
@@ -128,38 +142,131 @@ export class IdentitySyncService implements OnModuleInit {
   /**
    * Troca de e-mail, parte 1. A senha atual é conferida antes: com um access
    * token roubado, trocar o e-mail e depois recuperar a senha tomaria a conta.
+   *
+   * O código do Logto é "Generic" — amarrado só ao e-mail. Por isso a senha
+   * conferida vira um pedido desta conta para este e-mail (15 min, uso único),
+   * e a parte 2 só vale com ele e com o nonce devolvido aqui.
+   *
+   * Destino que já é de outra conta (aqui ou no Logto) responde igual, sem
+   * mandar código: a resposta não revela se a conta existe.
    */
-  async requestEmailChange(userId: string, rawEmail: string, password: string): Promise<void> {
+  async requestEmailChange(
+    userId: string,
+    rawEmail: string,
+    password: string,
+  ): Promise<{ requestToken: string }> {
     this.requireManagement();
+    const email = normalizeEmail(rawEmail);
     const user = await this.findUser(userId);
     if (!(await this.logto.verifyPassword(user.logtoSub, password))) {
       throw new BadRequestException('Senha incorreta');
     }
-    await this.logto.sendEmailCode(normalizeEmail(rawEmail));
+
+    const since = new Date(Date.now() - 60 * 60_000);
+    const [byUser, byEmail] = await Promise.all([
+      this.prisma.emailChangeRequest.count({ where: { userId, createdAt: { gte: since } } }),
+      this.prisma.emailChangeRequest.count({ where: { email, createdAt: { gte: since } } }),
+    ]);
+    if (byUser >= EMAIL_CHANGE_PER_HOUR || byEmail >= EMAIL_CHANGE_PER_HOUR) {
+      throw new HttpException('Muitos pedidos. Tente mais tarde.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    const nonce = randomBytes(24).toString('base64url');
+    const taken = await this.emailTakenByOther(user, email);
+    // Grava mesmo quando o destino está em uso: o pedido conta no limite, e
+    // sem código mandado a parte 2 nunca passa.
+    await this.prisma.emailChangeRequest.create({
+      data: {
+        userId,
+        email,
+        nonceHash: sha256(nonce),
+        expiresAt: new Date(Date.now() + EMAIL_CHANGE_TTL_MS),
+        consumedAt: taken ? new Date() : null,
+      },
+    });
+    if (!taken) await this.logto.sendEmailCode(email);
+    return { requestToken: nonce };
   }
 
-  /** Parte 2: o código que chegou no e-mail novo. */
+  /**
+   * Parte 2: o código que chegou no e-mail novo, com o pedido da parte 1 desta
+   * mesma conta. O pedido é consumido antes de tocar o Logto.
+   */
   async confirmEmailChange(
     userId: string,
     rawEmail: string,
     code: string,
+    requestToken: string,
   ): Promise<{ email: string; name: string }> {
     this.requireManagement();
     const email = normalizeEmail(rawEmail);
     const user = await this.findUser(userId);
-    if (!(await this.logto.verifyEmailCode(email, code.trim()))) {
-      throw new BadRequestException('Código incorreto ou expirado');
+    const invalid = () => new BadRequestException('Código incorreto ou expirado');
+
+    const pending = await this.prisma.emailChangeRequest.findFirst({
+      where: {
+        userId,
+        email,
+        nonceHash: sha256(requestToken),
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!pending) throw invalid();
+    if (!(await this.logto.verifyEmailCode(email, code.trim()))) throw invalid();
+    // Uso único, também sob corrida: só quem consome a linha segue.
+    const consumed = await this.prisma.emailChangeRequest.updateMany({
+      where: { id: pending.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (consumed.count !== 1) throw invalid();
+
+    if (await this.localEmailTaken(userId, email)) {
+      throw new ConflictException('Este e-mail não pode ser usado');
     }
     const result = await this.logto.updatePrimaryEmail(user.logtoSub, email);
-    if (result === 'in_use') throw new ConflictException('Este e-mail já tem conta');
+    if (result === 'in_use') throw new ConflictException('Este e-mail não pode ser usado');
     if (result !== 'ok') throw new ServiceUnavailableException('Logto indisponível');
     try {
-      return await this.update(userId, { email });
+      const row = await this.prisma.user.update({
+        where: { id: userId },
+        data: { email, emailChangedAt: new Date() },
+        select: { email: true, name: true },
+      });
+      return { email: row.email, name: row.name };
     } catch (err) {
+      // O Logto já aceitou: volta ao e-mail antigo para os dois não divergirem.
+      await this.logto
+        .updatePrimaryEmail(user.logtoSub, user.email)
+        .catch((e: Error) => this.logger.error(`Logto não voltou ao e-mail antigo: ${e.message}`));
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('Este e-mail já tem conta');
+        throw new ConflictException('Este e-mail não pode ser usado');
       }
       throw err;
+    }
+  }
+
+  private async localEmailTaken(userId: string, email: string): Promise<boolean> {
+    const other = await this.prisma.user.findFirst({
+      where: { email, NOT: { id: userId } },
+      select: { id: true },
+    });
+    return other !== null;
+  }
+
+  private async emailTakenByOther(
+    user: { id: string; logtoSub: string },
+    email: string,
+  ): Promise<boolean> {
+    if (await this.localEmailTaken(user.id, email)) return true;
+    try {
+      const owner = await this.logto.findUserIdByEmail(email);
+      return owner !== null && owner !== user.logtoSub;
+    } catch (err) {
+      this.logger.warn(`Busca de e-mail no Logto falhou: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Logto indisponível');
     }
   }
 
@@ -178,7 +285,7 @@ export class IdentitySyncService implements OnModuleInit {
   private async findUser(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, logtoSub: true, email: true, name: true },
+      select: { id: true, logtoSub: true, email: true, name: true, emailChangedAt: true },
     });
     if (!user) throw new NotFoundException('User not found');
     return user;

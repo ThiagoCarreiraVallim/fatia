@@ -132,6 +132,19 @@ export class LogtoManagementService {
     return res?.ok ?? false;
   }
 
+  /**
+   * O `sub` da conta do Logto com este e-mail principal, ou `null`. Lança se o
+   * Logto não responder: quem chama decide fechar (não arriscar).
+   */
+  async findUserIdByEmail(email: string): Promise<string | null> {
+    const q = new URLSearchParams({ 'search.primaryEmail': email, 'mode.primaryEmail': 'exact' });
+    const res = await this.request('GET', `/api/users?${q.toString()}`);
+    if (!res?.ok) throw new Error(`Logto não respondeu a busca (${res?.status ?? 'sem resposta'})`);
+    const users = (await res.json()) as Array<{ id: string; primaryEmail?: string | null }>;
+    const hit = users.find((u) => u.primaryEmail?.toLowerCase() === email);
+    return hit?.id ?? null;
+  }
+
   async updatePrimaryEmail(
     logtoSub: string,
     primaryEmail: string,

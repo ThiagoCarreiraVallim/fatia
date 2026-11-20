@@ -81,14 +81,24 @@ interface AuthContextValue {
   signInWithSocial(target: SocialTarget): Promise<void>;
   signOut(): Promise<void>;
   getAccessToken(): Promise<string | null>;
-  /** ID token da sessão (e-mail e nome reais para a API, ADR 050). */
-  getIdToken(): string | null;
+  /**
+   * O último ID token recém-emitido (login ou refresh), para a API gravar
+   * e-mail e nome reais (ADR 050). O que volta do cofre na abertura do app não
+   * entra: depois de uma troca de e-mail ele traz o e-mail velho.
+   */
+  freshIdentity: FreshIdentity | null;
   /** O nome digitado no cadastro, uma vez. */
   takeSignupName(): string | null;
-  /** Sobe a cada sessão aberta ou restaurada. */
-  sessionVersion: number;
+  /** Renova os tokens agora (depois da troca de e-mail). */
+  refreshSession(): Promise<void>;
   /** Mensagem do último erro do login social, para a tela mostrar. */
   error: string | null;
+}
+
+export interface FreshIdentity {
+  idToken: string;
+  /** Sobe a cada token novo, para o mesmo token não ser mandado duas vezes. */
+  version: number;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -119,15 +129,26 @@ interface PendingFlow {
   pkce: Pkce;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+  children,
+  onSignedOut,
+}: {
+  children: ReactNode;
+  /** Ao sair: o cache de queries não pode passar para a próxima conta. */
+  onSignedOut?: () => void;
+}) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [experience, setExperience] = useState<PublicSignInExperience | null>(null);
   const signup = useRef<PendingFlow | null>(null);
   const reset = useRef<PendingFlow | null>(null);
   const signupName = useRef<string | null>(null);
-  /** Sobe a cada sessão aberta ou restaurada: o `IdentitySync` reage a ele. */
-  const [sessionVersion, setSessionVersion] = useState(0);
+  /** O ID token novo mais recente: o `IdentitySync` reage a ele. */
+  const [freshIdentity, setFreshIdentity] = useState<FreshIdentity | null>(null);
+  const announce = useCallback((idToken: string | null) => {
+    if (!idToken) return;
+    setFreshIdentity((prev) => ({ idToken, version: (prev?.version ?? 0) + 1 }));
+  }, []);
 
   const manager = useMemo(
     () =>
@@ -137,8 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clientId: env.logtoAppId,
         resource: env.logtoAudience,
         onSessionEnded: () => setStatus('signedOut'),
+        onTokens: (session) => announce(session.idToken),
       }),
-    [],
+    [announce],
   );
 
   useEffect(() => {
@@ -148,7 +170,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((session) => {
         if (cancelled) return;
         setStatus(session ? 'signedIn' : 'signedOut');
-        if (session) setSessionVersion((v) => v + 1);
       })
       .catch(() => {
         if (!cancelled) setStatus('signedOut');
@@ -162,6 +183,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [manager]);
+
+  // Ao sair (por botão ou porque a sessão morreu), o cache de queries da conta
+  // anterior não pode aparecer para a próxima.
+  useEffect(() => {
+    if (status === 'signedOut') onSignedOut?.();
+  }, [status, onSignedOut]);
 
   const authorizeUrl = useCallback(async (pkce: Pkce) => {
     const discovery = await endpoints();
@@ -187,12 +214,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         redirectUri: NATIVE_REDIRECT_URI,
         resource: env.logtoAudience,
       });
-      await manager.adopt(toStoredSession(tokens, Date.now()));
+      const session = toStoredSession(tokens, Date.now());
+      await manager.adopt(session);
       await SecureStore.setItemAsync(VIA_KEY, via);
       setStatus('signedIn');
-      setSessionVersion((v) => v + 1);
+      announce(session.idToken);
     },
-    [manager],
+    [manager, announce],
   );
 
   // `expo/fetch` respeita `redirect: 'manual'` e `credentials: 'omit'` (o `fetch`
@@ -306,15 +334,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           redirectUri,
           resource: env.logtoAudience,
         });
-        await manager.adopt(toStoredSession(tokens, Date.now()));
+        const session = toStoredSession(tokens, Date.now());
+        await manager.adopt(session);
         await SecureStore.setItemAsync(VIA_KEY, 'browser');
         setStatus('signedIn');
-        setSessionVersion((v) => v + 1);
+        announce(session.idToken);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Falha ao autenticar');
       }
     },
-    [manager],
+    [manager, announce],
   );
 
   const signOut = useCallback(async () => {
@@ -353,7 +382,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [manager]);
 
   const getAccessToken = useCallback(() => manager.getAccessToken(), [manager]);
-  const getIdToken = useCallback(() => manager.current?.idToken ?? null, [manager]);
+  const refreshSession = useCallback(async () => {
+    await manager.forceRefresh();
+  }, [manager]);
   const takeSignupName = useCallback(() => {
     const name = signupName.current;
     signupName.current = null;
@@ -373,9 +404,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithSocial,
       signOut,
       getAccessToken,
-      getIdToken,
+      freshIdentity,
       takeSignupName,
-      sessionVersion,
+      refreshSession,
       error,
     }),
     [
@@ -389,9 +420,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithSocial,
       signOut,
       getAccessToken,
-      getIdToken,
+      freshIdentity,
       takeSignupName,
-      sessionVersion,
+      refreshSession,
       error,
     ],
   );

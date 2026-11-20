@@ -28,4 +28,10 @@ export class ConfirmEmailChangeDto {
   @IsString()
   @Matches(/^\s*\d{4,8}\s*$/)
   code!: string;
+
+  /** O que a parte 1 devolveu: amarra o código a este pedido desta conta. */
+  @IsString()
+  @MinLength(16)
+  @MaxLength(128)
+  requestToken!: string;
 }

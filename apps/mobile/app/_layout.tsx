@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -89,6 +89,7 @@ function ApiBridge({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
+  const clearQueries = useCallback(() => queryClient.clear(), [queryClient]);
   const preference = useStoredThemePreference();
   // Erro ao carregar fonte não pode travar o app na splash: segue na do sistema.
   const [fontsLoaded, fontError] = useFonts({
@@ -112,7 +113,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
         <ThemeProvider initialPreference={preference}>
-          <AuthProvider>
+          <AuthProvider onSignedOut={clearQueries}>
             <ApiBridge>
               <QueryClientProvider client={queryClient}>
                 <IdentitySync />
