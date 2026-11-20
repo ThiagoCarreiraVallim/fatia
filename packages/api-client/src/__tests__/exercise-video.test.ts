@@ -6,6 +6,7 @@ import {
   isYoutubeEmbedNavigation,
   signedVideoIsStale,
   youtubeEmbedUrl,
+  youtubeHeroThumbnails,
   youtubeWatchUrl,
 } from '../exercise-video';
 import { hasTopBar, navBarMode, routeInfo } from '../navigation';
@@ -54,6 +55,14 @@ describe('vídeo do exercício', () => {
     expect(youtubeEmbedUrl('../../evil')).toBeNull();
     expect(youtubeWatchUrl('abc')).toBeNull();
     expect(youtubeWatchUrl('dQw4w9WgXcQ')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  });
+
+  it('a capa do topo é 16:9, sem as faixas pretas do hqdefault (4:3)', () => {
+    expect(youtubeHeroThumbnails('dQw4w9WgXcQ')).toEqual([
+      'https://i.ytimg.com/vi/dQw4w9WgXcQ/hq720.jpg',
+      'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+    ]);
+    expect(youtubeHeroThumbnails('nope')).toEqual([]);
   });
 
   it('a URL assinada é renovada antes de vencer', () => {
