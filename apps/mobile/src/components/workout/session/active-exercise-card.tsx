@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,9 +11,12 @@ import {
   loadUnitLabel,
   newSetClientKey,
   prefillForNextSet,
+  restoreSetDraft,
+  setDraftKey,
   workoutApi,
   type ExerciseGroup,
   type LoadPrescription,
+  type SetDraft,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
@@ -26,6 +29,9 @@ import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
 import { colors } from '@/theme/colors';
+
+/** O rascunho da série vive até seis horas sem ninguém lendo. */
+const SET_DRAFT_GC_MS = 6 * 3600_000;
 
 /**
  * A série de força da sessão guiada (prancha `Al-T3-Sessao`): "Série N de M",
@@ -101,10 +107,15 @@ export function ActiveExerciseCard({
   const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
   const prescription = prescribed?.status === 'ok' ? prescribed : null;
 
-  const [weight, setWeight] = useState(0);
-  const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
-  const [feeling, setFeeling] = useState<number | null>(null);
-  const [touched, setTouched] = useState(false);
+  // "Como fazer" é outra tela e esta pode ser remontada na volta: o que foi
+  // digitado para a série em andamento volta do rascunho no cache.
+  const [saved] = useState(() =>
+    restoreSetDraft(qc.getQueryData<SetDraft>(setDraftKey(sessionId, group.exerciseId)), doneSets),
+  );
+  const [weight, setWeight] = useState(saved?.weightKg ?? 0);
+  const [reps, setReps] = useState(() => saved?.reps ?? parseFirstRep(group.targetReps));
+  const [feeling, setFeeling] = useState<number | null>(saved?.feeling ?? null);
+  const [touched, setTouched] = useState(saved?.touched ?? false);
 
   // O palpite é aplicado durante o render, comparando os dois números (#187):
   // os objetos de série trocam de identidade a cada refetch e reescreveriam o
@@ -115,10 +126,9 @@ export function ActiveExerciseCard({
     previousSessionSet: reference,
     prescription,
   });
-  const [prevPrefill, setPrevPrefill] = useState<{ weightKg: number | null; reps: number | null }>({
-    weightKg: null,
-    reps: null,
-  });
+  const [prevPrefill, setPrevPrefill] = useState<{ weightKg: number | null; reps: number | null }>(
+    saved?.prefill ?? { weightKg: null, reps: null },
+  );
   if (
     !Object.is(prevPrefill.weightKg, prefill.weightKg) ||
     !Object.is(prevPrefill.reps, prefill.reps)
@@ -127,6 +137,20 @@ export function ActiveExerciseCard({
     if (prefill.weightKg != null) setWeight(prefill.weightKg);
     if (prefill.reps != null) setReps(prefill.reps);
   }
+
+  useEffect(() => {
+    const key = setDraftKey(sessionId, group.exerciseId);
+    // Fica enquanto durar o treino, mesmo sem ninguém lendo (o "Como fazer" demora).
+    qc.setQueryDefaults(key, { gcTime: SET_DRAFT_GC_MS });
+    qc.setQueryData<SetDraft>(key, {
+      doneSets,
+      weightKg: weight,
+      reps,
+      feeling,
+      touched,
+      prefill: prevPrefill,
+    });
+  }, [qc, sessionId, group.exerciseId, doneSets, weight, reps, feeling, touched, prevPrefill]);
 
   // Uma chave por toque; sobrevive à falha para o reenvio ser o mesmo pedido.
   const clientKey = useRef<string | null>(null);

@@ -275,6 +275,26 @@ describe('mural do redesign (integração)', () => {
     });
   });
 
+  describe('nome no mural', () => {
+    it('o primeiro post sai com o nome do perfil, sem pedir apelido nem gravar na comunidade', async () => {
+      const a = await comunidade();
+      await prisma.user.update({ where: { id: a.ana }, data: { nickname: 'Aninha' } });
+      const antes = await posts.list(a.ana, a.groupId);
+      expect(antes.displayName).toBe('Aninha');
+
+      const post = await posts.create(a.ana, a.groupId, { body: 'Oi, gente!' });
+      expect(post.author.displayName).toBe('Aninha');
+      const m = await prisma.groupMembership.findUniqueOrThrow({
+        where: { groupId_userId: { groupId: a.groupId, userId: a.ana } },
+      });
+      expect(m.displayName).toBeNull();
+
+      // Sem apelido no perfil, vale o primeiro nome.
+      const gabi = await posts.list(a.gabi, a.groupId);
+      expect(gabi.displayName).toBe('Membro');
+    });
+  });
+
   describe('ocultar, filtros e posts novos', () => {
     it('ocultar some só para quem ocultou', async () => {
       const a = await comunidade();
@@ -982,6 +1002,25 @@ describe('mural do redesign (integração)', () => {
       expect(depois.fromTeam[0]!.unread).toBe(false);
       expect(depois.count).toBe(0);
       await expect(forYou.get(b.ana, a.groupId)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('comunicado em nome da pessoa mostra o apelido do perfil', async () => {
+      const a = await comunidade();
+      await prisma.user.update({ where: { id: a.prof }, data: { nickname: 'Prof Bia' } });
+      await announcements.create(a.prof, a.groupId, {
+        title: 'Treino extra',
+        body: 'Sábado.',
+        publishedAs: 'PERSON',
+        pin: false,
+        pinDays: null,
+        push: false,
+        at: null,
+        repeat: 'NONE',
+      });
+      const ana = await forYou.get(a.ana, a.groupId);
+      expect(ana.fromTeam).toEqual([
+        expect.objectContaining({ title: 'Treino extra', from: 'Prof Bia' }),
+      ]);
     });
 
     it('comunicado que a pessoa ocultou some; o que ela mesma mandou não conta como não lido', async () => {

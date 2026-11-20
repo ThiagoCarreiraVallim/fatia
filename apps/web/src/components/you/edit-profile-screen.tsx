@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   ApiError,
   AVATAR_VISIBILITY_OPTIONS,
+  avatarUploadNotice,
   avatarVisibilityText,
   communityName,
   formatWhatsapp,
@@ -128,6 +129,7 @@ function EditProfileForm({ me }: { me: MeUser }) {
   };
 
   const busy = photo.isPending || removePhoto.isPending;
+  const uploadNotice = avatarUploadNotice(me);
   const preview = communityName({ name: form.name || me.name, nickname: form.nickname });
 
   return (
@@ -155,28 +157,32 @@ function EditProfileForm({ me }: { me: MeUser }) {
       <div className="flex flex-col items-center gap-3">
         <UserAvatar name={form.name || me.name} url={me.avatarUrl} size={112} />
         <div className="flex flex-wrap justify-center gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            className="bg-muted"
-            disabled={busy}
-            onClick={() => camera.current?.click()}
-          >
-            <Icon name="camera" size={16} />
-            Tirar foto
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            className="bg-muted"
-            disabled={busy}
-            onClick={() => gallery.current?.click()}
-          >
-            <Icon name="image" size={16} />
-            Galeria
-          </Button>
+          {!uploadNotice && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="bg-muted"
+                disabled={busy}
+                onClick={() => camera.current?.click()}
+              >
+                <Icon name="camera" size={16} />
+                Tirar foto
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="bg-muted"
+                disabled={busy}
+                onClick={() => gallery.current?.click()}
+              >
+                <Icon name="image" size={16} />
+                Galeria
+              </Button>
+            </>
+          )}
           {me.avatarUrl && (
             <Button
               type="button"
@@ -191,9 +197,10 @@ function EditProfileForm({ me }: { me: MeUser }) {
           )}
         </div>
         <p className={`${hintClass} text-center`}>
-          {photo.isPending
-            ? 'Enviando a foto…'
-            : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.'}
+          {uploadNotice ??
+            (photo.isPending
+              ? 'Enviando a foto…'
+              : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.')}
         </p>
         <input
           ref={camera}

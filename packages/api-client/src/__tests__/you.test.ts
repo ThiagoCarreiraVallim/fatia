@@ -15,6 +15,8 @@ import {
 } from '../units';
 import { TUTORIALS, searchTutorials, tutorialSubtitle } from '../tutorials';
 import {
+  withIdentity,
+  avatarUploadNotice,
   avatarVisibilityText,
   communityName,
   formatWhatsapp,
@@ -25,6 +27,8 @@ import {
   objectiveSummary,
   stepHeight,
   youHeaderLine,
+  needsCommunityName,
+  communityNameProblem,
 } from '../you';
 import { DELETE_ACCOUNT_CONFIRMATION, isDeleteConfirmed } from '../users';
 
@@ -150,5 +154,64 @@ describe('Você (Al-V1, V8, V9, V11)', () => {
     expect(stepHeight(168, 1)).toBe(169);
     expect(stepHeight(100, -1)).toBe(100);
     expect(stepHeight(250, 1)).toBe(250);
+  });
+});
+
+describe('avatarUploadNotice', () => {
+  it('sem envio de mídia no servidor, explica por que a foto não troca', () => {
+    expect(avatarUploadNotice({ mediaUploadEnabled: false })).toMatch(/não está disponível/);
+  });
+
+  it('com envio disponível (ou API de antes, sem o campo), não diz nada', () => {
+    expect(avatarUploadNotice({ mediaUploadEnabled: true })).toBeNull();
+    expect(avatarUploadNotice({})).toBeNull();
+  });
+});
+
+describe('withIdentity — o perfil em cache depois do ID token (ADR 050)', () => {
+  const me = { id: 'u1', email: 'sub1@logto.local', name: 'sub1', avatarUrl: null };
+
+  it('troca e-mail e nome e mantém o resto', () => {
+    expect(withIdentity(me, { email: 'ana@x.com', name: 'Ana' })).toEqual({
+      id: 'u1',
+      email: 'ana@x.com',
+      name: 'Ana',
+      avatarUrl: null,
+    });
+  });
+
+  it('sem perfil em cache, não inventa um', () => {
+    expect(withIdentity(undefined, { email: 'ana@x.com', name: 'Ana' })).toBeUndefined();
+  });
+});
+
+describe('nome provisório na comunidade (ADR 050)', () => {
+  const me = {
+    name: 'k3j9x2',
+    email: 'k3j9x2@logto.local',
+    nickname: null,
+    nameIsProvisional: true,
+  };
+
+  it('enquanto o nome é provisório, os outros leem "Membro"', () => {
+    expect(communityName(me)).toBe('Membro');
+    expect(communityName({ ...me, nickname: 'Aninha' })).toBe('Aninha');
+    expect(communityName({ ...me, name: 'Ana Souza', nameIsProvisional: false })).toBe('Ana');
+  });
+
+  it('pede o nome antes do primeiro post ou desafio só enquanto for provisório e sem apelido', () => {
+    expect(needsCommunityName(me)).toBe(true);
+    expect(needsCommunityName({ ...me, nickname: 'Aninha' })).toBe(false);
+    expect(needsCommunityName({ ...me, nameIsProvisional: false })).toBe(false);
+    // API de antes, sem o campo: não pergunta.
+    expect(needsCommunityName({ name: 'Ana', nickname: null })).toBe(false);
+    expect(needsCommunityName(undefined)).toBe(false);
+  });
+
+  it('o nome digitado não pode ser vazio nem o pedaço do e-mail', () => {
+    expect(communityNameProblem('  ', me)).toMatch(/nome/);
+    expect(communityNameProblem('k3j9x2', me)).toMatch(/nome/);
+    expect(communityNameProblem('x'.repeat(121), me)).toMatch(/120/);
+    expect(communityNameProblem(' Ana Souza ', me)).toBeNull();
   });
 });

@@ -52,6 +52,7 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 import { YouScreen } from '../you-screen';
+import { EditProfileScreen } from '../edit-profile-screen';
 import { DeleteAccountScreen } from '../delete-account-screen';
 import { UnitsScreen } from '../units-screen';
 import { NewsScreen } from '../news-screen';
@@ -345,5 +346,21 @@ describe('foto de perfil', () => {
   it('o corte pega o quadrado do centro', () => {
     expect(centerSquare(1200, 800)).toEqual({ sx: 200, sy: 0, side: 800 });
     expect(centerSquare(600, 900)).toEqual({ sx: 0, sy: 150, side: 600 });
+  });
+});
+
+describe('Editar perfil: foto', () => {
+  it('com envio de foto disponível, oferece câmera e galeria', async () => {
+    renderWith(<EditProfileScreen />);
+    expect(await screen.findByRole('button', { name: /Tirar foto/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Galeria/ })).toBeInTheDocument();
+  });
+
+  it('sem envio de foto no servidor, esconde câmera e galeria e explica', async () => {
+    api.me.mockResolvedValue({ ...ME, mediaUploadEnabled: false });
+    renderWith(<EditProfileScreen />);
+    expect(await screen.findByText(/O envio de fotos não está disponível/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tirar foto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Galeria/ })).not.toBeInTheDocument();
   });
 });

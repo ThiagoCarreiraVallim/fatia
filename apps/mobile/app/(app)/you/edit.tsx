@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
   AVATAR_VISIBILITY_OPTIONS,
+  avatarUploadNotice,
   avatarVisibilityText,
   communityName,
   formatWhatsapp,
@@ -142,6 +143,7 @@ function EditForm({ me }: { me: MeUser }) {
   });
 
   const busy = photo.isPending || removePhoto.isPending;
+  const uploadNotice = avatarUploadNotice(me);
   const hasWhatsapp = !!form.whatsapp.trim();
   const shownName = form.name || me.name;
 
@@ -163,12 +165,16 @@ function EditForm({ me }: { me: MeUser }) {
         <View className="items-center gap-3">
           <UserAvatar name={shownName} url={me.avatarUrl} size={112} />
           <View className="flex-row flex-wrap justify-center gap-2">
-            <PhotoButton icon="camera" disabled={busy} onPress={() => photo.mutate('camera')}>
-              Tirar foto
-            </PhotoButton>
-            <PhotoButton icon="image" disabled={busy} onPress={() => photo.mutate('gallery')}>
-              Galeria
-            </PhotoButton>
+            {uploadNotice ? null : (
+              <>
+                <PhotoButton icon="camera" disabled={busy} onPress={() => photo.mutate('camera')}>
+                  Tirar foto
+                </PhotoButton>
+                <PhotoButton icon="image" disabled={busy} onPress={() => photo.mutate('gallery')}>
+                  Galeria
+                </PhotoButton>
+              </>
+            )}
             {me.avatarUrl ? (
               <PhotoButton danger disabled={busy} onPress={() => removePhoto.mutate()}>
                 Remover
@@ -176,9 +182,10 @@ function EditForm({ me }: { me: MeUser }) {
             ) : null}
           </View>
           <Text className="text-center text-xs text-faint">
-            {photo.isPending
-              ? 'Enviando a foto…'
-              : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.'}
+            {uploadNotice ??
+              (photo.isPending
+                ? 'Enviando a foto…'
+                : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.')}
           </Text>
         </View>
 
@@ -246,9 +253,27 @@ function EditForm({ me }: { me: MeUser }) {
           </View>
         </View>
 
-        <Field label="E-mail" hint="Para trocar o e-mail, fale com o suporte.">
-          <View className="h-[52px] justify-center rounded-field bg-card px-[18px]">
-            <Text className="text-[15px] text-muted-foreground">{me.email}</Text>
+        <Field
+          label="E-mail"
+          hint={
+            me.emailChangeEnabled
+              ? 'Pedimos sua senha e um código no e-mail novo.'
+              : 'A troca de e-mail ainda não está disponível neste servidor.'
+          }
+        >
+          <View className="h-[52px] flex-row items-center justify-between rounded-field bg-card px-[18px]">
+            <Text className="flex-1 text-[15px] text-muted-foreground" numberOfLines={1}>
+              {me.email}
+            </Text>
+            {me.emailChangeEnabled ? (
+              <Text
+                accessibilityRole="button"
+                onPress={() => router.push('/you/email')}
+                className="font-sans-bold text-sm text-primary"
+              >
+                Trocar
+              </Text>
+            ) : null}
           </View>
         </Field>
 

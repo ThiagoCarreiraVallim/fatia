@@ -27,14 +27,27 @@ de senha por código. Em dev o SMTP é o Mailpit do compose: todo e-mail aparece
 `pnpm logto:bootstrap` de novo. A página de login do PWA abre direto em cada tela do Logto:
 `/api/logto/sign-in` (entrar), `?tela=cadastro` e `?tela=senha`.
 
-**Google e Apple (#371).** A tela da conta (Onb-01a/01b) tem nome, e-mail, Google e Apple; a senha
-continua na tela do Logto (ADR 008). O PWA manda `?email=` (vira `login_hint`), `?nome=` (fica num
+**Login dentro do app (ADR 050).** No app, criar conta, entrar e "esqueci minha senha" são telas
+do próprio app: ele fala com a Experience API do Logto (`packages/api-client/src/auth-experience.ts`)
+e nunca abre a tela do Logto. O cadastro precisa do conector de e-mail (o Mailpit no dev): o código
+chega em <http://localhost:8025>. Sem SMTP o bootstrap troca o cadastro para nome de usuário, e o
+cadastro do app responde que o servidor não envia e-mail — o login de quem já existe continua. Depois
+de cada login o app manda o ID token a `POST /users/me/identity`, que grava o e-mail e o nome reais
+mesmo sem o M2M; para isso a API precisa de `LOGTO_MOBILE_APP_ID` (o bootstrap grava no `.env`).
+Na web nada mudou: a senha continua na tela do Logto.
+
+**Google e Apple (#371).** A tela da conta (Onb-01a/01b) tem nome, e-mail, Google e Apple; os botões
+só aparecem quando o Logto tem o conector (a página pública `/api/.well-known/sign-in-exp` diz
+quais). O PWA manda `?email=` (vira `login_hint`), `?nome=` (fica num
 cookie curto que o onboarding grava no perfil) e `?social=google|apple` (vira
 `direct_sign_in=social:<target>`, que pula a tela do Logto); o app manda os mesmos parâmetros na
 autorização. Com `LOGTO_GOOGLE_*` e `LOGTO_APPLE_*` no `.env`, `pnpm logto:bootstrap` cria os
 conectores `google-universal` e `apple-universal`, lista os dois na experiência de login e liga o
 vínculo automático: quem entra pelo Google com o e-mail de uma conta que já existe cai nela. Sem as
-credenciais, o botão leva à tela do Logto com e-mail e senha. O que configurar fora do repositório:
+credenciais, o botão não aparece. As variáveis `LOGTO_GOOGLE_*`, `LOGTO_APPLE_*` e `EMAIL_SMTP_*`
+são lidas só pelo `scripts/logto-bootstrap.ts`, não pela API. O que configurar fora do repositório
+(passo a passo em
+[OPERATIONS](./OPERATIONS.md#login-no-app--o-que-o-logto-de-produção-precisa-adr-050)):
 
 - **Google Cloud:** cliente OAuth do tipo _Web application_ com o redirect
   `<LOGTO_ENDPOINT>/callback/<id do conector>` (o console do Logto mostra o id depois do bootstrap).

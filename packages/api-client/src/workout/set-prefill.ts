@@ -58,3 +58,27 @@ export interface SetPrefill {
   weightKg: number | null;
   reps: number | null;
 }
+
+/**
+ * O que a pessoa digitou para a série em andamento de um exercício. "Como
+ * fazer" é outra tela e a sessão guiada pode ser remontada na volta: o
+ * rascunho fica no cache e volta para a mesma série.
+ */
+export interface SetDraft {
+  /** Quantas séries estavam registradas: o rascunho é da série seguinte. */
+  doneSets: number;
+  weightKg: number;
+  reps: number;
+  feeling: number | null;
+  touched: boolean;
+  /** O último palpite aplicado, para a volta não sobrescrever o que foi digitado. */
+  prefill: { weightKg: number | null; reps: number | null };
+}
+
+export const setDraftKey = (sessionId: string, exerciseId: number) =>
+  ['workout', 'set-draft', sessionId, exerciseId] as const;
+
+/** O rascunho, se ainda for da série em andamento. */
+export function restoreSetDraft(draft: SetDraft | undefined, doneSets: number): SetDraft | null {
+  return draft && draft.doneSets === doneSets ? draft : null;
+}

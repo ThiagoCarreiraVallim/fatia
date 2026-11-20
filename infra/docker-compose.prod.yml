@@ -42,6 +42,10 @@ services:
       # Endereço público da API, para os links que ela entrega (exportação de dados, #387).
       API_PUBLIC_URL: ${API_PUBLIC_URL:-https://api.${DOMAIN}}
       LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
+      # App "Native" do Logto (o mesmo EXPO_PUBLIC_LOGTO_APP_ID do app). É o `aud` aceito no
+      # ID token que o app manda a POST /users/me/identity (ADR 050). Vazio = o e-mail e o
+      # nome reais só chegam pela Management API.
+      LOGTO_MOBILE_APP_ID: ${LOGTO_MOBILE_APP_ID:-}
       LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
       # Management API do Logto: apagar a identidade junto da conta e ler o e-mail no
       # primeiro acesso. Vazio = a conta nasce com e-mail provisório.

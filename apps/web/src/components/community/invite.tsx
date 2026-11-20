@@ -15,6 +15,7 @@ import {
   usersApi,
   type InvitePreview,
   type JoinConsent,
+  type SocialTarget,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { AccountForm } from '@/components/auth/account-form';
@@ -60,7 +61,16 @@ export function InviteCard({ preview }: { preview: InvitePreview }) {
  * convidou e a conta. Criar conta ou entrar volta para este link, que leva ao
  * onboarding com as boas-vindas da comunidade.
  */
-export function InviteSignedOut({ token, preview }: { token: string; preview: InvitePreview }) {
+export function InviteSignedOut({
+  token,
+  preview,
+  socialTargets,
+}: {
+  token: string;
+  preview: InvitePreview;
+  /** Google e Apple configurados no Logto (`loadSocialTargets`). */
+  socialTargets: SocialTarget[];
+}) {
   const next = `/c/${token}`;
   return (
     <div className="flex flex-col gap-3.5">
@@ -91,6 +101,7 @@ export function InviteSignedOut({ token, preview }: { token: string; preview: In
       <AccountForm
         next={next}
         showModeSwitch={false}
+        socialTargets={socialTargets}
         ctaStyle={{
           background: 'hsl(var(--brand))',
           color: 'hsl(var(--brand-foreground))',

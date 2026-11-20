@@ -25,8 +25,8 @@ import { colors } from '@/theme/colors';
  * Duas diferenças em relação ao web, as duas por limitação do bottom sheet
  * nativo ou da divisão de trabalho:
  *
- * - o drawer de detalhe não mora aqui, mora em `<ExerciseDetailHost>`, que
- *   precisa envolver a tela (ver `exercise-detail-host.tsx`);
+ * - o detalhe não é drawer: o toque abre a tela "Como fazer"
+ *   (`/workout/exercise/:id`, ver `exercise-detail-context.ts`);
  * - `renderSet` é ponto de injeção. No PWA o modo `readonly` monta `SetRow`
  *   direto, e `SetRow` sabe editar a série pela API. Aqui a linha editável mora
  *   com a sessão ativa; sem a injeção este arquivo importaria de `./session/`,

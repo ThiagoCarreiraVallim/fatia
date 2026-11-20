@@ -60,8 +60,9 @@ export default function CommunityFeedPage() {
 
   const firstPage = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
+  // O nome do perfil; `suggestedDisplayName` cobre a API de antes, que mandava null.
   const me = firstPage
-    ? { displayName: firstPage.displayName, suggested: firstPage.suggestedDisplayName }
+    ? { displayName: firstPage.displayName ?? firstPage.suggestedDisplayName }
     : null;
   const settingsHref = `/community/${groupId}/settings`;
   const pins = firstPage?.pins ?? [];
@@ -171,7 +172,7 @@ export default function CommunityFeedPage() {
               <ul className="flex snap-x snap-mandatory gap-3">
                 {pins.map((p) => (
                   <li key={p.id} className="w-[85%] max-w-md shrink-0 snap-start">
-                    <PostCard groupId={groupId} post={p} me={me} />
+                    <PostCard groupId={groupId} post={p} />
                   </li>
                 ))}
               </ul>
@@ -232,7 +233,7 @@ export default function CommunityFeedPage() {
             <ul className="space-y-3" aria-label="Posts do mural">
               {posts.map((p) => (
                 <li key={p.id}>
-                  <PostCard groupId={groupId} post={p} me={me} />
+                  <PostCard groupId={groupId} post={p} />
                 </li>
               ))}
             </ul>

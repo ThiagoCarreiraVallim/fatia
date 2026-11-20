@@ -1,3 +1,4 @@
+import type { IdentitySyncService } from '../../auth/identity-sync.service';
 import { ChatRunRegistry } from '../../chat/chat-run.registry';
 import { AutoWriteService } from '../../chat/auto-write/auto-write.service';
 import { PreviaDaAcaoService } from '../../chat/previa/previa-da-acao.service';
@@ -3415,6 +3416,7 @@ describe('isolamento entre usuários', () => {
       {} as ProfileService,
       {} as DataExportService,
       connections,
+      {} as IdentitySyncService,
     );
     const realFetch = global.fetch;
     const clientIds: string[] = [];

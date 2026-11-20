@@ -15,6 +15,12 @@ export interface SessionManagerDeps {
   resource: string;
   /** Chamado quando a sessão morre de vez e só um login novo resolve. */
   onSessionEnded: () => void;
+  /**
+   * Tokens recém-emitidos pelo Logto (refresh). O ID token guardado no cofre
+   * não passa por aqui: depois de uma troca de e-mail ele traz o e-mail velho
+   * (ADR 050).
+   */
+  onTokens?: (session: StoredSession) => void;
   now?: () => number;
   refresh?: typeof refreshTokens;
 }
@@ -101,6 +107,21 @@ export class SessionManager {
     return this.inFlight;
   }
 
+  /**
+   * Renova agora, mesmo com o access token válido: depois de trocar o e-mail o
+   * app precisa de um ID token com o e-mail novo.
+   */
+  async forceRefresh(): Promise<string | null> {
+    if (!this.cached) this.cached = await this.deps.store.read();
+    const refreshToken = this.cached?.refreshToken;
+    if (!refreshToken) return null;
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = this.doRefresh(refreshToken).finally(() => {
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+
   private async doRefresh(refreshToken: string): Promise<string | null> {
     try {
       const { tokenEndpoint } = await this.deps.endpoints();
@@ -115,6 +136,7 @@ export class SessionManager {
       // a sessão na renovação seguinte.
       if (!session.refreshToken) session.refreshToken = refreshToken;
       await this.adopt(session);
+      this.deps.onTokens?.(session);
       return session.accessToken;
     } catch (err) {
       if (err instanceof OidcError && err.requiresReauthentication) {

@@ -10,6 +10,7 @@ export interface OidcEndpoints {
   tokenEndpoint: string;
   endSessionEndpoint: string | null;
   userinfoEndpoint: string | null;
+  revocationEndpoint?: string | null;
 }
 
 export interface TokenResponse {
@@ -58,6 +59,7 @@ export async function discover(endpoint: string, fetchImpl = fetch): Promise<Oid
     tokenEndpoint: doc.token_endpoint,
     endSessionEndpoint: doc.end_session_endpoint ?? null,
     userinfoEndpoint: doc.userinfo_endpoint ?? null,
+    revocationEndpoint: doc.revocation_endpoint ?? null,
   };
 }
 
@@ -157,4 +159,25 @@ export function refreshTokens(
     },
     fetchImpl,
   );
+}
+
+/**
+ * Revoga o refresh token ao sair (RFC 7009). Com o login dentro do app não há
+ * sessão no navegador para encerrar: o que segura a conta aberta é o refresh
+ * token, e é ele que morre aqui.
+ */
+export async function revokeToken(
+  revocationEndpoint: string,
+  params: { clientId: string; token: string },
+  fetchImpl = fetch,
+): Promise<void> {
+  await fetchImpl(revocationEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      token: params.token,
+      token_type_hint: 'refresh_token',
+      client_id: params.clientId,
+    }).toString(),
+  });
 }

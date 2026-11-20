@@ -18,9 +18,10 @@ import {
   type ShareTarget,
   type TodaySummary,
 } from '@fatia/api-client';
+import { dashboardTodayKey, useToday } from '@/components/layout/use-today';
 import { Screen } from '@/components/layout/screen';
 import { headerButtonClass } from '@/components/layout/tab-header';
-import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { DrawerLayer, EmptyState, ErrorState, Skeleton, SkeletonGroup } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -56,8 +57,6 @@ import { colors } from '@/theme/colors';
 
 type Sheet = 'goals' | 'water' | 'weight' | 'steps' | 'share' | 'inbox' | null;
 
-const DASHBOARD_KEY = ['dashboard', 'today'] as const;
-
 function shareInput(data: TodaySummary) {
   return { ...data, streakDays: data.streak.activeDays.periodos };
 }
@@ -70,7 +69,9 @@ export default function TodayScreen() {
   const toast = useToast();
 
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  const today = useQuery({ queryKey: DASHBOARD_KEY, queryFn: () => progressApi.today() });
+  // A data na chave: a aba fica montada e, na virada, o resumo é outro.
+  const dashboardKey = dashboardTodayKey(useToday());
+  const today = useQuery({ queryKey: dashboardKey, queryFn: () => progressApi.today() });
   // O `today()` só LÊ as conquistas; quem desbloqueia é esta chamada (ver a mesma nota no PWA).
   useQuery({
     queryKey: ['achievements', 'refresh'],
@@ -100,7 +101,7 @@ export default function TodayScreen() {
     mutationFn: () => progressApi.createWater({ ml: WATER_GLASS_ML }),
     onSuccess: () => {
       const total = (data?.water.todayMl ?? 0) + WATER_GLASS_ML;
-      qc.setQueryData<TodaySummary>(DASHBOARD_KEY, (old) =>
+      qc.setQueryData<TodaySummary>(dashboardKey, (old) =>
         old ? { ...old, water: { ...old.water, todayMl: total } } : old,
       );
       void qc.invalidateQueries({ queryKey: ['dashboard'] });
@@ -197,7 +198,20 @@ export default function TodayScreen() {
             </Pressable>
           </View>
 
-          {today.isLoading ? <LoadingState label="Carregando seu dia…" /> : null}
+          {today.isLoading ? (
+            <SkeletonGroup label="Carregando seu dia">
+              <Skeleton height={176} />
+              <Skeleton height={96} />
+              <View className="flex-row gap-3">
+                <Skeleton height={120} className="flex-1" width="auto" />
+                <Skeleton height={120} className="flex-1" width="auto" />
+              </View>
+              <View className="flex-row gap-3">
+                <Skeleton height={120} className="flex-1" width="auto" />
+                <Skeleton height={120} className="flex-1" width="auto" />
+              </View>
+            </SkeletonGroup>
+          ) : null}
 
           {today.error ? (
             <ErrorState error={today.error} onRetry={() => today.refetch()} />

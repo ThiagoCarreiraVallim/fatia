@@ -29,7 +29,6 @@ import {
   useToast,
 } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
-import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
 import { PlanExerciseRow } from '@/components/workout/plan-exercise-row';
 import { PlanExerciseSheet } from '@/components/workout/plan-exercise-sheet';
 import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
@@ -233,7 +232,7 @@ export default function PlanDetailScreen() {
   }
 
   return (
-    <ExerciseDetailHost>
+    <>
       <Screen
         // Al-T7: a barra diz o modo; o nome vem grande embaixo.
         title={editing ? 'Editando plano' : 'Plano'}
@@ -423,6 +422,6 @@ export default function PlanDetailScreen() {
         planName={planData.name}
         existingExerciseIds={existingIds}
       />
-    </ExerciseDetailHost>
+    </>
   );
 }

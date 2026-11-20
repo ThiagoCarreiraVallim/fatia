@@ -8,6 +8,7 @@ import {
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { blockedUserIds } from './block.service';
+import { COMMUNITY_NAME_USER_SELECT, communityName } from './display-name';
 import { requireContentRole } from './content-roles';
 
 export type ForYouKind = 'PLAN_OFFER' | 'NUTRITION_PLAN';
@@ -122,7 +123,11 @@ export class ForYouService {
           createdAt: true,
           publishedAs: true,
           author: {
-            select: { userId: true, displayName: true, user: { select: { name: true } } },
+            select: {
+              userId: true,
+              displayName: true,
+              user: { select: COMMUNITY_NAME_USER_SELECT },
+            },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -142,7 +147,7 @@ export class ForYouService {
       }),
     ]);
 
-    const primeiro = (n: string | null | undefined) => (n ? n.split(/\s+/)[0]! : null);
+    const firstWord = (n: string | null | undefined) => (n ? n.split(/\s+/)[0]! : null);
     const todo: ForYouItem[] = [];
     const done: ForYouItem[] = [];
     for (const o of ofertas) {
@@ -177,10 +182,7 @@ export class ForYouService {
     const fromTeam = comunicados.map((c) => ({
       postId: c.id,
       title: c.title ?? '',
-      from:
-        c.publishedAs === PostAuthorAs.GROUP
-          ? m.group.name
-          : (c.author.displayName ?? primeiro(c.author.user.name) ?? ''),
+      from: c.publishedAs === PostAuthorAs.GROUP ? m.group.name : communityName(c.author),
       at: c.createdAt,
       // O comunicado que a própria pessoa mandou não é novidade para ela.
       unread: c.createdAt > vistoAte && c.author.userId !== userId,
@@ -191,7 +193,7 @@ export class ForYouService {
         id: t.id,
         title: t.title,
         meta: `${t.kind === 'WORKOUT' ? 'Treino' : 'Plano alimentar'}${
-          t.author ? ` · ${primeiro(t.author.name)}` : ''
+          t.author ? ` · ${firstWord(t.author.name)}` : ''
         }`,
         href: `/community/${groupId}/content/${t.id}`,
       })),
@@ -199,7 +201,7 @@ export class ForYouService {
         kind: 'TIP' as const,
         id: d.id,
         title: d.title,
-        meta: `Dica${d.author ? ` · ${primeiro(d.author.name)}` : ''}`,
+        meta: `Dica${d.author ? ` · ${firstWord(d.author.name)}` : ''}`,
         href: `/community/${groupId}/content`,
       })),
     ];

@@ -127,43 +127,19 @@ describe('desafios › um desafio (Cm-17, Cm-09, Cm-10, Cm-11)', () => {
     expect(screen.getByRole('button', { name: 'Participar do desafio' })).toBeInTheDocument();
   });
 
-  it('participar pede o apelido e manda o que foi digitado', async () => {
+  it('participar entra com o nome do perfil, sem perguntar apelido', async () => {
     vi.mocked(challengesApi.get).mockResolvedValue(detail());
-    vi.mocked(challengesApi.join).mockResolvedValue(
-      detail({
-        me: me(),
-        leaderboard: [
-          { displayName: 'Bia', score: 5, rank: 1, isMe: false, medal: null, streak: 1 },
-          { displayName: 'Aninha', score: 3, rank: 2, isMe: true, medal: null, streak: 2 },
-        ],
-      }),
-    );
+    vi.mocked(challengesApi.join).mockResolvedValue(detail({ me: me() }));
     renderWithClient(<CommunityChallengePage />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Participar do desafio' }));
     const dialog = screen.getByRole('dialog');
-    const apelido = within(dialog).getByLabelText('Como aparecer no ranking');
-    expect(apelido).toHaveValue('Ana');
-    expect(dialog).toHaveTextContent('Vale para os próximos desafios desta comunidade');
-    await userEvent.clear(apelido);
-    await userEvent.type(apelido, '  Aninha ');
-    await userEvent.click(within(dialog).getByRole('button', { name: /Participar como/ }));
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent('No ranking: Ana');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Participar como Ana' }));
 
-    await waitFor(() => expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', 'Aninha', {}));
+    await waitFor(() => expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', undefined, {}));
     expect(ctx.toast).toHaveBeenCalledWith('Você entrou no desafio.');
-  });
-
-  it('apelido com < > não sai da tela', async () => {
-    vi.mocked(challengesApi.get).mockResolvedValue(detail());
-    renderWithClient(<CommunityChallengePage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Participar do desafio' }));
-    const dialog = screen.getByRole('dialog');
-    const apelido = within(dialog).getByLabelText('Como aparecer no ranking');
-    await userEvent.clear(apelido);
-    await userEvent.type(apelido, '<b>Ana');
-
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('nem < ou >');
-    expect(within(dialog).getByRole('button', { name: /Participar como/ })).toBeDisabled();
   });
 
   it('água explica que os outros veem só os dias, nunca os ml', async () => {
@@ -196,7 +172,7 @@ describe('desafios › um desafio (Cm-17, Cm-09, Cm-10, Cm-11)', () => {
     expect(enviar).toBeEnabled();
     await userEvent.click(enviar);
     await waitFor(() =>
-      expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', 'Ana', {
+      expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', undefined, {
         acceptPhotoTerms: true,
       }),
     );
