@@ -654,3 +654,12 @@ export async function completePasswordReset(
   await client.resetPassword(input.password);
   await client.submit();
 }
+
+/**
+ * A política vinda do Logto pode chegar vazia (`{}`) ou pela metade quando a
+ * instância nunca configurou senha; completa com o padrão para a tela de login
+ * não ler campo inexistente.
+ */
+export function normalizePasswordPolicy(raw: unknown): PasswordPolicy {
+  return raw as PasswordPolicy;
+}
