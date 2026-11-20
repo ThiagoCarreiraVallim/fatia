@@ -114,8 +114,11 @@ export function PlanDocumentEditor({
     select(value.sessions.length);
   };
   const duplicateSession = () => {
-    const copy = structuredClone(session);
-    copy.weekday = null;
+    // A cópia é sessão nova: sem a chave da original (senão a versão nova
+    // casaria as duas com o mesmo plano) e sem o dia dela.
+    const { key: _key, ...rest } = structuredClone(session);
+    void _key;
+    const copy = { ...rest, weekday: null };
     const next = [...value.sessions];
     next.splice(si + 1, 0, copy);
     setSessions(next);

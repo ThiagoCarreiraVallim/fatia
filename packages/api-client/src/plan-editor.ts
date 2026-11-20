@@ -417,6 +417,7 @@ function exerciseInput(e: DocumentExerciseView | PlanDocExerciseInput): PlanDocE
 export function toDocumentInput(view: PlanDocumentView): PlanDocumentInput {
   return {
     sessions: view.sessions.map((s) => ({
+      ...(s.key ? { key: s.key } : {}),
       name: s.name,
       weekday: s.weekday,
       items: s.items.map((i) =>
