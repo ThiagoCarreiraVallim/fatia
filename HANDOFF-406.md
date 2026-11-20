@@ -31,7 +31,7 @@ circuito] }] }`. v1 continua legível (normalizado para v2 numa sessão). `build
 - [x] content (template) com documento do editor; rota da cópia do aluno
 - [x] MCP + docs/MCP_TOOL_SURFACE.md
 - [x] api-client (plan-editor.ts: tipos, planCopyApi, textos e conferências)
-- [ ] web: editor (Pn-09..09e)
+- [x] web: editor (Pn-09..09e) — ee3058e7 (components/org/plan-editor, página da cópia, link na ficha)
 - [ ] passada visual, REDESIGN_PROGRESS, merge main
 
 ## Estado
@@ -46,4 +46,4 @@ circuito] }] }`. v1 continua legível (normalizado para v2 numa sessão). `build
 - Feito (API): consumidores multi-plano (offerProgress com planIds, ficha, enviados, agenda com
   rodízio no flexível e remarcar por qualquer sessão), percentLoadKg na sessão, campos novos no DTO
   do plano da pessoa (+ regras: calorias, uma intensidade, loadPercent só em PERCENT_1RM).
-- Pendentes: web editor (Pn-09..09e), passada visual, REDESIGN_PROGRESS, merge main.
+- Pendentes: passada visual (vis.env, portas livres, demo-rows antes/depois), REDESIGN_PROGRESS, merge main.
