@@ -814,7 +814,12 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - Check-in e a tela da recepção (Pn-20, #390). Recusar pedido de entrada continua com dono e admin (`member.remove`); a recepção só aprova.
   - Consentimento por papel na entrada (#372) e o "Ver como membro" com faixa.
   - Atividade da equipe no painel (quem fez o quê por dia) e a seção Equipe no celular (#414).
-  - Passada visual (feita depois, à parte).
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/404/cmp-<tela>.<tema>.png` (prancha | web 1440 | web 390, escuro e claro): Pn-19 com a pessoa escolhida (nutricionista e recepção), a tabela de permissões e o histórico vistos pelo dono; Pn-19 e Membros vistos por um admin e por uma recepção (a recepção vê o aviso "Só o dono e o admin cuidam da equipe" e Membros só com nome e situação); Configurações pelo admin (sem passar a posse, apagar nem o que é obrigatório compartilhar). Dados mínimos por SQL no banco de dev (admin, recepção e nutricionista na comunidade do Bruno; o usuário demo de observador), apagados no fim (contagens antes e depois em `demo-rows.txt`). Corrigido:
+  - **Selo do papel** com a cor da prancha (dono, admin, profissional, criador, recepção), com os selos do DS.
+  - **Celular:** tocar alguém da equipe rola até o painel da pessoa, que fica abaixo da lista (antes nada parecia mudar).
+  - **Tabela no celular:** a coluna "Ação" fica fixa e quebra linha ao rolar de lado; antes só Dono e meia coluna de Admin apareciam, sem rótulo ao rolar.
+  - **Histórico:** especialidade nova sai "pôs Renata como nutricionista", e a que some "tirou a especialidade de X (era personal)", em vez de "de — para".
+  - Conferido: o menu de baixo e o treino em andamento não cobrem botões (o fim da página rola acima deles) e não há texto escuro no escuro. A prancha marca o "Convidar para a equipe" na barra do topo; na web ele fica no cabeçalho da página, porque a barra do topo é a do painel (#398). O "N" no canto é o indicador do Next em dev.
 
 ## Etapas seguintes
 
