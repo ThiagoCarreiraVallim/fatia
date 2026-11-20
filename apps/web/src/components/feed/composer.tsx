@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ImagePlus, Plus, X } from 'lucide-react';
 import {
-  displayNameProblem,
   feedApi,
   POLL_MAX_OPTIONS,
   POLL_MIN_VOTES,
@@ -26,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { apiMessage, NicknameField, type MyName } from './feed-ui';
+import { apiMessage, type MyName } from './feed-ui';
 
 /** "Fecha em" da prancha Cm-06b. */
 const POLL_DAYS = [
@@ -55,7 +54,7 @@ export interface ComposerTeam {
 /**
  * Escrever no mural (pranchas Cm-06 e Cm-06b): post com Markdown e até 4
  * imagens, ou enquete. A equipe escolhe publicar em nome da comunidade e fixar
- * como aviso. Na primeira vez, o apelido.
+ * como aviso. O nome é o do perfil, sem pergunta.
  */
 export function Composer({
   groupId,
@@ -75,7 +74,6 @@ export function Composer({
   const [vista, setVista] = useState<'write' | 'preview'>('write');
   const [texto, setTexto] = useState('');
   const [imagens, setImagens] = useState<ImageValue[]>([]);
-  const [apelido, setApelido] = useState(me.suggested);
   const [pergunta, setPergunta] = useState('');
   const [opcoes, setOpcoes] = useState<string[]>(['', '']);
   const [dias, setDias] = useState('3');
@@ -105,7 +103,6 @@ export function Composer({
               ...(texto.trim() ? { body: texto.trim() } : {}),
             }
           : { body: texto.trim(), imageFileIds: imagens.map((i) => i.fileId) };
-      if (!me.displayName) input.displayName = apelido.trim();
       if (team) {
         if (comoGrupo) input.publishedAs = 'GROUP';
         if (fixar) {
@@ -125,13 +122,12 @@ export function Composer({
   });
 
   const problema =
-    (tipo === 'POLL'
+    tipo === 'POLL'
       ? (pollProblem(pergunta, opcoes) ??
         (texto.trim().length > POST_BODY_MAX
           ? `O texto tem até ${POST_BODY_MAX} caracteres.`
           : null))
-      : postProblem(texto, imagens.length)) ??
-    (me.displayName ? null : displayNameProblem(apelido));
+      : postProblem(texto, imagens.length);
   const escreveu =
     tipo === 'POLL'
       ? pergunta.trim().length > 0 || opcoes.some((o) => o.trim())
@@ -169,7 +165,7 @@ export function Composer({
           label="Publicar como"
           value={comoGrupo ? 'group' : 'me'}
           options={[
-            { value: 'me', label: me.displayName ? `Eu, ${me.displayName}` : 'Eu' },
+            { value: 'me', label: `Eu, ${me.displayName}` },
             { value: 'group', label: team.groupName },
           ]}
           onChange={(v) => setComoGrupo(v === 'group')}
@@ -323,7 +319,6 @@ export function Composer({
         </div>
       )}
 
-      {!me.displayName && escreveu && <NicknameField value={apelido} onChange={setApelido} />}
       {problema && escreveu && (
         <p role="alert" className="text-xs text-danger">
           {problema}

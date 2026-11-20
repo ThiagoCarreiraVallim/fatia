@@ -172,7 +172,7 @@ describe('desafios › um desafio (Cm-17, Cm-09, Cm-10, Cm-11)', () => {
     expect(enviar).toBeEnabled();
     await userEvent.click(enviar);
     await waitFor(() =>
-      expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', 'Ana', {
+      expect(challengesApi.join).toHaveBeenCalledWith('g1', 'c1', undefined, {
         acceptPhotoTerms: true,
       }),
     );

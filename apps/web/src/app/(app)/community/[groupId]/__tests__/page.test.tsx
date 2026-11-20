@@ -593,9 +593,7 @@ describe('/community/[groupId] (o mural)', () => {
     expect(within(lista).getByText('Equipe')).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Escreva um comentário' }), 'Valeu');
     await user.click(screen.getByRole('button', { name: 'Enviar' }));
-    await waitFor(() =>
-      expect(feedApi.comment).toHaveBeenCalledWith('g1', 'p1', 'Valeu', undefined),
-    );
+    await waitFor(() => expect(feedApi.comment).toHaveBeenCalledWith('g1', 'p1', 'Valeu'));
   });
 
   it('mais antigos carregam pela próxima página', async () => {
