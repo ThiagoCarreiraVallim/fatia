@@ -5,6 +5,7 @@ import {
   initialScrollChrome,
   nextScrollChrome,
   type ScrollChromeState,
+  chromeOnFocus,
 } from '../scroll-chrome';
 
 /**
@@ -82,5 +83,22 @@ describe('chromeAfterIdle', () => {
 
   it('o tempo parado é ~250 ms', () => {
     expect(SCROLL_CHROME.idleMs).toBe(250);
+  });
+});
+
+/**
+ * As abas ficam montadas: a rolagem de uma aba guarda o estado de quando a
+ * barra sumiu. Ao voltar a ela, a barra está visível de novo, e um toque de
+ * rolagem não pode escondê-la só porque o estado velho dizia "escondida".
+ */
+describe('chromeOnFocus — a barra volta visível ao voltar para a tela', () => {
+  const frame = { contentHeight: 3000, viewportHeight: 800 };
+
+  it('esquece o "escondida" e conta o limiar de onde a tela está', () => {
+    const velho = { y: 500, anchor: 400, hidden: true };
+    const agora = chromeOnFocus(velho);
+    expect(agora.hidden).toBe(false);
+    expect(nextScrollChrome(agora, { ...frame, y: 505 }).hidden).toBe(false);
+    expect(nextScrollChrome(agora, { ...frame, y: 500 + 13 }).hidden).toBe(true);
   });
 });
