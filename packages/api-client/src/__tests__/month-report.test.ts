@@ -102,6 +102,9 @@ describe('relatório do mês (#400, Pn-03)', () => {
     expect(challengeFinishedLabel({ ...linha, finished: null })).toBe('menos de 5');
     expect(challengeReviewedLabel(linha)).toBe('23 · 5 anulados');
     expect(challengeReviewedLabel({ ...linha, voided: null })).toBe('23');
+    // Nada anulado não vira "0 anulados" ao lado do número.
+    expect(challengeReviewedLabel({ ...linha, voided: 0 })).toBe('23');
+    expect(challengeReviewedLabel({ ...linha, reviewed: 0, voided: 0 })).toBe('0');
     expect(challengeReviewedLabel({ ...linha, reviewed: null, voided: null })).toBe('menos de 5');
     expect(challengeLiftLine(2.1)).toBe(
       'Quem participa de algum desafio registra 2,1× mais dias no mês do que quem não participa.',
