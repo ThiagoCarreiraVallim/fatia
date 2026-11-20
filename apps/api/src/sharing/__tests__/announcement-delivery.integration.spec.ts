@@ -161,8 +161,11 @@ describe('entrega do comunicado (#398, integração)', () => {
     it('descadastro pelo link para o e-mail, sem login, e não mexe no push', async () => {
       const a = await comunidade();
       const t = announcementUnsubscribeToken(a.ana, SEGREDO);
-      expect(await mail.status(t)).toEqual({ subscribed: true });
-      expect(await mail.setSubscribed(t, false)).toEqual({ subscribed: false });
+      expect(await mail.status(t)).toEqual({ subscribed: true, kind: 'announcements' });
+      expect(await mail.setSubscribed(t, false)).toEqual({
+        subscribed: false,
+        kind: 'announcements',
+      });
 
       await announcements.create(a.dono, a.groupId, agora({ alsoEmail: true }));
       await Promise.all([notifications.drain(), announcements.drain()]);
@@ -172,7 +175,10 @@ describe('entrega do comunicado (#398, integração)', () => {
       const devAna = await prisma.userDevice.findFirstOrThrow({ where: { userId: a.ana } });
       expect(enviados.map((p) => p.to)).toContain(devAna.token);
 
-      expect(await mail.setSubscribed(t, true)).toEqual({ subscribed: true });
+      expect(await mail.setSubscribed(t, true)).toEqual({
+        subscribed: true,
+        kind: 'announcements',
+      });
     });
 
     it('token adulterado, de outro segredo ou lixo não descadastra ninguém', async () => {

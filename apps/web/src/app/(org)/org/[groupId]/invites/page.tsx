@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Copy, Link2, Mail, QrCode, ScanLine, Send } from 'lucide-react';
@@ -87,6 +88,17 @@ export default function OrgInvitesPage() {
     if (painel) painel.open(c);
     else setEmLinha(c);
   };
+
+  // "Criar link com nome" da Origem dos convites (#400) chega com `?novo=link`
+  // e já encontra o painel do link aberto. Uma vez por visita.
+  const novo = useSearchParams().get('novo');
+  const abriuNovo = useRef(false);
+  useEffect(() => {
+    if (novo !== 'link' || abriuNovo.current) return;
+    abriuNovo.current = true;
+    abrir('link');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [novo]);
 
   const criarCodigo = useMutation({
     mutationFn: () => orgApi.createInvite(g.id, { role: 'MEMBER', code: true }),

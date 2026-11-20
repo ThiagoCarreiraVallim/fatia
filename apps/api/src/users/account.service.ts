@@ -93,6 +93,8 @@ export class AccountService {
         webSearchEnabled: true,
         // Descadastro do e-mail de comunicado pelo link (#398).
         announcementEmailOptOutAt: true,
+        // Descadastro do e-mail mensal do relatório pelo link (#400).
+        reportEmailOptOutAt: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -459,6 +461,8 @@ export class AccountService {
           statsOptIn: true,
           joinVia: true,
           displayName: true,
+          // Recebe o e-mail mensal do relatório da comunidade (#400, equipe).
+          reportEmail: true,
           seatAssignments: { select: { assignedAt: true, revokedAt: true } },
           // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
           // e a posição dela. O ranking dos outros é dado de terceiro. Desde a

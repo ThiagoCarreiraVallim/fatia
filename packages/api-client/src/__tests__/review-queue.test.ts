@@ -176,7 +176,10 @@ describe('menu do painel com "Para revisar" (#399)', () => {
   it('fica em Acompanhar, logo depois da Visão geral, para dono e profissional', () => {
     for (const role of ['OWNER', 'PROFESSIONAL'] as const) {
       const acompanhar = panelNav(role).find((g) => g.key === 'track')!;
-      expect(acompanhar.items.map((i) => i.label)).toEqual(['Visão geral', 'Para revisar']);
+      expect(acompanhar.items.map((i) => i.label).slice(0, 2)).toEqual([
+        'Visão geral',
+        'Para revisar',
+      ]);
     }
     expect(panelHref('g', 'review')).toBe('/org/g/review');
     expect(panelBreadcrumb('/org/g/review/sessions/s1')).toEqual({

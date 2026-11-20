@@ -497,6 +497,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | #402  | Painel: ficha da pessoa (resumo, planos e agenda) | mergeado (#452)  | api, db, api-client, web, mobile, docs |
 | #401  | Painel: membros, convites e ativação pendente     | mergeado (#453)  | api, db, api-client, web, mobile, docs |
 | #399  | Painel: para revisar, em risco e sessão feita     | pronto na branch | api, db, api-client, web, mobile, docs |
+| #400  | Painel: relatório do mês e origens dos convites   | pronto na branch | api, db, api-client, web, mobile, docs |
 
 #398 (branch `redesign/398-painel-layout`; migrations `20261119100000_panel_overview_announcement_email` e `20261119100100_announcement_dispatch`; envs novas `EMAIL_UNSUBSCRIBE_SECRET` e `ANNOUNCEMENT_PUSH_WEEKLY_LIMIT`; nenhuma tool nova no MCP, o painel não entra no MCP):
 
@@ -680,6 +681,93 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - Comentário por exercício (#303) e resposta do aluno no app (fora pela ADR 048).
   - WhatsApp pela Cloud API (#338 etapa 2, fora pela ADR 048).
   - O app do painel (#414).
+
+#400 (branch `redesign/400-relatorio`; migration `20261119500000_month_report`; nenhuma env nova (o e-mail usa `EMAIL_UNSUBSCRIBE_SECRET` e `WEB_ORIGIN`, que já existem); nenhuma permissão nova; nenhuma tool nova no MCP; nenhuma dependência nova; sem ADR):
+
+- **Decisões (orquestrador):**
+  - **A base de todo número é quem aceitou entrar nas estatísticas** (`statsOptIn`): "76 de 97 que aceitaram entrar nas estatísticas". Só treino agrega (AGGREGATION_POLICY §6), com o opt-in também no denominador (§7).
+  - **Uma regra de risco só:** `Group.riskDays` (#399). O "sem treino há N+ dias" do relatório e do e-mail usa ela.
+  - **Visitas (#390) e avaliações (#383) ficam fora por inteiro:** sem cartão vazio e sem "em breve". Entram com as issues delas.
+  - **PDF no cliente:** "Baixar PDF" chama `window.print()`, e um `@media print` em `globals.css` deixa só o relatório no papel. Sem dependência e sem rota de PDF.
+  - **Fora:** o campo de cancelamentos manuais (#316). O add-on de insights (#293) vai para a #403 ou para a história de produção.
+  - **Meta da equipe:** `Group.weeklySessionsGoal` (opcional, de 1 a 100.000), que o dono edita na própria tela (`PATCH report/settings`, `group.update`).
+  - **Mínimo de 5 em toda célula**, inclusive em origem e desafio. A taxa de ativação só aparece com 5 ou mais de cada lado (`binarySplit`). Nenhum nome, nenhum dado de saúde. O uso de IA não entrou.
+  - **Só o dono** vê o relatório e as origens (`insights.read`). Os outros papéis ficam para a #404.
+- **Relatório do mês** (`/org/<id>/report`, Pn-03; `GET groups/:id/report?month=YYYY-MM`; item "Relatório" no grupo Acompanhar do menu):
+  - **Mês:** só mês fechado. O padrão é o mês anterior, e dá para escolher até 12 meses para trás; o mês corrente é 400. Os dias são contados no fuso da comunidade. O mês fechado é calculado uma vez e servido de um retrato (`MonthReportSnapshot`); nome, meta e a lista de meses são lidos na hora.
+  - **Cartões:**
+    - Membros ativos: % e quantos, "N de M que aceitaram…", com a variação em pontos.
+    - Sessões de treino: total e por membro ativo, com a variação em %.
+    - Dias com treino por membro ativo.
+    - Voltaram após 14 dias.
+    - Sem treino há N+ dias.
+    - Planos enviados: aceitos, recusados e sem resposta.
+    - Treinos revisados: em até 1 dia e a mediana em horas, pelo 1º comentário ou "Visto" da #399.
+  - **Gráficos** (no padrão SVG da #398; `linePaths` saiu da visão geral para `components/org/chart-paths.ts`):
+    - Sessões por semana: blocos que começam nos dias 1, 8, 15, 22 e 29, com a média, a linha da meta e "N de M semanas na meta".
+    - Membros ativos ao longo do mês, acumulado por semana.
+  - **Desafios:** a tabela "Desafios do mês · ninguém aparece com nome" (participantes, terminaram ou "em andamento", revisados e anulados) e a frase de quanto mais registra quem participa de algum desafio.
+  - **Origem dos convites:** um bloco resumido de 30 dias, com "Abrir".
+  - **E-mail mensal e meta:** fica fora da impressão.
+  - **Na visão geral:** a seção de Retenção e Comportamento ganhou o atalho "Relatório do mês".
+- **Origem dos convites** (`/org/<id>/origins`, Pn-25; `GET groups/:id/invites/origins?days=7|30`; item no grupo Pessoas, depois de Ativação pendente):
+  - **Quem conta:** quem entrou por um convite desta comunidade que tem origem ou nome. A janela são os dias completos até ontem.
+  - **Ativação:** o 1º treino em até 48 h. Só conta quando a janela de 48 h já fechou.
+  - **Agrupamento:** as linhas são por origem, nome e tipo (QR, link, lista, e-mail, código).
+  - **Supressão:**
+    - Linhas com menos de 5 pessoas somam numa "Outras origens" sem rótulo; se a soma também tem menos de 5, saem de tudo, inclusive do total.
+    - Nos 30 dias, número que isolaria alguém pela diferença com os 7 dias não sai.
+    - A taxa total exige que o resto das linhas sem taxa tenha 5 ou mais de cada lado. Assim nada se descobre por diferença.
+  - **Tela:** cartões, tabela, o rodapé da prancha e o vazio "Ainda sem dados".
+  - "Criar link com nome" abre Convites com `?novo=link`, que já abre o painel do link novo.
+- **E-mail mensal** (Ex-02, `ReportEmailService`, passe a cada 30 min):
+  - **Quando:** no 1º dia útil do mês (segunda a sexta, fora feriado nacional e Sexta-feira Santa, em `business-day.ts`), a partir das 8 h no fuso da comunidade, sai o relatório do mês que acabou. Com o servidor fora, sai até o 3º dia útil; depois, o mês é pulado.
+  - **No deploy:** a migration grava em todas as comunidades que já existem o mês anterior ao deploy, então o 1º e-mail é o do mês do deploy, no 1º dia útil seguinte (nada sai no meio do mês). `reportEmailEnabled` continua ligado por padrão (recomendação; o usuário pode pedir o contrário).
+  - **Para quem:** sempre o dono, mais quem da equipe ele marcou (`GroupMembership.reportEmail`, `PUT report/recipients/:membershipId`, só profissional e criador da mesma comunidade).
+  - **Liga e desliga:** `Group.reportEmailEnabled`.
+  - **Uma vez por comunidade e mês, com lease:** o envio é reivindicado em `Group.reportEmailClaimedAt` (`updateMany` condicional, lease de 15 min) e `reportEmailMonth` só é gravado depois do envio. Três passes simultâneos mandam um só; se o envio falha, o lease é solto e o passe seguinte tenta. Se o processo cai no meio, o lease vence e pode haver um envio repetido (raro).
+  - **Erro numa comunidade** (fuso inválido, banco) vira log e não para as outras.
+  - **Comunidade criada no mês corrente:** não recebe.
+  - **Sem SMTP ou sem segredo:** nada sai e nada é reivindicado.
+  - **Descadastro:** o mesmo mecanismo da #398, com token HMAC de propósito `report` (`User.reportEmailOptOutAt`), `List-Unsubscribe` e um clique.
+    - O token de comunicado não desliga o relatório, e o do relatório não desliga o comunicado.
+    - A página `/descadastro` mostra o texto de cada um pelo `kind` que a API devolve.
+    - Correção no caminho: o `kind` da resposta sobrescrevia o `kind: 'ok'` do resultado na web, e agora vira `topic`.
+- **Dados e LGPD:** os campos novos entram no export (`reportEmailOptOutAt`, `membership.reportEmail`) e na `DATA_RETENTION.md`. O retrato do mês fechado (`MonthReportSnapshot`) é só agregado, sem id de pessoa, e sai com a comunidade (cascata). `reportEmail` e `riskDigest` (#399) recomeçam desligados quando a pessoa volta ou troca de papel.
+- **Isolamento:** tudo pelo `groupId` da URL. O destinatário é amarrado à comunidade da URL (`updateMany` com `groupId`; id de fora dá 404). O token de descadastro só muda a própria pessoa. Coberto em `report.integration.spec.ts`, `report-email.integration.spec.ts` e no bloco #400 do `user-isolation.spec.ts`: o dono de A não lê o relatório, as origens nem as configurações de B (404); a profissional de B recebe 403 no relatório de B; a pessoa da equipe de B não é marcada pela URL de A. A mutação que tira o `groupId` do destinatário deixa o teste vermelho.
+- **Celular:** o app não tem o painel (#414). `report` e `origins` saem das abas em `mobilePanelSections`.
+- **Desvios de propósito:**
+  - "Dias com o app aberto" (Pn-03) virou **"Dias com treino"**: o app não registra aberturas, e §6 só deixa agregar treino.
+  - O "sem registro" do e-mail conta só treino.
+  - Feriados são só os nacionais.
+  - O e-mail usa a cor padrão da marca (#ff7a1a): a comunidade ainda não tem cor própria.
+  - Só mês fechado: sai o "novembro (até ontem)" do seletor.
+  - O primeiro cálculo de um mês antigo usa os membros ativos daquele momento (registrado em AGGREGATION_POLICY).
+  - Pn-25c mostra cada origem pequena com o nome e "amostra pequena demais para mostrar"; aqui elas viram uma "Outras origens" sem rótulo (ou somem). A privacidade vence: a linha "Convite da Ana" com uma pessoa só diria que a Ana aceitou entrar nas estatísticas. O rodapé diz isso.
+  - Nos 30 dias, um rótulo pode sair com "—" quando a diferença para os 7 dias isolaria alguém.
+  - Origens têm só 7 e 30 dias (sem 90): a ativação em 48 h precisa da janela fechada.
+- **Correções da revisão adversarial** (cobertas em `report-review.integration.spec.ts` e nos testes das telas):
+  - **Semana por diferença (bloqueador):** total menos as semanas visíveis devolvia a semana de uma pessoa. Supressão complementar no eixo das semanas (a menor semana visível some junto; se não fecha, total, por ativo, variação e média não saem).
+  - **Mês corrente (bloqueador):** o total de um dia menos o do anterior era o dia de uma pessoa. O relatório só abre mês fechado.
+  - **Saída de membro:** recalcular o mês depois que alguém saía revelava os treinos dele. Retrato do mês fechado, gravado uma vez com segurança sob concorrência.
+  - **Origens:** a linha de uma pessoa só revelava o opt-in dela ("Outras origens"); 30 − 7 dias isolava a ativação de uma pessoa (os 30 dias não saem nesse caso).
+  - **E-mail:** no deploy, outubro sairia em 19/11 para todas as comunidades (migration grava o mês anterior; limite até o 3º dia útil); falha no envio perdia o mês (lease); erro de uma comunidade travava as outras (try por comunidade).
+  - **Marca de destinatário** sobrevivia a sair, voltar ou trocar de papel; o aviso diário da #399 tinha o mesmo padrão. As duas zeram.
+  - **Ativos por dia:** a diferença entre dois dias isolava a 1ª vez de alguém; agora é por semana. As diferenças que sobram (entre semanas, "sem treino" menos quem nunca treinou) são contagens de pessoas e estão em "O que não está protegido".
+- **Passada visual (2026-11-19):** prints em `~/.cache/fatia-vis/400/cmp-<prancha>.<tema>.png` (prancha | web 1440 | web 390, escuro e claro) para Pn-03, Pn-25, Pn-25b, Pn-25c e Ex-02 (e-mail renderizado pelo `reportEmail`), e `cmp-PDF.png` com a impressão do "Baixar PDF". Dados mínimos por SQL no banco de dev, apagados no fim (contagens antes e depois em `demo-rows.txt`). Corrigido:
+  - O "Baixar PDF" no tema escuro saía com texto claro no papel branco. A impressão usa os tokens do tema claro.
+  - "Revisados" mostrava "0 · 0 anulados"; sem anulação sai só o número.
+  - Origens no celular: a tabela de 5 colunas cortava a taxa em 390. Vira uma lista de cartões (nome, tipo, "N entraram · N ativaram", taxa); a tabela fica do `sm` para cima.
+  - Origens: tipo em etiqueta contornada e a taxa com barra, como na Pn-25.
+  - Pn-25b: o rodapé de privacidade só aparece com números (some no estado vazio).
+  - Gráficos: média de sessões e membros ativos em número grande, "+12 no mês" em selo, área sob a linha e o eixo do tempo (começo, meio e fim). A nota da célula suprimida dizia "Dias"; a série é por semana.
+  - Conferido: o menu não cobre botões (no 390 o fim da página passa da barra de baixo); nada de texto escuro no escuro; a impressão esconde menu, seletor e ajustes.
+  - Desvios que ficam: 7 cartões em vez de 8 (visitas e avaliações, ver acima); selos de variação neutros como na #398; sem 90 dias nas origens; no e-mail, "sem treino há 7+ dias" no lugar de "sem registro".
+- **Falta:**
+  - Os cartões de visitas (#390) e avaliações (#383).
+  - Os outros papéis vendo o relatório (#404).
+  - O add-on de insights (#293 → #403).
+  - Cancelamentos manuais (#316).
 
 ## Etapas seguintes
 

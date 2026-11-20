@@ -25,4 +25,10 @@ describe('abas do painel no app (#399, F7)', () => {
   it('"Para revisar" fica de fora até a tela do app existir (#414)', () => {
     expect(mobilePanelSections('OWNER').map((s) => s.section)).not.toContain('review');
   });
+
+  it('relatório e origens dos convites (#400) também ficam para a #414', () => {
+    const secoes = mobilePanelSections('OWNER').map((s) => s.section);
+    expect(secoes).not.toContain('report');
+    expect(secoes).not.toContain('origins');
+  });
 });

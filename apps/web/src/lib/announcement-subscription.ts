@@ -10,13 +10,25 @@ const BASE = `${API_BASE}/api/email/announcements`;
  * - `invalid`: o link não vale (formato ruim ou 400 da API);
  * - `unavailable`: 429, 5xx ou rede caída — o link pode estar certo, tente de novo.
  */
+export type SubscriptionTopic = 'announcements' | 'report';
+
+/** `topic`: qual e-mail o token muda (comunicados, #398, ou relatório mensal, #400). */
 export type SubscriptionResult =
-  { kind: 'ok'; subscribed: boolean } | { kind: 'invalid' } | { kind: 'unavailable' };
+  | { kind: 'ok'; subscribed: boolean; topic: SubscriptionTopic }
+  | { kind: 'invalid' }
+  | { kind: 'unavailable' };
 
 async function chama(url: string, init: RequestInit): Promise<SubscriptionResult> {
   try {
     const res = await fetch(url, { ...init, cache: 'no-store' });
-    if (res.ok) return { kind: 'ok', ...((await res.json()) as { subscribed: boolean }) };
+    if (res.ok) {
+      const body = (await res.json()) as { subscribed: boolean; kind?: string };
+      return {
+        kind: 'ok',
+        subscribed: body.subscribed,
+        topic: body.kind === 'report' ? 'report' : 'announcements',
+      };
+    }
     return res.status === 400 ? { kind: 'invalid' } : { kind: 'unavailable' };
   } catch {
     return { kind: 'unavailable' };
@@ -24,7 +36,8 @@ async function chama(url: string, init: RequestInit): Promise<SubscriptionResult
 }
 
 /**
- * O e-mail de comunicados (#398) por link, sem login: o token assinado do
+ * O e-mail de comunicados (#398) e o do relatório mensal (#400) por link, sem
+ * login (o token diz qual dos dois): o token assinado do
  * próprio e-mail é a prova. Buscado no servidor, como o cartão do convite: o
  * proxy da web só fala com a API em nome de quem entrou.
  */

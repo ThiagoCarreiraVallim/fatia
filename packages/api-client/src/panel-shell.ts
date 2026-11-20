@@ -108,6 +108,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
     items: [
       ['overview', 'Visão geral'],
       ['review', 'Para revisar'],
+      ['report', 'Relatório'],
     ],
   },
   {
@@ -117,6 +118,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
       ['members', 'Membros'],
       ['invites', 'Convites'],
       ['activation', 'Ativação pendente'],
+      ['origins', 'Origem dos convites'],
       ['seats', 'Assentos e faturas'],
     ],
   },

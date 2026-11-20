@@ -5,7 +5,8 @@ import type { InviteOverviewRow, InviteView, MyGroup } from '@fatia/api-client';
 import { SidePanel, SidePanelProvider } from '@/components/org/side-panel';
 import { assentos, grupo, membro, renderWithClient } from '../../__tests__/helpers';
 
-const ctx = vi.hoisted(() => ({ group: null as MyGroup | null }));
+const ctx = vi.hoisted(() => ({ group: null as MyGroup | null, params: new URLSearchParams() }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => ctx.params }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -104,8 +105,9 @@ const LINHAS = [
   }),
 ];
 
-function abrir(g: MyGroup = grupo()) {
+function abrir(g: MyGroup = grupo(), params = '') {
   ctx.group = g;
+  ctx.params = new URLSearchParams(params);
   vi.mocked(orgApi.invitesOverview).mockResolvedValue({
     cards: {
       activeLinks: 2,
@@ -314,5 +316,11 @@ describe('painel › convites (Pn-06)', () => {
     await screen.findByText('Recepção');
     expect(screen.queryByRole('button', { name: 'Gerar código de entrada' })).toBeNull();
     expect(screen.getByText(/só por convite/)).toBeInTheDocument();
+  });
+
+  it('vindo da Origem dos convites (?novo=link), já abre o painel do link novo (#400)', async () => {
+    abrir(grupo(), 'novo=link');
+    await screen.findByText('Recepção');
+    expect(await screen.findByRole('complementary')).toHaveTextContent('Novo link de convite');
   });
 });
