@@ -136,14 +136,21 @@ const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
 
 export function filterPanelMembers(
   members: PanelMember[],
-  filter: { tab: MemberTab; q?: string; via?: string | null },
+  filter: {
+    tab: MemberTab;
+    q?: string;
+    via?: string | null;
+    /** Só quem esta pessoa da equipe acompanha ("Distribuir", Pn-19). */
+    accompaniedBy?: string | null;
+  },
 ): PanelMember[] {
   const q = filter.q ? semAcento(filter.q) : '';
   return members.filter(
     (m) =>
       inTab(m, filter.tab) &&
       (!q || semAcento(m.name).includes(q)) &&
-      (!filter.via || joinedViaLabel(m) === filter.via),
+      (!filter.via || joinedViaLabel(m) === filter.via) &&
+      (!filter.accompaniedBy || m.accompaniedBy?.membershipId === filter.accompaniedBy),
   );
 }
 

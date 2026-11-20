@@ -482,7 +482,17 @@ describe('MembershipService', () => {
 
       const where = prisma.groupMembership.findMany.mock.calls[0][0].where;
       expect(where.OR).toEqual([
-        { role: { in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR] } },
+        {
+          role: {
+            in: [
+              GroupRole.OWNER,
+              GroupRole.ADMIN,
+              GroupRole.PROFESSIONAL,
+              GroupRole.CREATOR,
+              GroupRole.RECEPTION,
+            ],
+          },
+        },
         { userId: ALUNO },
       ]);
     });

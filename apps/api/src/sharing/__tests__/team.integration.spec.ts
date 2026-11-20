@@ -48,10 +48,18 @@ describe('equipe, papéis e permissões (integração, #404)', () => {
     silentNotifications,
     seats,
   );
+  // `listStudents` só usa o Prisma; as leituras de domínio não entram aqui.
+  const nada = null as never;
   const studentView = new StudentViewService(
     prisma,
     access,
-    ...([null, null, null, null, null, null, null] as never as [never, never, never, never]),
+    nada,
+    nada,
+    nada,
+    nada,
+    nada,
+    nada,
+    nada,
   );
 
   const stamp = `t404-${Date.now()}`;

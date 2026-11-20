@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { GroupRole, MembershipStatus, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { ProfessionalAccessService } from './professional-access.service';
-import { TEAM_ROLES } from './permissions';
+import { seesOnlyAccompanied, TEAM_ROLES } from './permissions';
 import { GoalsService } from '../goals/goals.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
 import { MealService } from '../nutrition/meal.service';
@@ -219,9 +219,21 @@ export class StudentViewService {
         // da academia que o demitiu — nome por nome, mesmo sem ler dado nenhum.
         status: MembershipStatus.ACTIVE,
       },
-      select: { groupId: true, group: { select: { name: true } } },
+      select: {
+        id: true,
+        groupId: true,
+        role: true,
+        group: { select: { name: true, proSeeOnlyAssigned: true } },
+      },
     });
     if (minhas.length === 0) return [];
+    // "Profissionais veem só quem acompanham" (#404): nessas comunidades, só
+    // quem aponta para esta pessoa.
+    const soOsMeus = new Map(
+      minhas
+        .filter((m) => seesOnlyAccompanied(m.role, m.group.proSeeOnlyAssigned))
+        .map((m) => [m.groupId, m.id]),
+    );
 
     const groupIds = minhas.map((m) => m.groupId);
     const nomeDoGrupo = new Map(minhas.map((m) => [m.groupId, m.group.name]));
@@ -238,6 +250,7 @@ export class StudentViewService {
           groupId: true,
           userId: true,
           joinedAt: true,
+          accompaniedById: true,
           user: { select: { name: true } },
         },
         orderBy: [{ groupId: 'asc' }, { createdAt: 'asc' }],
@@ -256,14 +269,16 @@ export class StudentViewService {
       vinculos.map((v) => [`${v.groupId}:${v.subjectUserId}`, v.scopes]),
     );
 
-    return alunos.map((aluno) => ({
-      membershipId: aluno.id,
-      name: aluno.user.name,
-      groupId: aluno.groupId,
-      groupName: nomeDoGrupo.get(aluno.groupId) ?? '',
-      joinedAt: aluno.joinedAt,
-      scopesGrantedToMe: porGrupoETitular.get(`${aluno.groupId}:${aluno.userId}`) ?? [],
-    }));
+    return alunos
+      .filter((a) => !soOsMeus.has(a.groupId) || a.accompaniedById === soOsMeus.get(a.groupId))
+      .map((aluno) => ({
+        membershipId: aluno.id,
+        name: aluno.user.name,
+        groupId: aluno.groupId,
+        groupName: nomeDoGrupo.get(aluno.groupId) ?? '',
+        joinedAt: aluno.joinedAt,
+        scopesGrantedToMe: porGrupoETitular.get(`${aluno.groupId}:${aluno.userId}`) ?? [],
+      }));
   }
 
   /**

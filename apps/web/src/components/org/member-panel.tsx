@@ -8,6 +8,8 @@ import { MessageCircle } from 'lucide-react';
 import {
   ApiError,
   accompanyOptions,
+  grantableRolesFor,
+  groupCan,
   hasFreeSeat,
   joinedViaLabel,
   orgApi,
@@ -27,8 +29,6 @@ import { Chip } from '@/components/ui/chip';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Switch } from '@/components/ui/switch';
 import { usePanelMembers } from './use-panel-members';
-
-const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
 
 const STATUS: Record<PanelMember['status'], string> = {
   ACTIVE: 'Ativo',
@@ -67,7 +67,9 @@ function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode
 /**
  * A pessoa no painel lateral (Pn-04b): WhatsApp que ela autorizou, quem
  * acompanha, assento, papel, o que compartilha e remover. Cada mudança vale na
- * hora; o dono muda, o profissional só lê.
+ * hora. Cada bloco segue a ação do papel (#404): o dono e o admin mudam
+ * papel e responsável, só o dono mexe em assento, a recepção aprova entradas e
+ * o profissional só lê.
  */
 export function MemberPanel({
   group: g,
@@ -78,13 +80,19 @@ export function MemberPanel({
   membershipId: string;
   onClose: () => void;
 }) {
-  const dono = g.role === 'OWNER';
+  // Assento é fatura: só o dono (#403, #404).
+  const fatura = groupCan(g, 'billing.manage');
+  const aprova = groupCan(g, 'member.approve');
+  const remove = groupCan(g, 'member.remove');
+  const distribui = groupCan(g, 'member.assign');
+  // O que a pessoa compartilha só aparece para quem pode receber vínculo.
+  const lePessoa = groupCan(g, 'member.file');
   const qc = useQueryClient();
   const membros = usePanelMembers(g.id);
   const assentos = useQuery({
     queryKey: orgKeys.seats(g.id),
     queryFn: () => seatsApi.get(g.id),
-    enabled: dono,
+    enabled: fatura,
   });
   const [removendo, setRemovendo] = useState(false);
   const m = membros.data?.find((x) => x.membershipId === membershipId);
@@ -152,6 +160,9 @@ export function MemberPanel({
   const pendente = m.status === 'INVITED';
   const ehDono = m.role === 'OWNER';
   const ehMembro = m.role === 'MEMBER';
+  // O admin não mexe em outro admin; ninguém mexe no dono (a API confere de novo).
+  const gerencia = remove && !ehDono && !(g.role === 'ADMIN' && m.role === 'ADMIN');
+  const papeis = grantableRolesFor(g.role);
   const zap = m.whatsapp ? whatsappChatHref(m.whatsapp) : null;
   const via = joinedViaLabel(m);
   const vaga = assentos.data ? hasFreeSeat(assentos.data) : false;
@@ -187,7 +198,7 @@ export function MemberPanel({
           </a>
         )}
 
-        {pendente && dono && (
+        {pendente && aprova && (
           <div className="flex gap-2">
             <Button
               className="flex-1"
@@ -196,22 +207,24 @@ export function MemberPanel({
             >
               Aprovar
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => setRemovendo(true)}>
-              Recusar
-            </Button>
+            {gerencia && (
+              <Button variant="outline" className="flex-1" onClick={() => setRemovendo(true)}>
+                Recusar
+              </Button>
+            )}
           </div>
         )}
 
         {/* A ficha (#402) abre para todo membro ativo; o cadeado fica nas abas. */}
-        {ativo && ehMembro && (
+        {ativo && ehMembro && lePessoa && (
           <Button variant="outline" asChild className="w-full">
             <Link href={`${panelHref(g.id, 'members')}/${m.membershipId}`}>Ficha completa</Link>
           </Button>
         )}
 
-        {ativo && ehMembro && (
+        {ativo && ehMembro && m.accompaniedBy !== undefined && (
           <Bloco titulo="Acompanhada por">
-            {dono ? (
+            {distribui ? (
               <div className="flex flex-wrap gap-2">
                 {accompanyOptions(membros.data ?? []).map((p) => (
                   <Chip
@@ -241,7 +254,7 @@ export function MemberPanel({
           </Bloco>
         )}
 
-        {ativo && !ehDono && dono && (
+        {ativo && !ehDono && fatura && (
           <div className="flex items-center gap-3 rounded-xl bg-muted/50 p-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Assento PRO</p>
@@ -262,10 +275,10 @@ export function MemberPanel({
           </div>
         )}
 
-        {ativo && !ehDono && dono && (
+        {ativo && gerencia && (
           <Bloco titulo="Papel">
             <div className="flex flex-wrap gap-2">
-              {PAPEIS.map((r) => (
+              {papeis.map((r) => (
                 <Chip
                   key={r}
                   selected={m.role === r}
@@ -279,7 +292,7 @@ export function MemberPanel({
           </Bloco>
         )}
 
-        {ativo && !ehDono && (
+        {ativo && !ehDono && lePessoa && (
           <Bloco titulo="O que compartilha com você">
             <ScopeChips granted={m.scopesGrantedToMe ?? []} />
             <p className="text-xs text-muted-foreground">
@@ -290,7 +303,7 @@ export function MemberPanel({
         )}
       </div>
 
-      {ativo && !ehDono && dono && (
+      {ativo && gerencia && (
         <div className="shrink-0 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <Button variant="ghost" className="w-full text-danger" onClick={() => setRemovendo(true)}>
             Remover da comunidade

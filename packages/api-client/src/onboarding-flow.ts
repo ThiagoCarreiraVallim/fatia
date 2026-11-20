@@ -411,8 +411,10 @@ export const SHARE_STEP_COPY = {
 
 const ROLE_WORD: Record<string, string> = {
   OWNER: 'dono',
+  ADMIN: 'admin',
   PROFESSIONAL: 'profissional',
   CREATOR: 'criador',
+  RECEPTION: 'recepção',
   MEMBER: 'membro',
 };
 

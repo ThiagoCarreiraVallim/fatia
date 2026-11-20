@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  groupCan,
   CUSTOM_EQUIPMENT_MAX_LENGTH,
   customEquipmentName,
   customEquipmentProblem,
@@ -62,7 +63,8 @@ export function GymEquipmentDrawer({
     queryFn: () => groupExerciseApi.list(groupId),
     enabled: open,
   });
-  const dono = grupo.data?.role === 'OWNER';
+  // Dono e admin salvam (`group.update`, #404).
+  const dono = grupo.data ? groupCan(grupo.data, 'group.update') : false;
 
   const [busca, setBusca] = useState('');
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
@@ -116,7 +118,7 @@ export function GymEquipmentDrawer({
         <DrawerDescription>
           {dono
             ? `O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre. ${marcados.size + proprios.length} marcado(s).`
-            : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+            : 'Só o dono e o admin mudam. O filtro "Na minha academia" usa esta lista.'}
         </DrawerDescription>
         <DrawerTextInput
           value={busca}

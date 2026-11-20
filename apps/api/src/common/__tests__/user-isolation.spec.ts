@@ -2712,6 +2712,7 @@ describe('isolamento entre usuários', () => {
         'denied',
         'groupId',
         'professionalName',
+        'professionalRole',
         'scope',
       ]);
     });

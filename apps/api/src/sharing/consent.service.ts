@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { MembershipStatus, ShareScope } from '@fatia/db';
+import { MembershipStatus, ShareScope, type GroupRole } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { ProfessionalLinkService } from './professional-link.service';
-import { canReceiveLink } from './permissions';
+import { canReceiveLink, clipScopes, type Specialty } from './permissions';
 import { assertKeepsRequiredScopes, normalizarEscopos } from './consent-scopes';
 
 /** Mesma resposta para membership inexistente, de outro grupo e de grupo alheio (#92, #204). */
@@ -31,6 +31,12 @@ export interface ConsentView {
   groupName: string;
   professionalMembershipId: string;
   professionalName: string;
+  /** O papel de quem recebe (#404), para "quem vê o quê" nomear o papel. Nulo se saiu. */
+  professionalRole?: GroupRole | null;
+  /** A especialidade, se for profissional (#404). */
+  professionalSpecialty?: Specialty | null;
+  /** É quem acompanha o titular nesta comunidade (#404). */
+  accompaniesMe?: boolean;
   scopes: ShareScope[];
   /** `null` pelo mesmo motivo de `linkId`: não há concessão em vigor. */
   grantedAt: Date | null;
@@ -54,6 +60,8 @@ export interface AccessLogView {
   denied: boolean;
   /** Nome de quem tentou. `null` se a conta do profissional já não existe. */
   professionalName: string | null;
+  /** O papel dela na comunidade hoje (#404). `null` se saiu ou a conta sumiu. */
+  professionalRole?: GroupRole | null;
 }
 
 /**
@@ -102,7 +110,14 @@ export class ConsentService {
   ): Promise<ConsentView> {
     const alvo = await this.prisma.groupMembership.findUnique({
       where: { id: professionalMembershipId },
-      select: { id: true, userId: true, groupId: true, role: true, status: true },
+      select: {
+        id: true,
+        userId: true,
+        groupId: true,
+        role: true,
+        status: true,
+        specialty: true,
+      },
     });
     if (!alvo) throw new NotFoundException(NOT_FOUND);
 
@@ -126,7 +141,9 @@ export class ConsentService {
       );
     }
 
-    const escopos = normalizarEscopos(scopes);
+    // A especialidade recorta (#404, ADR 043): nutricionista não recebe treino
+    // nem hábitos, mesmo marcados.
+    const escopos = clipScopes(normalizarEscopos(scopes), alvo.specialty);
     const vinculo = {
       subjectUserId,
       professionalId: alvo.userId,
@@ -209,7 +226,7 @@ export class ConsentService {
     assertKeepsRequiredScopes(eu.role, eu.group.requiredSharingScopes, eu.consentScopes, scopes);
     const equipe = await this.prisma.groupMembership.findMany({
       where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: subjectUserId } },
-      select: { userId: true, role: true },
+      select: { userId: true, role: true, specialty: true },
     });
     const at = new Date();
     await this.prisma.$transaction([
@@ -222,6 +239,7 @@ export class ConsentService {
         groupId,
         scopes,
         receivers: equipe.filter((m) => canReceiveLink(m.role)).map((m) => m.userId),
+        receiverSpecialty: new Map(equipe.map((m) => [m.userId, m.specialty])),
         at,
       }),
     ]);
@@ -276,7 +294,15 @@ export class ConsentService {
           groupId: { in: [...new Set(links.map((l) => l.groupId))] },
           userId: { in: [...new Set(links.map((l) => l.professionalId))] },
         },
-        select: { id: true, groupId: true, userId: true, user: { select: { name: true } } },
+        select: {
+          id: true,
+          groupId: true,
+          userId: true,
+          role: true,
+          status: true,
+          specialty: true,
+          user: { select: { name: true } },
+        },
       }),
       this.prisma.group.findMany({
         where: { id: { in: [...new Set(links.map((l) => l.groupId))] } },
@@ -286,6 +312,12 @@ export class ConsentService {
 
     const porGrupoEUsuario = new Map(memberships.map((m) => [`${m.groupId}:${m.userId}`, m]));
     const nomeDoGrupo = new Map(grupos.map((g) => [g.id, g.name]));
+    // Quem acompanha o titular em cada comunidade (#404).
+    const minhas = await this.prisma.groupMembership.findMany({
+      where: { userId: subjectUserId, groupId: { in: [...nomeDoGrupo.keys()] } },
+      select: { groupId: true, accompaniedById: true },
+    });
+    const acompanhante = new Map(minhas.map((m) => [m.groupId, m.accompaniedById]));
 
     return links.map((link) => {
       const membership = porGrupoEUsuario.get(`${link.groupId}:${link.professionalId}`);
@@ -297,6 +329,9 @@ export class ConsentService {
         // listado porque ele ainda é do titular, e a porta de leitura já barra.
         professionalMembershipId: membership?.id ?? '',
         professionalName: membership?.user.name ?? '',
+        professionalRole: membership?.status === MembershipStatus.ACTIVE ? membership.role : null,
+        professionalSpecialty: membership?.specialty ?? null,
+        accompaniesMe: !!membership && acompanhante.get(link.groupId) === membership.id,
         scopes: link.scopes,
         grantedAt: link.grantedAt,
       };
@@ -350,12 +385,27 @@ export class ConsentService {
       ).map((u) => [u.id, u.name]),
     );
 
+    // O papel de cada um hoje, na comunidade da linha (#404).
+    const papeis = new Map(
+      (
+        await this.prisma.groupMembership.findMany({
+          where: {
+            userId: { in: [...new Set(linhas.map((l) => l.professionalId))] },
+            status: MembershipStatus.ACTIVE,
+          },
+          select: { groupId: true, userId: true, role: true },
+        })
+      ).map((m) => [`${m.groupId}:${m.userId}`, m.role]),
+    );
+
     return linhas.map((linha) => ({
       at: linha.at,
       action: linha.action,
       scope: linha.scope,
       denied: linha.denied,
       professionalName: nomes.get(linha.professionalId) ?? null,
+      professionalRole:
+        papeis.get(`${linha.groupId ?? linha.link?.groupId}:${linha.professionalId}`) ?? null,
       groupId: linha.groupId ?? linha.link?.groupId ?? null,
     }));
   }

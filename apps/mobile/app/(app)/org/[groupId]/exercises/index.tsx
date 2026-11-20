@@ -4,7 +4,13 @@ import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Plus, Search } from 'lucide-react-native';
-import { groupExerciseApi, workoutApi, type Exercise, type MyGroup } from '@fatia/api-client';
+import {
+  groupCan,
+  groupExerciseApi,
+  workoutApi,
+  type Exercise,
+  type MyGroup,
+} from '@fatia/api-client';
 import {
   DrawerOption,
   NewButton,
@@ -42,13 +48,14 @@ function GymEquipmentCard({
   customEquipment: string[];
   onOpen: () => void;
 }) {
-  const dono = g.role === 'OWNER';
+  // Equipamento é configuração da comunidade: dono e admin (#404).
+  const dono = groupCan(g, 'group.update');
   return (
     <PanelCard title="Equipamento da academia">
       <Text className="text-xs text-muted-foreground">
         {dono
           ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
-          : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+          : 'Só o dono e o admin mudam. O filtro "Na minha academia" usa esta lista.'}
       </Text>
       <EquipmentSummary equipment={equipment} custom={customEquipment} />
       <Button size="sm" variant="outline" className="self-start" onPress={onOpen}>

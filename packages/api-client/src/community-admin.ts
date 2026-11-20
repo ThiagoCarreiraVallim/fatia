@@ -7,6 +7,7 @@ import type {
   MembershipChange,
   MembershipStatus,
   MyGroup,
+  TeamSpecialty,
 } from './community';
 import type { ShareScope } from './sharing';
 
@@ -20,6 +21,50 @@ import type { ShareScope } from './sharing';
 export type GroupVisibility = 'PUBLIC' | 'PRIVATE';
 /** Papéis que se concedem por convite, aprovação ou mudança. Dono só por transferência. */
 export type GrantableRole = Exclude<GroupRole, 'OWNER'>;
+
+/** Uma pessoa da equipe na tela Equipe e permissões (Pn-19, #404). */
+export interface StaffView {
+  membershipId: string;
+  name: string;
+  role: GroupRole;
+  specialty: TeamSpecialty | null;
+  /** Quantos membros acompanha; `null` para quem não acompanha por papel. */
+  accompanies: number | null;
+  /** Último acesso ao painel. */
+  panelSeenAt: string | null;
+  isMe: boolean;
+  /** Quem pergunta pode trocar o papel, a especialidade ou remover. */
+  manageable: boolean;
+}
+
+/** Uma linha do histórico da equipe (só o dono recebe). */
+export interface StaffChange {
+  at: string;
+  action:
+    | 'members.role'
+    | 'members.specialty'
+    | 'members.accompany'
+    | 'group.pro_see_only_assigned'
+    | string;
+  actorName: string | null;
+  targetName: string | null;
+  targetCount: number;
+  from: string | null;
+  to: string | null;
+}
+
+export interface StaffOverview {
+  staff: StaffView[];
+  grantableRoles: GrantableRole[];
+  proSeeOnlyAssigned: boolean;
+  history: StaffChange[] | null;
+}
+
+/** "O que cada papel pode fazer", da mesma matriz do guarda da API. */
+export interface PermissionTable {
+  columns: GroupRole[];
+  rows: { key: string; label: string; roles: GroupRole[] }[];
+}
 
 export interface CreateGroupInput {
   type: GroupType;
@@ -43,6 +88,8 @@ export interface UpdateGroupInput {
   autoPosts?: ('PLAN' | 'TIP' | 'EXERCISE' | 'CHALLENGE')[];
   /** Vale para quem entrar dali em diante: quem já está dentro não passa a dever nada. */
   requiredSharingScopes?: ShareScope[];
+  /** Profissionais veem só quem acompanham (#404). */
+  proSeeOnlyAssigned?: boolean;
 }
 
 /** O grupo como a API devolve ao criar ou editar. */
@@ -320,6 +367,16 @@ export const orgApi = {
     apiFetch<MembershipChange>(
       `${base}/${groupId}/members/${membershipId}`,
       json('PATCH', { role }),
+    ),
+  /** A equipe por papel, o que cada um pode dar e o histórico (Pn-19, #404). */
+  staff: (groupId: string) => apiFetch<StaffOverview>(`${base}/${groupId}/staff`),
+  /** A tabela "O que cada papel pode fazer". */
+  permissions: (groupId: string) => apiFetch<PermissionTable>(`${base}/${groupId}/permissions`),
+  /** A especialidade do profissional; Nutrição recorta o que ele recebe. */
+  setSpecialty: (groupId: string, membershipId: string, specialty: TeamSpecialty | null) =>
+    apiFetch<{ membershipId: string; specialty: TeamSpecialty | null; narrowedLinks: number }>(
+      `${base}/${groupId}/members/${membershipId}/specialty`,
+      json('PATCH', { specialty }),
     ),
 
   invites: (groupId: string) => apiFetch<InviteView[]>(`${base}/${groupId}/invites`),

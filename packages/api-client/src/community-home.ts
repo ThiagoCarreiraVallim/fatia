@@ -117,8 +117,10 @@ export const CAMERA_NOTE =
 const TYPE_WORD = { SPONSORED: 'patrocinada', SOCIAL: 'social' } as const;
 const ROLE_WORD: Record<GroupRole, string> = {
   OWNER: 'dono',
+  ADMIN: 'admin',
   PROFESSIONAL: 'profissional',
   CREATOR: 'criador',
+  RECEPTION: 'recepção',
   MEMBER: 'membro',
 };
 
@@ -185,13 +187,15 @@ export interface TeamSection {
 
 const SECTION_TITLE: Partial<Record<GroupRole, string>> = {
   OWNER: 'Donos',
+  ADMIN: 'Administração',
   PROFESSIONAL: 'Profissionais',
   CREATOR: 'Criadores de conteúdo',
+  RECEPTION: 'Recepção',
 };
 
-/** A equipe por papel, na ordem dono → profissional → criador. */
+/** A equipe por papel, na ordem dono → admin → profissional → criador → recepção. */
 export function teamSections(team: readonly TeamMemberView[]): TeamSection[] {
-  return (['OWNER', 'PROFESSIONAL', 'CREATOR'] as const)
+  return (['OWNER', 'ADMIN', 'PROFESSIONAL', 'CREATOR', 'RECEPTION'] as const)
     .map((role) => ({
       title: SECTION_TITLE[role]!,
       members: team.filter((m) => m.role === role),

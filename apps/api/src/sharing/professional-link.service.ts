@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, ProfessionalLink, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { clipScopes, scopesForSpecialty, type Specialty } from './permissions';
 
 /** Motivos possíveis de revogação. Gravados em `ProfessionalLink.revokedReason`. */
 export type RevokeReason =
@@ -169,6 +170,11 @@ export class ProfessionalLinkService {
     groupId: string;
     scopes: ShareScope[];
     receivers: string[];
+    /**
+     * A especialidade de cada destinatário (#404): a de nutrição recorta o que
+     * o vínculo carrega. Ausente = sem recorte.
+     */
+    receiverSpecialty?: ReadonlyMap<string, Specialty | null>;
     at: Date;
   }): Prisma.PrismaPromise<unknown>[] {
     const { subjectUserId, groupId, scopes, at } = params;
@@ -179,19 +185,16 @@ export class ProfessionalLinkService {
         data: { revokedAt: at, revokedReason: 'superseded' satisfies RevokeReason },
       }),
     ];
-    if (scopes.length > 0 && receivers.length > 0) {
-      ops.push(
-        this.prisma.professionalLink.createMany({
-          data: receivers.map((professionalId) => ({
-            subjectUserId,
-            professionalId,
-            groupId,
-            scopes,
-            grantedAt: at,
-          })),
-        }),
-      );
-    }
+    const data = receivers
+      .map((professionalId) => ({
+        subjectUserId,
+        professionalId,
+        groupId,
+        scopes: clipScopes(scopes, params.receiverSpecialty?.get(professionalId)),
+        grantedAt: at,
+      }))
+      .filter((d) => d.scopes.length > 0);
+    if (data.length > 0) ops.push(this.prisma.professionalLink.createMany({ data }));
     return ops;
   }
 
@@ -204,10 +207,14 @@ export class ProfessionalLinkService {
     groupId: string;
     teamUserId: string;
     subjects: { userId: string; scopes: ShareScope[] }[];
+    /** A especialidade de quem entra na equipe (#404); nutrição recorta. */
+    specialty?: Specialty | null;
     at: Date;
   }): Prisma.PrismaPromise<unknown>[] {
     const { groupId, teamUserId, at } = params;
-    const subjects = params.subjects.filter((s) => s.userId !== teamUserId && s.scopes.length > 0);
+    const subjects = params.subjects
+      .map((s) => ({ ...s, scopes: clipScopes(s.scopes, params.specialty) }))
+      .filter((s) => s.userId !== teamUserId && s.scopes.length > 0);
     if (subjects.length === 0) return [];
     return [
       this.prisma.professionalLink.updateMany({
@@ -229,6 +236,47 @@ export class ProfessionalLinkService {
         })),
       }),
     ];
+  }
+
+  /**
+   * A especialidade mudou (#404): os vínculos vivos que a pessoa recebe neste
+   * grupo encolhem para o que a especialidade permite. Só encolhem: voltar de
+   * nutrição para treino não devolve categoria sem novo aceite (ADR 043 §5).
+   * Cada vínculo cortado vira linha nova (a trilha fica), e o que fica vazio só
+   * é revogado. Lê agora e devolve as escritas, para o `$transaction` de quem chama.
+   */
+  async narrowReceiverOps(
+    groupId: string,
+    userId: string,
+    specialty: Specialty | null,
+    at: Date,
+  ): Promise<{ ops: Prisma.PrismaPromise<unknown>[]; narrowed: number }> {
+    const pode = scopesForSpecialty(specialty);
+    const vivos = await this.prisma.professionalLink.findMany({
+      where: { groupId, professionalId: userId, revokedAt: null },
+      select: { id: true, subjectUserId: true, scopes: true },
+    });
+    const cortar = vivos.filter((v) => v.scopes.some((s) => !pode.includes(s)));
+    if (cortar.length === 0) return { ops: [], narrowed: 0 };
+    const novos = cortar
+      .map((v) => ({
+        subjectUserId: v.subjectUserId,
+        professionalId: userId,
+        groupId,
+        scopes: clipScopes(v.scopes, specialty),
+        grantedAt: at,
+      }))
+      .filter((n) => n.scopes.length > 0);
+    return {
+      narrowed: cortar.length,
+      ops: [
+        this.prisma.professionalLink.updateMany({
+          where: { id: { in: cortar.map((v) => v.id) }, revokedAt: null },
+          data: { revokedAt: at, revokedReason: 'role_changed' satisfies RevokeReason },
+        }),
+        ...(novos.length > 0 ? [this.prisma.professionalLink.createMany({ data: novos })] : []),
+      ],
+    };
   }
 
   /** Vínculos ativos que o titular concedeu. Base do painel de consentimento (#155). */

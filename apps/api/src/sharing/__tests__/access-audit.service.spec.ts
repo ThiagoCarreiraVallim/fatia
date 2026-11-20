@@ -93,8 +93,19 @@ describe('AccessAuditService dentro do assertReadable', () => {
       findUnique: jest.fn((args: { where: { id?: string } }) =>
         Promise.resolve(
           args.where.id === undefined
-            ? { role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE }
-            : { userId: SUBJECT, groupId: GROUP, status: MembershipStatus.ACTIVE },
+            ? {
+                id: 'm-pro',
+                role: GroupRole.PROFESSIONAL,
+                status: MembershipStatus.ACTIVE,
+                specialty: null,
+              }
+            : {
+                userId: SUBJECT,
+                groupId: GROUP,
+                status: MembershipStatus.ACTIVE,
+                accompaniedById: null,
+                group: { proSeeOnlyAssigned: false },
+              },
         ),
       ),
     },

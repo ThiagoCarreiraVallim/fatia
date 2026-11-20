@@ -13,7 +13,7 @@ function hasRoute(href: string): boolean {
 }
 
 describe('abas do painel no app (#399, F7)', () => {
-  it.each<GroupRole>(['OWNER', 'PROFESSIONAL'])(
+  it.each<GroupRole>(['OWNER', 'ADMIN', 'PROFESSIONAL', 'RECEPTION'])(
     'toda seção que aparece para %s tem tela no app',
     (role) => {
       const secoes = mobilePanelSections(role);
@@ -30,5 +30,10 @@ describe('abas do painel no app (#399, F7)', () => {
     const secoes = mobilePanelSections('OWNER').map((s) => s.section);
     expect(secoes).not.toContain('report');
     expect(secoes).not.toContain('origins');
+  });
+
+  it('"Equipe e permissões" (#404) também fica para a #414', () => {
+    expect(mobilePanelSections('OWNER').map((s) => s.section)).not.toContain('team');
+    expect(mobilePanelSections('ADMIN').map((s) => s.section)).not.toContain('team');
   });
 });

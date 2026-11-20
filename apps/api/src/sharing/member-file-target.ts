@@ -1,7 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
-import { MembershipStatus, type GroupRole } from '@fatia/db';
+import { GroupRole, MembershipStatus } from '@fatia/db';
 import type { PrismaService } from '../common/prisma.service';
 import { requireContentRole } from './content-roles';
+import { accompaniedOnly } from './team-reach';
 import type { GroupAction } from './permissions';
 
 /** A mesma recusa da porta de leitura (#92): não diz se a pessoa existe. */
@@ -42,6 +43,12 @@ export async function resolveMemberTarget(
     select: { groupId: true, userId: true, role: true, status: true, joinedAt: true },
   });
   if (!m || m.groupId !== groupId || m.status !== MembershipStatus.ACTIVE) {
+    throw new NotFoundException(MEMBER_NOT_FOUND);
+  }
+  // "Profissionais veem só quem acompanham" (#404): a ficha de quem não é dele
+  // responde como inexistente, igual à porta de leitura.
+  const meus = await accompaniedOnly(prisma, viewerId, groupId);
+  if (meus && m.role === GroupRole.MEMBER && !meus.has(membershipId)) {
     throw new NotFoundException(MEMBER_NOT_FOUND);
   }
   return {

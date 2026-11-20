@@ -20,6 +20,7 @@ import {
   paginate,
   panelApi,
   panelHref,
+  groupCan,
   seatsApi,
   type MemberBulkAction,
   type MemberTab,
@@ -146,15 +147,23 @@ function ColumnsMenu({ cols, onChange }: { cols: Coluna[]; onChange: (c: Coluna[
 
 /**
  * Membros (Pn-04): abas, busca, "Entrou por", colunas, páginas, seleção com
- * ações em massa e a pessoa no painel lateral. O dono administra; o
- * profissional vê a lista e abre cada pessoa.
+ * ações em massa e a pessoa no painel lateral. Cada ação segue o papel
+ * (#404): dono e admin distribuem alunos, só o dono mexe em assento, a
+ * recepção vê nome e situação e aprova entradas, o profissional abre a ficha.
  */
 export default function OrgMembersPage() {
   const g = useOrgGroup();
-  const dono = g.role === 'OWNER';
+  const fatura = groupCan(g, 'billing.manage');
+  const distribui = groupCan(g, 'member.assign');
+  const aprova = groupCan(g, 'member.approve');
+  const recusa = groupCan(g, 'member.remove');
+  const abreFicha = groupCan(g, 'member.file');
   const qc = useQueryClient();
   const painel = useOptionalSidePanel();
-  const inicial = useSearchParams().get('filtro');
+  const params = useSearchParams();
+  const inicial = params.get('filtro');
+  // "Distribuir" da tela Equipe (#404): só quem esta pessoa acompanha.
+  const [responsavel, setResponsavel] = useState<string | null>(params.get('responsavel'));
   const [aba, setAba] = useState<MemberTab>(inicial === 'pending' ? 'pending' : 'all');
   const [busca, setBusca] = useState('');
   const [via, setVia] = useState('');
@@ -168,7 +177,7 @@ export default function OrgMembersPage() {
   const assentos = useQuery({
     queryKey: orgKeys.seats(g.id),
     queryFn: () => seatsApi.get(g.id),
-    enabled: dono,
+    enabled: fatura,
   });
   const contadores = useQuery({
     queryKey: orgKeys.panelCounts(g.id),
@@ -176,14 +185,24 @@ export default function OrgMembersPage() {
   });
 
   const todos = membros.data ?? [];
-  const lista = filterPanelMembers(todos, { tab: aba, q: busca, via: via || null });
+  const lista = filterPanelMembers(todos, {
+    tab: aba,
+    q: busca,
+    via: via || null,
+    accompaniedBy: responsavel,
+  });
+  const nomeResponsavel = responsavel
+    ? (todos.find((m) => m.membershipId === responsavel)?.name ?? null)
+    : null;
   const pg = paginate(lista, pagina, PAGE_SIZE);
   const contagem = memberTabCounts(todos);
   const origens = memberViaOptions(todos);
   const acompanhantes = accompanyOptions(todos);
   const ativos = todos.filter((m) => m.status === 'ACTIVE').length;
 
-  const mostra = (c: Coluna) => cols.includes(c);
+  // A recepção recebe só nome e situação; o assento é do dono (#404).
+  const mostra = (c: Coluna) =>
+    cols.includes(c) && (c !== 'seat' || fatura) && (c === 'status' || g.role !== 'RECEPTION');
   const mudaCols = (c: Coluna[]) => {
     setCols(c);
     writeCols(g.id, c);
@@ -268,7 +287,7 @@ export default function OrgMembersPage() {
       value: String(contagem.unassigned),
       sub: 'membros ativos sem ninguém',
     },
-    ...(dono && assentos.data?.pool
+    ...(fatura && assentos.data?.pool
       ? [
           {
             label: 'Assentos PRO',
@@ -353,7 +372,18 @@ export default function OrgMembersPage() {
         <ColumnsMenu cols={cols} onChange={mudaCols} />
       </div>
 
-      {dono && sel.length > 0 && (
+      {responsavel && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span>
+            Acompanhados por <b>{nomeResponsavel ?? 'esta pessoa'}</b>
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setResponsavel(null)}>
+            Ver todos
+          </Button>
+        </div>
+      )}
+
+      {distribui && sel.length > 0 && (
         <div
           role="region"
           aria-label="Ações em massa"
@@ -383,22 +413,26 @@ export default function OrgMembersPage() {
             ))}
             <option value="none">Ninguém</option>
           </select>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={lote.isPending}
-            onClick={() => lote.mutate({ action: 'seat' })}
-          >
-            Dar assento
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={lote.isPending}
-            onClick={() => lote.mutate({ action: 'unseat' })}
-          >
-            Tirar assento
-          </Button>
+          {fatura && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={lote.isPending}
+                onClick={() => lote.mutate({ action: 'seat' })}
+              >
+                Dar assento
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={lote.isPending}
+                onClick={() => lote.mutate({ action: 'unseat' })}
+              >
+                Tirar assento
+              </Button>
+            </>
+          )}
           <span className="text-xs text-muted-foreground">
             as ações valem só para quem está ativo
           </span>
@@ -434,7 +468,7 @@ export default function OrgMembersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-subtle text-left text-xs text-muted-foreground">
-                {dono && (
+                {distribui && (
                   <th className="w-10 p-3">
                     <Checkbox
                       label="Selecionar todos desta página"
@@ -475,7 +509,7 @@ export default function OrgMembersPage() {
                 const marcado = sel.includes(m.membershipId);
                 return (
                   <tr key={m.membershipId} className={cn(marcado && 'bg-primary/5')}>
-                    {dono && (
+                    {distribui && (
                       <td className="p-3">
                         {selecionavel(m) && (
                           <Checkbox
@@ -555,7 +589,7 @@ export default function OrgMembersPage() {
                       </td>
                     )}
                     <td className="p-3 text-right">
-                      {pendente && dono && (
+                      {pendente && aprova && (
                         <span className="inline-flex gap-2">
                           <Button
                             size="sm"
@@ -564,14 +598,16 @@ export default function OrgMembersPage() {
                           >
                             Aprovar
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setRecusando(m)}>
-                            Recusar
-                          </Button>
+                          {recusa && (
+                            <Button size="sm" variant="outline" onClick={() => setRecusando(m)}>
+                              Recusar
+                            </Button>
+                          )}
                         </span>
                       )}
                       {/* A ficha (#402) é de quem é membro, com ou sem nada compartilhado:
                           planos e agenda são da equipe, e o cadeado fica nas abas. */}
-                      {temFicha(m) && (
+                      {abreFicha && temFicha(m) && (
                         <Link
                           href={`${panelHref(g.id, 'members')}/${m.membershipId}`}
                           className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-primary hover:bg-muted"

@@ -320,7 +320,8 @@ describe('painel › convites (Pn-06)', () => {
 
   it('vindo da Origem dos convites (?novo=link), já abre o painel do link novo (#400)', async () => {
     abrir(grupo(), 'novo=link');
-    await screen.findByText('Recepção');
+    // O painel aberto também tem o papel "Recepção" (#404): mais de um texto.
+    await screen.findAllByText('Recepção');
     expect(await screen.findByRole('complementary')).toHaveTextContent('Novo link de convite');
   });
 });

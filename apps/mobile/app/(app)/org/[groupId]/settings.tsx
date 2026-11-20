@@ -4,6 +4,7 @@ import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  groupCan,
   ApiError,
   contentApi,
   joinPolicyLabel,
@@ -193,60 +194,65 @@ function GroupSettings({ g }: { g: MyGroup }) {
         </Button>
       </PanelCard>
 
-      <PanelCard title="Passar adiante ou apagar">
-        {candidatos.length > 0 ? (
-          <Choice
-            label="Transferir para"
-            options={candidatos.map((m) => ({
-              value: m.membershipId,
-              label: `${m.name} (${teamRoleLabel(m.role).toLowerCase()})`,
-            }))}
-            value={novoDono}
-            onChange={setNovoDono}
-          />
-        ) : (
-          <Text className="text-xs text-muted-foreground">Ninguém para quem transferir ainda.</Text>
-        )}
-        <Button
-          variant="outline"
-          disabled={!alvo}
-          loading={transferir.isPending}
-          onPress={() =>
-            confirm({
-              title: 'Transferir a comunidade?',
-              description: `${alvo?.name ?? 'A pessoa'} passa a ser dona, com a cobrança dos assentos. Você continua na equipe como profissional.`,
-              confirmLabel: 'Transferir',
-              cancelLabel: 'Voltar',
-              destructive: true,
-              onConfirm: () => transferir.mutate(),
-            })
-          }
-        >
-          Transferir
-        </Button>
-        <View className="gap-2 border-t border-border pt-3">
-          <Text className="text-xs text-muted-foreground">
-            Apagar tira os membros, os convites e o que cada um compartilhava, e cancela os
-            assentos. Os registros de cada pessoa continuam com ela. Para confirmar, digite o nome
-            da comunidade.
-          </Text>
-          <Input
-            value={confirmacao}
-            onChangeText={setConfirmacao}
-            autoCapitalize="none"
-            accessibilityLabel="Nome da comunidade, para confirmar"
-            placeholder={g.name}
-          />
+      {/* Passar a posse e apagar são só do dono; o admin não vê (#404). */}
+      {groupCan(g, 'group.transfer') ? (
+        <PanelCard title="Passar adiante ou apagar">
+          {candidatos.length > 0 ? (
+            <Choice
+              label="Transferir para"
+              options={candidatos.map((m) => ({
+                value: m.membershipId,
+                label: `${m.name} (${teamRoleLabel(m.role).toLowerCase()})`,
+              }))}
+              value={novoDono}
+              onChange={setNovoDono}
+            />
+          ) : (
+            <Text className="text-xs text-muted-foreground">
+              Ninguém para quem transferir ainda.
+            </Text>
+          )}
           <Button
-            variant="destructive"
-            disabled={confirmacao.trim() !== g.name}
-            loading={apagar.isPending}
-            onPress={() => apagar.mutate()}
+            variant="outline"
+            disabled={!alvo}
+            loading={transferir.isPending}
+            onPress={() =>
+              confirm({
+                title: 'Transferir a comunidade?',
+                description: `${alvo?.name ?? 'A pessoa'} passa a ser dona, com a cobrança dos assentos. Você continua na equipe como profissional.`,
+                confirmLabel: 'Transferir',
+                cancelLabel: 'Voltar',
+                destructive: true,
+                onConfirm: () => transferir.mutate(),
+              })
+            }
           >
-            Apagar a comunidade
+            Transferir
           </Button>
-        </View>
-      </PanelCard>
+          <View className="gap-2 border-t border-border pt-3">
+            <Text className="text-xs text-muted-foreground">
+              Apagar tira os membros, os convites e o que cada um compartilhava, e cancela os
+              assentos. Os registros de cada pessoa continuam com ela. Para confirmar, digite o nome
+              da comunidade.
+            </Text>
+            <Input
+              value={confirmacao}
+              onChangeText={setConfirmacao}
+              autoCapitalize="none"
+              accessibilityLabel="Nome da comunidade, para confirmar"
+              placeholder={g.name}
+            />
+            <Button
+              variant="destructive"
+              disabled={confirmacao.trim() !== g.name}
+              loading={apagar.isPending}
+              onPress={() => apagar.mutate()}
+            >
+              Apagar a comunidade
+            </Button>
+          </View>
+        </PanelCard>
+      ) : null}
     </>
   );
 }

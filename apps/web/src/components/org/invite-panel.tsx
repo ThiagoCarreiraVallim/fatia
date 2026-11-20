@@ -9,6 +9,8 @@ import {
   accompanyOptions,
   batchResultMessage,
   batchSkipLabel,
+  grantableRolesFor,
+  groupCan,
   inviteValidityNote,
   orgApi,
   parseInviteEmails,
@@ -36,8 +38,6 @@ import { usePanelMembers } from './use-panel-members';
 
 export type InviteMode = 'link' | 'email';
 
-const PAPEIS: GrantableRole[] = ['MEMBER', 'PROFESSIONAL', 'CREATOR'];
-
 /** As origens do link, com o nome sugerido (que a equipe pode trocar). */
 const ORIGENS: { origin: InviteOrigin; name: string }[] = [
   { origin: 'QR', name: 'Recepção' },
@@ -61,8 +61,10 @@ const VALIDADES = [
 
 const ROLE_HINT: Record<GrantableRole, string> = {
   MEMBER: 'Usa o app como aluno e entra nos desafios e no mural.',
+  ADMIN: 'Cuida da comunidade e da equipe. Não vê dados de alunos nem faturas.',
   PROFESSIONAL: 'Acompanha alunos e envia planos. Vê só o que cada aluno autoriza.',
   CREATOR: 'Cria planos e dicas da comunidade, sem acesso a alunos.',
+  RECEPTION: 'Aprova entradas e vê nome e situação. Não vê dados de alunos.',
 };
 
 function erroDaApi(err: unknown, padrao: string): string {
@@ -116,14 +118,19 @@ function Campo({
 export function InvitePanel({
   group: g,
   initialMode = 'link',
+  initialRole = 'MEMBER',
   onDone,
 }: {
   group: MyGroup;
   initialMode?: InviteMode;
+  /** "Convidar para a equipe" (Pn-19) já chega com um papel de equipe. */
+  initialRole?: GrantableRole;
   onDone: () => void;
 }) {
   const dono = g.role === 'OWNER';
-  const papeis: GrantableRole[] = dono ? PAPEIS : ['MEMBER'];
+  // Quem distribui alunos escolhe qualquer acompanhante; o profissional, só a si (#404).
+  const distribui = groupCan(g, 'member.assign');
+  const papeis: GrantableRole[] = grantableRolesFor(g.role);
   const qc = useQueryClient();
   const [modo, setModo] = useState<InviteMode>(initialMode);
 
@@ -131,7 +138,9 @@ export function InvitePanel({
   const [nome, setNome] = useState(ORIGENS[0]!.name);
   const [limite, setLimite] = useState(2);
   const [validade, setValidade] = useState(1);
-  const [papel, setPapel] = useState<GrantableRole>('MEMBER');
+  const [papel, setPapel] = useState<GrantableRole>(
+    papeis.includes(initialRole) ? initialRole : 'MEMBER',
+  );
   const [acompanha, setAcompanha] = useState<string | null>(null);
   const [assento, setAssento] = useState(false);
   const [criado, setCriado] = useState<{ url: string; name: string } | null>(null);
@@ -152,7 +161,7 @@ export function InvitePanel({
     : 0;
 
   // O profissional só se põe como acompanhante (a API recusa outro nome).
-  const acompanhantes: { id: string; label: string }[] = dono
+  const acompanhantes: { id: string; label: string }[] = distribui
     ? accompanyOptions(membros.data ?? []).map((m) => ({ id: m.membershipId, label: m.name }))
     : [{ id: g.membershipId, label: 'Eu' }];
   const ehMembro = papel === 'MEMBER';

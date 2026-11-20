@@ -5,6 +5,8 @@ const ROLE_LABEL = {
   PROFESSIONAL: 'profissional da equipe',
   CREATOR: 'criador de conteúdo',
   OWNER: 'dono',
+  ADMIN: 'administrador da comunidade',
+  RECEPTION: 'recepção',
 } as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;

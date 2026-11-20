@@ -2,6 +2,8 @@
  * Estado de um convite (#401), sem Prisma nem Nest: a mesma regra no aceite,
  * no código de entrada, na prévia do chat e nas listas do painel.
  */
+import type { GroupRole } from '@fatia/db';
+import { rolesGrantableBy } from './permissions';
 
 export type InviteStatus = 'active' | 'used' | 'expired' | 'revoked' | 'declined';
 export type InviteKind = 'link' | 'email' | 'code';
@@ -49,13 +51,13 @@ export const ACTIVATION_PENDING_AFTER_DAYS = 2;
  */
 export function activationPendingWhere(
   groupId: string,
-  viewerRole: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER',
+  viewerRole: GroupRole,
   now: Date,
   opts: { includeDeclined?: boolean } = {},
 ) {
   return {
     groupId,
-    ...(viewerRole === 'OWNER' ? {} : { role: 'MEMBER' as const }),
+    ...inviteReachWhere(viewerRole),
     email: { not: null },
     code: null,
     uses: 0,
@@ -66,4 +68,12 @@ export function activationPendingWhere(
       lte: new Date(now.getTime() - ACTIVATION_PENDING_AFTER_DAYS * 24 * 60 * 60 * 1000),
     },
   };
+}
+
+/**
+ * Os convites que este papel administra (#404): os dos papéis que ele pode dar
+ * (`rolesGrantableBy`). Papel sem nenhum não vê convite.
+ */
+export function inviteReachWhere(role: GroupRole): { role: { in: GroupRole[] } } {
+  return { role: { in: [...rolesGrantableBy(role)] } };
 }

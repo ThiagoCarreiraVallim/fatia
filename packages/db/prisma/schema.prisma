@@ -1712,12 +1712,26 @@ enum GroupType {
 enum GroupRole {
   /// Gere grupo, membros e cobrança. Lê dado de saúde só com vínculo (ADR 026).
   OWNER
+  /// Administra a comunidade sem ser o dono (#404, ADR 043): sem faturas, sem
+  /// passar a posse e **sem vínculo** de leitura, nunca.
+  ADMIN
   /// Pode receber vínculo de leitura e oferecer plano.
   PROFESSIONAL
   /// Publica conteúdo. Lê dado individual só com vínculo (ADR 026).
   CREATOR
+  /// O balcão (#404, ADR 043): nome, situação e check-in. Nunca recebe vínculo.
+  RECEPTION
   /// Aluno/fã. O próprio dado, sempre.
   MEMBER
+}
+
+/// Especialidade do profissional (#404, ADR 043). Nutrição recorta o vínculo
+/// para Alimentação, Metas, Corpo e Fotos das refeições.
+enum TeamSpecialty {
+  TRAINING
+  NUTRITION
+  PHYSIO
+  OTHER
 }
 
 enum MembershipStatus {
@@ -1846,6 +1860,9 @@ model Group {
   /// Lease do envio do mês (#400): quem reivindica grava a hora; outra
   /// instância só tenta depois que o lease vence. Falha solta o lease.
   reportEmailClaimedAt   DateTime?
+  /// "Profissionais veem só quem acompanham" (#404): o profissional só lê e só
+  /// lista quem tem `accompaniedById` apontando para ele. Dono e criador, não.
+  proSeeOnlyAssigned     Boolean                @default(false)
   reviewSeen             ReviewSeen[]
   sessionFeedback        SessionFeedback[]
   monthReports           MonthReportSnapshot[]
@@ -1904,6 +1921,11 @@ model GroupMembership {
   /// Recebe o e-mail mensal do relatório (#400). Vale só para a equipe e é o
   /// dono quem marca; o dono recebe sempre.
   reportEmail       Boolean          @default(false)
+  /// Especialidade (#404), só do `PROFESSIONAL`. Nula = sem recorte.
+  specialty         TeamSpecialty?
+  /// Último acesso ao painel (#404, "último acesso" da Equipe): carimbado pelos
+  /// contadores do menu, no máximo a cada 5 minutos.
+  panelSeenAt       DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 

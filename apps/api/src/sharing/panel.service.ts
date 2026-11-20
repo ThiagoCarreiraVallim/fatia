@@ -11,6 +11,7 @@ import { MIN_CELL } from '../insights/aggregation.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from './content-roles';
 import { activationPendingWhere } from './invite-state';
+import { accompaniedOnly } from './team-reach';
 import { can, type GroupAction } from './permissions';
 
 const DIA_MS = 86_400_000;
@@ -106,7 +107,9 @@ export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] 
   { key: 'overview', label: 'Visão geral', group: 'Acompanhar', action: 'panel.overview' },
   { key: 'review', label: 'Para revisar', group: 'Acompanhar', action: 'panel.review' },
   { key: 'report', label: 'Relatório', group: 'Acompanhar', action: 'insights.read' },
-  { key: 'members', label: 'Membros', group: 'Pessoas', action: 'invite.create' },
+  // Membros abre para quem busca no painel: a recepção vê só nome e situação (#404).
+  { key: 'members', label: 'Membros', group: 'Pessoas', action: 'panel.search' },
+  { key: 'team', label: 'Equipe e permissões', group: 'Pessoas', action: 'member.role' },
   { key: 'invites', label: 'Convites', group: 'Pessoas', action: 'invite.create' },
   { key: 'origins', label: 'Origem dos convites', group: 'Pessoas', action: 'insights.read' },
   { key: 'seats', label: 'Assentos e faturas', group: 'Pessoas', action: 'billing.read' },
@@ -152,7 +155,17 @@ export class PanelService {
       'panel.overview',
       'Seu papel não abre o painel desta comunidade',
     );
-    return this.countsFor(userId, groupId, role, new Date());
+    const now = new Date();
+    // "Último acesso" da Equipe (#404): no máximo uma escrita a cada 5 minutos.
+    await this.prisma.groupMembership.updateMany({
+      where: {
+        groupId,
+        userId,
+        OR: [{ panelSeenAt: null }, { panelSeenAt: { lt: new Date(now.getTime() - 5 * 60_000) } }],
+      },
+      data: { panelSeenAt: now },
+    });
+    return this.countsFor(userId, groupId, role, now);
   }
 
   async overview(
@@ -215,11 +228,14 @@ export class PanelService {
     const q = raw.trim().slice(0, SEARCH_QUERY_MAX);
     if (!q) return { members: [], screens: [], plans: [] };
     const alvo = semAcento(q);
+    // "Profissionais veem só quem acompanham" (#404): a busca também.
+    const meus = await accompaniedOnly(this.prisma, userId, groupId);
 
     const [pessoas, planos] = await Promise.all([
       this.prisma.groupMembership.findMany({
         where: {
           groupId,
+          ...(meus ? { OR: [{ role: { not: GroupRole.MEMBER } }, { id: { in: [...meus] } }] } : {}),
           status: { in: [MembershipStatus.ACTIVE, MembershipStatus.INVITED] },
           user: { name: { contains: q, mode: 'insensitive' } },
         },

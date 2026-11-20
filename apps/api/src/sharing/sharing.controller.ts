@@ -20,6 +20,7 @@ import { GroupService } from './group.service';
 import { InviteService } from './invite.service';
 import { MemberAdminService } from './member-admin.service';
 import { MembershipService } from './membership.service';
+import { TeamService } from './team.service';
 import {
   ApproveMemberDto,
   BatchInviteDto,
@@ -36,6 +37,7 @@ import {
   ResendInvitesDto,
   SetAccompaniedByDto,
   SetAvatarDto,
+  SetSpecialtyDto,
   TransferOwnershipDto,
   UpdateGroupDto,
 } from './dto/group.dto';
@@ -72,6 +74,7 @@ export class SharingController {
     private readonly consents: ConsentService,
     private readonly content: ContentService,
     private readonly memberAdmin: MemberAdminService,
+    private readonly teamAdmin: TeamService,
   ) {}
 
   @Post()
@@ -222,6 +225,38 @@ export class SharingController {
   @RequireGroupAction('group.read')
   team(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
     return this.memberships.teamForMember(user.id, groupId);
+  }
+
+  /**
+   * A tela Equipe do painel (#404, Pn-19): a equipe por papel, especialidade,
+   * quantos acompanha e o último acesso; o histórico de mudanças só ao dono.
+   */
+  @Get(':groupId/staff')
+  @RequireGroupAction('member.role')
+  staff(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
+    return this.teamAdmin.staff(user.id, groupId);
+  }
+
+  /** "O que cada papel pode fazer" (#404), calculado da matriz do guarda. */
+  @Get(':groupId/permissions')
+  @RequireGroupAction('group.read')
+  permissions() {
+    return this.teamAdmin.permissions();
+  }
+
+  /** A especialidade do profissional (#404); nutrição recorta o vínculo. */
+  @Patch(':groupId/members/:membershipId/specialty')
+  @RequireGroupAction('member.role')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  // O ThrottlerModule não é APP_GUARD: sem o guard de rota, o @Throttle é inerte.
+  @UseGuards(UserThrottlerGuard)
+  setSpecialty(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: SetSpecialtyDto,
+  ) {
+    return this.teamAdmin.setSpecialty(user.id, groupId, membershipId, dto.specialty);
   }
 
   /** Pedido de entrada do próprio usuário. Quem entra é sempre quem chamou. */
@@ -424,7 +459,10 @@ export class SharingController {
     return this.memberships.leave(user.id, groupId);
   }
 
-  /** Mudar o papel de quem já está dentro; os vínculos acompanham (ADR 026). */
+  /**
+   * Mudar o papel de quem já está dentro; os vínculos acompanham (ADR 026). O
+   * dono e o administrador (#404), cada um com o seu limite.
+   */
   @Patch(':groupId/members/:membershipId')
   @RequireGroupAction('member.role')
   changeRole(

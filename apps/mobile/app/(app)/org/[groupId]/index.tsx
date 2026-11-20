@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
+  groupCan,
   orgApi,
   panelHref,
   pendingRequests,
@@ -74,7 +75,7 @@ function VisaoGeral({ g }: { g: MyGroup }) {
         <Numero
           titulo="Pedidos aguardando"
           valor={String(pedidos)}
-          detalhe={pedidos > 0 && dono ? 'Toque para aprovar' : undefined}
+          detalhe={pedidos > 0 && groupCan(g, 'member.approve') ? 'Toque para aprovar' : undefined}
           onPress={() => router.replace(`${panelHref(g.id, 'members')}?filtro=pending`)}
         />
         <Numero titulo="Compartilham com você" valor={String(compartilhando)} />
