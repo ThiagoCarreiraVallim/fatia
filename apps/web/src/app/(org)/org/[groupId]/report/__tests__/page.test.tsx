@@ -169,11 +169,31 @@ describe('relatório do mês (#400, Pn-03)', () => {
     expect(barras).toHaveAccessibleName(
       'Sessões por semana: S1 310, S2 290, S3 amostra pequena, S4 340, S5 120 (3 dias)',
     );
-    expect(screen.getByText('321 média')).toBeInTheDocument();
+    // Média em destaque, como na Pn-03.
+    expect(screen.getByText('média').parentElement).toHaveTextContent('321 média');
+    expect(screen.getByText('321')).toHaveClass('text-3xl');
     expect(screen.getByText('meta da equipe 300')).toBeInTheDocument();
     expect(screen.getByText('2 de 3 semanas na meta da equipe')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Membros ativos ao longo do mês/ })).toBeVisible();
-    expect(screen.getByText('+12 em relação ao mês anterior')).toBeInTheDocument();
+    expect(screen.getByText('pessoas').parentElement).toHaveTextContent('76 pessoas');
+    expect(screen.getByText('+12 no mês')).toHaveAccessibleName('+12 em relação ao mês anterior');
+    // Eixo do tempo: começo, meio e fim.
+    for (const d of ['7 out', '21 out', '31 out']) expect(screen.getByText(d)).toBeInTheDocument();
+  });
+
+  it('ativos: semana suprimida fala de semana, não de dia', async () => {
+    abrir(
+      relatorio({
+        activeByDay: ['07', '14', '21', '28', '31'].map((d, i) =>
+          cell(`2026-10-${d}`, i === 1 ? null : 40 + i * 9),
+        ),
+      }),
+    );
+    const ativos = await screen.findByRole('region', { name: /^Membros ativos/ });
+    expect(
+      within(ativos).getByText('Semanas com menos de 5 pessoas de cada lado ficam em branco.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Dias com menos de 5/)).toBeNull();
   });
 
   it('desafios sem nome de ninguém e a comparação de quem participa', async () => {
