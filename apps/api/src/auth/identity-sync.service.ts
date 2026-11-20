@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { isProvisionalName } from '../users/provisional-name';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from './logto-management.service';
 
@@ -105,7 +106,7 @@ export class IdentitySyncService implements OnModuleInit {
       const email = normalizeEmail(claims.email);
       if (email && email !== user.email) data.email = email;
     }
-    if (typeof claims.name === 'string' && this.isProvisionalName(user)) {
+    if (typeof claims.name === 'string' && isProvisionalName(user)) {
       const name = cleanName(claims.name);
       if (name && name !== user.name) data.name = name;
     }
@@ -274,12 +275,6 @@ export class IdentitySyncService implements OnModuleInit {
     if (!this.logto.isConfigured()) {
       throw new ServiceUnavailableException('Troca de e-mail indisponível neste servidor');
     }
-  }
-
-  /** Nome que ninguém escolheu: o `sub` (provisionamento sem perfil) ou vazio. */
-  private isProvisionalName(user: { name: string; logtoSub: string }): boolean {
-    const name = user.name.trim();
-    return !name || name === user.logtoSub || name === 'User';
   }
 
   private async findUser(userId: string) {

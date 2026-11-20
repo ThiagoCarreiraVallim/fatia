@@ -10,7 +10,6 @@ describe('isProvisionalName', () => {
     ['"User"', 'User'],
     ['o sub', 'sub-1'],
     ['o pedaço do e-mail antes do @', 'ana'],
-    ['o pedaço do e-mail com outra caixa', 'ANA'],
   ])('%s é provisório', (_, name) => {
     expect(isProvisionalName({ ...base, name })).toBe(true);
   });
@@ -23,5 +22,9 @@ describe('isProvisionalName', () => {
 
   it('um nome de verdade não é', () => {
     expect(isProvisionalName({ ...base, name: 'Ana Souza' })).toBe(false);
+  });
+
+  it('o nome digitado que só coincide com o e-mail (outra caixa) é de verdade', () => {
+    expect(isProvisionalName({ ...base, name: 'Ana' })).toBe(false);
   });
 });

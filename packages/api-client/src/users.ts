@@ -49,6 +49,12 @@ export interface MeUser {
   distanceUnit: DistanceUnit;
   /** Troca de e-mail com código disponível (a API tem a Management API do Logto). */
   emailChangeEnabled?: boolean;
+  /**
+   * O nome ainda é o que o provisionamento inventou: na comunidade sai "Membro"
+   * e o app pede o nome antes do primeiro post ou desafio. Ausente na API de
+   * antes.
+   */
+  nameIsProvisional?: boolean;
 }
 
 export interface UpdateMeInput {

@@ -17,6 +17,10 @@ import {
 import type { ImageValue } from '@/components/content/image-field';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { PhotosField } from '@/components/content/photos-field';
+import {
+  CommunityNameField,
+  useCommunityNameGate,
+} from '@/components/community/community-name-field';
 import { apiMessage } from '@/components/org/org-panel';
 import { Button, Input, Segmented, Switch } from '@/components/ui';
 import { Text } from '@/components/ui/text';
@@ -70,9 +74,13 @@ export function Composer({
   const [dias, setDias] = useState('3');
   const [comoGrupo, setComoGrupo] = useState<'me' | 'group'>('me');
   const [fixar, setFixar] = useState(false);
+  const nome = useCommunityNameGate();
+  // Em nome da comunidade não aparece o nome de ninguém.
+  const pedeNome = nome.needed && !(team && comoGrupo === 'group');
 
   const publicar = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (pedeNome) await nome.save();
       const input: CreatePostInput =
         tipo === 'POLL'
           ? {
@@ -111,7 +119,8 @@ export function Composer({
   });
 
   const problema =
-    tipo === 'POLL' ? pollProblem(pergunta, opcoes) : postProblem(texto, imagens.length);
+    (tipo === 'POLL' ? pollProblem(pergunta, opcoes) : postProblem(texto, imagens.length)) ??
+    (pedeNome ? nome.problem : null);
   const escreveu =
     tipo === 'POLL'
       ? pergunta.trim().length > 0 || opcoes.some((o) => o.trim())
@@ -274,6 +283,8 @@ export function Composer({
           <Switch checked={fixar} onCheckedChange={setFixar} label="Fixar como aviso" />
         </View>
       ) : null}
+
+      {pedeNome ? <CommunityNameField gate={nome} /> : null}
 
       {problema && escreveu ? (
         <Text accessibilityRole="alert" className="text-sm text-danger">

@@ -55,7 +55,7 @@ import {
   challengeEndedNotice,
   challengeStartedNotice,
 } from './community-notices';
-import { cleanDisplayName, communityName } from './display-name';
+import { COMMUNITY_NAME_USER_SELECT, cleanDisplayName, communityName } from './display-name';
 import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
 import { can } from './permissions';
 
@@ -1375,7 +1375,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     );
     const m = await this.prisma.groupMembership.findUniqueOrThrow({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, displayName: true, user: { select: { name: true, nickname: true } } },
+      select: { id: true, displayName: true, user: { select: COMMUNITY_NAME_USER_SELECT } },
     });
     // O nome no ranking é o da comunidade, senão o do perfil (`communityName`).
     return { role, membershipId: m.id, name: communityName(m) };

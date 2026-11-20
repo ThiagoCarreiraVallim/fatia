@@ -29,7 +29,7 @@ import {
   POST_BODY_MAX,
   PostService,
 } from './post.service';
-import { communityName } from './display-name';
+import { COMMUNITY_NAME_USER_SELECT, communityName } from './display-name';
 
 /** O horário do comunicado anda em blocos de 15 minutos (prancha Pn-14). */
 export const ANNOUNCEMENT_SLOT_MINUTES = 15;
@@ -535,5 +535,5 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
 
 const AUTOR = {
   displayName: true,
-  user: { select: { name: true, nickname: true } },
+  user: { select: COMMUNITY_NAME_USER_SELECT },
 } as const;

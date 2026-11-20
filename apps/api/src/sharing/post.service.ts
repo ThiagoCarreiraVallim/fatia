@@ -34,7 +34,7 @@ import {
 } from './community-notices';
 import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
-import { cleanDisplayName, communityName } from './display-name';
+import { COMMUNITY_NAME_USER_SELECT, cleanDisplayName, communityName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
 
 /** Quem agendou saiu ou perdeu o papel: os próximos disparos não saem mais. */
@@ -249,7 +249,7 @@ const AUTOR = {
     role: true,
     displayName: true,
     user: {
-      select: { name: true, nickname: true, avatarVisibility: true, avatarFile: true },
+      select: { ...COMMUNITY_NAME_USER_SELECT, avatarVisibility: true, avatarFile: true },
     },
   },
 } as const;
@@ -288,6 +288,9 @@ interface Eu {
   userName: string;
   /** O apelido do perfil (Você, #387), que vale em toda comunidade sem apelido próprio. */
   userNickname: string | null;
+  /** Só para saber se o nome ainda é provisório; nunca sai na resposta. */
+  userEmail: string;
+  userLogtoSub: string;
   moderates: boolean;
 }
 
@@ -1253,7 +1256,7 @@ export class PostService {
           feedSeenAt: true,
           joinedAt: true,
           createdAt: true,
-          user: { select: { name: true, nickname: true } },
+          user: { select: COMMUNITY_NAME_USER_SELECT },
           group: { select: { name: true, postPolicy: true, avatarFile: true } },
         },
       }),
@@ -1269,6 +1272,8 @@ export class PostService {
       displayName: m.displayName,
       userName: m.user.name,
       userNickname: m.user.nickname,
+      userEmail: m.user.email,
+      userLogtoSub: m.user.logtoSub,
       moderates: can(role, 'content.moderate'),
     };
   }
@@ -1603,9 +1608,16 @@ export class PostService {
 }
 
 /** O nome da própria pessoa no mural (ver `communityName`). */
-function myName(eu: { displayName: string | null; userNickname: string | null; userName: string }) {
+function myName(
+  eu: Pick<Eu, 'displayName' | 'userNickname' | 'userName' | 'userEmail' | 'userLogtoSub'>,
+) {
   return communityName({
     displayName: eu.displayName,
-    user: { nickname: eu.userNickname, name: eu.userName },
+    user: {
+      nickname: eu.userNickname,
+      name: eu.userName,
+      email: eu.userEmail,
+      logtoSub: eu.userLogtoSub,
+    },
   });
 }

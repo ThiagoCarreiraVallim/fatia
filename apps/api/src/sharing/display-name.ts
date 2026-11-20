@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { isProvisionalName } from '../users/provisional-name';
 
 /**
  * O apelido na comunidade (`GroupMembership.displayName`): como a pessoa
@@ -39,11 +40,28 @@ export function firstName(name: string): string {
  */
 export function communityName(m: {
   displayName: string | null;
-  user: { nickname: string | null; name: string };
+  user: { nickname: string | null; name: string; email?: string; logtoSub?: string };
 }): string {
   const escolhido = m.displayName?.trim();
   if (escolhido) return escolhido;
   const doPerfil = m.user.nickname?.trim().replace(/\s+/g, ' ');
   if (doPerfil) return doPerfil.slice(0, DISPLAY_NAME_MAX);
+  // O `sub` ou o pedaço do e-mail no lugar do nome não vão ao mural (ADR 050).
+  const { email, logtoSub } = m.user;
+  if (email !== undefined && logtoSub !== undefined) {
+    if (isProvisionalName({ name: m.user.name, email, logtoSub }))
+      return PROVISIONAL_COMMUNITY_NAME;
+  }
   return firstName(m.user.name);
 }
+
+/** Como aparece quem ainda não tem nome escolhido. */
+export const PROVISIONAL_COMMUNITY_NAME = 'Membro';
+
+/** O `select` do usuário que `communityName` precisa. */
+export const COMMUNITY_NAME_USER_SELECT = {
+  name: true,
+  nickname: true,
+  email: true,
+  logtoSub: true,
+} as const;

@@ -12,7 +12,7 @@ import {
   localClock,
   parseClock,
 } from './reminders/reminder-rules';
-import { communityName } from '../sharing/display-name';
+import { COMMUNITY_NAME_USER_SELECT, communityName } from '../sharing/display-name';
 
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
 export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
@@ -282,7 +282,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
             select: {
               role: true,
               displayName: true,
-              user: { select: { nickname: true, name: true } },
+              user: { select: COMMUNITY_NAME_USER_SELECT },
             },
           });
     // O profissional antes do dono e do criador: é quem manda plano e avaliação.

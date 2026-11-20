@@ -86,9 +86,38 @@ export function initialsOf(name: string | null | undefined): string {
     .join('');
 }
 
-/** O nome que os outros membros leem: o apelido, senão o primeiro nome. */
-export function communityName(me: Pick<MeUser, 'name' | 'nickname'>): string {
-  return me.nickname?.trim() || me.name.trim().split(/\s+/)[0] || me.name;
+type CommunityNameOf = Pick<MeUser, 'name' | 'nickname'> &
+  Partial<Pick<MeUser, 'nameIsProvisional'>>;
+
+/**
+ * O nome que os outros membros leem: o apelido, senão o primeiro nome. Enquanto
+ * o nome é o que o provisionamento inventou (o `sub`, o pedaço do e-mail), é
+ * "Membro" — igual à API (ADR 050).
+ */
+export function communityName(me: CommunityNameOf): string {
+  const apelido = me.nickname?.trim();
+  if (apelido) return apelido;
+  if (me.nameIsProvisional) return 'Membro';
+  return me.name.trim().split(/\s+/)[0] || me.name;
+}
+
+/** O nome do perfil (o mesmo limite da API). */
+export const PROFILE_NAME_MAX = 120;
+
+/**
+ * Pedir o nome antes do primeiro post ou da entrada num desafio: só enquanto o
+ * nome for provisório e não houver apelido. Salvo no perfil, não pergunta mais.
+ */
+export function needsCommunityName(me: CommunityNameOf | null | undefined): boolean {
+  return !!me && me.nameIsProvisional === true && !me.nickname?.trim();
+}
+
+/** O que impede o nome digitado; `null` quando serve. */
+export function communityNameProblem(name: string, me: Pick<MeUser, 'email'>): string | null {
+  const nome = name.trim();
+  if (!nome || nome === me.email.split('@')[0]) return 'Escreva seu nome como quer aparecer.';
+  if (nome.length > PROFILE_NAME_MAX) return `Use até ${PROFILE_NAME_MAX} caracteres.`;
+  return null;
 }
 
 /** `ana@email.com · nas comunidades: Ana` (cabeçalho de Você). */

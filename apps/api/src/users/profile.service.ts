@@ -4,21 +4,30 @@ import { logtoManagementConfigured } from '../auth/logto-management.service';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
+import { isProvisionalName } from './provisional-name';
 import { USER_SELECT } from './user-select';
 import { profileUpdateData, type ProfileUpdate } from './profile-update';
 
-type UserRow = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
+/** O perfil mais o `sub`, que só serve para saber se o nome é provisório e não sai. */
+const PROFILE_SELECT = { ...USER_SELECT, logtoSub: true } as const;
+type UserRow = Prisma.UserGetPayload<{ select: typeof PROFILE_SELECT }>;
 
 /**
  * O perfil como o app e o MCP o recebem: a foto vira URL assinada de curta duração.
  * `mediaUploadEnabled` diz se o servidor tem bucket (`MEDIA_S3_*`): sem ele o app
  * esconde "Tirar foto / Galeria" em vez de deixar o envio falhar com 503.
  */
-export type MeView = Omit<UserRow, 'avatarFile'> & {
+export type MeView = Omit<UserRow, 'avatarFile' | 'logtoSub'> & {
   avatarUrl: string | null;
   mediaUploadEnabled: boolean;
   /** A troca de e-mail precisa da Management API do Logto (ADR 050). */
   emailChangeEnabled: boolean;
+  /**
+   * O nome ainda é o que o provisionamento inventou (o `sub` ou o pedaço do
+   * e-mail): a comunidade mostra "Membro" e o app pede o nome antes do primeiro
+   * post ou da entrada num desafio.
+   */
+  nameIsProvisional: boolean;
 };
 
 /**
@@ -35,7 +44,10 @@ export class ProfileService {
   ) {}
 
   async getMe(userId: string): Promise<MeView> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: PROFILE_SELECT,
+    });
     if (!row) throw new NotFoundException('User not found');
     return this.view(row);
   }
@@ -51,7 +63,11 @@ export class ProfileService {
         throw new BadRequestException('Informe o WhatsApp antes de deixar a equipe chamar.');
       }
     }
-    const row = await this.prisma.user.update({ where: { id: userId }, data, select: USER_SELECT });
+    const row = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: PROFILE_SELECT,
+    });
     return this.view(row);
   }
 
@@ -69,7 +85,7 @@ export class ProfileService {
     const row = await this.prisma.user.update({
       where: { id: userId },
       data: { avatarFileId: file.id },
-      select: USER_SELECT,
+      select: PROFILE_SELECT,
     });
     if (antes.avatarFileId && antes.avatarFileId !== file.id) {
       await this.media.discardById(antes.avatarFileId);
@@ -85,19 +101,20 @@ export class ProfileService {
     const row = await this.prisma.user.update({
       where: { id: userId },
       data: { avatarFileId: null },
-      select: USER_SELECT,
+      select: PROFILE_SELECT,
     });
     await this.media.discardById(antes.avatarFileId);
     return this.view(row);
   }
 
-  private async view({ avatarFile, ...row }: UserRow): Promise<MeView> {
+  private async view({ avatarFile, logtoSub, ...row }: UserRow): Promise<MeView> {
     const foto = await this.media.viewOrNull(avatarFile);
     return {
       ...row,
       avatarUrl: foto?.url ?? null,
       mediaUploadEnabled: this.media.enabled,
       emailChangeEnabled: this.config ? logtoManagementConfigured(this.config) : false,
+      nameIsProvisional: isProvisionalName({ name: row.name, email: row.email, logtoSub }),
     };
   }
 }

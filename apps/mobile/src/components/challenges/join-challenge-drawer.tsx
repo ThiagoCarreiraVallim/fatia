@@ -9,6 +9,10 @@ import {
   type Challenge,
   type ChallengeDetail,
 } from '@fatia/api-client';
+import {
+  CommunityNameField,
+  useCommunityNameGate,
+} from '@/components/community/community-name-field';
 import { apiMessage } from '@/components/org/org-panel';
 import {
   Button,
@@ -83,12 +87,15 @@ function JoinForm({
   const qc = useQueryClient();
   const toast = useToast();
   const [consent, setConsent] = useState(false);
+  const nome = useCommunityNameGate();
 
   const join = useMutation({
-    mutationFn: () =>
-      challengesApi.join(groupId, c.id, undefined, {
+    mutationFn: async () => {
+      await nome.save();
+      return challengesApi.join(groupId, c.id, undefined, {
         acceptPhotoTerms: c.needsPhotoConsent ? consent : undefined,
-      }),
+      });
+    },
     onSuccess: (d) => {
       qc.setQueryData(challengeKey(groupId, d.id), d);
       void qc.invalidateQueries({ queryKey: challengeListKey(groupId), exact: true });
@@ -100,7 +107,7 @@ function JoinForm({
   });
 
   const needsConsent = c.needsPhotoConsent;
-  const blocked = needsConsent && !consent;
+  const blocked = (needsConsent && !consent) || Boolean(nome.problem);
   const privacy = privacyLine(c);
 
   return (
@@ -116,15 +123,19 @@ function JoinForm({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 14 }}
       >
-        <View className="flex-row items-center gap-3 rounded-card bg-card p-4">
-          <Icon name="user" size={20} color={colors.mutedForeground} />
-          <View className="flex-1 gap-0.5">
-            <Text className="text-sm text-foreground">{`No ranking: ${suggestedName}`}</Text>
-            <Text className="text-xs text-muted-foreground">
-              É o nome do seu perfil. Para trocar, vá em Você → Editar perfil.
-            </Text>
+        {nome.needed ? (
+          <CommunityNameField gate={nome} />
+        ) : (
+          <View className="flex-row items-center gap-3 rounded-card bg-card p-4">
+            <Icon name="user" size={20} color={colors.mutedForeground} />
+            <View className="flex-1 gap-0.5">
+              <Text className="text-sm text-foreground">{`No ranking: ${suggestedName}`}</Text>
+              <Text className="text-xs text-muted-foreground">
+                É o nome do seu perfil. Para trocar, vá em Você → Editar perfil.
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
         <View className="flex-row items-start gap-3 rounded-card bg-card p-4">
           <Icon name={KIND_INFO[c.kind].icon} size={20} color={colors.primaryText} />
@@ -158,7 +169,7 @@ function JoinForm({
       </DrawerScrollView>
       <DrawerFooter className="pb-8">
         <Button size="xl" disabled={blocked} loading={join.isPending} onPress={() => join.mutate()}>
-          {`Participar como ${suggestedName}`}
+          {nome.needed ? 'Participar' : `Participar como ${suggestedName}`}
         </Button>
         {needsConsent && !consent ? (
           <Text className="text-center text-xs text-muted-foreground">

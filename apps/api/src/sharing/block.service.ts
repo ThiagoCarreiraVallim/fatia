@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MembershipStatus, PostAuthorAs } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { communityName } from './display-name';
+import { COMMUNITY_NAME_USER_SELECT, communityName } from './display-name';
 
 export interface BlockInput {
   /** A comunidade da URL (ou da tool): o post e o comentário só valem dentro dela. */
@@ -82,7 +82,7 @@ export class BlockService {
           select: {
             userId: true,
             displayName: true,
-            user: { select: { name: true, nickname: true } },
+            user: { select: COMMUNITY_NAME_USER_SELECT },
           },
         },
       },
@@ -101,7 +101,7 @@ export class BlockService {
             select: {
               userId: true,
               displayName: true,
-              user: { select: { name: true, nickname: true } },
+              user: { select: COMMUNITY_NAME_USER_SELECT },
             },
           },
         },

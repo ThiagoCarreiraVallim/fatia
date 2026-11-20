@@ -8,7 +8,7 @@ import {
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { blockedUserIds } from './block.service';
-import { communityName } from './display-name';
+import { COMMUNITY_NAME_USER_SELECT, communityName } from './display-name';
 import { requireContentRole } from './content-roles';
 
 export type ForYouKind = 'PLAN_OFFER' | 'NUTRITION_PLAN';
@@ -126,7 +126,7 @@ export class ForYouService {
             select: {
               userId: true,
               displayName: true,
-              user: { select: { name: true, nickname: true } },
+              user: { select: COMMUNITY_NAME_USER_SELECT },
             },
           },
         },
