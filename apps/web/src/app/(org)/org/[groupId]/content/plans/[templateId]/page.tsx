@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/selection';
 import { Textarea } from '@/components/ui/textarea';
 
 type GoalsForm = Record<keyof NutritionGoalsInput, string>;
@@ -215,7 +216,9 @@ function PlanEditor({
     onSuccess: (t, sent) => {
       setSaved(sent);
       toast(
-        template === null ? 'Rascunho criado. Publique quando estiver pronto.' : 'Plano salvo.',
+        template === null
+          ? 'Plano criado. Já dá para enviar para alunos; a comunidade é à parte.'
+          : 'Plano salvo.',
       );
       void invalidate();
       if (template === null) router.replace(`/org/${groupId}/content/plans/${t.id}`);
@@ -248,6 +251,20 @@ function PlanEditor({
     onError: (err) => toast(apiErrorMessage(err, 'Não deu para mudar agora.')),
   });
 
+  // Rascunho (#405): não vai para alunos nem para a comunidade até terminar.
+  const draft = useMutation({
+    mutationFn: (on: boolean) => contentApi.updatePlan(groupId, template!.id, { draft: on }),
+    onSuccess: (t) => {
+      toast(
+        t.draft
+          ? 'Marcado como rascunho. Não se envia nem se publica até terminar.'
+          : 'Rascunho terminado. Já dá para enviar e publicar.',
+      );
+      void invalidate();
+    },
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para mudar agora.')),
+  });
+
   const remove = useMutation({
     mutationFn: () => contentApi.deletePlan(groupId, template!.id),
     onSuccess: () => {
@@ -268,10 +285,28 @@ function PlanEditor({
           dirty={dirty}
           pending={publish.isPending}
           publishedHint="Os membros veem e podem adotar. Mudanças salvas valem para quem adotar daqui em diante."
-          draftHint="Só a equipe vê. Publique quando estiver pronto."
+          draftHint="Só a equipe vê e envia para alunos. Publique se quiser que os membros adotem."
           onPublish={() => publish.mutate(true)}
           onUnpublish={() => setUnpublishing(true)}
-        />
+          blockedReason={template.draft ? 'Termine o rascunho antes de publicar ou enviar.' : null}
+        >
+          {canEdit && !template.publishedAt && (
+            <div className="flex items-start gap-3 border-t border-subtle pt-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">Rascunho</span>
+                <span className="block text-xs text-muted-foreground">
+                  Enquanto for rascunho, não se envia para alunos nem vai para a comunidade.
+                </span>
+              </span>
+              <Switch
+                checked={template.draft === true}
+                disabled={draft.isPending}
+                onCheckedChange={(on) => draft.mutate(on)}
+                label="Rascunho"
+              />
+            </div>
+          )}
+        </PublishCard>
       )}
       {!canEdit && (
         <p className="rounded-xl bg-muted p-3 text-sm">
@@ -538,7 +573,7 @@ function PlanEditor({
         {canEdit && (
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={save.isPending || (template !== null && !dirty)}>
-              {template === null ? 'Criar rascunho' : dirty ? 'Salvar mudanças' : 'Tudo salvo'}
+              {template === null ? 'Criar plano' : dirty ? 'Salvar mudanças' : 'Tudo salvo'}
             </Button>
             <Link href={`/org/${groupId}/content`} className={buttonVariants({ variant: 'ghost' })}>
               Voltar

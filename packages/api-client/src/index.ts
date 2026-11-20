@@ -103,5 +103,6 @@ export * from './member-file';
 export * from './review-queue';
 export * from './seats-panel';
 export * from './plan-programs';
+export * from './plan-library';
 export * from './community-offers';
 export * from './month-report';

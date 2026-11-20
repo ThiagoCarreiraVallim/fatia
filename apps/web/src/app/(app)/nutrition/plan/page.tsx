@@ -149,6 +149,11 @@ export default function NutritionPlanPage() {
           <p className="text-sm font-bold text-foreground">
             {pending.author?.name ?? 'Seu profissional'} mandou o plano v{pending.version}
           </p>
+          {pending.changeNote && (
+            <p className="text-sm text-foreground">
+              <b>O que mudou:</b> {pending.changeNote}
+            </p>
+          )}
           {pending.note && <p className="text-sm text-muted-foreground">{pending.note}</p>}
           <div className="flex flex-wrap gap-2">
             <Button size="lg" onClick={() => setConfirmAccept(true)}>

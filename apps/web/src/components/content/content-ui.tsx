@@ -278,6 +278,7 @@ export function PublishCard({
   draftHint,
   onPublish,
   onUnpublish,
+  blockedReason,
   children,
 }: {
   published: boolean;
@@ -291,6 +292,8 @@ export function PublishCard({
   onPublish: () => void;
   /** Quem chama confirma antes: tirar do ar some com o conteúdo para os membros na hora. */
   onUnpublish: () => void;
+  /** Por que não dá para publicar agora (ex.: rascunho, #405). */
+  blockedReason?: string | null;
   children?: ReactNode;
 }) {
   const dirtyId = useId();
@@ -321,16 +324,16 @@ export function PublishCard({
             <Button
               type="button"
               className="w-full sm:w-auto"
-              disabled={dirty || pending}
-              aria-describedby={dirty ? dirtyId : undefined}
+              disabled={dirty || pending || Boolean(blockedReason)}
+              aria-describedby={dirty || blockedReason ? dirtyId : undefined}
               onClick={onPublish}
             >
               <Eye aria-hidden />
               Publicar para os membros
             </Button>
-            {dirty && (
+            {(dirty || blockedReason) && (
               <p id={dirtyId} className="text-xs text-warning">
-                Salve as mudanças antes de publicar.
+                {dirty ? 'Salve as mudanças antes de publicar.' : blockedReason}
               </p>
             )}
           </div>

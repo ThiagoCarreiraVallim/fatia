@@ -39,6 +39,8 @@ export class NutritionGoalsDto {
 }
 
 class TemplateMetaDto {
+  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
+  @IsOptional() @IsBoolean() draft?: boolean;
   @IsOptional() @IsString() @MaxLength(100) title?: string;
   @IsOptional() @IsString() @MaxLength(1000) description?: string | null;
   @IsOptional() @IsIn([...PLAN_LEVELS, null]) level?: string | null;
@@ -85,6 +87,8 @@ export class UpdateTemplateDto extends TemplateMetaDto {
 export class PublishDto {
   @IsBoolean()
   published!: boolean;
+  /** "Anunciar no mural" (#405): sem ele, vale a configuração da comunidade. */
+  @IsOptional() @IsBoolean() announce?: boolean;
 }
 
 export class CreateTipDto {

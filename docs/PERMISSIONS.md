@@ -142,6 +142,15 @@ futura:
   ou do dono; reordenar é de quem tem `member.plans`. A anotação não é privada: a pessoa vê, só
   leitura, e ela some quando a pessoa sai da comunidade. Editar ou apagar a anotação é do autor
   ou do dono.
+- **Enviar para alunos (#405): `member.plans` (dono e profissional), em `groups/:id/sends`.**
+  A biblioteca (ver, publicar, rascunho, "Com quem") continua `content.publish`. Cada pessoa de
+  um envio em lote precisa ser membro ativo da comunidade da URL, dentro do "profissionais veem
+  só quem acompanham", e ter `ProfessionalLink` ativo com quem envia; um id que falhe barra o
+  lote inteiro, como inexistente. O lote grava numa transação só: ou todos recebem, ou ninguém. "Enviados recentemente" mostra só os envios de quem olha, com
+  a resposta (que já chega a quem mandou); o progresso é dado de Treino e só sai pela porta de
+  leitura, com registro na trilha; sem Treino liberado, "sem progresso", sem dizer o motivo.
+  Cancelar o envio sem resposta é do autor ou do dono. "Com quem" é só contagem, e abaixo de 5
+  pessoas não mostra o número.
 - **Assentos, programas e ofertas (#403) são dinheiro: `billing.read`/`billing.manage`, só o
   dono.** Programas por aluno (Pn-30, `GET plan-programs`) é `member.file` (dono e profissional,
   com "profissionais veem só quem acompanham"): o plano é da equipe, mas status e progresso são

@@ -83,6 +83,8 @@ export interface NutritionPlan {
   goals: PlanGoals;
   applyGoals: boolean;
   note: string | null;
+  /** "O que mudou" (#405), da versão 2 em diante. */
+  changeNote: string | null;
   meals: PlanMeal[];
 }
 

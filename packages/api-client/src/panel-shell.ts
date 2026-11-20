@@ -127,6 +127,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
     key: 'content',
     label: 'Conteúdo',
     items: [
+      ['send', 'Enviar para alunos'],
       ['content', 'Planos e dicas'],
       ['programs', 'Programas'],
       ['exercises', 'Exercícios'],

@@ -56,6 +56,7 @@ describe('quem abre o painel e com que seções', () => {
       'invites',
       'activation',
       'origins',
+      'send',
       'content',
       'programs',
       'exercises',
@@ -74,6 +75,7 @@ describe('quem abre o painel e com que seções', () => {
       'members',
       'invites',
       'activation',
+      'send',
       'content',
       'programs',
       'exercises',
@@ -89,7 +91,8 @@ describe('quem abre o painel e com que seções', () => {
     expect(admin).toEqual(
       expect.arrayContaining(['members', 'team', 'invites', 'moderation', 'settings']),
     );
-    for (const fora of ['seats', 'report', 'origins', 'benefits', 'review']) {
+    // Enviar para alunos é `member.plans` (#405): o admin não manda plano.
+    for (const fora of ['seats', 'report', 'origins', 'benefits', 'review', 'send']) {
       expect(admin).not.toContain(fora);
     }
     expect(panelSections('RECEPTION').map((s) => s.section)).toEqual([

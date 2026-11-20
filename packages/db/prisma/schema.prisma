@@ -681,39 +681,45 @@ enum NutritionPlanStatus {
 /// As metas vêm como faixa, como `UserGoals`: aceitar com `applyGoals` copia
 /// as oito colunas para as metas do dia.
 model NutritionPlan {
-  id           String              @id @default(uuid())
-  userId       String
-  authorId     String?
+  id               String              @id @default(uuid())
+  userId           String
+  authorId         String?
   /// Comunidade em que o plano foi enviado: diz quem da equipe vê as trocas.
-  groupId      String?
+  groupId          String?
   /// 1, 2, 3… por aluno e autor. Aparece como "· v2" no cabeçalho.
-  version      Int
-  status       NutritionPlanStatus @default(SENT)
-  kcalMin      Int
-  kcalMax      Int
-  proteinMinG  Int
-  proteinMaxG  Int
-  carbsMinG    Int
-  carbsMaxG    Int
-  fatMinG      Int
-  fatMaxG      Int
+  version          Int
+  status           NutritionPlanStatus @default(SENT)
+  kcalMin          Int
+  kcalMax          Int
+  proteinMinG      Int
+  proteinMaxG      Int
+  carbsMinG        Int
+  carbsMaxG        Int
+  fatMinG          Int
+  fatMaxG          Int
   /// Aceitar aplica as faixas acima às metas do dia.
-  applyGoals   Boolean             @default(true)
+  applyGoals       Boolean             @default(true)
   /// Recado do profissional, texto puro.
-  note         String?
-  sentAt       DateTime            @default(now())
-  acceptedAt   DateTime?
-  supersededAt DateTime?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  note             String?
+  /// "O que mudou" (#405): da versão 2 em diante, escrito por quem reenviou.
+  changeNote       String?
+  /// Modelo da biblioteca de onde o plano saiu (#405): "já tem" e "Com quem".
+  sourceTemplateId String?
+  sentAt           DateTime            @default(now())
+  acceptedAt       DateTime?
+  supersededAt     DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  user   User                @relation("NutritionPlanSubject", fields: [userId], references: [id], onDelete: Cascade)
-  author User?               @relation("NutritionPlanAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  group  Group?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  meals  NutritionPlanMeal[]
-  swaps  NutritionSwap[]
+  user           User                @relation("NutritionPlanSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author         User?               @relation("NutritionPlanAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  group          Group?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  meals          NutritionPlanMeal[]
+  swaps          NutritionSwap[]
+  sourceTemplate GroupPlanTemplate?  @relation("NutritionPlanFromTemplate", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
+  @@index([sourceTemplateId])
   @@index([authorId])
   @@index([groupId])
 }
@@ -1480,6 +1486,10 @@ model PlanOfferVersion {
   weekdays        Int[]           @default([])
   /// Recado da equipe, texto puro.
   note            String?
+  /// "O que mudou" (#405): da versão 2 em diante, escrito por quem reenviou.
+  changeNote      String?
+  /// Só no FLEXIBLE (#405): último dia (YYYY-MM-DD). Nulo = sem fim.
+  endDate         String?
   sentAt          DateTime        @default(now())
   /// Quando a pessoa aceitou, recusou ou a versão foi substituída.
   respondedAt     DateTime?
@@ -2894,22 +2904,26 @@ model GroupPlanTemplate {
   /// do plano". Sem chave estrangeira: é só conveniência do autor, e o plano
   /// dele pode sumir sem mexer no modelo publicado.
   sourcePlanId    String?
-  /// Nulo = rascunho, visível só para a equipe.
+  /// Na comunidade (#405): membros veem e adotam. Nulo = só a equipe envia.
   publishedAt     DateTime?
+  /// Rascunho (#405, Pn-08): não vai para a comunidade nem é enviado a ninguém.
+  draft           Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  group         Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  author        User?              @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  cover         MediaFile?         @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
-  workoutCopies WorkoutPlan[]      @relation("PlanFromTemplate")
-  mealCopies    MealTemplate[]     @relation("MealFromTemplate")
+  group          Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author         User?              @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  cover          MediaFile?         @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  workoutCopies  WorkoutPlan[]      @relation("PlanFromTemplate")
+  mealCopies     MealTemplate[]     @relation("MealFromTemplate")
   /// As metas que este modelo substituiu na conta de quem adotou (#396).
-  goalsReplaced UserGoalsHistory[]
+  goalsReplaced  UserGoalsHistory[]
   /// Ofertas de treino a uma pessoa que saíram deste modelo (#402, "já com a Ana").
-  offers        PlanOffer[]        @relation("OfferFromTemplate")
+  offers         PlanOffer[]        @relation("OfferFromTemplate")
   /// Ofertas vendidas que liberam este plano (#403).
-  groupOffers   GroupOffer[]
+  groupOffers    GroupOffer[]
+  /// Planos alimentares enviados a uma pessoa a partir deste modelo (#405).
+  nutritionPlans NutritionPlan[]    @relation("NutritionPlanFromTemplate")
 
   @@index([groupId, publishedAt])
 }

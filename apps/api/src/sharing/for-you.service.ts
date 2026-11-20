@@ -157,7 +157,8 @@ export class ForYouService {
         kind: 'PLAN_OFFER',
         id: o.id,
         title: v.version > 1 ? `${v.title} · versão ${v.version}` : v.title,
-        note: v.note,
+        // A versão nova mostra o que mudou (#405, Cm-20); a primeira, o recado.
+        note: v.changeNote ?? v.note,
         from: o.author?.name ?? null,
         at: v.status === PlanOfferStatus.PENDING ? v.sentAt : (v.respondedAt ?? v.sentAt),
         href: `/workout/offers/${o.id}`,
@@ -170,7 +171,7 @@ export class ForYouService {
         kind: 'NUTRITION_PLAN',
         id: p.id,
         title: `Plano alimentar · ${p.kcalMin}–${p.kcalMax} kcal`,
-        note: p.note,
+        note: p.changeNote ?? p.note,
         from: p.author?.name ?? null,
         at: p.acceptedAt ?? p.sentAt,
         href: '/nutrition/plan',

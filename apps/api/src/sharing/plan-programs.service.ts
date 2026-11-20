@@ -149,7 +149,9 @@ export class PlanProgramsService {
           status = 'ENDING';
         }
         const copia = o.plans.find((p) => p.userId === o.userId)?.id ?? null;
-        if (copia) progress = await this.progressOf(o.userId, copia, shown, st.weekNumber);
+        if (copia) {
+          progress = await offerProgress(this.prisma, o.userId, copia, shown, st.weekNumber);
+        }
       }
       items.push({
         offerId: o.id,
@@ -193,27 +195,33 @@ export class PlanProgramsService {
       throw err;
     }
   }
+}
 
-  private async progressOf(
-    userId: string,
-    planId: string,
-    shown: { schedule: 'CALENDAR' | 'FLEXIBLE'; weeks: number | null },
-    weekNumber: number | null,
-  ): Promise<NonNullable<PlanProgramItem['progress']>> {
-    const [done, planned] = await Promise.all([
-      this.prisma.workoutSession.count({ where: { userId, planId, completedAt: { not: null } } }),
-      shown.schedule === 'CALENDAR'
-        ? this.prisma.plannedSession.count({ where: { userId, planId } })
-        : Promise.resolve(null),
-    ]);
-    return {
-      done,
-      planned,
-      percent: planned ? Math.min(100, Math.round((done / planned) * 100)) : null,
-      weekNumber,
-      weeks: shown.weeks,
-    };
-  }
+/**
+ * Treinos feitos do plano que a equipe mandou (#403, #405). Lê dado de Treino
+ * da pessoa: só se chama depois de `assertReadable` com Treino liberado para
+ * quem olha (a leitura fica na trilha dela).
+ */
+export async function offerProgress(
+  prisma: PrismaService,
+  userId: string,
+  planId: string,
+  shown: { schedule: 'CALENDAR' | 'FLEXIBLE'; weeks: number | null },
+  weekNumber: number | null,
+): Promise<NonNullable<PlanProgramItem['progress']>> {
+  const [done, planned] = await Promise.all([
+    prisma.workoutSession.count({ where: { userId, planId, completedAt: { not: null } } }),
+    shown.schedule === 'CALENDAR'
+      ? prisma.plannedSession.count({ where: { userId, planId } })
+      : Promise.resolve(null),
+  ]);
+  return {
+    done,
+    planned,
+    percent: planned ? Math.min(100, Math.round((done / planned) * 100)) : null,
+    weekNumber,
+    weeks: shown.weeks,
+  };
 }
 
 /** As semanas do bloco, com o foco de cada uma (ADR 019, #379). */

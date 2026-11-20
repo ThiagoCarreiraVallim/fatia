@@ -58,6 +58,7 @@ describe('menu do painel (#398)', () => {
     ]);
     expect(comunidade.count).toBe(4);
     expect(nav.find((g) => g.key === 'content')!.items.map((i) => i.label)).toEqual([
+      'Enviar para alunos',
       'Planos e dicas',
       'Programas',
       'Exercícios',

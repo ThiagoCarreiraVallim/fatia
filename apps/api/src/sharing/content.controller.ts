@@ -99,7 +99,9 @@ export class ContentController {
     @Param() p: ContentParamDto,
     @Body() dto: PublishDto,
   ) {
-    return this.content.setTemplatePublished(user.id, p.groupId, p.id, dto.published);
+    return this.content.setTemplatePublished(user.id, p.groupId, p.id, dto.published, {
+      announce: dto.announce,
+    });
   }
 
   @Delete('content/plans/:id')

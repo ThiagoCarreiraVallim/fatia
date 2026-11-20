@@ -512,6 +512,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/programs', title: 'Programas', parent: '/org/:id' },
   { pattern: '/org/:id/offers', title: 'Ofertas', parent: '/org/:id' },
   { pattern: '/org/:id/settings', title: 'Configurações', parent: '/org/:id' },
+  { pattern: '/org/:id/send', title: 'Enviar para alunos', parent: '/org/:id' },
   { pattern: '/org/:id/content', title: 'Planos e dicas', parent: '/org/:id' },
   {
     pattern: '/org/:id/content/plans/:templateId',

@@ -1,6 +1,7 @@
 import { apiFetch } from './http';
 import type { GroupRole, MyGroup } from './community';
 import type { MealType } from './nutrition';
+import type { TemplateReach } from './plan-library';
 
 /**
  * Planos prontos, dicas e mídia da comunidade (Fase 7a). A equipe publica pelo
@@ -96,6 +97,10 @@ export interface PlanTemplate {
   /** Só para a equipe. */
   sourcePlanId?: string | null;
   canEdit?: boolean;
+  /** Rascunho (#405), só para a equipe: não vai para a comunidade nem é enviado. */
+  draft?: boolean;
+  /** "Com quem" (#405), só na lista da equipe. */
+  withWhom?: TemplateReach;
 }
 
 export interface GroupTip {
@@ -115,6 +120,8 @@ export interface GroupTip {
 }
 
 export interface TemplateMetaInput {
+  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
+  draft?: boolean;
   title?: string;
   description?: string | null;
   level?: PlanLevel | null;
@@ -174,10 +181,11 @@ export const contentApi = {
   ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/nutrition`, json('POST', input)),
   updatePlan: (groupId: string, id: string, input: UpdateTemplateInput) =>
     apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/${id}`, json('PATCH', input)),
-  publishPlan: (groupId: string, id: string, published: boolean) =>
+  /** `announce` (#405): "Anunciar no mural"; sem ele, vale a configuração da comunidade. */
+  publishPlan: (groupId: string, id: string, published: boolean, announce?: boolean) =>
     apiFetch<PlanTemplate>(
       `${base}/${groupId}/content/plans/${id}/publish`,
-      json('POST', { published }),
+      json('POST', announce === undefined ? { published } : { published, announce }),
     ),
   deletePlan: (groupId: string, id: string) =>
     apiFetch<{ id: string }>(`${base}/${groupId}/content/plans/${id}`, json('DELETE')),

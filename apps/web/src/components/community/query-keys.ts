@@ -51,6 +51,10 @@ export const orgKeys = {
   /** Os desafios, para o programa de desafio (#403). */
   challengesList: (groupId: string) => ['community', 'org', groupId, 'challenges', 'list'] as const,
   contentPlans: (groupId: string) => ['community', 'org', groupId, 'content', 'plans'] as const,
+  /** Enviar para alunos (#405): quem pode receber e o que já foi enviado. */
+  sendRecipients: (groupId: string, templateId: string) =>
+    ['community', 'org', groupId, 'sends', 'recipients', templateId] as const,
+  sends: (groupId: string) => ['community', 'org', groupId, 'sends', 'list'] as const,
   contentPlan: (groupId: string, id: string) =>
     ['community', 'org', groupId, 'content', 'plans', id] as const,
   contentTips: (groupId: string) => ['community', 'org', groupId, 'content', 'tips'] as const,

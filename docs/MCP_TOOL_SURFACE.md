@@ -212,6 +212,13 @@ ADR 042). Aceitar, recusar e remarcar são escritas reversíveis (`confirmableHi
 recusa é o próprio `accept_plan_offer` sobre a versão recusada. `create_training_block` passou a
 aceitar `weeks` de 3 a 6. Enviar e atualizar a oferta é da equipe e fica em REST
 (`/professional/students/:membershipId/plan-offers`).
+Na #405 (biblioteca e enviar para alunos) nenhuma tool nova: a equipe manda um modelo da biblioteca
+para uma ou várias pessoas pelo painel (`/groups/:groupId/sends`, REST), e o aluno responde pelas
+mesmas `list_plan_offers`, `accept_plan_offer` e `decline_plan_offer` (treino) e
+`get_nutrition_plan` e `accept_nutrition_plan` (alimentação). A versão nova traz no resultado o
+`shown.changeNote` ("o que mudou", escrito pela equipe) ao lado do `shown.version` e do diff, e o
+`get_nutrition_plan` devolve o `changeNote` do plano. As descrições não mudaram, para não mexer na
+linha de base da superfície; a contagem também não muda.
 Também entregue: `save_session_as_plan` (#381), o "Salvar como plano" do detalhe da sessão
 (`POST /workout/sessions/:id/plan`), escrita reversível (`confirmableHint`), idempotente por sessão
 (repetir devolve o plano já criado) e só para sessão terminada (a aberta é `CONFLICT`).

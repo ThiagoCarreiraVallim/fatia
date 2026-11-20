@@ -71,6 +71,7 @@ import { AchievementService } from '../../progress/achievement.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
+import { PlanSendService } from '../../sharing/plan-send.service';
 import { MemberFileService } from '../../sharing/member-file.service';
 import { MemberNoteService } from '../../sharing/member-note.service';
 import { ReviewService } from '../../sharing/review.service';
@@ -4208,6 +4209,148 @@ describe('isolamento entre usuários', () => {
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain(o.offerId);
       expect(JSON.stringify(deB)).not.toContain(o.sessionId);
+    });
+  });
+
+  describe('enviar para alunos pela biblioteca (#405)', () => {
+    const offers = new PlanOfferService(
+      prisma,
+      new PlanMaterializerService(prisma, exercises),
+      silentNotifications,
+      plans,
+    );
+    const sends = new PlanSendService(
+      prisma,
+      offers,
+      new NutritionPlanService(
+        prisma,
+        new MealService(prisma),
+        new DailyAdherenceService(prisma),
+        new SharedWithService(prisma),
+      ),
+      silentNotifications,
+      new ProfessionalAccessService(prisma, new AccessAuditService(prisma)),
+    );
+    const s = { groupId: '', outroGrupo: '', membershipA: '', membershipFora: '', templateId: '' };
+
+    beforeAll(async () => {
+      const stamp = `envio-${Date.now()}`;
+      const grupo = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Biblioteca do Pro',
+          slug: `${stamp}-bib`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      const outro = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Outra do Pro',
+          slug: `${stamp}-outra`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      s.groupId = grupo.id;
+      s.outroGrupo = outro.id;
+      s.membershipA = grupo.memberships.find((m) => m.userId === owned.userA)!.id;
+      s.membershipFora = outro.memberships.find((m) => m.userId === owned.userB)!.id;
+      await prisma.professionalLink.createMany({
+        data: [
+          { subjectUserId: owned.userA, professionalId: owned.pro, groupId: grupo.id },
+          { subjectUserId: owned.userB, professionalId: owned.pro, groupId: outro.id },
+        ].map((l) => ({ ...l, scopes: [ShareScope.WORKOUT] })),
+      });
+      const catalogo = await prisma.exercise.findFirstOrThrow({
+        where: { createdByUserId: null, groupOwned: false },
+        select: { id: true },
+      });
+      const doPro = await prisma.workoutPlan.create({
+        data: {
+          userId: owned.pro,
+          name: 'Inferior da biblioteca',
+          exercises: {
+            create: [{ exerciseId: catalogo.id, order: 0, targetSets: 3, targetReps: '10' }],
+          },
+        },
+      });
+      const snapshot = buildPlanSnapshot(await plans.findById(owned.pro, doPro.id));
+      s.templateId = (
+        await prisma.groupPlanTemplate.create({
+          data: {
+            groupId: grupo.id,
+            authorId: owned.pro,
+            kind: 'WORKOUT',
+            title: 'Inferior da biblioteca',
+            snapshot: snapshot as object,
+            snapshotVersion: PLAN_SNAPSHOT_VERSION,
+          },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [s.groupId, s.outroGrupo] } } });
+    });
+
+    it('um lote com alguém de outra comunidade não envia nada a ninguém', async () => {
+      await expect(
+        sends.send(owned.pro, s.groupId, {
+          templateId: s.templateId,
+          membershipIds: [s.membershipA, s.membershipFora],
+          schedule: 'FLEXIBLE',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(await prisma.planOffer.count({ where: { groupId: s.groupId } })).toBe(0);
+    });
+
+    it('o aluno B não lê nem aceita a oferta que a biblioteca mandou ao A', async () => {
+      const enviado = await sends.send(owned.pro, s.groupId, {
+        templateId: s.templateId,
+        membershipIds: [s.membershipA],
+        schedule: 'FLEXIBLE',
+      });
+      await sends.send(owned.pro, s.groupId, {
+        templateId: s.templateId,
+        membershipIds: [s.membershipA],
+        schedule: 'FLEXIBLE',
+        changeNote: 'Subiu as séries.',
+      });
+      const id = enviado.results[0]!.id;
+      const daA = await offers.get(owned.userA, id);
+      expect(daA.shown).toMatchObject({ version: 2, changeNote: 'Subiu as séries.' });
+      await expect(offers.get(owned.userB, id)).rejects.toThrow(NotFoundException);
+      await expect(offers.accept(owned.userB, id, daA.shown.id, TZ)).rejects.toThrow(
+        NotFoundException,
+      );
+      // O aluno não vê a lista de envios da equipe nem cancela o envio.
+      await expect(sends.list(owned.userA, s.groupId)).rejects.toThrow();
+      await expect(sends.revoke(owned.userB, s.groupId, id)).rejects.toThrow();
+
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const exportA = await conta.exportData(owned.userA);
+      const oferta = exportA.planOffers.find((x) => x.id === id)!;
+      expect(oferta.versions.map((v) => v.changeNote)).toEqual([null, 'Subiu as séries.']);
+      expect(JSON.stringify(await conta.exportData(owned.userB))).not.toContain(id);
     });
   });
 

@@ -104,6 +104,8 @@ export interface NutritionPlanView {
   goals: PlanGoals;
   applyGoals: boolean;
   note: string | null;
+  /** "O que mudou" (#405), da versão 2 em diante. */
+  changeNote: string | null;
   meals: PlanMealView[];
 }
 
@@ -262,6 +264,12 @@ function linkOf(links: Prisma.JsonValue, planItemId: string): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** Enfileira quem grava plano alimentar para a mesma pessoa (revisão do PR #461). */
+async function lockPlanOf(db: Prisma.TransactionClient, userId: string) {
+  const key = `nutrition-plan:${userId}`;
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+}
+
 @Injectable()
 export class NutritionPlanService {
   constructor(
@@ -285,6 +293,48 @@ export class NutritionPlanService {
     membershipId: string,
     input: SendNutritionPlanInput,
   ): Promise<NutritionPlanView> {
+    const student = await this.receiver(authorId, membershipId);
+    const meals = await this.prepareMeals(input);
+    const { plan } = await this.prisma.$transaction((db) =>
+      this.writePlan(db, authorId, student, input, meals, {}),
+    );
+    return this.view(plan, new Map(), new Map());
+  }
+
+  /**
+   * O plano alimentar da biblioteca para várias pessoas (#405). Tudo numa
+   * transação: ou o lote inteiro recebe, ou ninguém. A versão, o "o que mudou"
+   * e a substituição do que esperava aceite contam só o MESMO modelo
+   * (`sourceTemplateId`) do mesmo autor: um modelo diferente é plano novo e
+   * não tira o pendente do outro (revisão do PR #461).
+   */
+  async sendFromTemplate(
+    authorId: string,
+    membershipIds: string[],
+    input: SendNutritionPlanInput,
+    origin: { sourceTemplateId: string; changeNote?: string | null },
+  ): Promise<Array<{ plan: NutritionPlanView; update: boolean }>> {
+    const students: Array<{ userId: string; groupId: string }> = [];
+    for (const id of membershipIds) students.push(await this.receiver(authorId, id));
+    const meals = await this.prepareMeals(input);
+    const out = await this.prisma.$transaction(
+      async (db) => {
+        for (const userId of [...new Set(students.map((s) => s.userId))].sort()) {
+          await lockPlanOf(db, userId);
+        }
+        const written = [];
+        for (const student of students) {
+          written.push(await this.writePlan(db, authorId, student, input, meals, origin));
+        }
+        return written;
+      },
+      { timeout: 60_000 },
+    );
+    return out.map((w) => ({ plan: this.view(w.plan, new Map(), new Map()), update: w.update }));
+  }
+
+  /** O aluno que recebe e quem envia, da equipe ativa da mesma comunidade. */
+  private async receiver(authorId: string, membershipId: string) {
     const student = await this.prisma.groupMembership.findUnique({
       where: { id: membershipId },
       select: { userId: true, groupId: true, role: true, status: true },
@@ -305,7 +355,11 @@ export class NutritionPlanService {
     ) {
       throw new NotFoundException('Membership not found');
     }
+    return { userId: student.userId, groupId: student.groupId };
+  }
 
+  /** Valida e resolve os alimentos fora da transação: um 400 não abre transação à toa. */
+  private async prepareMeals(input: SendNutritionPlanInput) {
     assertGoalsValid(input.goals);
     this.assertShape(input);
 
@@ -327,7 +381,6 @@ export class NutritionPlanService {
         portionQuantity: f.portionLabel ? (f.portionQuantity ?? null) : null,
       };
     };
-    // Resolve fora da transação: um 400 de quantidade não abre transação à toa.
     const meals = input.meals.map((meal, mealPos) => ({
       mealType: meal.mealType,
       name: meal.name.trim(),
@@ -352,32 +405,62 @@ export class NutritionPlanService {
       },
     }));
 
-    const created = await this.prisma.$transaction(async (db) => {
-      const last = await db.nutritionPlan.findFirst({
-        where: { userId: student.userId, authorId },
-        orderBy: { version: 'desc' },
-        select: { version: true },
-      });
-      // A versão anterior que ainda esperava o aceite sai: a nova a substitui.
-      await db.nutritionPlan.updateMany({
-        where: { userId: student.userId, authorId, status: 'SENT' },
-        data: { status: 'SUPERSEDED', supersededAt: new Date() },
-      });
-      return db.nutritionPlan.create({
-        data: {
-          userId: student.userId,
-          authorId,
-          groupId: student.groupId,
-          version: (last?.version ?? 0) + 1,
-          ...goalsOf(input.goals),
-          applyGoals: input.applyGoals ?? true,
-          note: input.note?.trim() || null,
-          meals: { create: meals },
-        },
-        include: PLAN_INCLUDE,
-      });
+    return meals;
+  }
+
+  /**
+   * Grava uma versão. Trava a pessoa antes de ler a última versão: dois envios
+   * ao mesmo tempo não saem com o mesmo número nem deixam dois pendentes.
+   */
+  private async writePlan(
+    db: Prisma.TransactionClient,
+    authorId: string,
+    student: { userId: string; groupId: string },
+    input: SendNutritionPlanInput,
+    meals: Awaited<ReturnType<NutritionPlanService['prepareMeals']>>,
+    origin: { sourceTemplateId?: string; changeNote?: string | null },
+  ) {
+    await lockPlanOf(db, student.userId);
+    const last = await db.nutritionPlan.findFirst({
+      where: { userId: student.userId, authorId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
     });
-    return this.view(created, new Map(), new Map());
+    // Pela biblioteca, só o mesmo modelo conta como versão anterior.
+    const mesmo = origin.sourceTemplateId ? { sourceTemplateId: origin.sourceTemplateId } : {};
+    const previous = origin.sourceTemplateId
+      ? await db.nutritionPlan.findFirst({
+          where: {
+            userId: student.userId,
+            authorId,
+            ...mesmo,
+            status: { in: ['SENT', 'ACCEPTED'] },
+          },
+          select: { id: true },
+        })
+      : last;
+    // A versão anterior que ainda esperava o aceite sai: a nova a substitui.
+    await db.nutritionPlan.updateMany({
+      where: { userId: student.userId, authorId, ...mesmo, status: 'SENT' },
+      data: { status: 'SUPERSEDED', supersededAt: new Date() },
+    });
+    const plan = await db.nutritionPlan.create({
+      data: {
+        userId: student.userId,
+        authorId,
+        groupId: student.groupId,
+        version: (last?.version ?? 0) + 1,
+        ...goalsOf(input.goals),
+        applyGoals: input.applyGoals ?? true,
+        note: input.note?.trim() || null,
+        // A primeira versão não tem o que mudou.
+        changeNote: previous ? origin.changeNote?.trim() || null : null,
+        sourceTemplateId: origin.sourceTemplateId ?? null,
+        meals: { create: meals },
+      },
+      include: PLAN_INCLUDE,
+    });
+    return { plan, update: Boolean(previous) };
   }
 
   /** O plano em uso e o que espera aceite, com o "feito" e as trocas de um dia. */
@@ -884,6 +967,7 @@ export class NutritionPlanService {
       goals: goalsOf(plan),
       applyGoals: plan.applyGoals,
       note: plan.note,
+      changeNote: plan.changeNote,
       meals: plan.meals.map((meal) => ({
         id: meal.id,
         mealType: meal.mealType,

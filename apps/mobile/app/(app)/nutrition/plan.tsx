@@ -157,6 +157,12 @@ export default function NutritionPlanScreen() {
               <Text className="text-sm font-bold text-foreground">
                 {pending.author?.name ?? 'Seu profissional'} mandou o plano v{pending.version}
               </Text>
+              {pending.changeNote ? (
+                <Text className="text-sm text-foreground">
+                  <Text className="font-sans-bold">O que mudou: </Text>
+                  {pending.changeNote}
+                </Text>
+              ) : null}
               {pending.note ? (
                 <Text className="text-sm text-muted-foreground">{pending.note}</Text>
               ) : null}

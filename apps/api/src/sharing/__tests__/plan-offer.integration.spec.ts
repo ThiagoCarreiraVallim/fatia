@@ -351,7 +351,7 @@ describe('plano recebido da equipe (integração)', () => {
       expect(undone.shown.status).toBe('PENDING');
     });
 
-    it('aceitar a troca muda o mesmo plano e refaz a agenda de hoje em diante', async () => {
+    it('aceitar a troca que começa amanhã mantém a atual até hoje; no dia, a nova assume no mesmo plano', async () => {
       // Uma sessão de ontem fica: aceitar uma versão nova não mexe no passado.
       await prisma.plannedSession.create({
         data: { userId: ids.ana, planId, date: addDaysIso(today, -1), order: 0 },
@@ -361,22 +361,39 @@ describe('plano recebido da equipe (integração)', () => {
       expect(accepted.planId).toBe(planId);
       expect(accepted.shown).toMatchObject({ version: 2, status: 'ACCEPTED' });
 
-      const plan = await prisma.workoutPlan.findUniqueOrThrow({
-        where: { id: planId },
-        include: { exercises: true },
+      // A v2 começa amanhã (revisão do PR #461): hoje o plano ainda é a v1.
+      const exercicios = () =>
+        prisma.workoutPlanExercise.findMany({
+          where: { planId },
+          select: { exerciseId: true, targetSets: true },
+        });
+      expect(await exercicios()).toHaveLength(2);
+      let versions = await prisma.planOfferVersion.findMany({
+        where: { offerId },
+        orderBy: { version: 'asc' },
       });
-      expect(plan.exercises).toHaveLength(3);
-      expect(plan.exercises.find((e) => e.exerciseId === ex.agach)?.targetSets).toBe(5);
+      expect(versions.map((v) => v.status)).toEqual(['ACCEPTED', 'ACCEPTED']);
 
+      // Da v2 em diante, a agenda já é a dela; o passado fica.
       const sessions = await prisma.plannedSession.findMany({
         where: { planId },
         orderBy: { date: 'asc' },
       });
       expect(sessions[0]!.date).toBe(addDaysIso(today, -1));
-      expect(sessions.slice(1)).toHaveLength(3);
-      expect(sessions.slice(1).every((s) => s.date > today)).toBe(true);
+      const daV2 = sessions.filter((s) => s.date > today);
+      expect(daV2).toHaveLength(3);
+      expect(daV2.every((s) => s.offerVersionId === versions[1]!.id)).toBe(true);
 
-      const versions = await prisma.planOfferVersion.findMany({
+      // No dia, a v2 assume: troca os exercícios do mesmo plano e a v1 sai.
+      await prisma.planOfferVersion.update({
+        where: { id: versions[1]!.id },
+        data: { startDate: today },
+      });
+      expect(await offers.settleScheduledVersions()).toBeGreaterThanOrEqual(1);
+      const depois = await exercicios();
+      expect(depois).toHaveLength(3);
+      expect(depois.find((e) => e.exerciseId === ex.agach)?.targetSets).toBe(5);
+      versions = await prisma.planOfferVersion.findMany({
         where: { offerId },
         orderBy: { version: 'asc' },
       });

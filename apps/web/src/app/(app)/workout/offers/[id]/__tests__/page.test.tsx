@@ -70,6 +70,7 @@ const version = (over: Partial<OfferVersion> = {}): OfferVersion => ({
   weeks: 4,
   weekdays: [1, 4],
   note: 'Coloquei stiff e panturrilha.',
+  changeNote: null,
   sentAt: '2025-11-10T12:12:00.000Z',
   respondedAt: null,
   summary: { exercises: 2, sets: 7, minutes: 40 },
@@ -197,6 +198,21 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
     await waitFor(() => expect(api.undoDecline).toHaveBeenCalledWith('o1', 'v1'));
     expect(await screen.findByRole('button', { name: 'Aceitar plano' })).toBeInTheDocument();
+  });
+
+  it('versão nova mandada pela biblioteca traz o "o que mudou" escrito por quem mandou (#405)', async () => {
+    api.get.mockResolvedValue(
+      offer({
+        kind: 'update',
+        accepted: { id: 'v1', version: 1, planId: 'p9' },
+        planId: 'p9',
+        diff: { added: [], removed: [], changed: [], hasChanges: false },
+        shown: version({ id: 'v2', version: 2, changeNote: 'Subiu as séries do agachamento.' }),
+      }),
+    );
+    renderPage();
+    const mudou = await screen.findByRole('region', { name: 'O que mudou' });
+    expect(mudou).toHaveTextContent('Subiu as séries do agachamento.');
   });
 
   it('atualização: diz o que mudou, marca o novo e lista o que saiu', async () => {
