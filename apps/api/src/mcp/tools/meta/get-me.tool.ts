@@ -1,6 +1,7 @@
 // apps/api/src/mcp/tools/meta/get-me.tool.ts
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { AiAccessService } from '../../../ai/ai-access.service';
 import { ProfileService } from '../../../users/profile.service';
 import {
   McpTool,
@@ -11,7 +12,10 @@ import {
 @Injectable()
 @McpTool()
 export class GetMeTool implements McpToolDef {
-  constructor(private readonly profile: ProfileService) {}
+  constructor(
+    private readonly profile: ProfileService,
+    private readonly access: AiAccessService,
+  ) {}
   readonly name = 'get_me';
   readonly title = 'Ver meu perfil';
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
