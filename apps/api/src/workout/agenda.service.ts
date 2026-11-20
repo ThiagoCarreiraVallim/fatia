@@ -103,12 +103,15 @@ export class AgendaService {
     }
 
     const plans = await this.acceptedPlans(userId, timezone);
+    const flexible = await this.nextSessions(
+      userId,
+      plans.filter((p) => p.schedule === 'FLEXIBLE'),
+    );
     const sessions = await this.prisma.plannedSession.findMany({
       where: { userId, date: { gte: start, lte: end } },
       include: { plan: { select: { name: true } } },
       orderBy: [{ date: 'asc' }, { order: 'asc' }],
     });
-    const flexible = plans.filter((p) => p.schedule === 'FLEXIBLE');
     const done = await this.doneDays(
       userId,
       timezone,
@@ -116,7 +119,8 @@ export class AgendaService {
       start,
       end,
     );
-    const endOf = new Map(plans.map((p) => [p.planId, p.endDate]));
+    // Um plano por sessão (#406): todas as sessões do plano têm o mesmo fim.
+    const endOf = new Map(plans.flatMap((p) => p.planIds.map((id) => [id, p.endDate] as const)));
 
     const days = [];
     for (let date = start; date <= end; date = addDaysIso(date, 1)) {
@@ -211,8 +215,8 @@ export class AgendaService {
       include: { plan: { select: { name: true } } },
     });
     if (!session) throw new NotFoundException(SESSION_NOT_FOUND);
-    const accepted = (await this.acceptedPlans(userId, timezone)).find(
-      (p) => p.planId === session.planId,
+    const accepted = (await this.acceptedPlans(userId, timezone)).find((p) =>
+      p.planIds.includes(session.planId),
     );
     if (!accepted || accepted.schedule !== 'CALENDAR' || !accepted.endDate) {
       throw new ConflictException(NO_DATES);
@@ -253,13 +257,20 @@ export class AgendaService {
         author: { select: { name: true } },
         // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
         versions: { where: { status: 'ACCEPTED' }, orderBy: { version: 'desc' }, take: 1 },
-        plans: { where: { userId }, select: { id: true, name: true } },
+        plans: {
+          where: { userId },
+          select: { id: true, name: true },
+          orderBy: { sessionIndex: { sort: 'asc', nulls: 'first' } },
+        },
       },
     });
     return offers.flatMap((offer) => {
       const version = offer.versions[0];
       const plan = offer.plans[0];
       if (!version || !plan) return [];
+      // Mais de uma sessão (#406): o plano se chama pelo título da versão, e
+      // cada sessão é um plano na conta da pessoa.
+      const multi = offer.plans.length > 1;
       const planned =
         version.startDate && version.weeks ? planEndDate(version.startDate, version.weeks) : null;
       // "Terminar hoje" na ficha (#402): o plano acaba no dia em que a equipe
@@ -268,7 +279,9 @@ export class AgendaService {
       return [
         {
           planId: plan.id,
-          planName: plan.name,
+          planName: multi ? version.title : plan.name,
+          planIds: offer.plans.map((p) => p.id),
+          sessionPlans: offer.plans,
           authorName: offer.author?.name ?? null,
           schedule: version.schedule,
           startDate: version.startDate,
@@ -277,6 +290,40 @@ export class AgendaService {
           ended: endedOn !== null,
         },
       ];
+    });
+  }
+
+  /**
+   * A próxima sessão de cada plano flexível: com várias sessões (#406), a que
+   * vem depois da última feita, em rodízio; sem nada feito, a primeira.
+   */
+  private async nextSessions(
+    userId: string,
+    plans: Array<{ sessionPlans: Array<{ id: string; name: string }> }>,
+  ): Promise<Array<{ planId: string; planName: string }>> {
+    const multi = plans.filter((p) => p.sessionPlans.length > 1);
+    const last = multi.length
+      ? await this.prisma.workoutSession.findMany({
+          where: {
+            userId,
+            completedAt: { not: null },
+            planId: { in: multi.flatMap((p) => p.sessionPlans.map((s) => s.id)) },
+          },
+          orderBy: { completedAt: 'desc' },
+          distinct: ['planId'],
+          select: { planId: true, completedAt: true },
+        })
+      : [];
+    return plans.map(({ sessionPlans }) => {
+      let next = sessionPlans[0]!;
+      if (sessionPlans.length > 1) {
+        const ids = sessionPlans.map((s) => s.id);
+        const latest = last
+          .filter((r) => r.planId && ids.includes(r.planId))
+          .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
+        if (latest) next = sessionPlans[(ids.indexOf(latest.planId!) + 1) % ids.length]!;
+      }
+      return { planId: next.id, planName: next.name };
     });
   }
 
@@ -307,18 +354,24 @@ export class AgendaService {
   private async endedSummary(
     userId: string,
     timezone: string,
-    plan: { planId: string; planName: string; authorName: string | null; weeks: number | null },
+    plan: {
+      planId: string;
+      planIds: string[];
+      planName: string;
+      authorName: string | null;
+      weeks: number | null;
+    },
   ) {
     const sessions = await this.prisma.plannedSession.findMany({
-      where: { userId, planId: plan.planId },
-      select: { date: true },
+      where: { userId, planId: { in: plan.planIds } },
+      select: { date: true, planId: true },
       orderBy: { date: 'asc' },
     });
     if (sessions.length === 0) return null;
     const done = await this.doneDays(
       userId,
       timezone,
-      [plan.planId],
+      plan.planIds,
       sessions[0]!.date,
       sessions.at(-1)!.date,
     );
@@ -326,7 +379,7 @@ export class AgendaService {
       planId: plan.planId,
       planName: plan.planName,
       authorName: plan.authorName,
-      done: sessions.filter((s) => done.has(`${plan.planId}|${s.date}`)).length,
+      done: sessions.filter((s) => done.has(`${s.planId}|${s.date}`)).length,
       total: sessions.length,
       weeks: plan.weeks ?? 0,
     };

@@ -148,9 +148,10 @@ export class PlanProgramsService {
         if (status === 'ACTIVE' && endDate && daysBetween(today, endDate) <= ENDING_DAYS) {
           status = 'ENDING';
         }
-        const copia = o.plans.find((p) => p.userId === o.userId)?.id ?? null;
-        if (copia) {
-          progress = await offerProgress(this.prisma, o.userId, copia, shown, st.weekNumber);
+        // Um plano por sessão (#406): o progresso soma todas.
+        const copias = o.plans.filter((p) => p.userId === o.userId).map((p) => p.id);
+        if (copias.length) {
+          progress = await offerProgress(this.prisma, o.userId, copias, shown, st.weekNumber);
         }
       }
       items.push({
@@ -198,21 +199,24 @@ export class PlanProgramsService {
 }
 
 /**
- * Treinos feitos do plano que a equipe mandou (#403, #405). Lê dado de Treino
+ * Treinos feitos do plano que a equipe mandou (#403, #405), somando os planos
+ * de todas as sessões da cópia (#406). Lê dado de Treino
  * da pessoa: só se chama depois de `assertReadable` com Treino liberado para
  * quem olha (a leitura fica na trilha dela).
  */
 export async function offerProgress(
   prisma: PrismaService,
   userId: string,
-  planId: string,
+  planIds: string[],
   shown: { schedule: 'CALENDAR' | 'FLEXIBLE'; weeks: number | null },
   weekNumber: number | null,
 ): Promise<NonNullable<PlanProgramItem['progress']>> {
   const [done, planned] = await Promise.all([
-    prisma.workoutSession.count({ where: { userId, planId, completedAt: { not: null } } }),
+    prisma.workoutSession.count({
+      where: { userId, planId: { in: planIds }, completedAt: { not: null } },
+    }),
     shown.schedule === 'CALENDAR'
-      ? prisma.plannedSession.count({ where: { userId, planId } })
+      ? prisma.plannedSession.count({ where: { userId, planId: { in: planIds } } })
       : Promise.resolve(null),
   ]);
   return {
