@@ -11,6 +11,8 @@ export interface OfferVersionState {
   schedule: PlanSchedule;
   startDate: string | null;
   weeks: number | null;
+  /** Último dia do plano flexível (#405). Nulo = sem fim. */
+  endDate?: string | null;
 }
 
 export interface OfferState<V extends OfferVersionState> {
@@ -44,7 +46,7 @@ export function offerState<V extends OfferVersionState>(
   const endDate =
     shown.schedule === 'CALENDAR' && shown.startDate && shown.weeks
       ? planEndDate(shown.startDate, shown.weeks)
-      : null;
+      : (shown.endDate ?? null);
 
   let status: MemberPlanStatus;
   if (endedAt) status = 'ENDED';

@@ -66,3 +66,15 @@ export function offerRemovedNotice(p: {
     url: '/workout/plans',
   };
 }
+
+/** Plano alimentar enviado pela biblioteca (#405): leva à tela do plano alimentar. */
+export function nutritionPlanSentNotice(p: { authorName: string; update: boolean }): Notice {
+  return {
+    kind: NotificationKind.PLAN_RECEIVED,
+    title: p.update
+      ? `${firstName(p.authorName)} atualizou seu plano alimentar`
+      : `${firstName(p.authorName)} enviou um plano alimentar`,
+    body: p.update ? 'Veja o que mudou e decida se troca.' : 'Toque para ver e aceitar.',
+    url: '/nutrition/plan',
+  };
+}

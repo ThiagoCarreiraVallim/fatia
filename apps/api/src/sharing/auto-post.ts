@@ -13,6 +13,11 @@ export interface AutoPostInput {
   title: string;
   /** Uma linha de contexto ("4 exercícios", "nutrição"). */
   meta?: string | null;
+  /**
+   * "Anunciar no mural" escolhido na hora (#405, Pn-08c): posta mesmo com o
+   * tipo desligado em `Group.autoPosts`.
+   */
+  force?: boolean;
 }
 
 const logger = new Logger('AutoPost');
@@ -37,7 +42,7 @@ export async function publishAutoPost(
       where: { id: input.groupId },
       select: { autoPosts: true },
     });
-    if (!grupo?.autoPosts.includes(input.kind)) return null;
+    if (!grupo || (!input.force && !grupo.autoPosts.includes(input.kind))) return null;
     const autor = await prisma.groupMembership.findFirst({
       where: { groupId: input.groupId, userId: input.actorUserId, status: MembershipStatus.ACTIVE },
       select: { id: true },

@@ -28,11 +28,11 @@ Pn-M4, Cm-20); se sumirem, `Artifact read` do GvL8GtYkJGjK5e4YovhZ3o.
 ## Passos
 
 - [x] 1. Ler issue, schema, código existente
-- [ ] 2. Banco de teste fatia_t405
-- [ ] 3. Migration 20261120400000_plan_library_send
-- [ ] 4. API: testes vermelhos (sends.integration.spec, content publish/draft/reach, isolamento)
-- [ ] 5. API: implementação
-- [ ] 6. MCP changeNote + docs/MCP_TOOL_SURFACE.md
+- [x] 2. Banco de teste fatia_t405
+- [x] 3. Migration 20261120400000_plan_library_send
+- [x] 4. API: testes vermelhos (sends.integration.spec, content publish/draft/reach, isolamento)
+- [x] 5. API: implementação
+- [x] 6. MCP (sem mudar descrição: baseline sha) changeNote + docs/MCP_TOOL_SURFACE.md
 - [ ] 7. api-client (send-plans.ts) + testes
 - [ ] 8. Web: biblioteca (Pn-08/08b/08c/08d), página Enviar (Pn-18), oferta do aluno com "O que mudou"
 - [ ] 9. Mobile: "O que mudou" na oferta; seção send fora das abas

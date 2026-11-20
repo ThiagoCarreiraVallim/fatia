@@ -21,6 +21,7 @@ import { planEndDate, scheduleDates } from '../workout/helpers/planned-schedule'
 import { WorkoutPlanService } from '../workout/workout-plan.service';
 import type { SendMemberPlanDto } from './dto/member-file.dto';
 import { MAX_OFFER_NOTE, MAX_OFFER_WEEKS, type SendPlanOfferDto } from './dto/plan-offer.dto';
+import { MAX_CHANGE_NOTE } from './dto/plan-send.dto';
 import { TEAM_ROLES } from './permissions';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { diffOfferVersions, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
@@ -101,7 +102,7 @@ export interface OfferVersionView {
   weekdays: number[];
   note: string | null;
   /** "O que mudou" (#405), escrito por quem reenviou. */
-  changeNote?: string | null;
+  changeNote: string | null;
   sentAt: Date;
   respondedAt: Date | null;
   summary: { exercises: number; sets: number; minutes: number };
@@ -462,13 +463,121 @@ export class PlanOfferService {
     return { offerIds };
   }
 
-  /** O retrato de um modelo de treino da biblioteca desta comunidade. */
-  private async templateSource(groupId: string, templateId: string) {
+  /**
+   * Um modelo da biblioteca para UMA pessoa, pelo envio em lote (#405). Quem
+   * chama já conferiu o papel, a associação desta comunidade e o vínculo ativo
+   * com quem envia, e já validou as datas.
+   *
+   * Se quem envia já mandou este modelo à pessoa (oferta viva, nem apagada nem
+   * terminada), sai uma versão nova da mesma oferta, com "o que mudou": a
+   * versão que esperava resposta fica substituída e a aceita continua em uso
+   * até o novo aceite. Senão, nasce uma oferta no fim da ordem da ficha.
+   */
+  async sendTemplateTo(
+    author: { id: string; name: string },
+    groupId: string,
+    studentUserId: string,
+    templateId: string,
+    source: { title: string; snapshot: PlanSnapshot },
+    input: Pick<SendMemberPlanDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
+      endDate?: string | null;
+      changeNote?: string | null;
+    },
+  ): Promise<{ id: string; versionId: string; version: number; kind: 'new' | 'update' }> {
+    const content = this.scheduleContent(source, input);
+    const result = await this.inTransaction(async (db) => {
+      await lockMemberOrder(db, studentUserId, groupId);
+      const existing = await db.planOffer.findFirst({
+        where: {
+          userId: studentUserId,
+          groupId,
+          authorId: author.id,
+          sourceTemplateId: templateId,
+          removedAt: null,
+          endedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      if (existing) {
+        await this.lockOffer(db, existing.id);
+        const last = await db.planOfferVersion.findFirst({
+          where: { offerId: existing.id },
+          orderBy: { version: 'desc' },
+          select: { version: true },
+        });
+        await db.planOfferVersion.updateMany({
+          where: { offerId: existing.id, status: 'PENDING' },
+          data: { status: 'SUPERSEDED', respondedAt: new Date() },
+        });
+        const v = await db.planOfferVersion.create({
+          data: { offerId: existing.id, version: (last?.version ?? 0) + 1, ...content },
+        });
+        return { id: existing.id, versionId: v.id, version: v.version, kind: 'update' as const };
+      }
+      const last = await db.planOffer.aggregate({
+        where: { userId: studentUserId, groupId, removedAt: null },
+        _max: { position: true },
+      });
+      // Na primeira versão não há o que mudou.
+      const offer = await db.planOffer.create({
+        data: {
+          userId: studentUserId,
+          authorId: author.id,
+          groupId,
+          position: (last._max.position ?? -1) + 1,
+          sourceTemplateId: templateId,
+          versions: { create: { version: 1, ...content, changeNote: null } },
+        },
+        include: { versions: true },
+      });
+      return { id: offer.id, versionId: offer.versions[0]!.id, version: 1, kind: 'new' as const };
+    });
+    const notice = result.kind === 'update' ? offerUpdatedNotice : offerSentNotice;
+    this.notifications.notify(
+      [studentUserId],
+      notice({ offerId: result.id, authorName: author.name, title: content.title }),
+    );
+    return result;
+  }
+
+  /**
+   * Cancela um envio que ainda espera resposta (#405, "Enviados
+   * recentemente"). Com a oferta travada, confere de novo que nenhuma versão
+   * foi aceita: o aceite e o cancelamento nunca se cruzam. A oferta some do
+   * app da pessoa; a linha fica, para o export dela.
+   */
+  async revokePending(offerId: string): Promise<void> {
+    await this.inTransaction(async (db) => {
+      await this.lockOffer(db, offerId);
+      const aceita = await db.planOfferVersion.count({
+        where: { offerId, status: 'ACCEPTED' },
+      });
+      if (aceita > 0) {
+        throw new ConflictException(
+          'A pessoa já aceitou este plano. Para tirar, use a ficha dela em Planos.',
+        );
+      }
+      const now = new Date();
+      await db.planOfferVersion.updateMany({
+        where: { offerId, status: 'PENDING' },
+        data: { status: 'SUPERSEDED', respondedAt: now },
+      });
+      await db.planOffer.update({ where: { id: offerId }, data: { removedAt: now } });
+    });
+  }
+
+  /**
+   * O retrato de um modelo de treino da biblioteca desta comunidade. O
+   * rascunho (#405) ainda não se envia.
+   */
+  async templateSource(groupId: string, templateId: string) {
     const tpl = await this.prisma.groupPlanTemplate.findFirst({
       where: { id: templateId, groupId },
-      select: { kind: true, title: true, snapshot: true },
+      select: { kind: true, title: true, snapshot: true, draft: true },
     });
     if (!tpl) throw new NotFoundException('Template not found');
+    if (tpl.draft) throw new ConflictException('Termine o rascunho antes de enviar.');
     if (tpl.kind !== 'WORKOUT') {
       throw new BadRequestException(
         'Plano alimentar para uma pessoa chega com o editor de dieta. Por ora, só treino.',
@@ -746,10 +855,16 @@ export class PlanOfferService {
   /** A agenda pedida, validada, sobre o retrato já pronto. */
   private scheduleContent(
     source: { title: string; snapshot: PlanSnapshot },
-    input: Pick<SendPlanOfferDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'>,
+    input: Pick<SendPlanOfferDto, 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'note'> & {
+      endDate?: string | null;
+      changeNote?: string | null;
+    },
   ) {
     const snapshot = source.snapshot;
     const note = input.note?.trim() ? input.note.trim().slice(0, MAX_OFFER_NOTE) : null;
+    const changeNote = input.changeNote?.trim()
+      ? input.changeNote.trim().slice(0, MAX_CHANGE_NOTE)
+      : null;
 
     if (input.schedule === 'FLEXIBLE') {
       return {
@@ -760,7 +875,10 @@ export class PlanOfferService {
         startDate: null,
         weeks: null,
         weekdays: [],
+        // Plano flexível (#405) pode ter um último dia; sem ele, "sem fim".
+        endDate: input.endDate ? assertDay(input.endDate, 'endDate') : null,
         note,
+        changeNote,
       };
     }
     if (!input.startDate || !input.weeks || !input.weekdays?.length) {
@@ -788,7 +906,9 @@ export class PlanOfferService {
       startDate,
       weeks: input.weeks,
       weekdays,
+      endDate: null,
       note,
+      changeNote,
     };
   }
 
@@ -935,10 +1055,14 @@ export class PlanOfferService {
       title: row.title,
       schedule: row.schedule,
       startDate: row.startDate,
-      endDate: row.startDate && row.weeks ? planEndDate(row.startDate, row.weeks) : null,
+      endDate:
+        row.schedule === 'CALENDAR' && row.startDate && row.weeks
+          ? planEndDate(row.startDate, row.weeks)
+          : row.endDate,
       weeks: row.weeks,
       weekdays: row.weekdays,
       note: row.note,
+      changeNote: row.changeNote,
       sentAt: row.sentAt,
       respondedAt: row.respondedAt,
       summary: {

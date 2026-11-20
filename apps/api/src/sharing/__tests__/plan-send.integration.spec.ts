@@ -432,7 +432,9 @@ describe('enviar para alunos (#405, banco real)', () => {
       const vista = await offers.get(u.ana!, oferta.id);
       expect(vista.kind).toBe('update');
       expect(vista.shown.changeNote).toBe('Trocou 2 exercícios e subiu o descanso para 90 s.');
-      expect(notify.mock.calls[0][1].title).toMatch(/atualizou/);
+      // O aceite avisou a Helena; a versão nova avisa a Ana.
+      const paraAna = notify.mock.calls.filter((c) => c[0][0] === u.ana).at(-1)!;
+      expect(paraAna[1].title).toMatch(/atualizou/);
     });
 
     it('sem plano atual, "depois do plano atual" começa hoje', async () => {

@@ -80,6 +80,8 @@ import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
 import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
 import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
 import { PlanOfferService } from './plan-offer.service';
+import { PlanSendController } from './plan-send.controller';
+import { PlanSendService } from './plan-send.service';
 import { MemberFileController, MyMemberNotesController } from './member-file.controller';
 import { MemberFileService } from './member-file.service';
 import { PlanProgramsController } from './plan-programs.controller';
@@ -157,6 +159,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     BenefitController,
     MemberFileController,
     PlanProgramsController,
+    PlanSendController,
     MyMemberNotesController,
     ReviewController,
     ReportController,
@@ -176,6 +179,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PlanOfferService,
     MemberFileService,
     PlanProgramsService,
+    PlanSendService,
     MemberNoteService,
     ReviewService,
     ReportService,

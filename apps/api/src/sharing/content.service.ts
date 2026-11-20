@@ -44,6 +44,8 @@ export const PLAN_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
 export const MAX_TIP_BODY = 4000;
 
 export interface TemplateMeta {
+  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
+  draft?: boolean;
   title?: string;
   description?: string | null;
   level?: string | null;
@@ -66,8 +68,6 @@ export interface TemplateReach {
 }
 
 export interface UpdateTemplateInput extends TemplateMeta {
-  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
-  draft?: boolean;
   /** Treino: congela de novo a partir deste plano do autor. */
   planId?: string;
   /** Nutrição: troca metas e refeições do retrato. */
@@ -209,6 +209,9 @@ function macrosOf(g: NutritionGoals): NutritionGoals {
   };
 }
 
+/** "Com quem" (#405): abaixo disto o número não sai, como nos agregados do painel. */
+export const REACH_MIN_CELL = 5;
+
 /** Autor que apagou a conta aparece como a equipe: o conteúdo é da comunidade. */
 const TEAM_AUTHOR = 'Equipe';
 
@@ -252,7 +255,70 @@ export class ContentService {
       groupId,
       rows.map((r) => r.authorId),
     );
-    return Promise.all(rows.map((r) => this.templateView(r, userId, eu, papeis)));
+    const alcance = await this.reachOf(rows.map((r) => r.id));
+    return Promise.all(
+      rows.map(async (r) => ({
+        ...(await this.templateView(r, userId, eu, papeis)),
+        withWhom: alcance.get(r.id) ?? { band: 'none' as const, count: null },
+      })),
+    );
+  }
+
+  /**
+   * "Com quem" (#405, Pn-08): pessoas distintas com uma cópia de cada modelo,
+   * adotada na comunidade ou recebida da equipe (treino ou alimentação). É só
+   * uma contagem: abaixo de 5 pessoas o número não sai, e nunca sai quem.
+   * Oferta apagada da pessoa (#402) e plano alimentar cancelado antes do
+   * aceite não contam.
+   */
+  private async reachOf(templateIds: string[]): Promise<Map<string, TemplateReach>> {
+    const out = new Map<string, TemplateReach>();
+    if (templateIds.length === 0) return out;
+    const ids = { in: templateIds };
+    const [adotados, ofertas, refeicoes, alimentares] = await Promise.all([
+      this.prisma.workoutPlan.findMany({
+        where: { fromTemplateId: ids },
+        select: { fromTemplateId: true, userId: true },
+      }),
+      this.prisma.planOffer.findMany({
+        where: { sourceTemplateId: ids, removedAt: null },
+        select: { sourceTemplateId: true, userId: true },
+      }),
+      this.prisma.mealTemplate.findMany({
+        where: { fromTemplateId: ids },
+        select: { fromTemplateId: true, userId: true },
+      }),
+      this.prisma.nutritionPlan.findMany({
+        where: {
+          sourceTemplateId: ids,
+          OR: [{ status: { not: 'SUPERSEDED' } }, { acceptedAt: { not: null } }],
+        },
+        select: { sourceTemplateId: true, userId: true },
+      }),
+    ]);
+    const pessoas = new Map<string, Set<string>>();
+    const conta = (templateId: string | null, userId: string) => {
+      if (!templateId) return;
+      const set = pessoas.get(templateId) ?? new Set<string>();
+      set.add(userId);
+      pessoas.set(templateId, set);
+    };
+    for (const r of adotados) conta(r.fromTemplateId, r.userId);
+    for (const r of ofertas) conta(r.sourceTemplateId, r.userId);
+    for (const r of refeicoes) conta(r.fromTemplateId, r.userId);
+    for (const r of alimentares) conta(r.sourceTemplateId, r.userId);
+    for (const id of templateIds) {
+      const n = pessoas.get(id)?.size ?? 0;
+      out.set(
+        id,
+        n === 0
+          ? { band: 'none', count: null }
+          : n < REACH_MIN_CELL
+            ? { band: 'few', count: null }
+            : { band: 'many', count: n },
+      );
+    }
+    return out;
   }
 
   async getTemplateForTeam(userId: string, groupId: string, id: string): Promise<TemplateView> {
@@ -283,6 +349,7 @@ export class ContentService {
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
         snapshotVersion: PLAN_SNAPSHOT_VERSION,
         sourcePlanId: plano.id,
+        draft: input.draft === true,
       },
       include: TEMPLATE_INCLUDE,
     });
@@ -313,6 +380,7 @@ export class ContentService {
         coverFileId,
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
         snapshotVersion: NUTRITION_SNAPSHOT_VERSION,
+        draft: input.draft === true,
       },
       include: TEMPLATE_INCLUDE,
     });
@@ -330,6 +398,13 @@ export class ContentService {
     this.assertCanEdit(eu, userId, atual.authorId);
 
     const data: Prisma.GroupPlanTemplateUpdateInput = {};
+    if (input.draft !== undefined) {
+      // Rascunho nunca está na comunidade (o banco também confere).
+      if (input.draft && atual.publishedAt) {
+        throw new ConflictException('Tire da comunidade antes de voltar o plano a rascunho.');
+      }
+      data.draft = input.draft;
+    }
     if (input.title !== undefined) data.title = this.title(input.title);
     if (input.description !== undefined) data.description = this.description(input.description);
     if (input.level !== undefined) data.level = this.level(input.level);
@@ -383,18 +458,23 @@ export class ContentService {
     groupId: string,
     id: string,
     published: boolean,
-    _opts: { announce?: boolean } = {},
+    opts: { announce?: boolean } = {},
   ): Promise<TemplateView> {
     const eu = await this.assertPublisher(userId, groupId);
     const atual = await this.findTemplate(groupId, id);
     this.assertCanEdit(eu, userId, atual.authorId);
+    if (published && atual.draft) {
+      throw new ConflictException('Termine o rascunho antes de publicar na comunidade.');
+    }
     const row = await this.prisma.groupPlanTemplate.update({
       where: { id: atual.id },
       // Republicar não muda a data: "novo" na lista do membro é o que estreou agora.
       data: { publishedAt: published ? (atual.publishedAt ?? new Date()) : null },
       include: TEMPLATE_INCLUDE,
     });
-    if (published && !atual.publishedAt) {
+    // "Anunciar no mural" (Pn-08c): ligado posta mesmo com o post automático
+    // de plano desligado; desligado não posta; sem a escolha, vale a configuração.
+    if (published && !atual.publishedAt && opts.announce !== false) {
       await publishAutoPost(this.prisma, {
         groupId,
         actorUserId: userId,
@@ -402,6 +482,7 @@ export class ContentService {
         refId: row.id,
         title: row.title,
         meta: row.kind === PlanTemplateKind.WORKOUT ? 'plano de treino' : 'plano alimentar',
+        force: opts.announce === true,
       });
     }
     return this.templateView(row, userId, eu);
@@ -892,7 +973,11 @@ export class ContentService {
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
       ...(teamRole
-        ? { sourcePlanId: row.sourcePlanId, canEdit: this.canEdit(teamRole, userId, row.authorId) }
+        ? {
+            draft: row.draft,
+            sourcePlanId: row.sourcePlanId,
+            canEdit: this.canEdit(teamRole, userId, row.authorId),
+          }
         : {}),
     };
 

@@ -104,6 +104,8 @@ export interface NutritionPlanView {
   goals: PlanGoals;
   applyGoals: boolean;
   note: string | null;
+  /** "O que mudou" (#405), da versão 2 em diante. */
+  changeNote: string | null;
   meals: PlanMealView[];
 }
 
@@ -284,6 +286,8 @@ export class NutritionPlanService {
     authorId: string,
     membershipId: string,
     input: SendNutritionPlanInput,
+    /** Do envio pela biblioteca (#405): o modelo de origem e "o que mudou". */
+    origin: { sourceTemplateId?: string; changeNote?: string | null } = {},
   ): Promise<NutritionPlanView> {
     const student = await this.prisma.groupMembership.findUnique({
       where: { id: membershipId },
@@ -372,6 +376,9 @@ export class NutritionPlanService {
           ...goalsOf(input.goals),
           applyGoals: input.applyGoals ?? true,
           note: input.note?.trim() || null,
+          // A primeira versão não tem o que mudou.
+          changeNote: last ? origin.changeNote?.trim() || null : null,
+          sourceTemplateId: origin.sourceTemplateId ?? null,
           meals: { create: meals },
         },
         include: PLAN_INCLUDE,
@@ -884,6 +891,7 @@ export class NutritionPlanService {
       goals: goalsOf(plan),
       applyGoals: plan.applyGoals,
       note: plan.note,
+      changeNote: plan.changeNote,
       meals: plan.meals.map((meal) => ({
         id: meal.id,
         mealType: meal.mealType,
