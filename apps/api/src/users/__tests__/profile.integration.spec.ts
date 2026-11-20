@@ -90,6 +90,20 @@ describe('Você: perfil, conta e novidades (integração)', () => {
       expect((await semBucket.getMe(id)).mediaUploadEnabled).toBe(false);
     });
 
+    it('diz se o nome ainda é provisório (o sub ou o pedaço do e-mail), sem expor o sub', async () => {
+      const real = await pessoa('Ana Souza');
+      expect((await profile.getMe(real)).nameIsProvisional).toBe(false);
+      const sub = await pessoa('x');
+      const row = await prisma.user.update({
+        where: { id: sub },
+        data: { name: `${stamp}-${n}` },
+      });
+      const me = await profile.getMe(sub);
+      expect(row.name).toBe(row.logtoSub);
+      expect(me.nameIsProvisional).toBe(true);
+      expect(me).not.toHaveProperty('logtoSub');
+    });
+
     it('toda resposta de perfil diz se a troca de e-mail existe (também a da foto)', async () => {
       const id = await pessoa();
       const comM2m = new ProfileService(prisma, media, {

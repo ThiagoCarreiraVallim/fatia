@@ -148,6 +148,18 @@ describe('IdentitySyncService.syncFromIdToken', () => {
     expect(result.email).toBe(USER.email);
   });
 
+  it('o nome igual ao pedaço do e-mail antes do @ também é provisório e é substituído', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({
+      ...USER,
+      email: 'ana.souza@x.com',
+      name: 'ana.souza',
+    });
+    idToken({ name: 'Ana Souza' });
+    const result = await service.syncFromIdToken(USER.id, 'tok');
+    expect(result.name).toBe('Ana Souza');
+  });
+
   it('sem LOGTO_MOBILE_APP_ID responde 503', async () => {
     const { service } = setup({ LOGTO_ENDPOINT: BASE.LOGTO_ENDPOINT });
     await expect(service.syncFromIdToken(USER.id, 'tok')).rejects.toBeInstanceOf(
