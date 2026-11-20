@@ -143,6 +143,8 @@ model User {
   nutritionPlans          NutritionPlan[]      @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
   nutritionPlansAuthored  NutritionPlan[]      @relation("NutritionPlanAuthor")
+  /// Versões de plano alimentar que a pessoa salvou na cópia de um aluno (#407).
+  nutritionPlansEdited    NutritionPlan[]      @relation("NutritionPlanEditor")
   /// Anotações da equipe sobre a pessoa (#402). Ela vê, só leitura.
   memberNotes             MemberNote[]         @relation("MemberNoteSubject")
   /// Anotações que a pessoa, como equipe, escreveu sobre membros (#402).
@@ -681,38 +683,47 @@ enum NutritionPlanStatus {
 /// As metas vêm como faixa, como `UserGoals`: aceitar com `applyGoals` copia
 /// as oito colunas para as metas do dia.
 model NutritionPlan {
-  id               String              @id @default(uuid())
-  userId           String
-  authorId         String?
+  id                String              @id @default(uuid())
+  userId            String
+  authorId          String?
   /// Comunidade em que o plano foi enviado: diz quem da equipe vê as trocas.
-  groupId          String?
+  groupId           String?
   /// 1, 2, 3… por aluno e autor. Aparece como "· v2" no cabeçalho.
-  version          Int
-  status           NutritionPlanStatus @default(SENT)
-  kcalMin          Int
-  kcalMax          Int
-  proteinMinG      Int
-  proteinMaxG      Int
-  carbsMinG        Int
-  carbsMaxG        Int
-  fatMinG          Int
-  fatMaxG          Int
+  version           Int
+  status            NutritionPlanStatus @default(SENT)
+  kcalMin           Int
+  kcalMax           Int
+  proteinMinG       Int
+  proteinMaxG       Int
+  carbsMinG         Int
+  carbsMaxG         Int
+  fatMinG           Int
+  fatMaxG           Int
   /// Aceitar aplica as faixas acima às metas do dia.
-  applyGoals       Boolean             @default(true)
+  applyGoals        Boolean             @default(true)
   /// Recado do profissional, texto puro.
-  note             String?
+  note              String?
   /// "O que mudou" (#405): da versão 2 em diante, escrito por quem reenviou.
-  changeNote       String?
+  changeNote        String?
   /// Modelo da biblioteca de onde o plano saiu (#405): "já tem" e "Com quem".
-  sourceTemplateId String?
-  sentAt           DateTime            @default(now())
-  acceptedAt       DateTime?
-  supersededAt     DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  sourceTemplateId  String?
+  /// Quem da equipe salvou esta versão pela cópia do aluno (#407, Pn-24c).
+  /// Nulo no envio comum. Fica fora do export: é dado de quem editou.
+  editedById        String?
+  /// Os grupos de equivalentes do editor (#407), como o profissional os montou:
+  /// `[{ key, name, keyMacro, foods: [{ foodId, foodName, grams, portionLabel,
+  /// portionQuantity, kcal, proteinG, carbsG, fatG }] }]`. Só referência para
+  /// reabrir a cópia no editor: a troca do aluno usa `NutritionPlanEquivalent`.
+  equivalenceGroups Json?
+  sentAt            DateTime            @default(now())
+  acceptedAt        DateTime?
+  supersededAt      DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   user           User                @relation("NutritionPlanSubject", fields: [userId], references: [id], onDelete: Cascade)
   author         User?               @relation("NutritionPlanAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  editedBy       User?               @relation("NutritionPlanEditor", fields: [editedById], references: [id], onDelete: SetNull)
   group          Group?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
   meals          NutritionPlanMeal[]
   swaps          NutritionSwap[]
@@ -721,6 +732,7 @@ model NutritionPlan {
   @@index([userId, status])
   @@index([sourceTemplateId])
   @@index([authorId])
+  @@index([editedById])
   @@index([groupId])
 }
 
@@ -732,6 +744,11 @@ model NutritionPlanMeal {
   /// "Café da manhã", "Lanche da tarde": o nome que o profissional deu.
   name     String
   position Int
+  /// Horário sugerido ("07:00"), texto HH:MM (#407). Nulo = sem horário.
+  time     String?
+  /// Chave estável da refeição no editor (#407): casa a refeição entre versões
+  /// para o aceite levar o "comi isso" de hoje para a versão nova.
+  key      String?
 
   plan    NutritionPlan         @relation(fields: [planId], references: [id], onDelete: Cascade)
   options NutritionPlanOption[]
@@ -778,6 +795,11 @@ model NutritionPlanItem {
   portionQuantity  Float?
   /// Grupo de equivalência ("Carboidrato"), o título da folha de troca.
   equivalenceGroup String?
+  /// Chave estável do item no editor (#407): casa o item entre versões para o
+  /// aceite manter as trocas que a pessoa já fez.
+  key              String?
+  /// Chave do grupo de equivalentes do editor (`NutritionPlan.equivalenceGroups`).
+  groupKey         String?
 
   option      NutritionPlanOption       @relation(fields: [optionId], references: [id], onDelete: Cascade)
   food        Food?                     @relation(fields: [foodId], references: [id], onDelete: SetNull)
