@@ -1,5 +1,6 @@
 import { apiFetch } from './http';
 import type { PlanDocumentInput, PlanDocumentView } from './plan-editor';
+import type { NutritionDocument, NutritionDocumentInput } from './nutrition-plan-editor';
 import type { GroupRole, MyGroup } from './community';
 import type { MealType } from './nutrition';
 import type { TemplateReach } from './plan-library';
@@ -115,6 +116,8 @@ export interface PlanTemplate {
   sessionCount?: number;
   /** O documento do editor; só na leitura de um modelo pela equipe. */
   document?: PlanDocumentView | null;
+  /** O plano alimentar do editor (#407); só na leitura de um modelo pela equipe. */
+  nutritionDocument?: NutritionDocument | null;
 }
 
 export interface GroupTip {
@@ -202,14 +205,22 @@ export const contentApi = {
         | { planId?: undefined; document: PlanDocumentInput }
       ),
   ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/workout`, json('POST', input)),
+  /** O documento do editor (#407), ou metas e refeições salvas (Fase 7): um dos dois. */
   createNutrition: (
     groupId: string,
     input: TemplateMetaInput & {
       title: string;
+      document?: NutritionDocumentInput;
       goals?: NutritionGoalsInput | null;
       mealTemplateIds?: string[];
     },
   ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/nutrition`, json('POST', input)),
+  /** Salvar o plano alimentar do editor (#407). */
+  updateNutrition: (
+    groupId: string,
+    id: string,
+    input: TemplateMetaInput & { document?: NutritionDocumentInput },
+  ) => apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/${id}`, json('PATCH', input)),
   updatePlan: (groupId: string, id: string, input: UpdateTemplateInput) =>
     apiFetch<PlanTemplate>(`${base}/${groupId}/content/plans/${id}`, json('PATCH', input)),
   /** `announce` (#405): "Anunciar no mural"; sem ele, vale a configuração da comunidade. */

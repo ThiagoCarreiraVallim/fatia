@@ -235,9 +235,12 @@ export function documentTotals(
   doc: Pick<NutritionDocument, 'meals'>,
   chosen: Record<string, number> = {},
 ): Macros {
-  void doc;
-  void chosen;
-  return { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 };
+  return sumMacros(
+    doc.meals.map((m) => {
+      const o = m.options[chosen[m.key] ?? 0] ?? m.options[0];
+      return sumMacros(o?.items ?? []);
+    }),
+  );
 }
 
 /** "dentro da meta", "+374 acima da meta", "−120 abaixo da meta" (kcal ±5%). */
@@ -245,31 +248,40 @@ export function targetStatus(
   totalKcal: number,
   targets: NutritionTargets | null,
 ): { tone: 'ok' | 'over' | 'under'; label: string } | null {
-  void totalKcal;
-  void targets;
-  return null;
+  if (!targets || !(targets.kcal > 0)) return null;
+  const total = Math.round(totalKcal);
+  const folga = targets.kcal * KCAL_TOLERANCE;
+  const diff = total - targets.kcal;
+  if (Math.abs(diff) <= folga) return { tone: 'ok', label: 'dentro da meta' };
+  return diff > 0
+    ? { tone: 'over', label: `+${formatInteger(diff)} acima da meta` }
+    : { tone: 'under', label: `−${formatInteger(-diff)} abaixo da meta` };
 }
 
 /** Em quantas refeições o grupo aparece (uma refeição conta uma vez). */
 export function groupUsage(doc: Pick<NutritionDocument, 'meals'>, groupKey: string): number {
-  void doc;
-  void groupKey;
-  return 0;
+  return doc.meals.filter((m) =>
+    m.options.some((o) => o.items.some((i) => i.groupKey === groupKey)),
+  ).length;
 }
 
 export function groupUsageLabel(n: number): string {
-  return String(n);
+  if (n === 0) return 'ainda sem uso';
+  return n === 1 ? 'usado em 1 refeição' : `usado em ${n} refeições`;
 }
 
 /** O selo do item: "Carboidrato 2 · 5 opções". */
 export function groupChip(group: Pick<EquivalenceGroupDoc, 'name' | 'foods'>): string {
-  return group.name;
+  const n = group.foods.length;
+  return `${group.name} · ${n} ${n === 1 ? 'opção' : 'opções'}`;
 }
 
 /** Grupo com menos de 2 alimentos não dá troca: o aluno não vê o Trocar. */
 export function groupProblem(group: Pick<EquivalenceGroupDoc, 'foods'>): string | null {
-  void group;
-  return null;
+  if (group.foods.length >= 2) return null;
+  return group.foods.length === 0
+    ? 'Grupo vazio. Adicione ao menos 2 alimentos.'
+    : 'Adicione ao menos 2 alimentos. Com 1 só, o botão Trocar some para o aluno.';
 }
 
 function keyOf(f: Macros, key: KeyMacro): number {
@@ -287,15 +299,24 @@ function keyOf(f: Macros, key: KeyMacro): number {
  * Só aviso: no envio, o servidor acerta a quantidade de cada troca pelo item.
  */
 export function groupOutliers(group: Pick<EquivalenceGroupDoc, 'foods' | 'keyMacro'>): number[] {
-  void group;
-  return [];
+  const ref = group.foods[0];
+  if (!ref) return [];
+  const alvo = keyOf(ref, group.keyMacro);
+  if (!(alvo > 0)) return [];
+  return group.foods.flatMap((f, i) =>
+    i > 0 && Math.abs(keyOf(f, group.keyMacro) - alvo) / alvo > EQUIVALENT_TOLERANCE + 1e-9
+      ? [i]
+      : [],
+  );
 }
 
 /** "100 g · 4 × colher de sopa", ou "120 g". */
 export function amountLine(
   item: Pick<NutritionFoodSnap, 'grams' | 'portionLabel' | 'portionQuantity'>,
 ): string {
-  return String(item.grams);
+  const g = `${formatInteger(Math.round(item.grams))} g`;
+  if (!item.portionLabel || !item.portionQuantity) return g;
+  return `${formatQuantity(item.portionQuantity)} × ${item.portionLabel} · ${g}`;
 }
 
 /** "C 28 · P 2,5 · G 0,2": macros curtos da linha do grupo. */
@@ -306,14 +327,42 @@ export function macroLine(f: Macros): string {
 
 /** O que impede salvar. Grupo com 1 alimento e refeição vazia são só aviso. */
 export function nutritionDocumentProblems(doc: NutritionDocument): string[] {
-  void doc;
-  return [];
+  const out: string[] = [];
+  if (!doc.targets || !(doc.targets.kcal > 0)) out.push('Defina as calorias por dia.');
+  if (doc.meals.length > MAX_PLAN_MEALS) out.push(`Um plano tem até ${MAX_PLAN_MEALS} refeições.`);
+  for (const m of doc.meals) {
+    if (!m.name.trim()) out.push('Toda refeição precisa de nome.');
+    if (m.time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(m.time)) {
+      out.push(`O horário de ${m.name || 'uma refeição'} vai no formato 07:00.`);
+    }
+    for (const o of m.options) {
+      for (const it of o.items) {
+        if (it.foodId === null) {
+          out.push(`"${it.foodName}" não é um alimento da TACO: troque antes de salvar.`);
+        }
+      }
+    }
+  }
+  for (const g of doc.groups) {
+    if (!g.name.trim()) out.push('Todo grupo de equivalentes precisa de nome.');
+  }
+  return [...new Set(out)];
 }
 
 /** Avisos que não impedem salvar (Pn-24b). */
 export function nutritionDocumentWarnings(doc: NutritionDocument): string[] {
-  void doc;
-  return [];
+  const out: string[] = [];
+  for (const m of doc.meals) {
+    if (m.options.every((o) => o.items.length === 0)) {
+      out.push(`${m.name}: nenhum item. O aluno vê "sem sugestão".`);
+    }
+  }
+  for (const g of doc.groups) {
+    if (groupUsage(doc, g.key) > 0 && groupProblem(g)) {
+      out.push(`${g.name}: ${groupProblem(g)}`);
+    }
+  }
+  return out;
 }
 
 const amountInput = (f: NutritionFoodSnap): FoodAmountInput => ({
@@ -381,9 +430,16 @@ export function nextGroupName(
   groups: Pick<EquivalenceGroupDoc, 'name'>[],
   keyMacro: KeyMacro,
 ): string {
-  void groups;
-  return KEY_MACRO_LABEL[keyMacro];
+  const base =
+    keyMacro === 'carbs'
+      ? 'Carboidrato'
+      : keyMacro === 'protein'
+        ? 'Proteína'
+        : keyMacro === 'fat'
+          ? 'Gordura'
+          : 'Troca';
+  let n = 1;
+  const nomes = new Set(groups.map((g) => g.name));
+  while (nomes.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
 }
-
-// Stub (#407): o que as contas vão usar.
-export const STUB_REFS = [formatInteger, formatQuantity, keyOf];
