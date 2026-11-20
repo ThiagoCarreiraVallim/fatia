@@ -28,11 +28,13 @@ import {
   teamHeadline,
   teamRoleLabel,
   type GrantableRole,
+  type GroupRole,
   type StaffView,
   type TeamSpecialty,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { orgKeys } from '@/components/community/query-keys';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -69,6 +71,16 @@ function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode
  * se profissionais veem só quem acompanham. Papel decide ação; dado de aluno
  * depende sempre do que ele compartilhou.
  */
+/** A cor do selo por papel, como na prancha (dono, admin, profissional, criador, recepção). */
+const ROLE_BADGE: Record<GroupRole, BadgeProps['variant']> = {
+  OWNER: 'pro-community',
+  ADMIN: 'pro',
+  PROFESSIONAL: 'done',
+  CREATOR: 'trial',
+  RECEPTION: 'pending',
+  MEMBER: 'free',
+};
+
 export default function OrgTeamPage() {
   const g = useOrgGroup();
   const qc = useQueryClient();
@@ -245,9 +257,9 @@ export default function OrgTeamPage() {
                           {staffSubtitle(p)}
                         </span>
                       </span>
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
+                      <Badge variant={ROLE_BADGE[p.role]} className="shrink-0">
                         {staffRoleWord(p.role)}
-                      </span>
+                      </Badge>
                     </button>
                   </li>
                 ))}
