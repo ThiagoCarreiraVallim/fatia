@@ -157,6 +157,8 @@ export function staffChangeLine(c: StaffChange): string {
     case 'members.role':
       return `${quem} mudou ${alvo} de ${papel(c.from)} para ${papel(c.to)}`;
     case 'members.specialty':
+      if (!c.from) return `${quem} pôs ${alvo} como ${esp(c.to)}`;
+      if (!c.to) return `${quem} tirou a especialidade de ${alvo} (era ${esp(c.from)})`;
       return `${quem} mudou a especialidade de ${alvo} de ${esp(c.from)} para ${esp(c.to)}`;
     case 'members.approve':
       return `${quem} aprovou ${alvo} como ${papel(c.to)}`;

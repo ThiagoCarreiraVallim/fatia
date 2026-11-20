@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -74,6 +74,14 @@ export default function OrgTeamPage() {
   const qc = useQueryClient();
   const [busca, setBusca] = useState('');
   const [selId, setSelId] = useState<string | null>(null);
+  // No celular o painel da pessoa fica abaixo da lista: quem toca alguém é
+  // levado até ele (só no toque, não na escolha inicial).
+  const painelRef = useRef<HTMLElement>(null);
+  const [tocou, setTocou] = useState(0);
+  useEffect(() => {
+    if (!tocou || !window.matchMedia?.('(max-width: 1023px)').matches) return;
+    painelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [tocou]);
 
   const pode = groupCan(g, 'member.role');
   const equipe = useQuery({
@@ -213,7 +221,10 @@ export default function OrgTeamPage() {
                     <button
                       type="button"
                       aria-pressed={sel?.membershipId === p.membershipId}
-                      onClick={() => setSelId(p.membershipId)}
+                      onClick={() => {
+                        setSelId(p.membershipId);
+                        setTocou((n) => n + 1);
+                      }}
                       className={cn(
                         'flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         sel?.membershipId === p.membershipId && 'bg-muted',
@@ -247,8 +258,9 @@ export default function OrgTeamPage() {
 
         {sel && (
           <aside
+            ref={painelRef}
             aria-label={`Detalhes de ${sel.name}`}
-            className="h-fit space-y-4 rounded-2xl border border-subtle bg-card p-4"
+            className="h-fit scroll-mt-48 space-y-4 rounded-2xl border border-subtle bg-card p-4 lg:scroll-mt-0"
           >
             <div className="flex items-center gap-3">
               <span
@@ -366,7 +378,7 @@ export default function OrgTeamPage() {
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-subtle text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-3 font-semibold">Ação</th>
+                  <th className="sticky left-0 z-10 bg-card py-2 pr-3 font-semibold">Ação</th>
                   {tabela.data.columns.map((c) => (
                     <th
                       key={c}
@@ -383,7 +395,9 @@ export default function OrgTeamPage() {
               <tbody className="divide-y divide-subtle">
                 {tabela.data.rows.map((r) => (
                   <tr key={r.key}>
-                    <td className="py-2 pr-3">{r.label}</td>
+                    <td className="sticky left-0 z-10 max-w-44 bg-card py-2 pr-3 sm:max-w-none">
+                      {r.label}
+                    </td>
                     {tabela.data.columns.map((c) => {
                       const v = permissionCell(c, r.roles);
                       return (
