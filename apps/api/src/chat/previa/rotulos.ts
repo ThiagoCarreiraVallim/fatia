@@ -454,12 +454,28 @@ export const CAMPOS: Record<string, Campo> = {
   startLoadKg: { rotulo: 'Carga inicial', formato: comUnidade('kg') },
   loadMode: {
     rotulo: 'Carga',
-    formato: deMapa({ WEIGHT: 'Carga externa', BODYWEIGHT: 'Peso do corpo' }),
+    formato: deMapa({
+      WEIGHT: 'Carga externa',
+      BODYWEIGHT: 'Peso do corpo',
+      PERCENT_1RM: '% de 1RM',
+      BAND: 'Elástico',
+    }),
   },
-  repUnit: { rotulo: 'Conta por', formato: deMapa({ REPS: 'Repetições', SECONDS: 'Segundos' }) },
+  // Editor da equipe (#406).
+  loadPercent: { rotulo: '% de 1RM', formato: comUnidade('%', 0) },
+  warmupBefore: { rotulo: 'Série de aquecimento antes', formato: simOuNao },
+  repUnit: {
+    rotulo: 'Conta por',
+    formato: deMapa({
+      REPS: 'Repetições',
+      SECONDS: 'Segundos',
+      MAX: 'Até a falha',
+      METERS: 'Metros',
+    }),
+  },
   cardioTarget: {
     rotulo: 'Meta do cardio',
-    formato: deMapa({ TIME: 'Tempo', DISTANCE: 'Distância' }),
+    formato: deMapa({ TIME: 'Tempo', DISTANCE: 'Distância', CALORIES: 'Calorias' }),
   },
   cardioDurationSeconds: {
     rotulo: 'Duração alvo',
@@ -473,6 +489,20 @@ export const CAMPOS: Record<string, Campo> = {
     rotulo: 'Intensidade',
     formato: deMapa({ LIGHT: 'Leve', MODERATE: 'Moderada', VIGOROUS: 'Forte' }),
   },
+  cardioCalories: { rotulo: 'Calorias alvo', formato: comUnidade('kcal', 0) },
+  cardioInclinePercent: { rotulo: 'Inclinação', formato: comUnidade('%', 1) },
+  cardioZone: {
+    rotulo: 'Zona',
+    formato: (valor) => (typeof valor === 'number' ? `Zona ${valor}` : null),
+  },
+  cardioPaceSecondsPerKm: {
+    rotulo: 'Ritmo',
+    formato: (valor) =>
+      typeof valor === 'number'
+        ? `${Math.floor(valor / 60)}:${String(valor % 60).padStart(2, '0')}/km`
+        : null,
+  },
+  cardioRpe: { rotulo: 'Esforço (1 a 10)', formato: semUnidade },
   sets: {
     rotulo: 'Série por série',
     formato: (valor) => {

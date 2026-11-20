@@ -40,8 +40,8 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-162 tools: **151,4 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 127,0 k e subestima o
+162 tools: **153,6 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 129,3 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 87 tools de escrita
