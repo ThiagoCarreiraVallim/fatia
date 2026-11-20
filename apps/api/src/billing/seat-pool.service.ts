@@ -31,6 +31,7 @@ import {
   valorMensal,
   vencimentoAvulso,
 } from './seat-pricing';
+import type { ProgramView } from './program.service';
 import { ASSINATURA_LIDA } from './subscription-entitlements.service';
 import { subscriptionEventChange } from './subscription-events';
 
@@ -64,7 +65,16 @@ export interface VisaoDosAssentos {
     paymentUrl: string | null;
     monthlyCents: number;
     nextMonthlyCents: number;
+    /** Dias que faltam da carência, pelo `graceEndsAt` (#403). Nulo fora do atraso. */
+    graceDaysLeft: number | null;
   } | null;
+  /** Próxima fatura (#403): assentos × preço, com o vencimento do período. */
+  nextInvoice: { seats: number; unitPriceCents: number; amountCents: number; dueAt: string } | null;
+  /** A fatura vencida mais recente, para o "Pagar agora" (#403). */
+  overdueInvoice: SeatInvoiceView | null;
+  /** Programas (#403): PRO por período, com assentos à parte. */
+  programs: ProgramView[];
+  /** Assentos comuns em uso (os de programa ficam em `programs`). */
   assigned: number;
   assignments: Array<{
     membershipId: string;
@@ -91,6 +101,10 @@ export interface SeatInvoiceView {
   dueDate: string | null;
   status: SeatInvoiceStatus;
   invoiceUrl: string | null;
+  /** Assentos cobrados (#403). Nulo em fatura antiga. */
+  seats: number | null;
+  /** Dias do proporcional, no ajuste. */
+  proRataDays: number | null;
   paidAt: string | null;
   createdAt: string;
 }
@@ -168,8 +182,12 @@ export class SeatPoolService {
             paymentUrl: pool.status === 'PENDING' ? pool.paymentUrl : null,
             monthlyCents: valorMensal(pool.seats, unit),
             nextMonthlyCents: valorMensal(pool.nextPeriodSeats ?? pool.seats, unit),
+            graceDaysLeft: null,
           }
         : null,
+      nextInvoice: null,
+      overdueInvoice: null,
+      programs: [],
       assigned: pool?.assignments.length ?? 0,
       assignments: (pool?.assignments ?? []).map((a) => ({
         membershipId: a.membership.id,
@@ -666,6 +684,8 @@ export class SeatPoolService {
       dueDate: f.dueDate,
       status: f.status,
       invoiceUrl: f.invoiceUrl,
+      seats: null,
+      proRataDays: null,
       paidAt: f.paidAt?.toISOString() ?? null,
       createdAt: f.createdAt.toISOString(),
     }));
