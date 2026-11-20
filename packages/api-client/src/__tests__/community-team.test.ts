@@ -82,6 +82,24 @@ describe('Equipe e permissões (Pn-19, #404)', () => {
     ).toBe('Bruno mudou Nina de profissional para recepção');
   });
 
+  it('especialidade que aparece ou some não vira "de — para"', () => {
+    const esp = (from: string | null, to: string | null) =>
+      staffChangeLine({
+        at: '',
+        action: 'members.specialty',
+        actorName: 'Bruno',
+        targetName: 'Renata',
+        targetCount: 1,
+        from,
+        to,
+      });
+    expect(esp(null, 'NUTRITION')).toBe('Bruno pôs Renata como nutricionista');
+    expect(esp('TRAINING', null)).toBe('Bruno tirou a especialidade de Renata (era personal)');
+    expect(esp('TRAINING', 'NUTRITION')).toBe(
+      'Bruno mudou a especialidade de Renata de personal para nutricionista',
+    );
+  });
+
   it('o admin dá só membro e recepção; papel que recebe vínculo é do dono', () => {
     expect(grantableRolesFor('ADMIN')).toEqual(['MEMBER', 'RECEPTION']);
     expect(grantableRolesFor('OWNER')).toContain('PROFESSIONAL');

@@ -126,6 +126,28 @@ describe('painel › equipe e permissões (Pn-19, #404)', () => {
     );
   });
 
+  it('no celular, escolher alguém rola até o painel da pessoa', async () => {
+    const rola = vi.fn();
+    const antes = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = rola;
+    const mmAntes = window.matchMedia;
+    window.matchMedia = (q: string) =>
+      ({ matches: q.includes('max-width'), media: q }) as MediaQueryList;
+    try {
+      abrir(grupo());
+      await screen.findByRole('complementary');
+      expect(rola).not.toHaveBeenCalled();
+      await userEvent.click(await screen.findByRole('button', { name: /Nina Alves/ }));
+      await waitFor(() => expect(rola).toHaveBeenCalledTimes(1));
+      expect(rola.mock.contexts[0]).toBe(
+        screen.getByRole('complementary', { name: 'Detalhes de Nina Alves' }),
+      );
+    } finally {
+      Element.prototype.scrollIntoView = antes;
+      window.matchMedia = mmAntes;
+    }
+  });
+
   it('o dono não muda de papel aqui', async () => {
     abrir(grupo());
     await userEvent.click(await screen.findByRole('button', { name: /Bruno Esteves/ }));
