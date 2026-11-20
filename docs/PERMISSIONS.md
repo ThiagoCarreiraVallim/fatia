@@ -63,41 +63,41 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 
 ## Ações administrativas (papel decide)
 
-| Ação                   | OWNER | PROFESSIONAL | CREATOR | MEMBER |
-| ---------------------- | ----- | ------------ | ------- | ------ |
-| `group.read`           | sim   | sim          | sim     | sim    |
-| `group.update`         | sim   | não          | não     | não    |
-| `group.delete`         | sim   | não          | não     | não    |
-| `group.transfer`       | sim   | não          | não     | não    |
-| `invite.create`        | sim   | sim          | não     | não    |
-| `invite.revoke`        | sim   | sim          | não     | não    |
-| `member.list`          | sim   | sim          | sim     | sim    |
-| `member.approve`       | sim   | não          | não     | não    |
-| `member.remove`        | sim   | não          | não     | não    |
-| `member.role`          | sim   | não          | não     | não    |
-| `member.assign`        | sim   | não          | não     | não    |
-| `billing.read`         | sim   | não          | não     | não    |
-| `billing.manage`       | sim   | não          | não     | não    |
-| `content.publish`      | sim   | sim          | sim     | não    |
-| `content.read`         | sim   | sim          | sim     | sim    |
-| `content.moderate`     | sim   | não          | sim     | não    |
-| `offer.create`         | não   | sim          | não     | não    |
-| `challenge.manage`     | sim   | sim          | sim     | não    |
-| `challenge.join`       | sim   | sim          | sim     | sim    |
-| `challenge.review`     | sim   | sim          | sim     | não    |
-| `post.read`            | sim   | sim          | sim     | sim    |
-| `post.create`          | sim   | sim          | sim     | sim    |
-| `announcement.publish` | sim   | sim          | não     | não    |
-| `member.ban`           | sim   | não          | não     | não    |
-| `insights.read`        | sim   | não          | não     | não    |
-| `panel.overview`       | sim   | sim          | não     | não    |
-| `panel.search`         | sim   | sim          | não     | não    |
-| `member.file`          | sim   | sim          | não     | não    |
-| `member.plans`         | sim   | sim          | não     | não    |
-| `member.note`          | sim   | sim          | não     | não    |
-| `panel.review`         | sim   | sim          | não     | não    |
-| `benefit.read`         | sim   | sim          | sim     | sim    |
-| `benefit.manage`       | sim   | não          | não     | não    |
+| Ação                   | OWNER | ADMIN | PROFESSIONAL | CREATOR | RECEPTION | MEMBER |
+| ---------------------- | ----- | ----- | ------------ | ------- | --------- | ------ |
+| `group.read`           | sim   | sim   | sim          | sim     | sim       | sim    |
+| `group.update`         | sim   | sim   | não          | não     | não       | não    |
+| `group.delete`         | sim   | não   | não          | não     | não       | não    |
+| `group.transfer`       | sim   | não   | não          | não     | não       | não    |
+| `invite.create`        | sim   | sim   | sim          | não     | não       | não    |
+| `invite.revoke`        | sim   | sim   | sim          | não     | não       | não    |
+| `member.list`          | sim   | sim   | sim          | sim     | sim       | sim    |
+| `member.approve`       | sim   | sim   | não          | não     | sim       | não    |
+| `member.remove`        | sim   | sim   | não          | não     | não       | não    |
+| `member.role`          | sim   | sim   | não          | não     | não       | não    |
+| `member.assign`        | sim   | sim   | não          | não     | não       | não    |
+| `billing.read`         | sim   | não   | não          | não     | não       | não    |
+| `billing.manage`       | sim   | não   | não          | não     | não       | não    |
+| `content.publish`      | sim   | sim   | sim          | sim     | não       | não    |
+| `content.read`         | sim   | sim   | sim          | sim     | sim       | sim    |
+| `content.moderate`     | sim   | sim   | não          | não     | não       | não    |
+| `offer.create`         | não   | não   | sim          | não     | não       | não    |
+| `challenge.manage`     | sim   | sim   | sim          | sim     | não       | não    |
+| `challenge.join`       | sim   | sim   | sim          | sim     | sim       | sim    |
+| `challenge.review`     | sim   | sim   | sim          | sim     | não       | não    |
+| `post.read`            | sim   | sim   | sim          | sim     | sim       | sim    |
+| `post.create`          | sim   | sim   | sim          | sim     | sim       | sim    |
+| `announcement.publish` | sim   | sim   | sim          | não     | sim       | não    |
+| `member.ban`           | sim   | sim   | não          | não     | não       | não    |
+| `insights.read`        | sim   | não   | não          | não     | não       | não    |
+| `panel.overview`       | sim   | sim   | sim          | não     | sim       | não    |
+| `panel.search`         | sim   | sim   | sim          | não     | sim       | não    |
+| `member.file`          | sim   | não   | sim          | não     | não       | não    |
+| `member.plans`         | sim   | não   | sim          | não     | não       | não    |
+| `member.note`          | sim   | não   | sim          | não     | não       | não    |
+| `panel.review`         | sim   | não   | sim          | não     | não       | não    |
+| `benefit.read`         | sim   | sim   | sim          | sim     | sim       | sim    |
+| `benefit.manage`       | sim   | não   | não          | não     | não       | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
 futura:
@@ -263,14 +263,14 @@ cobrança viva (#158).
 
 ## Leitura de dado de titular (papel NÃO decide — vínculo decide)
 
-| Escopo        | Quem pode receber vínculo    | Quem NUNCA recebe |
-| ------------- | ---------------------------- | ----------------- |
-| `WORKOUT`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `NUTRITION`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `BODY`        | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `HABITS`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `GOALS`       | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
-| `MEAL_PHOTOS` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| Escopo        | Quem pode receber vínculo    | Quem NUNCA recebe        |
+| ------------- | ---------------------------- | ------------------------ |
+| `WORKOUT`     | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `NUTRITION`   | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `BODY`        | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `HABITS`      | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `GOALS`       | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
+| `MEAL_PHOTOS` | OWNER, PROFESSIONAL, CREATOR | ADMIN, RECEPTION, MEMBER |
 
 Esta tabela é **igual em todas as linhas de propósito**, e é isso que ela tem a dizer: nenhum
 papel lê nada. A equipe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode receber", que

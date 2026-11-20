@@ -92,6 +92,7 @@ import { ScoreboardService } from '../../social/scoreboard.service';
 import { ChallengeService } from '../../sharing/challenge.service';
 import { ChallengeCheckinService } from '../../sharing/challenge-checkin.service';
 import { PanelService } from '../../sharing/panel.service';
+import { TeamService } from '../../sharing/team.service';
 import { InviteService } from '../../sharing/invite.service';
 import { MemberAdminService } from '../../sharing/member-admin.service';
 import { SeatPoolService } from '../../billing/seat-pool.service';
@@ -5617,6 +5618,176 @@ describe('isolamento entre usuários', () => {
       expect(m.reportEmail).toBe(false);
       const meu = await relatorio.settings(owned.pro, r.a);
       expect(meu.team.map((t) => t.membershipId)).not.toContain(r.profB);
+    });
+  });
+
+  describe('equipe, papéis e permissões (#404)', () => {
+    const team404 = new TeamService(prisma, links);
+    const panel404 = new PanelService(prisma);
+    const t = {
+      donoA: '',
+      admA: '',
+      recA: '',
+      profA: '',
+      anaA: '',
+      donoB: '',
+      profB: '',
+      a: '',
+      b: '',
+    };
+    const mm = { donoA: '', admA: '', recA: '', profA: '', anaA: '', profB: '' };
+
+    beforeAll(async () => {
+      const stamp = `iso404-${Date.now()}`;
+      const nomes = ['Dono A', 'Admin A', 'Recepção A', 'Prof A', 'Ana A', 'Dono B', 'Prof B'];
+      const [donoA, admA, recA, profA, anaA, donoB, profB] = await Promise.all(
+        nomes.map((name, i) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${i}`, email: `${stamp}-${i}@test.local`, name },
+          }),
+        ),
+      );
+      Object.assign(t, {
+        donoA: donoA!.id,
+        admA: admA!.id,
+        recA: recA!.id,
+        profA: profA!.id,
+        anaA: anaA!.id,
+        donoB: donoB!.id,
+        profB: profB!.id,
+      });
+      const a = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia A 404',
+          slug: `${stamp}-a`,
+          ownerId: t.donoA,
+          memberships: {
+            create: [
+              { userId: t.donoA, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: t.admA, role: 'ADMIN' as GroupRole, status: MembershipStatus.ACTIVE },
+              { userId: t.recA, role: 'RECEPTION' as GroupRole, status: MembershipStatus.ACTIVE },
+              { userId: t.profA, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+              {
+                userId: t.anaA,
+                role: GroupRole.MEMBER,
+                status: MembershipStatus.ACTIVE,
+                consentScopes: Object.values(ShareScope),
+              },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      const b = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Academia B 404',
+          slug: `${stamp}-b`,
+          ownerId: t.donoB,
+          memberships: {
+            create: [
+              { userId: t.donoB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: t.profB, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      t.a = a.id;
+      t.b = b.id;
+      const id = (g: typeof a, u: string) => g.memberships.find((x) => x.userId === u)!.id;
+      Object.assign(mm, {
+        donoA: id(a, t.donoA),
+        admA: id(a, t.admA),
+        recA: id(a, t.recA),
+        profA: id(a, t.profA),
+        anaA: id(a, t.anaA),
+        profB: id(b, t.profB),
+      });
+      // Um vínculo "esquecido" com a recepção e o administrador: a porta barra assim mesmo.
+      await prisma.professionalLink.createMany({
+        data: [t.recA, t.admA, t.profA].map((professionalId) => ({
+          subjectUserId: t.anaA,
+          professionalId,
+          groupId: t.a,
+          scopes: Object.values(ShareScope),
+        })),
+      });
+    });
+
+    it('o administrador não se promove a dono nem promove alguém a administrador', async () => {
+      await expect(
+        memberships.changeRole(t.admA, t.a, mm.admA, GroupRole.PROFESSIONAL),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(memberships.changeRole(t.admA, t.a, mm.profA, 'ADMIN' as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(
+        memberships.changeRole(t.admA, t.a, mm.profA, GroupRole.OWNER as never),
+      ).rejects.toThrow();
+      await expect(groups.transferOwnership(t.admA, t.a, mm.admA)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(memberships.ban(t.admA, t.a, mm.donoA)).rejects.toThrow(ConflictException);
+      const eu = await prisma.groupMembership.findUniqueOrThrow({ where: { id: mm.admA } });
+      expect(eu.role).toBe('ADMIN');
+      const prof = await prisma.groupMembership.findUniqueOrThrow({ where: { id: mm.profA } });
+      expect(prof.role).toBe(GroupRole.PROFESSIONAL);
+    });
+
+    it('papel e especialidade não mudam em outra comunidade pela URL desta', async () => {
+      await expect(
+        memberships.changeRole(t.donoA, t.a, mm.profB, GroupRole.MEMBER),
+      ).rejects.toThrow(NotFoundException);
+      await expect(memberships.changeRole(t.admA, t.a, mm.profB, GroupRole.MEMBER)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(team404.setSpecialty(t.donoA, t.a, mm.profB, 'NUTRITION')).rejects.toThrow(
+        NotFoundException,
+      );
+      // O dono de B não troca papel em A, nem pela URL de B.
+      await expect(
+        memberships.changeRole(t.donoB, t.a, mm.profA, GroupRole.MEMBER),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        memberships.changeRole(t.donoB, t.b, mm.profA, GroupRole.MEMBER),
+      ).rejects.toThrow(NotFoundException);
+      const pb = await prisma.groupMembership.findUniqueOrThrow({ where: { id: mm.profB } });
+      expect(pb.role).toBe(GroupRole.PROFESSIONAL);
+      expect(pb.specialty).toBeNull();
+    });
+
+    it('recepção e administrador não leem dado de aluno, nem com vínculo', async () => {
+      for (const quem of [t.recA, t.admA]) {
+        for (const scope of Object.values(ShareScope)) {
+          await expect(access.assertReadable(quem, mm.anaA, scope, 'iso_404')).rejects.toThrow(
+            NotFoundException,
+          );
+        }
+      }
+      expect(
+        await prisma.professionalAccessLog.count({
+          where: { subjectUserId: t.anaA, professionalId: { in: [t.recA, t.admA] }, denied: true },
+        }),
+      ).toBe(Object.values(ShareScope).length * 2);
+    });
+
+    it('a recepção vê só nome, papel e situação, e não busca planos', async () => {
+      const lista = await memberships.listMembers(t.recA, t.a);
+      const ana = lista.find((x) => x.membershipId === mm.anaA)!;
+      expect(ana.scopesGrantedToMe).toBeUndefined();
+      expect(ana.whatsapp).toBeUndefined();
+      expect(ana.accompaniedBy).toBeUndefined();
+      const busca = await panel404.search(t.recA, t.a, 'Ana');
+      expect(busca.members.map((x) => Object.keys(x).sort())).toEqual([
+        ['membershipId', 'name', 'role', 'status'],
+      ]);
+    });
+
+    it('a equipe de outra comunidade não lista a equipe desta', async () => {
+      await expect(team404.staff(t.donoB, t.a)).rejects.toThrow(NotFoundException);
+      await expect(team404.staff(t.recA, t.a)).rejects.toThrow(ForbiddenException);
     });
   });
 
