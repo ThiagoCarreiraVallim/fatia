@@ -4,7 +4,10 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 import { PrismaService } from '../../common/prisma.service';
+import { AccountService } from '../../users/account.service';
 import { MealService } from '../../nutrition/meal.service';
 import { MealTemplateService } from '../../nutrition/meal-template.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
@@ -675,6 +678,21 @@ describe('editor de plano de treino (#406, banco real)', () => {
           })
         ).map((p) => p.sessionIndex),
       ).toEqual([0, 1, 2]);
+    });
+
+    it('o export da Ana leva o circuito da sessão e não o id de quem editou', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const exp = await conta.exportData(u.ana!);
+      const json = JSON.stringify(exp);
+      expect(json).not.toContain(u.helena!);
+      const planoB = (
+        exp.workoutPlans as unknown as Array<{ sessionIndex: number | null; circuits?: unknown[] }>
+      ).find((p) => p.sessionIndex === 1);
+      expect(planoB?.circuits).toHaveLength(1);
     });
 
     it('"Avisar a Ana" desligado não manda aviso', async () => {
