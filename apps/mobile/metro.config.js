@@ -39,9 +39,13 @@ config.resolver.disableHierarchicalLookup = false;
 // watchman derruba o Metro com ENOENT ao tentar observá-los. O mesmo vale para
 // os outros apps: o `nest start --watch` recria apps/api/dist enquanto o Metro
 // percorre a árvore, e o app nunca importa api, web, site ou agent.
+//
+// O bloqueio de `.claude`/`.canvas` é ancorado na raiz desta árvore: sem a
+// âncora, o Metro rodando DE DENTRO de um worktree bloqueava o próprio
+// worktree (o caminho dele contém `.claude/`) e respondia 404 ao bundle.
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ignored = [
-  /[/\\]\.claude[/\\]/,
-  /[/\\]\.canvas[/\\]/,
+  new RegExp(`^${escapeRegExp(workspaceRoot)}[/\\\\]\\.(claude|canvas)[/\\\\]`),
   /[/\\]apps[/\\](api|web|site|agent)[/\\]/,
 ];
 const blockList = config.resolver.blockList;
