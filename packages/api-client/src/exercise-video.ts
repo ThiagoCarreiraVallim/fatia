@@ -40,6 +40,17 @@ export function youtubeEmbedUrl(id: string): string | null {
   return `https://www.youtube-nocookie.com/embed/${id}?${params.toString()}`;
 }
 
+/**
+ * A capa do topo, em ordem de preferência. O `hqdefault` é 4:3 com faixas
+ * pretas em cima e embaixo, que no topo sangrado viravam uma tarja; o `hq720`
+ * é 16:9 limpo, mas nem todo vídeo tem, e o `mqdefault` (16:9, menor) fica de
+ * reserva.
+ */
+export function youtubeHeroThumbnails(id: string): string[] {
+  if (!YOUTUBE_ID.test(id)) return [];
+  return [`https://i.ytimg.com/vi/${id}/hq720.jpg`, `https://i.ytimg.com/vi/${id}/mqdefault.jpg`];
+}
+
 /** Para o fallback no navegador do sistema, quando não dá para embutir. */
 export function youtubeWatchUrl(id: string): string | null {
   return YOUTUBE_ID.test(id) ? `https://www.youtube.com/watch?v=${id}` : null;

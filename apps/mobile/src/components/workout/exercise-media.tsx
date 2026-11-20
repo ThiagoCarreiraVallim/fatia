@@ -8,7 +8,7 @@ import {
   exerciseVideoSource,
   signedVideoIsStale,
   workoutApi,
-  youtubeThumbnail,
+  youtubeHeroThumbnails,
   youtubeWatchUrl,
   type Exercise,
 } from '@fatia/api-client';
@@ -89,6 +89,7 @@ export function ExerciseVideoHero({
   const video = exerciseVideoSource(exercise);
   const [state, setState] = useState<PlayState>('poster');
   const [url, setUrl] = useState<string | null>(null);
+  const [thumbIndex, setThumbIndex] = useState(0);
 
   const setPlaying = useCallback(
     (next: PlayState) => {
@@ -132,7 +133,8 @@ export function ExerciseVideoHero({
     }
   }
 
-  const thumb = video.kind === 'youtube' ? youtubeThumbnail(video.id) : null;
+  const thumb =
+    video.kind === 'youtube' ? (youtubeHeroThumbnails(video.id)[thumbIndex] ?? null) : null;
   const groupName = exercise.community?.groupName;
   const playing = state === 'playing';
 
@@ -154,6 +156,7 @@ export function ExerciseVideoHero({
               accessibilityIgnoresInvertColors
               resizeMode="cover"
               style={StyleSheet.absoluteFill}
+              onError={() => setThumbIndex((i) => i + 1)}
             />
           ) : (
             <StripedBackdrop />
