@@ -126,6 +126,36 @@ const CIRCUIT_LABELS: Record<string, string> = {
   rounds: 'os rounds',
 };
 
+/**
+ * As regras da meta de cardio, as mesmas do REST (`assertCardioTarget`): o
+ * retrato não aceita o que a configuração do exercício recusaria.
+ */
+function cardioProblems(e: {
+  cardioTarget?: string;
+  cardioDurationSeconds?: number;
+  cardioDistanceMeters?: number;
+  cardioCalories?: number;
+  cardioZone?: number;
+  cardioPaceSecondsPerKm?: number;
+  cardioRpe?: number;
+}): string[] {
+  const out: string[] = [];
+  if (e.cardioTarget === 'DISTANCE' && !e.cardioDistanceMeters) {
+    out.push('meta por distância precisa da distância');
+  }
+  if (e.cardioTarget === 'TIME' && !e.cardioDurationSeconds) {
+    out.push('meta por tempo precisa da duração');
+  }
+  if (e.cardioTarget === 'CALORIES' && !e.cardioCalories) {
+    out.push('meta por calorias precisa das calorias');
+  }
+  const intensidades = [e.cardioZone, e.cardioPaceSecondsPerKm, e.cardioRpe];
+  if (intensidades.filter((v) => v !== undefined && v !== null).length > 1) {
+    out.push('escolha uma intensidade: zona, ritmo ou esforço');
+  }
+  return out;
+}
+
 export const planSnapshotV2Schema = z
   .object({
     version: z.literal(PLAN_SNAPSHOT_V2),
@@ -151,6 +181,9 @@ export const planSnapshotV2Schema = z
           });
         }
         vistos.add(chave);
+        for (const message of cardioProblems(item)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sessions', s], message });
+        }
       });
       if (session.weekday !== undefined) {
         if (dias.has(session.weekday)) {
