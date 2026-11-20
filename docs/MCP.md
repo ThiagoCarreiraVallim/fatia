@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 162 tools): **151,4 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 162 tools): **153,6 k caracteres**
 hoje, dos quais **8.921 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (127,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (129,3 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1538,13 +1538,20 @@ que não é de cardio respondem `BAD_REQUEST`.
   technique?: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
   biSetWithNext?: boolean;           // faz este e o próximo em sequência, depois descansa
   startLoadKg?: number | null;       // carga inicial (com BODYWEIGHT, o extra)
-  loadMode?: 'WEIGHT' | 'BODYWEIGHT';
-  repUnit?: 'REPS' | 'SECONDS';      // SECONDS: a faixa é de segundos (prancha)
+  loadMode?: 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
+  loadPercent?: number | null;       // com PERCENT_1RM: % do 1RM estimado (1–150)
+  warmupBefore?: boolean;            // série de aquecimento antes
+  repUnit?: 'REPS' | 'SECONDS' | 'MAX' | 'METERS'; // SECONDS: prancha; MAX: até a falha
   notes?: string | null;             // pegada, banco, cadência (até 200)
-  cardioTarget?: 'TIME' | 'DISTANCE' | null; // só em exercício de cardio
+  cardioTarget?: 'TIME' | 'DISTANCE' | 'CALORIES' | null; // só em exercício de cardio
   cardioDurationSeconds?: number | null;
   cardioDistanceMeters?: number | null;
   cardioIntensity?: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  cardioCalories?: number | null;    // com cardioTarget CALORIES
+  cardioInclinePercent?: number | null;
+  cardioZone?: number | null;        // 1–5; uma intensidade só: zona, ritmo ou esforço
+  cardioPaceSecondsPerKm?: number | null;
+  cardioRpe?: number | null;         // 1–10
 }
 ```
 
@@ -1568,13 +1575,20 @@ ou `null` volta a séries iguais, e mudar `targetSets`/`targetReps` sem `sets` t
   technique?: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
   biSetWithNext?: boolean;           // faz este e o próximo em sequência, depois descansa
   startLoadKg?: number | null;       // carga inicial (com BODYWEIGHT, o extra)
-  loadMode?: 'WEIGHT' | 'BODYWEIGHT';
-  repUnit?: 'REPS' | 'SECONDS';      // SECONDS: a faixa é de segundos (prancha)
+  loadMode?: 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
+  loadPercent?: number | null;       // com PERCENT_1RM: % do 1RM estimado (1–150)
+  warmupBefore?: boolean;            // série de aquecimento antes
+  repUnit?: 'REPS' | 'SECONDS' | 'MAX' | 'METERS'; // SECONDS: prancha; MAX: até a falha
   notes?: string | null;             // pegada, banco, cadência (até 200)
-  cardioTarget?: 'TIME' | 'DISTANCE' | null; // só em exercício de cardio
+  cardioTarget?: 'TIME' | 'DISTANCE' | 'CALORIES' | null; // só em exercício de cardio
   cardioDurationSeconds?: number | null;
   cardioDistanceMeters?: number | null;
   cardioIntensity?: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  cardioCalories?: number | null;    // com cardioTarget CALORIES
+  cardioInclinePercent?: number | null;
+  cardioZone?: number | null;        // 1–5; uma intensidade só: zona, ritmo ou esforço
+  cardioPaceSecondsPerKm?: number | null;
+  cardioRpe?: number | null;         // 1–10
   sets?: Array<{ kind?: 'WARMUP' | 'NORMAL' | 'DROP'; reps: number; loadKg?: number | null }> | null;
 }
 ```

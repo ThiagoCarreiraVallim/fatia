@@ -3,9 +3,14 @@ import {
   CARDIO_INTENSITIES,
   CARDIO_TARGETS,
   LOAD_MODES,
+  MAX_CARDIO_CALORIES,
   MAX_CARDIO_DISTANCE_METERS,
   MAX_CARDIO_DURATION_SECONDS,
+  MAX_CARDIO_INCLINE,
+  MAX_CARDIO_PACE,
   MAX_LOAD_KG,
+  MAX_LOAD_PERCENT,
+  MIN_CARDIO_PACE,
   MAX_PLAN_NOTES,
   MAX_PLAN_SETS,
   MAX_REST_SECONDS,
@@ -44,11 +49,28 @@ export const planExerciseConfigShape = {
     .nullable()
     .optional()
     .describe('Carga inicial em kg (com loadMode BODYWEIGHT, o peso extra)'),
-  loadMode: z.enum(LOAD_MODES).optional().describe('WEIGHT (carga externa) | BODYWEIGHT'),
+  loadMode: z
+    .enum(LOAD_MODES)
+    .optional()
+    .describe(
+      'WEIGHT (carga externa) | BODYWEIGHT | PERCENT_1RM (com loadPercent) | BAND (elástico)',
+    ),
+  loadPercent: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LOAD_PERCENT)
+    .nullable()
+    .optional()
+    .describe('Com loadMode PERCENT_1RM: % do 1RM estimado (ex.: 75)'),
+  warmupBefore: z
+    .boolean()
+    .optional()
+    .describe('Série de aquecimento antes das séries do exercício'),
   repUnit: z
     .enum(REP_UNITS)
     .optional()
-    .describe('REPS (padrão) | SECONDS (a série é contada em segundos, como a prancha)'),
+    .describe('REPS (padrão) | SECONDS (como a prancha) | MAX (até a falha) | METERS (distância)'),
   notes: z
     .string()
     .max(MAX_PLAN_NOTES)
@@ -59,7 +81,7 @@ export const planExerciseConfigShape = {
     .enum(CARDIO_TARGETS)
     .nullable()
     .optional()
-    .describe('Só em exercício de cardio: meta por TIME (duração) ou DISTANCE (distância)'),
+    .describe('Só em exercício de cardio: meta por TIME, DISTANCE ou CALORIES'),
   cardioDurationSeconds: z
     .number()
     .int()
@@ -80,6 +102,45 @@ export const planExerciseConfigShape = {
     .nullable()
     .optional()
     .describe('Intensidade do cardio: LIGHT | MODERATE | VIGOROUS (a faixa de FC sai da idade)'),
+  cardioCalories: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_CARDIO_CALORIES)
+    .nullable()
+    .optional()
+    .describe('Meta de calorias do cardio (com cardioTarget CALORIES)'),
+  cardioInclinePercent: z
+    .number()
+    .min(0)
+    .max(MAX_CARDIO_INCLINE)
+    .nullable()
+    .optional()
+    .describe('Inclinação da esteira, em %'),
+  cardioZone: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .nullable()
+    .optional()
+    .describe('Zona de FC (1–5). Uma intensidade só: zona, ritmo ou esforço'),
+  cardioPaceSecondsPerKm: z
+    .number()
+    .int()
+    .min(MIN_CARDIO_PACE)
+    .max(MAX_CARDIO_PACE)
+    .nullable()
+    .optional()
+    .describe('Ritmo alvo, em segundos por km (ex.: 330 = 5:30/km)'),
+  cardioRpe: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .nullable()
+    .optional()
+    .describe('Esforço percebido alvo (RPE 1–10)'),
 } as const;
 
 /** Série por série (pirâmide, aquecimento, drop). Substitui a tabela inteira; [] volta ao simples. */

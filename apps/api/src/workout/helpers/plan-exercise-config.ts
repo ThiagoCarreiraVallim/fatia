@@ -6,11 +6,13 @@ import { BadRequestException } from '@nestjs/common';
  * a API grava, e o que a API grava é o que o retrato aceita.
  */
 
-export const REP_UNITS = ['REPS', 'SECONDS'] as const;
-export const LOAD_MODES = ['WEIGHT', 'BODYWEIGHT'] as const;
+/** MAX = até a falha (sem número) e METERS = distância vêm do editor da equipe (#406). */
+export const REP_UNITS = ['REPS', 'SECONDS', 'MAX', 'METERS'] as const;
+/** PERCENT_1RM usa `loadPercent`; BAND é elástico, sem número (#406). */
+export const LOAD_MODES = ['WEIGHT', 'BODYWEIGHT', 'PERCENT_1RM', 'BAND'] as const;
 export const TECHNIQUES = ['NORMAL', 'DROP_SET', 'TO_FAILURE'] as const;
 export const PLAN_SET_KINDS = ['WARMUP', 'NORMAL', 'DROP'] as const;
-export const CARDIO_TARGETS = ['TIME', 'DISTANCE'] as const;
+export const CARDIO_TARGETS = ['TIME', 'DISTANCE', 'CALORIES'] as const;
 export const CARDIO_INTENSITIES = ['LIGHT', 'MODERATE', 'VIGOROUS'] as const;
 
 export type RepUnitValue = (typeof REP_UNITS)[number];
@@ -31,6 +33,12 @@ export const MAX_PLAN_NOTES = 200;
 export const MAX_CARDIO_DURATION_SECONDS = 86_400;
 /** 1.000 km. */
 export const MAX_CARDIO_DISTANCE_METERS = 1_000_000;
+/** Editor da equipe (#406): limites dos campos novos da linha. */
+export const MAX_LOAD_PERCENT = 150;
+export const MAX_CARDIO_CALORIES = 5000;
+export const MAX_CARDIO_INCLINE = 40;
+export const MIN_CARDIO_PACE = 60;
+export const MAX_CARDIO_PACE = 1800;
 
 export const DEFAULT_STRENGTH_SETS = 3;
 export const DEFAULT_STRENGTH_REPS = '8-12';
@@ -80,13 +88,28 @@ export interface CardioFields {
   cardioDurationSeconds?: number | null;
   cardioDistanceMeters?: number | null;
   cardioIntensity?: CardioIntensityValue | null;
+  // Editor da equipe (#406).
+  cardioCalories?: number | null;
+  cardioInclinePercent?: number | null;
+  cardioZone?: number | null;
+  cardioPaceSecondsPerKm?: number | null;
+  cardioRpe?: number | null;
 }
 
+const CARDIO_KEYS = [
+  'cardioTarget',
+  'cardioDurationSeconds',
+  'cardioDistanceMeters',
+  'cardioIntensity',
+  'cardioCalories',
+  'cardioInclinePercent',
+  'cardioZone',
+  'cardioPaceSecondsPerKm',
+  'cardioRpe',
+] as const;
+
 export const hasCardioInput = (dto: CardioFields): boolean =>
-  (dto.cardioTarget ?? null) !== null ||
-  (dto.cardioDurationSeconds ?? null) !== null ||
-  (dto.cardioDistanceMeters ?? null) !== null ||
-  (dto.cardioIntensity ?? null) !== null;
+  CARDIO_KEYS.some((k) => (dto[k] ?? null) !== null);
 
 /**
  * A meta de cardio depois da gravação (o que já estava, com o que chegou por
@@ -99,5 +122,23 @@ export function assertCardioTarget(merged: CardioFields): void {
   }
   if (merged.cardioTarget === 'TIME' && !merged.cardioDurationSeconds) {
     throw new BadRequestException('Meta por tempo precisa da duração.');
+  }
+  if (merged.cardioTarget === 'CALORIES' && !merged.cardioCalories) {
+    throw new BadRequestException('Meta por calorias precisa das calorias.');
+  }
+  // Pn-09d: a intensidade é por zona, por ritmo ou por esforço, uma das três.
+  const intensities = [merged.cardioZone, merged.cardioPaceSecondsPerKm, merged.cardioRpe];
+  if (intensities.filter((v) => (v ?? null) !== null).length > 1) {
+    throw new BadRequestException('Escolha uma intensidade: zona, ritmo ou esforço.');
+  }
+}
+
+/** `loadPercent` só existe no modo "% de 1RM" (#406). */
+export function assertLoadPercent(merged: {
+  loadMode?: LoadModeValue | null;
+  loadPercent?: number | null;
+}): void {
+  if ((merged.loadPercent ?? null) !== null && merged.loadMode !== 'PERCENT_1RM') {
+    throw new BadRequestException('A % de 1RM vale só com a carga em % de 1RM.');
   }
 }

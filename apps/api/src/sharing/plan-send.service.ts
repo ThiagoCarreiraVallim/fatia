@@ -411,8 +411,8 @@ export class PlanSendService {
 
       let progress: SentItem['progress'] = null;
       let noProgress = false;
-      const copia = o.plans.find((p) => p.userId === o.userId)?.id ?? null;
-      if (aceita && !o.removedAt && copia && st) {
+      const copias = o.plans.filter((p) => p.userId === o.userId).map((p) => p.id);
+      if (aceita && !o.removedAt && copias.length && st) {
         let pode = false;
         if (m && m.status === MembershipStatus.ACTIVE) {
           if (!lerTreino.has(o.userId)) {
@@ -421,7 +421,7 @@ export class PlanSendService {
           pode = lerTreino.get(o.userId) === true;
         }
         if (pode) {
-          const p = await offerProgress(this.prisma, o.userId, copia, st.shown, st.weekNumber);
+          const p = await offerProgress(this.prisma, o.userId, copias, st.shown, st.weekNumber);
           progress = { done: p.done, planned: p.planned, percent: p.percent };
         } else noProgress = true;
       }

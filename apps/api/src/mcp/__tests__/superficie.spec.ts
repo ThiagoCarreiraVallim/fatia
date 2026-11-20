@@ -81,9 +81,12 @@ import {
  * da main (#393 via #446) na #396 juntou: braço A novo, braço B o da main. O merge da #393 na
  * #394 juntou os dois braços A, e o da main (#394 via #447) na #396 juntou de novo o braço A.
  * O merge da main (#396 via #448) na #395 junta os braços de novo.
+ * A #406 acrescentou os campos do editor da equipe (% de 1RM, aquecimento, calorias,
+ * inclinação, zona, ritmo e esforço) a `add_exercise_to_plan` e `update_plan_exercise`
+ * (nenhuma destrutiva nem de intenção): muda o braço A.
  */
 
-const SHA_ENTIDADE = 'afde7b5a6200084a165715fdaa0416ed78fc73f367ba6d89e587b62f8329369a';
+const SHA_ENTIDADE = 'cf601d06320b6292dcd1f2eb7f6465f7627db6e9548cbf2bc180a724bc22303d';
 const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

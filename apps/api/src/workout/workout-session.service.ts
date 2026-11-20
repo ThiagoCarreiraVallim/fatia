@@ -1,3 +1,4 @@
+import { estimate1RM } from './helpers/estimate-1rm';
 import {
   BadRequestException,
   ConflictException,
@@ -141,19 +142,36 @@ export interface PlannedExerciseView {
   order: number;
   targetSets: number;
   targetReps: string;
-  repUnit: 'REPS' | 'SECONDS';
-  loadMode: 'WEIGHT' | 'BODYWEIGHT';
+  /** MAX (até a falha) e METERS (distância) vêm do editor da equipe (#406). */
+  repUnit: 'REPS' | 'SECONDS' | 'MAX' | 'METERS';
+  /** PERCENT_1RM: `loadPercent` do 1RM estimado; BAND: elástico (#406). */
+  loadMode: 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
   startLoadKg: number | null;
+  loadPercent: number | null;
+  /**
+   * PERCENT_1RM (#406): a carga em kg do `loadPercent` sobre o 1RM estimado
+   * da pessoa (melhor série de força deste exercício), arredondada a 0,5 kg.
+   * Nulo sem histórico ("sem 1RM") ou em outro modo de carga.
+   */
+  percentLoadKg: number | null;
+  warmupBefore: boolean;
   /** Nulo = o descanso padrão da sessão. */
   restSeconds: number | null;
   technique: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
   /** Já falso no último exercício: não há próximo com quem fazer o bi-set. */
   biSetWithNext: boolean;
   notes: string | null;
-  cardioTarget: 'TIME' | 'DISTANCE' | null;
+  cardioTarget: 'TIME' | 'DISTANCE' | 'CALORIES' | null;
   cardioDurationSeconds: number | null;
   cardioDistanceMeters: number | null;
   cardioIntensity: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  cardioCalories: number | null;
+  cardioInclinePercent: number | null;
+  cardioZone: number | null;
+  cardioPaceSecondsPerKm: number | null;
+  cardioRpe: number | null;
+  /** Circuito da sessão (#406): os exercícios dele seguem juntos, na ordem. */
+  circuitId: string | null;
   /** Série por série; vazia = `targetSets` séries iguais. */
   sets: Array<{
     order: number;
@@ -259,7 +277,7 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new NotFoundException('Session not found');
-    return { ...this.shapeSession(session), feedback: await this.feedbackFor(session.id) };
+    return { ...(await this.shapeSession(session)), feedback: await this.feedbackFor(session.id) };
   }
 
   /** Reação e comentário da equipe na sessão (#399). Quem chama já conferiu o dono. */
@@ -286,7 +304,7 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
       orderBy: { startedAt: 'desc' },
     });
-    return session ? this.shapeSession(session) : null;
+    return session ? await this.shapeSession(session) : null;
   }
 
   /**
@@ -497,7 +515,7 @@ export class WorkoutSessionService {
       data: dto,
       include: SESSION_INCLUDE,
     });
-    return this.shapeSession(session);
+    return await this.shapeSession(session);
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -735,13 +753,44 @@ export class WorkoutSessionService {
     return null;
   }
 
-  private shapeSession(session: SessionWithRelations) {
+  /**
+   * 1RM estimado da pessoa por exercício (#406): a melhor série de força dela
+   * (Epley, como no histórico do exercício). Só do `userId` da sessão.
+   */
+  private async estimated1RMs(userId: string, exerciseIds: number[]): Promise<Map<number, number>> {
+    const best = new Map<number, number>();
+    if (exerciseIds.length === 0) return best;
+    const sets = await this.prisma.sessionSet.findMany({
+      where: {
+        exerciseId: { in: exerciseIds },
+        session: { userId, completedAt: { not: null } },
+        weightKg: { gt: 0 },
+        reps: { gt: 0 },
+      },
+      select: { exerciseId: true, weightKg: true, reps: true },
+    });
+    for (const s of sets) {
+      const e = estimate1RM(s.weightKg!, s.reps!);
+      if (e > (best.get(s.exerciseId) ?? 0)) best.set(s.exerciseId, e);
+    }
+    return best;
+  }
+
+  private async shapeSession(session: SessionWithRelations) {
     const { plan, ...rest } = session;
     // O que a pessoa tirou deste treino some daqui, e não só da tela do app:
     // web, MCP e o resumo do fim leem a mesma lista, e o progresso "3/5
     // exercícios" contaria o removido como pendente para sempre.
     const removed = new Set(session.removedExerciseIds ?? []);
     const kept = plan ? plan.exercises.filter((pe) => !removed.has(pe.exerciseId)) : [];
+    const oneRm = await this.estimated1RMs(
+      session.userId,
+      kept.filter((pe) => pe.loadMode === 'PERCENT_1RM').map((pe) => pe.exerciseId),
+    );
+    const percentKg = (exerciseId: number, percent: number | null) => {
+      const e = oneRm.get(exerciseId);
+      return e && percent ? Math.round(((e * percent) / 100) * 2) / 2 : null;
+    };
     const plannedExercises: PlannedExerciseView[] = kept.map((pe, i) => ({
       planExerciseId: pe.id,
       exerciseId: pe.exerciseId,
@@ -753,6 +802,10 @@ export class WorkoutSessionService {
       repUnit: pe.repUnit,
       loadMode: pe.loadMode,
       startLoadKg: pe.startLoadKg,
+      loadPercent: pe.loadPercent,
+      percentLoadKg:
+        pe.loadMode === 'PERCENT_1RM' ? percentKg(pe.exerciseId, pe.loadPercent) : null,
+      warmupBefore: pe.warmupBefore,
       restSeconds: pe.restSeconds,
       technique: pe.technique,
       biSetWithNext: pe.biSetWithNext && i < kept.length - 1,
@@ -761,6 +814,12 @@ export class WorkoutSessionService {
       cardioDurationSeconds: pe.cardioDurationSeconds,
       cardioDistanceMeters: pe.cardioDistanceMeters,
       cardioIntensity: pe.cardioIntensity,
+      cardioCalories: pe.cardioCalories,
+      cardioInclinePercent: pe.cardioInclinePercent,
+      cardioZone: pe.cardioZone,
+      cardioPaceSecondsPerKm: pe.cardioPaceSecondsPerKm,
+      cardioRpe: pe.cardioRpe,
+      circuitId: pe.circuitId,
       sets: pe.sets.map((s) => ({ order: s.order, kind: s.kind, reps: s.reps, loadKg: s.loadKg })),
     }));
     return { ...rest, plannedExercises };

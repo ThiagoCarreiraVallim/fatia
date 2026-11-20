@@ -776,7 +776,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | #404  | Painel: equipe, papéis e permissões            | pronto na branch | api, db, api-client, web, mobile, docs |
 | #403  | Painel: assentos, faturas, programas e ofertas | pronto na branch | api, db, api-client, web, mobile, docs |
 | #405  | Painel: biblioteca e enviar para alunos        | pronto na branch | api, db, api-client, web, mobile, docs |
-| #406  | Painel: editor de plano de treino              | a fazer          |                                        |
+| #406  | Painel: editor de plano de treino              | pronto na branch | api, db, api-client, web, docs         |
 | #407  | Painel: editor de alimentação                  | a fazer          |                                        |
 | #408  | Painel: dicas e catálogo de exercícios         | a fazer          |                                        |
 
@@ -885,6 +885,34 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **Painel lateral:** o formulário não rolava e o botão Enviar ficava cortado; agora rola e os botões ficam fixos embaixo.
   - A situação na comunidade ("membros podem adotar", "só a equipe envia") foi para baixo do nome do plano, como na prancha, e as colunas não quebram linha com o painel aberto.
   - Fica como está, de propósito: quem "já tem" continua marcável (vira versão nova com "o que mudou"; a prancha o apaga), o rascunho mostra "Enviar para…" desligado em vez de sumir, "Novo plano" e afins no cabeçalho da página (a barra do topo é a do painel) e o plano escolhido numa lista suspensa em vez de cartões.
+
+#406 (branch `redesign/406-editor-plano`; migration `20261120500000_workout_plan_editor`; nenhuma env nova; MCP: campos novos na configuração do exercício (`warmupBefore`, `loadPercent`, `cardioCalories`, `cardioInclinePercent`, `cardioZone`, `cardioPaceSecondsPerKm`, `cardioRpe`), sem tool nova; sem ADR nova, segue a 010, a 014 e a 043):
+
+- **O que entrou:** retrato v2 do plano (sessões com nome, dia e itens: exercício ou circuito), documento do editor na biblioteca (`document`, `tags`, `schedule`, `startDate`/`endDate`), editor web do modelo (Pn-09..09d) e a edição da cópia de um aluno pela ficha (Pn-09e, `GET/PUT groups/:g/members/:m/plan-offers/:o/copy`). O retrato v1 continua lido (`upgradeV1`, guardando a `order` do autor).
+- **Decisões adotadas (as recomendações da issue):**
+  - **Uma sessão = um `WorkoutPlan`** na conta da pessoa (`sessionIndex`). A sessão que é só um circuito vira plano CIRCUIT; circuito dentro de sessão de força vira `WorkoutPlanCircuit`, com `circuitId` nos exercícios.
+  - **Desvio da recomendação 3:** `@@unique([planId, exerciseId])` fica; repetir o mesmo exercício numa sessão vai para a #418. O editor recusa com "X aparece duas vezes na sessão B" e a busca marca "já está na sessão".
+  - **Bi/tri-set** = circuito Rounds com 2 ou 3 exercícios.
+  - **% 1RM aparece em kg para o aluno:** `loadPercent` × o melhor 1RM estimado (Epley), arredondado a 0,5 kg; sem histórico, "sem 1RM".
+  - **Mudar o modelo da biblioteca não mexe nas cópias** já enviadas.
+  - **Editar a cópia** = versão nova pelo fluxo de versão (substitui a pendente; a aceita continua em uso até a pessoa aceitar), com `changeNote` e quem editou (`authorId`, fora do export). Exige vínculo ativo, papel com `member.plans` e a porta de leitura de Treino; ler e salvar gravam o acesso (`open_plan_copy`, `edit_plan_copy`). Qualquer pessoa da equipe com vínculo ativo edita; aviso "<nome> ajustou seu treino" opcional. Nada do que a pessoa registrou é apagado; sessão tirada do plano é apagada se não tem registro, ou desligada se tem.
+  - **Agenda:** "Datas" = cada sessão no seu dia da semana; "Flexível" = rodízio (a próxima depois da última feita). Remarcar vale para qualquer sessão. Período em `startDate`/`endDate` (texto YYYY-MM-DD).
+  - Regras novas da configuração: meta CALORIES exige `cardioCalories`; uma intensidade só (zona, ritmo ou esforço); `loadPercent` só com PERCENT_1RM; campos de cardio só em exercício de cardio.
+- **Revisão do PR #462 (corrigido, cada um com teste vermelho antes):**
+  - **D1:** trocar a carga de % de 1RM para outra só com o `loadMode` (o app e o `update_plan_exercise` do MCP) dava 400. Agora a % guardada vira nula quando a carga deixa de ser % de 1RM; só é 400 mandar a % junto com outra carga.
+  - **D2:** a versão aceita para começar no futuro espalhava a agenda pelos planos das sessões que ela tirou, e o settle só refazia a agenda quando entrava sessão. Agora só os planos que a versão mantém recebem datas, e o settle refaz a agenda de hoje em diante sempre que o conjunto de planos muda.
+  - **D3:** o documento do editor pulava as regras de cardio do REST. Agora o retrato v2 confere item por item: meta por tempo, distância ou calorias exige o número, e só uma intensidade (zona, ritmo ou esforço).
+  - **D4:** a versão nova casava sessão com plano pela posição; tirar ou reordenar sessões na cópia punha o conteúdo de B no plano de A (com o histórico de A). Agora cada sessão tem uma chave estável (`key` no retrato e no documento, gerada ao salvar e devolvida na leitura; `WorkoutPlan.sessionKey`), e só o plano sem chave (retrato antigo, v1 de uma sessão) casa pela posição. Duplicar uma sessão no editor cria sessão nova, sem a chave da original.
+  - **P1:** duas pessoas da equipe salvando a mesma cópia: a segunda sobrescrevia a versão pendente da primeira sem aviso. Agora o PUT aceita `baseVersionId` e responde 409 se outra versão foi salva depois; a página manda a versão que abriu e mostra "Outra pessoa salvou esta cópia; recarregue", com o botão Recarregar.
+  - **P2:** a lista de modelos do membro apontava o plano adotado para uma sessão qualquer; agora é o da sessão A.
+  - **Fica como está, de propósito:** editar a cópia vale para qualquer pessoa da equipe com `member.plans` e a porta de leitura de Treino (vínculo ativo); tirar o plano da pessoa continua só para quem enviou ou o dono.
+- **Fica para depois:** relógio de circuito dentro de uma sessão de força (#380/#418), o mesmo exercício duas vezes numa sessão (#418), mudar período e semanas na cópia (segue a última versão; os dias da semana mudam pelas sessões).
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/406/web/` (web 1440 e 390, escuro e claro) contra Pn-09, 09b, 09c, 09d e 09e (`board/`): editor do modelo, opções do exercício, circuito AMRAP com Prancha, cardio na esteira, plano novo, a cópia da Carla (com opções) e a ficha. API e web da branch na worktree (portas 3106 e 3136) contra o banco de dev, com a migration aplicada; o envio para a Carla, o aviso e o histórico de acesso criados foram apagados (`demo-rows.txt` = `after-cleanup.txt`; só a tabela nova `WorkoutPlanCircuit` passou a existir, vazia). Corrigido:
+  - A tabela ganhou as colunas Séries, Repetições, Carga e Descanso digitáveis (no celular, só séries × repetições; o resto nas opções), e a lista de sessões, a letra da sessão.
+  - Segmentados do tamanho do texto e opções em duas colunas (antes ocupavam a largura toda).
+  - "Comunidade" foi para a faixa de dados do plano, como na prancha; a agenda ficou só Datas/Flexível ("Sem agenda" quebrava linha; sem escolha nenhuma = quem envia decide).
+  - Na cópia, "Voltar à ficha" e "Ver original" foram para dentro do aviso "Editando a cópia".
+  - Fica como está, de propósito (usabilidade acima da prancha): números digitáveis em vez de "−/+", subir/descer ao lado do arrastar, nome da sessão num campo (em vez de "Renomear"), o "Salvar na cópia" embaixo, com o aviso e "O que mudou" junto, em vez de no topo, e descanso em segundos em vez de mm:ss.
 
 ## Etapas seguintes
 

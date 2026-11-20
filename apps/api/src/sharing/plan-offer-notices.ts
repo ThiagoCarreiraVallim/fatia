@@ -29,6 +29,20 @@ export function offerUpdatedNotice(p: {
   };
 }
 
+/** Para o aluno: a equipe ajustou a cópia dele no editor (#406, Pn-09e). */
+export function offerAdjustedNotice(p: {
+  offerId: string;
+  authorName: string;
+  title: string;
+}): Notice {
+  return {
+    kind: NotificationKind.PLAN_RECEIVED,
+    title: `${firstName(p.authorName)} ajustou seu treino`,
+    body: `${p.title}. Veja o que mudou e decida se troca.`,
+    url: `/workout/offers/${p.offerId}`,
+  };
+}
+
 /** Para a equipe: a resposta do aluno. Leva ao painel da comunidade. */
 export function offerAnsweredNotice(p: {
   groupId: string;

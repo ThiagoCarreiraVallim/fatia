@@ -24,7 +24,7 @@ import {
   canEditContent,
   requireContentRole,
 } from './content-roles';
-import { planSnapshotSchema } from './plan-snapshot';
+import { parsePlanSnapshot, sessionExercises } from './plan-snapshot-v2';
 
 export const MAX_GUIDE_PHOTOS = 4;
 export const MAX_GUIDE_TIPS = 2000;
@@ -443,10 +443,12 @@ export class GroupExerciseService {
     });
     return modelos
       .filter((m) => {
-        const snap = planSnapshotSchema.safeParse(m.snapshot);
+        const snap = parsePlanSnapshot(m.snapshot);
         return (
-          snap.success &&
-          snap.data.exercises.some((e) => e.source === 'group' && e.groupExerciseId === exerciseId)
+          snap !== null &&
+          snap.sessions
+            .flatMap(sessionExercises)
+            .some((e) => e.source === 'group' && e.groupExerciseId === exerciseId)
         );
       })
       .map((m) => m.title);

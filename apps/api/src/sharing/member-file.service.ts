@@ -324,10 +324,14 @@ export class MemberFileService {
     return offers
       .filter((o) => o.versions.length > 0)
       .map((o) => {
-        const copy = o.plans.find((p) => p.userId === target.subjectUserId)?.id ?? null;
+        // Um plano por sessão (#406): a ficha soma as sessões de todas.
+        const mine = o.plans.filter((p) => p.userId === target.subjectUserId).map((p) => p.id);
+        const sum = (of: Map<string | null, number>) =>
+          mine.reduce((acc, id) => acc + (of.get(id) ?? 0), 0);
+        const planned = mine.some((id) => plannedOf.has(id)) ? sum(plannedOf) : null;
         return this.planView(o, viewerId, target.viewerRole, today, {
-          planned: copy ? (plannedOf.get(copy) ?? null) : null,
-          done: canWorkout && copy ? (doneOf.get(copy) ?? 0) : null,
+          planned: mine.length ? planned : null,
+          done: canWorkout && mine.length ? sum(doneOf) : null,
         });
       });
   }

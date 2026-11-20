@@ -36,7 +36,22 @@ import {
 } from './content-roles';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { PlanMaterializerService } from './plan-materializer.service';
-import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION, planSnapshotSchema } from './plan-snapshot';
+import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION } from './plan-snapshot';
+import {
+  MAX_PLAN_TAGS,
+  MAX_TAG_LENGTH,
+  parsePlanSnapshot,
+  PLAN_SNAPSHOT_V2,
+  sessionExercises,
+  sessionLetter,
+} from './plan-snapshot-v2';
+import {
+  documentToSnapshot,
+  parsePlanDocument,
+  snapshotToDocument,
+  type PlanDocumentView,
+} from './plan-document';
+import { assertDay } from '../common/dates';
 
 export const TIP_CATEGORIES = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'] as const;
 export type TipCategory = (typeof TIP_CATEGORIES)[number];
@@ -52,8 +67,19 @@ export interface TemplateMeta {
   coverFileId?: string | null;
 }
 
-export interface CreateWorkoutTemplateInput extends TemplateMeta {
-  planId: string;
+/** O que o editor de treino (#406, Pn-09) grava além do título e do nível. */
+export interface WorkoutPlanFields {
+  /** O plano inteiro do editor: sessões, exercícios e circuitos. */
+  document?: unknown;
+  tags?: string[];
+  schedule?: 'CALENDAR' | 'FLEXIBLE' | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export interface CreateWorkoutTemplateInput extends TemplateMeta, WorkoutPlanFields {
+  /** "A partir do seu plano": congela um plano do autor. Sem ele, vem o `document`. */
+  planId?: string;
 }
 
 export interface CreateNutritionTemplateInput extends TemplateMeta {
@@ -67,7 +93,7 @@ export interface TemplateReach {
   count: number | null;
 }
 
-export interface UpdateTemplateInput extends TemplateMeta {
+export interface UpdateTemplateInput extends TemplateMeta, WorkoutPlanFields {
   /** Treino: congela de novo a partir deste plano do autor. */
   planId?: string;
   /** Nutrição: troca metas e refeições do retrato. */
@@ -102,6 +128,8 @@ export interface TemplateExerciseView {
   muscleGroup: string | null;
   targetSets: number;
   targetReps: string;
+  /** Sessão do plano (#406): "A · Legs". Nulo no plano de uma sessão só. */
+  session: string | null;
 }
 
 export interface TemplateView {
@@ -133,6 +161,15 @@ export interface TemplateView {
   /** Só para a equipe: dá para atualizar a partir do plano de origem. */
   sourcePlanId?: string | null;
   canEdit?: boolean;
+  /** Treino (#406): etiquetas, agenda × sequência e período sugerido. */
+  tags: string[];
+  schedule: 'CALENDAR' | 'FLEXIBLE' | null;
+  startDate: string | null;
+  endDate: string | null;
+  /** Quantas sessões o plano de treino tem. */
+  sessionCount: number;
+  /** Só para a equipe, no treino: o plano inteiro para o editor. */
+  document?: PlanDocumentView | null;
 }
 
 /** Um grupo da tela Modelos (Al-T23): a comunidade e os modelos de treino dela. */
@@ -333,23 +370,45 @@ export class ContentService {
     input: CreateWorkoutTemplateInput,
   ): Promise<TemplateView> {
     const eu = await this.assertPublisher(userId, groupId);
-    // `findById` com o `userId` de quem publica: plano de outra pessoa é 404.
-    const plano = await this.plans.findById(userId, input.planId);
-    const snapshot = buildPlanSnapshot(plano, groupId);
+    if (Boolean(input.planId) === (input.document !== undefined)) {
+      throw new BadRequestException(
+        'Monte o plano no editor ou escolha um plano seu, um dos dois.',
+      );
+    }
+    let snapshot: unknown;
+    let snapshotVersion = PLAN_SNAPSHOT_V2;
+    let title = input.title ?? '';
+    let sourcePlanId: string | null = null;
+    if (input.planId) {
+      // `findById` com o `userId` de quem publica: plano de outra pessoa é 404.
+      const plano = await this.plans.findById(userId, input.planId);
+      snapshot = buildPlanSnapshot(plano, groupId);
+      snapshotVersion = PLAN_SNAPSHOT_VERSION;
+      title = input.title ?? plano.name;
+      sourcePlanId = plano.id;
+    } else {
+      snapshot = await documentToSnapshot(
+        this.prisma,
+        parsePlanDocument(input.document),
+        this.title(title),
+        { editorId: userId, groupId, groupByValue: false },
+      );
+    }
     const coverFileId = await this.resolveCover(groupId, input.coverFileId);
     const row = await this.prisma.groupPlanTemplate.create({
       data: {
         groupId,
         authorId: userId,
         kind: PlanTemplateKind.WORKOUT,
-        title: this.title(input.title ?? plano.name),
+        title: this.title(title),
         description: this.description(input.description),
         level: this.level(input.level),
         coverFileId,
-        snapshot: snapshot as unknown as Prisma.InputJsonValue,
-        snapshotVersion: PLAN_SNAPSHOT_VERSION,
-        sourcePlanId: plano.id,
+        snapshot: snapshot as Prisma.InputJsonValue,
+        snapshotVersion,
+        sourcePlanId,
         draft: input.draft === true,
+        ...this.workoutFields(input),
       },
       include: TEMPLATE_INCLUDE,
     });
@@ -413,15 +472,43 @@ export class ContentService {
       if (input.goals !== undefined || input.mealTemplateIds !== undefined) {
         throw new BadRequestException('Metas e refeições são de plano de nutrição.');
       }
+      if (input.planId !== undefined && input.document !== undefined) {
+        throw new BadRequestException('Mande o plano do editor ou um plano seu, um dos dois.');
+      }
       if (input.planId !== undefined) {
         const plano = await this.plans.findById(userId, input.planId);
         data.snapshot = buildPlanSnapshot(plano, groupId) as unknown as Prisma.InputJsonValue;
         data.snapshotVersion = PLAN_SNAPSHOT_VERSION;
         data.sourcePlanId = plano.id;
       }
+      if (input.document !== undefined) {
+        // O editor (#406) grava o retrato direto; o plano de origem deixa de valer.
+        data.snapshot = (await documentToSnapshot(
+          this.prisma,
+          parsePlanDocument(input.document),
+          this.title(input.title ?? atual.title),
+          { editorId: userId, groupId, groupByValue: false },
+        )) as unknown as Prisma.InputJsonValue;
+        data.snapshotVersion = PLAN_SNAPSHOT_V2;
+        data.sourcePlanId = null;
+      } else if (input.title !== undefined && atual.snapshotVersion === PLAN_SNAPSHOT_V2) {
+        // O nome do retrato acompanha o título (é o nome do plano na conta de quem recebe).
+        const snap = parsePlanSnapshot(atual.snapshot);
+        if (snap)
+          data.snapshot = { ...snap, name: this.title(input.title) } as Prisma.InputJsonValue;
+      }
+      Object.assign(data, this.workoutFields(input));
     } else {
-      if (input.planId !== undefined) {
+      if (input.planId !== undefined || input.document !== undefined) {
         throw new BadRequestException('Plano de treino só entra em modelo de treino.');
+      }
+      if (
+        input.tags !== undefined ||
+        input.schedule !== undefined ||
+        input.startDate !== undefined ||
+        input.endDate !== undefined
+      ) {
+        throw new BadRequestException('Etiquetas, agenda e período são do plano de treino.');
       }
       if (input.goals !== undefined || input.mealTemplateIds !== undefined) {
         const anterior = parseNutritionSnapshot(atual.snapshot, true);
@@ -642,16 +729,21 @@ export class ContentService {
     const adopted = await this.prisma.workoutPlan.findMany({
       where: { userId, fromTemplateId: { in: rows.map((r) => r.id) } },
       select: { id: true, fromTemplateId: true },
+      // Modelo com sessões vira um plano por sessão: o adotado é o da sessão A.
+      orderBy: [{ sessionIndex: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
     });
-    const adoptedOf = new Map(adopted.map((p) => [p.fromTemplateId, p.id]));
+    const adoptedOf = new Map<string | null, string>();
+    for (const p of adopted) {
+      if (!adoptedOf.has(p.fromTemplateId)) adoptedOf.set(p.fromTemplateId, p.id);
+    }
     return memberships
       .map(({ group }) => ({
         group,
         templates: rows
           .filter((r) => r.groupId === group.id)
           .map((r) => {
-            const snap = planSnapshotSchema.safeParse(r.snapshot);
-            const items = snap.success ? snap.data.exercises : [];
+            const snap = parsePlanSnapshot(r.snapshot);
+            const items = snap ? snap.sessions.flatMap(sessionExercises) : [];
             return {
               id: r.id,
               title: r.title,
@@ -961,6 +1053,8 @@ export class ContentService {
     teamRole: GroupRole | null,
     papeis?: Map<string, GroupRole>,
   ): Promise<TemplateView> {
+    // O plano inteiro do editor só sai no detalhe (#406), não na lista.
+    const withDocument = papeis === undefined;
     const base = {
       id: row.id,
       kind: row.kind,
@@ -972,6 +1066,11 @@ export class ContentService {
       authorRole: await this.authorRole(row.groupId, row.authorId, papeis),
       publishedAt: row.publishedAt,
       updatedAt: row.updatedAt,
+      tags: row.tags,
+      schedule: row.schedule,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      sessionCount: 0,
       ...(teamRole
         ? {
             draft: row.draft,
@@ -984,10 +1083,16 @@ export class ContentService {
     if (row.kind === PlanTemplateKind.WORKOUT) {
       const adotado = await this.prisma.workoutPlan.findFirst({
         where: { userId, fromTemplateId: row.id },
+        orderBy: { sessionIndex: { sort: 'asc', nulls: 'first' } },
         select: { id: true },
       });
+      const snap = parsePlanSnapshot(row.snapshot);
       return {
         ...base,
+        sessionCount: snap?.sessions.length ?? 0,
+        ...(teamRole && withDocument
+          ? { document: snap ? await snapshotToDocument(this.prisma, snap, row.groupId) : null }
+          : {}),
         exercises: await this.exercisesOf(row.snapshot, row.groupId),
         goals: null,
         meals: [],
@@ -1012,14 +1117,21 @@ export class ContentService {
 
   /** Os exercícios do retrato com nome, para a prévia. Retrato inválido mostra lista vazia. */
   private async exercisesOf(snapshot: unknown, groupId: string): Promise<TemplateExerciseView[]> {
-    const parsed = planSnapshotSchema.safeParse(snapshot);
-    if (!parsed.success) return [];
-    const ids = parsed.data.exercises.flatMap((e) =>
-      e.source === 'catalog' ? [e.catalogExerciseId] : [],
+    const snap = parsePlanSnapshot(snapshot);
+    if (!snap) return [];
+    const multi = snap.sessions.length > 1;
+    const items = snap.sessions.flatMap((s, i) =>
+      sessionExercises(s).map((e) => ({
+        ...e,
+        session: multi
+          ? s.name.trim()
+            ? `${sessionLetter(i)} · ${s.name.trim()}`
+            : `Sessão ${sessionLetter(i)}`
+          : null,
+      })),
     );
-    const daComunidade = parsed.data.exercises.flatMap((e) =>
-      e.source === 'group' ? [e.groupExerciseId] : [],
-    );
+    const ids = items.flatMap((e) => (e.source === 'catalog' ? [e.catalogExerciseId] : []));
+    const daComunidade = items.flatMap((e) => (e.source === 'group' ? [e.groupExerciseId] : []));
     const catalogo =
       ids.length || daComunidade.length
         ? await this.prisma.exercise.findMany({
@@ -1043,25 +1155,60 @@ export class ContentService {
           ).map((g) => g.exerciseId)
         : [],
     );
-    return [...parsed.data.exercises]
-      .sort((a, b) => a.order - b.order)
-      .map((e) => {
-        const ex =
-          e.source === 'catalog'
-            ? porId.get(e.catalogExerciseId)
-            : e.source === 'group'
-              ? porId.get(e.groupExerciseId)
-              : { id: null, name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
-        const exerciseId = ex?.id ?? null;
-        return {
-          exerciseId,
-          hasGuide: exerciseId !== null && comGuia.has(exerciseId),
-          name: ex?.name ?? 'Exercício',
-          muscleGroup: ex?.muscleGroup ?? null,
-          targetSets: e.targetSets,
-          targetReps: e.targetReps,
-        };
-      });
+    return items.map((e) => {
+      const ex =
+        e.source === 'catalog'
+          ? porId.get(e.catalogExerciseId)
+          : e.source === 'group'
+            ? porId.get(e.groupExerciseId)
+            : { id: null, name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+      const exerciseId = ex?.id ?? null;
+      return {
+        exerciseId,
+        hasGuide: exerciseId !== null && comGuia.has(exerciseId),
+        name: ex?.name ?? 'Exercício',
+        muscleGroup: ex?.muscleGroup ?? null,
+        targetSets: e.targetSets,
+        targetReps: e.targetReps,
+        session: e.session,
+      };
+    });
+  }
+
+  /** Etiquetas, agenda e período do editor (#406), conferidos. */
+  private workoutFields(input: WorkoutPlanFields): {
+    tags?: string[];
+    schedule?: 'CALENDAR' | 'FLEXIBLE' | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } {
+    const data: ReturnType<ContentService['workoutFields']> = {};
+    if (input.tags !== undefined) {
+      const tags = [
+        ...new Set(input.tags.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0)),
+      ];
+      if (tags.length > MAX_PLAN_TAGS || tags.some((t) => t.length > MAX_TAG_LENGTH)) {
+        throw new BadRequestException(
+          `Até ${MAX_PLAN_TAGS} etiquetas, de até ${MAX_TAG_LENGTH} letras.`,
+        );
+      }
+      data.tags = tags;
+    }
+    if (input.schedule !== undefined) data.schedule = input.schedule;
+    const start =
+      input.startDate === undefined
+        ? undefined
+        : input.startDate && assertDay(input.startDate, 'startDate');
+    const end =
+      input.endDate === undefined
+        ? undefined
+        : input.endDate && assertDay(input.endDate, 'endDate');
+    if (start && end && end < start) {
+      throw new BadRequestException('O fim do período vem depois do começo.');
+    }
+    if (start !== undefined) data.startDate = start || null;
+    if (end !== undefined) data.endDate = end || null;
+    return data;
   }
 
   private async tipView(

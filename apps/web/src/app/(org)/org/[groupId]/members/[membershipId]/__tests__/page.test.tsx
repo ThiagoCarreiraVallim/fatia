@@ -208,6 +208,10 @@ describe('painel › ficha da pessoa (Pn-05)', () => {
     const tabela = screen.getByRole('table', { name: 'Treino' });
     expect(within(tabela).getByText('aguardando aceite')).toBeInTheDocument();
     expect(within(tabela).getByText('semana 2 de 4 · 6 de 16 sessões')).toBeInTheDocument();
+    // #406 (Pn-09e): a cópia dela abre no editor.
+    expect(
+      within(tabela).getByRole('link', { name: 'Editar a cópia de Inferior v2' }),
+    ).toHaveAttribute('href', '/org/g1/members/m-ana/plans/o1');
 
     await userEvent.click(within(tabela).getAllByRole('button', { name: 'Subir' })[1]!);
     await waitFor(() =>

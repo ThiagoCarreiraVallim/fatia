@@ -42,14 +42,26 @@ export interface FieldChange {
     | 'cardioDuration'
     | 'cardioDistance'
     | 'cardioIntensity'
+    // Editor da equipe (#406).
+    | 'warmup'
+    | 'loadPercent'
+    | 'cardioCalories'
+    | 'cardioIncline'
+    | 'cardioZone'
+    | 'cardioPace'
+    | 'cardioRpe'
     | 'config';
   before: string | null;
   after: string | null;
 }
 
-/** O que mudou na versão fora de um exercício: nome, ordem e agenda. */
+/**
+ * O que mudou na versão fora de um exercício: nome, ordem, agenda e, com o
+ * editor da equipe (#406), as sessões (quantas, nome e dia) e os circuitos.
+ */
 export interface VersionChange {
-  field: 'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays';
+  field:
+    'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays' | 'sessions' | 'circuits';
   before: string | null;
   after: string | null;
 }
@@ -63,6 +75,8 @@ export interface OfferExercise {
   targetSets: number;
   targetReps: string;
   restSeconds: number | null;
+  /** Sessão do plano (#406): "A · Pernas". Nulo no plano de uma sessão só. */
+  session?: string | null;
   isNew: boolean;
   changes: FieldChange[];
 }
@@ -103,7 +117,10 @@ export interface PlanOffer {
   shown: OfferVersion;
   accepted: { id: string; version: number; planId: string | null } | null;
   diff: (PlanDiff & { hasChanges: boolean }) | null;
+  /** O plano da primeira sessão na conta da pessoa. */
   planId: string | null;
+  /** Os planos de todas as sessões (#406), na ordem. */
+  planIds?: string[];
 }
 
 export interface PlanOfferSummary {
@@ -344,6 +361,17 @@ const INTENSITY_TEXT: Record<string, string> = {
   VIGOROUS: 'forte',
 };
 
+const LOAD_MODE_TEXT: Record<string, string> = {
+  BODYWEIGHT: 'peso do corpo',
+  PERCENT_1RM: '% de 1RM',
+  BAND: 'elástico',
+};
+const REP_UNIT_TEXT: Record<string, string> = {
+  SECONDS: 'segundos',
+  MAX: 'até a falha',
+  METERS: 'metros',
+};
+
 /** `12:WARMUP,8x40` → "aquec. 12 · 8 × 40 kg". */
 function setTableText(v: string): string {
   return v
@@ -381,21 +409,34 @@ const FIELD_TEXT: Record<
   load: { label: 'carga inicial', value: (v) => `${decimal(v)} kg` },
   loadMode: {
     label: 'carga',
-    value: (v) => (v === 'BODYWEIGHT' ? 'peso do corpo' : 'com peso'),
+    value: (v) => LOAD_MODE_TEXT[v] ?? 'com peso',
   },
-  repUnit: { label: 'unidade', value: (v) => (v === 'SECONDS' ? 'segundos' : 'repetições') },
+  repUnit: { label: 'unidade', value: (v) => REP_UNIT_TEXT[v] ?? 'repetições' },
   technique: { label: 'técnica', value: (v) => TECHNIQUE_TEXT[v] ?? v.toLowerCase() },
   biSet: { label: 'bi-set', value: (v) => (v === 'true' ? 'sim' : 'não') },
   setTable: { label: 'séries uma a uma', value: setTableText, empty: 'nenhuma' },
   notes: { label: 'observação alterada' },
   cardioTarget: {
     label: 'meta',
-    value: (v) => (v === 'DISTANCE' ? 'distância' : 'tempo'),
+    value: (v) => (v === 'DISTANCE' ? 'distância' : v === 'CALORIES' ? 'calorias' : 'tempo'),
     empty: 'nenhuma',
   },
   cardioDuration: { label: 'tempo', value: (v) => minutesText(Number(v)) },
   cardioDistance: { label: 'distância', value: (v) => distanceText(Number(v)) },
   cardioIntensity: { label: 'intensidade', value: (v) => INTENSITY_TEXT[v] ?? v.toLowerCase() },
+  warmup: { label: 'aquecimento', value: (v) => (v === 'true' ? 'sim' : 'não') },
+  loadPercent: { label: '% de 1RM', value: (v) => `${v}%` },
+  cardioCalories: { label: 'calorias', value: (v) => `${v} kcal` },
+  cardioIncline: { label: 'inclinação', value: (v) => `${decimal(v)}%` },
+  cardioZone: { label: 'zona', value: (v) => v },
+  cardioPace: {
+    label: 'ritmo',
+    value: (v) => {
+      const s = Number(v);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}/km`;
+    },
+  },
+  cardioRpe: { label: 'esforço', value: (v) => v },
   config: { label: 'configuração alterada' },
 };
 
@@ -421,6 +462,9 @@ function versionChangeParts(changes: VersionChange[]): string[] {
   const schedule = changes.find((c) => c.field === 'schedule');
   if (schedule) parts.push(schedule.after === 'FLEXIBLE' ? 'agora sem datas' : 'agora com datas');
   else if (has('startDate') || has('weeks') || has('weekdays')) parts.push('agenda alterada');
+  // Editor da equipe (#406).
+  if (has('sessions')) parts.push('sessões alteradas');
+  if (has('circuits')) parts.push('circuito alterado');
   return parts;
 }
 

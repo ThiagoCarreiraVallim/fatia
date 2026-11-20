@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -15,6 +16,7 @@ import {
 } from 'class-validator';
 import { MAX_TIP_BODY, PLAN_LEVELS, TIP_CATEGORIES, type TipCategory } from '../content.service';
 import { MAX_SUGGESTED_MEALS } from '../nutrition-snapshot';
+import { MAX_PLAN_TAGS, MAX_TAG_LENGTH } from '../plan-snapshot-v2';
 
 /** Rota de um item de conteúdo: o id é amarrado ao `groupId` no service. */
 export class ContentParamDto {
@@ -47,9 +49,28 @@ class TemplateMetaDto {
   @IsOptional() @IsUUID() coverFileId?: string | null;
 }
 
-export class CreateWorkoutTemplateDto extends TemplateMetaDto {
+/**
+ * O editor de treino (#406): o plano inteiro (`document`, conferido pelo
+ * schema do editor no service), etiquetas, agenda e período.
+ */
+class WorkoutFieldsDto extends TemplateMetaDto {
+  @IsOptional() @IsObject() document?: Record<string, unknown>;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_PLAN_TAGS)
+  @IsString({ each: true })
+  @MaxLength(MAX_TAG_LENGTH, { each: true })
+  tags?: string[];
+  @IsOptional() @IsIn(['CALENDAR', 'FLEXIBLE', null]) schedule?: 'CALENDAR' | 'FLEXIBLE' | null;
+  @IsOptional() @IsString() @MaxLength(10) startDate?: string | null;
+  @IsOptional() @IsString() @MaxLength(10) endDate?: string | null;
+}
+
+export class CreateWorkoutTemplateDto extends WorkoutFieldsDto {
+  /** "A partir do seu plano". Sem ele, o plano vem do editor (`document`). */
+  @IsOptional()
   @IsUUID()
-  planId!: string;
+  planId?: string;
 }
 
 export class CreateNutritionTemplateDto extends TemplateMetaDto {
@@ -69,7 +90,7 @@ export class CreateNutritionTemplateDto extends TemplateMetaDto {
   mealTemplateIds?: string[];
 }
 
-export class UpdateTemplateDto extends TemplateMetaDto {
+export class UpdateTemplateDto extends WorkoutFieldsDto {
   @IsOptional() @IsUUID() planId?: string;
 
   @IsOptional()

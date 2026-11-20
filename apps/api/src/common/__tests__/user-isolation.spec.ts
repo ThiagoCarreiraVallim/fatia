@@ -70,6 +70,7 @@ import { ConsistencyService } from '../../progress/consistency.service';
 import { AchievementService } from '../../progress/achievement.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
+import { PlanCopyService } from '../../sharing/plan-copy.service';
 import { PlanOfferService } from '../../sharing/plan-offer.service';
 import { PlanSendService } from '../../sharing/plan-send.service';
 import { MemberFileService } from '../../sharing/member-file.service';
@@ -4351,6 +4352,185 @@ describe('isolamento entre usuários', () => {
       const oferta = exportA.planOffers.find((x) => x.id === id)!;
       expect(oferta.versions.map((v) => v.changeNote)).toEqual([null, 'Subiu as séries.']);
       expect(JSON.stringify(await conta.exportData(owned.userB))).not.toContain(id);
+    });
+  });
+
+  describe('editor de plano e a cópia do aluno (#406)', () => {
+    const offers = new PlanOfferService(
+      prisma,
+      new PlanMaterializerService(prisma, exercises),
+      silentNotifications,
+      plans,
+    );
+    const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
+    const copies = new PlanCopyService(prisma, offers, access, silentNotifications);
+    const content = new ContentService(
+      prisma,
+      plans,
+      mealTemplates,
+      userGoals,
+      new PlanMaterializerService(prisma, exercises),
+      new MediaService(prisma, new MemoryObjectStore()),
+    );
+    const s = {
+      groupId: '',
+      outroGrupo: '',
+      membershipA: '',
+      membershipB: '',
+      membershipFora: '',
+      offerA: '',
+      offerFora: '',
+      catalogo: 0,
+      daOutra: 0,
+      doB: 0,
+    };
+    const doc = (exerciseId: number) => ({
+      sessions: [
+        {
+          name: 'A',
+          weekday: 1,
+          items: [{ type: 'exercise', exerciseId, targetSets: 3, targetReps: '10' }],
+        },
+        {
+          name: 'B',
+          weekday: 4,
+          items: [{ type: 'exercise', exerciseId: s.catalogo, targetSets: 3, targetReps: '8-10' }],
+        },
+      ],
+    });
+
+    beforeAll(async () => {
+      const stamp = `editor-${Date.now()}`;
+      const grupo = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Editor do Pro',
+          slug: `${stamp}-ed`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      const outro = await prisma.group.create({
+        data: {
+          type: GroupType.SPONSORED,
+          name: 'Outra do editor',
+          slug: `${stamp}-outra`,
+          ownerId: owned.pro,
+          memberships: {
+            create: [
+              { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+              { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            ],
+          },
+        },
+        include: { memberships: true },
+      });
+      s.groupId = grupo.id;
+      s.outroGrupo = outro.id;
+      s.membershipA = grupo.memberships.find((m) => m.userId === owned.userA)!.id;
+      s.membershipB = grupo.memberships.find((m) => m.userId === owned.userB)!.id;
+      s.membershipFora = outro.memberships.find((m) => m.userId === owned.userB)!.id;
+      await prisma.professionalLink.createMany({
+        data: [
+          { subjectUserId: owned.userA, professionalId: owned.pro, groupId: grupo.id },
+          { subjectUserId: owned.userB, professionalId: owned.pro, groupId: outro.id },
+        ].map((l) => ({ ...l, scopes: [ShareScope.WORKOUT] })),
+      });
+      s.catalogo = (
+        await prisma.exercise.findFirstOrThrow({
+          where: { createdByUserId: null, groupOwned: false, muscleGroup: { not: 'cardio' } },
+          select: { id: true },
+        })
+      ).id;
+      s.daOutra = (
+        await prisma.exercise.create({
+          data: {
+            name: `Da outra ${stamp}`,
+            muscleGroup: 'pernas',
+            groupOwned: true,
+            groupId: outro.id,
+          },
+        })
+      ).id;
+      s.doB = (
+        await prisma.exercise.create({
+          data: { name: `Do B ${stamp}`, muscleGroup: 'pernas', createdByUserId: owned.userB },
+        })
+      ).id;
+      const tpl = await content.createWorkoutTemplate(owned.pro, grupo.id, {
+        title: 'Editor A/B',
+        document: doc(s.catalogo),
+      });
+      s.offerA = (
+        await offers.sendToMember(owned.pro, grupo.id, s.membershipA, {
+          templateId: tpl.id,
+          schedule: 'FLEXIBLE',
+        })
+      ).id;
+      const tplFora = await content.createWorkoutTemplate(owned.pro, outro.id, {
+        title: 'Da outra',
+        document: doc(s.catalogo),
+      });
+      s.offerFora = (
+        await offers.sendToMember(owned.pro, outro.id, s.membershipFora, {
+          templateId: tplFora.id,
+          schedule: 'FLEXIBLE',
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [s.groupId, s.outroGrupo] } } });
+      await prisma.exercise.deleteMany({ where: { id: { in: [s.daOutra, s.doB] } } });
+    });
+
+    it('o modelo não aceita exercício de outra comunidade nem de outra pessoa', async () => {
+      for (const id of [s.daOutra, s.doB]) {
+        await expect(
+          content.createWorkoutTemplate(owned.pro, s.groupId, { title: 'X', document: doc(id) }),
+        ).rejects.toThrow(BadRequestException);
+      }
+    });
+
+    it('a cópia só abre pela ficha da própria pessoa, nesta comunidade', async () => {
+      // Oferta do A pela ficha do B; oferta da outra comunidade por esta.
+      await expect(copies.get(owned.pro, s.groupId, s.membershipB, s.offerA)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(copies.get(owned.pro, s.groupId, s.membershipA, s.offerFora)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(copies.get(owned.pro, s.groupId, s.membershipFora, s.offerFora)).rejects.toThrow(
+        NotFoundException,
+      );
+      // O B não tem vínculo com o pro nesta comunidade: nem a ficha dele abre a oferta.
+      await expect(
+        copies.save(owned.pro, s.groupId, s.membershipB, s.offerA, { document: doc(s.catalogo) }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('membro não edita a cópia de ninguém, nem a própria pelo painel', async () => {
+      await expect(copies.get(owned.userA, s.groupId, s.membershipA, s.offerA)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(
+        copies.save(owned.userB, s.groupId, s.membershipA, s.offerA, { document: doc(s.catalogo) }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('salvar a cópia com exercício de outra comunidade é 400 e não grava versão', async () => {
+      const antes = await prisma.planOfferVersion.count({ where: { offerId: s.offerA } });
+      await expect(
+        copies.save(owned.pro, s.groupId, s.membershipA, s.offerA, { document: doc(s.daOutra) }),
+      ).rejects.toThrow(BadRequestException);
+      expect(await prisma.planOfferVersion.count({ where: { offerId: s.offerA } })).toBe(antes);
     });
   });
 

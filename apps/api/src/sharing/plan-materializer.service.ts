@@ -5,28 +5,31 @@ import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { isCardioExercise } from '../workout/helpers/is-cardio';
-import { normalizeCircuitConfig } from '../workout/helpers/circuit';
+import { normalizeCircuitConfig, type CircuitFormatValue } from '../workout/helpers/circuit';
+import { type DefinicaoCustom } from './plan-snapshot';
 import {
-  describeIssues,
-  PLAN_SNAPSHOT_VERSION,
-  planSnapshotSchema,
-  type DefinicaoCustom,
-  type PlanSnapshot,
-} from './plan-snapshot';
+  readPlanSnapshot,
+  sessionExercises,
+  sessionPlanName,
+  type PlanCircuitBlock,
+  type PlanExerciseItem,
+  type PlanSnapshotV2,
+} from './plan-snapshot-v2';
 
 const PLAN_INCLUDE = {
   circuit: true,
+  circuits: true,
   exercises: {
     include: { exercise: true, sets: { orderBy: { order: 'asc' as const } } },
     orderBy: { order: 'asc' as const },
   },
 } as const;
 
-type SnapshotItem = PlanSnapshot['exercises'][number];
+type SnapshotItem = PlanExerciseItem;
 
 /**
- * Os campos de configuração do item (#378), sem a origem do exercício. Meta de
- * cardio só em exercício de cardio: a escrita direta recusa com 400
+ * Os campos de configuração do item (#378, #406), sem a origem do exercício.
+ * Meta de cardio só em exercício de cardio: a escrita direta recusa com 400
  * (`assertConfig`); aqui o retrato pode vir forjado ou de um exercício que mudou
  * de grupo, e a adoção descarta os campos em vez de reprovar o plano.
  */
@@ -35,29 +38,76 @@ function configOf(item: SnapshotItem, cardio: boolean) {
     repUnit,
     loadMode,
     startLoadKg,
+    loadPercent,
     restSeconds,
     technique,
     biSetWithNext,
+    warmupBefore,
     notes,
     cardioTarget,
     cardioDurationSeconds,
     cardioDistanceMeters,
     cardioIntensity,
+    cardioCalories,
+    cardioInclinePercent,
+    cardioZone,
+    cardioPaceSecondsPerKm,
+    cardioRpe,
     sets,
   } = item;
   return {
     repUnit,
     loadMode,
     startLoadKg,
+    loadPercent: loadMode === 'PERCENT_1RM' ? loadPercent : undefined,
     restSeconds,
     technique,
     biSetWithNext,
+    warmupBefore,
     notes,
     ...(cardio
-      ? { cardioTarget, cardioDurationSeconds, cardioDistanceMeters, cardioIntensity }
+      ? {
+          cardioTarget,
+          cardioDurationSeconds,
+          cardioDistanceMeters,
+          cardioIntensity,
+          cardioCalories,
+          cardioInclinePercent,
+          cardioZone,
+          cardioPaceSecondsPerKm,
+          cardioRpe,
+        }
       : {}),
     sets,
   };
+}
+
+type ExerciseCreate = Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput;
+
+/** O plano de uma sessão da oferta na conta da pessoa (#406). */
+export interface OfferSessionPlan {
+  id: string;
+  sessionIndex: number;
+  /** Modo Agenda: o dia da semana da sessão. */
+  weekday: number | null;
+}
+
+/** Uma sessão do retrato pronta para virar plano. */
+interface SessionPlanData {
+  index: number;
+  /** A chave estável da sessão no retrato; nula no retrato antigo. */
+  key: string | null;
+  name: string;
+  weekday: number | null;
+  /** Circuito com relógio (#380): a sessão é um bloco só. */
+  circuitConfig:
+    (ReturnType<typeof normalizeCircuitConfig> & { format: CircuitFormatValue }) | null;
+  /** Circuitos no meio da sessão de séries, com os exercícios deles. */
+  circuits: Array<{
+    data: Omit<Prisma.WorkoutPlanCircuitUncheckedCreateWithoutPlanInput, 'exercises'>;
+    exercises: ExerciseCreate[];
+  }>;
+  exercises: ExerciseCreate[];
 }
 
 /**
@@ -89,6 +139,23 @@ function configOf(item: SnapshotItem, cardio: boolean) {
  * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
  * do profissional (#379) grava `fromOfferId` (`offerPlanWrites`).
  */
+/**
+ * O retrato v1 traz a `order` do autor; a v2 é posicional. Na v1 (uma sessão,
+ * sem bloco de circuito) a cópia guarda a `order` que o autor prescreveu, como
+ * antes da #406: adotar não inventa numeração no meio do caminho.
+ */
+function keepV1Order(raw: unknown, sessions: SessionPlanData[]): SessionPlanData[] {
+  const v1 = raw as { version?: unknown; exercises?: Array<{ order?: unknown }> } | null;
+  if (v1?.version !== 1 || !Array.isArray(v1.exercises) || sessions.length !== 1) return sessions;
+  const orders = v1.exercises
+    .map((e) => e.order)
+    .filter((o): o is number => typeof o === 'number')
+    .sort((a, b) => a - b);
+  const [only] = sessions;
+  if (!only || only.circuits.length || orders.length !== only.exercises.length) return sessions;
+  return [{ ...only, exercises: only.exercises.map((e, i) => ({ ...e, order: orders[i]! })) }];
+}
+
 @Injectable()
 export class PlanMaterializerService {
   constructor(
@@ -97,7 +164,8 @@ export class PlanMaterializerService {
   ) {}
 
   /**
-   * Cria o plano do snapshot sob `userId`.
+   * Cria o plano do snapshot sob `userId` — um plano por sessão (#406), com o
+   * mesmo `fromTemplateId`. Devolve o da primeira sessão.
    *
    * **Snapshot reprovado não deixa rastro**: toda validação — versão, schema,
    * dedupe e os ids de catálogo — roda antes da primeira escrita, e é só nesses
@@ -119,104 +187,262 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
-    const circuit = this.circuitOf(snap);
-    const exercises = await this.buildExercises(userId, snap, groupId);
-
-    // Um `create` aninhado, não `$transaction` interativa: plano e exercícios
-    // saem numa transação só do lado do Prisma, sem segurar conexão entre
-    // roundtrips — pgbouncer em transaction pooling (ADR 010).
-    return this.prisma.workoutPlan.create({
-      data: {
-        userId,
-        name: snap.name,
-        fromTemplateId,
-        ...(circuit ? { kind: 'CIRCUIT' as const, circuit: { create: circuit } } : {}),
-        exercises: { create: exercises },
-      },
-      include: PLAN_INCLUDE,
+    const sessions = keepV1Order(snapshot, await this.buildSessions(userId, snap, groupId));
+    const multi = sessions.length > 1;
+    const creates = sessions.map((s) => {
+      // Id daqui só quando há bloco de circuito: o exercício dele aponta para o plano.
+      const id = s.circuits.length ? randomUUID() : undefined;
+      return this.prisma.workoutPlan.create({
+        data: {
+          ...(id ? { id } : {}),
+          userId,
+          name: s.name,
+          fromTemplateId,
+          ...(multi ? { sessionIndex: s.index } : {}),
+          sessionKey: s.key,
+          ...this.planContent(s, id ?? ''),
+        },
+        include: PLAN_INCLUDE,
+      });
     });
+    // Um `create` aninhado por sessão, não `$transaction` interativa: cada plano
+    // sai numa escrita só do lado do Prisma, sem segurar conexão entre
+    // roundtrips — pgbouncer em transaction pooling (ADR 010). Várias sessões
+    // vão num lote só: ou entram todas, ou nenhuma.
+    const planos = multi ? await this.prisma.$transaction(creates) : [await creates[0]!];
+    return planos[0]!;
   }
 
   /**
-   * As escritas do plano no aceite de uma oferta da equipe (#379), para o
-   * aceite pôr na **mesma** transação de lote que a troca de versão e a agenda:
-   * ou entra tudo, ou nada. Devolve as escritas sem rodar.
+   * As escritas dos planos no aceite de uma oferta da equipe (#379, #406),
+   * para o aceite pôr na **mesma** transação de lote que a troca de versão e a
+   * agenda: ou entra tudo, ou nada. Devolve as escritas sem rodar.
    *
-   * Sem `planId`, é a primeira versão: cria o plano com a proveniência da
-   * oferta, com o id gerado aqui para a agenda apontar para ele na mesma
-   * transação. Exercício da comunidade não viaja por id numa oferta (ver
-   * `plan-snapshot.ts`), então não há `groupId`.
+   * Cada sessão do retrato é um plano na conta da pessoa (`sessionIndex`). O
+   * plano que a versão aceita já criou para a mesma sessão troca de
+   * exercícios no lugar (as sessões feitas continuam ligadas a ele). A mesma
+   * sessão é a da mesma chave (`sessionKey`, D4 da revisão do PR #462): tirar
+   * ou trocar sessões de ordem não põe o conteúdo de uma no plano de outra.
+   * Só o plano sem chave (retrato antigo) casa pela posição. Sessão
+   * nova cria plano com o id gerado aqui, para a agenda apontar para ele na
+   * mesma transação. A sessão que saiu do plano não apaga o que a pessoa fez:
+   * sem treino registrado nem agenda que já passou, o plano sai; com, ele fica
+   * com a pessoa, solto da oferta.
    *
-   * Com `planId`, é a versão nova: troca os exercícios do plano que a versão
-   * aceita criou, no mesmo plano (as sessões feitas continuam ligadas a ele).
-   * O `planId` é procurado com o `userId`: plano de outra pessoa responde como
-   * inexistente.
+   * Exercício da comunidade não viaja por id numa oferta (ver
+   * `plan-snapshot.ts`), então não há `groupId`. Os planos existentes são
+   * conferidos com o `userId`: plano de outra pessoa responde como inexistente.
    *
-   * A cópia dos exercícios do autor (`buildExercises`) roda antes, fora da
-   * transação, como em `materialize`.
+   * A cópia dos exercícios do autor roda antes, fora da transação, como em
+   * `materialize`.
    */
   async offerPlanWrites(
     userId: string,
     snapshot: unknown,
     fromOfferId: string,
-    planId: string | null,
-  ): Promise<{ planId: string; writes: Prisma.PrismaPromise<unknown>[] }> {
+    existing: ReadonlyArray<{
+      id: string;
+      sessionIndex: number | null;
+      sessionKey?: string | null;
+    }>,
+    today?: string,
+  ): Promise<{
+    plans: OfferSessionPlan[];
+    writes: Prisma.PrismaPromise<unknown>[];
+  }> {
     const snap = this.validate(snapshot);
-    const circuit = this.circuitOf(snap);
-    if (planId) {
-      const owned = await this.prisma.workoutPlan.findFirst({
-        where: { id: planId, userId },
+    if (existing.length) {
+      const owned = await this.prisma.workoutPlan.findMany({
+        where: { id: { in: existing.map((e) => e.id) }, userId },
         select: { id: true },
       });
-      if (!owned) throw new NotFoundException('Plan not found');
+      if (owned.length !== new Set(existing.map((e) => e.id)).size) {
+        throw new NotFoundException('Plan not found');
+      }
     }
-    const exercises = await this.buildExercises(userId, snap);
-    if (!planId) {
-      const id = randomUUID();
-      return {
-        planId: id,
-        writes: [
+    const sessions = keepV1Order(snapshot, await this.buildSessions(userId, snap));
+    const byKey = new Map<string, string>();
+    const byPosition = new Map<number, string>();
+    for (const e of existing) {
+      if (e.sessionKey) {
+        if (!byKey.has(e.sessionKey)) byKey.set(e.sessionKey, e.id);
+        continue;
+      }
+      const idx = e.sessionIndex ?? 0;
+      if (!byPosition.has(idx)) byPosition.set(idx, e.id);
+    }
+    const taken = new Set<string>();
+    const planFor = (s: SessionPlanData): string | undefined => {
+      const byItsKey = s.key ? byKey.get(s.key) : undefined;
+      const id = byItsKey ?? byPosition.get(s.index);
+      if (!id || taken.has(id)) return undefined;
+      taken.add(id);
+      return id;
+    };
+    const multi = sessions.length > 1;
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+    const plans: OfferSessionPlan[] = [];
+    for (const s of sessions) {
+      const planId = planFor(s);
+      if (!planId) {
+        const id = randomUUID();
+        plans.push({ id, sessionIndex: s.index, weekday: s.weekday });
+        writes.push(
           this.prisma.workoutPlan.create({
             data: {
               id,
               userId,
-              name: snap.name,
+              name: s.name,
               fromOfferId,
-              ...(circuit ? { kind: 'CIRCUIT' as const, circuit: { create: circuit } } : {}),
-              exercises: { create: exercises },
+              sessionIndex: multi ? s.index : null,
+              sessionKey: s.key,
+              ...this.planContent(s, id),
             },
           }),
-        ],
-      };
-    }
-    return {
-      planId,
-      writes: [
+        );
+        continue;
+      }
+      plans.push({ id: planId, sessionIndex: s.index, weekday: s.weekday });
+      writes.push(
         this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
         // A versão nova pode trocar o tipo (séries ↔ circuito): a configuração acompanha.
         this.prisma.circuitConfig.deleteMany({ where: { planId } }),
+        this.prisma.workoutPlanCircuit.deleteMany({ where: { planId } }),
         this.prisma.workoutPlan.update({
           where: { id: planId },
           data: {
-            name: snap.name,
-            kind: circuit ? 'CIRCUIT' : 'STRENGTH',
-            ...(circuit ? { circuit: { create: circuit } } : {}),
-            exercises: { create: exercises },
+            name: s.name,
+            sessionIndex: multi ? s.index : null,
+            sessionKey: s.key,
+            ...this.planContent(s, planId),
           },
         }),
-      ],
+      );
+    }
+
+    // As sessões que a versão nova tirou.
+    const kept = new Set(plans.map((p) => p.id));
+    const gone = existing.filter((e) => !kept.has(e.id)).map((e) => e.id);
+    if (gone.length) {
+      const [feitos, passados] = await Promise.all([
+        this.prisma.workoutSession.findMany({
+          where: { userId, planId: { in: gone } },
+          select: { planId: true },
+          distinct: ['planId'],
+        }),
+        this.prisma.plannedSession.findMany({
+          where: { userId, planId: { in: gone }, ...(today ? { date: { lt: today } } : {}) },
+          select: { planId: true },
+          distinct: ['planId'],
+        }),
+      ]);
+      const comHistorico = new Set([...feitos, ...passados].map((r) => r.planId));
+      for (const id of gone) {
+        writes.push(
+          comHistorico.has(id)
+            ? this.prisma.workoutPlan.updateMany({
+                where: { id, userId },
+                data: { fromOfferId: null, sessionIndex: null, sessionKey: null },
+              })
+            : this.prisma.workoutPlan.deleteMany({ where: { id, userId } }),
+        );
+      }
+    }
+    return { plans, writes };
+  }
+
+  /** O conteúdo de um plano de sessão: tipo, circuito, blocos e exercícios. */
+  private planContent(s: SessionPlanData, planId: string) {
+    if (s.circuitConfig) {
+      return {
+        kind: 'CIRCUIT' as const,
+        circuit: { create: s.circuitConfig },
+        exercises: { create: s.exercises },
+      };
+    }
+    return {
+      kind: 'STRENGTH' as const,
+      ...(s.circuits.length
+        ? {
+            circuits: {
+              create: s.circuits.map((c) => ({
+                ...c.data,
+                exercises: { create: c.exercises.map((e) => ({ ...e, planId })) },
+              })),
+            },
+          }
+        : {}),
+      exercises: { create: s.exercises },
     };
   }
 
   /**
-   * A configuração do circuito do retrato, conferida pelo formato antes de
-   * qualquer escrita (o retrato pode vir forjado). Sem circuito, nulo.
+   * As sessões do retrato prontas para virar planos. Toda validação de id
+   * roda antes da primeira escrita (a cópia do exercício custom).
+   *
+   * - Sessão que é um circuito só vira plano `CIRCUIT`, com o relógio da #380
+   *   (Rounds vira For Time: rounds e descanso entre eles).
+   * - Circuito no meio de uma sessão de séries vira `WorkoutPlanCircuit`, e os
+   *   exercícios dele apontam para lá, na ordem da sessão.
    */
-  private circuitOf(snap: PlanSnapshot) {
-    if (!snap.circuit) return null;
-    const { format, ...fields } = snap.circuit;
+  private async buildSessions(
+    userId: string,
+    snap: PlanSnapshotV2,
+    groupId?: string,
+  ): Promise<SessionPlanData[]> {
+    const all = snap.sessions.flatMap(sessionExercises);
+    const groups = new Map([
+      ...(await this.assertCatalogExercises(all)),
+      ...(await this.assertGroupExercises(all, groupId)),
+    ]);
+    const out: SessionPlanData[] = [];
+    for (const [index, session] of snap.sessions.entries()) {
+      const only = session.items.length === 1 ? session.items[0]! : null;
+      const name = sessionPlanName(snap, index);
+      const weekday = session.weekday ?? null;
+      const key = session.key ?? null;
+      if (only?.type === 'circuit') {
+        out.push({
+          index,
+          key,
+          name,
+          weekday,
+          circuitConfig: this.circuitConfigOf(only),
+          circuits: [],
+          exercises: await this.buildExercises(userId, only.exercises, groups, 0, 1),
+        });
+        continue;
+      }
+      const exercises: ExerciseCreate[] = [];
+      const circuits: SessionPlanData['circuits'] = [];
+      let order = 1;
+      for (const item of session.items) {
+        if (item.type === 'exercise') {
+          exercises.push(...(await this.buildExercises(userId, [item], groups, order)));
+          order += 1;
+          continue;
+        }
+        const { exercises: itens, type: _type, ...fields } = item;
+        void _type;
+        const rows = await this.buildExercises(userId, itens, groups, order, item.rounds ?? 1);
+        // O exercício do circuito entra aninhado no bloco, com o plano pelo id:
+        // o bloco nasce antes dele na mesma escrita.
+        circuits.push({ data: { ...fields, name: fields.name ?? null }, exercises: rows });
+        order += itens.length;
+      }
+      out.push({ index, key, name, weekday, circuitConfig: null, circuits, exercises });
+    }
+    return out;
+  }
+
+  /**
+   * A configuração do circuito com relógio, conferida pelo formato antes de
+   * qualquer escrita (o retrato pode vir forjado).
+   */
+  private circuitConfigOf(block: PlanCircuitBlock) {
+    const format: CircuitFormatValue = block.format === 'ROUNDS' ? 'FOR_TIME' : block.format;
     try {
-      return { format, ...normalizeCircuitConfig(format, fields) };
+      return { format, ...normalizeCircuitConfig(format, block) };
     } catch (err) {
       const motivo = err instanceof Error ? err.message : 'circuito inválido';
       throw new BadRequestException(`Circuito do plano inválido (${motivo}). Nada foi criado.`);
@@ -224,21 +450,18 @@ export class PlanMaterializerService {
   }
 
   /**
-   * Os exercícios do plano, já com a origem resolvida. Toda validação de id
-   * roda antes da primeira escrita (a cópia do exercício custom).
+   * Os exercícios, já com a origem resolvida, a partir da posição `from`. No
+   * circuito, `rounds` faz as vezes de séries.
    */
   private async buildExercises(
     userId: string,
-    snap: PlanSnapshot,
-    groupId?: string,
-  ): Promise<Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput[]> {
-    const groups = new Map([
-      ...(await this.assertCatalogExercises(snap)),
-      ...(await this.assertGroupExercises(snap, groupId)),
-    ]);
-
-    const exercises: Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput[] = [];
-    for (const item of snap.exercises) {
+    items: ReadonlyArray<SnapshotItem>,
+    groups: Map<number, string>,
+    from: number,
+    rounds?: number,
+  ): Promise<ExerciseCreate[]> {
+    const exercises: ExerciseCreate[] = [];
+    for (const [i, item] of items.entries()) {
       const exerciseId =
         item.source === 'catalog'
           ? item.catalogExerciseId
@@ -255,15 +478,15 @@ export class PlanMaterializerService {
       );
       exercises.push({
         exerciseId,
-        order: item.order,
-        targetSets: item.targetSets,
+        order: from + i,
+        targetSets: rounds ?? item.targetSets,
         targetReps: item.targetReps,
         ...config,
-        ...(sets?.length
+        ...(sets?.length && rounds === undefined
           ? {
               sets: {
-                create: sets.map((st, i) => ({
-                  order: i + 1,
+                create: sets.map((st, n) => ({
+                  order: n + 1,
                   kind: st.kind,
                   reps: st.reps,
                   loadKg: st.loadKg ?? null,
@@ -276,25 +499,22 @@ export class PlanMaterializerService {
     return exercises;
   }
 
-  private validate(snapshot: unknown): PlanSnapshot {
-    // A versão é conferida antes do schema para a mensagem dizer o que houve.
-    // O `z.literal` sozinho reprovaria com "invalid literal value", e o
-    // snapshot de um plano guardado meses atrás merece erro melhor do que isso.
-    const versao = (snapshot as { version?: unknown } | null)?.version;
-    if (versao !== PLAN_SNAPSHOT_VERSION) {
-      throw new BadRequestException(
-        `Snapshot de plano na versão ${typeof versao === 'number' ? versao : 'desconhecida'}: ` +
-          `esta versão do produto materializa apenas a v${PLAN_SNAPSHOT_VERSION}. Nada foi criado.`,
-      );
+  private validate(snapshot: unknown): PlanSnapshotV2 {
+    // A versão é conferida antes do schema para a mensagem dizer o que houve:
+    // o snapshot de um plano guardado meses atrás merece erro melhor do que o
+    // "invalid literal value" do Zod.
+    const lido = readPlanSnapshot(snapshot);
+    if (!lido.ok) {
+      const versao = (snapshot as { version?: unknown } | null)?.version;
+      if (versao !== 1 && versao !== 2) {
+        throw new BadRequestException(
+          `Snapshot de plano na versão ${typeof versao === 'number' ? versao : 'desconhecida'}: ` +
+            'esta versão do produto materializa apenas a v1 e a v2. Nada foi criado.',
+        );
+      }
+      throw new BadRequestException(`Snapshot de plano inválido (${lido.error}). Nada foi criado.`);
     }
-
-    const parsed = planSnapshotSchema.safeParse(snapshot);
-    if (!parsed.success) {
-      throw new BadRequestException(
-        `Snapshot de plano inválido (${describeIssues(parsed.error)}). Nada foi criado.`,
-      );
-    }
-    return parsed.data;
+    return lido.snapshot;
   }
 
   /**
@@ -308,18 +528,16 @@ export class PlanMaterializerService {
    * **Pré-passada, e não uma resolução por item dentro do laço de cópia**: o id
    * reprovado costuma vir depois de um item `custom` no mesmo snapshot, e
    * resolver na hora estourava com o `createCustom` do item anterior já
-   * commitado. O snapshot forjado era recusado, a mensagem dizia "Nada foi
-   * criado", e mesmo assim quem forjou escrevia um exercício de nome à escolha
-   * na biblioteca de quem adota. Uma query só para todos os ids, antes de
-   * qualquer escrita.
+   * commitado. Uma query só para todos os ids, antes de qualquer escrita.
+   *
+   * Devolve o grupo muscular de cada id, para a adoção saber o que é cardio.
    */
-  /** Devolve o grupo muscular de cada id, para a adoção saber o que é cardio. */
-  private async assertCatalogExercises(snap: PlanSnapshot): Promise<Map<number, string>> {
+  private async assertCatalogExercises(
+    items: ReadonlyArray<SnapshotItem>,
+  ): Promise<Map<number, string>> {
     const ids = [
       ...new Set(
-        snap.exercises.flatMap((item) =>
-          item.source === 'catalog' ? [item.catalogExerciseId] : [],
-        ),
+        items.flatMap((item) => (item.source === 'catalog' ? [item.catalogExerciseId] : [])),
       ),
     ];
     if (ids.length === 0) return new Map();
@@ -347,13 +565,11 @@ export class PlanMaterializerService {
    * pelo mesmo motivo de `assertCatalogExercises`.
    */
   private async assertGroupExercises(
-    snap: PlanSnapshot,
+    items: ReadonlyArray<SnapshotItem>,
     groupId?: string,
   ): Promise<Map<number, string>> {
     const ids = [
-      ...new Set(
-        snap.exercises.flatMap((item) => (item.source === 'group' ? [item.groupExerciseId] : [])),
-      ),
+      ...new Set(items.flatMap((item) => (item.source === 'group' ? [item.groupExerciseId] : []))),
     ];
     if (ids.length === 0) return new Map();
     const daComunidade = groupId

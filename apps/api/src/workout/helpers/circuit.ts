@@ -218,7 +218,8 @@ export interface PlanForCircuit {
   exercises: ReadonlyArray<{
     exerciseId: number;
     targetReps: string;
-    repUnit: 'REPS' | 'SECONDS';
+    /** No circuito só reps ou segundos; o resto (#406) conta como reps. */
+    repUnit: string;
     order: number;
     exercise: { name: string; muscleGroup: string };
   }>;
@@ -242,7 +243,7 @@ export function circuitDefinitionFromPlan(plan: PlanForCircuit): CircuitDefiniti
         exerciseId: pe.exerciseId,
         name: pe.exercise.name,
         muscleGroup: pe.exercise.muscleGroup,
-        unit: pe.repUnit,
+        unit: pe.repUnit === 'SECONDS' ? ('SECONDS' as const) : ('REPS' as const),
         target: targetOf(pe.targetReps),
       })),
   };

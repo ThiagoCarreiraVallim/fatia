@@ -177,7 +177,8 @@ export function draftFromCircuitPlan(plan: WorkoutPlan): CircuitDraft {
         exerciseId: pe.exerciseId,
         name: pe.exercise.name,
         muscleGroup: pe.exercise.muscleGroup,
-        unit: pe.repUnit ?? 'REPS',
+        // O circuito conta repetições ou segundos; MAX e METERS (#406) contam como repetições.
+        unit: pe.repUnit === 'SECONDS' ? 'SECONDS' : 'REPS',
         target: firstNumber(pe.targetReps),
       })),
   };

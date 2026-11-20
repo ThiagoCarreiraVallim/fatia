@@ -19,11 +19,13 @@ import {
   MemberNoteDto,
   RemoveMemberPlanQueryDto,
   ReorderMemberPlansDto,
+  SavePlanCopyDto,
   SendMemberPlanDto,
 } from './dto/member-file.dto';
 import { GroupRoleGuard } from './guards/group-role.guard';
 import { MemberFileService } from './member-file.service';
 import { MemberNoteService } from './member-note.service';
+import { PlanCopyService } from './plan-copy.service';
 import { PlanOfferService } from './plan-offer.service';
 
 /**
@@ -41,6 +43,7 @@ export class MemberFileController {
     private readonly files: MemberFileService,
     private readonly offers: PlanOfferService,
     private readonly notes: MemberNoteService,
+    private readonly copies: PlanCopyService,
   ) {}
 
   @Get('file')
@@ -84,6 +87,31 @@ export class MemberFileController {
     @Body() dto: ReorderMemberPlansDto,
   ) {
     return this.offers.reorderForMember(user.id, groupId, membershipId, dto.offerIds);
+  }
+
+  /** A cópia da pessoa no editor (#406, Pn-09e). Passa pela porta de leitura de Treino. */
+  @Get('plan-offers/:offerId/copy')
+  @RequireGroupAction('member.plans')
+  planCopy(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('offerId', ParseUUIDPipe) offerId: string,
+  ) {
+    return this.copies.get(user.id, groupId, membershipId, offerId);
+  }
+
+  /** "Salvar na cópia da Ana": versão nova; a pessoa vê o que mudou e aceita. */
+  @Put('plan-offers/:offerId/copy')
+  @RequireGroupAction('member.plans')
+  savePlanCopy(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('offerId', ParseUUIDPipe) offerId: string,
+    @Body() dto: SavePlanCopyDto,
+  ) {
+    return this.copies.save(user.id, groupId, membershipId, offerId, dto);
   }
 
   @Delete('plans/:offerId')

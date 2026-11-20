@@ -357,6 +357,46 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
     expect(listed?.timesDone).toBe(1);
   });
 
+  it('campos do editor (#406): % de 1RM, aquecimento, calorias, inclinação e zona', async () => {
+    const plan = await plans.create(userId, { name: 'Editor' });
+    const a = await plans.addExercise(userId, plan.id, {
+      exerciseId: strengthId,
+      loadMode: 'PERCENT_1RM',
+      loadPercent: 70,
+      warmupBefore: true,
+      targetReps: '6-8',
+    });
+    expect(a).toMatchObject({ loadMode: 'PERCENT_1RM', loadPercent: 70, warmupBefore: true });
+    const c = await plans.addExercise(userId, plan.id, {
+      exerciseId: cardioId,
+      cardioTarget: 'CALORIES',
+      cardioCalories: 300,
+      cardioInclinePercent: 4.5,
+      cardioZone: 2,
+    });
+    expect(c).toMatchObject({ cardioCalories: 300, cardioInclinePercent: 4.5, cardioZone: 2 });
+
+    // Meta por calorias sem as calorias.
+    await expect(
+      plans.updatePlanExercise(userId, plan.id, c.id, { cardioCalories: null }),
+    ).rejects.toThrow(BadRequestException);
+    // Uma intensidade só: zona, ritmo ou esforço.
+    await expect(plans.updatePlanExercise(userId, plan.id, c.id, { cardioRpe: 7 })).rejects.toThrow(
+      BadRequestException,
+    );
+    // Campo de cardio em exercício de força.
+    await expect(
+      plans.updatePlanExercise(userId, plan.id, a.id, { cardioZone: 3 }),
+    ).rejects.toThrow(BadRequestException);
+    // % de 1RM só no modo % de 1RM: mandar a % com outra carga é 400.
+    await expect(
+      plans.updatePlanExercise(userId, plan.id, a.id, { loadMode: 'WEIGHT', loadPercent: 70 }),
+    ).rejects.toThrow(BadRequestException);
+    // Voltar para kg só com o loadMode (o app e o MCP): a % guardada sai.
+    const kg = await plans.updatePlanExercise(userId, plan.id, a.id, { loadMode: 'WEIGHT' });
+    expect(kg).toMatchObject({ loadMode: 'WEIGHT', loadPercent: null });
+  });
+
   describe('favoritos de exercício', () => {
     it('marcar e desmarcar é idempotente, inclusive ao mesmo tempo', async () => {
       const results = await Promise.allSettled([
