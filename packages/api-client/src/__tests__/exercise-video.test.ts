@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   exerciseDetailPath,
+  exerciseIdFromParam,
   exerciseVideoSource,
   howToMeta,
   isYoutubeEmbedNavigation,
@@ -111,5 +112,17 @@ describe('Como fazer é uma tela (Al-T9)', () => {
     const info = routeInfo('/workout/exercise/42');
     expect(info.title).toBe('Como fazer');
     expect(info.parent).toBe('/workout');
+  });
+});
+
+/** `/workout/exercise/<id>` com id que não é exercício: erro, não carregando para sempre. */
+describe('exerciseIdFromParam', () => {
+  it('aceita só inteiro positivo', () => {
+    expect(exerciseIdFromParam('42')).toBe(42);
+    expect(exerciseIdFromParam(['42'])).toBe(42);
+  });
+
+  it.each([undefined, '', 'abc', '0', '-3', '4.5', '1e3', ' 7'])('%s é inválido', (raw) => {
+    expect(exerciseIdFromParam(raw)).toBeNull();
   });
 });
