@@ -82,7 +82,16 @@ const circuitBlockSchema = z.object({
 
 const sessionItemSchema = z.union([circuitBlockSchema, exerciseItemSchema]);
 
+/** Tamanho máximo da chave da sessão (um uuid tem 36). */
+export const MAX_SESSION_KEY = 64;
+
 const sessionSchema = z.object({
+  /**
+   * A chave estável da sessão (#406): a versão nova acha o plano da mesma
+   * sessão por ela, mesmo com sessões tiradas ou trocadas de ordem. O retrato
+   * antigo não tem e casa pela posição.
+   */
+  key: z.string().min(1).max(MAX_SESSION_KEY).optional(),
   name: z.string().max(MAX_SESSION_NAME),
   /** Modo Agenda: o dia da semana ISO (1 = segunda … 7 = domingo). */
   weekday: z.number().int().min(1).max(7).optional(),
@@ -165,7 +174,18 @@ export const planSnapshotV2Schema = z
   .superRefine((snap, ctx) => {
     let total = 0;
     const dias = new Set<number>();
+    const chaves = new Set<string>();
     snap.sessions.forEach((session, s) => {
+      if (session.key !== undefined) {
+        if (chaves.has(session.key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['sessions', s, 'key'],
+            message: 'duas sessões com a mesma chave',
+          });
+        }
+        chaves.add(session.key);
+      }
       // Na conta da pessoa a sessão vira um plano, e a sessão de treino agrupa
       // as séries por exercício: o mesmo exercício duas vezes na mesma sessão
       // (num circuito e solto, ou repetido) somaria as séries dos dois.

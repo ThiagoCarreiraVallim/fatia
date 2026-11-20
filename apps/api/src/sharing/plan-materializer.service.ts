@@ -95,6 +95,8 @@ export interface OfferSessionPlan {
 /** Uma sessão do retrato pronta para virar plano. */
 interface SessionPlanData {
   index: number;
+  /** A chave estável da sessão no retrato; nula no retrato antigo. */
+  key: string | null;
   name: string;
   weekday: number | null;
   /** Circuito com relógio (#380): a sessão é um bloco só. */
@@ -197,6 +199,7 @@ export class PlanMaterializerService {
           name: s.name,
           fromTemplateId,
           ...(multi ? { sessionIndex: s.index } : {}),
+          sessionKey: s.key,
           ...this.planContent(s, id ?? ''),
         },
         include: PLAN_INCLUDE,
@@ -217,7 +220,10 @@ export class PlanMaterializerService {
    *
    * Cada sessão do retrato é um plano na conta da pessoa (`sessionIndex`). O
    * plano que a versão aceita já criou para a mesma sessão troca de
-   * exercícios no lugar (as sessões feitas continuam ligadas a ele); sessão
+   * exercícios no lugar (as sessões feitas continuam ligadas a ele). A mesma
+   * sessão é a da mesma chave (`sessionKey`, D4 da revisão do PR #462): tirar
+   * ou trocar sessões de ordem não põe o conteúdo de uma no plano de outra.
+   * Só o plano sem chave (retrato antigo) casa pela posição. Sessão
    * nova cria plano com o id gerado aqui, para a agenda apontar para ele na
    * mesma transação. A sessão que saiu do plano não apaga o que a pessoa fez:
    * sem treino registrado nem agenda que já passou, o plano sai; com, ele fica
@@ -234,7 +240,11 @@ export class PlanMaterializerService {
     userId: string,
     snapshot: unknown,
     fromOfferId: string,
-    existing: ReadonlyArray<{ id: string; sessionIndex: number | null }>,
+    existing: ReadonlyArray<{
+      id: string;
+      sessionIndex: number | null;
+      sessionKey?: string | null;
+    }>,
     today?: string,
   ): Promise<{
     plans: OfferSessionPlan[];
@@ -251,16 +261,29 @@ export class PlanMaterializerService {
       }
     }
     const sessions = keepV1Order(snapshot, await this.buildSessions(userId, snap));
-    const bySession = new Map<number, string>();
+    const byKey = new Map<string, string>();
+    const byPosition = new Map<number, string>();
     for (const e of existing) {
+      if (e.sessionKey) {
+        if (!byKey.has(e.sessionKey)) byKey.set(e.sessionKey, e.id);
+        continue;
+      }
       const idx = e.sessionIndex ?? 0;
-      if (!bySession.has(idx)) bySession.set(idx, e.id);
+      if (!byPosition.has(idx)) byPosition.set(idx, e.id);
     }
+    const taken = new Set<string>();
+    const planFor = (s: SessionPlanData): string | undefined => {
+      const byItsKey = s.key ? byKey.get(s.key) : undefined;
+      const id = byItsKey ?? byPosition.get(s.index);
+      if (!id || taken.has(id)) return undefined;
+      taken.add(id);
+      return id;
+    };
     const multi = sessions.length > 1;
     const writes: Prisma.PrismaPromise<unknown>[] = [];
     const plans: OfferSessionPlan[] = [];
     for (const s of sessions) {
-      const planId = bySession.get(s.index);
+      const planId = planFor(s);
       if (!planId) {
         const id = randomUUID();
         plans.push({ id, sessionIndex: s.index, weekday: s.weekday });
@@ -272,6 +295,7 @@ export class PlanMaterializerService {
               name: s.name,
               fromOfferId,
               sessionIndex: multi ? s.index : null,
+              sessionKey: s.key,
               ...this.planContent(s, id),
             },
           }),
@@ -289,6 +313,7 @@ export class PlanMaterializerService {
           data: {
             name: s.name,
             sessionIndex: multi ? s.index : null,
+            sessionKey: s.key,
             ...this.planContent(s, planId),
           },
         }),
@@ -317,7 +342,7 @@ export class PlanMaterializerService {
           comHistorico.has(id)
             ? this.prisma.workoutPlan.updateMany({
                 where: { id, userId },
-                data: { fromOfferId: null, sessionIndex: null },
+                data: { fromOfferId: null, sessionIndex: null, sessionKey: null },
               })
             : this.prisma.workoutPlan.deleteMany({ where: { id, userId } }),
         );
@@ -375,9 +400,11 @@ export class PlanMaterializerService {
       const only = session.items.length === 1 ? session.items[0]! : null;
       const name = sessionPlanName(snap, index);
       const weekday = session.weekday ?? null;
+      const key = session.key ?? null;
       if (only?.type === 'circuit') {
         out.push({
           index,
+          key,
           name,
           weekday,
           circuitConfig: this.circuitConfigOf(only),
@@ -403,7 +430,7 @@ export class PlanMaterializerService {
         circuits.push({ data: { ...fields, name: fields.name ?? null }, exercises: rows });
         order += itens.length;
       }
-      out.push({ index, name, weekday, circuitConfig: null, circuits, exercises });
+      out.push({ index, key, name, weekday, circuitConfig: null, circuits, exercises });
     }
     return out;
   }

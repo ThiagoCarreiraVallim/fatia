@@ -192,7 +192,7 @@ const OFFER_INCLUDE = {
   author: { select: { name: true } },
   group: { select: { id: true, name: true } },
   versions: { orderBy: { version: 'asc' } },
-  plans: { select: { id: true, userId: true, sessionIndex: true } },
+  plans: { select: { id: true, userId: true, sessionIndex: true, sessionKey: true } },
 } satisfies Prisma.PlanOfferInclude;
 
 type OfferRow = Prisma.PlanOfferGetPayload<{ include: typeof OFFER_INCLUDE }>;
@@ -1206,11 +1206,11 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
   private plansOf(
     offer: OfferRow,
     userId: string,
-  ): Array<{ id: string; sessionIndex: number | null }> {
+  ): Array<{ id: string; sessionIndex: number | null; sessionKey: string | null }> {
     return offer.plans
       .filter((p) => p.userId === userId)
       .sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0))
-      .map((p) => ({ id: p.id, sessionIndex: p.sessionIndex }));
+      .map((p) => ({ id: p.id, sessionIndex: p.sessionIndex, sessionKey: p.sessionKey }));
   }
 
   /** O plano da primeira sessão: o "plano da oferta" de antes da #406. */
@@ -1224,20 +1224,26 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
    * da semana que a versão nova dá a cada uma.
    */
   private sessionPlansFor(
-    existing: Array<{ id: string; sessionIndex: number | null }>,
+    existing: Array<{ id: string; sessionIndex: number | null; sessionKey: string | null }>,
     version: VersionRow,
   ): OfferSessionPlan[] {
     const snap = parseSnapshot(version.snapshot);
-    const count = snap?.sessions.length ?? 1;
+    if (!snap) {
+      return existing.map((p) => ({ id: p.id, sessionIndex: p.sessionIndex ?? 0, weekday: null }));
+    }
+    const sessions = snap.sessions;
     // Só as sessões que a versão nova ainda tem (D2 da revisão do PR #462): o
-    // plano de uma sessão que saiu não recebe dia da agenda nova.
-    return existing
-      .filter((p) => (p.sessionIndex ?? 0) < count)
-      .map((p) => ({
-        id: p.id,
-        sessionIndex: p.sessionIndex ?? 0,
-        weekday: snap?.sessions[p.sessionIndex ?? 0]?.weekday ?? null,
-      }));
+    // plano de uma sessão que saiu não recebe dia da agenda nova. A sessão é a
+    // da mesma chave (D4); sem chave (retrato antigo), a da mesma posição.
+    return existing.flatMap((p) => {
+      const idx = p.sessionKey
+        ? sessions.findIndex((s) => s.key === p.sessionKey)
+        : (p.sessionIndex ?? 0) < sessions.length && !sessions[p.sessionIndex ?? 0]!.key
+          ? (p.sessionIndex ?? 0)
+          : -1;
+      if (idx < 0) return [];
+      return [{ id: p.id, sessionIndex: idx, weekday: sessions[idx]!.weekday ?? null }];
+    });
   }
 
   /**

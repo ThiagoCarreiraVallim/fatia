@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import type { PrismaService } from '../common/prisma.service';
@@ -8,6 +9,7 @@ import {
   assertPlanSnapshotV2,
   cleanCircuitBlock,
   MAX_PLAN_SESSIONS,
+  MAX_SESSION_KEY,
   MAX_SESSION_NAME,
   PLAN_CIRCUIT_FORMATS,
   PLAN_SNAPSHOT_V2,
@@ -62,6 +64,7 @@ export const planDocumentSchema = z
     sessions: z
       .array(
         z.object({
+          key: z.string().min(1).max(MAX_SESSION_KEY).optional(),
           name: z.string().max(MAX_SESSION_NAME),
           weekday: z.number().int().min(1).max(7).nullable().optional(),
           items: z
@@ -202,6 +205,8 @@ export async function documentToSnapshot(
   };
 
   const sessions = doc.sessions.map((s) => ({
+    // A sessão nova ganha chave aqui; a que já tinha volta com a mesma.
+    key: s.key ?? randomUUID(),
     name: s.name.trim(),
     ...(s.weekday ? { weekday: s.weekday } : {}),
     items: s.items.map((i): PlanSessionItem => {
@@ -339,6 +344,7 @@ export async function snapshotToDocument(
   };
   return {
     sessions: snap.sessions.map((s) => ({
+      ...(s.key ? { key: s.key } : {}),
       name: s.name,
       weekday: s.weekday ?? null,
       items: s.items.map((i) =>
