@@ -27,7 +27,11 @@ export class GetMeTool implements McpToolDef {
     'unidades de exibição (loadUnit KG|LB, distanceUnit KM|M|MI). Os valores do diário continuam ' +
     'sempre em kg e metros — a unidade só muda como o app mostra; converta ao falar com o usuário.';
   readonly inputSchema = {} as const;
-  execute(_input: z.infer<z.ZodObject<typeof this.inputSchema>>, { userId }: McpToolContext) {
-    return this.profile.getMe(userId);
+  async execute(_input: z.infer<z.ZodObject<typeof this.inputSchema>>, { userId }: McpToolContext) {
+    const [me, pro] = await Promise.all([
+      this.profile.getMe(userId),
+      this.access.proStatus(userId),
+    ]);
+    return { ...me, pro };
   }
 }

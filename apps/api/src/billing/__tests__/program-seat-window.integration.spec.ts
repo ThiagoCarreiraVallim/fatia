@@ -122,6 +122,7 @@ describe('assento com janela (#403, banco real)', () => {
       subscription: { paidBy: 'PROGRAM', programName: 'Verão 21', cancelAtPeriodEnd: true },
     });
     expect(d.subscription?.currentPeriodEnd?.getTime()).toBe(fimDoPrograma.getTime());
+    expect(d.subscription?.programEndsAt?.getTime()).toBe(fimDoPrograma.getTime());
   });
 
   it('o painel só marca PRO para quem está dentro da janela', async () => {

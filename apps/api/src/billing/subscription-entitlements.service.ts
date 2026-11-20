@@ -76,7 +76,9 @@ function seatAsSubscription(seat: SeatRow): AssinaturaLida {
   return {
     ...base,
     ...(acabaAntes ? { currentPeriodEnd: seat.endsAt, cancelAtPeriodEnd: true } : {}),
-    ...(seat.program ? { paidBy: 'PROGRAM' as const, programName: seat.program.name } : {}),
+    ...(seat.program
+      ? { paidBy: 'PROGRAM' as const, programName: seat.program.name, programEndsAt: seat.endsAt }
+      : {}),
   };
 }
 

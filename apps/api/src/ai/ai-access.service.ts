@@ -8,6 +8,7 @@ export { INSTANCIA_LIBERADA, type AiEntitlement } from '../billing/ai-entitlemen
 export { AiEntitlements } from '../billing/subscription-entitlements.service';
 import { AiEntitlements } from '../billing/subscription-entitlements.service';
 import { AiUsageService } from './ai-usage.service';
+import { proStatusOf, type ProStatus } from './pro-status';
 
 /**
  * 402 com erro nomeado (ADR 024): a IA hospedada é do plano PRO.
@@ -78,6 +79,11 @@ export class AiAccessService {
     return direito.tier === 'PRO'
       ? { allowed: true, reason: 'ok' }
       : { allowed: false, reason: 'plan_required' };
+  }
+
+  /** De onde vem o PRO da pessoa e até quando, sem nada de cobrança (#403, `get_me`). */
+  async proStatus(userId: string, agora: Date = new Date()): Promise<ProStatus> {
+    return proStatusOf(await this.direitos.aiTierForUser(userId, agora));
   }
 
   /**

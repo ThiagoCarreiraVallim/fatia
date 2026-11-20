@@ -829,6 +829,13 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
     loadUnit: 'KG',
     distanceUnit: 'KM',
     avatarUrl: null,
+    pro: {
+      tier: 'PRO',
+      origin: 'PROGRAM',
+      community: 'Academia Centro',
+      program: 'Verão 21',
+      until: '2026-11-30T03:00:00.000Z',
+    },
   }),
   get_meal: sample<GetMealTool>(refeicao, { id: 'm1' }),
   get_notification_settings: sample<GetNotificationSettingsTool>({
