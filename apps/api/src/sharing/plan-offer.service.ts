@@ -981,10 +981,11 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
         hoje,
       );
       // A agenda da versão já foi gravada no aceite, com os planos de então.
-      // Se a versão nova trouxe sessão a mais, o plano dela nasce agora: a
-      // agenda de hoje em diante é refeita com os planos certos.
-      const novos = plans.filter((p) => !existing.some((e) => e.id === p.id));
-      if (novos.length) {
+      // Se a versão trouxe ou tirou sessão, os planos mudaram: a agenda de
+      // hoje em diante é refeita com os planos certos.
+      const antes = new Set(existing.map((e) => e.id));
+      const mudou = plans.length !== antes.size || plans.some((p) => !antes.has(p.id));
+      if (mudou) {
         writes.push(
           ...this.agendaWrites(
             offer.userId,
@@ -1227,11 +1228,16 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
     version: VersionRow,
   ): OfferSessionPlan[] {
     const snap = parseSnapshot(version.snapshot);
-    return existing.map((p) => ({
-      id: p.id,
-      sessionIndex: p.sessionIndex ?? 0,
-      weekday: snap?.sessions[p.sessionIndex ?? 0]?.weekday ?? null,
-    }));
+    const count = snap?.sessions.length ?? 1;
+    // Só as sessões que a versão nova ainda tem (D2 da revisão do PR #462): o
+    // plano de uma sessão que saiu não recebe dia da agenda nova.
+    return existing
+      .filter((p) => (p.sessionIndex ?? 0) < count)
+      .map((p) => ({
+        id: p.id,
+        sessionIndex: p.sessionIndex ?? 0,
+        weekday: snap?.sessions[p.sessionIndex ?? 0]?.weekday ?? null,
+      }));
   }
 
   /**
