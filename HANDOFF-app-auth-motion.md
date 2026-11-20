@@ -6,8 +6,8 @@ Testes API: DATABASE_URL=postgresql://fatia:fatia_dev@localhost:5432/fatia_tauth
 ## Feito
 
 1 troca de e-mail amarrada (ec4610dd), 2 emailChangedAt/iat, 3 unicidade + revert Logto, 9 emailChangeEnabled,
-signOut limpa cache, 6 nome provisório (83353ed7; app pede nome no composer e na entrada do desafio).
+signOut limpa cache, 6 nome provisório (83353ed7), 4 join (659cbb41), 5 virada (540f8f39), 7+8 (a747a31d).
 
 ## Próximo
 
-4 join, 5 virada do dia, 7 rascunho, 8 id inválido, 10 suspeitos (webview, vídeo expirado, barra, chat key); depois merge main, testes, emulador
+10 suspeitos (webview, vídeo expirado, barra, chat key); depois merge main, testes, emulador
