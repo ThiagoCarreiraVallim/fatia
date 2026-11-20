@@ -13,7 +13,7 @@ import {
 import { SessionReaction } from '@fatia/db';
 import { FEEDBACK_BODY_MAX, RISK_DAYS_MAX, RISK_DAYS_MIN, feedbackLength } from '../review.service';
 
-export const REVIEW_KIND_PARAMS = ['workout', 'goal', 'plan'] as const;
+export const REVIEW_KIND_PARAMS = ['workout', 'goal', 'plan', 'plan-ended'] as const;
 export type ReviewKindParam = (typeof REVIEW_KIND_PARAMS)[number];
 
 /** Reação e comentário na sessão feita (#399). `null` tira; ausente mantém. */
