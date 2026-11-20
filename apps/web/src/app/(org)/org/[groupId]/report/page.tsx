@@ -15,6 +15,7 @@ import {
   challengeKindShort,
   challengeLiftLine,
   challengeReviewedLabel,
+  dayMonth,
   decimalBR,
   deltaPctLabel,
   deltaPtsLabel,
@@ -144,14 +145,21 @@ function WeeksChart({ r }: { r: MonthReport }) {
   const summary = weeksSummary(r);
   return (
     <section aria-labelledby="semanas" className={cn(cartao, 'gap-2')}>
+      <h2 id="semanas" className="text-sm font-semibold">
+        Sessões por semana
+      </h2>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="semanas" className="text-sm font-semibold">
-          Sessões por semana
-        </h2>
-        <span className="flex gap-3 text-xs text-muted-foreground">
-          {r.weeksAverage !== null && <span>{`${num(r.weeksAverage)} média`}</span>}
-          {goal && <span>{`meta da equipe ${num(goal)}`}</span>}
-        </span>
+        {r.weeksAverage !== null && (
+          <p className="flex items-baseline gap-1.5">
+            <span className="font-display text-3xl font-bold tabular-nums">
+              {num(r.weeksAverage)}
+            </span>{' '}
+            <span className="text-sm text-muted-foreground">média</span>
+          </p>
+        )}
+        {goal && (
+          <span className="ml-auto text-xs text-muted-foreground">{`meta da equipe ${num(goal)}`}</span>
+        )}
       </div>
       <svg
         viewBox="0 0 1000 200"
@@ -205,6 +213,12 @@ function WeeksChart({ r }: { r: MonthReport }) {
   );
 }
 
+/** A área sob um trecho da linha, fechada no chão do `viewBox`. */
+function areaPath(d: string): string {
+  const xs = [...d.matchAll(/[ML]([\d.]+) /g)].map((m) => m[1]);
+  return `${d} L${xs[xs.length - 1]} 200 L${xs[0]} 200 Z`;
+}
+
 /** "Membros ativos" (Pn-03): quantos já tinham treinado no mês, dia a dia. */
 function ActiveChart({ r }: { r: MonthReport }) {
   const max = Math.max(1, ...r.activeByDay.map((c) => c.value ?? 0)) * 1.1;
@@ -212,17 +226,33 @@ function ActiveChart({ r }: { r: MonthReport }) {
   const delta =
     a.delta === null
       ? null
-      : `${a.delta > 0 ? '+' : a.delta < 0 ? '−' : ''}${num(Math.abs(a.delta))} em relação ao mês anterior`;
+      : `${a.delta > 0 ? '+' : a.delta < 0 ? '−' : ''}${num(Math.abs(a.delta))}`;
+  const paths = linePaths(r.activeByDay, max);
+  const cells = r.activeByDay;
+  const ticks =
+    cells.length > 2
+      ? [cells[0]!, cells[Math.floor((cells.length - 1) / 2)]!, cells[cells.length - 1]!]
+      : cells;
   return (
     <section aria-labelledby="ativos" className={cn(cartao, 'gap-2')}>
+      <h2 id="ativos" className="text-sm font-semibold">
+        Membros ativos
+      </h2>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="ativos" className="text-sm font-semibold">
-          Membros ativos
-          {a.value !== null && (
-            <span className="ml-2 font-normal text-muted-foreground">{`${num(a.value)} pessoas`}</span>
-          )}
-        </h2>
-        {delta && <span className="text-xs text-muted-foreground">{delta}</span>}
+        {a.value !== null && (
+          <p className="flex items-baseline gap-1.5">
+            <span className="font-display text-3xl font-bold tabular-nums">{num(a.value)}</span>{' '}
+            <span className="text-sm text-muted-foreground">pessoas</span>
+          </p>
+        )}
+        {delta && (
+          <span
+            aria-label={`${delta} em relação ao mês anterior`}
+            className="ml-auto rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary-text"
+          >
+            {`${delta} no mês`}
+          </span>
+        )}
       </div>
       <svg
         viewBox="0 0 1000 200"
@@ -243,7 +273,10 @@ function ActiveChart({ r }: { r: MonthReport }) {
             vectorEffect="non-scaling-stroke"
           />
         ))}
-        {linePaths(r.activeByDay, max).map((d, i) => (
+        {paths.map((d, i) => (
+          <path key={`a${i}`} d={areaPath(d)} fill="hsl(var(--primary) / 0.14)" stroke="none" />
+        ))}
+        {paths.map((d, i) => (
           <path
             key={i}
             d={d}
@@ -255,9 +288,14 @@ function ActiveChart({ r }: { r: MonthReport }) {
           />
         ))}
       </svg>
+      <div aria-hidden className="flex justify-between text-[11.5px] text-muted-foreground">
+        {ticks.map((c) => (
+          <span key={c.key}>{dayMonth(c.key).replace(/^0/, '')}</span>
+        ))}
+      </div>
       {r.activeByDay.some((c) => c.value === null) && (
         <p className="text-xs text-muted-foreground">
-          Dias com menos de 5 pessoas de cada lado ficam em branco.
+          Semanas com menos de 5 pessoas de cada lado ficam em branco.
         </p>
       )}
     </section>
