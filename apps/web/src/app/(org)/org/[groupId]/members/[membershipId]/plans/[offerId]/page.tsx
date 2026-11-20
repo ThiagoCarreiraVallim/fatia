@@ -126,41 +126,42 @@ function CopyEditor({
   const { done, planned } = data.progress;
   return (
     <div className="max-w-6xl space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href={fileHref} className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-          <ArrowLeft aria-hidden />
-          Voltar à ficha
-        </Link>
-        {data.template && (
-          <Link
-            href={`/org/${groupId}/content/plans/${data.template.id}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Ver original
-          </Link>
-        )}
-      </div>
-
       <section
         aria-label="Sobre esta cópia"
-        className="flex gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-4"
+        className="flex flex-wrap gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-4"
       >
-        <Info size={18} aria-hidden className="mt-0.5 shrink-0 text-primary" />
-        <div className="min-w-0 space-y-1 text-sm">
-          <p className="font-bold text-foreground">{`Editando a cópia da ${first}`}</p>
-          <p className="text-muted-foreground">
-            {`${data.title} · v${data.version.version}${data.authorName ? ` · enviado por ${data.authorName}` : ''}. `}
-            O original na biblioteca não muda.
-          </p>
-          <p className="text-muted-foreground">
-            {planned
-              ? `Sessões já feitas (${done} de ${planned}) ficam como estão. O que você salvar vira uma versão nova, que vale quando a ${first} aceitar.`
-              : `Sessões já feitas (${done}) ficam como estão. O que você salvar vira uma versão nova, que vale quando a ${first} aceitar.`}
-          </p>
-          {data.pendingUpdate && (
-            <p className="text-warning">
-              {`Há uma versão esperando a ${first} aceitar: salvar aqui a substitui.`}
+        <div className="flex min-w-0 flex-1 basis-64 gap-3">
+          <Info size={18} aria-hidden className="mt-0.5 shrink-0 text-primary" />
+          <div className="min-w-0 space-y-1 text-sm">
+            <p className="font-bold text-foreground">{`Editando a cópia da ${first}`}</p>
+            <p className="text-muted-foreground">
+              {`${data.title} · v${data.version.version}${data.authorName ? ` · enviado por ${data.authorName}` : ''}. `}
+              O original na biblioteca não muda.
             </p>
+            <p className="text-muted-foreground">
+              {planned
+                ? `Sessões já feitas (${done} de ${planned}) ficam como estão. O que você salvar vira uma versão nova, que vale quando a ${first} aceitar.`
+                : `Sessões já feitas (${done}) ficam como estão. O que você salvar vira uma versão nova, que vale quando a ${first} aceitar.`}
+            </p>
+            {data.pendingUpdate && (
+              <p className="text-warning">
+                {`Há uma versão esperando a ${first} aceitar: salvar aqui a substitui.`}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-start gap-2 sm:ml-auto">
+          <Link href={fileHref} className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+            <ArrowLeft aria-hidden />
+            Voltar à ficha
+          </Link>
+          {data.template && (
+            <Link
+              href={`/org/${groupId}/content/plans/${data.template.id}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Ver original
+            </Link>
           )}
         </div>
       </section>

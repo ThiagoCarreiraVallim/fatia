@@ -24,6 +24,7 @@ import {
   moveItem,
   newCircuitBlock,
   sessionLabel,
+  sessionLetter,
   type DocumentCircuitView,
   type DocumentExerciseView,
   type DocumentItemView,
@@ -149,24 +150,35 @@ export function PlanDocumentEditor({
                   aria-current={i === si ? 'true' : undefined}
                   onClick={() => select(i)}
                   className={cn(
-                    'flex min-h-11 w-full min-w-[140px] flex-col rounded-xl border px-3 py-2 text-left transition-colors',
+                    'flex min-h-11 w-full min-w-[160px] items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors',
                     i === si
                       ? 'border-primary bg-primary/10'
                       : 'border-subtle bg-card hover:bg-muted',
                   )}
                 >
-                  <span className="truncate text-sm font-semibold text-foreground">
-                    {`Sessão ${sessionLabel(i, s.name)}`}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold',
+                      i === si ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                    )}
+                  >
+                    {sessionLetter(i)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {[
-                      showWeekdays && s.weekday ? WEEKDAYS[s.weekday - 1] : null,
-                      count === 0
-                        ? 'vazia'
-                        : `${count} ${count === 1 ? 'exercício' : 'exercícios'}`,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-semibold text-foreground">
+                      {`Sessão ${sessionLabel(i, s.name)}`}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {[
+                        showWeekdays && s.weekday ? WEEKDAYS[s.weekday - 1] : null,
+                        count === 0
+                          ? 'vazia'
+                          : `${count} ${count === 1 ? 'exercício' : 'exercícios'}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -260,68 +272,71 @@ export function PlanDocumentEditor({
             Sessão vazia. Busque um exercício abaixo, ou monte um circuito.
           </p>
         ) : (
-          <ol className="space-y-2">
-            {session.items.map((item, ii) => (
-              <li
-                key={ii}
-                draggable
-                onDragStart={(e) => {
-                  setDrag(ii);
-                  e.dataTransfer.effectAllowed = 'move';
-                }}
-                onDragOver={(e) => {
-                  if (drag !== null) e.preventDefault();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (drag !== null) move(drag, ii);
-                  setDrag(null);
-                }}
-                onDragEnd={() => setDrag(null)}
-                className={cn(
-                  'rounded-xl border border-subtle bg-background p-2 sm:p-3',
-                  drag === ii && 'opacity-50',
-                )}
-              >
-                {isCircuit(item) ? (
-                  <CircuitRow
-                    groupId={groupId}
-                    block={item}
-                    index={ii}
-                    total={session.items.length}
-                    open={open === `c${ii}`}
-                    onToggle={() => setOpen(open === `c${ii}` ? null : `c${ii}`)}
-                    onChange={(b) => setItem(ii, b)}
-                    onMove={(to) => move(ii, to)}
-                    onRemove={() => {
-                      setOpen(null);
-                      setItems(session.items.filter((_, i) => i !== ii));
-                    }}
-                    exclude={ids}
-                  />
-                ) : (
-                  <ExerciseRow
-                    row={item}
-                    index={ii}
-                    total={session.items.length}
-                    open={open === `e${ii}`}
-                    onToggle={() => setOpen(open === `e${ii}` ? null : `e${ii}`)}
-                    onChange={(r) => setItem(ii, r)}
-                    onMove={(to) => move(ii, to)}
-                    onRemove={() => {
-                      setOpen(null);
-                      setItems(session.items.filter((_, i) => i !== ii));
-                    }}
-                    hint={
-                      student && item.exerciseId != null
-                        ? lastSetHint(student.name, student.lastSets[String(item.exerciseId)])
-                        : null
-                    }
-                  />
-                )}
-              </li>
-            ))}
-          </ol>
+          <>
+            <ColumnHeads />
+            <ol className="space-y-2">
+              {session.items.map((item, ii) => (
+                <li
+                  key={ii}
+                  draggable
+                  onDragStart={(e) => {
+                    setDrag(ii);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    if (drag !== null) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (drag !== null) move(drag, ii);
+                    setDrag(null);
+                  }}
+                  onDragEnd={() => setDrag(null)}
+                  className={cn(
+                    'rounded-xl border border-subtle bg-background p-2 sm:p-3',
+                    drag === ii && 'opacity-50',
+                  )}
+                >
+                  {isCircuit(item) ? (
+                    <CircuitRow
+                      groupId={groupId}
+                      block={item}
+                      index={ii}
+                      total={session.items.length}
+                      open={open === `c${ii}`}
+                      onToggle={() => setOpen(open === `c${ii}` ? null : `c${ii}`)}
+                      onChange={(b) => setItem(ii, b)}
+                      onMove={(to) => move(ii, to)}
+                      onRemove={() => {
+                        setOpen(null);
+                        setItems(session.items.filter((_, i) => i !== ii));
+                      }}
+                      exclude={ids}
+                    />
+                  ) : (
+                    <ExerciseRow
+                      row={item}
+                      index={ii}
+                      total={session.items.length}
+                      open={open === `e${ii}`}
+                      onToggle={() => setOpen(open === `e${ii}` ? null : `e${ii}`)}
+                      onChange={(r) => setItem(ii, r)}
+                      onMove={(to) => move(ii, to)}
+                      onRemove={() => {
+                        setOpen(null);
+                        setItems(session.items.filter((_, i) => i !== ii));
+                      }}
+                      hint={
+                        student && item.exerciseId != null
+                          ? lastSetHint(student.name, student.lastSets[String(item.exerciseId)])
+                          : null
+                      }
+                    />
+                  )}
+                </li>
+              ))}
+            </ol>
+          </>
         )}
 
         <div className="space-y-2 border-t border-subtle pt-3">
@@ -397,6 +412,39 @@ function MoveButtons({
   );
 }
 
+function withField<K extends keyof DocumentExerciseView>(
+  row: DocumentExerciseView,
+  key: K,
+  v: DocumentExerciseView[K] | undefined,
+): DocumentExerciseView {
+  const next = { ...row };
+  if (v === undefined) delete next[key];
+  else next[key] = v;
+  return next;
+}
+
+/** Os títulos das colunas da tabela (só no computador; as células têm rótulo próprio). */
+function ColumnHeads() {
+  return (
+    <div
+      aria-hidden
+      className="hidden items-center gap-2 px-3 text-xs font-medium text-muted-foreground md:flex"
+    >
+      <span className="flex-1 pl-6">Exercício</span>
+      <span className="flex items-center gap-1">
+        <span className="w-14 text-center">Séries</span>
+        <span className="invisible text-xs">×</span>
+        <span className="w-20 text-center">Repetições</span>
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-20 text-center">Carga</span>
+        <span className="w-20 text-center">Descanso</span>
+      </span>
+      <span className="w-36" />
+    </div>
+  );
+}
+
 function ExerciseRow({
   row,
   index,
@@ -457,7 +505,44 @@ function ExerciseRow({
             />
           </span>
         )}
-        <span className="flex items-center">
+        {!row.isCardio && (
+          <span className="hidden items-center gap-1 md:flex">
+            {row.loadMode === 'BAND' ? (
+              <span className="w-20 text-center text-xs text-muted-foreground">elástico</span>
+            ) : row.loadMode === 'PERCENT_1RM' ? (
+              <NumField
+                label={`% do 1RM de ${row.name}`}
+                hideLabel
+                placeholder="%"
+                value={row.loadPercent}
+                min={1}
+                max={120}
+                onChange={(v) => onChange(withField(row, 'loadPercent', v))}
+                className="w-20"
+              />
+            ) : (
+              <NumField
+                label={`Carga de ${row.name}`}
+                hideLabel
+                placeholder="kg"
+                integer={false}
+                value={row.startLoadKg}
+                onChange={(v) => onChange(withField(row, 'startLoadKg', v))}
+                className="w-20"
+              />
+            )}
+            <NumField
+              label={`Descanso de ${row.name}`}
+              hideLabel
+              placeholder="s"
+              value={row.restSeconds}
+              max={900}
+              onChange={(v) => onChange(withField(row, 'restSeconds', v))}
+              className="w-20"
+            />
+          </span>
+        )}
+        <span className="flex items-center md:w-36 md:justify-end">
           <MoveButtons name={row.name} index={index} total={total} onMove={onMove} />
           <button
             type="button"

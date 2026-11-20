@@ -39,16 +39,15 @@ import { PlanDocumentEditor } from './plan-document-editor';
 
 type Agenda = 'CALENDAR' | 'FLEXIBLE' | 'NONE';
 
-const AGENDAS: { value: Agenda; label: string }[] = [
+const AGENDAS: { value: Exclude<Agenda, 'NONE'>; label: string }[] = [
   { value: 'CALENDAR', label: 'Datas' },
   { value: 'FLEXIBLE', label: 'Flexível' },
-  { value: 'NONE', label: 'Sem agenda' },
 ];
 
 const AGENDA_HINT: Record<Agenda, string> = {
   CALENDAR: 'Cada sessão tem o seu dia da semana.',
   FLEXIBLE: 'Sem dia fixo: o aluno faz a próxima sessão do rodízio.',
-  NONE: 'Quem envia escolhe a agenda.',
+  NONE: 'Sem sugestão: quem envia escolhe.',
 };
 
 const EMPTY_DOC: PlanDocumentView = { sessions: [{ name: '', weekday: null, items: [] }] };
@@ -216,6 +215,11 @@ export function WorkoutTemplateEditor({
             </Button>
           </div>
         </div>
+        {template && (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {`Plano de treino · por ${template.authorName} · na biblioteca`}
+          </p>
+        )}
 
         {problems.length > 0 && (
           <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
@@ -229,15 +233,16 @@ export function WorkoutTemplateEditor({
 
         <section
           aria-label="Dados do plano"
-          className="grid gap-4 rounded-2xl border border-subtle bg-card p-4 md:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-4 rounded-2xl border border-subtle bg-card p-4 md:grid-cols-2 xl:grid-cols-5"
         >
           <div className="space-y-1.5">
             <span className="block text-xs font-medium text-muted-foreground">Agenda</span>
             <Segmented
               label="Agenda"
               options={AGENDAS}
-              value={form.agenda}
+              value={form.agenda as Exclude<Agenda, 'NONE'>}
               onChange={(a) => set('agenda', a)}
+              className="w-fit [&>button]:flex-none [&>button]:px-4"
             />
             <p className="text-xs text-muted-foreground">{AGENDA_HINT[form.agenda]}</p>
           </div>
@@ -317,7 +322,7 @@ export function WorkoutTemplateEditor({
               value={tagDraft}
               maxLength={MAX_TAG_LENGTH}
               disabled={form.tags.length >= MAX_PLAN_TAGS}
-              placeholder="hipertrofia, iniciante... (Enter)"
+              placeholder="Nova etiqueta (Enter)"
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ',') {
@@ -328,7 +333,38 @@ export function WorkoutTemplateEditor({
               onBlur={() => tagDraft.trim() && addTag()}
             />
           </div>
-          <div className="space-y-1 md:col-span-2 xl:col-span-4">
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-muted-foreground">Comunidade</span>
+            {template && canEdit ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">
+                    {published ? 'Publicado na comunidade' : 'Só na biblioteca'}
+                  </span>
+                  <Switch
+                    label="Na comunidade"
+                    checked={published}
+                    disabled={publish.isPending || (!published && (dirty || isDraft))}
+                    onCheckedChange={(on) => (on ? publish.mutate(true) : setUnpublishing(true))}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {published
+                    ? 'Membros podem adotar; quem já adotou fica com a cópia.'
+                    : isDraft
+                      ? 'Termine o rascunho antes de publicar.'
+                      : dirty
+                        ? 'Salve antes: vai a versão salva.'
+                        : 'Publique para os membros adotarem.'}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {template ? 'Só quem publicou, ou o dono, publica.' : 'Crie o plano para publicar.'}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1 md:col-span-2 xl:col-span-5">
             <Label htmlFor={ids.description} className="text-xs text-muted-foreground">
               Descrição
             </Label>
@@ -353,27 +389,9 @@ export function WorkoutTemplateEditor({
 
       {template && canEdit && (
         <section
-          aria-label="Publicação"
-          className="flex flex-col gap-4 rounded-2xl border border-subtle bg-card p-4 md:flex-row md:items-center"
+          aria-label="Rascunho e apagar"
+          className="flex flex-col gap-4 rounded-2xl border border-subtle bg-card p-4 md:flex-row md:items-center md:justify-between"
         >
-          <div className="flex flex-1 items-start gap-3">
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">Na comunidade</span>
-              <span className="block text-xs text-muted-foreground">
-                {isDraft
-                  ? 'Termine o rascunho antes de publicar.'
-                  : dirty
-                    ? 'Salve antes: vai para a comunidade a versão salva.'
-                    : 'Os membros veem e podem adotar. Enviar para um aluno é à parte.'}
-              </span>
-            </span>
-            <Switch
-              label="Na comunidade"
-              checked={published}
-              disabled={publish.isPending || (!published && (dirty || isDraft))}
-              onCheckedChange={(on) => (on ? publish.mutate(true) : setUnpublishing(true))}
-            />
-          </div>
           {!published && (
             <div className="flex flex-1 items-start gap-3">
               <span className="min-w-0 flex-1">

@@ -51,6 +51,9 @@ const FORMATS = (Object.keys(CIRCUIT_FORMAT_LABEL) as PlanCircuitFormat[]).map((
 
 type Row = DocumentExerciseView;
 
+/** Segmentado do tamanho do texto (a prancha), não da largura do painel. */
+const COMPACT = 'w-fit max-w-full flex-wrap [&>button]:flex-none [&>button]:px-3';
+
 /** Tira as chaves com `undefined` (o documento não carrega campo vazio). */
 function patch<T extends object>(row: T, changes: Partial<T>): T {
   const out = { ...row, ...changes } as Record<string, unknown>;
@@ -138,6 +141,7 @@ export function ExerciseOptions({
         <div className="space-y-1.5">
           <GroupLabel>Meta</GroupLabel>
           <Segmented
+            className={COMPACT}
             label="Meta do cardio"
             options={CARDIO_TARGETS}
             value={target}
@@ -192,6 +196,7 @@ export function ExerciseOptions({
         <div className="space-y-1.5">
           <GroupLabel>Intensidade: uma só, zona, ritmo ou esforço</GroupLabel>
           <Segmented
+            className={COMPACT}
             label="Zona de frequência"
             options={ZONES}
             value={row.cardioZone ? String(row.cardioZone) : ''}
@@ -242,76 +247,85 @@ export function ExerciseOptions({
   return (
     <Panel label={label} onClose={onClose}>
       {hint && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-foreground">{hint}</p>}
-      <div className="space-y-1.5">
-        <GroupLabel>Repetições em</GroupLabel>
-        <Segmented
-          label="Unidade das repetições"
-          options={REP_UNITS}
-          value={row.repUnit ?? 'REPS'}
-          onChange={(u) => set({ repUnit: u === 'REPS' ? undefined : u })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <GroupLabel>Carga</GroupLabel>
-        <Segmented
-          label="Carga"
-          options={LOAD_MODES}
-          value={mode}
-          onChange={(m) =>
-            set({
-              loadMode: m === 'WEIGHT' ? undefined : m,
-              loadPercent: m === 'PERCENT_1RM' ? (row.loadPercent ?? 70) : undefined,
-              startLoadKg: m === 'WEIGHT' || m === 'BODYWEIGHT' ? row.startLoadKg : undefined,
-            })
-          }
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {mode === 'PERCENT_1RM' ? (
-          <NumField
-            label="% do 1RM"
-            value={row.loadPercent}
-            min={1}
-            max={120}
-            onChange={(v) => set({ loadPercent: v })}
-          />
-        ) : mode !== 'BAND' ? (
-          <NumField
-            label={mode === 'BODYWEIGHT' ? 'Carga extra (kg)' : 'Carga inicial (kg)'}
-            value={row.startLoadKg}
-            integer={false}
-            onChange={(v) => set({ startLoadKg: v })}
-          />
-        ) : null}
-        <NumField
-          label="Descanso (s)"
-          value={row.restSeconds}
-          max={900}
-          onChange={(v) => set({ restSeconds: v })}
-        />
-      </div>
-      {mode === 'PERCENT_1RM' && (
-        <p className="text-xs text-muted-foreground">
-          O aluno vê em kg, a partir do melhor 1RM estimado dele; sem histórico, vê &quot;sem
-          1RM&quot;.
-        </p>
-      )}
-      <div className="space-y-1.5">
-        <GroupLabel>Técnica</GroupLabel>
-        <Segmented
-          label="Técnica"
-          options={TECHNIQUES}
-          value={row.technique ?? 'NORMAL'}
-          onChange={(t) => set({ technique: t === 'NORMAL' ? undefined : t })}
-        />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm">Série de aquecimento antes</span>
-        <Switch
-          label="Série de aquecimento antes"
-          checked={row.warmupBefore === true}
-          onCheckedChange={(on) => set({ warmupBefore: on || undefined })}
-        />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <GroupLabel>Repetições em</GroupLabel>
+            <Segmented
+              className={COMPACT}
+              label="Unidade das repetições"
+              options={REP_UNITS}
+              value={row.repUnit ?? 'REPS'}
+              onChange={(u) => set({ repUnit: u === 'REPS' ? undefined : u })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <GroupLabel>Carga</GroupLabel>
+            <Segmented
+              className={COMPACT}
+              label="Carga"
+              options={LOAD_MODES}
+              value={mode}
+              onChange={(m) =>
+                set({
+                  loadMode: m === 'WEIGHT' ? undefined : m,
+                  loadPercent: m === 'PERCENT_1RM' ? (row.loadPercent ?? 70) : undefined,
+                  startLoadKg: m === 'WEIGHT' || m === 'BODYWEIGHT' ? row.startLoadKg : undefined,
+                })
+              }
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {mode === 'PERCENT_1RM' ? (
+              <NumField
+                label="% do 1RM"
+                value={row.loadPercent}
+                min={1}
+                max={120}
+                onChange={(v) => set({ loadPercent: v })}
+              />
+            ) : mode !== 'BAND' ? (
+              <NumField
+                label={mode === 'BODYWEIGHT' ? 'Carga extra (kg)' : 'Carga inicial (kg)'}
+                value={row.startLoadKg}
+                integer={false}
+                onChange={(v) => set({ startLoadKg: v })}
+              />
+            ) : null}
+            <NumField
+              label="Descanso (s)"
+              value={row.restSeconds}
+              max={900}
+              onChange={(v) => set({ restSeconds: v })}
+            />
+          </div>
+          {mode === 'PERCENT_1RM' && (
+            <p className="text-xs text-muted-foreground">
+              O aluno vê em kg, a partir do melhor 1RM estimado dele; sem histórico, vê &quot;sem
+              1RM&quot;.
+            </p>
+          )}
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <GroupLabel>Técnica</GroupLabel>
+            <Segmented
+              className={COMPACT}
+              label="Técnica"
+              options={TECHNIQUES}
+              value={row.technique ?? 'NORMAL'}
+              onChange={(t) => set({ technique: t === 'NORMAL' ? undefined : t })}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">Série de aquecimento antes</span>
+            <Switch
+              label="Série de aquecimento antes"
+              checked={row.warmupBefore === true}
+              onCheckedChange={(on) => set({ warmupBefore: on || undefined })}
+            />
+          </div>
+        </div>
       </div>
       <NotesField row={row} onChange={(notes) => set({ notes })} />
     </Panel>
@@ -357,6 +371,7 @@ export function CircuitOptions({
       <div className="space-y-1.5">
         <GroupLabel>Formato</GroupLabel>
         <Segmented
+          className={COMPACT}
           label="Formato do circuito"
           options={FORMATS}
           value={block.format}
@@ -365,7 +380,6 @@ export function CircuitOptions({
             const fresh = newCircuitBlock(f, block.exercises);
             onChange(block.name ? { ...fresh, name: block.name } : fresh);
           }}
-          className="flex-wrap"
         />
         <p className="text-xs text-muted-foreground">{CIRCUIT_FORMAT_HINT[block.format]}</p>
       </div>
