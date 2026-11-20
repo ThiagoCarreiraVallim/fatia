@@ -186,3 +186,15 @@ export const HEIGHT_MAX_CM = 250;
 export function stepHeight(cm: number, delta: number): number {
   return Math.min(HEIGHT_MAX_CM, Math.max(HEIGHT_MIN_CM, Math.round(cm) + delta));
 }
+
+/**
+ * O perfil em cache com o e-mail e o nome que a API acabou de gravar pelo ID
+ * token (ADR 050). Escrito direto no cache: a tela não espera um refetch para
+ * trocar o `<sub>@logto.local` pelo e-mail real.
+ */
+export function withIdentity<T extends { email: string; name: string }>(
+  me: T | undefined,
+  identity: { email: string; name: string },
+): T | undefined {
+  return me ? { ...me, email: identity.email, name: identity.name } : undefined;
+}

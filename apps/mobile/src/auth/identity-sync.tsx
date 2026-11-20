@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { usersApi } from '@fatia/api-client';
+import { usersApi, withIdentity, type MeUser } from '@fatia/api-client';
 import { useAuth } from './auth-context';
 
 /**
@@ -18,7 +18,8 @@ export function IdentitySync() {
     const idToken = getIdToken();
     const name = takeSignupName();
     void (async () => {
-      if (idToken) await usersApi.syncIdentity(idToken).catch(() => undefined);
+      const identity = idToken ? await usersApi.syncIdentity(idToken).catch(() => null) : null;
+      if (identity) qc.setQueryData<MeUser>(['users', 'me'], (me) => withIdentity(me, identity));
       if (name) await usersApi.updateMe({ name }).catch(() => undefined);
       await qc.invalidateQueries({ queryKey: ['users', 'me'] });
     })();

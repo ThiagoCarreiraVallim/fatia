@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   BRAZIL_UNITS,
-  withIdentity,
   distanceToMeters,
   formatDistanceIn,
   formatLoad,
@@ -16,6 +15,7 @@ import {
 } from '../units';
 import { TUTORIALS, searchTutorials, tutorialSubtitle } from '../tutorials';
 import {
+  withIdentity,
   avatarUploadNotice,
   avatarVisibilityText,
   communityName,
