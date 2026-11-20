@@ -9,17 +9,25 @@ import { MealService } from '../../nutrition/meal.service';
 import { MealTemplateService } from '../../nutrition/meal-template.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
 import type { NotificationService } from '../../notifications/notification.service';
-import { todayInTz } from '../../progress/helpers/date-tz';
+import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
+import { addDaysIso, todayInTz } from '../../progress/helpers/date-tz';
+import { ProgressService } from '../../progress/progress.service';
+import { StepLogService } from '../../progress/step-log.service';
+import { WaterLogService } from '../../progress/water-log.service';
 import { MediaService } from '../../storage/media.service';
 import { MemoryObjectStore } from '../../storage/memory-object-store';
+import { AgendaService } from '../../workout/agenda.service';
 import { ExerciseService } from '../../workout/exercise.service';
 import { isoWeekday } from '../../workout/helpers/planned-schedule';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { AccessAuditService } from '../access-audit.service';
 import { ContentService } from '../content.service';
+import { MemberFileService } from '../member-file.service';
+import { MemberNoteService } from '../member-note.service';
 import { PlanCopyService } from '../plan-copy.service';
 import { PlanMaterializerService } from '../plan-materializer.service';
 import { PlanOfferService } from '../plan-offer.service';
+import { PlanProgramsService } from '../plan-programs.service';
 import type { PlanSnapshotV2 } from '../plan-snapshot-v2';
 import { ProfessionalAccessService } from '../professional-access.service';
 
@@ -457,6 +465,94 @@ describe('editor de plano de treino (#406, banco real)', () => {
         const dia = isoWeekday(s.date);
         expect(s.planId).toBe(dia === 1 ? a!.id : b!.id);
       }
+    });
+  });
+
+  describe('quem lê a cópia por sessão: agenda, ficha e programas', () => {
+    const agenda = new AgendaService(prisma);
+    const file = new MemberFileService(
+      prisma,
+      access,
+      new NutritionSummaryService(prisma),
+      new ProgressService(prisma, new StepLogService(prisma), new WaterLogService(prisma)),
+      new MemberNoteService(prisma),
+    );
+    const programs = new PlanProgramsService(prisma, access);
+
+    const planejadasDaAna = () =>
+      prisma.plannedSession.count({
+        where: { userId: u.ana!, plan: { fromOfferId: offerId } },
+      });
+
+    it('a agenda mostra o nome do plano e remarca a sessão de qualquer sessão do plano', async () => {
+      const v = await agenda.range(u.ana!, TZ, today, addDaysIso(today, 13));
+      if (v.calendarPlan) expect(v.calendarPlan.planName).toBe('Inferior v2');
+      const planoB = await prisma.workoutPlan.findFirstOrThrow({
+        where: { userId: u.ana!, fromOfferId: offerId, sessionIndex: 1 },
+      });
+      const daB = await prisma.plannedSession.findFirstOrThrow({
+        where: { planId: planoB.id, date: { gt: today } },
+        orderBy: { date: 'asc' },
+      });
+      const r = await agenda.reschedule(u.ana!, TZ, daB.id, addDaysIso(daB.date, 1));
+      expect(r.rescheduledFrom).toBe(daB.date);
+      await prisma.plannedSession.update({
+        where: { id: daB.id },
+        data: { date: daB.date, status: 'PLANNED', originalDate: null },
+      });
+    });
+
+    it('a ficha e os programas contam as sessões de todas as sessões do plano', async () => {
+      const total = await planejadasDaAna();
+      const ficha = await file.file(u.helena!, g, m.ana!);
+      const item = ficha.plans.workout.find((p) => p.offerId === offerId)!;
+      expect(item.sessionsPlanned).toBe(total);
+      const lista = await programs.list(u.helena!, g);
+      const prog = lista.items.find((i) => i.offerId === offerId)!;
+      expect(prog.progress?.planned).toBe(total);
+    });
+
+    it('no flexível, a próxima é a sessão depois da última feita', async () => {
+      const tpl = await content.createWorkoutTemplate(u.helena!, g, {
+        title: 'AB livre',
+        document: {
+          sessions: [
+            {
+              name: 'Peito',
+              items: [{ type: 'exercise', exerciseId: forca[0], targetSets: 3, targetReps: '10' }],
+            },
+            {
+              name: 'Costas',
+              items: [{ type: 'exercise', exerciseId: forca[1], targetSets: 3, targetReps: '10' }],
+            },
+          ],
+        },
+      });
+      const sent = await offers.sendToMember(u.helena!, g, m.carla!, {
+        templateId: tpl.id,
+        schedule: 'FLEXIBLE',
+      });
+      await offers.accept(u.carla!, sent.id, sent.versionId, TZ);
+      const [a, b] = await prisma.workoutPlan.findMany({
+        where: { userId: u.carla!, fromOfferId: sent.id },
+        orderBy: { sessionIndex: 'asc' },
+      });
+
+      const antes = await agenda.range(u.carla!, TZ, today, today);
+      expect(antes.flexible).toEqual([{ planId: a!.id, planName: a!.name }]);
+      expect(antes.days[0]!.items.filter((i) => i.kind === 'next')).toHaveLength(1);
+
+      await prisma.workoutSession.create({
+        data: {
+          userId: u.carla!,
+          planId: a!.id,
+          fromPlan: true,
+          startedAt: new Date(Date.now() - 2 * 86_400_000),
+          completedAt: new Date(Date.now() - 2 * 86_400_000 + 3_600_000),
+        },
+      });
+      const depois = await agenda.range(u.carla!, TZ, today, today);
+      expect(depois.flexible).toEqual([{ planId: b!.id, planName: b!.name }]);
     });
   });
 
