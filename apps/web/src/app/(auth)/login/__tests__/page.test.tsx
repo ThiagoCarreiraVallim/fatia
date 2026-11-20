@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadSocialTargets } from '@/lib/social-targets';
 import LoginPage from '../page';
+
+vi.mock('@/lib/social-targets', () => ({ loadSocialTargets: vi.fn() }));
 
 async function renderLogin(params: { next?: string; modo?: string } = {}) {
   render(await LoginPage({ searchParams: Promise.resolve(params) }));
@@ -12,6 +15,23 @@ const hidden = (name: string) =>
   form().querySelector<HTMLInputElement>(`input[type="hidden"][name="${name}"]`)?.value ?? null;
 
 describe('login (Onb-01b)', () => {
+  beforeEach(() => {
+    vi.mocked(loadSocialTargets).mockResolvedValue(['google', 'apple']);
+  });
+
+  it('esconde Google e Apple quando o Logto não tem o conector (ADR 050)', async () => {
+    vi.mocked(loadSocialTargets).mockResolvedValue(['google']);
+    await renderLogin();
+    expect(screen.getByRole('link', { name: 'Google' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Apple' })).not.toBeInTheDocument();
+
+    vi.mocked(loadSocialTargets).mockResolvedValue([]);
+    document.body.innerHTML = '';
+    await renderLogin();
+    expect(screen.queryByRole('link', { name: 'Google' })).not.toBeInTheDocument();
+    expect(screen.queryByText('ou')).not.toBeInTheDocument();
+  });
+
   it('abre em "Criar conta": nome e e-mail vão ao Logto na tela de cadastro, sem senha aqui', async () => {
     await renderLogin();
     expect(screen.getByRole('tab', { name: 'Criar conta' })).toHaveAttribute(
