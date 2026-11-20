@@ -89,7 +89,7 @@ Mitigações:
 ### Negativas
 
 - Dependemos de uma API do Logto que é menos estável que o OIDC; um upgrade do Logto precisa
-  rodar `pnpm vitest` do api-client e o roteiro de `TESTAR_O_APP.md`.
+  rodar `pnpm --filter @fatia/api-client test` e o roteiro de `TESTAR_O_APP.md`.
 - O cadastro precisa do conector de e-mail (SMTP) no Logto: o Logto exige e-mail verificado para
   cadastro por e-mail.
 - A web continua na tela do Logto (fora deste escopo).
