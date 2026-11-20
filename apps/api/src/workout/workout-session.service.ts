@@ -147,6 +147,12 @@ export interface PlannedExerciseView {
   loadMode: 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
   startLoadKg: number | null;
   loadPercent: number | null;
+  /**
+   * PERCENT_1RM (#406): a carga em kg do `loadPercent` sobre o 1RM estimado
+   * da pessoa (melhor série de força deste exercício), arredondada a 0,5 kg.
+   * Nulo sem histórico ("sem 1RM") ou em outro modo de carga.
+   */
+  percentLoadKg: number | null;
   warmupBefore: boolean;
   /** Nulo = o descanso padrão da sessão. */
   restSeconds: number | null;
@@ -765,6 +771,7 @@ export class WorkoutSessionService {
       loadMode: pe.loadMode,
       startLoadKg: pe.startLoadKg,
       loadPercent: pe.loadPercent,
+      percentLoadKg: null,
       warmupBefore: pe.warmupBefore,
       restSeconds: pe.restSeconds,
       technique: pe.technique,
