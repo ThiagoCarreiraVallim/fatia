@@ -1,19 +1,27 @@
 import type { Metadata, Viewport } from 'next';
-import { Manrope, Sora } from 'next/font/google';
+import localFont from 'next/font/local';
 import { palettes } from '@fatia/design';
 import './globals.css';
 import { Providers } from './providers';
 import { ServiceWorkerRegister } from '@/components/sw-register';
 import { THEME_SCRIPT } from '@/lib/theme-script';
 
-// DS v2 "Noite" (#368): Manrope no texto, Sora em números e títulos. O
-// next/font serve as fontes do próprio domínio (nada vai ao Google no acesso).
-const manrope = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+// DS v2 "Noite" (#368): Manrope no texto, Sora em números e títulos. As fontes
+// ficam no repositório (variáveis, subconjunto latin, licença OFL em ./fonts):
+// com `next/font/google` o build baixava do Google e falhava sempre que a
+// resposta vinha vazia — derrubou o CI várias vezes e um deploy de produção.
+const manrope = localFont({
+  src: './fonts/manrope-latin.woff2',
+  weight: '200 800',
   variable: '--font-manrope',
+  display: 'swap',
 });
-const sora = Sora({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-sora' });
+const sora = localFont({
+  src: './fonts/sora-latin.woff2',
+  weight: '100 800',
+  variable: '--font-sora',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Fatia',
