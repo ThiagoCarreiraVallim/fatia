@@ -142,6 +142,12 @@ futura:
   ou do dono; reordenar é de quem tem `member.plans`. A anotação não é privada: a pessoa vê, só
   leitura, e ela some quando a pessoa sai da comunidade. Editar ou apagar a anotação é do autor
   ou do dono.
+- **Assentos, programas e ofertas (#403) são dinheiro: `billing.read`/`billing.manage`, só o
+  dono.** Programas por aluno (Pn-30, `GET plan-programs`) é `member.file` (dono e profissional,
+  com "profissionais veem só quem acompanham"): o plano é da equipe, mas status e progresso são
+  dado de Treino e só saem pela porta de leitura, com Treino liberado para quem olha e cada
+  leitura na trilha da pessoa; sem isso a linha diz "enviado". O membro nunca vê fatura, preço
+  nem atraso da comunidade (o `get_me` mostra só a origem e o fim do PRO).
 - **"Para revisar" e "Em risco" (#399): `panel.review` é do dono e do profissional.** O papel
   só abre a tela: cada pessoa aparece só com `ProfessionalLink` ativo com quem olha, e cada
   categoria lida (treino, metas, e no em risco também alimentação, corpo e hábitos) passa pela

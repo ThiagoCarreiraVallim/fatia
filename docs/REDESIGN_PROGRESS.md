@@ -774,7 +774,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | Issue | Título                                         | Estado           | Superfícies                            |
 | ----- | ---------------------------------------------- | ---------------- | -------------------------------------- |
 | #404  | Painel: equipe, papéis e permissões            | pronto na branch | api, db, api-client, web, mobile, docs |
-| #403  | Painel: assentos, faturas, programas e ofertas | a fazer          |                                        |
+| #403  | Painel: assentos, faturas, programas e ofertas | pronto na branch | api, db, api-client, web, mobile, docs |
 | #405  | Painel: biblioteca e enviar para alunos        | a fazer          |                                        |
 | #406  | Painel: editor de plano de treino              | a fazer          |                                        |
 | #407  | Painel: editor de alimentação                  | a fazer          |                                        |
@@ -820,6 +820,27 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **Tabela no celular:** a coluna "Ação" fica fixa e quebra linha ao rolar de lado; antes só Dono e meia coluna de Admin apareciam, sem rótulo ao rolar.
   - **Histórico:** especialidade nova sai "pôs Renata como nutricionista", e a que some "tirou a especialidade de X (era personal)", em vez de "de — para".
   - Conferido: o menu de baixo e o treino em andamento não cobrem botões (o fim da página rola acima deles) e não há texto escuro no escuro. A prancha marca o "Convidar para a equipe" na barra do topo; na web ele fica no cabeçalho da página, porque a barra do topo é a do painel (#398). O "N" no canto é o indicador do Next em dev.
+
+#403 (branch `redesign/403-assentos-faturas`; migration `20261120300000_programs_and_offers`; envs novas `OFFERS_SALES_ENABLED` e `OFFERS_PLATFORM_FEE_PERCENT`; nenhuma tool nova no MCP, o `get_me` ganha o campo `pro`; sem ADR nova, segue a 025):
+
+- **Decisões (orquestrador):**
+  - **Preço do assento R$ 14,90 por mês** (o do código, `BILLING_SEAT_MONTHLY_CENTS`); a prancha Ex-04 com R$ 9,90 estava desatualizada.
+  - **A carência conta do `graceEndsAt`** (`pool.graceDaysLeft`, no fuso do provedor), não do número da prancha.
+  - **Falta de pagamento só pausa a IA hospedada**; registro e histórico nunca somem. Nenhum membro é avisado da fatura da academia: o Ex-04 vai só ao dono.
+  - **Nomes:** "Programa" para assentos com período (Pn-07) e para planos com datas por aluno (Pn-30, Conteúdo › Programas); "Ofertas" para o que se vende (Pn-37, Comunidade › Ofertas), que pode ligar um programa.
+  - **`ALL_MEMBERS`, cobrança por aluno ativo e Lite ficam adiados** (#288, #289, #290); ADR 025 vale.
+  - **Venda pelo Asaas desligada por flag** (`OFFERS_SALES_ENABLED=false`): o painel monta, publica e copia o link; o checkout público é da #421. Taxa da plataforma em `OFFERS_PLATFORM_FEE_PERCENT` (0 até decidir).
+  - **Pagamento é o `paymentUrl` do Asaas**, sem guardar dado de cartão; o cartão "Pagamento" diz "pelo Asaas" (a prancha mostra "cartão final 4821", que o Fatia não guarda).
+  - **O app nunca vende fora da loja:** Ofertas não existe no app; Programas (Pn-30) entra com o painel no celular (#414).
+- **API:** `GroupProgram` (turma ou desafio, assentos, primeiro e último dia, valor = assentos × preço por mês começado de 31 dias, cobrança avulsa `group-program:<id>`); `GroupSeatAssignment.programId/startsAt/endsAt` (assentos de programa à parte do pool; os índices únicos parciais separam os dois). O direito lê a janela sem job e mostra `paidBy = PROGRAM` com o nome e o fim. Desafio: quem entra ganha o assento até acabarem (`syncChallenge`, com trava por desafio). Overview dos assentos com `graceDaysLeft`, `nextInvoice`, `overdueInvoice` e `programs`; fatura com `seats` e `proRataDays`, e o tipo `PROGRAM`. E-mail Ex-04 no `BillingReminderJob` (só ao dono, uma vez por fatura, valor real). `GET groups/:id/plan-programs` (`member.file`, Pn-30): os planos com começo e fim por aluno; status e progresso **só pela porta de leitura** com Treino liberado para quem olha (cada leitura na trilha); sem isso, "enviado". Plano de calendário que termina entra em Para revisar (`PLAN_ENDED`). Ofertas: `groups/:id/offers` (listar `billing.read`; criar, editar, publicar, encerrar, duplicar e reenviar link `billing.manage`), slug único por comunidade, link `<WEB_ORIGIN>/<slug da comunidade>/<slug>`; compras (`GroupOfferPurchase`) ligadas ao webhook por `providerPaymentId` (pago, falhou, estornado; idempotente). Export LGPD leva as compras de oferta e o período e o programa de cada assento. `get_me` traz `pro` (origem e fim, sem fatura nem preço; a descrição da tool não mudou, para não mexer na linha de base da superfície).
+- **Cliente e telas:** `seats-panel.ts` (cartões, faixa da vencida, linhas de fatura e programa, ajuste com o proporcional, preço do programa), `plan-programs.ts` (Pn-30) e `community-offers.ts` (Pn-37). Web: **Assentos** redesenhada (quatro cartões, faixa "Fatura de novembro vencida · faltam N dias" com "Pagar agora" no Asaas, faturas, Programas com "Novo programa" e "Ajustar assentos" no painel lateral, quem usa); **Programas** (abas com contagem, busca, tabela por aluno, fases do bloco, nota do Treino) e **Ofertas** (Ativas, Rascunhos, Encerradas; vendas, receita com a taxa, ativaram em 48 h, o que a pessoa recebe, página de venda com "Copiar link", pagamento que falhou com "Reenviar link de pagamento", nova oferta e editar no painel lateral, encerrar com confirmação, "Duplicar para janeiro"). Menu: Conteúdo › Programas (dono e profissional), Comunidade › Ofertas (dono); ⌘K acha as duas. No app, as duas ficam fora das abas e a fatura de programa aparece como "Programa".
+- **Isolamento:** todo id do corpo amarrado à comunidade da URL: membros da turma (ativos, da comunidade), desafio, programa e modelo de plano da oferta, oferta e compra do reenvio (de outra comunidade dá 404). Coberto em `programs.integration.spec.ts`, `offers.integration.spec.ts` e `plan-programs.integration.spec.ts`; o webhook em `offer-purchase-webhook.integration.spec.ts`.
+- **Fora (vai para outras issues):**
+  - Checkout público da oferta, cupom, conta depois do pagamento, recebíveis, reembolso na tela, mensagem pós-compra e nota fiscal (#421).
+  - Editar a turma de um programa depois de criado e cancelar um programa.
+  - "Etiquetas" do Pn-30 vêm só do nível do modelo de onde o plano saiu; não há etiqueta livre.
+  - "Cartão final 4821" e a forma de pagamento do Asaas no cartão "Pagamento".
+  - `ALL_MEMBERS`, cobrança por aluno ativo e Lite (#288, #289, #290).
 
 ## Etapas seguintes
 
