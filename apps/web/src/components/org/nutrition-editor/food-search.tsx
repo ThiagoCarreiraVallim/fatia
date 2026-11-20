@@ -80,7 +80,10 @@ export function FoodSearch({
         />
       </div>
       {term.length >= 2 && (
-        <ul className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle">
+        <ul
+          aria-label="Alimentos encontrados"
+          className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle"
+        >
           {shown.length === 0 ? (
             <li className="p-3 text-xs text-muted-foreground">
               {search.isFetching ? 'Buscando...' : 'Nada com esse nome na TACO.'}

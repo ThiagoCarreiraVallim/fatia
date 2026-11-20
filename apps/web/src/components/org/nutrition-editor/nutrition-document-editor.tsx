@@ -514,7 +514,7 @@ function MealCard({
                   className={cn('py-2', group && 'border-l-2 border-l-primary/60 pl-2')}
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="min-w-0 flex-1 basis-40">
+                    <span className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                       <span className="block truncate text-sm font-semibold">{it.foodName}</span>
                       <span className="block truncate text-xs text-muted-foreground">
                         <span>{amountLine(it)}</span>
@@ -526,16 +526,16 @@ function MealCard({
                         type="button"
                         aria-label={`Equivalentes: ${groupChip(group)}`}
                         onClick={() => onOpenGroup(group.key)}
-                        className="rounded-chip border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+                        className="mr-auto rounded-chip border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary sm:mr-0 hover:bg-primary/10"
                       >
                         {groupChip(group)}
                       </button>
                     ) : (
-                      <span className="rounded-chip border border-subtle px-2 py-0.5 text-xs text-muted-foreground">
+                      <span className="mr-auto rounded-chip border border-subtle sm:mr-0 px-2 py-0.5 text-xs text-muted-foreground">
                         sem equivalentes
                       </span>
                     )}
-                    <span className="w-20 text-right text-sm font-semibold tabular-nums">
+                    <span className="text-right sm:w-20 text-sm font-semibold tabular-nums">
                       {kcalText(it.kcal)}
                     </span>
                     <span className="flex">
@@ -559,7 +559,7 @@ function MealCard({
                     </span>
                   </div>
                   {open && (
-                    <div className="mt-2 grid gap-3 rounded-xl bg-muted/40 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                    <div className="mt-2 grid gap-3 rounded-xl bg-muted/40 p-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] sm:items-end">
                       <AmountField value={it} onChange={(next) => setItem(ii, next)} />
                       <div className="space-y-1">
                         <span aria-hidden className="block text-xs text-muted-foreground">

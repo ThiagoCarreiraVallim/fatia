@@ -190,7 +190,7 @@ export function NutritionTemplateEditor({
               </Button>
             </div>
           </div>
-          <p className="-mt-2 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {template
               ? `Plano alimentar · por ${template.authorName} · alimentos e medidas caseiras da TACO`
               : 'Plano alimentar · alimentos e medidas caseiras da TACO'}
