@@ -220,6 +220,12 @@ No espírito da seção homônima do [`THREAT_MODEL.md`](./THREAT_MODEL.md): sup
   vizinho no eixo, porque só o vizinho é o mesmo nas três janelas. Custa mais utilidade: às vezes
   cai junto uma célula grande, que era justamente a que dava valor ao recorte.
 
+- **Diferenças entre contagens de pessoas no relatório do mês (#400).** O acumulado de membros
+  ativos sai por semana; a diferença entre duas semanas seguidas é quantas pessoas treinaram
+  pela primeira vez no mês naquela semana, e pode ser 1. Do mesmo jeito, "sem treino há N+ dias"
+  menos quem nunca treinou no mês (`optIn − ativos`) pode dar um número pequeno. São contagens de
+  pessoas (quantas começaram, quantas pararam), sem valor de treino nem dado de saúde; ficam
+  como estão, registradas aqui.
 - **Conhecimento externo.** O dono conhece a academia dele. Nenhuma regra estatística impede que
   ele olhe um número agregado e se lembre de quem faltou. O que este documento garante é que o
   **sistema** não conta.
@@ -254,12 +260,42 @@ usam o mesmo `MIN_CELL` e o `binarySplit` da visão geral:
 
 - **Base:** só membros ativos com `statsOptIn`, no numerador e no denominador; só treino conta
   (§6, §7). Planos e revisões contam ofertas e comentários da equipe a quem aceitou.
-- **Semanas, dias e desafios:** cada célula com menos de 5 (ou com menos de 5 do outro lado)
-  sai como `null`; a frase "quem participa registra N× mais" exige 5 de cada lado.
-- **Origens:** linha com menos de 5 que entraram fica oculta; taxa só com 5 de cada lado
-  (ativou e não ativou). O total de "entraram" só aparece se as linhas ocultas somam 5 ou mais
-  e sobra 5 ou mais além delas (bloco seguro), e a taxa total exige que o resto das linhas sem
-  taxa tenha 5 ou mais de cada lado — senão o total menos as linhas visíveis revelaria a oculta.
+- **Só mês fechado.** O relatório não abre o mês corrente: um mês que anda muda a cada dia, e o
+  total de um dia menos o do dia anterior seria o dia de uma pessoa. A lista vai do mês passado
+  a 12 meses atrás.
+- **Retrato do mês.** O mês fechado é calculado uma vez e gravado (`MonthReportSnapshot`,
+  único por comunidade e mês, gravado com `skipDuplicates`: leituras simultâneas ficam com o
+  mesmo retrato). Depois disso, quem sai da comunidade não muda o número de outubro, e a saída
+  não se revela pela diferença. **Risco que sobra:** o primeiro cálculo de um mês antigo, feito
+  depois que a funcionalidade entrou (ou na primeira leitura de um mês que ninguém abriu),
+  usa a base daquele momento — quem já tinha saído não entra, e um retrato tirado antes da saída
+  (se houvesse) diferiria do tirado depois. Daqui para a frente, o e-mail do 1º dia útil tira o
+  retrato logo que o mês fecha.
+- **Semanas e total (supressão complementar, §2).** Semana com menos de 5 de um lado (treinou /
+  não treinou) sai como `null`. O total do mês menos as semanas visíveis devolve a soma das
+  ocultas, então ela só pode sair se quem treinou nas semanas ocultas, somadas, passa pela
+  regra de dois lados. Se não passa, a menor semana visível some junto; se ainda não passa,
+  o total, o "por membro ativo", a variação e a média das semanas não saem. A variação contra o
+  mês anterior usa o total do mês anterior só se ele passaria pela mesma regra.
+- **Ativos ao longo do mês:** acumulado por semana (último dia de cada bloco de 7 dias), não
+  por dia.
+- **Desafios:** cada célula com menos de 5 (ou com menos de 5 do outro lado) sai como `null`; a
+  frase "quem participa registra N× mais" exige 5 de cada lado. "Em andamento" é no fim do mês.
+- **Origens: linhas pequenas.** Linha com menos de 5 não sai com rótulo, nem como "amostra
+  pequena": a linha "Convite da Ana" com uma pessoa só diria que a Ana aceitou entrar nas
+  estatísticas. As pequenas somam numa "Outras origens" sem rótulo; se a soma também tem menos
+  de 5, elas saem de tudo, inclusive do total (que é sempre a soma das linhas mostradas, então
+  total menos linhas não devolve nada). Taxa só com 5 de cada lado; a taxa total exige que as
+  linhas sem taxa somem 5 ou mais de cada lado.
+- **Origens: 30 dias − 7 dias.** As duas janelas terminam ontem, então os 30 dias menos os 7
+  dias são quem entrou entre o 8º e o 30º dia. Nos 30 dias, cada linha (e o total) é comparada
+  com a mesma linha dos 7 dias: se a diferença de quem entrou é de 1 a 4, o "entraram" dos 30
+  dias não sai; se a diferença de ativou / não ativou não é 0 e 0 nem 5 e 5 ou mais, a ativação
+  dos 30 dias não sai; e uma linha suprimida assim tira o total correspondente. **Escolha:**
+  suprime-se os 30 dias, não os 7. A janela curta é a que a equipe usa para agir (o convite da
+  semana), e quando a diferença é pequena os 30 dias quase repetem os 7 — perde-se pouco.
+  A comparação é por linha consolidada; quem compara uma linha grande dos 30 dias com a
+  "Outras origens" dos 7 dias (em que a mesma origem ainda era pequena) não é coberto.
 - **Períodos fixos** (7 e 30 dias, meses fechados): não há janela arbitrária para subtrair uma
   da outra.
 
