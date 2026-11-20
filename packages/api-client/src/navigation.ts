@@ -267,6 +267,8 @@ const FOCUS_ROUTES = [
   '/workout/circuit/:id',
   // Al-T17b: o Treino livre fecha no X e tem o "Iniciar treino" embaixo, sem a barra.
   '/workout/free',
+  // Al-T9: o Como fazer tem o voltar e a estrela sobre o vídeo, sem barra.
+  '/workout/exercise/:id',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -279,6 +281,8 @@ export type NavBarMode = 'visible' | 'hidden';
 const SESSION_ROUTE = '/workout/session/:id';
 /** O relógio do circuito (Al-T4, T4b, T4c, T4d): o próprio cabeçalho, sem barra de topo. */
 const CIRCUIT_RUN_ROUTE = '/workout/circuit/:id';
+/** O Como fazer (Al-T9): o voltar e a estrela ficam sobre o vídeo. */
+const EXERCISE_DETAIL_ROUTE = '/workout/exercise/:id';
 
 /** O relógio do circuito de uma sessão (web e app). */
 export function circuitRunPath(sessionId: string): string {
@@ -391,6 +395,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout/block', title: 'Bloco de treino', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
   { pattern: '/workout/session/:id/edit', title: 'Treino atual', parent: '/workout' },
+  { pattern: '/workout/exercise/:id', title: 'Como fazer', parent: '/workout' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
   { pattern: '/you', title: 'Você', parent: null },
   { pattern: '/you/edit', title: 'Editar perfil', parent: '/you' },
@@ -540,6 +545,7 @@ export function hasTopBar(pathname: string): boolean {
   // nenhum: sem a barra e sem o voltar, nas duas pontas.
   if (match(SESSION_ROUTE, segments(pathname))) return false;
   if (match(CIRCUIT_RUN_ROUTE, segments(pathname))) return false;
+  if (match(EXERCISE_DETAIL_ROUTE, segments(pathname))) return false;
   return !(TAB_ROOTS as readonly string[]).includes(path);
 }
 

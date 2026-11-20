@@ -81,6 +81,7 @@ export * from './active-workout-bar';
 export * from './workout-cards';
 export * from './scroll-reveal';
 export * from './workout-session-copy';
+export * from './exercise-video';
 export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';
