@@ -226,7 +226,8 @@ export class AccountService {
         include: {
           author: { select: { name: true } },
           group: { select: { name: true } },
-          versions: { orderBy: { version: 'asc' } },
+          // Quem editou a cópia (#406) é outra pessoa: o id dela não sai no export.
+          versions: { omit: { authorId: true }, orderBy: { version: 'asc' } },
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -300,6 +301,8 @@ export class AccountService {
         include: {
           // Circuito (#380): formato e tempos; o resultado vem na sessão (`circuit`).
           circuit: true,
+          // Circuito dentro da sessão (#406): o AMRAP no fim do treino de força.
+          circuits: true,
           exercises: {
             include: {
               exercise: { select: { id: true, name: true } },
