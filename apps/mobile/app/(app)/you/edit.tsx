@@ -246,9 +246,27 @@ function EditForm({ me }: { me: MeUser }) {
           </View>
         </View>
 
-        <Field label="E-mail" hint="Para trocar o e-mail, fale com o suporte.">
-          <View className="h-[52px] justify-center rounded-field bg-card px-[18px]">
-            <Text className="text-[15px] text-muted-foreground">{me.email}</Text>
+        <Field
+          label="E-mail"
+          hint={
+            me.emailChangeEnabled
+              ? 'Pedimos sua senha e um código no e-mail novo.'
+              : 'A troca de e-mail ainda não está disponível neste servidor.'
+          }
+        >
+          <View className="h-[52px] flex-row items-center justify-between rounded-field bg-card px-[18px]">
+            <Text className="flex-1 text-[15px] text-muted-foreground" numberOfLines={1}>
+              {me.email}
+            </Text>
+            {me.emailChangeEnabled ? (
+              <Text
+                accessibilityRole="button"
+                onPress={() => router.push('/you/email')}
+                className="font-sans-bold text-sm text-primary"
+              >
+                Trocar
+              </Text>
+            ) : null}
           </View>
         </Field>
 

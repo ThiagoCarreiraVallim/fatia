@@ -254,6 +254,7 @@ const FOCUS_ROUTES = [
   '/nutrition/goals',
   '/you/edit',
   '/you/delete',
+  '/you/email',
   '/community/new',
   // Al-T19: o Novo plano fecha no X e tem o "Criar plano" embaixo, sem a barra.
   '/workout/plans/new',
@@ -398,6 +399,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/you/news', title: 'Novidades', parent: '/you' },
   { pattern: '/you/help', title: 'Ajuda e tutoriais', parent: '/you' },
   { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
+  { pattern: '/you/email', title: 'Trocar e-mail', parent: '/you' },
   { pattern: '/you/blocked', title: 'Pessoas bloqueadas', parent: '/you' },
   { pattern: '/progress', title: 'Progresso', parent: '/you', untitled: true },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
