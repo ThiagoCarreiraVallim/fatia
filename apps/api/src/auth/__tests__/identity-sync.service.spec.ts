@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -164,47 +163,14 @@ describe('IdentitySyncService — nome e e-mail para o Logto', () => {
     expect(logto.updateUserName).toHaveBeenCalledWith(SUB, 'Ana Souza');
   });
 
-  it('troca de e-mail: confere a senha antes de mandar o código', async () => {
+  it('troca de e-mail: senha errada não manda código (o resto em email-change.integration)', async () => {
     const { service, logto } = setup();
     logto.verifyPassword.mockResolvedValue(false);
     await expect(
       service.requestEmailChange(USER.id, 'nova@x.com', 'errada'),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(logto.verifyPassword).toHaveBeenLastCalledWith(SUB, 'errada');
     expect(logto.sendEmailCode).not.toHaveBeenCalled();
-
-    logto.verifyPassword.mockResolvedValue(true);
-    await service.requestEmailChange(USER.id, ' Nova@X.com ', 'certa');
-    expect(logto.verifyPassword).toHaveBeenLastCalledWith(SUB, 'certa');
-    expect(logto.sendEmailCode).toHaveBeenCalledWith('nova@x.com');
-  });
-
-  it('troca de e-mail: código certo grava no Logto e no perfil', async () => {
-    const { service, logto, prisma } = setup();
-    const result = await service.confirmEmailChange(USER.id, 'nova@x.com', '123456');
-    expect(logto.verifyEmailCode).toHaveBeenCalledWith('nova@x.com', '123456');
-    expect(logto.updatePrimaryEmail).toHaveBeenCalledWith(SUB, 'nova@x.com');
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { email: 'nova@x.com' } }),
-    );
-    expect(result.email).toBe('nova@x.com');
-  });
-
-  it('troca de e-mail: código errado não muda nada', async () => {
-    const { service, logto, prisma } = setup();
-    logto.verifyEmailCode.mockResolvedValue(false);
-    await expect(
-      service.confirmEmailChange(USER.id, 'nova@x.com', '000000'),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(logto.updatePrimaryEmail).not.toHaveBeenCalled();
-    expect(prisma.user.update).not.toHaveBeenCalled();
-  });
-
-  it('troca de e-mail: e-mail de outra conta vira 409', async () => {
-    const { service, logto } = setup();
-    logto.updatePrimaryEmail.mockResolvedValue('in_use');
-    await expect(
-      service.confirmEmailChange(USER.id, 'outra@x.com', '123456'),
-    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('sem a Management API a troca de e-mail fica indisponível', async () => {
