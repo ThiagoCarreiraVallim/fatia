@@ -38,7 +38,7 @@ adiado; venda Asaas desligada por flag (`OFFERS_SALES_ENABLED`); paymentUrl do A
 - [x] 6. Pn-30 API + PLAN_ENDED (GET groups/:id/plan-programs)
 - [x] 7. Ofertas API (groups/:id/offers) + webhook (offer-purchase-webhook.ts) + export LGPD (offerPurchases, seatAssignments com programa)
 - [x] 8. get_me: campo `pro` (ai/pro-status.ts, AiAccessService.proStatus); descrição da tool intacta (linha de base da superfície)
-- [ ] 9. api-client FEITO (seats-panel.ts, plan-programs.ts, community-offers.ts, menu, PLAN_ENDED); web: testes vermelhos commitados (seats, programs, offers) — falta as páginas
+- [x] 9. api-client + web (seats, programs, offers) + menu + rotas; mobile só rótulo de fatura PROGRAM
 - [ ] 10. Docs (BILLING, PERMISSIONS, REDESIGN_PROGRESS, env)
 - [ ] 11. Passada visual
 - [ ] 12. merge origin/main, verdes, apagar HANDOFF e banco
