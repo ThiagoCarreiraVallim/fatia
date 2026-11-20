@@ -123,6 +123,10 @@ BILLING_SEAT_MONTHLY_CENTS=1490
 MAIL_SMTP_URL=smtps://resend:CHAVE@smtp.resend.com:465
 EMAIL_FROM=Fatia <nao-responda@fat.ia.br>
 
+# App Native "Fatia Mobile" do Logto (o mesmo EXPO_PUBLIC_LOGTO_APP_ID do app). Com ele a
+# API grava o e-mail e o nome reais a partir do ID token do login (ADR 050), sem M2M.
+LOGTO_MOBILE_APP_ID=...
+
 # Apagar a conta remove a identidade no Logto, e o primeiro acesso lê o e-mail
 # real da pessoa (sem isso o convite por e-mail não a reconhece). App M2M com a
 # role "Logto Management API access".
