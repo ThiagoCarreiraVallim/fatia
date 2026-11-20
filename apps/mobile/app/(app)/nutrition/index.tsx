@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { nutritionApi, type DayNutrient, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { ErrorState, Icon, LoadingState } from '@/components/ui';
+import { ErrorState, Icon, Skeleton, SkeletonGroup } from '@/components/ui';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 import { colors } from '@/theme/colors';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
@@ -82,7 +82,14 @@ export default function NutritionScreen() {
 
           <NutritionWeekStrip date={data} today={hojeIso()} onChange={setData} />
 
-          {resumo.isLoading ? <LoadingState label="Carregando o dia…" /> : null}
+          {resumo.isLoading ? (
+            <SkeletonGroup label="Carregando o dia">
+              <Skeleton height={208} />
+              <Skeleton height={72} />
+              <Skeleton height={72} />
+              <Skeleton height={72} />
+            </SkeletonGroup>
+          ) : null}
 
           {resumo.error ? (
             <ErrorState error={resumo.error} onRetry={() => void resumo.refetch()} />

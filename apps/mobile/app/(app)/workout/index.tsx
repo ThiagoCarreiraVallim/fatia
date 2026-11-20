@@ -21,7 +21,7 @@ import {
 } from '@fatia/api-client';
 import { WorkoutCardsCarousel } from '@/components/workout/cards/workout-cards';
 import { Screen } from '@/components/layout/screen';
-import { Carousel, ErrorState, LoadingState } from '@/components/ui';
+import { Carousel, ErrorState, Skeleton, SkeletonGroup } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
@@ -248,7 +248,13 @@ function BlockRow() {
     queryFn: () => workoutApi.getActiveBlock(),
     retry: false,
   });
-  if (block.isLoading) return null;
+  if (block.isLoading) {
+    return (
+      <SkeletonGroup label="Carregando o bloco">
+        <Skeleton height={56} />
+      </SkeletonGroup>
+    );
+  }
   const row = block.data ? blockRow(block.data) : null;
   return (
     <View className="gap-2">
@@ -435,7 +441,12 @@ export default function WorkoutScreen() {
             Seus planos
           </SectionTitle>
 
-          {plans.isLoading ? <LoadingState /> : null}
+          {plans.isLoading ? (
+            <SkeletonGroup label="Carregando seus planos" className="flex-row gap-2.5">
+              <Skeleton height={150} width={planWidth} />
+              <Skeleton height={150} width={planWidth} />
+            </SkeletonGroup>
+          ) : null}
           {plans.isError ? (
             <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
           ) : null}

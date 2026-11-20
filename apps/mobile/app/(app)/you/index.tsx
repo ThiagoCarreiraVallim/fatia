@@ -24,7 +24,7 @@ import { Screen } from '@/components/layout/screen';
 import { openLegal } from '@/components/profile/legal';
 import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { useChatAvailability } from '@/components/layout/use-ai-state';
-import { Button, useConfirm, useToast } from '@/components/ui';
+import { Button, Skeleton, SkeletonGroup, useConfirm, useToast } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { HeightSheet } from '@/components/you/height-sheet';
@@ -219,6 +219,12 @@ export default function YouScreen() {
               >
                 {user?.name ?? ''}
               </Text>
+              {!user && me.isLoading ? (
+                <SkeletonGroup label="Carregando seu perfil" className="gap-2">
+                  <Skeleton height={22} width="70%" />
+                  <Skeleton height={12} width="45%" />
+                </SkeletonGroup>
+              ) : null}
               {user ? (
                 <Text numberOfLines={1} className="text-xs text-faint">
                   {youHeaderLine(user)}
