@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma.service';
+import { dateInTz } from '../../progress/helpers/date-tz';
 import { AsaasProvider } from '../asaas/asaas.provider';
 import type { SeatProvider, SubscriptionProvider } from '../billing-provider.port';
 import { ProgramService } from '../program.service';
@@ -71,7 +72,8 @@ const pagamento = (
   payment: { id: extra.id ?? `pay_${Date.now()}_${ev}`, status: 'CONFIRMED', ...extra },
 });
 
-const diaIso = (n: number) => new Date(Date.now() + n * DIA).toISOString().slice(0, 10);
+/** `YYYY-MM-DD` daqui a `n` dias, no fuso do provedor (a carência conta dias de lá). */
+const diaIso = (n: number) => dateInTz(new Date(Date.now() + n * DIA), 'America/Sao_Paulo');
 
 describe('assentos, faturas e programas (#403, banco real)', () => {
   const stamp = `programas-${Date.now()}`;

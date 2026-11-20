@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { GroupRole, MembershipStatus, ShareScope, type Prisma } from '@fatia/db';
+import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
 import { assertDay } from '../common/dates';
 import { PrismaService } from '../common/prisma.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
@@ -99,10 +100,9 @@ export class MemberFileService {
         where: { subjectUserId: subjectId, groupId, revokedAt: null },
         select: { professionalId: true, scopes: true, professional: { select: { name: true } } },
       }),
-      this.prisma.groupSeatAssignment.findFirst({
-        where: { membershipId, revokedAt: null },
-        select: { id: true },
-      }),
+      // O PRO pago pela comunidade valendo agora, pela regra do portão (#403:
+      // assento de programa fora do período não conta).
+      membershipsWithEffectiveSeat(this.prisma, [membershipId]),
       this.prisma.groupMembership.findMany({
         where: { groupId, role: { in: [...TEAM_ROLES] } },
         select: { userId: true, status: true },
@@ -167,7 +167,7 @@ export class MemberFileService {
       role: target.subjectRole,
       joinedAt: target.joinedAt,
       timezone: ctx.timezone,
-      proByGroup: seat !== null,
+      proByGroup: seat.size > 0,
       followedBy: links
         .filter((l) => activeTeam.has(l.professionalId))
         .map((l) => l.professional.name)

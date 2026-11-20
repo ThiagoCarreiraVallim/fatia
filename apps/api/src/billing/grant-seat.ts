@@ -110,11 +110,11 @@ export async function concederAssento(
       });
 
   const aberta = await prisma.groupSeatAssignment.findFirst({
-    where: { poolId: cortesia.id, membershipId: membership.id, revokedAt: null },
+    where: { poolId: cortesia.id, membershipId: membership.id, revokedAt: null, programId: null },
   });
   if (!aberta) {
     const usados = await prisma.groupSeatAssignment.count({
-      where: { poolId: cortesia.id, revokedAt: null },
+      where: { poolId: cortesia.id, revokedAt: null, programId: null },
     });
     if (usados >= cortesia.seats) {
       await prisma.groupSeatPool.update({

@@ -108,7 +108,7 @@ export async function groupProOffer(
   if (!valendo) return null;
   if (pool.mode === 'ALL_MEMBERS') return 'ALL_MEMBERS';
   const ocupados = await prisma.groupSeatAssignment.count({
-    where: { poolId: pool.id, revokedAt: null, membership: { status: 'ACTIVE' } },
+    where: { poolId: pool.id, revokedAt: null, programId: null, membership: { status: 'ACTIVE' } },
   });
   return ocupados < pool.seats ? 'SEATS' : null;
 }
