@@ -120,6 +120,10 @@ futura:
   mínimo de 5 e o `statsOptIn`. A busca devolve só nome, papel e situação do membro, telas
   conforme a ação de cada tela e planos da biblioteca com `content.publish`; nunca dado de saúde.
   Um papel só com `panel.search` (a Recepção da #404) vê só nomes.
+- **Relatório do mês e origens dos convites (#400) seguem `insights.read`** (o dono), sem ação
+  nova: são agregados, com o mínimo de 5 e o `statsOptIn`. Mudar a meta da equipe, ligar o e-mail
+  mensal e escolher quem da equipe o recebe é `group.update`; o destinatário marcado precisa ser
+  profissional ou criador ativo da mesma comunidade. Os outros papéis ficam para a #404.
 - **Ficha da pessoa (#402): `member.file`, `member.plans` e `member.note` são do dono e do
   profissional.** Abrir a ficha mostra o que é da equipe (planos que ela mandou, anotações,
   agenda planejada, quem abriu a ficha); dado de saúde continua só pelo vínculo, uma categoria

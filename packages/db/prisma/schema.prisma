@@ -91,6 +91,11 @@ model User {
   /// próprio e-mail, sem login. Nulo = recebe (se `ANNOUNCEMENTS` estiver ligado).
   announcementEmailOptOutAt DateTime?
 
+  /// Descadastro do e-mail mensal do relatório (#400), pelo link do próprio
+  /// e-mail (mesmo token HMAC da #398, com outro propósito). Vale para todas as
+  /// comunidades. Nulo = recebe, se for dono ou estiver marcado pelo dono.
+  reportEmailOptOutAt DateTime?
+
   /// Quando a pessoa reordenou os planos de treino no app (#402). Nulo = a
   /// ordem ainda é a que a equipe definiu; depois disso a ordem é dela, e
   /// reordenar no painel só muda as ofertas, não a lista do app.
@@ -1834,8 +1839,21 @@ model Group {
   /// "Em risco" (#399): dias sem registrar que põem a pessoa na lista; o
   /// dobro vira "sumiu". Entre 3 e 60 (CHECK na migration).
   riskDays               Int                    @default(7)
+  /// Meta da equipe de sessões de treino por semana (#400), a linha do gráfico
+  /// do relatório. Nula = sem meta. Entre 1 e 100.000 (CHECK na migration).
+  weeklySessionsGoal     Int?
+  /// O e-mail mensal do relatório (#400) sai no 1º dia útil. O dono desliga aqui.
+  reportEmailEnabled     Boolean                @default(true)
+  /// O último mês (YYYY-MM) cujo relatório saiu por e-mail: gravado só depois
+  /// do envio. Na migration, as comunidades que já existiam começam no mês
+  /// anterior ao deploy (o 1º e-mail é o do mês do deploy).
+  reportEmailMonth       String?
+  /// Lease do envio do mês (#400): quem reivindica grava a hora; outra
+  /// instância só tenta depois que o lease vence. Falha solta o lease.
+  reportEmailClaimedAt   DateTime?
   reviewSeen             ReviewSeen[]
   sessionFeedback        SessionFeedback[]
+  monthReports           MonthReportSnapshot[]
 
   @@index([ownerId])
   @@index([type])
@@ -1888,6 +1906,9 @@ model GroupMembership {
   riskDigest        Boolean          @default(false)
   /// O dia (YYYY-MM-DD, fuso da comunidade) do último aviso diário: um por dia.
   riskDigestOn      String?
+  /// Recebe o e-mail mensal do relatório (#400). Vale só para a equipe e é o
+  /// dono quem marca; o dono recebe sempre.
+  reportEmail       Boolean          @default(false)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -3593,4 +3614,20 @@ model EmailChangeRequest {
 
   @@index([userId, createdAt])
   @@index([email, createdAt])
+}
+
+/// O relatório de um mês fechado (#400), calculado uma vez e servido daqui
+/// depois: quem sai da comunidade não muda o número de um mês que passou (e
+/// não se revela pela diferença). Só agregado, já suprimido; sem nenhum id
+/// de pessoa. Sai com a comunidade.
+model MonthReportSnapshot {
+  id        String   @id @default(uuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// YYYY-MM, no fuso da comunidade.
+  month     String
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, month])
 }

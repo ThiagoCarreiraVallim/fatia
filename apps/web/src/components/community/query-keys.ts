@@ -69,6 +69,12 @@ export const orgKeys = {
     ['community', 'org', groupId, 'moderation', 'announcements', 'settings'] as const,
   announcementsRecent: (groupId: string) =>
     ['community', 'org', groupId, 'moderation', 'announcements', 'recent'] as const,
+  /** Relatório do mês e origens dos convites (#400): só quem lê os agregados. */
+  monthReport: (groupId: string, month: string | undefined) =>
+    ['community', 'org', groupId, 'report', month ?? 'default'] as const,
+  reportSettings: (groupId: string) => ['community', 'org', groupId, 'report', 'settings'] as const,
+  inviteOrigins: (groupId: string, days: number) =>
+    ['community', 'org', groupId, 'invites', 'origins', days] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

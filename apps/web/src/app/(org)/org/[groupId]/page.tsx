@@ -26,6 +26,7 @@ import {
 import { useOrgGroup } from '@/components/org/org-shell';
 import { InsightsCard } from '@/components/org/insights-card';
 import { AnnouncementEditor } from '@/components/org/announcement-editor';
+import { linePaths } from '@/components/org/chart-paths';
 import { readOverviewColumns, writeOverviewColumns } from '@/components/org/panel-prefs';
 import { useOptionalSidePanel } from '@/components/org/side-panel';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
@@ -130,25 +131,6 @@ const fmtDia = (key: string) => {
 };
 
 const soma = (cells: OverviewCell[]) => cells.reduce((s, c) => s + (c.value ?? 0), 0);
-
-/** Os trechos da linha; célula oculta (menos de 5 pessoas) vira um buraco. */
-function trechos(cells: OverviewCell[], max: number): string[] {
-  const passo = cells.length > 1 ? 1000 / (cells.length - 1) : 0;
-  const out: string[] = [];
-  let atual: string[] = [];
-  cells.forEach((c, i) => {
-    if (c.value === null) {
-      if (atual.length) out.push(atual.join(' '));
-      atual = [];
-      return;
-    }
-    const x = (i * passo).toFixed(1);
-    const y = (190 - (c.value / max) * 175).toFixed(1);
-    atual.push(`${atual.length ? 'L' : 'M'}${x} ${y}`);
-  });
-  if (atual.length) out.push(atual.join(' '));
-  return out;
-}
 
 type Serie = 'workouts' | 'people';
 const SERIES: { key: Serie; label: string; cor: string }[] = [
@@ -257,7 +239,7 @@ function Atividade({
               />
             ))}
             {SERIES.filter((s) => visiveis[s.key]).map((s) =>
-              trechos(data[s.key], max).map((d, i) => (
+              linePaths(data[s.key], max).map((d, i) => (
                 <path
                   key={`${s.key}-${i}`}
                   d={d}
@@ -670,9 +652,17 @@ export default function OrgOverviewPage() {
 
       {dono ? (
         <section aria-labelledby="relatorio" className="space-y-3 pt-2">
-          <h2 id="relatorio" className="text-sm font-semibold">
-            Relatório
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="relatorio" className="text-sm font-semibold">
+              Retenção e comportamento
+            </h2>
+            <Link
+              href={panelHref(g.id, 'report')}
+              className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Relatório do mês <ChevronRight size={14} aria-hidden />
+            </Link>
+          </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <InsightsCard
               groupId={g.id}

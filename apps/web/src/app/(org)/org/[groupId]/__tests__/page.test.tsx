@@ -128,6 +128,10 @@ describe('painel › visão geral (Pn-01, #398)', () => {
     );
     expect(screen.getByText('painel Retenção')).toBeInTheDocument();
     expect(screen.queryByText('painel Comportamento')).toBeNull();
+    expect(screen.getByRole('link', { name: /Relatório do mês/ })).toHaveAttribute(
+      'href',
+      '/org/g1/report',
+    );
     expect(panelApi.overview).toHaveBeenCalledWith('g1', 30);
   });
 

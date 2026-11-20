@@ -349,6 +349,10 @@ export class MembershipService {
       consentScopes: scopes,
       consentAt: at,
       statsOptIn: params.consent.statsOptIn,
+      // Quem volta (ou é reativado) não herda o que marcou antes: e-mail do
+      // relatório (#400) e aviso diário de em risco (#399) recomeçam desligados.
+      reportEmail: false,
+      riskDigest: false,
       // Entrada nova (com `via`) reescreve a origem e o responsável: quem volta
       // por outro caminho não herda o de antes. Na aprovação, fica o do pedido.
       ...(params.via
@@ -610,7 +614,14 @@ export class MembershipService {
     const [membership, ...resto] = (await this.prisma.$transaction([
       this.prisma.groupMembership.update({
         where: { id: alvo.id },
-        data: { role, ...(role !== GroupRole.MEMBER ? { accompaniedById: null } : {}) },
+        // Papel novo, escolhas novas: e-mail do relatório (#400) e aviso diário
+        // de em risco (#399) são do papel de antes e recomeçam desligados.
+        data: {
+          role,
+          reportEmail: false,
+          riskDigest: false,
+          ...(role !== GroupRole.MEMBER ? { accompaniedById: null } : {}),
+        },
       }),
       ...vinculos,
       ...cancelaAgendados,

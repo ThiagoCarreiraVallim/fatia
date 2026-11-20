@@ -37,14 +37,32 @@ describe('/descadastro (#398)', () => {
   });
 
   it('quem recebe vê o botão de parar', async () => {
-    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: true });
+    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: true, topic: 'announcements' });
     await abrir({ t: 'x' });
     expect(screen.getByRole('button', { name: 'Não receber mais por e-mail' })).toBeInTheDocument();
   });
 
   it('o botão que falhou por limite diz para tentar de novo', async () => {
-    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: true });
+    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: true, topic: 'announcements' });
     await abrir({ t: 'x', erro: '1' });
     expect(screen.getByRole('alert')).toHaveTextContent('Não deu agora. Tente de novo.');
+  });
+
+  it('o link do relatório mensal fala do relatório, não dos comunicados (#400)', async () => {
+    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: true, topic: 'report' });
+    await abrir({ t: 'x' });
+    expect(screen.getByRole('heading', { name: 'E-mail do relatório mensal' })).toBeInTheDocument();
+    expect(screen.getByText(/relatório mensal das comunidades que você administra/)).toBeVisible();
+    expect(screen.queryByText(/comunicados/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Não receber mais por e-mail' })).toBeInTheDocument();
+  });
+
+  it('relatório já desligado: confirma e oferece voltar', async () => {
+    sub.fetch.mockResolvedValue({ kind: 'ok', subscribed: false, topic: 'report' });
+    await abrir({ t: 'x', ok: 'off' });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Pronto: você não recebe mais o relatório mensal por e-mail.',
+    );
+    expect(screen.getByRole('button', { name: 'Voltar a receber por e-mail' })).toBeInTheDocument();
   });
 });

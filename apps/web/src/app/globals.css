@@ -419,3 +419,74 @@
     top: 0;
   }
 }
+
+/*
+ * "Baixar PDF" do relatório do mês (#400): a impressão do navegador. Só o
+ * relatório sai no papel; o menu, a barra e os controles (`print:hidden`) somem.
+ */
+@media print {
+  body:has(#month-report) * {
+    visibility: hidden;
+  }
+  body:has(#month-report) #month-report,
+  body:has(#month-report) #month-report * {
+    visibility: visible;
+  }
+  body:has(#month-report) #month-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  /*
+   * O papel é sempre claro: no tema escuro, sem "gráficos de fundo" o texto
+   * claro sumiria no branco. Mesmos tokens do tema claro.
+   */
+  html:has(#month-report),
+  body:has(#month-report) {
+    background: #fff;
+  }
+  #month-report {
+    color-scheme: light;
+    --background: 80 13% 95.5%; /* #f4f5f2 */
+    --foreground: 100 7.3% 8%; /* #141613 */
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 100 7.3% 8%; /* #141613 */
+    --popover: 0 0% 100%; /* #ffffff */
+    --popover-foreground: 100 7.3% 8%; /* #141613 */
+    --primary: 108.5 100% 44.9%; /* #2ce500 */
+    --primary-foreground: 102.9 67.7% 6.1%; /* #0b1a05 */
+    --primary-text: 107.7 100% 24.9%; /* #1a7f00 */
+    --secondary: 85.7 11.5% 88%; /* #e1e4dd */
+    --secondary-foreground: 100 7.3% 8%; /* #141613 */
+    --muted: 84 12.8% 92.4%; /* #eceee9 */
+    --muted-foreground: 93.3 5.7% 31.2%; /* #4f544b */
+    --faint-foreground: 96 5% 39.6%; /* #646a60 */
+    --surface-3: 85.7 11.5% 88%; /* #e1e4dd */
+    --accent: 90 28.6% 89%; /* #e3ebdb */
+    --accent-foreground: 100 7.3% 8%; /* #141613 */
+    --destructive: 4.2 76.5% 40%; /* #b42318 */
+    --destructive-foreground: 0 0% 100%; /* #ffffff */
+    --border: 85.7 11.5% 88%; /* #e1e4dd */
+    --border-strong: 86.7 8.9% 80.2%; /* #cdd1c8 */
+    --input: 86.7 8.9% 80.2%; /* #cdd1c8 */
+    --ring: 107.7 100% 24.9%; /* #1a7f00 */
+    --danger: 4.2 76.5% 40%; /* #b42318 */
+    --success: 157.3 83.5% 26.1%; /* #0b7a50 */
+    --warning: 39.1 100% 27.1%; /* #8a5a00 */
+    --info: 212.9 76.4% 43.1%; /* #1a66c2 */
+    --ok: 107.7 100% 24.9%; /* #1a7f00 */
+    --kcal: 100 7.3% 8%; /* #141613 */
+    --protein: 221.2 83.2% 53.3%; /* #2563eb */
+    --carbs: 107.7 100% 24.9%; /* #1a7f00 */
+    --fat: 5.2 60.2% 45.3%; /* #b93a2e */
+    --water: 212.9 76.4% 43.1%; /* #1a66c2 */
+    --steps: 172.9 78.5% 25.5%; /* #0e7468 */
+    --brand: 25.2 100% 55.1%; /* #ff7a1a */
+    --brand-foreground: 27.1 100% 6.1%; /* #1f0e00 */
+    --sunken: 84 9.8% 90%; /* #e6e8e3 */
+    --border-subtle: 0 0% 0% / 0.06;
+    --primary-soft: 108.5 100% 44.9% / 0.16;
+    --brand-soft: 25.2 100% 55.1% / 0.14;
+    color: hsl(var(--foreground));
+  }
+}

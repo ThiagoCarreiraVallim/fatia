@@ -1,5 +1,8 @@
 import { ReviewController } from './review.controller';
 import { ReviewService } from './review.service';
+import { ReportController } from './report.controller';
+import { ReportService } from './report.service';
+import { ReportEmailService } from './report-email.service';
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../common/common.module';
 import { GoalsModule } from '../goals/goals.module';
@@ -152,6 +155,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     MemberFileController,
     MyMemberNotesController,
     ReviewController,
+    ReportController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -168,6 +172,8 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     MemberFileService,
     MemberNoteService,
     ReviewService,
+    ReportService,
+    ReportEmailService,
     ContentService,
     GroupExerciseService,
     GroupAgentService,

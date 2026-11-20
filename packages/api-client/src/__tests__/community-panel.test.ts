@@ -46,9 +46,11 @@ describe('quem abre o painel e com que seções', () => {
     expect(panelSections('OWNER').map((s) => s.section)).toEqual([
       'overview',
       'review',
+      'report',
       'members',
       'invites',
       'activation',
+      'origins',
       'content',
       'exercises',
       'challenges',
@@ -89,6 +91,8 @@ describe('quem abre o painel e com que seções', () => {
     expect(activePanelSection('/org/g1/invites?x=1')).toBe('invites');
     expect(activePanelSection('/org/g1/activation')).toBe('activation');
     expect(activePanelSection('/org/g1/challenges')).toBe('challenges');
+    expect(activePanelSection('/org/g1/report?month=2026-10')).toBe('report');
+    expect(panelHref('g1', 'origins')).toBe('/org/g1/origins');
   });
 });
 

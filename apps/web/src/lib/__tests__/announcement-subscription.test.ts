@@ -26,7 +26,11 @@ describe('descadastro do e-mail de comunicados (#398)', () => {
   it('lê pelo GET e muda só pelo POST, com o token', async () => {
     const f = vi.fn().mockResolvedValue(res(200, { subscribed: true }));
     vi.stubGlobal('fetch', f);
-    expect(await fetchAnnouncementSubscription(TOKEN)).toEqual({ kind: 'ok', subscribed: true });
+    expect(await fetchAnnouncementSubscription(TOKEN)).toEqual({
+      kind: 'ok',
+      subscribed: true,
+      topic: 'announcements',
+    });
     expect(f.mock.calls[0]![0]).toContain(`/api/email/announcements/subscription?t=${TOKEN}`);
     await setAnnouncementSubscription(TOKEN, false);
     expect(f.mock.calls[1]![1]).toMatchObject({
@@ -55,6 +59,27 @@ describe('descadastro do e-mail de comunicados (#398)', () => {
     expect(f.mock.calls[0]![1]).toMatchObject({
       method: 'POST',
       body: 'List-Unsubscribe=One-Click',
+    });
+  });
+
+  it('o mesmo link serve ao relatório mensal (#400): a API diz qual e-mail o token muda', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res(200, { subscribed: true, kind: 'report' })),
+    );
+    expect(await fetchAnnouncementSubscription(TOKEN)).toEqual({
+      kind: 'ok',
+      subscribed: true,
+      topic: 'report',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res(200, { subscribed: false, kind: 'announcements' })),
+    );
+    expect(await setAnnouncementSubscription(TOKEN, false)).toEqual({
+      kind: 'ok',
+      subscribed: false,
+      topic: 'announcements',
     });
   });
 });

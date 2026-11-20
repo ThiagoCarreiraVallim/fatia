@@ -505,6 +505,8 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/members/:membershipId', title: 'Membro', parent: '/org/:id/members' },
   { pattern: '/org/:id/invites', title: 'Convites', parent: '/org/:id' },
   { pattern: '/org/:id/activation', title: 'Ativação pendente', parent: '/org/:id' },
+  { pattern: '/org/:id/origins', title: 'Origem dos convites', parent: '/org/:id' },
+  { pattern: '/org/:id/report', title: 'Relatório', parent: '/org/:id' },
   { pattern: '/org/:id/seats', title: 'Assentos', parent: '/org/:id' },
   { pattern: '/org/:id/settings', title: 'Configurações', parent: '/org/:id' },
   { pattern: '/org/:id/content', title: 'Planos e dicas', parent: '/org/:id' },

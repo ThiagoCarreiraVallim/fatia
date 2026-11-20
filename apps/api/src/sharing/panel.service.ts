@@ -105,8 +105,10 @@ export interface PanelSearchResult {
 export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] = [
   { key: 'overview', label: 'Visão geral', group: 'Acompanhar', action: 'panel.overview' },
   { key: 'review', label: 'Para revisar', group: 'Acompanhar', action: 'panel.review' },
+  { key: 'report', label: 'Relatório', group: 'Acompanhar', action: 'insights.read' },
   { key: 'members', label: 'Membros', group: 'Pessoas', action: 'invite.create' },
   { key: 'invites', label: 'Convites', group: 'Pessoas', action: 'invite.create' },
+  { key: 'origins', label: 'Origem dos convites', group: 'Pessoas', action: 'insights.read' },
   { key: 'seats', label: 'Assentos e faturas', group: 'Pessoas', action: 'billing.read' },
   { key: 'content', label: 'Planos e dicas', group: 'Conteúdo', action: 'content.publish' },
   { key: 'exercises', label: 'Exercícios', group: 'Conteúdo', action: 'content.publish' },
