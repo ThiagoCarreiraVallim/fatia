@@ -126,7 +126,7 @@ function Assentos({ g }: { g: MyGroup }) {
                   {f.dueDate ? dia(f.dueDate) : dia(f.createdAt)}
                 </Text>
                 <Text className="text-xs text-muted-foreground">
-                  {`${f.kind === 'ADJUSTMENT' ? 'Proporcional' : 'Mensalidade'} · ${invoiceStatusLabel(f.status)}`}
+                  {`${f.kind === 'ADJUSTMENT' ? 'Proporcional' : f.kind === 'PROGRAM' ? 'Programa' : 'Mensalidade'} · ${invoiceStatusLabel(f.status)}`}
                 </Text>
               </View>
               <Text className="text-sm text-foreground">{formatBRL(f.amountCents)}</Text>
