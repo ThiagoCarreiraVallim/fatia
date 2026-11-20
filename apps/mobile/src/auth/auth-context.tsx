@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { fetch as expoFetch } from 'expo/fetch';
 import * as AuthSession from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
@@ -194,7 +195,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [manager],
   );
 
-  const newClient = () => createExperienceClient({ endpoint: env.logtoEndpoint });
+  // `expo/fetch` respeita `redirect: 'manual'` e `credentials: 'omit'` (o `fetch`
+  // do React Native ignora os dois no Android): o cliente guarda o cookie da
+  // interação ele mesmo.
+  const newClient = () =>
+    createExperienceClient({
+      endpoint: env.logtoEndpoint,
+      fetch: expoFetch as unknown as typeof fetch,
+    });
 
   const signInWithPassword = useCallback(
     async (email: string, password: string) => {

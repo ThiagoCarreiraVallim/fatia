@@ -5,7 +5,8 @@
  * O caminho, conferido contra o Logto 1.36 (e as rotas existem no 1.30):
  *
  * 1. `GET /oidc/auth?…&response_mode=form_post` abre uma interação OIDC com PKCE
- *    e deixa o cookie `_interaction` no cookie jar do `fetch` nativo;
+ *    e devolve o cookie `_interaction`, que guardamos num jar do próprio cliente
+ *    (ver `call`), seguindo o 303 à mão;
  * 2. `PUT /api/experience` escolhe o evento (entrar, cadastrar, recuperar);
  * 3. verificação (senha ou código no e-mail), identificação e perfil;
  * 4. `POST /api/experience/submit` devolve um `redirectTo`, que seguimos (com o
@@ -360,6 +361,49 @@ type Identifier = { type: 'email'; value: string };
 export type InteractionEvent = 'SignIn' | 'Register' | 'ForgotPassword';
 /** Quantas páginas seguimos depois do submit até achar o `form_post`. */
 const MAX_HOPS = 4;
+const MAX_REDIRECTS = 5;
+
+/**
+ * Separa um `Set-Cookie` que o React Native juntou com ", ". Só corta na
+ * vírgula seguida de `nome=`: nem a data do `expires` ("Fri, 20 Nov") nem o
+ * JSON do cookie do Logto têm isso.
+ */
+export function splitSetCookie(header: string): string[] {
+  return header
+    .split(/,\s*(?=[^;,=\s]+=)/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
+
+function readSetCookies(headers: Headers): string[] {
+  const list = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.();
+  if (list && list.length > 0) return list;
+  const joined = headers.get('set-cookie');
+  return joined ? splitSetCookie(joined) : [];
+}
+
+function storeCookies(jar: Map<string, string>, setCookies: string[], now: number): void {
+  for (const raw of setCookies) {
+    const [pair = '', ...attrs] = raw.split(';');
+    const eq = pair.indexOf('=');
+    if (eq <= 0) continue;
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    const attr = (key: string) =>
+      attrs
+        .map((a) => a.trim())
+        .find((a) => a.toLowerCase().startsWith(`${key}=`))
+        ?.slice(key.length + 1);
+    const maxAge = attr('max-age');
+    const expires = attr('expires');
+    const expired =
+      value === '' ||
+      (maxAge !== undefined && Number(maxAge) <= 0) ||
+      (expires !== undefined && Date.parse(expires) <= now);
+    if (expired) jar.delete(name);
+    else jar.set(name, value);
+  }
+}
 
 export interface ExperienceClient {
   begin(authorizeUrl: string): Promise<void>;
@@ -382,6 +426,7 @@ export function createExperienceClient(opts: {
 }): ExperienceClient {
   const base = opts.endpoint.replace(/\/+$/, '');
   const fetchImpl: Fetch = opts.fetch ?? fetch;
+  const jar = new Map<string, string>();
 
   /**
    * O Logto monta `redirectTo` com o próprio `ENDPOINT`, que pode ser um
@@ -398,16 +443,37 @@ export function createExperienceClient(opts: {
     path: string,
     body?: unknown,
   ): Promise<{ status: number; text: string; json: Record<string, unknown> | null }> {
-    const res = await fetchImpl(path.startsWith('http') ? path : `${base}${path}`, {
-      method,
-      // iOS só envia e guarda o cookie da interação com `include`.
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json, text/html',
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let url = path.startsWith('http') ? sameOrigin(path) : `${base}${path}`;
+    let verb = method;
+    let payload = body === undefined ? undefined : JSON.stringify(body);
+    let res: Response;
+    for (let hop = 0; ; hop += 1) {
+      res = await fetchImpl(url, {
+        method: verb,
+        // O cookie da interação fica no `jar` daqui, não no nativo: o okhttp do
+        // Android corta o `_interaction` do Logto 1.3x (JSON com vírgula) e a
+        // interação some. Por isso também o redirect é seguido à mão — o 303 do
+        // authorize é a resposta que traz o cookie.
+        credentials: 'omit',
+        redirect: 'manual',
+        headers: {
+          Accept: 'application/json, text/html',
+          ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(jar.size > 0
+            ? { Cookie: [...jar].map(([name, value]) => `${name}=${value}`).join('; ') }
+            : {}),
+        },
+        body: payload,
+      });
+      storeCookies(jar, readSetCookies(res.headers), Date.now());
+      const location = res.headers.get('location');
+      if (res.status < 300 || res.status >= 400 || !location || hop >= MAX_REDIRECTS) break;
+      url = sameOrigin(new URL(location, url).toString());
+      if (res.status !== 307 && res.status !== 308) {
+        verb = 'GET';
+        payload = undefined;
+      }
+    }
     const text = await res.text();
     let json: Record<string, unknown> | null;
     try {
