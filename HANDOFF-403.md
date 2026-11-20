@@ -37,7 +37,7 @@ adiado; venda Asaas desligada por flag (`OFFERS_SALES_ENABLED`); paymentUrl do A
 - [x] 5. E-mail Ex-04
 - [x] 6. Pn-30 API + PLAN_ENDED (GET groups/:id/plan-programs)
 - [x] 7. Ofertas API (groups/:id/offers) + webhook (offer-purchase-webhook.ts) + export LGPD (offerPurchases, seatAssignments com programa)
-- [ ] 8. get_me (origem e fim)
+- [x] 8. get_me: campo `pro` (ai/pro-status.ts, AiAccessService.proStatus); descrição da tool intacta (linha de base da superfície)
 - [ ] 9. api-client + web (Pn-07, Pn-30, Pn-37) + menu
 - [ ] 10. Docs (BILLING, PERMISSIONS, REDESIGN_PROGRESS, env)
 - [ ] 11. Passada visual
