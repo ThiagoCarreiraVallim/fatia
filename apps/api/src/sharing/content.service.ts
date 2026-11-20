@@ -729,8 +729,13 @@ export class ContentService {
     const adopted = await this.prisma.workoutPlan.findMany({
       where: { userId, fromTemplateId: { in: rows.map((r) => r.id) } },
       select: { id: true, fromTemplateId: true },
+      // Modelo com sessões vira um plano por sessão: o adotado é o da sessão A.
+      orderBy: [{ sessionIndex: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
     });
-    const adoptedOf = new Map(adopted.map((p) => [p.fromTemplateId, p.id]));
+    const adoptedOf = new Map<string | null, string>();
+    for (const p of adopted) {
+      if (!adoptedOf.has(p.fromTemplateId)) adoptedOf.set(p.fromTemplateId, p.id);
+    }
     return memberships
       .map(({ group }) => ({
         group,

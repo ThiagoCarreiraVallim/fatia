@@ -15,7 +15,7 @@ Cada um sai com um commit de teste vermelho e depois a correção.
 - [x] D2: aceite com início no futuro espalha datas pelos planos que saíram; settle só refaz quando entram sessões
 - [x] D3: regras de cardio fora do superRefine v2
 - [x] D4: sessionKey estável (snapshot, editor, WorkoutPlan) em vez do sessionIndex
-- [ ] P1: baseVersionId no PUT da cópia → 409; a web manda e mostra a mensagem
-- [ ] P2: no mapa adoptedOf, ordenar por sessionIndex e ficar com o primeiro
+- [x] P1: baseVersionId no PUT da cópia → 409; a web manda e mostra a mensagem
+- [x] P2: no mapa adoptedOf, ordenar por sessionIndex e ficar com o primeiro
 - [ ] REDESIGN_PROGRESS: editar a cópia (member.plans + porta de leitura) × tirar (autor/dono)
 - [ ] lint, tsc e testes; merge main; push; dropar fatia_t406b; apagar este arquivo
