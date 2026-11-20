@@ -6,11 +6,13 @@ import { BadRequestException } from '@nestjs/common';
  * a API grava, e o que a API grava é o que o retrato aceita.
  */
 
-export const REP_UNITS = ['REPS', 'SECONDS'] as const;
-export const LOAD_MODES = ['WEIGHT', 'BODYWEIGHT'] as const;
+/** MAX = até a falha (sem número) e METERS = distância vêm do editor da equipe (#406). */
+export const REP_UNITS = ['REPS', 'SECONDS', 'MAX', 'METERS'] as const;
+/** PERCENT_1RM usa `loadPercent`; BAND é elástico, sem número (#406). */
+export const LOAD_MODES = ['WEIGHT', 'BODYWEIGHT', 'PERCENT_1RM', 'BAND'] as const;
 export const TECHNIQUES = ['NORMAL', 'DROP_SET', 'TO_FAILURE'] as const;
 export const PLAN_SET_KINDS = ['WARMUP', 'NORMAL', 'DROP'] as const;
-export const CARDIO_TARGETS = ['TIME', 'DISTANCE'] as const;
+export const CARDIO_TARGETS = ['TIME', 'DISTANCE', 'CALORIES'] as const;
 export const CARDIO_INTENSITIES = ['LIGHT', 'MODERATE', 'VIGOROUS'] as const;
 
 export type RepUnitValue = (typeof REP_UNITS)[number];

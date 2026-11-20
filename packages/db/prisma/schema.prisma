@@ -941,10 +941,16 @@ model WorkoutPlan {
   /// Ordem na lista de planos do app (#402): o primeiro é o treino de hoje.
   /// Nulo = depois dos ordenados, por data de criação.
   position       Int?
+  /// Sessão do plano da equipe (#406): o plano de várias sessões (A, B, C…)
+  /// vira um plano por sessão na conta da pessoa, todos com o mesmo
+  /// `fromOfferId` (ou `fromTemplateId`). 0 = a primeira. Nulo = plano solto.
+  sessionIndex   Int?
   createdAt      DateTime        @default(now())
 
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   circuit         CircuitConfig?
+  /// Circuitos no meio de uma sessão de séries (#406, Pn-09c).
+  circuits        WorkoutPlanCircuit[]
   exercises       WorkoutPlanExercise[]
   sessions        WorkoutSession[]      @relation("SessionPlan")
   fromSession     WorkoutSession?       @relation("PlanFromSession", fields: [fromSessionId], references: [id], onDelete: SetNull)
@@ -975,6 +981,42 @@ enum CircuitFormat {
   TABATA
   /// `rounds` rounds no menor tempo, com `restBetweenRoundsSeconds` entre eles.
   FOR_TIME
+}
+
+/// Formatos do bloco de circuito do editor da equipe (#406, Pn-09c). ROUNDS é
+/// o superset (2 a 3 exercícios em sequência) e o circuito sem relógio.
+enum PlanCircuitFormat {
+  AMRAP
+  EMOM
+  TABATA
+  FOR_TIME
+  ROUNDS
+}
+
+/// Circuito dentro de uma sessão de séries (#406): os exercícios dele apontam
+/// para cá (`circuitId`). Sem relógio no app por ora (o timer é o do plano
+/// `CIRCUIT`, #380): a pessoa faz os rounds como séries, na ordem.
+model WorkoutPlanCircuit {
+  id                       String            @id @default(uuid())
+  planId                   String
+  /// "Finalizador". Opcional.
+  name                     String?
+  format                   PlanCircuitFormat
+  /// Os mesmos campos de `CircuitConfig` (AMRAP e EMOM: duração; Tabata:
+  /// trabalho, descanso e intervalos; For Time e Rounds: rounds e descanso).
+  durationSeconds          Int?
+  workSeconds              Int?
+  restSeconds              Int?
+  intervals                Int?
+  rounds                   Int?
+  restBetweenRoundsSeconds Int?
+  /// For Time: o limite de tempo (opcional).
+  timeCapSeconds           Int?
+
+  plan      WorkoutPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercises WorkoutPlanExercise[]
+
+  @@index([planId])
 }
 
 /// A configuração do circuito (#380, Al-T22). Uma por plano `CIRCUIT`; só os
@@ -1034,7 +1076,24 @@ model WorkoutPlanExercise {
   /// A faixa de FC sai da idade, na tela: aqui fica só a zona escolhida.
   cardioIntensity       CardioIntensity?
 
+  // Editor da equipe (#406, Pn-09b e Pn-09d). Opcionais: o plano antigo segue igual.
+  /// Uma série de aquecimento antes das de trabalho.
+  warmupBefore           Boolean @default(false)
+  /// Com `loadMode = PERCENT_1RM`: a porcentagem do 1RM estimado da pessoa.
+  loadPercent            Int?
+  /// Meta por calorias (`cardioTarget = CALORIES`).
+  cardioCalories         Int?
+  /// Inclinação da esteira, em %.
+  cardioInclinePercent   Float?
+  /// Intensidade por zona (1 a 5), ritmo (s/km) ou esforço (1 a 10): uma delas.
+  cardioZone             Int?
+  cardioPaceSecondsPerKm Int?
+  cardioRpe              Int?
+  /// Circuito da sessão a que este exercício pertence (#406). Nulo = série solta.
+  circuitId              String?
+
   plan     WorkoutPlan              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  circuit  WorkoutPlanCircuit?      @relation(fields: [circuitId], references: [id], onDelete: SetNull)
   exercise Exercise                 @relation(fields: [exerciseId], references: [id])
   /// Série por série (Al-T21b), opcional. Vazia = séries iguais (`targetSets` × `targetReps`).
   sets     WorkoutPlanExerciseSet[]
@@ -1043,6 +1102,7 @@ model WorkoutPlanExercise {
   /// (#378 manteve o bloqueio; repetir fica para outra issue).
   @@unique([planId, exerciseId])
   @@index([planId])
+  @@index([circuitId])
 }
 
 /// A meta de cada série, quando a pessoa configura série por série (pirâmide,
@@ -1062,14 +1122,20 @@ model WorkoutPlanExerciseSet {
   @@unique([planExerciseId, order])
 }
 
+/// MAX = até a falha ("máximo", sem número); METERS = distância (#406).
 enum PlanRepUnit {
   REPS
   SECONDS
+  MAX
+  METERS
 }
 
+/// PERCENT_1RM: `loadPercent` do 1RM estimado; BAND: elástico, sem número (#406).
 enum PlanLoadMode {
   WEIGHT
   BODYWEIGHT
+  PERCENT_1RM
+  BAND
 }
 
 enum PlanTechnique {
@@ -1087,6 +1153,7 @@ enum PlanSetKind {
 enum CardioTargetKind {
   TIME
   DISTANCE
+  CALORIES
 }
 
 enum CardioIntensity {
@@ -1490,6 +1557,10 @@ model PlanOfferVersion {
   changeNote      String?
   /// Só no FLEXIBLE (#405): último dia (YYYY-MM-DD). Nulo = sem fim.
   endDate         String?
+  /// Quem escreveu esta versão (#406): na edição da cópia pela equipe pode ser
+  /// outra pessoa que não o autor da oferta. Nulo nas antigas (= o autor) e
+  /// quando a conta sumiu. String pura, como na trilha.
+  authorId        String?
   sentAt          DateTime        @default(now())
   /// Quando a pessoa aceitou, recusou ou a versão foi substituída.
   respondedAt     DateTime?
@@ -2908,6 +2979,13 @@ model GroupPlanTemplate {
   publishedAt     DateTime?
   /// Rascunho (#405, Pn-08): não vai para a comunidade nem é enviado a ninguém.
   draft           Boolean          @default(false)
+  /// Etiquetas livres do editor (#406, Pn-09), em minúsculas.
+  tags            String[]         @default([])
+  /// Agenda (datas, cada sessão num dia) ou sequência (#406). Nulo = não disse.
+  schedule        PlanSchedule?
+  /// Período sugerido (#406), YYYY-MM-DD. O envio continua escolhendo o começo.
+  startDate       String?
+  endDate         String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 

@@ -141,19 +141,30 @@ export interface PlannedExerciseView {
   order: number;
   targetSets: number;
   targetReps: string;
-  repUnit: 'REPS' | 'SECONDS';
-  loadMode: 'WEIGHT' | 'BODYWEIGHT';
+  /** MAX (até a falha) e METERS (distância) vêm do editor da equipe (#406). */
+  repUnit: 'REPS' | 'SECONDS' | 'MAX' | 'METERS';
+  /** PERCENT_1RM: `loadPercent` do 1RM estimado; BAND: elástico (#406). */
+  loadMode: 'WEIGHT' | 'BODYWEIGHT' | 'PERCENT_1RM' | 'BAND';
   startLoadKg: number | null;
+  loadPercent: number | null;
+  warmupBefore: boolean;
   /** Nulo = o descanso padrão da sessão. */
   restSeconds: number | null;
   technique: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
   /** Já falso no último exercício: não há próximo com quem fazer o bi-set. */
   biSetWithNext: boolean;
   notes: string | null;
-  cardioTarget: 'TIME' | 'DISTANCE' | null;
+  cardioTarget: 'TIME' | 'DISTANCE' | 'CALORIES' | null;
   cardioDurationSeconds: number | null;
   cardioDistanceMeters: number | null;
   cardioIntensity: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  cardioCalories: number | null;
+  cardioInclinePercent: number | null;
+  cardioZone: number | null;
+  cardioPaceSecondsPerKm: number | null;
+  cardioRpe: number | null;
+  /** Circuito da sessão (#406): os exercícios dele seguem juntos, na ordem. */
+  circuitId: string | null;
   /** Série por série; vazia = `targetSets` séries iguais. */
   sets: Array<{
     order: number;
@@ -753,6 +764,8 @@ export class WorkoutSessionService {
       repUnit: pe.repUnit,
       loadMode: pe.loadMode,
       startLoadKg: pe.startLoadKg,
+      loadPercent: pe.loadPercent,
+      warmupBefore: pe.warmupBefore,
       restSeconds: pe.restSeconds,
       technique: pe.technique,
       biSetWithNext: pe.biSetWithNext && i < kept.length - 1,
@@ -761,6 +774,12 @@ export class WorkoutSessionService {
       cardioDurationSeconds: pe.cardioDurationSeconds,
       cardioDistanceMeters: pe.cardioDistanceMeters,
       cardioIntensity: pe.cardioIntensity,
+      cardioCalories: pe.cardioCalories,
+      cardioInclinePercent: pe.cardioInclinePercent,
+      cardioZone: pe.cardioZone,
+      cardioPaceSecondsPerKm: pe.cardioPaceSecondsPerKm,
+      cardioRpe: pe.cardioRpe,
+      circuitId: pe.circuitId,
       sets: pe.sets.map((s) => ({ order: s.order, kind: s.kind, reps: s.reps, loadKg: s.loadKg })),
     }));
     return { ...rest, plannedExercises };
