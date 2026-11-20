@@ -841,6 +841,12 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - "Etiquetas" do Pn-30 vêm só do nível do modelo de onde o plano saiu; não há etiqueta livre.
   - "Cartão final 4821" e a forma de pagamento do Asaas no cartão "Pagamento".
   - `ALL_MEMBERS`, cobrança por aluno ativo e Lite (#288, #289, #290).
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/403/web/` (web 1440 e 390, escuro e claro) contra Pn-07, Pn-07v, Pn-30, Pn-37 e Pn-37b, com "Ajustar assentos", "Novo programa" e "Nova oferta" abertos no painel lateral. Dados mínimos por SQL no banco de dev (pool com 20 assentos e faturas, dois programas, seis planos com e sem datas, três ofertas com compras pagas e que falharam; a vencida trocando o status do pool), apagados no fim (contagens antes e depois em `demo-rows.txt`). Corrigido:
+  - No celular o botão do cabeçalho espremia o título e a descrição numa coluna estreita: o cabeçalho das três telas empilha abaixo de `sm`.
+  - A linha de baixo dos cartões de número cortava com reticências ("vence 5 d…", "depois da taxa…"): agora quebra a linha.
+  - Com o painel lateral aberto, a receita da oferta virava "R$ 2.6…": os três números da oferta vão para a linha de baixo quando não cabem.
+  - Linhas das tabelas e descrição da oferta mais compactas, como na prancha.
+  - Fica como está, de propósito: "Novo programa" no lugar de "Ver programas" (criar fica na própria tela), "Quem usa" abaixo das faturas, a faixa "A venda ainda não está ligada" (flag) e a receita "depois da taxa" em vez de "repasse em 2 dias úteis".
 
 ## Etapas seguintes
 

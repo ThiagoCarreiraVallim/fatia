@@ -265,7 +265,7 @@ export default function OrgSeatsPage() {
                 const r = seatInvoiceRow(f);
                 return (
                   <tr key={f.id} className={cn(r.muted && 'text-muted-foreground')}>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">
                       <span className={cn('block', !r.muted && r.sub && 'font-semibold')}>
                         {r.title}
                       </span>
@@ -273,17 +273,17 @@ export default function OrgSeatsPage() {
                         <span className="block text-xs text-muted-foreground">{r.sub}</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 tabular-nums">
+                    <td className="px-3 py-2 tabular-nums">
                       <span className="block">{r.amount}</span>
                       {r.amountSub && (
                         <span className="block text-xs text-muted-foreground">{r.amountSub}</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">{r.due}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">{r.due}</td>
+                    <td className="px-3 py-2">
                       <StatusChip label={r.status.label} tone={r.status.tone} />
                     </td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className="px-3 py-2 text-right">
                       {f.invoiceUrl && !r.muted && (
                         <a
                           href={f.invoiceUrl}
@@ -333,16 +333,16 @@ export default function OrgSeatsPage() {
                 const r = seatProgramRow(p);
                 return (
                   <tr key={p.id}>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">
                       <span className="block font-semibold">{r.name}</span>
                       {r.sub && (
                         <span className="block text-xs text-muted-foreground">{r.sub}</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 tabular-nums">{r.seats}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">{r.period}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{r.amount}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2 tabular-nums">{r.seats}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.period}</td>
+                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">{r.amount}</td>
+                    <td className="px-3 py-2">
                       <StatusChip label={r.status.label} tone={r.status.tone} />
                     </td>
                   </tr>

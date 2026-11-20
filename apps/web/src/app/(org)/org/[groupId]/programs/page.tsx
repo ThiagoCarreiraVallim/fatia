@@ -190,7 +190,7 @@ function Linha({
   const ficha = `${panelHref(groupId, 'members')}/${i.membershipId}`;
   return (
     <tr className={cn(selected && 'bg-muted/50')}>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         {onSelect ? (
           <button
             type="button"
@@ -205,18 +205,18 @@ function Linha({
         )}
         <span className="block text-xs text-muted-foreground">{i.authorName ?? 'Equipe'}</span>
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <StatusChip label={planProgramKindLabel(i.schedule)} tone="neutral" />
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5">{planProgramDates(i)}</td>
-      <td className="px-3 py-2.5">
+      <td className="whitespace-nowrap px-3 py-2">{planProgramDates(i)}</td>
+      <td className="px-3 py-2">
         <span className="flex flex-wrap gap-1">
           {i.tags.map((t) => (
             <StatusChip key={t} label={t} tone="neutral" />
           ))}
         </span>
       </td>
-      <td className="min-w-52 px-3 py-2.5">
+      <td className="min-w-52 px-3 py-2">
         {i.progress?.percent != null && (
           <span className="flex items-center gap-2">
             <span
@@ -251,7 +251,7 @@ function Linha({
           )
         )}
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <StatusChip label={planProgramStatusLabel(i.status)} tone={TONE[i.status]} />
       </td>
     </tr>

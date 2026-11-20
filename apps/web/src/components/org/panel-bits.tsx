@@ -20,7 +20,7 @@ export function PanelPageHead({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start gap-3">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
       <div className="min-w-0 flex-1">
         <h1 className="font-display text-xl font-bold">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
@@ -88,7 +88,7 @@ export function PanelStat({
       >
         {value}
       </p>
-      {sub && <p className="truncate text-xs text-muted-foreground">{sub}</p>}
+      {sub && <p className="text-xs leading-snug text-muted-foreground">{sub}</p>}
     </div>
   );
 }

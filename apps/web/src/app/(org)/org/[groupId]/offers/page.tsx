@@ -188,7 +188,9 @@ export default function OrgOffersPage() {
                   </h2>
                   <StatusChip label={offerStatusLabel(o)} tone={tomDe(o)} />
                 </div>
-                {o.description && <p className="text-sm text-muted-foreground">{o.description}</p>}
+                {o.description && (
+                  <p className="text-[13px] leading-snug text-muted-foreground">{o.description}</p>
+                )}
                 <p className="flex flex-wrap items-baseline gap-x-3">
                   <span className="font-display text-2xl font-bold tabular-nums">
                     {offerPriceLabel(o.priceCents)}
@@ -198,7 +200,7 @@ export default function OrgOffersPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
               <PanelStat
                 label="Vendas"
                 value={String(o.stats.sales)}
