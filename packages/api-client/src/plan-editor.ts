@@ -152,6 +152,8 @@ export interface SavePlanCopyInput {
   changeNote?: string;
   /** "Avisar a Ana no app". Padrão: avisa. */
   notify?: boolean;
+  /** A versão que o editor abriu: se outra pessoa salvou depois, a API responde 409. */
+  baseVersionId?: string;
 }
 
 const member = (groupId: string, membershipId: string) =>

@@ -101,4 +101,12 @@ export class SavePlanCopyDto {
   @IsOptional()
   @IsBoolean()
   notify?: boolean;
+
+  /**
+   * A versão que o editor abriu. Se outra pessoa salvou depois, a cópia não é
+   * sobrescrita: 409.
+   */
+  @IsOptional()
+  @IsUUID()
+  baseVersionId?: string;
 }

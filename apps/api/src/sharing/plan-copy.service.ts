@@ -54,6 +54,8 @@ export interface SavePlanCopyInput {
   changeNote?: string | null;
   /** "Avisar a Ana no app" (Pn-09e). Padrão: avisa. */
   notify?: boolean;
+  /** A versão que o editor abriu: outra salva depois dela dá 409. */
+  baseVersionId?: string;
 }
 
 /**

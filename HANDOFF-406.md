@@ -11,10 +11,10 @@ Cada um sai com um commit de teste vermelho e depois a correção.
 
 ## Passos
 
-- [ ] D1: loadPercent guardado + loadMode WEIGHT dá 400 (assertConfig)
-- [ ] D2: aceite com início no futuro espalha datas pelos planos que saíram; settle só refaz quando entram sessões
-- [ ] D3: regras de cardio fora do superRefine v2
-- [ ] D4: sessionKey estável (snapshot, editor, WorkoutPlan) em vez do sessionIndex
+- [x] D1: loadPercent guardado + loadMode WEIGHT dá 400 (assertConfig)
+- [x] D2: aceite com início no futuro espalha datas pelos planos que saíram; settle só refaz quando entram sessões
+- [x] D3: regras de cardio fora do superRefine v2
+- [x] D4: sessionKey estável (snapshot, editor, WorkoutPlan) em vez do sessionIndex
 - [ ] P1: baseVersionId no PUT da cópia → 409; a web manda e mostra a mensagem
 - [ ] P2: no mapa adoptedOf, ordenar por sessionIndex e ficar com o primeiro
 - [ ] REDESIGN_PROGRESS: editar a cópia (member.plans + porta de leitura) × tirar (autor/dono)

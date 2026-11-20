@@ -704,6 +704,37 @@ describe('editor de plano de treino (#406, banco real)', () => {
       });
       expect(notify).not.toHaveBeenCalled();
     });
+
+    it('duas pessoas da equipe na mesma cópia: a segunda recebe 409, não apaga a primeira', async () => {
+      const aberta = await copies.get(u.helena!, g, m.ana!, offerId);
+      const base = aberta.version.id;
+      const primeira = await copies.save(u.helena!, g, m.ana!, offerId, {
+        document: aberta.document,
+        baseVersionId: base,
+        notify: false,
+      });
+      await expect(
+        copies.save(u.helena!, g, m.ana!, offerId, {
+          document: aberta.document,
+          baseVersionId: base,
+          notify: false,
+        }),
+      ).rejects.toThrow(ConflictException);
+      const ultima = await prisma.planOfferVersion.findFirstOrThrow({
+        where: { offerId },
+        orderBy: { version: 'desc' },
+      });
+      expect(ultima.id).toBe(primeira.versionId);
+      expect(ultima.status).toBe('PENDING');
+      // Recarregando (a base certa), salva.
+      await expect(
+        copies.save(u.helena!, g, m.ana!, offerId, {
+          document: aberta.document,
+          baseVersionId: primeira.versionId,
+          notify: false,
+        }),
+      ).resolves.toMatchObject({ version: ultima.version + 1 });
+    });
   });
 
   describe('isolamento da cópia', () => {

@@ -377,9 +377,29 @@ describe('editar a cópia da Ana (#406, Pn-09e)', () => {
     await waitFor(() => expect(planCopyApi.save).toHaveBeenCalled());
     const [g, m, o, body] = vi.mocked(planCopyApi.save).mock.calls[0]!;
     expect([g, m, o]).toEqual(['g1', 'm1', 'o1']);
-    expect(body).toMatchObject({ notify: false, changeNote: 'Uma série a mais' });
+    expect(body).toMatchObject({
+      notify: false,
+      changeNote: 'Uma série a mais',
+      baseVersionId: 'v1',
+    });
     expect(body.document.sessions[0]!.items[0]).toMatchObject({ exerciseId: 10, targetSets: 5 });
     await waitFor(() => expect(toast).toHaveBeenCalled());
+  });
+
+  it('outra pessoa salvou antes: diz para recarregar, sem sobrescrever', async () => {
+    vi.mocked(planCopyApi.get).mockResolvedValue(copia());
+    vi.mocked(planCopyApi.save).mockRejectedValue(
+      new ApiError('Outra pessoa salvou esta cópia; recarregue.', 409),
+    );
+    renderWithClient(<MemberPlanCopyPage />);
+    fireEvent.change(await screen.findByLabelText('Séries de Agachamento livre'), {
+      target: { value: '5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar na cópia da Ana' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Outra pessoa salvou esta cópia; recarregue',
+    );
+    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeInTheDocument();
   });
 
   it('sem acesso ao treino, diz isso em vez de abrir o editor', async () => {
