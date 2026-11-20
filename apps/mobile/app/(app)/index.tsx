@@ -20,7 +20,7 @@ import {
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { headerButtonClass } from '@/components/layout/tab-header';
-import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { DrawerLayer, EmptyState, ErrorState, Skeleton, SkeletonGroup } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -197,7 +197,20 @@ export default function TodayScreen() {
             </Pressable>
           </View>
 
-          {today.isLoading ? <LoadingState label="Carregando seu dia…" /> : null}
+          {today.isLoading ? (
+            <SkeletonGroup label="Carregando seu dia">
+              <Skeleton height={176} />
+              <Skeleton height={96} />
+              <View className="flex-row gap-3">
+                <Skeleton height={120} className="flex-1" width="auto" />
+                <Skeleton height={120} className="flex-1" width="auto" />
+              </View>
+              <View className="flex-row gap-3">
+                <Skeleton height={120} className="flex-1" width="auto" />
+                <Skeleton height={120} className="flex-1" width="auto" />
+              </View>
+            </SkeletonGroup>
+          ) : null}
 
           {today.error ? (
             <ErrorState error={today.error} onRetry={() => today.refetch()} />

@@ -15,7 +15,14 @@ import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { Screen } from '@/components/layout/screen';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
-import { Button, DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import {
+  Button,
+  DrawerLayer,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonGroup,
+} from '@/components/ui';
 import { Badge } from '@/components/ui/badge';
 import { brandColors } from '@/components/ui/ds-math';
 import { Text } from '@/components/ui/text';
@@ -125,7 +132,12 @@ export default function CommunityScreen() {
               <Plus size={20} color={colors.primaryForeground} />
             </HeaderButton>
           </TabHeader>
-          {groups.isPending ? <LoadingState label="Carregando suas comunidades…" /> : null}
+          {groups.isPending ? (
+            <SkeletonGroup label="Carregando suas comunidades">
+              <Skeleton height={96} />
+              <Skeleton height={96} />
+            </SkeletonGroup>
+          ) : null}
           {groups.isError ? (
             <ErrorState error={groups.error} onRetry={() => void groups.refetch()} />
           ) : null}

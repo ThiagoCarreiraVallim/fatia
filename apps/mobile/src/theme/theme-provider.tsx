@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useMemo,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { usePathname, useRouter } from 'expo-router';
@@ -69,8 +77,15 @@ export function ThemeProvider({
     void writeThemePreference(p);
   }, []);
 
+  // Memorizado: este provider lê a rota (para voltar a ela ao trocar de tema),
+  // e um objeto novo a cada troca de tela re-renderizava todo `useTheme`.
+  const value = useMemo(
+    () => ({ preference, theme, setPreference }),
+    [preference, theme, setPreference],
+  );
+
   return (
-    <ThemeContext.Provider value={{ preference, theme, setPreference }}>
+    <ThemeContext.Provider value={value}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ThemeTree key={theme}>{children}</ThemeTree>
     </ThemeContext.Provider>

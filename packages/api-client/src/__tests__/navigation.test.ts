@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   HOME_TITLE,
   PRIMARY_TABS,
+  keepMountedOnBlur,
+  tabRouteName,
   ROUTES,
   activeNavKey,
   menuSections,
@@ -420,5 +422,39 @@ describe('circuitRunPath (#380)', () => {
     expect(circuitRunPath('s1')).toBe('/workout/circuit/s1');
     expect(navBarMode(circuitRunPath('a b'))).toBe('hidden');
     expect(hasTopBar(circuitRunPath('s1'))).toBe(false);
+  });
+});
+
+describe('tabRouteName / keepMountedOnBlur (item 6)', () => {
+  it('cada aba vira o nome da rota no navegador de abas do app', () => {
+    expect(PRIMARY_TABS.map((t) => tabRouteName(t.href))).toEqual([
+      'index',
+      'nutrition/index',
+      'workout/index',
+      'community/index',
+      'you/index',
+    ]);
+  });
+
+  it('só as cinco abas ficam montadas fora de foco; telas de detalhe e foco desmontam', () => {
+    for (const name of [
+      'index',
+      'nutrition/index',
+      'workout/index',
+      'community/index',
+      'you/index',
+    ]) {
+      expect(keepMountedOnBlur(name), name).toBe(true);
+    }
+    for (const name of [
+      'workout/session/[id]/index',
+      'nutrition/scan',
+      'nutrition/photo',
+      'chat/[id]',
+      'community/[groupId]/index',
+      'you/edit',
+    ]) {
+      expect(keepMountedOnBlur(name), name).toBe(false);
+    }
   });
 });
