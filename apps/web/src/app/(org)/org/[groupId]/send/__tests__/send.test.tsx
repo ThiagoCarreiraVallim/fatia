@@ -58,6 +58,7 @@ const pessoa = (name: string, p: Partial<SendRecipient> = {}): SendRecipient => 
   accompaniedByMe: false,
   hasPlan: true,
   alreadyHas: false,
+  openEnded: false,
   ...p,
 });
 
@@ -161,6 +162,25 @@ describe('painel › enviar para alunos (#405, Pn-18)', () => {
       },
     ]);
     await waitFor(() => expect(toast).toHaveBeenCalledWith('Enviado · 1 recebeu a versão nova'));
+  });
+
+  it('quem segue um flexível sem fim desliga "depois do plano atual" e diz por quê (#461)', async () => {
+    prepara();
+    vi.mocked(sendsApi.recipients).mockResolvedValue({
+      recipients: [pessoa('Ana Dias'), pessoa('Gil Reis', { openEnded: true })],
+    });
+    renderWithClient(<OrgSendPage />);
+    const plano = await screen.findByRole('combobox', { name: 'Plano' });
+    fireEvent.change(plano, { target: { value: 't1' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Ana Dias/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Depois do plano atual' }));
+    expect(screen.getByRole('radio', { name: 'Depois do plano atual' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Gil Reis/ }));
+    expect(screen.getByRole('radio', { name: 'Depois do plano atual' })).toBeDisabled();
+    // A escolha volta para "Hoje" e a tela diz por quê.
+    expect(screen.getByRole('radio', { name: 'Hoje' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(/Gil segue um plano flexível sem data de fim/)).toBeInTheDocument();
   });
 
   it('plano alimentar não pede agenda', async () => {

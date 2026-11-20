@@ -187,6 +187,7 @@ describe('painel › planos e dicas', () => {
           accompaniedByMe: true,
           hasPlan: false,
           alreadyHas: false,
+          openEnded: false,
         },
         {
           membershipId: 'm-diego',
@@ -194,6 +195,7 @@ describe('painel › planos e dicas', () => {
           accompaniedByMe: false,
           hasPlan: true,
           alreadyHas: true,
+          openEnded: false,
         },
       ],
     });

@@ -175,6 +175,7 @@ describe('enviar para alunos (#405, Pn-18 e Pn-08b)', () => {
       accompaniedByMe: false,
       hasPlan: true,
       alreadyHas: false,
+      openEnded: false,
       ...over,
     });
     const lista = [r('Ana', { accompaniedByMe: true }), r('Diego', { hasPlan: false }), r('Hugo')];
