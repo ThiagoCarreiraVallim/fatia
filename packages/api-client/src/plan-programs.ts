@@ -101,15 +101,22 @@ const dia = (ymd: string) => {
   return `${d} ${MESES[m! - 1]}`;
 };
 
+/** "3 – 9 nov" no mesmo mês; "27 out – 2 nov" entre meses. */
+function faixa(start: string, end: string): string {
+  return start.slice(0, 7) === end.slice(0, 7)
+    ? `${Number(start.slice(8, 10))} – ${dia(end)}`
+    : `${dia(start)} – ${dia(end)}`;
+}
+
 /** "27 out – 23 nov", ou "sem datas" no flexível. */
 export function planProgramDates(i: Pick<PlanProgramItem, 'startDate' | 'endDate'>): string {
   if (!i.startDate) return 'sem datas';
-  return i.endDate ? `${dia(i.startDate)} – ${dia(i.endDate)}` : `desde ${dia(i.startDate)}`;
+  return i.endDate ? faixa(i.startDate, i.endDate) : `desde ${dia(i.startDate)}`;
 }
 
-/** Dias de uma fase: "27 out – 2 nov". */
+/** Dias de uma fase: "3 – 9 nov", "27 out – 2 nov". */
 export function phaseDates(p: { startDate: string; endDate: string }): string {
-  return `${dia(p.startDate)} – ${dia(p.endDate)}`;
+  return faixa(p.startDate, p.endDate);
 }
 
 const primeiroNome = (n: string) => n.trim().split(/\s+/)[0] ?? n;

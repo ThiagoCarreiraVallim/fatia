@@ -312,6 +312,8 @@ describe('navegação', () => {
       ['/org/g1/members', 'Membros', '/org/g1', 'Painel'],
       ['/org/g1/members/m9', 'Membro', '/org/g1/members', 'Membros'],
       ['/org/g1/seats', 'Assentos', '/org/g1', 'Painel'],
+      ['/org/g1/programs', 'Programas', '/org/g1', 'Painel'],
+      ['/org/g1/offers', 'Ofertas', '/org/g1', 'Painel'],
       ['/org/g1/settings?x=1', 'Configurações', '/org/g1', 'Painel'],
       ['/community/g1/feed', 'Mural', '/community/g1', 'Comunidade'],
       ['/community/g1/settings', 'Sobre a comunidade', '/community/g1', 'Comunidade'],
