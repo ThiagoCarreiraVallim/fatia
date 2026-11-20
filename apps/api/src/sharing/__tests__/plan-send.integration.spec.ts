@@ -426,8 +426,9 @@ describe('enviar para alunos (#405, banco real)', () => {
       // A 1 continua em uso; a 2 espera o aceite.
       expect(versoes.map((v) => v.status)).toEqual(['ACCEPTED', 'PENDING']);
       expect(versoes[1]!.changeNote).toBe('Trocou 2 exercícios e subiu o descanso para 90 s.');
-      // "Depois do plano atual": o dia seguinte ao fim da versão em uso.
-      expect(versoes[1]!.startDate).toBe(addDaysIso(today, 4 * 7));
+      // "Depois do plano atual" não conta a própria oferta (revisão do PR #461):
+      // a versão nova substitui a atual, então começa hoje.
+      expect(versoes[1]!.startDate).toBe(today);
 
       const vista = await offers.get(u.ana!, oferta.id);
       expect(vista.kind).toBe('update');
