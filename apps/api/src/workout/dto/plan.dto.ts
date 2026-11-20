@@ -20,7 +20,12 @@ import {
   CARDIO_INTENSITIES,
   CARDIO_TARGETS,
   LOAD_MODES,
+  MAX_CARDIO_CALORIES,
   MAX_CARDIO_DISTANCE_METERS,
+  MAX_CARDIO_INCLINE,
+  MAX_CARDIO_PACE,
+  MAX_LOAD_PERCENT,
+  MIN_CARDIO_PACE,
   MAX_CARDIO_DURATION_SECONDS,
   MAX_LOAD_KG,
   MAX_PLAN_NOTES,
@@ -105,6 +110,28 @@ export class PlanExerciseConfigDto {
   cardioDistanceMeters?: number | null;
 
   @IsOptional() @IsIn(CARDIO_INTENSITIES) cardioIntensity?: CardioIntensityValue | null;
+
+  // Editor da equipe (#406): os mesmos campos valem no plano da própria pessoa.
+  /** "Série de aquecimento antes". */
+  @OptionalNotNull() @IsBoolean() warmupBefore?: boolean;
+  /** % do 1RM, com `loadMode` PERCENT_1RM. */
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_LOAD_PERCENT) loadPercent?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_CARDIO_CALORIES) cardioCalories?: number | null;
+
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 1 })
+  @Min(0)
+  @Max(MAX_CARDIO_INCLINE)
+  cardioInclinePercent?: number | null;
+
+  /** Intensidade por zona (1–5), ritmo (s/km) ou esforço (RPE 1–10): uma das três. */
+  @IsOptional() @IsInt() @Min(1) @Max(5) cardioZone?: number | null;
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_CARDIO_PACE)
+  @Max(MAX_CARDIO_PACE)
+  cardioPaceSecondsPerKm?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(10) cardioRpe?: number | null;
 
   /** Série por série. Lista vazia ou `null` volta ao modo simples. */
   @IsOptional()
