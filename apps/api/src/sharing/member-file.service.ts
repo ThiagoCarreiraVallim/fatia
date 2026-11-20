@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { GroupRole, MembershipStatus, ShareScope, type Prisma } from '@fatia/db';
+import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
 import { assertDay } from '../common/dates';
 import { PrismaService } from '../common/prisma.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
@@ -12,7 +13,7 @@ import {
 } from '../progress/helpers/date-tz';
 import { ProgressService } from '../progress/progress.service';
 import { MAX_AGENDA_DAYS } from '../workout/agenda.service';
-import { planEndDate, plannedState, scheduleDates } from '../workout/helpers/planned-schedule';
+import { plannedState, scheduleDates } from '../workout/helpers/planned-schedule';
 import { MEMBER_NOT_FOUND, resolveMemberTarget, type MemberFileTarget } from './member-file-target';
 import type {
   MemberAccessEntry,
@@ -20,11 +21,11 @@ import type {
   MemberAgendaItem,
   MemberFile,
   MemberNutritionPlan,
-  MemberPlanStatus,
   MemberWeek,
   MemberWorkoutPlan,
 } from './member-file.types';
 import { MemberNoteService } from './member-note.service';
+import { offerState } from './plan-offer-state';
 import { can, TEAM_ROLES } from './permissions';
 import { ProfessionalAccessService } from './professional-access.service';
 
@@ -99,10 +100,9 @@ export class MemberFileService {
         where: { subjectUserId: subjectId, groupId, revokedAt: null },
         select: { professionalId: true, scopes: true, professional: { select: { name: true } } },
       }),
-      this.prisma.groupSeatAssignment.findFirst({
-        where: { membershipId, revokedAt: null },
-        select: { id: true },
-      }),
+      // O PRO pago pela comunidade valendo agora, pela regra do portão (#403:
+      // assento de programa fora do período não conta).
+      membershipsWithEffectiveSeat(this.prisma, [membershipId]),
       this.prisma.groupMembership.findMany({
         where: { groupId, role: { in: [...TEAM_ROLES] } },
         select: { userId: true, status: true },
@@ -167,7 +167,7 @@ export class MemberFileService {
       role: target.subjectRole,
       joinedAt: target.joinedAt,
       timezone: ctx.timezone,
-      proByGroup: seat !== null,
+      proByGroup: seat.size > 0,
       followedBy: links
         .filter((l) => activeTeam.has(l.professionalId))
         .map((l) => l.professional.name)
@@ -339,28 +339,11 @@ export class MemberFileService {
     today: string,
     counts: { planned: number | null; done: number | null },
   ): MemberWorkoutPlan {
-    const latest = o.versions.at(-1)!;
-    const accepted = o.versions.filter((v) => v.status === 'ACCEPTED').at(-1) ?? null;
-    const shown = accepted ?? latest;
-    const endDate =
-      shown.schedule === 'CALENDAR' && shown.startDate && shown.weeks
-        ? planEndDate(shown.startDate, shown.weeks)
-        : null;
-
-    let status: MemberPlanStatus;
-    if (o.endedAt) status = 'ENDED';
-    else if (accepted) {
-      if (endDate && endDate < today) status = 'ENDED';
-      else if (shown.startDate && shown.schedule === 'CALENDAR' && shown.startDate > today) {
-        status = 'SCHEDULED';
-      } else status = 'ACTIVE';
-    } else if (latest.status === 'PENDING') status = 'PENDING';
-    else if (latest.status === 'DECLINED') status = 'DECLINED';
-    // Substituída sem nunca ter sido aceita (a pessoa saiu e voltou, por exemplo).
-    else status = 'ENDED';
-
-    const running =
-      status === 'ACTIVE' && shown.schedule === 'CALENDAR' && shown.startDate && shown.weeks;
+    const { status, shown, accepted, latest, endDate, weekNumber } = offerState(
+      o.versions,
+      o.endedAt,
+      today,
+    )!;
     return {
       offerId: o.id,
       title: shown.title,
@@ -371,9 +354,7 @@ export class MemberFileService {
       startDate: shown.startDate,
       endDate,
       weeks: shown.weeks,
-      weekNumber: running
-        ? Math.min(Math.floor(daysBetween(shown.startDate!, today) / 7) + 1, shown.weeks!)
-        : null,
+      weekNumber,
       sessionsDone: counts.done,
       sessionsPlanned: counts.planned,
       authorName: o.author?.name ?? null,

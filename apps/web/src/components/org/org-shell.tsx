@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BadgeDollarSign,
   BookOpen,
   Bot,
   ChevronDown,
@@ -15,6 +16,7 @@ import {
   Eye,
   FileBarChart,
   Gift,
+  Layers,
   LayoutGrid,
   ListChecks,
   Link2,
@@ -92,11 +94,13 @@ const ICONE: Record<PanelSection, LucideIcon> = {
   origins: Share2,
   seats: Crown,
   content: BookOpen,
+  programs: Layers,
   exercises: Dumbbell,
   moderation: Megaphone,
   announcements: MessageSquareText,
   challenges: Trophy,
   benefits: Gift,
+  offers: BadgeDollarSign,
   agent: Bot,
   settings: Settings,
 };

@@ -128,6 +128,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
     label: 'Conteúdo',
     items: [
       ['content', 'Planos e dicas'],
+      ['programs', 'Programas'],
       ['exercises', 'Exercícios'],
     ],
   },
@@ -139,6 +140,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
       ['announcements', 'Comunicados e enquetes'],
       ['challenges', 'Desafios'],
       ['benefits', 'Benefícios'],
+      ['offers', 'Ofertas'],
     ],
   },
   { key: 'ai', label: 'IA', items: [['agent', 'Agente da comunidade']] },

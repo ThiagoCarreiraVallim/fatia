@@ -12,6 +12,7 @@ import {
   MembershipStatus,
   NotificationKind,
   PlanOfferStatus,
+  Prisma,
   ReviewKind,
   ShareScope,
   type SessionReaction,
@@ -19,11 +20,12 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { hourInTz } from '../insights/helpers/time-buckets';
 import { NotificationService, type Notice } from '../notifications/notification.service';
-import { dateInTz } from '../progress/helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { WorkoutSessionService } from '../workout/workout-session.service';
 import { requireContentRole } from './content-roles';
 import { firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
+import { offerState } from './plan-offer-state';
 import { accompaniedOnly } from './team-reach';
 import { ProfessionalAccessService } from './professional-access.service';
 import type {
@@ -239,6 +241,8 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    items.push(...(await this.endedPlans(viewerId, groupId, since, now)));
+
     if (items.length > 0) {
       const refs = items.map((i) => i.refId);
       const workoutRefs = items.filter((i) => i.kind === ReviewKind.WORKOUT).map((i) => i.refId);
@@ -281,7 +285,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     const subjectId = await this.subjectOf(groupId, kind, refId);
     const member = subjectId ? (await this.members(groupId, [subjectId])).get(subjectId) : null;
     if (!member) throw new NotFoundException('Item not found');
-    if (kind !== ReviewKind.PLAN_RESPONSE) {
+    if (kind === ReviewKind.WORKOUT || kind === ReviewKind.GOAL) {
       const scope = kind === ReviewKind.WORKOUT ? ShareScope.WORKOUT : ShareScope.GOALS;
       if (!(await this.canRead(viewerId, member.membershipId, scope, ACTION.seen))) {
         throw new NotFoundException('Item not found');
@@ -543,6 +547,82 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Planos de calendário desta comunidade que terminaram na janela (#403, Pn-30):
+   * "revisar e enviar o próximo". Sem categoria, como a resposta ao plano: é o
+   * plano que a própria equipe mandou, e as datas são dela. Só de quem a
+   * pessoa que olha atende (o mesmo recorte da fila).
+   */
+  private async endedPlans(
+    viewerId: string,
+    groupId: string,
+    since: Date,
+    now: Date,
+  ): Promise<ReviewItem[]> {
+    const grupo = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      select: { timezone: true },
+    });
+    const tz = grupo?.timezone ?? 'America/Sao_Paulo';
+    const today = dateInTz(now, tz);
+    const desde = dateInTz(since, tz);
+    const offers = await this.prisma.planOffer.findMany({
+      where: {
+        groupId,
+        removedAt: null,
+        OR: [
+          { endedAt: { gte: since, lte: now } },
+          {
+            endedAt: null,
+            versions: { some: { status: PlanOfferStatus.ACCEPTED, schedule: 'CALENDAR' } },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        userId: true,
+        endedAt: true,
+        versions: { orderBy: { version: 'asc' } },
+      },
+    });
+    if (offers.length === 0) return [];
+    const people = await this.members(
+      groupId,
+      offers.map((o) => o.userId),
+    );
+    const meus = await accompaniedOnly(this.prisma, viewerId, groupId);
+    const out: ReviewItem[] = [];
+    for (const o of offers) {
+      const p = people.get(o.userId);
+      if (!p || (meus && !meus.has(p.membershipId))) continue;
+      const st = offerState(o.versions, o.endedAt, today);
+      if (!st || st.status !== 'ENDED') continue;
+      let at: Date;
+      if (o.endedAt) at = o.endedAt;
+      else if (st.endDate && st.endDate >= desde && st.endDate < today) {
+        at = dayBoundsInTz(addDaysIso(st.endDate, 1), tz).start;
+      } else continue;
+      out.push({
+        kind: ReviewKind.PLAN_ENDED,
+        // A versão que terminou, não a oferta: o bloco seguinte, na mesma
+        // oferta, termina de novo e volta à fila sem o "visto" do anterior.
+        refId: st.shown.id,
+        membershipId: p.membershipId,
+        name: p.name,
+        shares: [],
+        whatsapp: p.whatsapp,
+        at,
+        title: st.shown.title,
+        durationMinutes: null,
+        sets: null,
+        answer: null,
+        seenAt: null,
+        myFeedback: false,
+      });
+    }
+    return out;
+  }
+
+  /**
    * Quem deu vínculo ativo a quem olha nesta comunidade, e é membro ativo
    * dela. O vínculo é procurado pelo par (quem olha, comunidade da URL), nunca
    * por um id de fora.
@@ -634,6 +714,13 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       });
       return s?.completedAt ? s.userId : null;
     }
+    if (kind === ReviewKind.PLAN_ENDED) {
+      const v = await this.prisma.planOfferVersion.findFirst({
+        where: { id: refId, offer: { groupId, removedAt: null } },
+        select: { offer: { select: { userId: true } } },
+      });
+      return v?.offer.userId ?? null;
+    }
     if (kind === ReviewKind.GOAL) {
       const g = await this.prisma.goal.findUnique({
         where: { id: refId },
@@ -666,19 +753,27 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     return member;
   }
 
-  private seen(
+  private async seen(
     viewerId: string,
     groupId: string,
     subjectUserId: string,
     kind: ReviewKind,
     refId: string,
   ) {
-    return this.prisma.reviewSeen.upsert({
-      where: { userId_groupId_kind_refId: { userId: viewerId, groupId, kind, refId } },
-      create: { userId: viewerId, groupId, subjectUserId, kind, refId },
-      update: {},
-      select: { seenAt: true },
-    });
+    const where = { userId_groupId_kind_refId: { userId: viewerId, groupId, kind, refId } };
+    // Dois envios ao mesmo tempo correm para criar a mesma linha: quem perde
+    // a corrida só lê a que o outro criou.
+    try {
+      return await this.prisma.reviewSeen.upsert({
+        where,
+        create: { userId: viewerId, groupId, subjectUserId, kind, refId },
+        update: {},
+        select: { seenAt: true },
+      });
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') throw e;
+      return this.prisma.reviewSeen.findUniqueOrThrow({ where, select: { seenAt: true } });
+    }
   }
 
   /** As reações e comentários desta comunidade na sessão. */

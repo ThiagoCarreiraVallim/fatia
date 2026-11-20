@@ -42,6 +42,14 @@ export const orgKeys = {
   staff: (groupId: string) => ['community', 'org', groupId, 'staff'] as const,
   permissions: (groupId: string) => ['community', 'org', groupId, 'permissions'] as const,
   invoices: (groupId: string) => ['community', 'org', groupId, 'invoices'] as const,
+  /** Programas por aluno (#403, Pn-30). */
+  planPrograms: (groupId: string) => ['community', 'org', groupId, 'plan-programs'] as const,
+  /** Ofertas da comunidade (#403, Pn-37). */
+  offers: (groupId: string) => ['community', 'org', groupId, 'offers'] as const,
+  /** Programas de assentos (#403), para ligar a uma oferta. */
+  seatPrograms: (groupId: string) => ['community', 'org', groupId, 'seat-programs'] as const,
+  /** Os desafios, para o programa de desafio (#403). */
+  challengesList: (groupId: string) => ['community', 'org', groupId, 'challenges', 'list'] as const,
   contentPlans: (groupId: string) => ['community', 'org', groupId, 'content', 'plans'] as const,
   contentPlan: (groupId: string, id: string) =>
     ['community', 'org', groupId, 'content', 'plans', id] as const,

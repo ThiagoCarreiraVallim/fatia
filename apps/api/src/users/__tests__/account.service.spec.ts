@@ -59,6 +59,7 @@ const makePrisma = () => ({
   aiConsent: { findMany: jest.fn().mockResolvedValue([]) },
   aiWriteModeSetting: { findMany: jest.fn().mockResolvedValue([]) },
   aiAutoWrite: { findMany: jest.fn().mockResolvedValue([]) },
+  groupOfferPurchase: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -111,6 +112,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   linksAsSubject: 'professionalLinks',
   // Só a linha da própria pessoa, com o consentimento e o assento (ADR 025/026).
   memberships: 'communityMemberships',
+  // O que a pessoa comprou das ofertas de uma comunidade (#403): oferta, valor e situação.
+  offerPurchases: 'offerPurchases',
   invitesCreated: 'invitesCreated',
   // Convites que a pessoa recebeu e aceitou (#401): comunidade, papel e datas.
   invitesAccepted: 'invitesReceived',
@@ -432,6 +435,34 @@ describe('AccountService', () => {
       expect(result.counts.weightLogs).toBe(1);
       expect(result.format).toBe('fatia-export-v1');
       expect(result.exportedAt).toBeTruthy();
+    });
+
+    it('leva as compras de oferta e o período do assento de programa (#403)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      prisma.groupOfferPurchase.findMany.mockResolvedValue([
+        { offer: { title: 'Verão 21', group: { name: 'Academia' } }, amountCents: 14_900 },
+      ]);
+
+      const result = (await service.exportData('user-A')) as unknown as {
+        offerPurchases: unknown[];
+        counts: Record<string, number>;
+      };
+
+      expect(prisma.groupOfferPurchase.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'user-A' } }),
+      );
+      // Sem o link de pagamento nem o id do provedor.
+      const select = prisma.groupOfferPurchase.findMany.mock.calls[0][0].select;
+      expect(select.paymentUrl).toBeUndefined();
+      expect(select.providerPaymentId).toBeUndefined();
+      expect(result.offerPurchases).toHaveLength(1);
+      expect(result.counts.offerPurchases).toBe(1);
+      const membros = prisma.groupMembership.findMany.mock.calls[0][0];
+      expect(membros.select.seatAssignments.select).toMatchObject({
+        startsAt: true,
+        endsAt: true,
+        program: { select: { name: true } },
+      });
     });
 
     it('gravação automática: o pedido, os retratos e o cartão enquanto guardados, e o que sobra depois (#385)', async () => {

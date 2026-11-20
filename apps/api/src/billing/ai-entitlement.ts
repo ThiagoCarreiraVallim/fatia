@@ -47,6 +47,8 @@ export interface AssinaturaLida {
   paidBy?: GroupPayer;
   /** Nome do programa, quando `paidBy` é `PROGRAM`. */
   programName?: string | null;
+  /** Fim do assento do programa (#403): o que a pessoa vê como "PRO até". */
+  programEndsAt?: Date | null;
 }
 
 export type GroupPayer = 'SEAT' | 'COMMUNITY' | 'PROGRAM';

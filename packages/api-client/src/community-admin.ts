@@ -284,7 +284,16 @@ export interface SeatsOverview {
     paymentUrl: string | null;
     monthlyCents: number;
     nextMonthlyCents: number;
+    /** Dias que faltam da carência, pelo `graceEndsAt` (#403). Nulo fora do atraso. */
+    graceDaysLeft: number | null;
   } | null;
+  /** Próxima fatura (#403): assentos × preço, com o vencimento do período. */
+  nextInvoice: { seats: number; unitPriceCents: number; amountCents: number; dueAt: string } | null;
+  /** A fatura vencida mais recente, para o "Pagar agora" (#403). */
+  overdueInvoice: SeatInvoice | null;
+  /** Programas (#403): PRO por período, com assentos à parte. */
+  programs: SeatProgram[];
+  /** Assentos comuns em uso (os de programa ficam em `programs`). */
   assigned: number;
   assignments: { membershipId: string; name: string; assignedAt: string; ownPro: boolean }[];
   pendingCharges: {
@@ -299,15 +308,55 @@ export interface SeatsOverview {
 
 export type InvoiceStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'VOID';
 
+export type SeatInvoiceKind = 'SUBSCRIPTION' | 'ADJUSTMENT' | 'PROGRAM';
+
 export interface SeatInvoice {
   id: string;
-  kind: 'SUBSCRIPTION' | 'ADJUSTMENT';
+  kind: SeatInvoiceKind;
   amountCents: number;
   dueDate: string | null;
   status: InvoiceStatus;
   invoiceUrl: string | null;
+  /** Assentos cobrados (#403). Nulo em fatura antiga. */
+  seats: number | null;
+  /** Dias do proporcional, no ajuste. */
+  proRataDays: number | null;
   paidAt: string | null;
   createdAt: string;
+}
+
+/** Programa (#403, Pn-07): PRO por período para uma turma ou um desafio. */
+export interface SeatProgram {
+  id: string;
+  name: string;
+  note: string | null;
+  kind: 'CLASS' | 'CHALLENGE';
+  challengeId: string | null;
+  challengeTitle: string | null;
+  seats: number;
+  /** Quem tem o assento do programa agora. */
+  assigned: number;
+  /** Primeiro e último dia (`YYYY-MM-DD`, inclusivos). */
+  startDate: string;
+  endDate: string;
+  amountCents: number;
+  /** `PENDING` aguardando o pagamento, `ACTIVE` pago, `PAST_DUE` vencido. */
+  chargeStatus: PoolStatus;
+  /** `CANCELED`: a cobrança foi estornada, contestada ou apagada (o PRO acabou). */
+  status: 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELED';
+}
+
+export interface CreateSeatProgramInput {
+  name: string;
+  note?: string;
+  kind: 'CLASS' | 'CHALLENGE';
+  seats: number;
+  startDate: string;
+  endDate: string;
+  /** Turma: quem ganha o assento. */
+  membershipIds?: string[];
+  /** Desafio: quem entrar nele ganha o assento, até acabarem. */
+  challengeId?: string;
 }
 
 export type InsightsPanel = 'retention' | 'behavior';
@@ -435,6 +484,13 @@ export const seatsApi = {
   unassign: (groupId: string, membershipId: string) =>
     apiFetch<SeatsOverview>(`${base}/${groupId}/seats/assignments/${membershipId}`, json('DELETE')),
   invoices: (groupId: string) => apiFetch<SeatInvoice[]>(`${base}/${groupId}/seats/invoices`),
+};
+
+/** Programas de assentos (#403): só o dono, só na web. */
+export const seatProgramsApi = {
+  list: (groupId: string) => apiFetch<SeatProgram[]>(`${base}/${groupId}/programs`),
+  create: (groupId: string, input: CreateSeatProgramInput) =>
+    apiFetch<SeatProgram>(`${base}/${groupId}/programs`, json('POST', input)),
 };
 
 export const insightsApi = {

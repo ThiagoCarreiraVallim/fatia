@@ -70,7 +70,10 @@ describe('SubscriptionEntitlementsService', () => {
     ).groupSeatAssignment.findMany;
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { revokedAt: null, membership: { userId: 'pessoa-a', status: 'ACTIVE' } },
+        where: expect.objectContaining({
+          revokedAt: null,
+          membership: { userId: 'pessoa-a', status: 'ACTIVE' },
+        }),
       }),
     );
   });

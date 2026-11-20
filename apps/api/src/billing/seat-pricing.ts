@@ -21,8 +21,19 @@ export function valorMensal(seats: number, unitCents: number): number {
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
+/** Um mês de programa (#403): até 31 dias cobra um mês, como "1 a 31 dez". */
+export const DIAS_DO_MES_DE_PROGRAMA = 31;
+
+/**
+ * Preço de um programa (#403): assentos × preço do assento por mês começado.
+ * Um programa de 1 a 30 nov com 18 assentos custa 18 × R$ 14,90 (Pn-07).
+ */
+export function programPrice(seats: number, unitCents: number, dias: number): number {
+  return seats * unitCents * Math.max(1, Math.ceil(dias / DIAS_DO_MES_DE_PROGRAMA));
+}
+
 /** Dias entre dois `YYYY-MM-DD` (b − a). */
-function diasEntre(a: string, b: string): number {
+export function diasEntre(a: string, b: string): number {
   const [ya, ma, da] = a.split('-').map(Number);
   const [yb, mb, db] = b.split('-').map(Number);
   return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / DIA_MS);

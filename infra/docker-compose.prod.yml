@@ -77,6 +77,9 @@ services:
       BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
       BILLING_PRO_TRIAL_DAYS: ${BILLING_PRO_TRIAL_DAYS:-7}
       BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
+      # Ofertas (#403): venda desligada até o checkout público (#421).
+      OFFERS_SALES_ENABLED: ${OFFERS_SALES_ENABLED:-false}
+      OFFERS_PLATFORM_FEE_PERCENT: ${OFFERS_PLATFORM_FEE_PERCENT:-0}
       # Asaas (PRO pela web e assentos). Vazio = checkout responde 503.
       ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
       ASAAS_API_KEY: ${ASAAS_API_KEY:-}

@@ -15,6 +15,7 @@ import { UpdateTimezoneTool } from './tools/meta/update-timezone.tool';
 import { UpdateMeTool } from './tools/meta/update-me.tool';
 import { ProfileModule } from '../users/profile.module';
 import { McpConnectionsModule } from '../auth/mcp-connections.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -27,6 +28,8 @@ import { McpConnectionsModule } from '../auth/mcp-connections.module';
     IntentToolsModule,
     ProfileModule,
     McpConnectionsModule,
+    // O estado do PRO no get_me (#403), pelo portão da IA (sem importar billing/).
+    AiModule,
   ],
   controllers: [McpController],
   providers: [

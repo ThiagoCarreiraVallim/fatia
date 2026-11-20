@@ -82,6 +82,8 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
 import { PlanOfferService } from './plan-offer.service';
 import { MemberFileController, MyMemberNotesController } from './member-file.controller';
 import { MemberFileService } from './member-file.service';
+import { PlanProgramsController } from './plan-programs.controller';
+import { PlanProgramsService } from './plan-programs.service';
 import { MemberNoteService } from './member-note.service';
 import { PlanOfferController } from './plan-offer.controller';
 import { ListPlanOffersTool } from './mcp/list-plan-offers.tool';
@@ -154,6 +156,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PlanOfferController,
     BenefitController,
     MemberFileController,
+    PlanProgramsController,
     MyMemberNotesController,
     ReviewController,
     ReportController,
@@ -172,6 +175,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     PlanMaterializerService,
     PlanOfferService,
     MemberFileService,
+    PlanProgramsService,
     MemberNoteService,
     ReviewService,
     ReportService,

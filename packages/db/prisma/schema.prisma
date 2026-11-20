@@ -111,9 +111,9 @@ model User {
   goals                   UserGoals?
   /// As metas do dia anteriores a cada troca (#396). É dado da pessoa.
   goalsHistory            UserGoalsHistory[]
-  authoredChallenges      GroupChallenge[]   @relation("ChallengeAuthor")
+  authoredChallenges      GroupChallenge[]     @relation("ChallengeAuthor")
   /// Check-ins de desafio que a pessoa revisou como equipe (#395).
-  reviewedCheckins        ChallengeCheckin[] @relation("CheckinReviewer")
+  reviewedCheckins        ChallengeCheckin[]   @relation("CheckinReviewer")
   personalGoals           Goal[]
   meals                   Meal[]
   workoutPlans            WorkoutPlan[]
@@ -122,34 +122,36 @@ model User {
   weightLogs              WeightLog[]
   stepLogs                StepLog[]
   waterLogs               WaterLog[]
-  customFoods             Food[]             @relation("UserCustomFoods")
+  customFoods             Food[]               @relation("UserCustomFoods")
   favoriteFoods           FavoriteFood[]
   foodPortions            FoodPortion[]
   mealTemplates           MealTemplate[]
-  customExercises         Exercise[]         @relation("UserCustomExercises")
+  customExercises         Exercise[]           @relation("UserCustomExercises")
   favoriteExercises       FavoriteExercise[]
   nutrientTargets         NutrientTarget[]
   achievements            UserAchievement[]
   trainingBlocks          TrainingBlock[]
   /// Planos de treino que a equipe mandou para a pessoa (#379). É dado dela.
-  planOffers              PlanOffer[]        @relation("PlanOfferSubject")
+  planOffers              PlanOffer[]          @relation("PlanOfferSubject")
+  /// Compras de ofertas de comunidades (#403). Ficam ao apagar a conta (nota fiscal).
+  offerPurchases          GroupOfferPurchase[]
   /// Ofertas que a pessoa, como profissional, mandou para alunos (#379).
-  planOffersAuthored      PlanOffer[]        @relation("PlanOfferAuthor")
+  planOffersAuthored      PlanOffer[]          @relation("PlanOfferAuthor")
   /// A agenda de treinos (#379): as sessões dos planos de calendário.
   plannedSessions         PlannedSession[]
   /// Plano alimentar que a equipe mandou para a pessoa (#376). É dado dela.
-  nutritionPlans          NutritionPlan[]    @relation("NutritionPlanSubject")
+  nutritionPlans          NutritionPlan[]      @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
-  nutritionPlansAuthored  NutritionPlan[]    @relation("NutritionPlanAuthor")
+  nutritionPlansAuthored  NutritionPlan[]      @relation("NutritionPlanAuthor")
   /// Anotações da equipe sobre a pessoa (#402). Ela vê, só leitura.
-  memberNotes             MemberNote[]       @relation("MemberNoteSubject")
+  memberNotes             MemberNote[]         @relation("MemberNoteSubject")
   /// Anotações que a pessoa, como equipe, escreveu sobre membros (#402).
-  memberNotesAuthored     MemberNote[]       @relation("MemberNoteAuthor")
+  memberNotesAuthored     MemberNote[]         @relation("MemberNoteAuthor")
   /// O que a equipe já viu em "Para revisar" (#399): o de quem viu e o sobre quem é.
-  reviewSeen              ReviewSeen[]       @relation("ReviewSeenBy")
-  reviewSeenAbout         ReviewSeen[]       @relation("ReviewSeenSubject")
+  reviewSeen              ReviewSeen[]         @relation("ReviewSeenBy")
+  reviewSeenAbout         ReviewSeen[]         @relation("ReviewSeenSubject")
   /// Reações e comentários que a pessoa deixou em treinos de alunos (#399).
-  sessionFeedbackAuthored SessionFeedback[]  @relation("SessionFeedbackAuthor")
+  sessionFeedbackAuthored SessionFeedback[]    @relation("SessionFeedbackAuthor")
 
   conversations   Conversation[]
   memories        UserMemory[]
@@ -1394,6 +1396,8 @@ enum ReviewKind {
   GOAL
   /// Resposta a um plano que a equipe mandou (aceitou ou recusou).
   PLAN_RESPONSE
+  /// Plano com datas que terminou (#403, Pn-30): revisar e mandar o próximo.
+  PLAN_ENDED
 }
 
 /// "Visto" na fila "Para revisar" (#399): por pessoa da equipe e por item. O
@@ -1807,6 +1811,10 @@ model Group {
   invites                GroupInvite[]
   auditLogs              GroupAuditLog[]
   seatPool               GroupSeatPool?
+  /// PRO por período para uma turma ou um desafio (#403).
+  programs               GroupProgram[]
+  /// Programas vendidos pela comunidade (#403, Pn-37).
+  offers                 GroupOffer[]
   /// Avatar da comunidade (ADR 028).
   avatarFileId           String?                @unique
   avatarFile             MediaFile?             @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
@@ -2560,6 +2568,7 @@ model GroupSeatPool {
   assignments GroupSeatAssignment[]
   adjustments GroupSeatAdjustment[]
   invoices    GroupSeatInvoice[]
+  programs    GroupProgram[]
 }
 
 /// Quem recebeu um assento. No máximo um ativo por membership (índice único
@@ -2568,15 +2577,71 @@ model GroupSeatAssignment {
   id           String    @id @default(uuid())
   poolId       String
   membershipId String
+  /// Assento de um programa (#403): não conta nos `seats` do pool, conta nos do
+  /// programa. Nulo = assento comum, sem fim.
+  programId    String?
+  /// Começo e fim do direito (#403). Lidos como a carência, sem job: fora da
+  /// janela a atribuição não dá PRO. Nulos = desde já e sem fim.
+  startsAt     DateTime?
+  endsAt       DateTime?
   assignedById String?
   assignedAt   DateTime  @default(now())
   revokedAt    DateTime?
 
   pool       GroupSeatPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
   membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  program    GroupProgram?   @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([poolId, revokedAt])
   @@index([membershipId, revokedAt])
+  @@index([programId])
+}
+
+/// Tipo de programa (#403): uma turma escolhida a dedo ou quem entra num desafio.
+enum ProgramKind {
+  CLASS
+  CHALLENGE
+}
+
+/// Programa (#403, Pn-07): PRO por um período para uma turma ou um desafio,
+/// em assentos à parte dos do pool. No fim a pessoa volta ao Free sem perder
+/// nada: o fim é lido (`GroupSeatAssignment.endsAt`), nunca gravado por job.
+/// A cobrança é avulsa, na assinatura dos assentos (como o aumento).
+model GroupProgram {
+  id               String             @id @default(uuid())
+  groupId          String
+  poolId           String
+  name             String
+  /// Linha de apoio ("turma das 6h · Helena").
+  note             String?
+  kind             ProgramKind
+  /// O desafio, quando `kind` é `CHALLENGE`: quem entra nele ganha o assento,
+  /// até acabarem os assentos do programa.
+  challengeId      String?
+  seats            Int
+  /// Meia-noite do primeiro dia (inclusivo) e virada do último (exclusivo),
+  /// no fuso do provedor.
+  startsAt         DateTime
+  endsAt           DateTime
+  unitPriceCents   Int
+  amountCents      Int
+  /// Cobrança avulsa no Asaas. Nulo = cortesia (pool sem cobrança).
+  providerChargeId String?            @unique
+  /// `PENDING` aguardando, `ACTIVE` paga (ou sem cobrança), `PAST_DUE` vencida.
+  chargeStatus     SubscriptionStatus
+  canceledAt       DateTime?
+  createdById      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  group       Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  pool        GroupSeatPool         @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  challenge   GroupChallenge?       @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  assignments GroupSeatAssignment[]
+  offers      GroupOffer[]
+
+  @@index([groupId, endsAt])
+  @@index([challengeId])
 }
 
 enum SeatInvoiceKind {
@@ -2584,6 +2649,8 @@ enum SeatInvoiceKind {
   SUBSCRIPTION
   /// Cobrança avulsa proporcional de um aumento.
   ADJUSTMENT
+  /// Cobrança avulsa de um programa (#403).
+  PROGRAM
 }
 
 enum SeatInvoiceStatus {
@@ -2609,6 +2676,13 @@ model GroupSeatInvoice {
   status            SeatInvoiceStatus
   /// Página da fatura no Asaas.
   invoiceUrl        String?
+  /// Assentos cobrados (#403): os do pool na mensalidade, os novos no ajuste,
+  /// os do programa. Nulo = fatura antiga, sem o número.
+  seats             Int?
+  /// Dias cobrados no ajuste proporcional ("proporcional a 15 dias").
+  proRataDays       Int?
+  /// E-mail Ex-04 ao dono já mandado (#403): um por fatura vencida.
+  overdueNotifiedAt DateTime?
   paidAt            DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -2625,6 +2699,8 @@ model GroupSeatAdjustment {
   fromSeats        Int
   toSeats          Int
   amountCents      Int
+  /// Dias cobrados do período (#403, "proporcional a 15 dias").
+  proRataDays      Int?
   /// Id da cobrança avulsa no Asaas. null = abaixo do mínimo, não cobrada.
   providerChargeId String?            @unique
   status           SubscriptionStatus
@@ -2634,6 +2710,90 @@ model GroupSeatAdjustment {
   pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
 
   @@index([poolId])
+}
+
+/// Estado da oferta (#403, Pn-37).
+enum OfferStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+/// Programa vendido pela comunidade (#403, Pn-37): a pessoa paga pelo Asaas e
+/// recebe o que a oferta libera (entrada, assento do programa, plano). A venda
+/// em si (checkout público, conta depois do pagamento) é da #421 e fica atrás
+/// de `OFFERS_SALES_ENABLED`; aqui a comunidade cria, publica e acompanha.
+model GroupOffer {
+  id             String      @id @default(uuid())
+  groupId        String
+  /// Último pedaço do link de venda (`/<comunidade>/<slug>`), único na comunidade.
+  slug           String
+  title          String
+  description    String?
+  priceCents     Int
+  /// Vagas. Nulo = sem limite.
+  spots          Int?
+  /// Período do que a pessoa recebe (YYYY-MM-DD, inclusivo).
+  startDate      String?
+  endDate        String?
+  /// O que libera: entrar na comunidade, o assento de um programa, um plano.
+  grantsEntry    Boolean     @default(true)
+  programId      String?
+  planTemplateId String?
+  /// "questionário de início" e afins: o resto do que a pessoa recebe.
+  extras         String?
+  status         OfferStatus @default(DRAFT)
+  publishedAt    DateTime?
+  closedAt       DateTime?
+  createdById    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  group        Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  program      GroupProgram?        @relation(fields: [programId], references: [id], onDelete: SetNull)
+  planTemplate GroupPlanTemplate?   @relation(fields: [planTemplateId], references: [id], onDelete: SetNull)
+  purchases    GroupOfferPurchase[]
+
+  @@unique([groupId, slug])
+  @@index([groupId, status])
+}
+
+enum OfferPurchaseStatus {
+  /// Cobrança criada, aguardando.
+  PENDING
+  PAID
+  /// Venceu ou foi recusada: a pessoa não recebe o conteúdo novo até pagar.
+  FAILED
+  REFUNDED
+}
+
+/// Uma compra de oferta (#403). Dado de pagamento só no Asaas: aqui ficam o
+/// status, o valor e o link da cobrança. A linha fica quando a pessoa apaga a
+/// conta (`userId` vira nulo), porque a nota fiscal é exigida por lei.
+model GroupOfferPurchase {
+  id                String              @id @default(uuid())
+  offerId           String
+  /// Conta de quem comprou, quando já existe. A compra vem antes da conta.
+  userId            String?
+  buyerName         String
+  buyerEmail        String
+  amountCents       Int
+  status            OfferPurchaseStatus @default(PENDING)
+  /// Id da cobrança no Asaas (`pay_…`): o webhook é idempotente por ele.
+  providerPaymentId String?             @unique
+  /// Página de pagamento do Asaas, para reenviar.
+  paymentUrl        String?
+  paidAt            DateTime?
+  failedAt          DateTime?
+  linkResentAt      DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  offer GroupOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  user  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([offerId, status])
+  @@index([userId])
 }
 
 // ============================================================
@@ -2748,6 +2908,8 @@ model GroupPlanTemplate {
   goalsReplaced UserGoalsHistory[]
   /// Ofertas de treino a uma pessoa que saíram deste modelo (#402, "já com a Ana").
   offers        PlanOffer[]        @relation("OfferFromTemplate")
+  /// Ofertas vendidas que liberam este plano (#403).
+  groupOffers   GroupOffer[]
 
   @@index([groupId, publishedAt])
 }
@@ -2966,6 +3128,8 @@ model GroupChallenge {
   author       User?                       @relation("ChallengeAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   participants GroupChallengeParticipant[]
   watchers     GroupChallengeWatcher[]
+  /// Programas que dão PRO a quem entra (#403).
+  programs     GroupProgram[]
 
   @@index([groupId, endsAt])
   @@index([finalizedAt, endsAt])

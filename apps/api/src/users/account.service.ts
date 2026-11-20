@@ -150,6 +150,7 @@ export class AccountService {
       aiAutoWrites,
       mcpConnections,
       blocks,
+      offerPurchases,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       // As metas de antes de cada troca (#396): de onde a pessoa partiu, e se a
@@ -466,7 +467,16 @@ export class AccountService {
           // A especialidade, quando é da equipe, e quem a acompanha (#404).
           specialty: true,
           accompaniedBy: { select: { user: { select: { name: true } } } },
-          seatAssignments: { select: { assignedAt: true, revokedAt: true } },
+          // O assento de programa (#403) tem período e o nome do programa.
+          seatAssignments: {
+            select: {
+              assignedAt: true,
+              revokedAt: true,
+              startsAt: true,
+              endsAt: true,
+              program: { select: { name: true } },
+            },
+          },
           // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
           // e a posição dela. O ranking dos outros é dado de terceiro. Desde a
           // #395, também o aceite da foto e os check-ins dela, com a foto como
@@ -765,6 +775,22 @@ export class AccountService {
         select: { label: true, createdAt: true, group: { select: { name: true } } },
         orderBy: { createdAt: 'asc' },
       }),
+      // O que a pessoa comprou das ofertas de uma comunidade (#403). Sem o link
+      // de pagamento (temporário) e sem o id da cobrança no provedor.
+      this.prisma.groupOfferPurchase.findMany({
+        where: { userId },
+        select: {
+          offer: { select: { title: true, group: { select: { name: true } } } },
+          buyerName: true,
+          buyerEmail: true,
+          amountCents: true,
+          status: true,
+          paidAt: true,
+          failedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -901,6 +927,11 @@ export class AccountService {
         community: b.group?.name ?? null,
         blockedAt: b.createdAt,
       })),
+      offerPurchases: offerPurchases.map(({ offer, ...compra }) => ({
+        offer: offer.title,
+        community: offer.group.name,
+        ...compra,
+      })),
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -934,6 +965,7 @@ export class AccountService {
         aiAutoWrites: aiAutoWrites.length,
         mcpConnections: mcpConnections.length,
         blocks: blocks.length,
+        offerPurchases: offerPurchases.length,
         pollVotes: communityMemberships.reduce((n, m) => n + m.pollVotes.length, 0),
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,

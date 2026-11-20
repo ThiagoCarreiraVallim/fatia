@@ -13,6 +13,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
+  type GroupSeatInvoice,
   type GroupSeatPool,
   type SeatInvoiceKind,
   type SeatInvoiceStatus,
@@ -20,17 +21,20 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { can } from '../sharing/permissions';
-import { addDaysIso, dayBoundsInTz } from '../progress/helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { CARENCIA_DIAS, resolveAiEntitlement } from './ai-entitlement';
 import type { ResultadoDeWebhookDeAssinatura, SeatProvider } from './billing-provider.port';
 import { documentoValido, somenteDigitos } from './cpf';
 import {
   ASSENTOS_MAX,
+  diasEntre,
   FUSO_DO_PROVEDOR,
   proRataAumento,
   valorMensal,
   vencimentoAvulso,
 } from './seat-pricing';
+import { applyToOfferPurchase } from './offer-purchase-webhook';
+import { listPrograms, type ProgramView } from './program-view';
 import { ASSINATURA_LIDA } from './subscription-entitlements.service';
 import { subscriptionEventChange } from './subscription-events';
 
@@ -45,6 +49,11 @@ const VIVOS: SubscriptionStatus[] = ['PENDING', 'ACTIVE', 'PAST_DUE'];
 const ATRIBUIVEIS: SubscriptionStatus[] = ['ACTIVE', 'PAST_DUE'];
 
 const SEM_ASSENTOS = 'Esta comunidade não tem assentos ativos.';
+/**
+ * Assento comum, o que conta nos `seats` do pool. O de programa (#403) conta
+ * nos assentos do programa e fica fora de toda conta do pool.
+ */
+const ASSENTO_DO_POOL = { revokedAt: null, programId: null } as const;
 
 export interface VisaoDosAssentos {
   groupId: string;
@@ -64,7 +73,16 @@ export interface VisaoDosAssentos {
     paymentUrl: string | null;
     monthlyCents: number;
     nextMonthlyCents: number;
+    /** Dias que faltam da carência, pelo `graceEndsAt` (#403). Nulo fora do atraso. */
+    graceDaysLeft: number | null;
   } | null;
+  /** Próxima fatura (#403): assentos × preço, com o vencimento do período. */
+  nextInvoice: { seats: number; unitPriceCents: number; amountCents: number; dueAt: string } | null;
+  /** A fatura vencida mais recente, para o "Pagar agora" (#403). */
+  overdueInvoice: SeatInvoiceView | null;
+  /** Programas (#403): PRO por período, com assentos à parte. */
+  programs: ProgramView[];
+  /** Assentos comuns em uso (os de programa ficam em `programs`). */
   assigned: number;
   assignments: Array<{
     membershipId: string;
@@ -91,6 +109,10 @@ export interface SeatInvoiceView {
   dueDate: string | null;
   status: SeatInvoiceStatus;
   invoiceUrl: string | null;
+  /** Assentos cobrados (#403). Nulo em fatura antiga. */
+  seats: number | null;
+  /** Dias do proporcional, no ajuste. */
+  proRataDays: number | null;
   paidAt: string | null;
   createdAt: string;
 }
@@ -122,7 +144,7 @@ export class SeatPoolService {
       where: { groupId },
       include: {
         assignments: {
-          where: { revokedAt: null },
+          where: ASSENTO_DO_POOL,
           orderBy: { assignedAt: 'asc' },
           select: {
             assignedAt: true,
@@ -146,6 +168,21 @@ export class SeatPoolService {
           select: { ...ASSINATURA_LIDA, userId: true },
         })
       : [];
+    const [vencida, programas] = pool
+      ? await Promise.all([
+          this.prisma.groupSeatInvoice.findFirst({
+            where: { poolId: pool.id, status: 'OVERDUE' },
+            orderBy: [{ dueDate: 'desc' }, { createdAt: 'desc' }],
+          }),
+          listPrograms(this.prisma, groupId, agora),
+        ])
+      : [null, []];
+    // A próxima fatura só existe para quem paga pelo Asaas e segue assinando.
+    const cobrando =
+      pool !== null &&
+      pool.providerRef !== null &&
+      (pool.status === 'ACTIVE' || pool.status === 'PAST_DUE') &&
+      !pool.cancelAtPeriodEnd;
     const temProProprio = (userId: string) =>
       resolveAiEntitlement(
         proprias.filter((s) => s.userId === userId),
@@ -168,8 +205,29 @@ export class SeatPoolService {
             paymentUrl: pool.status === 'PENDING' ? pool.paymentUrl : null,
             monthlyCents: valorMensal(pool.seats, unit),
             nextMonthlyCents: valorMensal(pool.nextPeriodSeats ?? pool.seats, unit),
+            graceDaysLeft:
+              pool.status === 'PAST_DUE' && pool.graceEndsAt
+                ? Math.max(
+                    0,
+                    diasEntre(
+                      dateInTz(agora, FUSO_DO_PROVEDOR),
+                      dateInTz(pool.graceEndsAt, FUSO_DO_PROVEDOR),
+                    ),
+                  )
+                : null,
           }
         : null,
+      nextInvoice:
+        cobrando && pool.currentPeriodEnd
+          ? {
+              seats: pool.nextPeriodSeats ?? pool.seats,
+              unitPriceCents: pool.unitPriceCents,
+              amountCents: valorMensal(pool.nextPeriodSeats ?? pool.seats, pool.unitPriceCents),
+              dueAt: pool.currentPeriodEnd.toISOString(),
+            }
+          : null,
+      overdueInvoice: vencida ? invoiceView(vencida) : null,
+      programs: programas,
       assigned: pool?.assignments.length ?? 0,
       assignments: (pool?.assignments ?? []).map((a) => ({
         membershipId: a.membership.id,
@@ -406,6 +464,7 @@ export class SeatPoolService {
           fromSeats: pool.seats,
           toSeats: seats,
           amountCents: cobranca ? (conta?.valorCents ?? 0) : 0,
+          proRataDays: conta?.diasRestantes ?? null,
           providerChargeId: cobranca?.providerChargeId ?? null,
           // Sem cobrança (abaixo do mínimo ou sem período), não há o que pagar.
           status: cobranca ? 'PENDING' : 'ACTIVE',
@@ -436,7 +495,7 @@ export class SeatPoolService {
     if (!membership) throw new NotFoundException('Membro não encontrado.');
 
     const jaTem = await this.prisma.groupSeatAssignment.findFirst({
-      where: { poolId: pool.id, membershipId, revokedAt: null },
+      where: { poolId: pool.id, membershipId, ...ASSENTO_DO_POOL },
     });
     if (jaTem) return this.overview(groupId);
 
@@ -490,7 +549,7 @@ export class SeatPoolService {
       const jaTem = new Set(
         (
           await db.groupSeatAssignment.findMany({
-            where: { poolId: pool.id, membershipId: { in: membershipIds }, revokedAt: null },
+            where: { poolId: pool.id, membershipId: { in: membershipIds }, ...ASSENTO_DO_POOL },
             select: { membershipId: true },
           })
         ).map((a) => a.membershipId),
@@ -498,7 +557,7 @@ export class SeatPoolService {
       const novos = membershipIds.filter((id) => !jaTem.has(id));
       const livres =
         pool.seats -
-        (await db.groupSeatAssignment.count({ where: { poolId: pool.id, revokedAt: null } }));
+        (await db.groupSeatAssignment.count({ where: { poolId: pool.id, ...ASSENTO_DO_POOL } }));
       if (novos.length > livres) {
         const missing = novos.length - Math.max(0, livres);
         throw new ConflictException({
@@ -536,12 +595,12 @@ export class SeatPoolService {
     return this.prisma.$transaction(async (tx) => {
       await lockPool(tx, pool.id);
       const jaTem = await tx.groupSeatAssignment.findFirst({
-        where: { poolId: pool.id, membershipId, revokedAt: null },
+        where: { poolId: pool.id, membershipId, ...ASSENTO_DO_POOL },
         select: { id: true },
       });
       if (jaTem) return true;
       const usados = await tx.groupSeatAssignment.count({
-        where: { poolId: pool.id, revokedAt: null },
+        where: { poolId: pool.id, ...ASSENTO_DO_POOL },
       });
       if (usados >= pool.seats) return false;
       await tx.groupSeatAssignment.create({
@@ -558,7 +617,7 @@ export class SeatPoolService {
   ): Promise<VisaoDosAssentos> {
     await this.assertManager(actorId, groupId);
     const { count } = await this.prisma.groupSeatAssignment.updateMany({
-      where: { membershipId, revokedAt: null, pool: { groupId } },
+      where: { membershipId, ...ASSENTO_DO_POOL, pool: { groupId } },
       data: { revokedAt: new Date() },
     });
     if (count === 0) throw new NotFoundException('Este membro não tem assento.');
@@ -635,7 +694,12 @@ export class SeatPoolService {
     if (r.subscriptionId) {
       const pool = await tx.groupSeatPool.findUnique({ where: { providerRef: r.subscriptionId } });
       if (pool) {
-        await this.recordInvoice(tx, pool.id, 'SUBSCRIPTION', r);
+        // A mensalidade cobra os assentos do valor; sem conta exata, os do pool.
+        const seats =
+          r.valueCents !== null && r.valueCents % pool.unitPriceCents === 0
+            ? r.valueCents / pool.unitPriceCents
+            : pool.seats;
+        await this.recordInvoice(tx, pool.id, 'SUBSCRIPTION', r, { seats });
         return this.applyToPool(tx, pool, r);
       }
     }
@@ -645,9 +709,34 @@ export class SeatPoolService {
         include: { pool: true },
       });
       if (ajuste) {
-        await this.recordInvoice(tx, ajuste.poolId, 'ADJUSTMENT', r);
-        return this.applyToAdjustment(tx, ajuste, r);
+        await this.recordInvoice(tx, ajuste.poolId, 'ADJUSTMENT', r, {
+          seats: ajuste.toSeats - ajuste.fromSeats,
+          proRataDays: ajuste.proRataDays,
+        });
+        return this.applyToCharge(tx, ajuste, ajuste.pool, r, (status) =>
+          tx.groupSeatAdjustment.update({ where: { id: ajuste.id }, data: { status } }),
+        );
       }
+      const programa = await tx.groupProgram.findUnique({
+        where: { providerChargeId: r.paymentId },
+        include: { pool: true },
+      });
+      if (programa) {
+        await this.recordInvoice(tx, programa.poolId, 'PROGRAM', r, { seats: programa.seats });
+        return this.applyToCharge(
+          tx,
+          { status: programa.chargeStatus },
+          programa.pool,
+          r,
+          (chargeStatus) =>
+            tx.groupProgram.update({ where: { id: programa.id }, data: { chargeStatus } }),
+        );
+      }
+      const compra = await tx.groupOfferPurchase.findUnique({
+        where: { providerPaymentId: r.paymentId },
+        select: { id: true, status: true },
+      });
+      if (compra) return applyToOfferPurchase(tx, compra, r.event);
     }
     return 'desconhecido';
   }
@@ -659,16 +748,7 @@ export class SeatPoolService {
       orderBy: [{ dueDate: 'desc' }, { createdAt: 'desc' }],
       take: Math.min(Math.max(limit, 1), 100),
     });
-    return faturas.map((f) => ({
-      id: f.id,
-      kind: f.kind,
-      amountCents: f.amountCents,
-      dueDate: f.dueDate,
-      status: f.status,
-      invoiceUrl: f.invoiceUrl,
-      paidAt: f.paidAt?.toISOString() ?? null,
-      createdAt: f.createdAt.toISOString(),
-    }));
+    return faturas.map(invoiceView);
   }
 
   /**
@@ -682,6 +762,7 @@ export class SeatPoolService {
     poolId: string,
     kind: SeatInvoiceKind,
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
+    detalhe: { seats: number | null; proRataDays?: number | null },
   ): Promise<void> {
     if (!r.paymentId) return;
     const status = invoiceStatusOf(r);
@@ -699,6 +780,8 @@ export class SeatPoolService {
           dueDate: r.dueDate,
           status,
           invoiceUrl: r.invoiceUrl,
+          seats: detalhe.seats,
+          proRataDays: detalhe.proRataDays ?? null,
           paidAt: status === 'PAID' ? new Date() : null,
         },
       });
@@ -745,7 +828,7 @@ export class SeatPoolService {
       // O 409 da redução impede sobra; se mesmo assim sobrar (atribuição
       // concorrente), saem os atribuídos mais recentes.
       const abertos = await tx.groupSeatAssignment.findMany({
-        where: { poolId: pool.id, revokedAt: null },
+        where: { poolId: pool.id, ...ASSENTO_DO_POOL },
         orderBy: { assignedAt: 'desc' },
         select: { id: true },
       });
@@ -760,28 +843,33 @@ export class SeatPoolService {
     return null;
   }
 
-  private async applyToAdjustment(
+  /**
+   * Cobrança avulsa na assinatura dos assentos: o pró-rata de um aumento ou um
+   * programa (#403). As duas seguem a mesma regra: vencida põe a comunidade em
+   * atraso, com a carência da recorrente (os assentos valem durante ela); paga,
+   * tira do atraso se nenhuma outra avulsa seguir vencida.
+   */
+  private async applyToCharge(
     tx: Prisma.TransactionClient,
-    ajuste: { id: string; status: SubscriptionStatus; pool: GroupSeatPool },
+    cobranca: { status: SubscriptionStatus },
+    pool: GroupSeatPool,
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
+    marcar: (status: SubscriptionStatus) => Promise<unknown>,
   ): Promise<null | 'sem_efeito'> {
-    const pool = ajuste.pool;
     switch (r.event) {
       case 'PAYMENT_CONFIRMED':
       case 'PAYMENT_RECEIVED': {
-        if (ajuste.status === 'ACTIVE') return 'sem_efeito';
-        await tx.groupSeatAdjustment.update({
-          where: { id: ajuste.id },
-          data: { status: 'ACTIVE' },
-        });
-        // O atraso do pool era deste ajuste (a recorrente está em dia): sai do atraso.
+        if (cobranca.status === 'ACTIVE') return 'sem_efeito';
+        await marcar('ACTIVE');
+        // O atraso do pool era de uma avulsa (a recorrente está em dia): sai do atraso.
         const recorrenteEmDia =
           pool.currentPeriodEnd !== null && pool.currentPeriodEnd > new Date();
         if (pool.status === 'PAST_DUE' && recorrenteEmDia) {
-          const outros = await tx.groupSeatAdjustment.count({
-            where: { poolId: pool.id, status: 'PAST_DUE', id: { not: ajuste.id } },
-          });
-          if (outros === 0) {
+          const [ajustes, programas] = await Promise.all([
+            tx.groupSeatAdjustment.count({ where: { poolId: pool.id, status: 'PAST_DUE' } }),
+            tx.groupProgram.count({ where: { poolId: pool.id, chargeStatus: 'PAST_DUE' } }),
+          ]);
+          if (ajustes + programas === 0) {
             await tx.groupSeatPool.update({
               where: { id: pool.id },
               data: { status: 'ACTIVE', graceEndsAt: null },
@@ -791,12 +879,9 @@ export class SeatPoolService {
         return null;
       }
       case 'PAYMENT_OVERDUE': {
-        if (ajuste.status !== 'PENDING') return 'sem_efeito';
-        await tx.groupSeatAdjustment.update({
-          where: { id: ajuste.id },
-          data: { status: 'PAST_DUE' },
-        });
-        // Pró-rata vencido põe a comunidade em atraso, com a mesma carência
+        if (cobranca.status !== 'PENDING') return 'sem_efeito';
+        await marcar('PAST_DUE');
+        // Avulsa vencida põe a comunidade em atraso, com a mesma carência
         // da recorrente; os assentos continuam valendo durante ela.
         if (pool.status === 'ACTIVE') {
           const vencimento = r.dueDate ?? vencimentoAvulso(new Date());
@@ -814,11 +899,8 @@ export class SeatPoolService {
       case 'PAYMENT_DELETED':
       case 'PAYMENT_REFUNDED':
       case 'PAYMENT_CHARGEBACK_REQUESTED':
-        if (ajuste.status === 'CANCELED') return 'sem_efeito';
-        await tx.groupSeatAdjustment.update({
-          where: { id: ajuste.id },
-          data: { status: 'CANCELED' },
-        });
+        if (cobranca.status === 'CANCELED') return 'sem_efeito';
+        await marcar('CANCELED');
         return null;
       default:
         return 'sem_efeito';
@@ -858,7 +940,7 @@ export class SeatPoolService {
   }
 
   private contarAtribuidos(poolId: string): Promise<number> {
-    return this.prisma.groupSeatAssignment.count({ where: { poolId, revokedAt: null } });
+    return this.prisma.groupSeatAssignment.count({ where: { poolId, ...ASSENTO_DO_POOL } });
   }
 
   private exigirProvedor(): SeatProvider {
@@ -869,6 +951,21 @@ export class SeatPoolService {
     }
     return this.provedor;
   }
+}
+
+function invoiceView(f: GroupSeatInvoice): SeatInvoiceView {
+  return {
+    id: f.id,
+    kind: f.kind,
+    amountCents: f.amountCents,
+    dueDate: f.dueDate,
+    status: f.status,
+    invoiceUrl: f.invoiceUrl,
+    seats: f.seats,
+    proRataDays: f.proRataDays,
+    paidAt: f.paidAt?.toISOString() ?? null,
+    createdAt: f.createdAt.toISOString(),
+  };
 }
 
 /** O status da fatura a partir do evento; `null` = o evento não diz nada sobre ela. */

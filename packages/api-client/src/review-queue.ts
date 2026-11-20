@@ -10,7 +10,8 @@ import type { WorkoutCheckin, WorkoutSessionSummary } from './workout';
  * vínculo a quem olha) e o que se lê é a API.
  */
 
-export type ReviewKind = 'WORKOUT' | 'GOAL' | 'PLAN_RESPONSE';
+/** `PLAN_ENDED`: plano com fim que terminou (#403, Pn-30). */
+export type ReviewKind = 'WORKOUT' | 'GOAL' | 'PLAN_RESPONSE' | 'PLAN_ENDED';
 
 export interface PanelReviewItem {
   kind: ReviewKind;
@@ -94,6 +95,7 @@ const KIND_PARAM: Record<ReviewKind, string> = {
   WORKOUT: 'workout',
   GOAL: 'goal',
   PLAN_RESPONSE: 'plan',
+  PLAN_ENDED: 'plan-ended',
 };
 
 const base = (groupId: string) => `/api/groups/${groupId}`;
@@ -135,6 +137,7 @@ const KIND_LABEL: Record<ReviewKind, string> = {
   WORKOUT: 'treino',
   GOAL: 'meta',
   PLAN_RESPONSE: 'plano',
+  PLAN_ENDED: 'plano',
 };
 
 /** A etiqueta "Tipo" da linha. */
@@ -148,6 +151,7 @@ export function reviewLine(item: PanelReviewItem): string {
   if (item.kind === 'PLAN_RESPONSE') {
     return `${item.answer === 'ACCEPTED' ? 'Aceitou' : 'Recusou'} “${item.title ?? ''}”`;
   }
+  if (item.kind === 'PLAN_ENDED') return `Terminou “${item.title ?? ''}”`;
   return [
     item.title ?? 'Treino livre',
     item.durationMinutes !== null ? `${item.durationMinutes} min` : null,
@@ -203,7 +207,9 @@ export function filterReview(
   filter: ReviewFilter,
 ): PanelReviewItem[] {
   if (filter === 'workouts') return items.filter((i) => i.kind === 'WORKOUT' || i.kind === 'GOAL');
-  if (filter === 'plans') return items.filter((i) => i.kind === 'PLAN_RESPONSE');
+  if (filter === 'plans') {
+    return items.filter((i) => i.kind === 'PLAN_RESPONSE' || i.kind === 'PLAN_ENDED');
+  }
   return [...items];
 }
 
@@ -236,6 +242,9 @@ export function reviewWhatsappText(item: PanelReviewItem): string {
     return item.answer === 'ACCEPTED'
       ? `${oi} Vi que você aceitou “${item.title ?? ''}”. Qualquer dúvida, me chama. `
       : `${oi} Vi que você recusou “${item.title ?? ''}”. Quer conversar sobre o plano? `;
+  }
+  if (item.kind === 'PLAN_ENDED') {
+    return `${oi} Você terminou “${item.title ?? ''}”! Vamos montar o próximo? `;
   }
   return `${oi} Vi seu treino no Fatia. `;
 }

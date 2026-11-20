@@ -20,6 +20,7 @@ import {
   type GroupRole,
   type StepSource,
 } from '@fatia/db';
+import { ProgramService } from '../billing/program.service';
 import { PrismaService } from '../common/prisma.service';
 import { publishAutoPost } from './auto-post';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz';
@@ -301,6 +302,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     private readonly scoreboard: ScoreboardService,
     private readonly notifications: NotificationService,
     @Optional() private readonly media?: MediaService,
+    @Optional() private readonly programs?: ProgramService,
   ) {}
 
   onModuleInit(): void {
@@ -521,6 +523,15 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       // na próxima leitura.
       this.prisma.groupChallenge.update({ where: { id: row.id }, data: { scoredAt: null } }),
     ]);
+    // Programa do desafio (#403): quem entra ganha o assento PRO, até acabar.
+    // Falhar aqui não tira ninguém do desafio.
+    await this.programs
+      ?.syncChallenge(row.id, now)
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `Assento do programa do desafio falhou: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
     return this.get(userId, groupId, challengeId, now);
   }
 
@@ -536,6 +547,15 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.groupChallengeParticipant.deleteMany({
       where: { challengeId: row.id, membershipId: m.membershipId },
     });
+    // Quem sai devolve o assento do programa do desafio (#403); a vaga vai para
+    // o próximo que estiver nele.
+    await this.programs
+      ?.syncChallenge(row.id, now)
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `Assento do programa do desafio falhou: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
     return { left: true };
   }
 

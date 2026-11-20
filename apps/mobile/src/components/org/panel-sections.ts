@@ -17,6 +17,10 @@ export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = [
   'report',
   'origins',
   'team',
+  // Programas (#403) entram com o painel no celular; Ofertas nunca: o app não
+  // vende fora da loja.
+  'programs',
+  'offers',
 ];
 
 /** As abas do painel no app: as do papel, menos as que não têm tela aqui. */

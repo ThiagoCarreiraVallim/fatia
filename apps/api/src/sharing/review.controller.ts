@@ -28,6 +28,7 @@ const KIND: Record<ReviewKindParam, ReviewKind> = {
   workout: ReviewKind.WORKOUT,
   goal: ReviewKind.GOAL,
   plan: ReviewKind.PLAN_RESPONSE,
+  'plan-ended': ReviewKind.PLAN_ENDED,
 };
 
 /**

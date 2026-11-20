@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import {
   INSTANCIA_LIBERADA,
@@ -36,8 +37,65 @@ const POOL_AS_SUBSCRIPTION = {
 const SEAT_AS_SUBSCRIPTION = {
   membershipId: true,
   assignedAt: true,
+  endsAt: true,
+  program: { select: { name: true, chargeStatus: true } },
   pool: { select: POOL_AS_SUBSCRIPTION },
 } as const;
+
+/**
+ * Atribuições que valem agora (#403): começo e fim são lidos, como a carência,
+ * sem job. Fora da janela a linha continua lá — só não dá PRO.
+ */
+function seatInWindow(now: Date) {
+  return {
+    revokedAt: null,
+    AND: [
+      { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+      { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+    ],
+  };
+}
+
+type SeatRow = {
+  assignedAt: Date;
+  endsAt: Date | null;
+  program: { name: string; chargeStatus: SubscriptionStatus } | null;
+  pool: PoolRow;
+};
+
+/**
+ * Um assento lido como assinatura. O de programa (#403) é cobrança avulsa e
+ * vale pela janela do próprio programa: o fim e o cancelamento do pool não
+ * contam ("PRO até 30/11 · Programa Verão 21"). Estornada, contestada ou
+ * apagada, a cobrança do programa encerra o PRO; vencida (ou o pool em
+ * atraso) segue a carência do pool, como o resto dos assentos.
+ */
+function seatAsSubscription(seat: SeatRow): AssinaturaLida {
+  const base = poolAsSubscription(seat.pool, seat.assignedAt, 'SEAT');
+  if (seat.program) {
+    const cobranca = seat.program.chargeStatus;
+    const status: SubscriptionStatus =
+      cobranca === 'CANCELED' || cobranca === 'EXPIRED'
+        ? 'EXPIRED'
+        : cobranca === 'PAST_DUE' || seat.pool.status === 'PAST_DUE'
+          ? 'PAST_DUE'
+          : 'ACTIVE';
+    return {
+      ...base,
+      status,
+      currentPeriodEnd: seat.endsAt,
+      cancelAtPeriodEnd: true,
+      graceEndsAt: status === 'PAST_DUE' ? seat.pool.graceEndsAt : null,
+      paidBy: 'PROGRAM',
+      programName: seat.program.name,
+      programEndsAt: seat.endsAt,
+    };
+  }
+  if (!seat.endsAt) return base;
+  const fimDoPool = seat.pool.currentPeriodEnd;
+  const acabaAntes = !fimDoPool || seat.endsAt <= fimDoPool;
+  return acabaAntes ? { ...base, currentPeriodEnd: seat.endsAt, cancelAtPeriodEnd: true } : base;
+}
 
 type PoolRow = Omit<AssinaturaLida, 'source' | 'interval' | 'createdAt' | 'group'> & {
   programName: string | null;
@@ -80,16 +138,17 @@ function poolAsSubscription(
 export async function seatsAsSubscriptions(
   prisma: Pick<PrismaService, 'groupSeatAssignment' | 'groupSeatPool'>,
   userId: string,
+  now: Date = new Date(),
 ): Promise<AssinaturaLida[]> {
   const [assentos, comunidades] = await Promise.all([
     prisma.groupSeatAssignment.findMany({
-      where: { revokedAt: null, membership: { userId, status: 'ACTIVE' } },
+      where: { ...seatInWindow(now), membership: { userId, status: 'ACTIVE' } },
       select: SEAT_AS_SUBSCRIPTION,
     }),
     allMembersPools(prisma, { userId }),
   ]);
   return [
-    ...assentos.map((a) => poolAsSubscription(a.pool, a.assignedAt, 'SEAT')),
+    ...assentos.map(seatAsSubscription),
     ...comunidades.flatMap((pool) =>
       pool.group.memberships.map((m) =>
         poolAsSubscription(pool, m.joinedAt ?? m.createdAt, 'COMMUNITY'),
@@ -142,7 +201,7 @@ export async function membershipsWithEffectiveSeat(
   const [seats, comunidades] = await Promise.all([
     prisma.groupSeatAssignment.findMany({
       where: {
-        revokedAt: null,
+        ...seatInWindow(now),
         membershipId: { in: membershipIds },
         membership: { status: 'ACTIVE' },
       },
@@ -152,9 +211,7 @@ export async function membershipsWithEffectiveSeat(
   ]);
   const valendo = (a: AssinaturaLida) => resolveAiEntitlement([a], now).tier === 'PRO';
   return new Set([
-    ...seats
-      .filter((seat) => valendo(poolAsSubscription(seat.pool, seat.assignedAt, 'SEAT')))
-      .map((seat) => seat.membershipId),
+    ...seats.filter((seat) => valendo(seatAsSubscription(seat))).map((seat) => seat.membershipId),
     ...comunidades
       .filter((pool) => valendo(poolAsSubscription(pool, now, 'COMMUNITY')))
       .flatMap((pool) => pool.group.memberships.map((m) => m.id)),
@@ -193,7 +250,7 @@ export async function proPayerGroupOf(
 ): Promise<string | null> {
   const [proprias, assentos] = await Promise.all([
     prisma.userSubscription.findMany({ where: { userId }, select: ASSINATURA_LIDA }),
-    seatsAsSubscriptions(prisma, userId),
+    seatsAsSubscriptions(prisma, userId, agora),
   ]);
   const direito = resolveAiEntitlement([...proprias, ...assentos], agora);
   return direito.tier === 'PRO' && direito.source === 'GROUP'
@@ -220,7 +277,7 @@ export class SubscriptionEntitlementsService extends AiEntitlements {
     try {
       const [proprias, assentos] = await Promise.all([
         this.prisma.userSubscription.findMany({ where: { userId }, select: ASSINATURA_LIDA }),
-        seatsAsSubscriptions(this.prisma, userId),
+        seatsAsSubscriptions(this.prisma, userId, agora),
       ]);
       const assinaturas: AssinaturaLida[] = [...proprias, ...assentos];
       const direito = resolveAiEntitlement(assinaturas, agora);

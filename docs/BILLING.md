@@ -507,14 +507,19 @@ vê isso na lista de assentos (`ownPro`).
 
 ## API (só o dono, `billing.read` / `billing.manage`)
 
-| Rota                                                            | O que faz                               |
-| --------------------------------------------------------------- | --------------------------------------- |
-| `GET /groups/:groupId/seats`                                    | pool, atribuições, preço, próximo valor |
-| `POST /groups/:groupId/seats/checkout` `{seats, taxId}`         | abre a assinatura (link de pagamento)   |
-| `PATCH /groups/:groupId/seats` `{seats}`                        | aumenta (na hora) ou reduz (renovação)  |
-| `POST /groups/:groupId/seats/cancel`                            | cancela no fim do período               |
-| `POST\|DELETE /groups/:groupId/seats/assignments/:membershipId` | dá ou retira um assento                 |
-| `GET /groups/:groupId/seats/invoices`                           | histórico de faturas, mais novas antes  |
+| Rota                                                              | O que faz                               |
+| ----------------------------------------------------------------- | --------------------------------------- |
+| `GET /groups/:groupId/seats`                                      | pool, atribuições, preço, próximo valor |
+| `POST /groups/:groupId/seats/checkout` `{seats, taxId}`           | abre a assinatura (link de pagamento)   |
+| `PATCH /groups/:groupId/seats` `{seats}`                          | aumenta (na hora) ou reduz (renovação)  |
+| `POST /groups/:groupId/seats/cancel`                              | cancela no fim do período               |
+| `POST\|DELETE /groups/:groupId/seats/assignments/:membershipId`   | dá ou retira um assento                 |
+| `GET /groups/:groupId/seats/invoices`                             | histórico de faturas, mais novas antes  |
+| `GET\|POST /groups/:groupId/programs`                             | programas (PRO por período, #403)       |
+| `GET\|POST /groups/:groupId/offers`                               | ofertas (#403)                          |
+| `PATCH /groups/:groupId/offers/:offerId`                          | edita (encerrada não muda: 409)         |
+| `POST /groups/:groupId/offers/:offerId/publish\|close\|duplicate` | publica, encerra, duplica (+1 mês)      |
+| `POST …/offers/:offerId/purchases/:purchaseId/resend`             | reenvia o link de quem não pagou (1/h)  |
 
 A tela do dono é a seção **Assentos** do painel da comunidade (`/org/<id>/seats`, Fase 6): comprar
 com CPF/CNPJ (não guardado), aumentar e reduzir com a explicação da cobrança, cancelar, quem usa e as
@@ -541,18 +546,72 @@ evento depois dela.
 ## Programas e ofertas (redesign, #403)
 
 O redesign acrescenta **programas** (PRO por período para uma turma ou um desafio, como assento
-com fim) e **ofertas** (programas vendidos pela comunidade, pagos pelo Asaas, com repasse). O
-modelo de dados e o painel são da [#403](https://github.com/ThiagoCarreiraVallim/fatia/issues/403);
-o **checkout público da oferta** (link, cupom, conta depois do pagamento) é a
-[#421](https://github.com/ThiagoCarreiraVallim/fatia/issues/421) (Mapa 5.9), P2, fora da história
-do redesign. As regras desta página valem para os dois: CPF/CNPJ vai ao Asaas e não é guardado,
-webhook idempotente, e quem não pagou perde o conteúdo novo, nunca o que registrou.
+com fim) e **ofertas** (programas vendidos pela comunidade, pagos pelo Asaas). O modelo de dados e
+o painel são da [#403](https://github.com/ThiagoCarreiraVallim/fatia/issues/403); o **checkout
+público da oferta** (página de venda, cupom, conta depois do pagamento) é a
+[#421](https://github.com/ThiagoCarreiraVallim/fatia/issues/421) (Mapa 5.9). As regras desta
+página valem para os dois: CPF/CNPJ vai ao Asaas e não é guardado, webhook idempotente, e quem não
+pagou perde o conteúdo novo, nunca o que registrou.
+
+**Tela Assentos (Pn-07, Pn-07v).** Quatro números: em uso (só os assentos do pool), preço por
+assento, próxima fatura (`nextInvoice`: assentos × preço do pool, vence no fim do período) e
+pagamento. Com a fatura vencida, a faixa diz quantos dias faltam da carência, **contados do
+`graceEndsAt`** (`pool.graceDaysLeft`, no fuso do provedor), e o "Pagar agora" abre a fatura no
+Asaas (`overdueInvoice.invoiceUrl`). Depois da carência, só a IA hospedada dos membros pausa:
+registro e histórico ficam. O "Ajustar assentos" abre no painel lateral, com mínimo no que está em
+uso e o proporcional do aumento antes de confirmar. Cada fatura guarda os assentos cobrados
+(`seats`) e, no ajuste, os dias do proporcional (`proRataDays`). O preço é o do código, **R$ 14,90
+por assento** (`BILLING_SEAT_MONTHLY_CENTS`); a prancha Ex-04 com R$ 9,90 estava desatualizada.
+
+**Programas.** `GroupProgram` tem nome, tipo (`CLASS` para uma turma escolhida, `CHALLENGE` para
+quem entrar num desafio, até acabarem), assentos, primeiro e último dia (no fuso do provedor) e o
+valor: **assentos × preço por mês começado de 31 dias** (`programPrice`). Os assentos do programa
+são **à parte** dos do pool (`GroupSeatAssignment.programId`, com `startsAt`/`endsAt`); o pool
+continua contando só `programId = null`. O direito lê a janela (`startsAt ≤ agora < endsAt`), sem
+job, e a pessoa vê "PRO até <fim> · Programa <nome>" (`paidBy = PROGRAM`). A cobrança é avulsa na
+conta dos assentos (`externalReference = group-program:<id>`), vira fatura `PROGRAM` no histórico,
+e vencida põe o pool em atraso como o proporcional. **O assento de programa vale pela janela do
+próprio programa:** o fim do período e o cancelamento do pool não o encerram (é avulsa, já paga).
+Estornada, contestada ou apagada, a cobrança encerra o PRO do programa, e o painel mostra o
+programa como cancelado; vencida, ou com o pool em atraso, vale a carência do pool. Se gravar o
+programa falhar depois de gerar a cobrança, ela é apagada no Asaas. Criar pede pool `ACTIVE` e
+sem cancelamento marcado (cancelado é 409: "Reative a assinatura antes"); turma só com membros
+ativos da comunidade da URL; desafio só da comunidade da URL. No desafio, quem sai devolve o
+assento, que vai para o próximo que estiver nele. **Fora da #403:** editar a turma depois de
+criada e cancelar um programa.
+
+**Ofertas (Pn-37, Pn-37b).** `GroupOffer` (título, descrição, preço, vagas, datas, plano da
+comunidade, programa, extras, "quem compra entra na comunidade") nasce rascunho; publicar, encerrar
+e duplicar (rascunho com as datas um mês depois) são do dono. O link de venda é
+`<WEB_ORIGIN>/<slug da comunidade>/<slug da oferta>`. `GroupOfferPurchase` guarda cada compra
+(nome e e-mail de quem comprou, valor, status, o link de pagamento do Asaas — **nunca dado de
+cartão**). A tela mostra vendas (pagas), vagas, receita bruta e o líquido depois da taxa da
+plataforma (`OFFERS_PLATFORM_FEE_PERCENT`, 0 até decidir) e os pagamentos que falharam, com "Reenviar link de pagamento" (uma vez por hora por
+compra). O webhook liga a cobrança à compra por `providerPaymentId`: pago → `PAID`, vencido ou
+cartão recusado → `FAILED`, estorno ou contestação → `REFUNDED`; o mesmo estado de novo é
+`sem_efeito`, e pago não volta a falhou por evento fora de ordem. **A venda em si fica desligada**
+(`OFFERS_SALES_ENABLED=false`): o painel monta, publica e copia o link, mas o checkout é da #421.
+Nota fiscal, cupom, recebíveis e reembolso na tela também ficam fora. "Ativaram em 48 h" (Pn-37) fica
+de fora até a #421: ler refeições e treinos de quem comprou pede o consentimento dele. O app não vende oferta (regra
+das lojas) e não tem a seção.
+
+**E-mail Ex-04.** O `BillingReminderJob` (de hora em hora) manda ao **dono, e só a ele**, o e-mail
+"Fatura vencida" de cada fatura de assentos que venceu nos últimos 30 dias, uma vez
+(`overdueNotifiedAt`). Assentos, preço e total vêm da fatura real (sem "N × preço" quando a conta não
+fecha, como no proporcional); o botão abre a fatura no Asaas. Nenhum membro é avisado da fatura da
+academia, em canal nenhum.
+
+**Para a pessoa.** O `get_me` do MCP traz `pro`: de onde vem o PRO (`PERSONAL`, `COMMUNITY`,
+`PROGRAM`, `INSTANCE`), a comunidade, o programa e o fim marcado, sem fatura, preço nem atraso da
+academia. O export LGPD leva as compras de oferta da pessoa e o período e o programa de cada
+assento.
 
 ## Webhook
 
 O mesmo `POST /billing/webhooks/asaas`, com a mesma tabela de idempotência (`BillingWebhookEvent`). A
 ordem de procura é **assinatura pessoal → pool de assentos (`providerRef`) → cobrança avulsa
-(`providerChargeId`)**; só então o evento é marcado como desconhecido. A renovação confirmada aplica a
+(`providerChargeId`: ajuste, depois programa) → compra de oferta (`providerPaymentId`)**; só então o
+evento é marcado como desconhecido. A renovação confirmada aplica a
 redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 409 da redução evita isso).
 
 ## Cortesia e testes

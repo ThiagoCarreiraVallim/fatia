@@ -6,7 +6,10 @@ import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { NotificationService } from '../notifications/notification.service';
 import { localClock } from '../notifications/reminders/reminder-rules';
+import { dateInTz } from '../progress/helpers/date-tz';
 import { billingReminderFor, billingReminderTexts, safeTimeZone } from './billing-reminders';
+import { seatInvoiceOverdueEmail } from './seat-invoice-email';
+import { diasEntre, FUSO_DO_PROVEDOR } from './seat-pricing';
 import { UserSubscriptionService } from './user-subscription.service';
 
 /** Roda de hora em hora; cada aviso sai uma vez por dia de vencimento. */
@@ -67,6 +70,11 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
           `Testes vencidos não encerrados: ${err instanceof Error ? err.message : String(err)}`,
         ),
       );
+    await this.notifySeatInvoicesOverdue(now).catch((err: unknown) =>
+      this.logger.warn(
+        `Avisos de fatura vencida falharam: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
     const subs = await this.dueSubscriptions(now);
 
     const web = this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030';
@@ -79,6 +87,93 @@ export class BillingReminderJob implements OnModuleInit, OnModuleDestroy {
         this.logger.warn({
           event: 'aviso_de_cobranca_falhou',
           subscriptionId: sub.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return enviados;
+  }
+
+  /**
+   * Fatura dos assentos vencida (#403, prancha Ex-04): e-mail ao dono, uma vez
+   * por fatura. A fatura é marcada **antes** do envio (como o `BillingReminder`):
+   * duas instâncias não mandam duas vezes. Só o dono: nem a equipe nem os
+   * membros sabem da fatura da academia, e não há push (a regra das lojas vale
+   * para o que aparece no app).
+   */
+  async notifySeatInvoicesOverdue(now: Date): Promise<number> {
+    const faturas = await this.prisma.groupSeatInvoice.findMany({
+      where: {
+        status: 'OVERDUE',
+        overdueNotifiedAt: null,
+        // Fatura vencida há muito (antes do e-mail existir) não vira aviso hoje.
+        updatedAt: { gte: new Date(now.getTime() - 30 * DIA_MS) },
+      },
+      include: {
+        pool: {
+          select: {
+            status: true,
+            graceEndsAt: true,
+            unitPriceCents: true,
+            group: {
+              select: {
+                id: true,
+                name: true,
+                memberships: {
+                  where: { role: 'OWNER', status: 'ACTIVE' },
+                  select: { user: { select: { email: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const web = (this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030').replace(
+      /\/+$/,
+      '',
+    );
+    let enviados = 0;
+    for (const f of faturas) {
+      const dono = f.pool.group.memberships[0]?.user.email;
+      if (!dono) continue;
+      const { count } = await this.prisma.groupSeatInvoice.updateMany({
+        where: { id: f.id, overdueNotifiedAt: null },
+        data: { overdueNotifiedAt: now },
+      });
+      if (count === 0) continue;
+      const dias =
+        f.pool.status === 'PAST_DUE' && f.pool.graceEndsAt
+          ? Math.max(
+              0,
+              diasEntre(
+                dateInTz(now, FUSO_DO_PROVEDOR),
+                dateInTz(f.pool.graceEndsAt, FUSO_DO_PROVEDOR),
+              ),
+            )
+          : null;
+      try {
+        await this.email.send({
+          to: dono,
+          ...seatInvoiceOverdueEmail({
+            groupName: f.pool.group.name,
+            kind: f.kind,
+            seats: f.seats,
+            unitPriceCents: f.pool.unitPriceCents,
+            amountCents: f.amountCents,
+            dueDate: f.dueDate,
+            graceDaysLeft: dias,
+            payUrl: f.invoiceUrl,
+            panelUrl: `${web}/org/${f.pool.group.id}/seats`,
+          }),
+        });
+        enviados += 1;
+        this.logger.log({ event: 'fatura_de_assentos_vencida', invoiceId: f.id });
+      } catch (err) {
+        // Perder um aviso é melhor que repetir cobrança.
+        this.logger.warn({
+          event: 'aviso_de_fatura_vencida_falhou',
+          invoiceId: f.id,
           err: err instanceof Error ? err.message : String(err),
         });
       }
