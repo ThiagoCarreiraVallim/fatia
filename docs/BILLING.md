@@ -570,9 +570,15 @@ são **à parte** dos do pool (`GroupSeatAssignment.programId`, com `startsAt`/`
 continua contando só `programId = null`. O direito lê a janela (`startsAt ≤ agora < endsAt`), sem
 job, e a pessoa vê "PRO até <fim> · Programa <nome>" (`paidBy = PROGRAM`). A cobrança é avulsa na
 conta dos assentos (`externalReference = group-program:<id>`), vira fatura `PROGRAM` no histórico,
-e vencida põe o pool em atraso como o proporcional. Criar pede pool `ACTIVE`; turma só com
-membros ativos da comunidade da URL; desafio só da comunidade da URL. **Fora da #403:** editar a
-turma depois de criada e cancelar um programa.
+e vencida põe o pool em atraso como o proporcional. **O assento de programa vale pela janela do
+próprio programa:** o fim do período e o cancelamento do pool não o encerram (é avulsa, já paga).
+Estornada, contestada ou apagada, a cobrança encerra o PRO do programa, e o painel mostra o
+programa como cancelado; vencida, ou com o pool em atraso, vale a carência do pool. Se gravar o
+programa falhar depois de gerar a cobrança, ela é apagada no Asaas. Criar pede pool `ACTIVE` e
+sem cancelamento marcado (cancelado é 409: "Reative a assinatura antes"); turma só com membros
+ativos da comunidade da URL; desafio só da comunidade da URL. No desafio, quem sai devolve o
+assento, que vai para o próximo que estiver nele. **Fora da #403:** editar a turma depois de
+criada e cancelar um programa.
 
 **Ofertas (Pn-37, Pn-37b).** `GroupOffer` (título, descrição, preço, vagas, datas, plano da
 comunidade, programa, extras, "quem compra entra na comunidade") nasce rascunho; publicar, encerrar
@@ -580,13 +586,13 @@ e duplicar (rascunho com as datas um mês depois) são do dono. O link de venda 
 `<WEB_ORIGIN>/<slug da comunidade>/<slug da oferta>`. `GroupOfferPurchase` guarda cada compra
 (nome e e-mail de quem comprou, valor, status, o link de pagamento do Asaas — **nunca dado de
 cartão**). A tela mostra vendas (pagas), vagas, receita bruta e o líquido depois da taxa da
-plataforma (`OFFERS_PLATFORM_FEE_PERCENT`, 0 até decidir), quem registrou algo nas 48 h depois de
-pagar e os pagamentos que falharam, com "Reenviar link de pagamento" (uma vez por hora por
+plataforma (`OFFERS_PLATFORM_FEE_PERCENT`, 0 até decidir) e os pagamentos que falharam, com "Reenviar link de pagamento" (uma vez por hora por
 compra). O webhook liga a cobrança à compra por `providerPaymentId`: pago → `PAID`, vencido ou
 cartão recusado → `FAILED`, estorno ou contestação → `REFUNDED`; o mesmo estado de novo é
 `sem_efeito`, e pago não volta a falhou por evento fora de ordem. **A venda em si fica desligada**
 (`OFFERS_SALES_ENABLED=false`): o painel monta, publica e copia o link, mas o checkout é da #421.
-Nota fiscal, cupom, recebíveis e reembolso na tela também ficam fora. O app não vende oferta (regra
+Nota fiscal, cupom, recebíveis e reembolso na tela também ficam fora. "Ativaram em 48 h" (Pn-37) fica
+de fora até a #421: ler refeições e treinos de quem comprou pede o consentimento dele. O app não vende oferta (regra
 das lojas) e não tem a seção.
 
 **E-mail Ex-04.** O `BillingReminderJob` (de hora em hora) manda ao **dono, e só a ele**, o e-mail
