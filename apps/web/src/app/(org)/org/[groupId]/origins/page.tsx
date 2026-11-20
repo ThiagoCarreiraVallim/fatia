@@ -12,6 +12,7 @@ import {
   originRowName,
   panelHref,
   reportApi,
+  type InviteOrigins,
   type OriginsDays,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
@@ -23,6 +24,41 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 const num = (n: number) => n.toLocaleString('pt-BR');
+
+type OriginRow = InviteOrigins['rows'][number];
+
+/** O tipo em etiqueta contornada, como na Pn-25. */
+function KindChip({ kind }: { kind: OriginRow['kind'] }) {
+  return (
+    <span className="inline-flex rounded-full px-2 py-0.5 text-xs text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border-strong))]">
+      {originKindLabel(kind)}
+    </span>
+  );
+}
+
+/** Barra da taxa e o número; sem taxa, "amostra pequena". */
+function Rate({ row }: { row: OriginRow }) {
+  if (row.percent === null) {
+    return <span className="text-xs text-muted-foreground">{SMALL_SAMPLE}</span>;
+  }
+  return (
+    <span className="flex items-center gap-2.5">
+      <span aria-hidden className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-surface-3">
+        <span className="block h-full bg-primary" style={{ width: `${row.percent}%` }} />
+      </span>
+      <b className="w-10 tabular-nums">{`${row.percent}%`}</b>
+    </span>
+  );
+}
+
+/** "19 entraram · 15 ativaram", sem a parte que a API suprimiu. */
+function countsLine(row: OriginRow): string | null {
+  const parts = [
+    row.joined === null ? null : `${num(row.joined)} entraram`,
+    row.activated === null ? null : `${num(row.activated)} ativaram`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
 
 /**
  * Origem dos convites (#400, Pn-25): de onde vem quem entra (links e QRs com
@@ -137,7 +173,23 @@ export default function OriginsPage() {
             ))}
           </ul>
 
-          <div className="overflow-x-auto rounded-2xl border border-subtle bg-card">
+          <ul aria-label="Origens" className="space-y-2 sm:hidden">
+            {d.rows.map((o) => {
+              const counts = countsLine(o);
+              return (
+                <li key={o.key} className="space-y-2 rounded-2xl border border-subtle bg-card p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 font-semibold">{originRowName(o)}</p>
+                    <KindChip kind={o.kind} />
+                  </div>
+                  {counts && <p className="text-xs text-muted-foreground">{counts}</p>}
+                  <Rate row={o} />
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-subtle bg-card sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-subtle text-left text-xs text-muted-foreground">
@@ -145,37 +197,36 @@ export default function OriginsPage() {
                   <th className="p-3 font-medium">Tipo</th>
                   <th className="p-3 font-medium">Entraram</th>
                   <th className="p-3 font-medium">Ativaram em 48 h</th>
-                  <th className="p-3 font-medium">Taxa</th>
+                  <th className="w-1/4 p-3 font-medium">Taxa</th>
                 </tr>
               </thead>
               <tbody>
                 {d.rows.map((o) => (
                   <tr key={o.key} className="border-b border-subtle last:border-0">
                     <td className="p-3 font-semibold">{originRowName(o)}</td>
-                    <td className="p-3 text-muted-foreground">{originKindLabel(o.kind)}</td>
+                    <td className="p-3">
+                      <KindChip kind={o.kind} />
+                    </td>
                     <td className="p-3 tabular-nums">{o.joined === null ? '—' : num(o.joined)}</td>
                     <td className="p-3 tabular-nums">
                       {o.activated === null ? '—' : num(o.activated)}
                     </td>
                     <td className="p-3">
-                      {o.percent === null ? (
-                        <span className="text-xs text-muted-foreground">{SMALL_SAMPLE}</span>
-                      ) : (
-                        <b className="tabular-nums">{`${o.percent}%`}</b>
-                      )}
+                      <Rate row={o} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Contamos só quem entrou e quanto ativou. Nada de nome, nada de dado de saúde. Origens
+            com menos de 5 pessoas entram juntas em &quot;Outras origens&quot;, sem nome, ou não
+            aparecem.
+          </p>
         </>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Contamos só quem entrou e quanto ativou. Nada de nome, nada de dado de saúde. Origens com
-        menos de 5 pessoas entram juntas em &quot;Outras origens&quot;, sem nome, ou não aparecem.
-      </p>
     </div>
   );
 }
