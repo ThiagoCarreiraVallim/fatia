@@ -31,6 +31,7 @@ export * from './food-shortcuts';
 export * from './portions';
 export * from './meal-templates';
 export * from './meal-day';
+export * from './day-rollover';
 export * from './custom-food';
 export * from './food-entry';
 export * from './barcode';

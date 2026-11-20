@@ -12,6 +12,7 @@ import {
 } from '@fatia/api-client';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { REMINDERS_KEY } from '@/components/reminders/keys';
+import { dashboardTodayKey } from './use-today';
 
 /**
  * As leituras de abertura de cada aba (item 6), com as **mesmas chaves** das
@@ -28,7 +29,7 @@ interface TabQuery {
 export function tabQueries(): TabQuery[] {
   return [
     // Hoje
-    { queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() },
+    { queryKey: dashboardTodayKey(hojeIso()), queryFn: () => progressApi.today() },
     { queryKey: ['goals', 'active'], queryFn: () => goalsApi.list({ status: 'active' }) },
     // Nutrição
     {

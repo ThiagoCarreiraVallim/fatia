@@ -4,6 +4,7 @@ import { Tabs, useIsFocused, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { keepMountedOnBlur, onboardingPending, usersApi } from '@fatia/api-client';
 import { prefetchTabs } from '@/components/layout/tab-prefetch';
+import { DayRolloverSync } from '@/components/layout/use-today';
 import { colors } from '@/theme/colors';
 import { peekPendingInvite, takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
@@ -84,6 +85,7 @@ export default function AppLayout() {
     // O descanso também: a barra "treino em andamento" mostra a contagem fora
     // da sessão (#369).
     <ChatProvider>
+      <DayRolloverSync />
       {/* Drawer aberto em qualquer tela esconde a barra de baixo (`ui/drawer.tsx`). */}
       <DrawerPresenceProvider>
         <ConfirmProvider>

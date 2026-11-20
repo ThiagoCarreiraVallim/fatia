@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { nutritionApi, type DayNutrient, type MealType } from '@fatia/api-client';
+import { followToday, nutritionApi, type DayNutrient, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, Icon, Skeleton, SkeletonGroup } from '@/components/ui';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
@@ -11,7 +11,7 @@ import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { DayMealSources } from '@/components/nutrition/day-meal-sources';
 import { DayNutrientsCard } from '@/components/nutrition/day-nutrients-card';
 import { NutritionWeekStrip } from '@/components/nutrition/week-strip';
-import { hojeIso } from '@/components/nutrition/helpers';
+import { useToday } from '@/components/layout/use-today';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/page.tsx`.
@@ -40,7 +40,14 @@ function kcalFallback(kcal: number): DayNutrient {
 
 export default function NutritionScreen() {
   const router = useRouter();
-  const [data, setData] = useState(hojeIso);
+  const hoje = useToday();
+  const [data, setData] = useState(hoje);
+  // A aba fica montada: na virada do dia, quem estava em "hoje" vai para o novo hoje.
+  const [hojeVisto, setHojeVisto] = useState(hoje);
+  if (hoje !== hojeVisto) {
+    setHojeVisto(hoje);
+    setData(followToday(data, hojeVisto, hoje));
+  }
   const [novaRefeicao, setNovaRefeicao] = useState<MealType | null>(null);
   // O chip escolhido vale para o cartão e para o "De onde veio".
   const [nutrientKey, setNutrientKey] = useState<string | null>(null);
@@ -80,7 +87,7 @@ export default function NutritionScreen() {
             </HeaderButton>
           </TabHeader>
 
-          <NutritionWeekStrip date={data} today={hojeIso()} onChange={setData} />
+          <NutritionWeekStrip date={data} today={hoje} onChange={setData} />
 
           {resumo.isLoading ? (
             <SkeletonGroup label="Carregando o dia">

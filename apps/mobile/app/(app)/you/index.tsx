@@ -19,6 +19,7 @@ import {
   youHeaderLine,
   type MenuItem,
 } from '@fatia/api-client';
+import { dashboardTodayKey, useToday } from '@/components/layout/use-today';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
 import { openLegal } from '@/components/profile/legal';
@@ -66,7 +67,10 @@ export default function YouScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  const today = useQuery({ queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() });
+  const today = useQuery({
+    queryKey: dashboardTodayKey(useToday()),
+    queryFn: () => progressApi.today(),
+  });
   const plan = useQuery({ queryKey: ['billing', 'plan'], queryFn: () => billingApi.plan() });
   const news = useQuery({ queryKey: NEWS_QUERY_KEY, queryFn: () => newsApi.list(), retry: false });
   const reminders = useQuery({ queryKey: REMINDERS_KEY, queryFn: () => remindersApi.list() });
