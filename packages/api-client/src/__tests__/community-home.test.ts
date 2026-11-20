@@ -6,6 +6,8 @@ import {
   communityCardMeta,
   entryPolicyView,
   parseCommunityEntry,
+  joinSheetRequest,
+  autoLookCode,
   proOfferNote,
   teamSections,
   timezoneLabel,
@@ -245,5 +247,40 @@ describe('alreadyInView (Cm-02, quem já está na comunidade)', () => {
   it('fora da comunidade, ou lista ainda carregando: segue o fluxo de entrada', () => {
     expect(alreadyInView(mine, 'g3')).toBeNull();
     expect(alreadyInView(undefined, 'g1')).toBeNull();
+  });
+});
+
+/**
+ * A aba Comunidade fica montada (Tabs): um `?join=1&code=` novo chega como
+ * parâmetro novo, sem remontar. Cada pedido abre a folha e procura o código dele.
+ */
+describe('joinSheetRequest / autoLookCode — a folha "Tenho código" na aba montada', () => {
+  it('sem join nem code não pede nada', () => {
+    expect(joinSheetRequest({})).toBeNull();
+    expect(joinSheetRequest({ join: '0' })).toBeNull();
+  });
+
+  it('cada combinação de join e code é um pedido diferente', () => {
+    const a = joinSheetRequest({ join: '1' });
+    const b = joinSheetRequest({ join: '1', code: 'ad7k-3q9p' });
+    const c = joinSheetRequest({ join: '1', code: 'zz99-0000' });
+    expect(a).toEqual({ key: '1|', code: null });
+    expect(b).toEqual({ key: '1|ad7k-3q9p', code: 'ad7k-3q9p' });
+    expect(new Set([a!.key, b!.key, c!.key]).size).toBe(3);
+    expect(joinSheetRequest({ code: 'ad7k-3q9p' })?.code).toBe('ad7k-3q9p');
+  });
+
+  it('procura o código novo mesmo depois de já ter procurado outro', () => {
+    expect(autoLookCode({ open: true, initialCode: 'ad7k-3q9p', lookedFor: null })).toBe(
+      'ad7k-3q9p',
+    );
+    expect(
+      autoLookCode({ open: true, initialCode: 'ad7k-3q9p', lookedFor: 'ad7k-3q9p' }),
+    ).toBeNull();
+    expect(autoLookCode({ open: true, initialCode: 'zz99-0000', lookedFor: 'ad7k-3q9p' })).toBe(
+      'zz99-0000',
+    );
+    expect(autoLookCode({ open: false, initialCode: 'zz99-0000', lookedFor: null })).toBeNull();
+    expect(autoLookCode({ open: true, initialCode: null, lookedFor: null })).toBeNull();
   });
 });
