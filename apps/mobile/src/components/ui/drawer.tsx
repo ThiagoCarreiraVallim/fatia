@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
+import { useIsFocused } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './text';
 import BottomSheet, {
@@ -136,8 +137,21 @@ export function Drawer({
     else ref.current?.close();
   }, [open]);
 
-  // Aberto, esconde a barra de baixo (ver `DrawerPresence`).
-  useEffect(() => (open && add ? add() : undefined), [open, add]);
+  // Aberto, esconde a barra de baixo (ver `DrawerPresence`). Só na tela em
+  // foco: as abas ficam montadas, e uma folha aberta numa aba de trás não pode
+  // sumir com a barra das outras.
+  const focused = useIsFocused();
+  useEffect(() => (open && focused && add ? add() : undefined), [open, focused, add]);
+
+  // O voltar do Android fecha a folha em vez de sair da tela com ela aberta.
+  useEffect(() => {
+    if (!open || !focused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onOpenChange(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, focused, onOpenChange]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
