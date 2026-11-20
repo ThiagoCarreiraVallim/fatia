@@ -28,7 +28,7 @@ circuito] }] }`. v1 continua legível (normalizado para v2 numa sessão). `build
 
 - [x] schema + migração `20261120500000_workout_plan_editor`
 - [x] snapshot v2 + materializador (N planos por oferta) + agenda/aceite/settle
-- [ ] content (template) com documento do editor; rota da cópia do aluno
+- [x] content (template) com documento do editor; rota da cópia do aluno
 - [ ] MCP + docs/MCP_TOOL_SURFACE.md
 - [ ] api-client
 - [ ] web: editor (Pn-09..09e)
@@ -40,12 +40,7 @@ circuito] }] }`. v1 continua legível (normalizado para v2 numa sessão). `build
   (aceite/settle multi-sessão, writeTeamVersion), plan-offer-diff (v2), content.service
   (document/tags/schedule/datas), PlanCopyService + rotas
   `groups/:g/members/:m/plan-offers/:o/copy` (GET/PUT).
-- RED-FIRST em curso: `plan-copy.service.ts` e `documentToSnapshot`/`snapshotToDocument`
-  estão com stub (`throw`, `// @ts-nocheck`); as versões reais estão em `~/.cache/fatia-vis/406/real/`
-  (`plan-copy.service.ts`, `plan-document.ts`). Se o scratchpad sumiu, reescrever a partir
-  do commit `feat(api)` seguinte (ou do transcript). Próximo: escrever
-  `apps/api/src/sharing/__tests__/plan-editor.integration.spec.ts`, commit `test(api)` vermelho,
-  restaurar reais, commit `feat(api)`.
+- RED-FIRST feito (test 0f2be0f8 vermelho → feat). Stubs removidos.
 - Banco de teste: `bash ~/.cache/fatia-vis/406/resetdb.sh`; jest com
   `DATABASE_URL=$(cat ~/.cache/fatia-vis/406/tdb.url) npx jest <spec> --maxWorkers=4`.
 - Pendentes: consumidores multi-plano (plan-programs offerProgress, plan-send, member-file,

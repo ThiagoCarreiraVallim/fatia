@@ -1,5 +1,3 @@
-/* eslint-disable */
-// @ts-nocheck
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import type { PrismaService } from '../common/prisma.service';
@@ -33,15 +31,14 @@ import { CIRCUIT_LIMITS, MAX_CIRCUIT_EXERCISES } from '../workout/helpers/circui
  */
 const exerciseRef = {
   type: z.literal('exercise'),
-  exerciseId: z.number().int().positive().optional(),
+  // Nulo no que viaja por valor: é como a tela recebe e devolve.
+  exerciseId: z.number().int().positive().nullable().optional(),
   custom: definicaoCustomSchema.optional(),
 };
 
-const docExerciseSchema = z
-  .object({ ...exerciseRef, ...prescricaoV2 })
-  .refine((e) => (e.exerciseId === undefined) !== (e.custom === undefined), {
-    message: 'cada exercício vem pelo id da biblioteca ou pela definição, um dos dois',
-  });
+// Objeto puro (sem refine) para a união discriminada por `type` dizer o campo
+// que está errado; "id ou definição" é conferido no documento inteiro.
+const docExerciseSchema = z.object({ ...exerciseRef, ...prescricaoV2 });
 
 const campo = (c: keyof typeof CIRCUIT_LIMITS) =>
   z.number().int().min(CIRCUIT_LIMITS[c][0]).max(CIRCUIT_LIMITS[c][1]).optional();
@@ -60,20 +57,40 @@ const docCircuitSchema = z.object({
   exercises: z.array(docExerciseSchema).min(1).max(MAX_CIRCUIT_EXERCISES),
 });
 
-export const planDocumentSchema = z.object({
-  sessions: z
-    .array(
-      z.object({
-        name: z.string().max(MAX_SESSION_NAME),
-        weekday: z.number().int().min(1).max(7).nullable().optional(),
-        items: z
-          .array(z.union([docCircuitSchema, docExerciseSchema]))
-          .max(MAX_EXERCICIOS_NO_SNAPSHOT),
+export const planDocumentSchema = z
+  .object({
+    sessions: z
+      .array(
+        z.object({
+          name: z.string().max(MAX_SESSION_NAME),
+          weekday: z.number().int().min(1).max(7).nullable().optional(),
+          items: z
+            .array(z.discriminatedUnion('type', [docCircuitSchema, docExerciseSchema]))
+            .max(MAX_EXERCICIOS_NO_SNAPSHOT),
+        }),
+      )
+      .min(1)
+      .max(MAX_PLAN_SESSIONS),
+  })
+  .superRefine((doc, ctx) => {
+    doc.sessions.forEach((s, si) =>
+      s.items.forEach((item, ii) => {
+        const list = item.type === 'circuit' ? item.exercises : [item];
+        list.forEach((e, ei) => {
+          if ((e.exerciseId == null) === (e.custom === undefined)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path:
+                item.type === 'circuit'
+                  ? ['sessions', si, 'items', ii, 'exercises', ei]
+                  : ['sessions', si, 'items', ii],
+              message: 'cada exercício vem pelo id da biblioteca ou pela definição, um dos dois',
+            });
+          }
+        });
       }),
-    )
-    .min(1)
-    .max(MAX_PLAN_SESSIONS),
-});
+    );
+  });
 
 export type PlanDocumentInput = z.infer<typeof planDocumentSchema>;
 type DocExercise = z.infer<typeof docExerciseSchema>;
@@ -137,8 +154,6 @@ export async function documentToSnapshot(
   name: string,
   ctx: { editorId: string; groupId: string; groupByValue: boolean },
 ): Promise<PlanSnapshotV2> {
-  throw new Error('não implementado (#406)');
-
   const all: DocExercise[] = doc.sessions.flatMap((s) =>
     s.items.flatMap((i) => (i.type === 'circuit' ? i.exercises : [i])),
   );
@@ -260,8 +275,6 @@ export async function snapshotToDocument(
   snap: PlanSnapshotV2,
   groupId: string,
 ): Promise<PlanDocumentView> {
-  throw new Error('não implementado (#406)');
-
   const all = snap.sessions.flatMap(sessionExercises);
   const catalog = all.flatMap((e) => (e.source === 'catalog' ? [e.catalogExerciseId] : []));
   const group = all.flatMap((e) => (e.source === 'group' ? [e.groupExerciseId] : []));

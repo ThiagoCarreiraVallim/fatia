@@ -130,7 +130,7 @@ describe('editor de plano de treino (#406, banco real)', () => {
               exerciseId: daComunidade,
               targetSets: 3,
               targetReps: '12',
-              loadMode: 'KG',
+              loadMode: 'WEIGHT',
               startLoadKg: 40,
             },
           ],
@@ -166,7 +166,7 @@ describe('editor de plano de treino (#406, banco real)', () => {
               exerciseId: cardio,
               targetSets: 1,
               targetReps: '1',
-              cardioTarget: 'DURATION',
+              cardioTarget: 'TIME',
               cardioDurationSeconds: 1800,
               cardioInclinePercent: 6,
               cardioZone: 2,
@@ -260,6 +260,9 @@ describe('editor de plano de treino (#406, banco real)', () => {
 
   afterAll(async () => {
     await prisma.group.deleteMany({ where: { id: { in: grupos } } });
+    // Os planos antes das contas: o exercício por valor é da própria pessoa.
+    await prisma.workoutSession.deleteMany({ where: { userId: { in: criados } } });
+    await prisma.workoutPlan.deleteMany({ where: { userId: { in: criados } } });
     await prisma.user.deleteMany({ where: { id: { in: criados } } });
     await prisma.exercise.deleteMany({
       where: { id: { in: [daComunidade, daOutraComunidade, doCarlos, daHelena] } },
@@ -274,7 +277,7 @@ describe('editor de plano de treino (#406, banco real)', () => {
       const v = await content.createWorkoutTemplate(u.helena!, g, {
         title: 'Inferior v2',
         document: documento(),
-        level: 'INTERMEDIATE',
+        level: 'intermediate',
         tags: ['Hipertrofia', ' força ', 'hipertrofia'],
         schedule: 'CALENDAR',
         startDate: '2026-12-01',

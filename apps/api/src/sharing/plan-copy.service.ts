@@ -1,5 +1,3 @@
-/* eslint-disable */
-// @ts-nocheck
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ShareScope, type PlanOfferStatus, type PlanSchedule } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
@@ -84,7 +82,6 @@ export class PlanCopyService {
     membershipId: string,
     offerId: string,
   ): Promise<PlanCopyView> {
-    throw new Error('não implementado (#406)');
     const { offer, subjectId } = await this.resolve(
       viewerId,
       groupId,
@@ -169,7 +166,6 @@ export class PlanCopyService {
     offerId: string,
     input: SavePlanCopyInput,
   ): Promise<{ offerId: string; versionId: string; version: number }> {
-    throw new Error('não implementado (#406)');
     const doc = parsePlanDocument(input.document);
     const { offer, subjectId, editorName } = await this.resolve(
       viewerId,
