@@ -34,9 +34,8 @@ export class UsersController {
   ) {}
 
   @Get('me')
-  async getMe(@CurrentUser() user: CurrentUserPayload) {
-    const me = await this.profile.getMe(user.id);
-    return { ...me, emailChangeEnabled: this.identity.emailChangeEnabled() };
+  getMe(@CurrentUser() user: CurrentUserPayload) {
+    return this.profile.getMe(user.id);
   }
 
   @Patch('me')
@@ -44,7 +43,7 @@ export class UsersController {
     const me = await this.profile.updateMe(user.id, dto, user.timezone);
     // O nome também no Logto, sem segurar a resposta (best-effort, ADR 050).
     if (dto.name !== undefined) void this.identity.pushName(user.id, me.name);
-    return { ...me, emailChangeEnabled: this.identity.emailChangeEnabled() };
+    return me;
   }
 
   /**

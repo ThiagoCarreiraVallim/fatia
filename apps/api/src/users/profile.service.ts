@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { logtoManagementConfigured } from '../auth/logto-management.service';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
@@ -15,6 +17,8 @@ type UserRow = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
 export type MeView = Omit<UserRow, 'avatarFile'> & {
   avatarUrl: string | null;
   mediaUploadEnabled: boolean;
+  /** A troca de e-mail precisa da Management API do Logto (ADR 050). */
+  emailChangeEnabled: boolean;
 };
 
 /**
@@ -27,6 +31,7 @@ export class ProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
+    @Optional() private readonly config?: ConfigService,
   ) {}
 
   async getMe(userId: string): Promise<MeView> {
@@ -88,6 +93,11 @@ export class ProfileService {
 
   private async view({ avatarFile, ...row }: UserRow): Promise<MeView> {
     const foto = await this.media.viewOrNull(avatarFile);
-    return { ...row, avatarUrl: foto?.url ?? null, mediaUploadEnabled: this.media.enabled };
+    return {
+      ...row,
+      avatarUrl: foto?.url ?? null,
+      mediaUploadEnabled: this.media.enabled,
+      emailChangeEnabled: this.config ? logtoManagementConfigured(this.config) : false,
+    };
   }
 }

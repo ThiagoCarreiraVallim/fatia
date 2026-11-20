@@ -13,6 +13,13 @@ import { ConfigService } from '@nestjs/config';
  * transformaria "não configurei a Management API" em "ninguém consegue apagar a
  * conta", que é o pior dos dois lados.
  */
+/** Há app M2M da Management API? (o perfil também pergunta, sem o service). */
+export function logtoManagementConfigured(config: Pick<ConfigService, 'get'>): boolean {
+  return Boolean(
+    config.get<string>('LOGTO_M2M_APP_ID') && config.get<string>('LOGTO_M2M_APP_SECRET'),
+  );
+}
+
 @Injectable()
 export class LogtoManagementService {
   private readonly logger = new Logger(LogtoManagementService.name);
@@ -21,10 +28,7 @@ export class LogtoManagementService {
 
   /** True se as credenciais da Management API estão configuradas. */
   isConfigured(): boolean {
-    return Boolean(
-      this.config.get<string>('LOGTO_M2M_APP_ID') &&
-      this.config.get<string>('LOGTO_M2M_APP_SECRET'),
-    );
+    return logtoManagementConfigured(this.config);
   }
 
   /**
