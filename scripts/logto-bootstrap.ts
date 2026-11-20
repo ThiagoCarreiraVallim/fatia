@@ -443,6 +443,8 @@ async function main() {
   envFileSetIfPlaceholder(ENV_PATH, 'LOGTO_APP_SECRET', await appSecret(api, web.id));
   envFileSetIfPlaceholder(ENV_PATH, 'LOGTO_MCP_APP_ID', mcp.id);
   envFileSetIfPlaceholder(ENV_PATH, 'LOGTO_MCP_APP_SECRET', await appSecret(api, mcp.id));
+  // A API aceita o ID token do app com este `aud` (ADR 050).
+  envFileSetIfPlaceholder(ENV_PATH, 'LOGTO_MOBILE_APP_ID', mobile.id);
   envFileSetIfPlaceholder(ENV_PATH, 'LOGTO_COOKIE_SECRET', randomBytes(32).toString('base64'));
   if (existsSync(MOBILE_ENV_PATH)) {
     envFileSetIfPlaceholder(MOBILE_ENV_PATH, 'EXPO_PUBLIC_LOGTO_APP_ID', mobile.id);

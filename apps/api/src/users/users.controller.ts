@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateMeDto } from './dto/update-me.dto';
@@ -8,6 +19,9 @@ import { AccountService, APP_DELETE_CONFIRMATION } from './account.service';
 import { DataExportService } from './data-export.service';
 import { ProfileService } from './profile.service';
 import { McpConnectionService } from '../auth/mcp-connection.service';
+import { IdentitySyncService } from '../auth/identity-sync.service';
+import { UserThrottlerGuard } from '../common/user-throttler.guard';
+import { ConfirmEmailChangeDto, RequestEmailChangeDto, SyncIdentityDto } from './dto/identity.dto';
 
 @Controller('users')
 export class UsersController {
@@ -16,16 +30,54 @@ export class UsersController {
     private readonly profile: ProfileService,
     private readonly exports: DataExportService,
     private readonly mcp: McpConnectionService,
+    private readonly identity: IdentitySyncService,
   ) {}
 
   @Get('me')
-  getMe(@CurrentUser() user: CurrentUserPayload) {
-    return this.profile.getMe(user.id);
+  async getMe(@CurrentUser() user: CurrentUserPayload) {
+    const me = await this.profile.getMe(user.id);
+    return { ...me, emailChangeEnabled: this.identity.emailChangeEnabled() };
   }
 
   @Patch('me')
-  updateMe(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateMeDto) {
-    return this.profile.updateMe(user.id, dto, user.timezone);
+  async updateMe(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateMeDto) {
+    const me = await this.profile.updateMe(user.id, dto, user.timezone);
+    // O nome também no Logto, sem segurar a resposta (best-effort, ADR 050).
+    if (dto.name !== undefined) void this.identity.pushName(user.id, me.name);
+    return { ...me, emailChangeEnabled: this.identity.emailChangeEnabled() };
+  }
+
+  /**
+   * E-mail e nome reais a partir do ID token do login (ADR 050). Só vale um ID
+   * token emitido para o app mobile e com o `sub` desta conta.
+   */
+  @Post('me/identity')
+  @HttpCode(200)
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  syncIdentity(@CurrentUser() user: CurrentUserPayload, @Body() dto: SyncIdentityDto) {
+    return this.identity.syncFromIdToken(user.id, dto.idToken);
+  }
+
+  /** Troca de e-mail, parte 1: confere a senha e manda o código ao e-mail novo. */
+  @Post('me/email/code')
+  @HttpCode(204)
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  async requestEmailChange(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: RequestEmailChangeDto,
+  ): Promise<void> {
+    await this.identity.requestEmailChange(user.id, dto.email, dto.password);
+  }
+
+  /** Parte 2: o código recebido; grava no Logto e no perfil. */
+  @Post('me/email')
+  @HttpCode(200)
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  confirmEmailChange(@CurrentUser() user: CurrentUserPayload, @Body() dto: ConfirmEmailChangeDto) {
+    return this.identity.confirmEmailChange(user.id, dto.email, dto.code);
   }
 
   /**
