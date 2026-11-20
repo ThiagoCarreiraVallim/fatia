@@ -11,8 +11,6 @@ import {
   COMMENT_BODY_MAX,
   commentProblem,
   commentsLabel,
-  DISPLAY_NAME_MAX,
-  displayNameProblem,
   feedApi,
   moderationApi,
   PIN_DAY_OPTIONS,
@@ -49,33 +47,12 @@ import { PollBlock } from './poll-block';
 import { feedKey, postKey } from './feed-keys';
 export { feedKey, feedListKey, forYouKey, postKey } from './feed-keys';
 
-/** Como a pessoa aparece no mural: pedido na primeira vez que ela escreve. */
+/**
+ * Como a pessoa aparece no mural: o nome do perfil (apelido ou primeiro nome),
+ * que a API resolve. O app não pergunta mais; para trocar, Você → Editar perfil.
+ */
 export interface MyName {
-  displayName: string | null;
-  suggested: string;
-}
-
-export function NicknameField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <View className="gap-1">
-      <Input
-        value={value}
-        onChangeText={onChange}
-        maxLength={DISPLAY_NAME_MAX}
-        accessibilityLabel="Seu apelido no mural"
-        placeholder="Seu apelido no mural"
-      />
-      <Text className="text-xs text-muted-foreground">
-        É o nome que os outros membros veem, o mesmo dos desafios.
-      </Text>
-    </View>
-  );
+  displayName: string;
 }
 
 function Autor({ author, createdAt }: { author: PostAuthor; createdAt: string }) {
@@ -209,12 +186,11 @@ function useBlock(groupId: string) {
     });
 }
 
-function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
+function Comments({ groupId, post }: { groupId: string; post: Post }) {
   const qc = useQueryClient();
   const toast = useToast();
   const bloquear = useBlock(groupId);
   const [texto, setTexto] = useState('');
-  const [apelido, setApelido] = useState(me.suggested);
   const [denunciando, setDenunciando] = useState<PostComment | null>(null);
   const detalhe = useQuery({
     queryKey: postKey(groupId, post.id),
@@ -224,8 +200,7 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
     void qc.invalidateQueries({ queryKey: feedKey(groupId) });
   };
   const comentar = useMutation({
-    mutationFn: () =>
-      feedApi.comment(groupId, post.id, texto.trim(), me.displayName ? undefined : apelido.trim()),
+    mutationFn: () => feedApi.comment(groupId, post.id, texto.trim()),
     onSuccess: () => {
       setTexto('');
       recarregar();
@@ -241,7 +216,7 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
     onError: (err) =>
       toast.show({ message: apiMessage(err, 'Não deu para tirar o comentário agora.') }),
   });
-  const problema = commentProblem(texto) ?? (me.displayName ? null : displayNameProblem(apelido));
+  const problema = commentProblem(texto);
 
   return (
     <View className="gap-3 border-t border-border pt-3">
@@ -288,7 +263,6 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
           ) : null}
         </View>
       ))}
-      {!me.displayName ? <NicknameField value={apelido} onChange={setApelido} /> : null}
       <Input
         value={texto}
         onChangeText={setTexto}
@@ -324,7 +298,7 @@ function autoHref(groupId: string, kind: AutoPostKind, refId: string): string {
 }
 
 /** Um post no mural — equivalente de `apps/web/src/components/feed/feed-ui.tsx`. */
-export function PostCard({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
+export function PostCard({ groupId, post }: { groupId: string; post: Post }) {
   const confirm = useConfirm();
   const actionSheet = useActionSheet();
   const router = useRouter();
@@ -548,7 +522,7 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
       {denunciando ? (
         <Denunciar groupId={groupId} postId={post.id} onClose={() => setDenunciando(false)} />
       ) : null}
-      {abertos && !post.removed ? <Comentarios groupId={groupId} post={post} me={me} /> : null}
+      {abertos && !post.removed ? <Comments groupId={groupId} post={post} /> : null}
     </View>
   );
 }

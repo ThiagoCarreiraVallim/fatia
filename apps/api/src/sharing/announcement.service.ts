@@ -29,6 +29,7 @@ import {
   POST_BODY_MAX,
   PostService,
 } from './post.service';
+import { communityName } from './display-name';
 
 /** O horário do comunicado anda em blocos de 15 minutos (prancha Pn-14). */
 export const ANNOUNCEMENT_SLOT_MINUTES = 15;
@@ -527,11 +528,7 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
       nextRunAt: r.nextRunAt,
       lastRunAt: r.lastRunAt,
       createdAt: r.createdAt,
-      author:
-        r.membership.displayName ??
-        r.membership.user.nickname ??
-        r.membership.user.name.split(/\s+/)[0] ??
-        '',
+      author: communityName(r.membership),
     };
   }
 }

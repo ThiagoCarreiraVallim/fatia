@@ -107,6 +107,13 @@ export function avatarVisibilityText(v: AvatarVisibility): string {
     : 'Os outros membros veem suas iniciais; só a equipe vê a foto.';
 }
 
+/** Por que a foto não pode ser trocada agora; `null` quando pode. */
+export function avatarUploadNotice(me: Pick<MeUser, 'mediaUploadEnabled'>): string | null {
+  return me.mediaUploadEnabled === false
+    ? 'O envio de fotos não está disponível neste servidor agora. Por enquanto, você aparece com as iniciais.'
+    : null;
+}
+
 export function whatsappOptInText(on: boolean): string {
   return on
     ? 'A equipe das suas comunidades vê o número e toca para abrir o WhatsApp.'

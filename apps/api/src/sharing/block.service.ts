@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MembershipStatus, PostAuthorAs } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { firstName } from './display-name';
+import { communityName } from './display-name';
 
 export interface BlockInput {
   /** A comunidade da URL (ou da tool): o post e o comentário só valem dentro dela. */
@@ -113,7 +113,7 @@ export class BlockService {
     }
     if (autor.userId === userId) throw new BadRequestException('Você não pode bloquear você mesmo');
 
-    const label = autor.displayName ?? autor.user.nickname ?? firstName(autor.user.name);
+    const label = communityName(autor);
     const row = await this.prisma.userBlock.upsert({
       where: { blockerId_blockedId: { blockerId: userId, blockedId: autor.userId } },
       create: { blockerId: userId, blockedId: autor.userId, label, groupId: input.groupId },

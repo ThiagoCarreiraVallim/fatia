@@ -10,8 +10,6 @@ import {
   challengePeriod,
   challengeScoreLabel,
   challengesApi,
-  DISPLAY_NAME_MAX,
-  displayNameProblem,
   KIND_INFO,
   METRIC_INFO,
   PHOTO_CONSENT_TEXT,
@@ -56,8 +54,6 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, UnderlineTabsList, UnderlineTabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -374,7 +370,10 @@ function joinExplain(c: ChallengeDetail): string {
   }
 }
 
-/** Entrar no desafio (Cm-09): apelido, o que conta e, com foto, o aceite (ADR 047). */
+/**
+ * Entrar no desafio (Cm-09): o que conta e, com foto, o aceite (ADR 047). O nome no
+ * ranking é o do perfil, sem pergunta.
+ */
 function JoinChallengeDialog({
   challenge: c,
   pending,
@@ -384,12 +383,11 @@ function JoinChallengeDialog({
   challenge: ChallengeDetail;
   pending: boolean;
   onCancel: () => void;
-  onConfirm: (nickname: string, acceptPhotoTerms: boolean) => void;
+  onConfirm: (acceptPhotoTerms: boolean) => void;
 }) {
-  const [nickname, setNickname] = useState(c.suggestedDisplayName);
   const [accepted, setAccepted] = useState(false);
-  const problem = displayNameProblem(nickname);
-  const blocked = Boolean(problem) || (c.needsPhotoConsent && !accepted) || pending;
+  const name = c.suggestedDisplayName;
+  const blocked = (c.needsPhotoConsent && !accepted) || pending;
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-sm">
@@ -397,28 +395,20 @@ function JoinChallengeDialog({
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!blocked) onConfirm(nickname.trim(), c.needsPhotoConsent && accepted);
+            if (!blocked) onConfirm(c.needsPhotoConsent && accepted);
           }}
         >
           <DialogHeader>
             <DialogTitle>{`Participar de ${c.title}`}</DialogTitle>
             <DialogDescription>
-              Os participantes veem seu apelido e sua pontuação. Você pode sair enquanto o desafio
-              não acabar.
+              Os participantes veem seu nome e sua pontuação. Você pode sair enquanto o desafio não
+              acabar.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1">
-            <Label htmlFor="apelido">Como aparecer no ranking</Label>
-            <Input
-              id="apelido"
-              value={nickname}
-              maxLength={DISPLAY_NAME_MAX}
-              onChange={(e) => setNickname(e.target.value)}
-              aria-invalid={Boolean(problem)}
-              aria-describedby="apelido-ajuda"
-            />
-            <p id="apelido-ajuda" className="text-xs text-muted-foreground">
-              Vale para os próximos desafios desta comunidade.
+          <div className="space-y-0.5 rounded-xl border border-subtle p-3 text-sm">
+            <p>{`No ranking: ${name}`}</p>
+            <p className="text-xs text-muted-foreground">
+              É o nome do seu perfil. Para trocar, vá em Você → Editar perfil.
             </p>
           </div>
           <p className="flex gap-3 rounded-xl bg-muted p-3 text-sm">
@@ -440,21 +430,12 @@ function JoinChallengeDialog({
               </div>
             </div>
           )}
-          {problem && (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
-          )}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={onCancel}>
               Cancelar
             </Button>
             <Button type="submit" disabled={blocked}>
-              {pending
-                ? 'Entrando...'
-                : nickname.trim()
-                  ? `Participar como ${nickname.trim()}`
-                  : 'Participar como...'}
+              {pending ? 'Entrando...' : `Participar como ${name}`}
             </Button>
           </DialogFooter>
         </form>
@@ -487,8 +468,8 @@ export default function CommunityChallengePage() {
     qc.invalidateQueries({ queryKey: communityKeys.challenges(groupId), exact: true });
 
   const join = useMutation({
-    mutationFn: ({ nickname, accept }: { nickname: string; accept: boolean }) =>
-      challengesApi.join(groupId, challengeId, nickname, accept ? { acceptPhotoTerms: true } : {}),
+    mutationFn: ({ accept }: { accept: boolean }) =>
+      challengesApi.join(groupId, challengeId, undefined, accept ? { acceptPhotoTerms: true } : {}),
     onSuccess: (d) => {
       qc.setQueryData(communityKeys.challenge(groupId, challengeId), d);
       void refreshList();
@@ -695,7 +676,7 @@ export default function CommunityChallengePage() {
           challenge={c}
           pending={join.isPending}
           onCancel={() => setJoining(false)}
-          onConfirm={(nickname, accept) => join.mutate({ nickname, accept })}
+          onConfirm={(accept) => join.mutate({ accept })}
         />
       )}
 

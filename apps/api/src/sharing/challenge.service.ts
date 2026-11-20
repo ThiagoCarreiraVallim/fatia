@@ -55,7 +55,7 @@ import {
   challengeEndedNotice,
   challengeStartedNotice,
 } from './community-notices';
-import { cleanDisplayName, firstName } from './display-name';
+import { cleanDisplayName, communityName } from './display-name';
 import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
 import { can } from './permissions';
 
@@ -425,11 +425,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     challengeId: string,
     now = new Date(),
   ): Promise<ChallengeDetail> {
-    const { role, membershipId, displayName, userName } = await this.member(
-      userId,
-      groupId,
-      'challenge.join',
-    );
+    const { role, membershipId, name } = await this.member(userId, groupId, 'challenge.join');
     const row = await this.find(groupId, challengeId);
     await this.refresh(row, now);
     const linhas = await this.prisma.groupChallengeParticipant.findMany({
@@ -464,7 +460,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       leaderboard: verRanking
         ? this.leaderboard(view.status, atual.finalizedAt, linhas, membershipId)
         : null,
-      suggestedDisplayName: displayName ?? firstName(userName),
+      suggestedDisplayName: name,
       today:
         meu && view.status === 'running' && atual.kind !== 'METRIC'
           ? await this.todayOf(atual, meu, now)
@@ -493,7 +489,9 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
           'de prova e que ela é apagada 30 dias depois do fim.',
       );
     }
-    const nome = cleanDisplayName(displayName ?? m.displayName ?? firstName(m.userName));
+    // Sem nome escolhido (o app não pergunta mais), entra com o do perfil e nada é
+    // gravado na comunidade: trocar o nome no perfil troca o próximo desafio.
+    const nome = displayName === undefined ? m.name : cleanDisplayName(displayName);
     const aceite = foto ? { photoConsentVersion: PHOTO_CONSENT_VERSION, photoConsentAt: now } : {};
     await this.prisma.$transaction([
       this.prisma.groupChallengeParticipant.upsert({
@@ -506,11 +504,15 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         },
         update: { displayName: nome, ...aceite },
       }),
-      // O apelido vale para a comunidade: o próximo desafio já sugere este.
-      this.prisma.groupMembership.update({
-        where: { id: m.membershipId },
-        data: { displayName: nome },
-      }),
+      // Um apelido escolhido vale para a comunidade: o próximo desafio já sugere este.
+      ...(displayName === undefined
+        ? []
+        : [
+            this.prisma.groupMembership.update({
+              where: { id: m.membershipId },
+              data: { displayName: nome },
+            }),
+          ]),
       // Entrou: o "Me avise" deixa de ser preciso (quem entrou já é avisado).
       this.prisma.groupChallengeWatcher.deleteMany({
         where: { challengeId: row.id, membershipId: m.membershipId },
@@ -1375,13 +1377,8 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       where: { groupId_userId: { groupId, userId } },
       select: { id: true, displayName: true, user: { select: { name: true, nickname: true } } },
     });
-    // Sem apelido na comunidade, vale o do perfil (Você, #387).
-    return {
-      role,
-      membershipId: m.id,
-      displayName: m.displayName ?? m.user.nickname,
-      userName: m.user.name,
-    };
+    // O nome no ranking é o da comunidade, senão o do perfil (`communityName`).
+    return { role, membershipId: m.id, name: communityName(m) };
   }
 
   /** Sempre pelo par da URL: id de desafio de outra comunidade é 404. */

@@ -50,8 +50,9 @@ export default function CommunityFeedScreen() {
   });
   const primeira = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
+  // O nome do perfil; `suggestedDisplayName` cobre a API de antes, que mandava null.
   const me = primeira
-    ? { displayName: primeira.displayName, suggested: primeira.suggestedDisplayName }
+    ? { displayName: primeira.displayName ?? primeira.suggestedDisplayName }
     : null;
   const settingsHref = `/community/${groupId}/settings`;
   const pins = primeira?.pins ?? [];
@@ -152,7 +153,7 @@ export default function CommunityFeedScreen() {
               >
                 {pins.map((p) => (
                   <View key={p.id} className="w-[300px]">
-                    <PostCard groupId={groupId} post={p} me={me} />
+                    <PostCard groupId={groupId} post={p} />
                   </View>
                 ))}
               </ScrollView>
@@ -204,7 +205,7 @@ export default function CommunityFeedScreen() {
                 }
               />
             ) : (
-              posts.map((p) => <PostCard key={p.id} groupId={groupId} post={p} me={me} />)
+              posts.map((p) => <PostCard key={p.id} groupId={groupId} post={p} />)
             )}
             {feed.hasNextPage ? (
               <Button

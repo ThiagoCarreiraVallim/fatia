@@ -34,7 +34,7 @@ import {
 } from './community-notices';
 import { blockedUserIds } from './block.service';
 import { requireContentRole } from './content-roles';
-import { cleanDisplayName, firstName } from './display-name';
+import { cleanDisplayName, communityName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
 
 /** Quem agendou saiu ou perdeu o papel: os próximos disparos não saem mais. */
@@ -439,8 +439,9 @@ export class PostService {
       canModerate: eu.moderates,
       isTeam: TEAM_ROLES.includes(eu.role),
       groupName: eu.group.name,
-      displayName: eu.displayName,
-      suggestedDisplayName: eu.displayName ?? eu.userNickname ?? firstName(eu.userName),
+      // Sempre preenchido: o nome vem do perfil, e o app não pergunta mais.
+      displayName: myName(eu),
+      suggestedDisplayName: myName(eu),
       pins: await Promise.all(pins.map((r) => this.view(r, eu))),
       posts: await Promise.all(rows.map((r) => this.view(r, eu))),
       unseen: depois ? 0 : await this.countUnseen(groupId, eu),
@@ -635,7 +636,7 @@ export class PostService {
       });
       // Só a reação nova avisa: trocar de emoji não é novidade para o autor.
       if (!before && row.membershipId !== eu.membershipId) {
-        const author = eu.displayName ?? eu.userNickname ?? firstName(eu.userName);
+        const author = myName(eu);
         await this.notifyAuthor(
           row.membershipId,
           (groupName) => reactionNotice({ groupId, groupName, author }),
@@ -1381,14 +1382,13 @@ export class PostService {
   }
 
   /**
-   * Quem ainda não tem apelido ganha um ao publicar: o escolhido ou o primeiro
-   * nome. O apelido do perfil não é copiado para a comunidade: ele continua
-   * valendo pelo `nameOf`, e trocar no perfil troca aqui também.
+   * O nome com que a pessoa publica. Sem um apelido escolhido (o MCP ainda
+   * aceita um), vale o do perfil e nada é gravado na comunidade: trocar o nome
+   * no perfil troca aqui também.
    */
   private async ensureDisplayName(eu: Eu, escolhido?: string): Promise<string> {
-    if (eu.displayName && !escolhido) return eu.displayName;
-    if (!escolhido && eu.userNickname) return eu.userNickname;
-    const nome = cleanDisplayName(escolhido ?? firstName(eu.userName));
+    if (!escolhido) return myName(eu);
+    const nome = cleanDisplayName(escolhido);
     if (nome !== eu.displayName) {
       await this.prisma.groupMembership.update({
         where: { id: eu.membershipId },
@@ -1511,9 +1511,8 @@ export class PostService {
     return this.view(completo!, eu);
   }
 
-  /** Apelido da comunidade, senão o do perfil (Você, #387), senão o primeiro nome. */
   private nameOf(a: Autor): string {
-    return a.displayName ?? a.user.nickname ?? firstName(a.user.name);
+    return communityName(a);
   }
 
   private async author(a: Autor, eu: Eu, asGroup = false): Promise<AuthorView> {
@@ -1601,4 +1600,12 @@ export class PostService {
       canBlock: !meu && !asGroup,
     };
   }
+}
+
+/** O nome da própria pessoa no mural (ver `communityName`). */
+function myName(eu: { displayName: string | null; userNickname: string | null; userName: string }) {
+  return communityName({
+    displayName: eu.displayName,
+    user: { nickname: eu.userNickname, name: eu.userName },
+  });
 }

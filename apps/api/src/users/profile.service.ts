@@ -7,8 +7,15 @@ import { profileUpdateData, type ProfileUpdate } from './profile-update';
 
 type UserRow = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
 
-/** O perfil como o app e o MCP o recebem: a foto vira URL assinada de curta duração. */
-export type MeView = Omit<UserRow, 'avatarFile'> & { avatarUrl: string | null };
+/**
+ * O perfil como o app e o MCP o recebem: a foto vira URL assinada de curta duração.
+ * `mediaUploadEnabled` diz se o servidor tem bucket (`MEDIA_S3_*`): sem ele o app
+ * esconde "Tirar foto / Galeria" em vez de deixar o envio falhar com 503.
+ */
+export type MeView = Omit<UserRow, 'avatarFile'> & {
+  avatarUrl: string | null;
+  mediaUploadEnabled: boolean;
+};
 
 /**
  * O perfil da própria pessoa (Você, #387): leitura, edição e a foto. Mora fora
@@ -81,6 +88,6 @@ export class ProfileService {
 
   private async view({ avatarFile, ...row }: UserRow): Promise<MeView> {
     const foto = await this.media.viewOrNull(avatarFile);
-    return { ...row, avatarUrl: foto?.url ?? null };
+    return { ...row, avatarUrl: foto?.url ?? null, mediaUploadEnabled: this.media.enabled };
   }
 }

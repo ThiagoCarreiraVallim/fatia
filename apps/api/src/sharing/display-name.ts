@@ -28,3 +28,22 @@ export function firstName(name: string): string {
   const primeiro = name.trim().split(/\s+/)[0] ?? '';
   return primeiro.length >= DISPLAY_NAME_MIN ? primeiro.slice(0, DISPLAY_NAME_MAX) : 'Participante';
 }
+
+/**
+ * O nome de alguém na comunidade, de um lugar só: o apelido escolhido para esta
+ * comunidade, senão o apelido do perfil (Você, #387), senão o primeiro nome da
+ * conta. Ninguém precisa digitar um nome para postar ou entrar num desafio.
+ *
+ * O apelido do perfil aceita até 60 caracteres; aqui ele cabe no tamanho do
+ * apelido da comunidade, que é o que o ranking e o mural mostram.
+ */
+export function communityName(m: {
+  displayName: string | null;
+  user: { nickname: string | null; name: string };
+}): string {
+  const escolhido = m.displayName?.trim();
+  if (escolhido) return escolhido;
+  const doPerfil = m.user.nickname?.trim().replace(/\s+/g, ' ');
+  if (doPerfil) return doPerfil.slice(0, DISPLAY_NAME_MAX);
+  return firstName(m.user.name);
+}

@@ -12,6 +12,7 @@ import {
   localClock,
   parseClock,
 } from './reminders/reminder-rules';
+import { communityName } from '../sharing/display-name';
 
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
 export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
@@ -288,9 +289,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     const quem = [...equipe].sort(
       (a, b) => TEAM_ROLES.indexOf(a.role) - TEAM_ROLES.indexOf(b.role),
     )[0];
-    const nome = quem
-      ? (quem.displayName ?? quem.user.nickname ?? quem.user.name).trim().split(/\s+/)[0]!
-      : null;
+    const nome = quem ? communityName(quem).split(' ')[0]! : null;
     return {
       preferences,
       quietHours,

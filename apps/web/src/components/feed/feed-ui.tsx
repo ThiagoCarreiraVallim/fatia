@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -9,8 +9,6 @@ import {
   ApiError,
   COMMENT_BODY_MAX,
   commentProblem,
-  DISPLAY_NAME_MAX,
-  displayNameProblem,
   commentsLabel,
   feedApi,
   moderationApi,
@@ -42,8 +40,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/you/user-avatar';
@@ -126,41 +122,17 @@ function Reacoes({ post, onReact }: { post: Post; onReact: (k: PostReactionKind 
   );
 }
 
-/** Como a pessoa aparece no mural: pedido na primeira vez que ela escreve. */
+/**
+ * Como a pessoa aparece no mural: o nome do perfil (apelido ou primeiro nome),
+ * que a API resolve. Não se pergunta mais; para trocar, Você → Editar perfil.
+ */
 export interface MyName {
-  displayName: string | null;
-  suggested: string;
+  displayName: string;
 }
 
-export function NicknameField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1 text-sm">
-      <Label htmlFor={id}>Seu apelido no mural</Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={DISPLAY_NAME_MAX}
-        aria-describedby={`${id}-ajuda`}
-      />
-      <p id={`${id}-ajuda`} className="text-xs text-muted-foreground">
-        É o nome que os outros membros veem, o mesmo dos desafios.
-      </p>
-    </div>
-  );
-}
-
-function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
+function Comments({ groupId, post }: { groupId: string; post: Post }) {
   const qc = useQueryClient();
   const [texto, setTexto] = useState('');
-  const [apelido, setApelido] = useState(me.suggested);
   const [denunciando, setDenunciando] = useState<PostComment | null>(null);
   const [bloqueando, setBloqueando] = useState<PostComment | null>(null);
   const detalhe = useQuery({
@@ -172,13 +144,10 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
     void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId), exact: true });
   };
   const comentar = useMutation({
-    mutationFn: () =>
-      feedApi.comment(groupId, post.id, texto.trim(), me.displayName ? undefined : apelido.trim()),
+    mutationFn: () => feedApi.comment(groupId, post.id, texto.trim()),
     onSuccess: () => {
       setTexto('');
       recarregar();
-      // O apelido escolhido agora vale para o mural todo.
-      if (!me.displayName) void qc.invalidateQueries({ queryKey: communityKeys.feed(groupId) });
     },
     onError: (err) => toast(apiMessage(err, 'Não deu para comentar agora.')),
   });
@@ -190,7 +159,7 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
     onSuccess: recarregar,
     onError: (err) => toast(apiMessage(err, 'Não deu para tirar o comentário agora.')),
   });
-  const problema = commentProblem(texto) ?? (me.displayName ? null : displayNameProblem(apelido));
+  const problema = commentProblem(texto);
 
   return (
     <div className="space-y-3 border-t border-subtle pt-3">
@@ -238,7 +207,6 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
           ))}
         </ul>
       )}
-      {!me.displayName && <NicknameField value={apelido} onChange={setApelido} />}
       <form
         className="flex items-end gap-2"
         onSubmit={(e) => {
@@ -414,7 +382,7 @@ function autoHref(groupId: string, kind: AutoPostKind, refId: string): string {
 }
 
 /** Um post no mural: autor, texto, imagens, enquete, reações, comentários e ações. */
-export function PostCard({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
+export function PostCard({ groupId, post }: { groupId: string; post: Post }) {
   const qc = useQueryClient();
   const [abertos, setAbertos] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -550,7 +518,7 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
         </div>
       )}
 
-      {abertos && !post.removed && <Comentarios groupId={groupId} post={post} me={me} />}
+      {abertos && !post.removed && <Comments groupId={groupId} post={post} />}
 
       {menu && (
         <AcoesDoPost
