@@ -49,6 +49,9 @@ import {
 } from './plan-snapshot-v2';
 
 /** O lote inteiro numa transação (#405): até 200 pessoas cabem com folga. */
+/** A cópia mudou desde que o editor abriu (P1 da revisão do PR #462). */
+export const COPY_CHANGED = 'Outra pessoa salvou esta cópia; recarregue para ver a versão nova.';
+
 const BATCH_TIMEOUT_MS = 60_000;
 /** De quanto em quanto tempo a versão aceita para o futuro assume (I1 do PR #461). */
 const SETTLE_EVERY_MS = 60 * 60 * 1000;
@@ -357,6 +360,8 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
       snapshot: PlanSnapshotV2;
       changeNote: string | null;
       weekdays?: number[];
+      /** A versão que o editor abriu; outra salva depois dela dá 409 (P1 do PR #462). */
+      baseVersionId?: string;
     },
   ): Promise<{ id: string; versionId: string; version: number }> {
     const created = await this.inTransaction(async (db) => {
@@ -373,6 +378,11 @@ export class PlanOfferService implements OnModuleInit, OnModuleDestroy {
         orderBy: { version: 'desc' },
       });
       if (!last) throw new NotFoundException(OFFER_NOT_FOUND);
+      // Conferido com a oferta travada: duas pessoas da equipe salvando a
+      // mesma cópia não se sobrescrevem caladas.
+      if (content.baseVersionId && content.baseVersionId !== last.id) {
+        throw new ConflictException(COPY_CHANGED);
+      }
       await db.planOfferVersion.updateMany({
         where: { offerId, status: 'PENDING' },
         data: { status: 'SUPERSEDED', respondedAt: new Date() },

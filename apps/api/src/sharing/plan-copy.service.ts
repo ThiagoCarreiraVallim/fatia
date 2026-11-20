@@ -199,6 +199,7 @@ export class PlanCopyService {
       snapshot,
       changeNote,
       weekdays,
+      baseVersionId: input.baseVersionId,
     });
     if (input.notify !== false) {
       this.notifications.notify(

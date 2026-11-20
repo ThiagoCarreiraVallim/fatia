@@ -95,6 +95,8 @@ function CopyEditor({
   const [notify, setNotify] = useState(true);
   const [note, setNote] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
+  const [base, setBase] = useState(data.version.id);
+  const [conflict, setConflict] = useState(false);
   const dirty = JSON.stringify(doc) !== JSON.stringify(saved);
   const fileHref = `/org/${groupId}/members/${data.membershipId}`;
 
@@ -102,11 +104,13 @@ function CopyEditor({
     mutationFn: (sent: PlanDocumentView) =>
       planCopyApi.save(groupId, data.membershipId, data.offerId, {
         document: toDocumentInput(sent),
+        baseVersionId: base,
         notify,
         ...(note.trim() ? { changeNote: note.trim() } : {}),
       }),
     onSuccess: (r, sent) => {
       setSaved(sent);
+      setBase(r.versionId);
       setNote('');
       toast(
         notify
@@ -115,12 +119,18 @@ function CopyEditor({
       );
       void qc.invalidateQueries({ queryKey: fileKeys.file(groupId, data.membershipId) });
     },
-    onError: (err) =>
+    onError: (err) => {
+      // Outra pessoa da equipe salvou esta cópia depois que ela abriu aqui.
+      if (err instanceof ApiError && err.status === 409) {
+        setConflict(true);
+        return;
+      }
       toast(
         err instanceof ApiError && err.status < 500 && err.message
           ? err.message
           : 'Não deu para salvar agora.',
-      ),
+      );
+    },
   });
 
   const { done, planned } = data.progress;
@@ -165,6 +175,28 @@ function CopyEditor({
           )}
         </div>
       </section>
+
+      {conflict && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm"
+        >
+          <span className="min-w-0 flex-1">
+            Outra pessoa salvou esta cópia; recarregue para ver a versão nova. O que você mudou aqui
+            não foi salvo.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              void qc.invalidateQueries({ queryKey: fileKeys.file(groupId, data.membershipId) })
+            }
+          >
+            Recarregar
+          </Button>
+        </div>
+      )}
 
       {problems.length > 0 && (
         <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
