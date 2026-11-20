@@ -83,6 +83,13 @@ describe('Você: perfil, conta e novidades (integração)', () => {
   });
 
   describe('foto de perfil', () => {
+    it('o perfil diz se o envio de foto está disponível', async () => {
+      const id = await pessoa();
+      expect((await profile.getMe(id)).mediaUploadEnabled).toBe(true);
+      const semBucket = new ProfileService(prisma, new MediaService(prisma, null));
+      expect((await semBucket.getMe(id)).mediaUploadEnabled).toBe(false);
+    });
+
     it('sai sem EXIF, em WebP, guardada como arquivo pessoal', async () => {
       const ana = await pessoa();
       // O que chega tem EXIF: sem isto, o teste passaria com qualquer imagem.

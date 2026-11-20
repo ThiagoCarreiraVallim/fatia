@@ -15,6 +15,7 @@ import {
 } from '../units';
 import { TUTORIALS, searchTutorials, tutorialSubtitle } from '../tutorials';
 import {
+  avatarUploadNotice,
   avatarVisibilityText,
   communityName,
   formatWhatsapp,
@@ -150,5 +151,16 @@ describe('Você (Al-V1, V8, V9, V11)', () => {
     expect(stepHeight(168, 1)).toBe(169);
     expect(stepHeight(100, -1)).toBe(100);
     expect(stepHeight(250, 1)).toBe(250);
+  });
+});
+
+describe('avatarUploadNotice', () => {
+  it('sem envio de mídia no servidor, explica por que a foto não troca', () => {
+    expect(avatarUploadNotice({ mediaUploadEnabled: false })).toMatch(/não está disponível/);
+  });
+
+  it('com envio disponível (ou API de antes, sem o campo), não diz nada', () => {
+    expect(avatarUploadNotice({ mediaUploadEnabled: true })).toBeNull();
+    expect(avatarUploadNotice({})).toBeNull();
   });
 });
