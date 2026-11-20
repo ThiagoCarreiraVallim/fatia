@@ -20,5 +20,5 @@ Pranchas renderizadas: `~/.cache/fatia-vis/407/board/`.
 - [x] aceite leva trocas e "comi isso" de hoje em diante (carryOver)
 - [x] export sem editedById
 - [x] api-client (nutrition-plan-editor.ts)
-- [ ] web editor + cópia
+- [x] web editor + cópia (components/org/nutrition-editor, members/[membershipId]/nutrition-plans/[planId]); ficha com lápis; aluno web+app: refeição vazia e hora
 - [ ] docs / passada visual
