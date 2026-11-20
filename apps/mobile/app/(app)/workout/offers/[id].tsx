@@ -220,7 +220,7 @@ function OfferBody({
         </View>
       </View>
 
-      {offer.kind === 'update' && offer.diff ? (
+      {offer.kind === 'update' && (offer.diff || v.changeNote) ? (
         <View
           className="gap-1 rounded-card p-4"
           style={{
@@ -230,10 +230,14 @@ function OfferBody({
           }}
         >
           <Text className="font-sans-bold text-sm text-foreground">O que mudou</Text>
-          <Text className="text-xs text-muted-foreground">
-            {diffSummary(offer.diff)} em relação à v{offer.accepted?.version ?? v.version - 1} que
-            você usa.
-          </Text>
+          {/* Quem mandou pela biblioteca escreve o que mudou (#405). */}
+          {v.changeNote ? <Text className="text-sm text-foreground">{v.changeNote}</Text> : null}
+          {offer.diff ? (
+            <Text className="text-xs text-muted-foreground">
+              {diffSummary(offer.diff)} em relação à v{offer.accepted?.version ?? v.version - 1} que
+              você usa.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 

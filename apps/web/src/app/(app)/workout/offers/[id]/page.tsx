@@ -159,7 +159,7 @@ export default function PlanOfferPage() {
         </p>
       </div>
 
-      {isUpdate && offer.diff && (
+      {isUpdate && (offer.diff || v.changeNote) && (
         <section
           aria-label="O que mudou"
           className="rounded-card bg-card px-4 py-3.5 shadow-[inset_0_0_0_1px_hsl(var(--water)/0.35)]"
@@ -167,7 +167,11 @@ export default function PlanOfferPage() {
           <b className="block text-sm">
             {offer.accepted ? `O que mudou desde a v${offer.accepted.version}` : 'O que mudou'}
           </b>
-          <span className="block text-xs text-muted-foreground">{diffSummary(offer.diff)}</span>
+          {/* Quem mandou pela biblioteca escreve o que mudou (#405); o resumo vem do diff. */}
+          {v.changeNote && <span className="block text-sm text-foreground">{v.changeNote}</span>}
+          {offer.diff && (
+            <span className="block text-xs text-muted-foreground">{diffSummary(offer.diff)}</span>
+          )}
         </section>
       )}
 

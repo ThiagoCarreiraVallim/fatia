@@ -146,9 +146,12 @@ describe('painel › planos e dicas', () => {
     renderWithClient(<OrgContentPage />);
 
     const tabela = await screen.findByRole('table', { name: 'Biblioteca de planos' });
-    expect(screen.getByRole('tab', { name: 'Treino 2' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Alimentação 1' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Dicas 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Treino\s*2$/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: /^Alimentação\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Dicas\s*1$/ })).toBeInTheDocument();
     expect(tabela).toHaveTextContent('Treino A');
     expect(tabela).toHaveTextContent('11 pessoas');
     expect(tabela).toHaveTextContent('termine antes');
@@ -163,7 +166,7 @@ describe('painel › planos e dicas', () => {
     });
     expect(tabela).not.toHaveTextContent('Treino A');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Alimentação 1' }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Alimentação\s*1$/ }));
     const alimentacao = screen.getByRole('table', { name: 'Biblioteca de planos' });
     expect(alimentacao).toHaveTextContent('Cutting');
     expect(alimentacao).toHaveTextContent('menos de 5');
@@ -250,7 +253,7 @@ describe('painel › planos e dicas', () => {
     );
     await waitFor(() => expect(toast).toHaveBeenCalledWith('Publicado na comunidade'));
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Alimentação 1' }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Alimentação\s*1$/ }));
     fireEvent.click(screen.getByRole('switch', { name: 'Na comunidade: Cutting' }));
     expect(contentApi.publishPlan).toHaveBeenCalledTimes(1);
     const tirar = screen.getByRole('dialog', { name: 'Tirar da comunidade?' });
@@ -320,7 +323,7 @@ describe('painel › planos e dicas', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preencher com as minhas metas' }));
     await waitFor(() => expect(screen.getByLabelText('Calorias mínimo')).toHaveValue('1800'));
     fireEvent.click(await screen.findByRole('checkbox', { name: /Café da academia/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar plano' }));
 
     await waitFor(() => expect(contentApi.createNutrition).toHaveBeenCalled());
     expect(vi.mocked(contentApi.createNutrition).mock.calls[0]).toEqual([
@@ -352,7 +355,7 @@ describe('painel › planos e dicas', () => {
     })) {
       fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } });
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar plano' }));
     await new Promise((r) => setTimeout(r, 0));
     expect(contentApi.createNutrition).not.toHaveBeenCalled();
   });
