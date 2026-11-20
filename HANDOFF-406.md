@@ -43,5 +43,7 @@ circuito] }] }`. v1 continua legível (normalizado para v2 numa sessão). `build
 - RED-FIRST feito (test 0f2be0f8 vermelho → feat). Stubs removidos.
 - Banco de teste: `bash ~/.cache/fatia-vis/406/resetdb.sh`; jest com
   `DATABASE_URL=$(cat ~/.cache/fatia-vis/406/tdb.url) npx jest <spec> --maxWorkers=4`.
-- Pendentes: consumidores multi-plano (plan-programs offerProgress, plan-send, member-file,
-  agenda.service), % 1RM na sessão, MCP/docs, api-client, web editor, passada visual.
+- Feito (API): consumidores multi-plano (offerProgress com planIds, ficha, enviados, agenda com
+  rodízio no flexível e remarcar por qualquer sessão), percentLoadKg na sessão, campos novos no DTO
+  do plano da pessoa (+ regras: calorias, uma intensidade, loadPercent só em PERCENT_1RM).
+- Pendentes: MCP/docs, api-client, web editor, passada visual, REDESIGN_PROGRESS, merge main.
