@@ -60,7 +60,14 @@ export interface CreateNutritionTemplateInput extends TemplateMeta {
   mealTemplateIds?: string[];
 }
 
+export interface TemplateReach {
+  band: 'none' | 'few' | 'many';
+  count: number | null;
+}
+
 export interface UpdateTemplateInput extends TemplateMeta {
+  /** Rascunho (#405): não vai para a comunidade nem é enviado. */
+  draft?: boolean;
   /** Treino: congela de novo a partir deste plano do autor. */
   planId?: string;
   /** Nutrição: troca metas e refeições do retrato. */
@@ -108,6 +115,13 @@ export interface TemplateView {
   /** O papel de hoje do autor nesta comunidade (#396): "Bruno (dono)". `null` se saiu. */
   authorRole: GroupRole | null;
   publishedAt: Date | null;
+  /** Rascunho (#405): só a equipe vê e ainda não se envia. */
+  draft?: boolean;
+  /**
+   * "Com quem" (#405), só para a equipe: pessoas distintas com uma cópia
+   * (adotou ou recebeu). Abaixo de 5 pessoas o número não sai.
+   */
+  withWhom?: TemplateReach;
   updatedAt: Date;
   /** Treino: os exercícios na ordem. Nutrição: vazio. */
   exercises: TemplateExerciseView[];
@@ -369,6 +383,7 @@ export class ContentService {
     groupId: string,
     id: string,
     published: boolean,
+    _opts: { announce?: boolean } = {},
   ): Promise<TemplateView> {
     const eu = await this.assertPublisher(userId, groupId);
     const atual = await this.findTemplate(groupId, id);

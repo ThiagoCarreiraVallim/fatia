@@ -100,6 +100,8 @@ export interface OfferVersionView {
   weeks: number | null;
   weekdays: number[];
   note: string | null;
+  /** "O que mudou" (#405), escrito por quem reenviou. */
+  changeNote?: string | null;
   sentAt: Date;
   respondedAt: Date | null;
   summary: { exercises: number; sets: number; minutes: number };
