@@ -123,7 +123,7 @@ describe('ofertas (#403, banco real)', () => {
       status: 'DRAFT',
       slug: 'verao-21',
       saleUrl: `https://fat.ia.br/${slug}/verao-21`,
-      stats: { sales: 0, spotsLeft: 30, revenueCents: 0, netCents: 0, activated48h: 0 },
+      stats: { sales: 0, spotsLeft: 30, revenueCents: 0, netCents: 0 },
     });
     // Mesmo título: outro link.
     expect((await offers.create(users.dona, g, base)).slug).toBe('verao-21-2');
@@ -172,7 +172,8 @@ describe('ofertas (#403, banco real)', () => {
       });
     await pago(users.ana, 'ana');
     await pago(null, 'semconta');
-    // A Ana registrou uma refeição no dia seguinte à compra: ativou.
+    // A Ana registrou uma refeição depois da compra: a oferta não lê isso (sem
+    // consentimento do comprador, até a #421).
     await prisma.meal.create({
       data: {
         userId: users.ana,
@@ -194,15 +195,20 @@ describe('ofertas (#403, banco real)', () => {
       },
     });
 
+    const refeicoes = jest.spyOn(prisma.meal, 'count');
+    const treinos = jest.spyOn(prisma.workoutSession, 'count');
     const [v] = (await offers.list(g)).offers.filter((x) => x.id === o.id);
+    expect(refeicoes).not.toHaveBeenCalled();
+    expect(treinos).not.toHaveBeenCalled();
+    refeicoes.mockRestore();
+    treinos.mockRestore();
+    expect(v!.stats).toEqual({
+      sales: 2,
+      spotsLeft: 28,
+      revenueCents: 29_800,
+      netCents: 26_820,
+    });
     expect(v).toMatchObject({
-      stats: {
-        sales: 2,
-        spotsLeft: 28,
-        revenueCents: 29_800,
-        netCents: 26_820,
-        activated48h: 1,
-      },
       failed: [{ purchaseId: falhou.id, name: 'Rafa Gomes' }],
     });
 

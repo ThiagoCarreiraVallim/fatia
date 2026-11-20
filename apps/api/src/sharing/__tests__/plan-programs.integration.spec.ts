@@ -244,15 +244,45 @@ describe('programas de planos (#403, banco real)', () => {
   });
 
   it('o plano que terminou entra em "Para revisar" e sai com "Visto"', async () => {
+    const v1 = await prisma.planOfferVersion.findFirstOrThrow({
+      where: { offerId: offers.diego! },
+    });
     const fila = await review.queue(users.helena!, g);
     const item = fila.items.find((i) => i.kind === 'PLAN_ENDED');
     expect(item).toMatchObject({
-      refId: offers.diego,
+      refId: v1.id,
       membershipId: ms.diego,
       title: 'Plano diego',
     });
-    await review.markSeen(users.helena!, g, 'PLAN_ENDED', offers.diego!);
+    await review.markSeen(users.helena!, g, 'PLAN_ENDED', v1.id);
     const depois = await review.queue(users.helena!, g);
     expect(depois.items.find((i) => i.kind === 'PLAN_ENDED')?.seenAt).not.toBeNull();
+  });
+
+  it('o próximo bloco que termina volta a "Para revisar": o visto é daquele término', async () => {
+    // Helena mandou o bloco seguinte na mesma oferta; o Diego aceitou e ele também acabou.
+    await prisma.planOfferVersion.updateMany({
+      where: { offerId: offers.diego! },
+      data: { status: 'SUPERSEDED' },
+    });
+    const v2 = await prisma.planOfferVersion.create({
+      data: {
+        offerId: offers.diego!,
+        version: 2,
+        status: 'ACCEPTED',
+        title: 'Plano diego 2',
+        snapshot: {},
+        snapshotVersion: 1,
+        schedule: 'CALENDAR',
+        startDate: addDaysIso(today, -9),
+        weeks: 1,
+        weekdays: [1, 3, 5],
+      },
+    });
+    const fila = await review.queue(users.helena!, g);
+    const item = fila.items.find((i) => i.kind === 'PLAN_ENDED' && i.membershipId === ms.diego);
+    expect(item).toMatchObject({ refId: v2.id, title: 'Plano diego 2', seenAt: null });
+    // A versão de outra comunidade não abre pelo id.
+    await expect(review.markSeen(users.helena!, outro, 'PLAN_ENDED', v2.id)).rejects.toThrow();
   });
 });

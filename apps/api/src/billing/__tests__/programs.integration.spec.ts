@@ -1,6 +1,10 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
+import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
+import { ChallengeService } from '../../sharing/challenge.service';
+import { ScoreboardService } from '../../social/scoreboard.service';
 import { dateInTz } from '../../progress/helpers/date-tz';
 import { AsaasProvider } from '../asaas/asaas.provider';
 import type { SeatProvider, SubscriptionProvider } from '../billing-provider.port';
@@ -46,6 +50,7 @@ function provedorFalso() {
       providerChargeId: `pay_prog_${Date.now()}_${++n}`,
       url: 'https://sandbox.asaas.com/i/prog',
     })),
+    cancelCharge: jest.fn(async (_id: string) => undefined),
     verifySubscriptionWebhook: real.verifySubscriptionWebhook.bind(real),
   } satisfies SeatProvider & SubscriptionProvider;
 }
@@ -379,6 +384,180 @@ describe('assentos, faturas e programas (#403, banco real)', () => {
           membershipIds: [],
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('revisão do PR #460', () => {
+    const turma = (c: { membros: Array<{ membershipId: string }> }, dias: number) => ({
+      name: 'Verão',
+      kind: 'CLASS' as const,
+      seats: 1,
+      startDate: diaIso(0),
+      endDate: diaIso(dias),
+      membershipIds: [c.membros[0]!.membershipId],
+    });
+
+    it('o assento do programa vale pela janela dele, mesmo com o pool cancelado e encerrado', async () => {
+      const c = await comunidadePaga(2, 1);
+      await c.programas.create(c.dona, c.groupId, turma(c, 60));
+      await c.assentos.cancel(c.dona, c.groupId);
+      const pool = await prisma.groupSeatPool.findUniqueOrThrow({ where: { groupId: c.groupId } });
+      const dia45 = new Date(Date.now() + 45 * DIA);
+      expect(pool.currentPeriodEnd!.getTime()).toBeLessThan(dia45.getTime());
+      expect(await c.direitos.aiTierForUser(c.membros[0]!.userId, dia45)).toMatchObject({
+        tier: 'PRO',
+      });
+      // O pool acabou de vez: o programa já pago continua.
+      await prisma.groupSeatPool.update({ where: { id: pool.id }, data: { status: 'CANCELED' } });
+      expect(await c.direitos.aiTierForUser(c.membros[0]!.userId, dia45)).toMatchObject({
+        tier: 'PRO',
+      });
+      // Depois do último dia, volta ao Free.
+      const dia62 = new Date(Date.now() + 62 * DIA);
+      expect(await c.direitos.aiTierForUser(c.membros[0]!.userId, dia62)).toMatchObject({
+        tier: 'FREE',
+      });
+    });
+
+    it('com os assentos cancelados, criar programa é 409 com o motivo', async () => {
+      const c = await comunidadePaga(2, 1);
+      await c.assentos.cancel(c.dona, c.groupId);
+      await expect(c.programas.create(c.dona, c.groupId, turma(c, 10))).rejects.toThrow(
+        new ConflictException(
+          'Os assentos desta comunidade foram cancelados. Reative a assinatura antes de criar um programa.',
+        ),
+      );
+      await prisma.groupSeatPool.updateMany({
+        where: { groupId: c.groupId },
+        data: { status: 'CANCELED' },
+      });
+      await expect(c.programas.create(c.dona, c.groupId, turma(c, 10))).rejects.toThrow(
+        ConflictException,
+      );
+      expect(c.provedor.createSubscriptionCharge).not.toHaveBeenCalled();
+    });
+
+    it('quem sai do desafio perde o assento do programa, que vai para quem entrar', async () => {
+      const c = await comunidadePaga(2, 2);
+      const desafios = new ChallengeService(
+        prisma,
+        new ScoreboardService(prisma, new DailyAdherenceService(prisma)),
+        silentNotifications,
+        undefined,
+        c.programas,
+      );
+      const d = await prisma.groupChallenge.create({
+        data: {
+          groupId: c.groupId,
+          title: 'Desafio',
+          metric: 'STEPS',
+          startsAt: new Date(Date.now() - DIA),
+          endsAt: new Date(Date.now() + 20 * DIA),
+          timezone: 'America/Sao_Paulo',
+        },
+      });
+      await c.programas.create(c.dona, c.groupId, {
+        name: 'P',
+        kind: 'CHALLENGE',
+        seats: 1,
+        startDate: diaIso(0),
+        endDate: diaIso(20),
+        challengeId: d.id,
+      });
+      const [a, b] = c.membros;
+      await prisma.groupChallengeParticipant.create({
+        data: { challengeId: d.id, membershipId: a!.membershipId, displayName: 'a' },
+      });
+      await c.programas.syncChallenge(d.id);
+      expect(await c.direitos.aiTierForUser(a!.userId)).toMatchObject({ tier: 'PRO' });
+
+      await desafios.leave(a!.userId, c.groupId, d.id);
+      expect(await c.direitos.aiTierForUser(a!.userId)).toMatchObject({ tier: 'FREE' });
+
+      await prisma.groupChallengeParticipant.create({
+        data: { challengeId: d.id, membershipId: b!.membershipId, displayName: 'b' },
+      });
+      await c.programas.syncChallenge(d.id);
+      expect(await c.direitos.aiTierForUser(b!.userId)).toMatchObject({ tier: 'PRO' });
+      expect((await c.programas.list(c.groupId))[0]).toMatchObject({ assigned: 1 });
+    });
+
+    it('quem saiu do desafio sem passar pelo leave não segura a vaga', async () => {
+      const c = await comunidadePaga(2, 2);
+      const d = await prisma.groupChallenge.create({
+        data: {
+          groupId: c.groupId,
+          title: 'Desafio',
+          metric: 'STEPS',
+          startsAt: new Date(),
+          endsAt: new Date(Date.now() + 20 * DIA),
+          timezone: 'America/Sao_Paulo',
+        },
+      });
+      await c.programas.create(c.dona, c.groupId, {
+        name: 'P',
+        kind: 'CHALLENGE',
+        seats: 1,
+        startDate: diaIso(0),
+        endDate: diaIso(20),
+        challengeId: d.id,
+      });
+      const [a, b] = c.membros;
+      await prisma.groupChallengeParticipant.create({
+        data: { challengeId: d.id, membershipId: a!.membershipId, displayName: 'a' },
+      });
+      await c.programas.syncChallenge(d.id);
+      await prisma.groupChallengeParticipant.deleteMany({
+        where: { challengeId: d.id, membershipId: a!.membershipId },
+      });
+      await prisma.groupChallengeParticipant.create({
+        data: { challengeId: d.id, membershipId: b!.membershipId, displayName: 'b' },
+      });
+      await c.programas.syncChallenge(d.id);
+      expect(await c.direitos.aiTierForUser(a!.userId, new Date(Date.now() + DIA))).toMatchObject({
+        tier: 'FREE',
+      });
+      expect(await c.direitos.aiTierForUser(b!.userId, new Date(Date.now() + DIA))).toMatchObject({
+        tier: 'PRO',
+      });
+    });
+
+    it.each(['PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED', 'PAYMENT_DELETED'])(
+      'programa com %s não dá PRO, e o painel diz que foi cancelado',
+      async (evento) => {
+        const c = await comunidadePaga(2, 1);
+        const p = await c.programas.create(c.dona, c.groupId, turma(c, 20));
+        const prog = await prisma.groupProgram.findUniqueOrThrow({ where: { id: p.id } });
+        const valor = {
+          id: prog.providerChargeId!,
+          dueDate: diaIso(1),
+          value: prog.amountCents / 100,
+        };
+        await webhook(c.assinaturas, pagamento('PAYMENT_CONFIRMED', valor));
+        await webhook(c.assinaturas, pagamento(evento, valor));
+        const amanha = new Date(Date.now() + DIA);
+        expect(await c.direitos.aiTierForUser(c.membros[0]!.userId, amanha)).toMatchObject({
+          tier: 'FREE',
+        });
+        expect((await c.programas.list(c.groupId))[0]).toMatchObject({
+          chargeStatus: 'CANCELED',
+          status: 'CANCELED',
+        });
+        const v = await c.assentos.overview(c.groupId);
+        expect(v.programs[0]).toMatchObject({ status: 'CANCELED' });
+      },
+    );
+
+    it('se gravar o programa falhar depois da cobrança, a cobrança é cancelada no Asaas', async () => {
+      const c = await comunidadePaga(2, 1);
+      const espia = jest
+        .spyOn(prisma, '$transaction')
+        .mockRejectedValueOnce(new Error('banco caiu'));
+      await expect(c.programas.create(c.dona, c.groupId, turma(c, 10))).rejects.toThrow();
+      espia.mockRestore();
+      const cobranca = await c.provedor.createSubscriptionCharge.mock.results[0]!.value;
+      expect(c.provedor.cancelCharge).toHaveBeenCalledWith(cobranca.providerChargeId);
+      expect(await prisma.groupProgram.count({ where: { groupId: c.groupId } })).toBe(0);
     });
   });
 });
