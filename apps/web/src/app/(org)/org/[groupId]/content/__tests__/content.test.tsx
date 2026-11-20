@@ -350,7 +350,7 @@ describe('painel › planos e dicas', () => {
 
     vi.mocked(contentApi.plan).mockResolvedValue(alimentar({ canEdit: false }));
     renderWithClient(<OrgPlanTemplatePage />);
-    expect(await screen.findByText(/Só quem publicou, ou o dono/)).toBeInTheDocument();
+    expect(await screen.findByText(/Só quem publicou, ou o dono, muda/)).toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Na comunidade' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Apagar plano' })).toBeNull();
   });
