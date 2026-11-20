@@ -10,4 +10,4 @@ signOut limpa cache, 6 nome provisório (83353ed7), 4 join (659cbb41), 5 virada 
 
 ## Próximo
 
-10 suspeitos (webview, vídeo expirado, barra, chat key); depois merge main, testes, emulador
+merge main, testes, emulador (10 feito: 3d2015a0 webview, bae47abf vídeo, e204402f barra, 78e31638 chat)
