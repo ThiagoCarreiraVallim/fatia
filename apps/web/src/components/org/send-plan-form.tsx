@@ -155,12 +155,33 @@ export function SendPlanForm({
     send.mutate(body);
   }
 
+  const actions = (
+    <div className="flex flex-wrap justify-end gap-2">
+      {onCancel && (
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancelar
+        </Button>
+      )}
+      <Button
+        type="button"
+        disabled={selected.length === 0 || !chosen || send.isPending}
+        onClick={submit}
+      >
+        {send.isPending ? 'Enviando…' : sendButtonLabel(names)}
+      </Button>
+    </div>
+  );
+
   const fields = (
     <div className="space-y-5">
       {page && (
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold">O que enviar</legend>
-          <div role="radiogroup" aria-label="O que enviar" className="grid gap-2 sm:grid-cols-2">
+          <div
+            role="radiogroup"
+            aria-label="O que enviar"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5"
+          >
             {SEND_KINDS.map((k) => (
               <KindOption
                 key={k.key}
@@ -411,24 +432,19 @@ export function SendPlanForm({
           ? 'Cada pessoa recebe uma cópia. Mudar o modelo depois não mexe na cópia de ninguém.'
           : 'Cada pessoa recebe a própria cópia e aceita no app. Para ajustar só para alguém, abra a ficha dela.'}
       </p>
-      <div className="flex flex-wrap justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancelar
-          </Button>
-        )}
-        <Button
-          type="button"
-          disabled={selected.length === 0 || !chosen || send.isPending}
-          onClick={submit}
-        >
-          {send.isPending ? 'Enviando…' : sendButtonLabel(names)}
-        </Button>
-      </div>
+      {page && actions}
     </div>
   );
 
-  if (!page) return <div className="p-4">{fields}</div>;
+  if (!page) {
+    // No painel lateral o formulário rola e os botões ficam fixos embaixo.
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{fields}</div>
+        <div className="border-t border-border p-3">{actions}</div>
+      </div>
+    );
+  }
 
   const preview = sendPreview({
     kind,

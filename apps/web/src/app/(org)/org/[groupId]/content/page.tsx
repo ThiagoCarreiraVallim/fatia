@@ -230,7 +230,14 @@ export default function OrgContentPage() {
 
           <PanelTable
             label="Biblioteca de planos"
-            head={['Plano', 'Autor', 'Formato', 'Com quem', 'Na comunidade', '']}
+            head={[
+              kind === 'WORKOUT' ? 'Plano de treino' : 'Plano alimentar',
+              'Autor',
+              'Formato',
+              'Com quem',
+              'Na comunidade',
+              'Ações',
+            ]}
             minWidth={820}
           >
             {list.map((t) => {
@@ -245,15 +252,23 @@ export default function OrgContentPage() {
                     >
                       {t.title}
                     </Link>
-                    {t.draft && (
-                      <span className="ml-2 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {t.draft ? (
+                      <span className="mt-0.5 block w-fit rounded-md px-1.5 text-[11px] text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]">
                         rascunho
                       </span>
+                    ) : (
+                      <span className="block text-xs text-muted-foreground">{community.hint}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{t.authorName}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{libraryFormat(t)}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{withWhomLabel(t.withWhom)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                    {t.authorName}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                    {libraryFormat(t)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
+                    {withWhomLabel(t.withWhom)}
+                  </td>
                   <td className="px-3 py-2.5">
                     <span className="flex items-center gap-2">
                       <Switch
@@ -269,12 +284,7 @@ export default function OrgContentPage() {
                           }
                         }}
                       />
-                      <span className="min-w-0 leading-tight">
-                        <span className="block text-xs font-medium">{community.label}</span>
-                        <span className="block text-[11px] text-muted-foreground">
-                          {community.hint}
-                        </span>
-                      </span>
+                      <span className="text-xs text-muted-foreground">{community.label}</span>
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
