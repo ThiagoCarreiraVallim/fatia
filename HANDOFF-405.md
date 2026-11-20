@@ -33,8 +33,14 @@ Pn-M4, Cm-20); se sumirem, `Artifact read` do GvL8GtYkJGjK5e4YovhZ3o.
 - [x] 4. API: testes vermelhos (sends.integration.spec, content publish/draft/reach, isolamento)
 - [x] 5. API: implementação
 - [x] 6. MCP (sem mudar descrição: baseline sha) changeNote + docs/MCP_TOOL_SURFACE.md
-- [ ] 7. api-client (send-plans.ts) + testes
-- [ ] 8. Web: biblioteca (Pn-08/08b/08c/08d), página Enviar (Pn-18), oferta do aluno com "O que mudou"
-- [ ] 9. Mobile: "O que mudou" na oferta; seção send fora das abas
+- [x] 7. api-client (send-plans.ts) + testes
+- [x] 8. Web: biblioteca (Pn-08/08b/08c/08d), página Enviar (Pn-18), oferta do aluno com "O que mudou"
+- [x] 9. Mobile: "O que mudou" na oferta; seção send fora das abas
 - [ ] 10. Passada visual
 - [ ] 11. REDESIGN_PROGRESS, merge origin/main, apagar banco e HANDOFF
+
+## Estado (web pronta)
+
+- Commits web: d12768af (vermelho), 3f3046fb (vermelho nutrição), fe6785bf (feat). api 253 suítes ok, api-client 1267, web 1240, mobile 614; lint/tsc ok.
+- Plano novo não nasce rascunho: botão virou "Criar plano"; rascunho é interruptor na página do plano.
+- Próximo: passada visual (passo 10), depois passo 11.
