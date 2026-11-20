@@ -158,6 +158,8 @@ export function staffChangeLine(c: StaffChange): string {
       return `${quem} mudou ${alvo} de ${papel(c.from)} para ${papel(c.to)}`;
     case 'members.specialty':
       return `${quem} mudou a especialidade de ${alvo} de ${esp(c.from)} para ${esp(c.to)}`;
+    case 'members.approve':
+      return `${quem} aprovou ${alvo} como ${papel(c.to)}`;
     case 'members.accompany':
       return c.to
         ? `${quem} pôs ${c.to} como responsável de ${alvo}`
@@ -178,12 +180,13 @@ export function permissionCell(role: GroupRole, roles: readonly GroupRole[]): st
 
 /**
  * Os papéis que quem pergunta pode dar, iguais a `rolesGrantableBy` da API: o
- * dono dá todos; o admin, todos menos admin; profissional e recepção, só
+ * dono dá todos; o admin, só membro e recepção; profissional e recepção, só
  * membro. A API confere de novo.
  */
 export function grantableRolesFor(role: GroupRole): GrantableRole[] {
   if (role === 'OWNER') return ['MEMBER', ...TEAM_ROLE_CHOICES];
-  if (role === 'ADMIN') return ['MEMBER', 'PROFESSIONAL', 'CREATOR', 'RECEPTION'];
+  // Profissional e criador recebem vínculo: só o dono dá (ADR 043).
+  if (role === 'ADMIN') return ['MEMBER', 'RECEPTION'];
   if (role === 'PROFESSIONAL' || role === 'RECEPTION') return ['MEMBER'];
   return [];
 }

@@ -31,13 +31,13 @@ describe('papéis da equipe (#404)', () => {
     );
   });
 
-  it('o dono dá qualquer papel menos o de dono; o administrador, nunca o de administrador', () => {
+  it('o dono dá qualquer papel menos o de dono; o administrador, só membro e recepção', () => {
     expect([...rolesGrantableBy(GroupRole.OWNER)].sort()).toEqual(
       ['ADMIN', 'CREATOR', 'MEMBER', 'PROFESSIONAL', 'RECEPTION'].sort(),
     );
-    expect([...rolesGrantableBy(ADMIN)].sort()).toEqual(
-      ['CREATOR', 'MEMBER', 'PROFESSIONAL', 'RECEPTION'].sort(),
-    );
+    // Papel que recebe vínculo é do dono (ADR 043): o admin não abre dado de
+    // aluno para uma conta dele.
+    expect([...rolesGrantableBy(ADMIN)].sort()).toEqual(['MEMBER', 'RECEPTION']);
     expect(rolesGrantableBy(GroupRole.PROFESSIONAL)).toEqual(['MEMBER']);
     expect(rolesGrantableBy(RECEPTION)).toEqual(['MEMBER']);
     expect(rolesGrantableBy(GroupRole.CREATOR)).toEqual([]);

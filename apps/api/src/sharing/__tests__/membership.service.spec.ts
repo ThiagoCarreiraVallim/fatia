@@ -25,6 +25,8 @@ type MockPrisma = {
   planOfferVersion: { updateMany: jest.Mock };
   sessionFeedback: { deleteMany: jest.Mock };
   reviewSeen: { deleteMany: jest.Mock };
+  groupAuditLog: { create: jest.Mock };
+  $executeRaw: jest.Mock;
   $transaction: jest.Mock;
 };
 
@@ -56,6 +58,9 @@ const makePrisma = (): MockPrisma => ({
   planOfferVersion: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
   sessionFeedback: { deleteMany: jest.fn().mockReturnValue({ count: 0 }) },
   reviewSeen: { deleteMany: jest.fn().mockReturnValue({ count: 0 }) },
+  // A trilha da equipe (#404) e a revogação dos convites de equipe de quem sai.
+  groupAuditLog: { create: jest.fn().mockReturnValue({}) },
+  $executeRaw: jest.fn().mockReturnValue(0),
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
   $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
 });
@@ -338,8 +343,10 @@ describe('MembershipService', () => {
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       // Associação, vínculos, assento, comunicados agendados, (#401) quem ela
       // acompanhava, em membros e em convites, (#402) notas e planos pendentes
-      // e (#399) comentários da equipe e "Visto".
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(10);
+      // e (#399) comentários da equipe e "Visto", e (#404) os convites de equipe
+      // que ela criou.
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(11);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
       expect(resultado.revokedLinks).toBe(2);
       // As anotações da equipe sobre ela e os planos esperando aceite (#402).
       expect(prisma.memberNote.deleteMany).toHaveBeenCalledWith({

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  grantableRolesFor,
   groupCan,
   staffLastAccessLabel,
   permissionCell,
@@ -79,6 +80,22 @@ describe('Equipe e permissões (Pn-19, #404)', () => {
         to: 'RECEPTION',
       }),
     ).toBe('Bruno mudou Nina de profissional para recepção');
+  });
+
+  it('o admin dá só membro e recepção; papel que recebe vínculo é do dono', () => {
+    expect(grantableRolesFor('ADMIN')).toEqual(['MEMBER', 'RECEPTION']);
+    expect(grantableRolesFor('OWNER')).toContain('PROFESSIONAL');
+    expect(
+      staffChangeLine({
+        at: '',
+        action: 'members.approve',
+        actorName: 'Bruno',
+        targetName: 'Nina',
+        targetCount: 1,
+        from: null,
+        to: 'PROFESSIONAL',
+      }),
+    ).toBe('Bruno aprovou Nina como profissional');
   });
 
   it('célula da tabela', () => {

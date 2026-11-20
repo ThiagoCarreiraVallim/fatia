@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, ProfessionalLink, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { clipScopes, scopesForSpecialty, type Specialty } from './permissions';
+import { TEAM_ROLES, clipScopes, scopesForSpecialty, type Specialty } from './permissions';
+
+/** Os papéis que recebem vínculo (ADR 026/043), como texto para o SQL. */
+const LINK_RECEIVER_ROLES: readonly string[] = TEAM_ROLES;
 
 /** Motivos possíveis de revogação. Gravados em `ProfessionalLink.revokedReason`. */
 export type RevokeReason =
@@ -186,15 +189,27 @@ export class ProfessionalLinkService {
       }),
     ];
     const data = receivers
-      .map((professionalId) => ({
-        subjectUserId,
-        professionalId,
-        groupId,
-        scopes: clipScopes(scopes, params.receiverSpecialty?.get(professionalId)),
-        grantedAt: at,
-      }))
-      .filter((d) => d.scopes.length > 0);
-    if (data.length > 0) ops.push(this.prisma.professionalLink.createMany({ data }));
+      .map((professionalId) => {
+        const sp = params.receiverSpecialty?.get(professionalId) ?? null;
+        return { u: professionalId, sp, c: clipScopes(scopes, sp) };
+      })
+      .filter((d) => d.c.length > 0);
+    // O vínculo só nasce para quem, no instante do commit, ainda é da equipe
+    // que recebe e tem a especialidade que foi lida (#404): a lista veio de
+    // uma leitura anterior, e quem saiu ou virou nutricionista no meio não
+    // pode ganhar o recorte de antes.
+    if (data.length > 0) {
+      ops.push(this.prisma.$executeRaw`
+        INSERT INTO "ProfessionalLink"
+          ("id", "subjectUserId", "professionalId", "groupId", "scopes", "grantedAt", "createdAt", "updatedAt")
+        SELECT gen_random_uuid()::text, ${subjectUserId}, x.u, ${groupId},
+          ARRAY(SELECT jsonb_array_elements_text(x.c))::"ShareScope"[], ${at}, ${at}, ${at}
+        FROM jsonb_to_recordset(${JSON.stringify(data)}::jsonb) AS x(u text, sp text, c jsonb)
+        JOIN "GroupMembership" gm ON gm."groupId" = ${groupId} AND gm."userId" = x.u
+        WHERE gm."status" = 'ACTIVE'
+          AND gm."role"::text = ANY(${[...LINK_RECEIVER_ROLES]}::text[])
+          AND gm."specialty"::text IS NOT DISTINCT FROM x.sp`);
+    }
     return ops;
   }
 
@@ -213,28 +228,31 @@ export class ProfessionalLinkService {
   }): Prisma.PrismaPromise<unknown>[] {
     const { groupId, teamUserId, at } = params;
     const subjects = params.subjects
-      .map((s) => ({ ...s, scopes: clipScopes(s.scopes, params.specialty) }))
-      .filter((s) => s.userId !== teamUserId && s.scopes.length > 0);
+      .map((s) => ({ u: s.userId, s: s.scopes, c: clipScopes(s.scopes, params.specialty) }))
+      .filter((s) => s.u !== teamUserId && s.c.length > 0);
     if (subjects.length === 0) return [];
     return [
       this.prisma.professionalLink.updateMany({
         where: {
           groupId,
           professionalId: teamUserId,
-          subjectUserId: { in: subjects.map((s) => s.userId) },
+          subjectUserId: { in: subjects.map((s) => s.u) },
           revokedAt: null,
         },
         data: { revokedAt: at, revokedReason: 'superseded' satisfies RevokeReason },
       }),
-      this.prisma.professionalLink.createMany({
-        data: subjects.map((s) => ({
-          subjectUserId: s.userId,
-          professionalId: teamUserId,
-          groupId,
-          scopes: s.scopes,
-          grantedAt: at,
-        })),
-      }),
+      // O consentimento de cada membro foi lido antes do commit (#404): o
+      // vínculo só nasce se, no commit, ele continua ativo e com o mesmo
+      // consentimento. Quem revogou ou mudou no meio não é ressuscitado.
+      this.prisma.$executeRaw`
+        INSERT INTO "ProfessionalLink"
+          ("id", "subjectUserId", "professionalId", "groupId", "scopes", "grantedAt", "createdAt", "updatedAt")
+        SELECT gen_random_uuid()::text, x.u, ${teamUserId}, ${groupId},
+          ARRAY(SELECT jsonb_array_elements_text(x.c))::"ShareScope"[], ${at}, ${at}, ${at}
+        FROM jsonb_to_recordset(${JSON.stringify(subjects)}::jsonb) AS x(u text, s jsonb, c jsonb)
+        JOIN "GroupMembership" gm ON gm."groupId" = ${groupId} AND gm."userId" = x.u
+        WHERE gm."status" = 'ACTIVE'
+          AND gm."consentScopes" = ARRAY(SELECT jsonb_array_elements_text(x.s))::"ShareScope"[]`,
     ];
   }
 
@@ -243,7 +261,13 @@ export class ProfessionalLinkService {
    * grupo encolhem para o que a especialidade permite. Só encolhem: voltar de
    * nutrição para treino não devolve categoria sem novo aceite (ADR 043 §5).
    * Cada vínculo cortado vira linha nova (a trilha fica), e o que fica vazio só
-   * é revogado. Lê agora e devolve as escritas, para o `$transaction` de quem chama.
+   * é revogado.
+   *
+   * Lê agora e devolve as escritas para o `$transaction` de quem chama. A
+   * leitura é anterior ao commit, então cada vínculo é revogado e recriado
+   * **num só comando**: a linha nova só nasce se a revogação daquele vínculo
+   * casou (`revokedAt IS NULL` no commit). Se o titular revogou no meio, nada
+   * volta.
    */
   async narrowReceiverOps(
     groupId: string,
@@ -254,28 +278,32 @@ export class ProfessionalLinkService {
     const pode = scopesForSpecialty(specialty);
     const vivos = await this.prisma.professionalLink.findMany({
       where: { groupId, professionalId: userId, revokedAt: null },
-      select: { id: true, subjectUserId: true, scopes: true },
+      select: { id: true, scopes: true },
     });
     const cortar = vivos.filter((v) => v.scopes.some((s) => !pode.includes(s)));
-    if (cortar.length === 0) return { ops: [], narrowed: 0 };
-    const novos = cortar
-      .map((v) => ({
-        subjectUserId: v.subjectUserId,
-        professionalId: userId,
-        groupId,
-        scopes: clipScopes(v.scopes, specialty),
-        grantedAt: at,
-      }))
-      .filter((n) => n.scopes.length > 0);
+    const reason: RevokeReason = 'role_changed';
     return {
       narrowed: cortar.length,
-      ops: [
-        this.prisma.professionalLink.updateMany({
-          where: { id: { in: cortar.map((v) => v.id) }, revokedAt: null },
-          data: { revokedAt: at, revokedReason: 'role_changed' satisfies RevokeReason },
-        }),
-        ...(novos.length > 0 ? [this.prisma.professionalLink.createMany({ data: novos })] : []),
-      ],
+      ops: cortar.map((v) => {
+        const fica = clipScopes(v.scopes, specialty);
+        return fica.length === 0
+          ? this.prisma.professionalLink.updateMany({
+              where: { id: v.id, revokedAt: null },
+              data: { revokedAt: at, revokedReason: reason },
+            })
+          : this.prisma.$executeRaw`
+              WITH revogado AS (
+                UPDATE "ProfessionalLink"
+                SET "revokedAt" = ${at}, "revokedReason" = ${reason}, "updatedAt" = ${at}
+                WHERE "id" = ${v.id} AND "revokedAt" IS NULL
+                RETURNING "subjectUserId", "professionalId", "groupId"
+              )
+              INSERT INTO "ProfessionalLink"
+                ("id", "subjectUserId", "professionalId", "groupId", "scopes", "grantedAt", "createdAt", "updatedAt")
+              SELECT gen_random_uuid()::text, r."subjectUserId", r."professionalId", r."groupId",
+                ${fica}::text[]::"ShareScope"[], ${at}, ${at}, ${at}
+              FROM revogado r`;
+      }),
     };
   }
 

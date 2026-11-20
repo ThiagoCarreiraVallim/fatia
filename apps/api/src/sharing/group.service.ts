@@ -15,6 +15,7 @@ import {
   type AutoPostKind,
   type GroupAiMode,
   type GroupMembership,
+  type Prisma,
   type GroupVisibility,
   type JoinPolicy,
   type MediaFile,
@@ -39,6 +40,7 @@ import {
   type Specialty,
 } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
+import { revokeCreatedTeamInvitesOp, specialtyClearedAuditOp } from './team-invites';
 
 /** Resposta única para grupo que não existe e para grupo de que não sou membro (#92). */
 const NOT_FOUND = 'Group not found';
@@ -479,36 +481,49 @@ export class GroupService {
 
   /** Perfil da comunidade. O guarda já conferiu `group.update`; o dono de novo aqui. */
   async update(actorId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
-    await this.assertAction(actorId, groupId, 'group.update');
+    const eu = await this.assertAction(actorId, groupId, 'group.update');
     const { requiredSharingScopes, autoPosts, ...resto } = input;
+    // O que todo membro precisa compartilhar decide o que a equipe recebe: é
+    // do dono, que define a equipe (#404, ADR 043).
+    if (requiredSharingScopes !== undefined && !can(eu.role, 'group.sharing')) {
+      throw new ForbiddenException('Só o dono muda o que é obrigatório compartilhar');
+    }
+    const trilha: Prisma.PrismaPromise<unknown>[] = [];
     if (input.proSeeOnlyAssigned !== undefined) {
       const atual = await this.prisma.group.findUniqueOrThrow({
         where: { id: groupId },
         select: { proSeeOnlyAssigned: true },
       });
-      // Quem ligou ou desligou o "só quem acompanham", e quando (#404).
+      // Quem ligou ou desligou o "só quem acompanham", e quando (#404), no
+      // mesmo commit da mudança.
       if (atual.proSeeOnlyAssigned !== input.proSeeOnlyAssigned) {
-        await this.prisma.groupAuditLog.create({
-          data: {
-            groupId,
-            actorId,
-            action: 'group.pro_see_only_assigned',
-            targetCount: 0,
-            payload: { value: input.proSeeOnlyAssigned },
-          },
-        });
+        trilha.push(
+          this.prisma.groupAuditLog.create({
+            data: {
+              groupId,
+              actorId,
+              action: 'group.pro_see_only_assigned',
+              targetCount: 0,
+              payload: { value: input.proSeeOnlyAssigned },
+            },
+          }),
+        );
       }
     }
-    return this.prisma.group.update({
-      where: { id: groupId },
-      data: {
-        ...resto,
-        ...(requiredSharingScopes
-          ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
-          : {}),
-        ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
-      },
-    });
+    const [grupo] = (await this.prisma.$transaction([
+      this.prisma.group.update({
+        where: { id: groupId },
+        data: {
+          ...resto,
+          ...(requiredSharingScopes
+            ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
+            : {}),
+          ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
+        },
+      }),
+      ...trilha,
+    ])) as [Group, ...unknown[]];
+    return grupo;
   }
 
   /**
@@ -576,21 +591,55 @@ export class GroupService {
               select: { userId: true, consentScopes: true },
             })
           ).map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          specialty: null,
           at,
         });
 
+    // Os dois lados da posse vão para a trilha como troca de papel (#404), e a
+    // especialidade que o novo dono deixa também.
+    const papel = (membershipId: string, from: GroupRole, to: GroupRole) =>
+      this.prisma.groupAuditLog.create({
+        data: {
+          groupId,
+          actorId: ownerId,
+          action: 'members.role',
+          targetCount: 1,
+          payload: { membershipIds: [membershipId], from, to },
+        },
+      });
     await this.prisma.$transaction([
       this.prisma.groupMembership.update({
         where: { id: eu.id },
-        data: { role: GroupRole.PROFESSIONAL },
+        // Papel novo, escolhas novas (#400, #399), como em toda troca de papel.
+        data: { role: GroupRole.PROFESSIONAL, reportEmail: false, riskDigest: false },
       }),
-      // Especialidade é do profissional (#404): o novo dono deixa a dele.
+      // Especialidade é do profissional (#404): o novo dono deixa a dela.
       this.prisma.groupMembership.update({
         where: { id: alvo.id },
-        data: { role: GroupRole.OWNER, specialty: null },
+        data: {
+          role: GroupRole.OWNER,
+          specialty: null,
+          accompaniedById: null,
+          reportEmail: false,
+          riskDigest: false,
+        },
       }),
       this.prisma.group.update({ where: { id: groupId }, data: { ownerId: alvo.userId } }),
       ...leque,
+      // O antigo dono vira profissional: os convites de equipe dele caem.
+      revokeCreatedTeamInvitesOp(this.prisma, groupId, ownerId, GroupRole.PROFESSIONAL, at),
+      papel(alvo.id, alvo.role, GroupRole.OWNER),
+      papel(eu.id, GroupRole.OWNER, GroupRole.PROFESSIONAL),
+      ...(alvo.specialty
+        ? [
+            specialtyClearedAuditOp(this.prisma, {
+              groupId,
+              actorId: ownerId,
+              membershipId: alvo.id,
+              from: alvo.specialty,
+            }),
+          ]
+        : []),
     ]);
     return this.findByIdForMember(ownerId, groupId);
   }

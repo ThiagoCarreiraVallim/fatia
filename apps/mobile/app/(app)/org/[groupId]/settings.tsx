@@ -164,7 +164,9 @@ function GroupSettings({ g }: { g: MyGroup }) {
         </Button>
       </PanelCard>
 
-      <RequiredScopesCard g={g} />
+      {/* O que todo membro tem de compartilhar é do dono (#404). */}
+
+      {groupCan(g, 'group.sharing') ? <RequiredScopesCard g={g} /> : null}
 
       <PanelCard title="Avatar">
         <ImageField

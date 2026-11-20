@@ -25,6 +25,7 @@ const HISTORY_ACTIONS = [
   'members.role',
   'members.specialty',
   'members.accompany',
+  'members.approve',
   'group.pro_see_only_assigned',
 ];
 const HISTORY_MAX = 30;

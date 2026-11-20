@@ -179,7 +179,8 @@ export default function OrgSettingsPage() {
           </Button>
         </form>
 
-        <RequiredScopesSection />
+        {/* O que todo membro tem de compartilhar é do dono (#404, `group.sharing`). */}
+        {groupCan(g, 'group.sharing') && <RequiredScopesSection />}
       </div>
 
       <div className="space-y-4">

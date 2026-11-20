@@ -19,3 +19,4 @@ Itens (cada um: commit test vermelho, depois fix):
 ## Estado
 
 - test vermelho A1–A7 commitado (team-review.integration.spec.ts, 9 its)
+- fix A1–A7 feitos e verdes (api 4018, web 1212, mobile 582, api-client 1155). Falta: REDESIGN_PROGRESS (item 8 + bloco), merge origin/main, migrate deploy em banco novo, validação final.

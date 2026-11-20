@@ -44,6 +44,17 @@ export const GROUP_PERMISSIONS = {
   /** Passar a comunidade (e a cobrança) para outra pessoa da equipe. */
   'group.transfer': [GroupRole.OWNER],
   /**
+   * O que todo membro precisa compartilhar para entrar (`requiredSharingScopes`).
+   * Decide o que a equipe recebe, então é de quem define a equipe (#404).
+   */
+  'group.sharing': [GroupRole.OWNER],
+  /**
+   * Dar papel que recebe vínculo (`PROFESSIONAL`, `CREATOR`) — por convite,
+   * link, aprovação ou troca de papel. Quem define a equipe é o dono (ADR 043):
+   * sem isto, o admin abriria dado de aluno para uma conta dele (#404).
+   */
+  'member.grant_reader': [GroupRole.OWNER],
+  /**
    * `PROFESSIONAL` convida, mas só como `MEMBER` — quem define a equipe é o
    * dono. A restrição por papel convidado fica no `InviteService`.
    */
@@ -301,12 +312,18 @@ export const GRANTABLE_ROLES: readonly GroupRole[] = [
 
 /**
  * Que papéis este papel pode dar (#404): o dono, qualquer um; o administrador,
- * qualquer um menos o de administrador (ninguém promove alguém ao próprio nível);
- * o profissional (convite) e a recepção (aprovação no balcão), só o de membro.
+ * só membro e recepção — não faz administrador (ninguém promove alguém ao
+ * próprio nível) nem papel que recebe vínculo (`member.grant_reader`, só do
+ * dono); o profissional (convite) e a recepção (aprovação no balcão), só o de
+ * membro.
  */
 export function rolesGrantableBy(actor: GroupRole): readonly GroupRole[] {
   if (actor === GroupRole.OWNER) return GRANTABLE_ROLES;
-  if (actor === GroupRole.ADMIN) return GRANTABLE_ROLES.filter((r) => r !== GroupRole.ADMIN);
+  if (actor === GroupRole.ADMIN) {
+    return GRANTABLE_ROLES.filter(
+      (r) => r !== GroupRole.ADMIN && (!canReceiveLink(r) || can(actor, 'member.grant_reader')),
+    );
+  }
   if (actor === GroupRole.PROFESSIONAL || actor === GroupRole.RECEPTION) return [GroupRole.MEMBER];
   return [];
 }
@@ -421,6 +438,18 @@ export const PERMISSION_SUMMARY: readonly {
     label: 'Trocar papéis, remover e distribuir alunos',
     rule: 'actions',
     actions: ['member.role', 'member.remove', 'member.assign'],
+  },
+  {
+    key: 'grant_reader',
+    label: 'Dar papel de profissional ou criador',
+    rule: 'actions',
+    actions: ['member.grant_reader'],
+  },
+  {
+    key: 'sharing',
+    label: 'Definir o que é obrigatório compartilhar',
+    rule: 'actions',
+    actions: ['group.sharing'],
   },
   { key: 'report', label: 'Relatório do mês', rule: 'actions', actions: ['insights.read'] },
   {

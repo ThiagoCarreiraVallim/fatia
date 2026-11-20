@@ -1921,7 +1921,7 @@ model GroupMembership {
   /// Recebe o e-mail mensal do relatório (#400). Vale só para a equipe e é o
   /// dono quem marca; o dono recebe sempre.
   reportEmail       Boolean          @default(false)
-  /// Especialidade (#404), só do `PROFESSIONAL`. Nula = sem recorte.
+  /// Especialidade (#404), só do `PROFESSIONAL` (CHECK no banco). Nula = sem recorte.
   specialty         TeamSpecialty?
   /// Último acesso ao painel (#404, "último acesso" da Equipe): carimbado pelos
   /// contadores do menu, no máximo a cada 5 minutos.

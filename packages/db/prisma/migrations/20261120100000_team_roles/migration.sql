@@ -9,3 +9,9 @@ ALTER TABLE "GroupMembership" ADD COLUMN "specialty" "TeamSpecialty";
 ALTER TABLE "GroupMembership" ADD COLUMN "panelSeenAt" TIMESTAMP(3);
 
 ALTER TABLE "Group" ADD COLUMN "proSeeOnlyAssigned" BOOLEAN NOT NULL DEFAULT false;
+
+-- Especialidade só existe em quem é profissional: o banco garante, para que
+-- nenhum caminho (saída, troca de papel, posse) deixe uma sobrar.
+ALTER TABLE "GroupMembership"
+  ADD CONSTRAINT "GroupMembership_specialty_professional"
+  CHECK ("specialty" IS NULL OR "role" = 'PROFESSIONAL');

@@ -23,6 +23,8 @@ export type GroupAction =
   | 'group.update'
   | 'group.delete'
   | 'group.transfer'
+  | 'group.sharing'
+  | 'member.grant_reader'
   | 'invite.create'
   | 'invite.revoke'
   | 'member.list'
@@ -125,6 +127,8 @@ export const ROLE_ACTIONS: Record<GroupRole, readonly GroupAction[]> = {
     'group.update',
     'group.delete',
     'group.transfer',
+    'group.sharing',
+    'member.grant_reader',
     'invite.create',
     'invite.revoke',
     'member.list',

@@ -69,6 +69,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `group.update`         | sim   | sim   | não          | não     | não       | não    |
 | `group.delete`         | sim   | não   | não          | não     | não       | não    |
 | `group.transfer`       | sim   | não   | não          | não     | não       | não    |
+| `group.sharing`        | sim   | não   | não          | não     | não       | não    |
+| `member.grant_reader`  | sim   | não   | não          | não     | não       | não    |
 | `invite.create`        | sim   | sim   | sim          | não     | não       | não    |
 | `invite.revoke`        | sim   | sim   | sim          | não     | não       | não    |
 | `member.list`          | sim   | sim   | sim          | sim     | sim       | sim    |
@@ -148,27 +150,41 @@ futura:
   a comunidade fez, não dado de saúde, e a ficha (#402) já mostra o mesmo estado a quem tem
   `member.plans`; oferta de outra comunidade nunca entra. Ver a sessão feita, reagir e comentar exigem Treino liberado para quem olha; sem ele,
   a tela diz só que não há detalhe. O "Visto" é de cada um. Mudar o limite do em risco é
-  `group.update` (o dono).
+  `group.update` **mais** `panel.review` ou `insights.read` (#404): na prática, o dono. O `ADMIN`
+  edita a comunidade, mas não mexe num número que não vê.
 - **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** O `InviteService` usa
-  `rolesGrantableBy`: o `OWNER` convida para qualquer papel, o `ADMIN` para qualquer um menos
-  `ADMIN`, o `PROFESSIONAL` só `MEMBER`. Ninguém é convidado como `OWNER` — dono se transfere
+  `rolesGrantableBy`: o `OWNER` convida para qualquer papel, o `ADMIN` só para `MEMBER` e
+  `RECEPTION`, o `PROFESSIONAL` só `MEMBER`. Ninguém é convidado como `OWNER` — dono se transfere
   (`group.transfer`, o antigo dono fica na equipe como `PROFESSIONAL`). Assento no convite é
-  `billing.manage`.
+  `billing.manage`. **Convite de equipe é poder emprestado de quem o criou:** quem sai, ou troca
+  para um papel que não daria mais aquele, leva junto os convites e links de papel de equipe que
+  ainda estavam valendo (no mesmo commit); o de membro fica.
+- **`member.grant_reader` é `OWNER` e só (#404, ADR 043: quem define a equipe é o dono).** Dar
+  papel que recebe vínculo (`PROFESSIONAL`, `CREATOR`) — por convite, link, aprovação ou troca de
+  papel — é abrir o que cada membro consentiu à comunidade. Se o `ADMIN` pudesse, criaria um
+  convite de profissional para uma conta dele e leria os alunos. Ele dá só `MEMBER` e `RECEPTION`.
+- **`group.sharing` é `OWNER` e só (#404).** O que todo membro precisa compartilhar para entrar
+  (`requiredSharingScopes`) decide o que a equipe recebe; o `ADMIN` edita o resto do perfil
+  (`group.update`), não isto.
 - **`member.role` é `OWNER` e `ADMIN` (#404), com limite.** Virar equipe é passar a receber o que
-  cada membro consentiu à comunidade. O `ADMIN` muda o papel de quem não é `ADMIN` nem `OWNER` e
-  não dá `ADMIN` a ninguém (`canManageMember` e `rolesGrantableBy`, em `permissions.ts`): assim
-  ele não se promove nem rebaixa um par, e o escalonamento para é no dono. Os vínculos acompanham
+  cada membro consentiu à comunidade. O `ADMIN` muda o papel de quem não é `ADMIN` nem `OWNER`,
+  e só para `MEMBER` ou `RECEPTION` (`canManageMember` e `rolesGrantableBy`, em `permissions.ts`):
+  assim ele não se promove, não rebaixa um par, não abre leitura para ninguém, e o escalonamento
+  para é no dono. Os vínculos acompanham
   no mesmo commit: quem entra num papel que recebe (`OWNER`, `PROFESSIONAL`, `CREATOR`) recebe o
   leque inverso, quem vai para `ADMIN`, `RECEPTION` ou `MEMBER` perde tudo que recebia ali
   (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere. Toda troca
   desliga `reportEmail` e `riskDigest` e deixa uma linha `members.role` em `GroupAuditLog`. A
   especialidade do `PROFESSIONAL` (`PATCH .../members/:id/specialty`) é `member.role` também; ela
-  se apaga quando a pessoa deixa de ser profissional.
+  se apaga quando a pessoa deixa de ser profissional, sai ou vira dona (com linha
+  `members.specialty` na trilha), e o banco garante com um `CHECK` que só profissional tem
+  especialidade. Passar a posse deixa duas linhas `members.role` (os dois lados).
 - **`member.approve` é `OWNER`, `ADMIN` e `RECEPTION`.** Aprovar é pôr para dentro quem pediu;
-  a recepção aprova só como `MEMBER`, o admin até o que ele pode dar. Recusar é remover a
-  associação pendente (`member.remove`), que a recepção não tem.
-- **`member.remove` e `member.ban` são `OWNER` e `ADMIN`.** O `ADMIN` não remove nem bane outro
-  `ADMIN`; ninguém remove o dono.
+  a recepção aprova só como `MEMBER`, o admin como `MEMBER` ou `RECEPTION`. Aprovar já com papel
+  de equipe deixa linha `members.approve` na trilha. Recusar é remover a associação pendente
+  (`member.remove`), que a recepção não tem.
+- **`member.remove` e `member.ban` são `OWNER` e `ADMIN`.** O `ADMIN` não remove, não bane nem
+  desfaz o banimento de outro `ADMIN`; ninguém remove o dono.
 - **`member.assign` (#401) é `OWNER` e `ADMIN`.** É escolher quem da equipe acompanha cada membro
   ("Acompanhado por", "Trocar responsável" em massa). É administração, não leitura: quem lê dado de
   saúde continua sendo o `ProfessionalLink` que o membro deu. No convite, o profissional pode pôr
@@ -248,6 +264,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.update`         | não                  |
 | `group.delete`         | não                  |
 | `group.transfer`       | não                  |
+| `group.sharing`        | não                  |
+| `member.grant_reader`  | não                  |
 | `invite.create`        | não                  |
 | `invite.revoke`        | não                  |
 | `member.list`          | não                  |
