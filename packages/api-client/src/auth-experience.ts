@@ -661,5 +661,26 @@ export async function completePasswordReset(
  * não ler campo inexistente.
  */
 export function normalizePasswordPolicy(raw: unknown): PasswordPolicy {
-  return raw as PasswordPolicy;
+  const d = DEFAULT_PASSWORD_POLICY;
+  const obj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const num = (v: unknown, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  const root = obj(raw);
+  const length = obj(root.length);
+  const types = obj(root.characterTypes);
+  const rejects = obj(root.rejects);
+  return {
+    length: { min: num(length.min, d.length.min), max: num(length.max, d.length.max) },
+    characterTypes: { min: num(types.min, d.characterTypes.min) },
+    rejects: {
+      pwned: bool(rejects.pwned, d.rejects.pwned),
+      repetitionAndSequence: bool(rejects.repetitionAndSequence, d.rejects.repetitionAndSequence),
+      userInfo: bool(rejects.userInfo, d.rejects.userInfo),
+      words: Array.isArray(rejects.words)
+        ? rejects.words.filter((w): w is string => typeof w === 'string')
+        : [...d.rejects.words],
+    },
+  };
 }

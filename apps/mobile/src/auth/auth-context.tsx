@@ -14,7 +14,6 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import {
-  DEFAULT_PASSWORD_POLICY,
   ExperienceError,
   buildNativeAuthorizeUrl,
   completePasswordReset,
@@ -25,6 +24,7 @@ import {
   signInWithPassword as signInWithPasswordFlow,
   socialTargets,
   type ExperienceClient,
+  normalizePasswordPolicy,
   type PasswordPolicy,
   type PendingCode,
   type PublicSignInExperience,
@@ -394,7 +394,7 @@ export function AuthProvider({
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
-      passwordPolicy: experience?.passwordPolicy ?? DEFAULT_PASSWORD_POLICY,
+      passwordPolicy: normalizePasswordPolicy(experience?.passwordPolicy),
       socialTargets: experience ? socialTargets(experience) : [],
       signInWithPassword,
       startSignup,
