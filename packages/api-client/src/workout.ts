@@ -64,6 +64,14 @@ export interface CommunityGuide {
   homeFriendly?: boolean;
 }
 
+/** "Como fazer" do membro (#408). */
+export function exerciseHowTo(_e: {
+  instructions: string[];
+  community?: CommunityGuide | null;
+}): { steps: string[]; mistakes: string[] } {
+  return { steps: [], mistakes: [] };
+}
+
 // Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves
 // em inglês do diagrama (chest, abdominals, ...).
 export type ExerciseEditInput = Partial<{

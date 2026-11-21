@@ -86,6 +86,34 @@ describe('Como fazer (#377, prancha Al-T9)', () => {
     expect(screen.getByText('Escápulas juntas.')).toBeInTheDocument();
   });
 
+  it('Passos da casa (#408): no lugar das instruções, com os erros comuns', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ExerciseDetailDrawer
+          open
+          onOpenChange={() => undefined}
+          exercise={{
+            ...SUPINO,
+            community: {
+              ...SUPINO.community!,
+              steps: ['Pés firmes no chão.', 'Barra na linha do mamilo.'],
+              commonMistakes: ['Tirar o quadril do banco.'],
+            },
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    const passos = screen.getByRole('list', { name: 'Como fazer' });
+    expect(within(passos).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '1Pés firmes no chão.',
+      '2Barra na linha do mamilo.',
+    ]);
+    expect(screen.queryByText('Deite no banco.')).toBeNull();
+    const erros = screen.getByRole('list', { name: 'Erros comuns' });
+    expect(erros).toHaveTextContent('Tirar o quadril do banco.');
+  });
+
   it('Músculos: o diagrama e quem trabalha e quem ajuda, em português', async () => {
     const user = userEvent.setup();
     renderDrawer();

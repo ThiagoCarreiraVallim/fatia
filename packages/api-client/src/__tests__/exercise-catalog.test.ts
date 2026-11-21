@@ -15,6 +15,7 @@ import {
   wrapSelection,
 } from '../index';
 import { configureApiClient, resetApiClient } from '../http';
+import { exerciseHowTo } from '../workout';
 
 const fetchMock = vi.fn();
 const pedido = (i = 0) => {
@@ -126,6 +127,28 @@ describe('catálogo da equipe e editor de dica no cliente (#408)', () => {
       'RECOVERY',
       'GENERAL',
     ]);
+  });
+
+  it('"Como fazer" do membro: os passos da casa no lugar das instruções, e os erros', () => {
+    const base = { instructions: ['Deite no banco.'], community: null };
+    expect(exerciseHowTo(base)).toEqual({ steps: ['Deite no banco.'], mistakes: [] });
+    const guia = {
+      groupId: 'g',
+      groupName: 'Academia',
+      video: null,
+      photos: [],
+      tips: null,
+    };
+    // Guia sem passos (ou da API antiga): ficam as instruções.
+    expect(exerciseHowTo({ ...base, community: { ...guia, steps: [] } }).steps).toEqual([
+      'Deite no banco.',
+    ]);
+    expect(
+      exerciseHowTo({
+        ...base,
+        community: { ...guia, steps: ['Pés firmes.'], commonMistakes: ['Quadril sobe.'] },
+      }),
+    ).toEqual({ steps: ['Pés firmes.'], mistakes: ['Quadril sobe.'] });
   });
 
   it('negrito e itálico em volta da seleção, ou o marcador no cursor', () => {
