@@ -43,6 +43,7 @@ import {
   type InviteStatus,
 } from './invite-state';
 import { can, rolesGrantableBy, TEAM_ROLES, type GroupAction } from './permissions';
+import { welcomeForJoin, type WelcomePageView } from './welcome.service';
 import {
   assertNotBanned,
   MembershipService,
@@ -250,6 +251,11 @@ export interface InvitePreview {
    * e quantos participam. Nada sobre quem participa.
    */
   activeChallenge: { title: string; participants: number } | null;
+  /**
+   * As páginas de boas-vindas da comunidade (#410, Onb-02b), entre as
+   * boas-vindas do Fatia e o que compartilhar. Vazio = só o padrão do Fatia.
+   */
+  welcome: WelcomePageView[];
 }
 
 function cleanLabel(label: string | undefined): string | null {
@@ -938,7 +944,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   async preview(token: string): Promise<InvitePreview> {
     const convite = await this.valido(token);
     const now = new Date();
-    const [grupo, equipe, memberCount, autor, desafio] = await Promise.all([
+    const [grupo, equipe, memberCount, autor, desafio, welcome] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: convite.groupId },
         select: {
@@ -977,6 +983,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         orderBy: { startsAt: 'desc' },
         select: { title: true, _count: { select: { participants: true } } },
       }),
+      welcomeForJoin(this.prisma, convite.groupId),
     ]);
     const { requiredSharingScopes, ...group } = grupo;
     return {
@@ -991,6 +998,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       activeChallenge: desafio
         ? { title: desafio.title, participants: desafio._count.participants }
         : null,
+      welcome,
     };
   }
 

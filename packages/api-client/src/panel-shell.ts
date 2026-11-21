@@ -140,6 +140,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
       ['moderation', 'Mural e avisos'],
       ['announcements', 'Comunicados e enquetes'],
       ['challenges', 'Desafios'],
+      ['welcome', 'Boas-vindas'],
       ['benefits', 'Benefícios'],
       ['offers', 'Ofertas'],
     ],

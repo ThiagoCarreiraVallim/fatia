@@ -53,6 +53,7 @@ describe('menu do painel (#398)', () => {
       'Mural e avisos',
       'Comunicados e enquetes',
       'Desafios',
+      'Boas-vindas',
       'Benefícios',
       'Ofertas',
     ]);
@@ -76,6 +77,16 @@ describe('menu do painel (#398)', () => {
     expect(secoes).not.toContain('origins');
     expect(nav.map((g) => g.key)).not.toContain('ai');
     expect(nav.find((g) => g.key === 'people')!.items[0]!.count).toBeNull();
+    // Boas-vindas é de quem publica conteúdo (#410, content.publish).
+    expect(secoes).toContain('welcome');
+    expect(panelBreadcrumb('/org/g1/welcome')).toEqual({
+      group: 'Comunidade',
+      label: 'Boas-vindas',
+    });
+    // A recepção não publica conteúdo.
+    expect(panelNav('RECEPTION').flatMap((g) => g.items.map((i) => i.section))).not.toContain(
+      'welcome',
+    );
   });
 
   it('membro não tem menu', () => {

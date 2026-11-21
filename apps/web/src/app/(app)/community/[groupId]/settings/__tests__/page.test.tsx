@@ -23,11 +23,18 @@ vi.mock('@fatia/api-client', async () => {
       leave: vi.fn(),
     },
     benefitsApi: { list: vi.fn() },
+    welcomeApi: { pages: vi.fn().mockResolvedValue({ pages: [], team: [] }) },
     myNotesApi: { list: vi.fn().mockResolvedValue([]) },
   };
 });
 
-import { benefitsApi, groupsApi, myNotesApi, type TeamMemberView } from '@fatia/api-client';
+import {
+  benefitsApi,
+  groupsApi,
+  myNotesApi,
+  welcomeApi,
+  type TeamMemberView,
+} from '@fatia/api-client';
 import CommunitySettingsPage from '../page';
 
 const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
@@ -108,6 +115,36 @@ describe('/community/[groupId]/settings (Cm-04)', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.mocked(myNotesApi.list).mockResolvedValue([]);
+    vi.mocked(welcomeApi.pages).mockResolvedValue({ pages: [], team: [] });
+  });
+
+  it('rever as boas-vindas da comunidade em Sobre (#410)', async () => {
+    vi.mocked(welcomeApi.pages).mockResolvedValue({
+      pages: [
+        {
+          position: 1,
+          kind: 'PLAIN',
+          title: 'Combinados da casa',
+          body: '- Traga toalha',
+          showTeam: false,
+        },
+      ],
+      team: [{ name: 'Ana Prado', role: 'OWNER' }],
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /Rever as boas-vindas/ }));
+    const d = await screen.findByRole('dialog');
+    expect(within(d).getByRole('heading', { name: 'Combinados da casa' })).toBeInTheDocument();
+    expect(within(d).getByText('Traga toalha')).toBeInTheDocument();
+    await userEvent.click(within(d).getByRole('button', { name: 'Continuar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('sem boas-vindas publicadas, sem a entrada', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Quem olhou seus dados' });
+    await waitFor(() => expect(welcomeApi.pages).toHaveBeenCalledWith('g1'));
+    expect(screen.queryByRole('button', { name: /Rever as boas-vindas/ })).not.toBeInTheDocument();
   });
 
   it('mostra quem é a comunidade, o PRO pago e quem olhou', async () => {

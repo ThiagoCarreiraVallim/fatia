@@ -1,12 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Crown, Gift, LayoutDashboard, Lock, Search } from 'lucide-react-native';
+import {
+  BookOpen,
+  ChevronRight,
+  Crown,
+  Gift,
+  LayoutDashboard,
+  Lock,
+  Search,
+} from 'lucide-react-native';
 import {
   accessLogLine,
   ApiError,
   benefitsApi,
+  welcomeApi,
   canOpenPanel,
   consentSummary,
   entryPolicyView,
@@ -33,6 +43,7 @@ import {
   type ShareScope,
 } from '@fatia/api-client';
 import { GroupAvatar } from '@/components/community/group-avatar';
+import { WelcomePagesView } from '@/components/community/welcome-pages';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
 import {
@@ -324,6 +335,13 @@ export default function CommunitySettingsScreen() {
     queryFn: () => groupsApi.accessLog({ groupId, limit: 5 }),
     enabled: ativo,
   });
+  // As boas-vindas publicadas (#410): rever o que a comunidade mostra ao entrar.
+  const welcome = useQuery({
+    queryKey: ['community', 'welcome', groupId],
+    queryFn: () => welcomeApi.pages(groupId),
+    enabled: group.data?.status === 'ACTIVE',
+  });
+  const [reviewing, setReviewing] = useState(false);
   const benefits = useQuery({
     queryKey: ['community', 'benefits', groupId],
     queryFn: () => benefitsApi.list(groupId),
@@ -367,6 +385,7 @@ export default function CommunitySettingsScreen() {
   const g = group.data;
   const entry = entryPolicyView(g.joinPolicy);
   const ativos = (benefits.data ?? []).filter((b) => !b.expired).length;
+  const welcomePages = welcome.data?.pages ?? [];
   const confirmLeave = () =>
     confirm({
       title: ativo ? `Sair da ${g.name}?` : 'Cancelar o pedido?',
@@ -446,6 +465,37 @@ export default function CommunitySettingsScreen() {
             onPress={() => router.push(`/community/${g.id}/benefits`)}
           />
         ) : null}
+
+        {/* Sem página publicada, a entrada some: vale só o padrão do Fatia. */}
+        {welcomePages.length > 0 ? (
+          <LinkRow
+            icon={
+              <View className="h-9 w-9 items-center justify-center rounded-xl bg-brand/15">
+                <BookOpen size={16} color={colors.brand} />
+              </View>
+            }
+            title="Rever as boas-vindas"
+            subtitle={
+              welcomePages.length === 1
+                ? (welcomePages[0]?.title ?? '')
+                : `${welcomePages.length} páginas da comunidade`
+            }
+            onPress={() => setReviewing(true)}
+          />
+        ) : null}
+        <Modal visible={reviewing} animationType="slide" onRequestClose={() => setReviewing(false)}>
+          <SafeAreaView className="flex-1 bg-background px-5 pb-4 pt-6">
+            <WelcomePagesView
+              groupName={g.name}
+              avatarUrl={g.avatarUrl}
+              pages={welcomePages}
+              team={welcome.data?.team ?? []}
+              note={false}
+              onSkip={() => setReviewing(false)}
+              onFinish={() => setReviewing(false)}
+            />
+          </SafeAreaView>
+        </Modal>
 
         {ativo ? <SharingSection g={g} /> : null}
         {ativo ? <TeamSection groupId={g.id} /> : null}

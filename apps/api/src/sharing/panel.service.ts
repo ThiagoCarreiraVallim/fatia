@@ -125,6 +125,8 @@ export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] 
     action: 'announcement.publish',
   },
   { key: 'challenges', label: 'Desafios', group: 'Comunidade', action: 'challenge.manage' },
+  // As páginas que o aluno vê ao entrar (#410, Pn-23).
+  { key: 'welcome', label: 'Boas-vindas', group: 'Comunidade', action: 'content.publish' },
   { key: 'benefits', label: 'Benefícios', group: 'Comunidade', action: 'benefit.manage' },
   // O que a comunidade vende (#403, Pn-37): dinheiro, só o dono.
   { key: 'offers', label: 'Ofertas', group: 'Comunidade', action: 'billing.read' },

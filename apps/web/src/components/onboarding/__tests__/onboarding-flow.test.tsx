@@ -269,6 +269,55 @@ describe('OnboardingFlow (#371)', () => {
     ).toBeInTheDocument();
   });
 
+  it('com páginas da comunidade: entre as boas-vindas e o compartilhar, com "Pular" (#410)', async () => {
+    vi.mocked(groupsApi.previewInvite).mockResolvedValue({
+      group: { id: 'g1', name: 'Academia Demo', description: null, type: 'SPONSORED' },
+      role: 'MEMBER',
+      invitedBy: null,
+      team: [
+        { name: 'Bruno Lima', role: 'OWNER' },
+        { name: 'Helena Souza', role: 'PROFESSIONAL' },
+      ],
+      memberCount: 40,
+      emailBound: false,
+      expiresAt: null,
+      requiredSharingScopes: [],
+      activeChallenge: null,
+      welcome: [
+        {
+          position: 1,
+          kind: 'PLAIN',
+          title: 'Combinados da casa',
+          body: '- Traga toalha\n- Devolva os pesos',
+          showTeam: false,
+        },
+        {
+          position: 2,
+          kind: 'PLAIN',
+          title: 'A Helena revisa seu treino',
+          body: 'Toda semana.',
+          showTeam: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderFlow({ inviteToken: 'c'.repeat(43) });
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(onboardingApi.save).toHaveBeenLastCalledWith({ step: 'community' });
+    expect(await screen.findByRole('heading', { name: 'Combinados da casa' })).toBeInTheDocument();
+    expect(screen.getByText('1 de 2')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Próxima' }));
+    expect(screen.getByRole('heading', { name: 'A Helena revisa seu treino' })).toBeInTheDocument();
+    expect(screen.getByText('Bruno e Helena')).toBeInTheDocument();
+    // Voltar anda entre as páginas; "Pular" vai direto ao compartilhar.
+    await user.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(screen.getByRole('heading', { name: 'Combinados da casa' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Pular' }));
+    expect(onboardingApi.save).toHaveBeenLastCalledWith({ step: 'share' });
+    expect(await screen.findByText('Bruno (dono) e Helena (profissional)')).toBeInTheDocument();
+  });
+
   it('aceitar o convite leva o obrigatório e o que a pessoa ligou', async () => {
     vi.mocked(groupsApi.previewInvite).mockResolvedValue({
       group: { id: 'g1', name: 'Academia Demo', description: null, type: 'SOCIAL' },

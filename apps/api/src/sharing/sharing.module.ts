@@ -64,6 +64,8 @@ import { ListGroupBenefitsTool } from './mcp/list-group-benefits.tool';
 import { GetMyChallengeProgressTool } from './mcp/get-my-challenge-progress.tool';
 import { ListGroupExerciseGuidesTool } from './mcp/list-group-exercise-guides.tool';
 import { BenefitController } from './benefit.controller';
+import { WelcomeController } from './welcome.controller';
+import { WelcomeService } from './welcome.service';
 import { BenefitService } from './benefit.service';
 import { SharingController } from './sharing.controller';
 import { GroupRoleGuard } from './guards/group-role.guard';
@@ -159,6 +161,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ModerationController,
     PlanOfferController,
     BenefitController,
+    WelcomeController,
     MemberFileController,
     PlanProgramsController,
     PlanSendController,
@@ -199,6 +202,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     BlockService,
     ForYouService,
     BenefitService,
+    WelcomeService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,

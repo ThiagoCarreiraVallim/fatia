@@ -1,3 +1,4 @@
+import type { WelcomePage } from './community-welcome';
 import { apiFetch } from './http';
 import type { PostPolicy } from './community-feed';
 import type { ShareScope } from './sharing';
@@ -295,6 +296,11 @@ export interface InvitePreview {
   requiredSharingScopes: ShareScope[];
   /** O desafio em andamento, para as boas-vindas (Onb-02): título e quantos participam. */
   activeChallenge: { title: string; participants: number } | null;
+  /**
+   * As páginas de boas-vindas da comunidade (#410, Onb-02b): publicadas e com
+   * "Mostrar ao entrar". Vazio (ou API antiga) = só o padrão do Fatia.
+   */
+  welcome?: WelcomePage[];
 }
 
 /** Resposta de entrar, aceitar ou sair. `INVITED` = aguardando o dono aprovar. */

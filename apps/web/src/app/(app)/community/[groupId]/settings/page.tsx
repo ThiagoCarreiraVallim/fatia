@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Check, ChevronRight, Crown, Gift, LayoutDashboard, Lock, Search } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  ChevronRight,
+  Crown,
+  Gift,
+  LayoutDashboard,
+  Lock,
+  Search,
+} from 'lucide-react';
 import {
   accessLogLine,
   ApiError,
@@ -31,12 +40,15 @@ import {
   toggleScope,
   viewedToday,
   VISIBILITY_WORD,
+  welcomeApi,
   type JoinConsent,
   type MyGroup,
   type ShareScope,
 } from '@fatia/api-client';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { communityKeys } from '@/components/community/query-keys';
+import { WelcomePagesView } from '@/components/community/welcome-pages';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -279,6 +291,14 @@ export default function CommunitySettingsPage() {
     enabled: active,
   });
 
+  // As boas-vindas publicadas (#410): rever o que a comunidade mostra ao entrar.
+  const welcome = useQuery({
+    queryKey: communityKeys.welcome(groupId),
+    queryFn: () => welcomeApi.pages(groupId),
+    enabled: active,
+  });
+  const [reviewing, setReviewing] = useState(false);
+
   const leave = useMutation({
     mutationFn: () => groupsApi.leave(groupId),
     onSuccess: () => {
@@ -323,6 +343,7 @@ export default function CommunitySettingsPage() {
   const isOwner = g.role === 'OWNER';
   const entry = entryPolicyView(g.joinPolicy);
   const ativos = (benefits.data ?? []).filter((b) => !b.expired).length;
+  const welcomePages = welcome.data?.pages ?? [];
 
   return (
     <div className="space-y-5 p-4">
@@ -400,6 +421,42 @@ export default function CommunitySettingsPage() {
           <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
         </Link>
       )}
+
+      {/* Sem página publicada, a entrada some: vale só o padrão do Fatia. */}
+      {welcomePages.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setReviewing(true)}
+          className="flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-card px-4 text-left hover:bg-accent/40"
+        >
+          <span className="flex size-9 items-center justify-center rounded-xl bg-brand-soft text-brand">
+            <BookOpen size={16} aria-hidden />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm font-semibold">Rever as boas-vindas</span>
+            <span className="block text-xs text-muted-foreground">
+              {welcomePages.length === 1
+                ? welcomePages[0]?.title
+                : `${welcomePages.length} páginas da comunidade`}
+            </span>
+          </span>
+          <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
+        </button>
+      )}
+      <Dialog open={reviewing} onOpenChange={setReviewing}>
+        <DialogContent className="flex h-dvh max-w-md max-sm:max-w-none max-sm:rounded-none sm:h-[min(760px,100dvh)] flex-col gap-0 p-5 pt-6 sm:rounded-card [&>button:last-child]:hidden">
+          <DialogTitle className="sr-only">Boas-vindas da {g.name}</DialogTitle>
+          <WelcomePagesView
+            groupName={g.name}
+            avatarUrl={g.avatarUrl}
+            pages={welcomePages}
+            team={welcome.data?.team ?? []}
+            note={false}
+            onSkip={() => setReviewing(false)}
+            onFinish={() => setReviewing(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {active && <SharingSection g={g} />}
       {active && <TeamSection groupId={g.id} />}

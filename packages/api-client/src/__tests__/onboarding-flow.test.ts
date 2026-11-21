@@ -91,6 +91,20 @@ describe('as etapas de cada fluxo (Onb-Fluxos)', () => {
     ]);
   });
 
+  it('com convite e páginas da comunidade: as páginas entre as boas-vindas e o compartilhar (#410)', () => {
+    const ctx = { ...BASE, invitePending: true, inCommunity: true, communityPages: true };
+    expect(onboardingSteps(ctx).slice(0, 3)).toEqual(['welcome', 'community', 'share']);
+    expect(nextOnboardingStep(ctx, 'welcome')).toBe('community');
+    expect(previousOnboardingStep(ctx, 'share')).toBe('community');
+    // Sem páginas (ou sem convite), a etapa não existe.
+    expect(onboardingSteps({ ...ctx, communityPages: false })).not.toContain('community');
+    expect(onboardingSteps({ ...BASE, communityPages: true })).not.toContain('community');
+    // Dividem o primeiro traço da barra: as outras etapas não andam.
+    expect(progressSegment('community')).toBe(0);
+    expect(progressSegment('share')).toBe(1);
+    expect(progressSegment('objective')).toBe(2);
+  });
+
   it('sem convite: do login direto ao objetivo, e o código depois das notificações', () => {
     expect(onboardingSteps({ ...BASE, aiVariant: 'trial' })).toEqual([
       'objective',

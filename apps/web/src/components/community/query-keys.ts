@@ -3,6 +3,8 @@ export const communityKeys = {
   mine: ['community', 'mine'] as const,
   group: (groupId: string) => ['community', 'group', groupId] as const,
   members: (groupId: string) => ['community', 'members', groupId] as const,
+  /** As boas-vindas publicadas, para rever em Sobre (#410). */
+  welcome: (groupId: string) => ['community', 'welcome', groupId] as const,
   accessLog: (groupId: string) => ['community', 'access-log', groupId] as const,
   plans: (groupId: string) => ['community', 'plans', groupId] as const,
   plan: (groupId: string, id: string) => ['community', 'plans', groupId, id] as const,
@@ -38,6 +40,8 @@ export const orgKeys = {
   pendingInvites: (groupId: string, origin: string | undefined, q: string, page: number) =>
     ['community', 'org', groupId, 'invites', 'pending', origin ?? 'all', q, page] as const,
   seats: (groupId: string) => ['community', 'org', groupId, 'seats'] as const,
+  /** O editor das boas-vindas (#410, Pn-23). */
+  welcome: (groupId: string) => ['community', 'org', groupId, 'welcome'] as const,
   /** A tela Equipe e permissões (#404). */
   staff: (groupId: string) => ['community', 'org', groupId, 'staff'] as const,
   permissions: (groupId: string) => ['community', 'org', groupId, 'permissions'] as const,
