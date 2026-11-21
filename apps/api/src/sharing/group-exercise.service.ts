@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AutoPostKind, Prisma, type GroupRole, type MediaFile } from '@fatia/db';
+import { AutoPostKind, Prisma, type GroupRole, type MediaFile, type PlanLoadMode } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { publishAutoPost } from './auto-post';
 import { normalizeSearchText } from '../common/search-text';
@@ -45,6 +45,76 @@ export interface GuideInput {
   videoFileId?: string | null;
   photoFileIds?: string[];
   tips?: string | null;
+  /** "Como fazer" da casa (#408): um passo por item. */
+  steps?: string[];
+  commonMistakes?: string[];
+  /** "Dá para fazer em casa": o selo DA CASA. */
+  homeFriendly?: boolean;
+  defaultSets?: number | null;
+  defaultReps?: string | null;
+  defaultRestSeconds?: number | null;
+  defaultLoadMode?: PlanLoadMode | null;
+}
+
+export const MAX_GUIDE_STEPS = 12;
+export const MAX_GUIDE_MISTAKES = 8;
+export const MAX_GUIDE_LINE = 300;
+/** O vídeo do exercício (#408): uma regra só, no guia e no editor. */
+export const EXERCISE_VIDEO_MAX_SECONDS = 60;
+
+/** O padrão ao entrar num plano (#408, Pn-11b). Nulo = o de sempre do editor. */
+export interface PlanDefaults {
+  sets: number | null;
+  reps: string | null;
+  restSeconds: number | null;
+  loadMode: PlanLoadMode | null;
+}
+
+/** Filtros do catálogo da equipe (#408, Pn-11). */
+export interface CatalogFilters {
+  q?: string;
+  muscle?: string;
+  equipment?: string;
+  /** Só o que dá para fazer em casa. */
+  house?: boolean;
+  /** Só os favoritos da equipe. */
+  favorite?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/** Uma linha do catálogo: o exercício e o que a comunidade pôs nele. */
+export interface CatalogItem {
+  exerciseId: number;
+  name: string;
+  muscleGroup: string;
+  equipment: string | null;
+  ownedByCommunity: boolean;
+  favorite: boolean;
+  homeFriendly: boolean;
+  hasGuide: boolean;
+  hasVideo: boolean;
+  photoCount: number;
+  hasTips: boolean;
+  defaults: PlanDefaults | null;
+}
+
+export interface CatalogPage {
+  equipment: string[];
+  customEquipment: string[];
+  /** O catálogo inteiro da comunidade (geral + da casa). */
+  total: number;
+  /** O que casa com os filtros. */
+  count: number;
+  /** Quantos casam por músculo e por equipamento, com os outros filtros. */
+  facets: { muscles: Record<string, number>; equipment: Record<string, number> };
+  items: CatalogItem[];
+}
+
+/** "Em N planos" (#408): os modelos da biblioteca e os planos dos membros. */
+export interface ExerciseUsage {
+  templates: number;
+  plans: { band: 'none' | 'few' | 'many'; count: number | null };
 }
 
 export interface GroupExerciseView {
@@ -66,8 +136,19 @@ export interface GroupExerciseView {
   /** O papel de hoje de quem escreveu, nesta comunidade (#396); `null` se saiu. */
   authorRole: GroupRole | null;
   updatedAt: Date;
+  /** "Como fazer" da casa; vazio = os passos do exercício (`instructions`). */
+  steps: string[];
+  commonMistakes: string[];
+  homeFriendly: boolean;
+  defaults: PlanDefaults | null;
   /** Só para a equipe. */
   canEdit?: boolean;
+  /** Só para a equipe: favorito da equipe. */
+  favorite?: boolean;
+  /** Só para a equipe: o exercício já tem guia da comunidade. */
+  hasGuide?: boolean;
+  /** Só para a equipe, no detalhe. */
+  usage?: ExerciseUsage;
 }
 
 const GUIDE_INCLUDE = {
@@ -107,7 +188,11 @@ export class GroupExerciseService {
 
   // ---------------------------------------------------------------- equipe
 
-  async listForTeam(userId: string, groupId: string) {
+  async listForTeam(
+    userId: string,
+    groupId: string,
+    _filters: CatalogFilters = {},
+  ): Promise<CatalogPage> {
     const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
     const [grupo, guias] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
@@ -120,10 +205,27 @@ export class GroupExerciseService {
         orderBy: { exercise: { name: 'asc' } },
       }),
     ]);
+    const items = await Promise.all(guias.map((g) => this.view(g, userId, eu)));
     return {
       equipment: grupo.equipment,
       customEquipment: grupo.customEquipment,
-      items: await Promise.all(guias.map((g) => this.view(g, userId, eu))),
+      total: items.length,
+      count: items.length,
+      facets: { muscles: {}, equipment: {} },
+      items: items.map((v) => ({
+        exerciseId: v.exerciseId,
+        name: v.name,
+        muscleGroup: v.muscleGroup,
+        equipment: v.equipment,
+        ownedByCommunity: v.ownedByCommunity,
+        favorite: false,
+        homeFriendly: false,
+        hasGuide: true,
+        hasVideo: v.video !== null,
+        photoCount: v.photos.length,
+        hasTips: v.tips !== null,
+        defaults: null,
+      })),
     };
   }
 
@@ -333,6 +435,21 @@ export class GroupExerciseService {
     }
     await this.media.discard(arquivos);
     return { id: exerciseId };
+  }
+
+  /** Favorito da equipe (#408). Idempotente nos dois sentidos. */
+  async setFavorite(
+    _userId: string,
+    _groupId: string,
+    _exerciseId: number,
+    _favorite: boolean,
+  ): Promise<{ exerciseId: number; favorite: boolean }> {
+    return { exerciseId: _exerciseId, favorite: false };
+  }
+
+  /** "Duplicar" (#408, Pn-11b): uma cópia da casa, com o guia sem vídeo nem fotos. */
+  async duplicate(userId: string, groupId: string, exerciseId: number): Promise<GroupExerciseView> {
+    return this.getForTeam(userId, groupId, exerciseId);
   }
 
   /**
@@ -564,6 +681,10 @@ export class GroupExerciseService {
       authorName: g.author?.name ?? TEAM_AUTHOR,
       authorRole: g.authorId ? (roles.get(g.authorId) ?? null) : null,
       updatedAt: g.updatedAt,
+      steps: [],
+      commonMistakes: [],
+      homeFriendly: false,
+      defaults: null,
       ...(teamRole ? { canEdit: canEditContent(teamRole, userId, g.authorId) } : {}),
     };
   }

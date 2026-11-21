@@ -699,6 +699,7 @@ export class ContentService {
     groupId: string,
     id: string,
     state: { published?: boolean; pinned?: boolean },
+    _opts: { announce?: boolean } = {},
   ): Promise<TipView> {
     const eu = await this.assertPublisher(userId, groupId);
     const atual = await this.findTip(groupId, id);
