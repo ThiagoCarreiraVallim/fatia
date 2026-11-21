@@ -20,6 +20,7 @@ import {
   type TipoDeRegistro,
 } from './rotulos';
 import { readableExercises } from '../../workout/helpers/exercise-access';
+import { snapshotGoalRanges } from '../../sharing/nutrition-document';
 
 export interface LinhaDaPrevia {
   rotulo: string;
@@ -59,13 +60,12 @@ const FAIXAS_DAS_METAS: ReadonlyArray<[string, CampoDaMeta, CampoDaMeta, string]
 const faixa = (min: number, max: number) =>
   min === max ? numero(min, 0) : `${numero(min, 0)}–${numero(max, 0)}`;
 
-/** As metas do retrato de nutrição, ou `null` se ele não traz (ou não é o formato esperado). */
+/**
+ * As metas do retrato de nutrição (v1 em faixas ou v2 do editor, #407), ou
+ * `null` se ele não traz. As mesmas faixas que o adotar aplica.
+ */
 function snapshotGoals(snapshot: unknown): Record<CampoDaMeta, number> | null {
-  const goals = (snapshot as { goals?: unknown } | null | undefined)?.goals;
-  if (typeof goals !== 'object' || goals === null) return null;
-  const g = goals as Record<string, unknown>;
-  const campos = FAIXAS_DAS_METAS.flatMap(([, min, max]) => [min, max]);
-  return campos.every((c) => typeof g[c] === 'number') ? (g as Record<CampoDaMeta, number>) : null;
+  return snapshotGoalRanges(snapshot);
 }
 
 /** Cartão é para ler de relance: depois disso, "e mais N". */
