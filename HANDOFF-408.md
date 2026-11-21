@@ -29,8 +29,8 @@ Prints da prancha em `~/.cache/fatia-vis/408/web/board/`.
 - [x] MCP get_exercise_details / explain_form + docs (MCP.md, MCP_TOOL_SURFACE.md)
 - [x] api-client (list com filtros, setFavorite, duplicate, helpers parseRest/restClock/usageLabel/...)
 - [x] isolamento em user-isolation.spec.ts (bloco #408)
-- [ ] web: Pn-10, Pn-11, Pn-11b; busca do editor de plano com favoritos primeiro
-- [ ] membro: passos/erros da casa no detalhe do exercício (web e app)
+- [x] web: Pn-10, Pn-11, Pn-11b; busca do editor de plano com favoritos primeiro
+- [x] membro: passos/erros da casa no detalhe do exercício (web e app); app do painel filtra o catálogo novo
 - [ ] isolation spec, passada visual, docs, PR
 
 ## Próximos passos
