@@ -35,8 +35,9 @@ Copiar para `.canvas/project/` da raiz para o `render-board.mjs`.
 - [x] db + migration
 - [x] api red → green (welcome-pages.integration, isolation, onboarding 'community', panel ⌘K)
 - [x] api-client red → green (community-welcome.ts, onboarding-flow, menu)
-- [ ] web painel red → green
-- [ ] onboarding web + app, Sobre web + app
+- [x] web painel red → green (`/org/[g]/welcome`, `components/community/welcome-pages.tsx`)
+- [x] onboarding web + Sobre web (settings/page.tsx)
+- [ ] app: onboarding.tsx (etapa community) + community/[groupId] Sobre
 - [ ] docs (REDESIGN_PROGRESS Etapa 10, MOBILE_PARITY?)
 - [ ] passada visual (portas 3110/3140), prints em ~/.cache/fatia-vis/410/web/
 - [ ] merge origin/main, push, PR
