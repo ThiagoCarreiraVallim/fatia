@@ -109,7 +109,7 @@ describe('editor de dica (#408, integração)', () => {
       body: 'Beba **500 ml**.',
       category: 'HABITS',
     });
-    await content.setTipState(
+    const posted = await content.setTipState(
       a.dono,
       a.groupId,
       d1.id,
@@ -121,6 +121,8 @@ describe('editor de dica (#408, integração)', () => {
     expect(await prisma.groupPost.count({ where: { groupId: a.groupId, autoRefId: d1.id } })).toBe(
       1,
     );
+    // A tela diz "post no mural criado" só quando o post saiu (#466).
+    expect((posted as { announced?: boolean }).announced).toBe(true);
 
     const b = await comunidade(['TIP']);
     const d2 = await content.createTip(b.dono, b.groupId, {
@@ -128,9 +130,16 @@ describe('editor de dica (#408, integração)', () => {
       body: 'Só na aba.',
       category: 'WORKOUT',
     });
-    await content.setTipState(b.dono, b.groupId, d2.id, { published: true }, { announce: false });
+    const quiet = await content.setTipState(
+      b.dono,
+      b.groupId,
+      d2.id,
+      { published: true },
+      { announce: false },
+    );
     expect(await prisma.groupPost.count({ where: { groupId: b.groupId, autoRefId: d2.id } })).toBe(
       0,
     );
+    expect((quiet as { announced?: boolean }).announced).toBe(false);
   });
 });

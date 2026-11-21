@@ -499,6 +499,24 @@ describe('painel › planos e dicas', () => {
     );
   });
 
+  it('publicar anunciando diz "post no mural criado" só se o post saiu', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'new' };
+    vi.mocked(contentApi.createTip).mockResolvedValue(dica({ id: 'nova', publishedAt: null }));
+    // A comunidade não deixou o autor postar (ou o post já existia).
+    vi.mocked(contentApi.setTipState).mockResolvedValue({
+      ...dica({ id: 'nova' }),
+      announced: false,
+    });
+    renderWithClient(<OrgTipPage />);
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Sono' } });
+    fireEvent.change(screen.getByLabelText('Texto'), { target: { value: 'Durma 8 h.' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Publicada na comunidade' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('Publicada para os membros.'));
+    expect(toast).not.toHaveBeenCalledWith('Publicada · post no mural criado.');
+  });
+
   it('dica nova acima de 600 caracteres não sai do formulário', async () => {
     ctx.group = grupo();
     ctx.params = { tipId: 'new' };
