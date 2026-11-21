@@ -42,22 +42,45 @@ export interface SaveWelcomeInput {
 /** Os mesmos limites da API (`welcome.service.ts`). */
 export const WELCOME_LIMITS = { pages: 3, title: 80, body: 300 } as const;
 
-export const WELCOME_KIND_OPTIONS: { value: WelcomeKind; label: string }[] = [];
+export const WELCOME_KIND_OPTIONS: { value: WelcomeKind; label: string }[] = [
+  { value: 'COVER', label: 'Capa com a marca' },
+  { value: 'PLAIN', label: 'Simples' },
+];
 
-export const WELCOME_COPY = {} as Record<string, string>;
+/** Os textos fixos do editor (Pn-23) e da tela do aluno (Onb-02b). */
+export const WELCOME_COPY = {
+  title: 'Boas-vindas da comunidade',
+  subtitle: 'De 1 a 3 páginas que o aluno vê ao entrar.',
+  bodyHint: 'Use “- ” no começo da linha para lista.',
+  healthTitle: 'Não peça dado de saúde aqui',
+  healthBody:
+    'Peso, medidas, doenças e remédios vão na avaliação, que o aluno escolhe compartilhar.',
+  showOnJoin: 'Mostrar ao entrar na comunidade',
+  showOnJoinHint:
+    'depois da tela de boas-vindas do Fatia, antes de escolher o que compartilhar · tem “Pular”',
+  showTeam: 'Mostrar a equipe nesta página',
+  emptyTitle: 'Usando o padrão do Fatia',
+  emptyBody:
+    'Quem entra vê só a tela de boas-vindas do Fatia, com a sua marca e a equipe. Crie páginas para contar regras, horários e como vocês acompanham.',
+  reviewLater: 'Dá para rever depois em Comunidade → Sobre',
+  skip: 'Pular',
+} as const;
 
 const base = (groupId: string) => `/api/groups/${groupId}/welcome`;
 
 export const welcomeApi = {
+  /** O editor (`content.publish`): rascunho ou publicado, tudo. */
   editor: (groupId: string) => apiFetch<WelcomeEditorState>(base(groupId)),
+  /** Reescreve o conjunto, na ordem, e publica ou volta a rascunho. */
   save: (groupId: string, input: SaveWelcomeInput) =>
-    apiFetch<WelcomeEditorState>(base(groupId), { method: 'GET', body: JSON.stringify(input) }),
-  pages: (groupId: string) => apiFetch<WelcomeMemberView>(base(groupId)),
+    apiFetch<WelcomeEditorState>(base(groupId), { method: 'PUT', body: JSON.stringify(input) }),
+  /** Comunidade → Sobre: só o publicado, com os nomes da equipe. */
+  pages: (groupId: string) => apiFetch<WelcomeMemberView>(`${base(groupId)}/pages`),
 };
 
 /** Caracteres como o aluno vê (emoji conta 1), como a API conta. */
-export function welcomeCharCount(_text: string): number {
-  return 0;
+export function welcomeCharCount(text: string): number {
+  return [...text].length;
 }
 
 export interface WelcomeLine {
@@ -66,23 +89,30 @@ export interface WelcomeLine {
 }
 
 /** As linhas do texto: "- " no começo vira item de lista; linha vazia some. */
-export function welcomeLines(_body: string): WelcomeLine[] {
-  return [];
+export function welcomeLines(body: string): WelcomeLine[] {
+  return body
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((l) =>
+      l.startsWith('- ') ? { text: l.slice(2).trim(), bullet: true } : { text: l, bullet: false },
+    );
 }
 
 /** O ícone da página simples: equipe, lista ou texto. */
-export function welcomePageIcon(_page: WelcomePageInput): 'users' | 'list' | 'text' {
-  return 'text';
+export function welcomePageIcon(page: WelcomePageInput): 'users' | 'list' | 'text' {
+  if (page.showTeam) return 'users';
+  return welcomeLines(page.body).some((l) => l.bullet) ? 'list' : 'text';
 }
 
 /** "1 de 3". */
-export function welcomePosition(_index: number, _total: number): string {
-  return '';
+export function welcomePosition(index: number, total: number): string {
+  return `${index + 1} de ${total}`;
 }
 
 /** O botão de baixo: "Próxima" até a última, "Continuar" na última. */
-export function welcomeCta(_index: number, _total: number): string {
-  return '';
+export function welcomeCta(index: number, total: number): string {
+  return index >= total - 1 ? 'Continuar' : 'Próxima';
 }
 
 export interface WelcomePageErrors {
@@ -90,20 +120,33 @@ export interface WelcomePageErrors {
   body?: string;
 }
 
-/** O que impede salvar cada página, na ordem. Vazio = tudo certo. */
-export function welcomeDraftErrors(_pages: WelcomePageInput[]): WelcomePageErrors[] {
-  return [];
+/** O que impede salvar cada página, na ordem. `{}` = a página está certa. */
+export function welcomeDraftErrors(pages: WelcomePageInput[]): WelcomePageErrors[] {
+  return pages.map((p) => {
+    const e: WelcomePageErrors = {};
+    const title = p.title.trim();
+    if (!title) e.title = 'Dê um título à página';
+    else if (welcomeCharCount(title) > WELCOME_LIMITS.title) {
+      e.title = `Título até ${WELCOME_LIMITS.title} caracteres`;
+    }
+    const n = welcomeCharCount(p.body.trim());
+    if (n > WELCOME_LIMITS.body) e.body = `Texto até ${WELCOME_LIMITS.body} caracteres (${n})`;
+    return e;
+  });
 }
 
 /** Rascunho, publicado ou sem páginas próprias (o selo do topo, Pn-23/23c). */
-export function welcomeStatus(_state: Pick<WelcomeEditorState, 'pages' | 'publishedAt'>): {
+export function welcomeStatus(state: Pick<WelcomeEditorState, 'pages' | 'publishedAt'>): {
   label: string;
   tone: 'published' | 'draft' | 'default';
 } {
-  return { label: '', tone: 'default' };
+  if (state.pages.length === 0) return { label: 'sem páginas próprias', tone: 'default' };
+  return state.publishedAt
+    ? { label: 'publicado', tone: 'published' }
+    : { label: 'rascunho', tone: 'draft' };
 }
 
 /** Uma página nova do editor: simples, vazia, sem equipe. */
 export function emptyWelcomePage(): WelcomePageInput {
-  return { kind: 'COVER', title: 'x', body: 'x', showTeam: true };
+  return { kind: 'PLAIN', title: '', body: '', showTeam: false };
 }
