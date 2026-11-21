@@ -23,6 +23,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { can, STAFF_ROLES, type GroupAction } from '../sharing/permissions';
 import { OBJECT_STORE, type ObjectStore } from './object-store.port';
+import { readVideoDurationMs } from './video-duration';
 
 /**
  * Para que cada arquivo é enviado, e o que isso exige. O item que referencia o
@@ -110,6 +111,12 @@ export const MEDIA_LIMITS: Record<MediaKind, { mimes: readonly string[]; maxByte
   VIDEO: { mimes: ['video/mp4', 'video/quicktime'], maxBytes: 200 * 1024 * 1024 },
 };
 
+/**
+ * Duração máxima do vídeo por propósito (#408): o do exercício é uma regra só,
+ * no guia da casa e no editor do exercício (MP4/MOV, até 200 MB e 60 s).
+ */
+export const VIDEO_MAX_SECONDS: Record<string, number> = { exercise_video: 60 };
+
 /** Validade da URL de envio e da de leitura (ADR 028). */
 export const UPLOAD_URL_TTL_SEC = 10 * 60;
 export const READ_URL_TTL_SEC = 10 * 60;
@@ -139,6 +146,8 @@ export interface MediaView {
   url: string | null;
   width: number | null;
   height: number | null;
+  /** Só no vídeo (#408): a duração lida do arquivo, quando deu para ler. */
+  durationMs?: number | null;
 }
 
 /**
@@ -342,9 +351,27 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         await this.discard([file]);
         throw new BadRequestException('Não deu para ler este vídeo. Envie um MP4 ou MOV.');
       }
+      // A duração vem do próprio arquivo (#408): o vídeo do exercício vai até
+      // 60 s. Com teto, a desconhecida não passa (#466): seria o atalho para
+      // subir um vídeo de qualquer tamanho.
+      const durationMs = await readVideoDurationMs(
+        (start, bytes) => store.getRange(file.key, start, bytes),
+        file.bytes,
+      ).catch(() => null);
+      const teto = VIDEO_MAX_SECONDS[file.purpose];
+      if (teto !== undefined && durationMs === null) {
+        await this.discard([file]);
+        throw new BadRequestException(
+          'Não deu para ler a duração deste vídeo. Exporte de novo em MP4 ou MOV.',
+        );
+      }
+      if (teto !== undefined && durationMs !== null && durationMs > teto * 1000) {
+        await this.discard([file]);
+        throw new BadRequestException(`O vídeo vai até ${teto} s. Corte e envie de novo.`);
+      }
       const pronto = await this.prisma.mediaFile.update({
         where: { id: file.id },
-        data: { status: MediaStatus.READY, confirmedAt: new Date() },
+        data: { status: MediaStatus.READY, confirmedAt: new Date(), durationMs },
       });
       return this.view(pronto);
     }
@@ -582,6 +609,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           : null,
       width: file.width,
       height: file.height,
+      ...(file.kind === MediaKind.VIDEO ? { durationMs: file.durationMs } : {}),
     };
   }
 

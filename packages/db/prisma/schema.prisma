@@ -929,6 +929,7 @@ model Exercise {
   sessionSets   SessionSet[]
   groupGuides   GroupExerciseGuide[]
   favoritedBy   FavoriteExercise[]
+  groupFavorites GroupExerciseFavorite[]
 
   @@unique([name, createdByUserId])
   // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
@@ -1937,6 +1938,7 @@ model Group {
   customEquipment        String[]               @default([])
   exercises              Exercise[]             @relation("GroupExercises")
   exerciseGuides         GroupExerciseGuide[]
+  exerciseFavorites      GroupExerciseFavorite[]
   /// O agente da comunidade no chat (Fase 7c, ADR 031).
   agent                  GroupAgent?
   agentChats             Conversation[]         @relation("ConversationAgent")
@@ -2941,6 +2943,8 @@ model MediaFile {
   height      Int?
   createdAt   DateTime    @default(now())
   confirmedAt DateTime?
+  /// Duração do vídeo, lida do próprio arquivo no confirm (#408). Nulo em imagem.
+  durationMs  Int?
 
   uploader       User?                    @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
   group          Group?                   @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
@@ -3100,6 +3104,23 @@ model GroupExerciseGuide {
   videoFileId String?  @unique
   /// Markdown restrito (`markdown-lite`), como as dicas.
   tips        String?
+
+  // Catálogo da equipe (#408, Pn-11 e Pn-11b). Ficam no guia, e não no
+  // `Exercise`: o exercício do catálogo geral é de todo mundo, e o "Como
+  // fazer", o selo DA CASA e o padrão no plano são de cada academia.
+  /// "Como fazer" da casa, um passo por item. Vazio = os passos do exercício.
+  steps              String[]      @default([])
+  /// Erros comuns, um por item.
+  commonMistakes     String[]      @default([])
+  /// "Dá para fazer em casa": o selo DA CASA e o filtro.
+  homeFriendly       Boolean       @default(false)
+  /// O padrão ao entrar num plano. Copiado para a linha do plano quando ele é
+  /// montado: mudar aqui não mexe em plano que já existe.
+  defaultSets        Int?
+  defaultReps        String?
+  defaultRestSeconds Int?
+  defaultLoadMode    PlanLoadMode?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -3108,6 +3129,21 @@ model GroupExerciseGuide {
   author   User?                     @relation("GuideAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   video    MediaFile?                @relation("GuideVideo", fields: [videoFileId], references: [id], onDelete: SetNull)
   photos   GroupExerciseGuidePhoto[]
+
+  @@unique([groupId, exerciseId])
+  @@index([exerciseId])
+}
+
+/// Favorito da equipe (#408): é da comunidade, não de quem marcou (o da pessoa
+/// é `FavoriteExercise`). Aparece primeiro na busca do editor de plano.
+model GroupExerciseFavorite {
+  id         String   @id @default(uuid())
+  groupId    String
+  exerciseId Int
+  createdAt  DateTime @default(now())
+
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, exerciseId])
   @@index([exerciseId])

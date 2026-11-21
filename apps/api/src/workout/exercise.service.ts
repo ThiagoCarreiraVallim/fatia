@@ -18,6 +18,11 @@ export interface CommunityGuideView {
   video: MediaView | null;
   photos: MediaView[];
   tips: string | null;
+  /** "Como fazer" da casa (#408); vazio = os passos do exercício. */
+  steps: string[];
+  commonMistakes: string[];
+  /** "Dá para fazer em casa": o selo DA CASA. */
+  homeFriendly: boolean;
 }
 
 /** O mesmo, para o agente: sem URL assinada, que não serve a ele e só ocupa contexto. */
@@ -26,6 +31,9 @@ export interface CommunityGuideSummary {
   tips: string | null;
   hasVideo: boolean;
   photoCount: number;
+  steps: string[];
+  commonMistakes: string[];
+  homeFriendly: boolean;
 }
 
 export type ExerciseListItem = Exercise & {
@@ -197,14 +205,7 @@ export class ExerciseService {
     return {
       ...ex,
       favorite: await this.isFavorite(userId, id),
-      community: guia
-        ? {
-            groupName: guia.groupName,
-            tips: guia.tips,
-            hasVideo: guia.video !== null,
-            photoCount: guia.photos.length,
-          }
-        : null,
+      community: guia ? this.guideSummary(guia) : null,
     } satisfies Exercise & { favorite: boolean; community: CommunityGuideSummary | null };
   }
 
@@ -218,11 +219,29 @@ export class ExerciseService {
         groupId: guia.groupId,
         groupName: guia.groupName,
         tips: guia.tips,
+        steps: guia.steps,
+        commonMistakes: guia.commonMistakes,
+        homeFriendly: guia.homeFriendly,
         video: this.media ? await this.media.viewOrNull(guia.video) : null,
         photos: this.media ? await Promise.all(guia.photos.map((f) => this.media!.view(f))) : [],
       };
     }
     return { ...ex, favorite: await this.isFavorite(userId, id), community };
+  }
+
+  /** O guia da casa para o agente: sem URL assinada, que não serve a ele. */
+  private guideSummary(
+    guia: NonNullable<Awaited<ReturnType<ExerciseService['guideRow']>>>,
+  ): CommunityGuideSummary {
+    return {
+      groupName: guia.groupName,
+      tips: guia.tips,
+      hasVideo: guia.video !== null,
+      photoCount: guia.photos.length,
+      steps: guia.steps,
+      commonMistakes: guia.commonMistakes,
+      homeFriendly: guia.homeFriendly,
+    };
   }
 
   private async isFavorite(userId: string, exerciseId: number): Promise<boolean> {
@@ -340,11 +359,23 @@ export class ExerciseService {
           tips: guia.tips,
           video: guia.video,
           photos: guia.photos.map((p) => p.file),
+          steps: guia.steps,
+          commonMistakes: guia.commonMistakes,
+          homeFriendly: guia.homeFriendly,
         };
       }
       // Exercício da própria comunidade, ainda sem tutorial: o nome dela aparece mesmo assim.
       if (ex.groupOwned && ex.groupId === v.groupId) {
-        return { groupId: v.groupId, groupName: v.group.name, tips: null, video: null, photos: [] };
+        return {
+          groupId: v.groupId,
+          groupName: v.group.name,
+          tips: null,
+          video: null,
+          photos: [],
+          steps: [] as string[],
+          commonMistakes: [] as string[],
+          homeFriendly: false,
+        };
       }
     }
     return null;
@@ -387,10 +418,15 @@ export class ExerciseService {
     return rankByRelevance(results, name, (ex) => ex.name, 5);
   }
 
-  /** Como executar: os exercícios que casam com o nome, só com o que descreve a execução. */
+  /**
+   * Como executar: os exercícios que casam com o nome, só com o que descreve a
+   * execução. Com o guia da casa da comunidade da pessoa (#408): passos, erros
+   * comuns, dica e o selo, sem URL.
+   */
   async explainForm(userId: string, name: string) {
     const matches = await this.findByName(userId, name);
-    return matches.map((ex) => ({
+    const guias = await Promise.all(matches.map((ex) => this.guideRow(userId, ex)));
+    return matches.map((ex, i) => ({
       id: ex.id,
       name: ex.name,
       primaryMuscles: ex.primaryMuscles,
@@ -399,6 +435,8 @@ export class ExerciseService {
       level: ex.level,
       mechanic: ex.mechanic,
       instructions: ex.instructions,
+      // Só quando há guia da casa: sem ele, a saída é a de sempre (o golden do MCP).
+      ...(guias[i] ? { community: this.guideSummary(guias[i]) } : {}),
     }));
   }
 

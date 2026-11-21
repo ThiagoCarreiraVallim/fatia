@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Exercise, GroupExercise, MyGroup } from '@fatia/api-client';
+import type { CatalogItem, CatalogPage, GroupExercise, MyGroup } from '@fatia/api-client';
 import { grupo, renderWithClient } from '../../__tests__/helpers';
 
 const ctx = vi.hoisted(() => ({
@@ -23,18 +23,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ctx.router,
 }));
 vi.mock('sonner', () => ({ toast: ctx.toast }));
-// O vaul precisa de APIs de layout que o jsdom não tem; aqui basta abrir e fechar.
-vi.mock('@/components/ui/drawer', () => {
-  const Passthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-  return {
-    Drawer: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
-      open ? <section aria-label="drawer">{children}</section> : null,
-    DrawerContent: Passthrough,
-    DrawerHeader: Passthrough,
-    DrawerTitle: Passthrough,
-    DrawerDescription: Passthrough,
-  };
-});
 vi.mock('@/components/org/org-shell', () => ({ useOrgGroup: () => ctx.group }));
 vi.mock('@/components/layout/app-top-bar', () => ({ useTopBarTitle: vi.fn() }));
 vi.mock('@fatia/api-client', async () => {
@@ -47,308 +35,337 @@ vi.mock('@fatia/api-client', async () => {
       create: vi.fn(),
       update: vi.fn(),
       setGuide: vi.fn(),
+      setFavorite: vi.fn(),
+      duplicate: vi.fn(),
       remove: vi.fn(),
       setEquipment: vi.fn(),
     },
-    workoutApi: { searchExercises: vi.fn(), getExercise: vi.fn() },
     uploadMedia: vi.fn(),
   };
 });
 
-import { groupExerciseApi, uploadMedia, workoutApi } from '@fatia/api-client';
+import { groupExerciseApi, uploadMedia } from '@fatia/api-client';
 import OrgExercisesPage from '../page';
 import OrgExercisePage from '../[exerciseId]/page';
 
+const row = (p: Partial<CatalogItem> = {}): CatalogItem => ({
+  exerciseId: 42,
+  name: 'Agachamento livre',
+  muscleGroup: 'pernas',
+  equipment: 'barra',
+  ownedByCommunity: false,
+  favorite: false,
+  homeFriendly: false,
+  hasGuide: false,
+  hasVideo: false,
+  photoCount: 0,
+  hasTips: false,
+  defaults: null,
+  ...p,
+});
+
+const page = (items: CatalogItem[], p: Partial<CatalogPage> = {}): CatalogPage => ({
+  equipment: [],
+  customEquipment: [],
+  total: 312,
+  count: items.length,
+  facets: { muscles: { pernas: 40, peito: 30 }, equipment: { barra: 12, halteres: 20 } },
+  items,
+  ...p,
+});
+
 const item = (p: Partial<GroupExercise> = {}): GroupExercise => ({
   exerciseId: 42,
-  name: 'Leg press da casa',
+  name: 'Agachamento livre',
   muscleGroup: 'pernas',
-  equipment: 'máquina',
+  equipment: 'barra',
   level: null,
   mechanic: null,
-  primaryMuscles: [],
+  primaryMuscles: ['quadriceps', 'glutes'],
   secondaryMuscles: [],
-  instructions: ['Pés na largura do quadril'],
-  ownedByCommunity: true,
+  instructions: ['Pés na largura dos ombros.'],
+  ownedByCommunity: false,
   video: null,
   photos: [],
   tips: null,
   authorName: 'Helena',
   authorRole: 'PROFESSIONAL',
   updatedAt: '2026-10-17T00:00:00Z',
+  steps: [],
+  commonMistakes: [],
+  homeFriendly: false,
+  defaults: null,
   canEdit: true,
+  favorite: false,
+  hasGuide: false,
+  usage: { templates: 0, plans: { band: 'many', count: 14 } },
   ...p,
 });
 
-describe('painel › exercícios', () => {
+describe('painel › catálogo de exercícios (Pn-11)', () => {
   afterEach(() => {
     vi.clearAllMocks();
     ctx.search = new URLSearchParams();
   });
 
-  it('lista os exercícios da casa e os tutoriais, e o dono marca o equipamento', async () => {
-    ctx.group = grupo({ role: 'OWNER' });
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: ['halteres'],
-      customEquipment: ['Hack da casa'],
-      items: [
-        item(),
-        item({
-          exerciseId: 7,
-          name: 'Supino reto',
-          ownedByCommunity: false,
-          video: { id: 'v', kind: 'VIDEO', url: 'https://b/v', width: null, height: null },
-        }),
-      ],
-    });
-    vi.mocked(groupExerciseApi.setEquipment).mockResolvedValue({
-      equipment: ['halteres', 'polia'],
-      customEquipment: ['Remada articulada'],
-    });
+  it('mostra o catálogo com o selo DA CASA, a estrela e a contagem', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(
+      page([
+        row({ favorite: true, homeFriendly: true, hasGuide: true }),
+        row({ exerciseId: 7, name: 'Supino reto', muscleGroup: 'peito' }),
+      ]),
+    );
     renderWithClient(<OrgExercisesPage />);
 
-    const lista = await screen.findByRole('list', { name: 'Exercícios da comunidade' });
-    expect(within(lista).getAllByRole('link')[0]).toHaveTextContent('Da casa');
-    expect(within(lista).getAllByRole('link')[1]).toHaveTextContent('CatálogoVídeo');
-    expect(within(lista).getAllByRole('link')[1]).toHaveAttribute('href', '/org/g1/exercises/7');
-    expect(screen.getByRole('heading', { name: 'Exercícios (2)' })).toBeInTheDocument();
+    const lista = await screen.findByRole('list', { name: 'Exercícios do catálogo' });
+    const cards = within(lista).getAllByRole('listitem');
+    expect(cards[0]).toHaveTextContent('DA CASA');
+    expect(cards[1]).not.toHaveTextContent('DA CASA');
+    expect(
+      within(cards[0]!).getByRole('button', { name: 'Tirar Agachamento livre dos favoritos' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/2 de 312 exercícios/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Pernas/ })).toHaveTextContent('40');
+  });
 
-    // Na tela, só o resumo; a lista inteira abre no modal.
-    expect(screen.getByRole('list', { name: 'Equipamento marcado' })).toHaveTextContent(
-      'HalteresHack da casa',
+  it('busca, músculo, equipamento, da casa e favoritos vão para a API', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([row()]));
+    renderWithClient(<OrgExercisesPage />);
+    await screen.findByRole('list', { name: 'Exercícios do catálogo' });
+
+    fireEvent.click(screen.getByRole('tab', { name: /Pernas/ }));
+    fireEvent.change(screen.getByLabelText('Equipamento'), { target: { value: 'barra' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Da casa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Favoritos' }));
+    fireEvent.change(screen.getByLabelText('Buscar exercício'), { target: { value: 'agach' } });
+    await waitFor(() =>
+      expect(groupExerciseApi.list).toHaveBeenLastCalledWith(
+        'g1',
+        expect.objectContaining({
+          q: 'agach',
+          muscle: 'pernas',
+          equipment: 'barra',
+          house: true,
+          favorite: true,
+        }),
+      ),
     );
-    expect(screen.queryByRole('checkbox', { name: 'Halteres' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Editar equipamento' }));
+  });
+
+  it('a estrela marca o favorito da equipe', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([row()]));
+    vi.mocked(groupExerciseApi.setFavorite).mockResolvedValue({ exerciseId: 42, favorite: true });
+    renderWithClient(<OrgExercisesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Favoritar Agachamento livre' }));
+    await waitFor(() => expect(groupExerciseApi.setFavorite).toHaveBeenCalledWith('g1', 42, true));
+  });
+
+  it('a lista mostra a coluna Guia', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(
+      page([
+        row({ hasGuide: true, hasVideo: true, hasTips: true }),
+        row({ exerciseId: 7, name: 'Stiff' }),
+      ]),
+    );
+    renderWithClient(<OrgExercisesPage />);
+    await screen.findByRole('list', { name: 'Exercícios do catálogo' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver em lista' }));
+    const tabela = screen.getByRole('table', { name: 'Exercícios do catálogo' });
+    expect(within(tabela).getByRole('columnheader', { name: 'Guia' })).toBeInTheDocument();
+    expect(tabela).toHaveTextContent('vídeo e dicas');
+    expect(tabela).toHaveTextContent('do catálogo');
+  });
+
+  it('abrir um exercício mostra o guia da casa e salva passos e dica', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([row()]));
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item({ steps: ['Costas apoiadas.'] }));
+    vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(item());
+    renderWithClient(<OrgExercisesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir Agachamento livre' }));
+    const guia = await screen.findByRole('region', { name: 'Agachamento livre' });
+    expect(await within(guia).findByLabelText('Passo 1')).toHaveValue('Costas apoiadas.');
+    fireEvent.click(within(guia).getByRole('button', { name: 'Adicionar passo' }));
+    fireEvent.change(within(guia).getByLabelText('Passo 2'), {
+      target: { value: 'Desça até 90°.' },
+    });
+    fireEvent.change(within(guia).getByLabelText('Dica da equipe'), {
+      target: { value: 'Fica no fundo da sala.' },
+    });
+    fireEvent.click(within(guia).getByRole('button', { name: 'Salvar guia' }));
+    await waitFor(() =>
+      expect(groupExerciseApi.setGuide).toHaveBeenCalledWith('g1', 42, {
+        steps: ['Costas apoiadas.', 'Desça até 90°.'],
+        tips: 'Fica no fundo da sala.',
+      }),
+    );
+  });
+
+  it('lista que não carregou diz que falhou', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockRejectedValue(new Error('rede'));
+    renderWithClient(<OrgExercisesPage />);
+    expect(await screen.findByText('Não deu para carregar os exercícios')).toBeInTheDocument();
+  });
+
+  it('o dono marca o equipamento da academia no modal', async () => {
+    ctx.group = grupo({ role: 'OWNER' });
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(
+      page([], { equipment: ['halteres'], customEquipment: ['Hack da casa'] }),
+    );
+    vi.mocked(groupExerciseApi.setEquipment).mockResolvedValue({
+      equipment: ['halteres', 'polia'],
+      customEquipment: ['Hack da casa'],
+    });
+    renderWithClient(<OrgExercisesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar equipamento' }));
     const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
-
-    expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeChecked();
     fireEvent.click(within(modal).getByRole('checkbox', { name: 'Polia' }));
-
-    // Equipamento próprio: o que já está na lista é recusado com recado; o novo entra.
-    const nome = within(modal).getByLabelText('Nome do equipamento próprio');
-    fireEvent.change(nome, { target: { value: 'Leg Press' } });
-    fireEvent.click(within(modal).getByRole('button', { name: 'Adicionar' }));
-    expect(within(modal).getByRole('alert')).toHaveTextContent('Esse já está na lista');
-    fireEvent.change(nome, { target: { value: '  Remada   articulada ' } });
-    expect(within(modal).queryByRole('alert')).toBeNull();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Adicionar' }));
-    expect(nome).toHaveValue('');
-    fireEvent.click(within(modal).getByRole('button', { name: 'Remover Hack da casa' }));
-    expect(within(modal).queryByRole('button', { name: 'Remover Hack da casa' })).toBeNull();
-
     fireEvent.click(within(modal).getByRole('button', { name: 'Salvar equipamento' }));
     await waitFor(() =>
       expect(groupExerciseApi.setEquipment).toHaveBeenCalledWith(
         'g1',
         ['halteres', 'polia'],
-        ['Remada articulada'],
+        ['Hack da casa'],
       ),
     );
-  });
-
-  it('"Novo exercício" pergunta o que criar: da casa ou tutorial do catálogo', async () => {
-    ctx.group = grupo();
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: [],
-      customEquipment: [],
-      items: [],
-    });
-    vi.mocked(workoutApi.searchExercises).mockResolvedValue([]);
-    renderWithClient(<OrgExercisesPage />);
-
-    // Lista vazia: o estado vazio também oferece criar.
-    await screen.findByText('Nenhum exercício ainda');
-    expect(screen.getAllByRole('button', { name: 'Novo exercício' })).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Novo exercício' })[0]!);
-    const escolha = screen.getByRole('region', { name: 'drawer' });
-    fireEvent.click(within(escolha).getByRole('button', { name: /Exercício da casa/ }));
-    expect(ctx.router.push).toHaveBeenCalledWith('/org/g1/exercises/new');
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Novo exercício' })[0]!);
-    fireEvent.click(
-      within(screen.getByRole('region', { name: 'drawer' })).getByRole('button', {
-        name: /Tutorial de um exercício do catálogo/,
-      }),
-    );
-    expect(await screen.findByRole('dialog', { name: 'Escolha o exercício' })).toBeVisible();
-  });
-
-  it('lista que não carregou diz que falhou, e não que está vazia', async () => {
-    ctx.group = grupo();
-    vi.mocked(groupExerciseApi.list).mockRejectedValue(new Error('rede'));
-    renderWithClient(<OrgExercisesPage />);
-    expect(await screen.findByText('Não deu para carregar os exercícios')).toBeInTheDocument();
-    expect(screen.queryByText('Nenhum exercício ainda')).toBeNull();
-  });
-
-  it('apagar fica à parte, com cara de perigo, e confirma antes', async () => {
-    ctx.group = grupo();
-    ctx.params = { exerciseId: '42' };
-    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: [],
-      customEquipment: [],
-      items: [],
-    });
-    vi.mocked(groupExerciseApi.remove).mockResolvedValue(undefined as never);
-    renderWithClient(<OrgExercisePage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Apagar exercício' }));
-    expect(groupExerciseApi.remove).not.toHaveBeenCalled();
-    fireEvent.click(
-      within(screen.getByRole('dialog', { name: 'Apagar este exercício?' })).getByRole('button', {
-        name: 'Apagar',
-      }),
-    );
-    await waitFor(() => expect(groupExerciseApi.remove).toHaveBeenCalledWith('g1', 42));
-    await waitFor(() => expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/exercises'));
-  });
-
-  it('a busca do modal filtra sem acento e some com as categorias vazias', async () => {
-    ctx.group = grupo({ role: 'OWNER' });
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: [],
-      customEquipment: [],
-      items: [],
-    });
-    renderWithClient(<OrgExercisesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Editar equipamento' }));
-    const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
-    expect(within(modal).getByRole('region', { name: 'Máquinas' })).toBeInTheDocument();
-
-    fireEvent.change(within(modal).getByLabelText('Buscar equipamento'), {
-      target: { value: 'ELIPTICO' },
-    });
-    expect(within(modal).getByRole('checkbox', { name: 'Elíptico' })).toBeInTheDocument();
-    expect(within(modal).queryByRole('checkbox', { name: 'Polia' })).toBeNull();
-    expect(within(modal).queryByRole('region', { name: 'Máquinas' })).toBeNull();
-
-    fireEvent.change(within(modal).getByLabelText('Buscar equipamento'), {
-      target: { value: 'nada disso' },
-    });
-    expect(within(modal).getByText('Nenhum equipamento com esse nome na lista.')).toBeVisible();
-    // Nada mudou: salvar não tem o que mandar.
-    expect(within(modal).getByRole('button', { name: 'Salvar equipamento' })).toBeDisabled();
   });
 
   it('o profissional vê o equipamento, mas não muda', async () => {
     ctx.group = grupo({ role: 'PROFESSIONAL' });
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: ['halteres'],
-      customEquipment: ['Hack da casa'],
-      items: [],
-    });
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([], { equipment: ['halteres'] }));
     renderWithClient(<OrgExercisesPage />);
     expect(await screen.findByText(/Só o dono e o admin mudam/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Ver equipamento' }));
-    const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
-    expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();
-    expect(within(modal).getByRole('checkbox', { name: 'Hack da casa' })).toBeChecked();
-    expect(within(modal).queryByLabelText('Nome do equipamento próprio')).toBeNull();
-    expect(within(modal).queryByRole('button', { name: 'Salvar equipamento' })).toBeNull();
+  });
+});
+
+describe('painel › editar exercício (Pn-11b)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    ctx.search = new URLSearchParams();
   });
 
-  it('o exercício da casa escolhe o equipamento próprio da academia', async () => {
+  it('exercício do catálogo: diz onde está e grava o guia da casa inteiro', async () => {
     ctx.group = grupo();
     ctx.params = { exerciseId: '42' };
     vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({
-      equipment: [],
-      customEquipment: ['Hack da casa'],
-      items: [],
+    vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(item({ hasGuide: true }));
+    vi.mocked(groupExerciseApi.setFavorite).mockResolvedValue({ exerciseId: 42, favorite: true });
+    renderWithClient(<OrgExercisePage />);
+
+    expect(await screen.findByText(/em 14 planos/)).toBeInTheDocument();
+    expect(screen.getByText(/o padrão vale só para planos novos/)).toBeInTheDocument();
+    // Do catálogo geral: o grupo muscular não muda aqui.
+    expect(screen.queryByRole('radio', { name: 'Pernas' })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Séries'), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText('Repetições'), { target: { value: '6-8' } });
+    fireEvent.change(screen.getByLabelText('Descanso'), { target: { value: '2:00' } });
+    fireEvent.change(screen.getByLabelText('Passo 1'), {
+      target: { value: 'Pés na largura dos ombros, barra no trapézio.' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar erro' }));
+    fireEvent.change(screen.getByLabelText('Erro 1'), {
+      target: { value: 'Joelho para dentro na subida.' },
+    });
+    fireEvent.click(screen.getByRole('switch', { name: /Dá para fazer em casa/ }));
+    fireEvent.click(screen.getByRole('switch', { name: /Favorito da equipe/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar exercício' }));
+
+    await waitFor(() =>
+      expect(groupExerciseApi.setGuide).toHaveBeenCalledWith(
+        'g1',
+        42,
+        expect.objectContaining({
+          steps: ['Pés na largura dos ombros, barra no trapézio.'],
+          commonMistakes: ['Joelho para dentro na subida.'],
+          homeFriendly: true,
+          defaultSets: 4,
+          defaultReps: '6-8',
+          defaultRestSeconds: 120,
+        }),
+      ),
+    );
+    expect(groupExerciseApi.setFavorite).toHaveBeenCalledWith('g1', 42, true);
+    expect(groupExerciseApi.update).not.toHaveBeenCalled();
+  });
+
+  it('descanso que não é tempo não sai do formulário', async () => {
+    ctx.group = grupo();
+    ctx.params = { exerciseId: '42' };
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
+    renderWithClient(<OrgExercisePage />);
+    fireEvent.change(await screen.findByLabelText('Descanso'), { target: { value: 'muito' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar exercício' }));
+    await waitFor(() =>
+      expect(ctx.toast).toHaveBeenCalledWith('Descanso: segundos (90) ou minutos (2:00).'),
+    );
+    expect(groupExerciseApi.setGuide).not.toHaveBeenCalled();
+  });
+
+  it('exercício da casa: escolhe o grupo muscular e salva dados e guia', async () => {
+    ctx.group = grupo();
+    ctx.params = { exerciseId: '42' };
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(
+      item({ ownedByCommunity: true, hasGuide: true, name: 'Leg da casa' }),
+    );
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([]));
     vi.mocked(groupExerciseApi.update).mockResolvedValue(item());
     vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(item());
     renderWithClient(<OrgExercisePage />);
-
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Equipamento: Máquinas em geral. Trocar' }),
-    );
-    const daAcademia = await screen.findByRole('region', { name: 'Da academia' });
-    expect(within(daAcademia).getByRole('radio', { name: 'Hack da casa' })).not.toBeChecked();
-    fireEvent.change(screen.getByLabelText('Buscar equipamento'), { target: { value: 'hack' } });
-    // A busca alcança a lista geral também.
-    expect(screen.getByRole('radio', { name: 'Agachamento hack' })).toBeInTheDocument();
-    fireEvent.click(within(daAcademia).getByRole('radio', { name: 'Hack da casa' }));
-    expect(screen.getByRole('button', { name: 'Equipamento: Hack da casa. Trocar' })).toBeVisible();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Core' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar exercício' }));
     await waitFor(() =>
       expect(groupExerciseApi.update).toHaveBeenCalledWith(
         'g1',
         42,
-        expect.objectContaining({ equipment: 'Hack da casa' }),
+        expect.objectContaining({ name: 'Leg da casa', muscleGroup: 'core' }),
       ),
     );
+    expect(groupExerciseApi.setGuide).toHaveBeenCalled();
   });
 
-  it('exercício da casa sem grupo muscular não sai do formulário', async () => {
+  it('Duplicar abre a cópia', async () => {
+    ctx.group = grupo();
+    ctx.params = { exerciseId: '42' };
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
+    vi.mocked(groupExerciseApi.duplicate).mockResolvedValue(item({ exerciseId: 99 }));
+    renderWithClient(<OrgExercisePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Duplicar' }));
+    await waitFor(() => expect(groupExerciseApi.duplicate).toHaveBeenCalledWith('g1', 42));
+    await waitFor(() => expect(ctx.router.push).toHaveBeenCalledWith('/org/g1/exercises/99'));
+  });
+
+  it('exercício novo sem grupo muscular não sai do formulário', async () => {
     ctx.group = grupo();
     ctx.params = { exerciseId: 'new' };
     renderWithClient(<OrgExercisePage />);
-
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Cadeira flexora' } });
     fireEvent.click(screen.getByRole('button', { name: 'Criar exercício' }));
     await waitFor(() => expect(ctx.toast).toHaveBeenCalledWith('Escolha o grupo muscular.'));
     expect(groupExerciseApi.create).not.toHaveBeenCalled();
   });
 
-  it('o primeiro tutorial de um exercício do catálogo grava só vídeo, fotos e dicas', async () => {
-    ctx.group = grupo();
-    ctx.params = { exerciseId: '7' };
-    ctx.search = new URLSearchParams('catalog=1');
-    vi.mocked(workoutApi.getExercise).mockResolvedValue({
-      id: 7,
-      name: 'Supino reto',
-      muscleGroup: 'peito',
-    } as Exercise);
-    vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(
-      item({ exerciseId: 7, ownedByCommunity: false }),
-    );
-    renderWithClient(<OrgExercisePage />);
-
-    expect(await screen.findByText('Supino reto')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Nome')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Dicas'), {
-      target: { value: 'Escápulas **juntas**.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar tutorial' }));
-    await waitFor(() =>
-      expect(groupExerciseApi.setGuide).toHaveBeenCalledWith('g1', 7, {
-        videoFileId: null,
-        photoFileIds: [],
-        tips: 'Escápulas **juntas**.',
-      }),
-    );
-    expect(groupExerciseApi.create).not.toHaveBeenCalled();
-    await waitFor(() => expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/exercises/7'));
-  });
-
-  it('salvar o exercício da casa atualiza os dados e o tutorial', async () => {
+  it('apagar fica à parte e confirma antes', async () => {
     ctx.group = grupo();
     ctx.params = { exerciseId: '42' };
-    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
-    vi.mocked(groupExerciseApi.update).mockResolvedValue(item());
-    vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(item());
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(
+      item({ ownedByCommunity: true, hasGuide: true }),
+    );
+    vi.mocked(groupExerciseApi.list).mockResolvedValue(page([]));
+    vi.mocked(groupExerciseApi.remove).mockResolvedValue(undefined as never);
     renderWithClient(<OrgExercisePage />);
-
-    fireEvent.change(await screen.findByLabelText('Como executar'), {
-      target: { value: '1. Sente\n2. Empurre' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
-    await waitFor(() =>
-      expect(groupExerciseApi.update).toHaveBeenCalledWith('g1', 42, {
-        name: 'Leg press da casa',
-        muscleGroup: 'pernas',
-        equipment: 'máquina',
-        instructions: ['Sente', 'Empurre'],
+    fireEvent.click(await screen.findByRole('button', { name: 'Apagar exercício' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Apagar este exercício?' })).getByRole('button', {
+        name: 'Apagar',
       }),
     );
-    expect(groupExerciseApi.setGuide).toHaveBeenCalledWith('g1', 42, {
-      videoFileId: null,
-      photoFileIds: [],
-      tips: null,
-    });
+    await waitFor(() => expect(groupExerciseApi.remove).toHaveBeenCalledWith('g1', 42));
   });
 
   it('vídeo em outro formato nem pede URL', async () => {
@@ -366,9 +383,9 @@ describe('painel › exercícios', () => {
   it('quem não é autor nem dono só lê', async () => {
     ctx.group = grupo({ role: 'PROFESSIONAL' });
     ctx.params = { exerciseId: '42' };
-    vi.mocked(groupExerciseApi.get).mockResolvedValue(item({ canEdit: false }));
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item({ canEdit: false, hasGuide: true }));
     renderWithClient(<OrgExercisePage />);
     expect(await screen.findByText(/Só quem publicou, ou o dono/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salvar exercício' })).toBeNull();
   });
 });

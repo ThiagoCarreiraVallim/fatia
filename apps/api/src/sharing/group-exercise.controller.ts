@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -15,7 +16,9 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
 import { RequireGroupAction } from './decorators/require-group-action.decorator';
 import {
+  CatalogQueryDto,
   CreateGroupExerciseDto,
+  FavoriteDto,
   EquipmentDto,
   GroupExerciseParamDto,
   GuideDto,
@@ -41,8 +44,12 @@ export class GroupExerciseController {
 
   @Get('content/exercises')
   @RequireGroupAction('content.publish')
-  list(@CurrentUser() user: CurrentUserPayload, @Param('groupId', ParseUUIDPipe) groupId: string) {
-    return this.exercises.listForTeam(user.id, groupId);
+  list(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Query() query: CatalogQueryDto,
+  ) {
+    return this.exercises.listForTeam(user.id, groupId, query);
   }
 
   @Get('content/exercises/:exerciseId')
@@ -83,6 +90,26 @@ export class GroupExerciseController {
     @Body() dto: GuideDto,
   ) {
     return this.exercises.setGuide(user.id, p.groupId, p.exerciseId, dto);
+  }
+
+  /** Estrela do catálogo (#408): o favorito é da equipe, não de quem marcou. */
+  @Put('content/exercises/:exerciseId/favorite')
+  @RequireGroupAction('content.publish')
+  setFavorite(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param() p: GroupExerciseParamDto,
+    @Body() dto: FavoriteDto,
+  ) {
+    return this.exercises.setFavorite(user.id, p.groupId, p.exerciseId, dto.favorite);
+  }
+
+  /** "Duplicar" (#408, Pn-11b): uma cópia da casa. */
+  @Post('content/exercises/:exerciseId/duplicate')
+  @RequireGroupAction('content.publish')
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  duplicate(@CurrentUser() user: CurrentUserPayload, @Param() p: GroupExerciseParamDto) {
+    return this.exercises.duplicate(user.id, p.groupId, p.exerciseId);
   }
 
   @Delete('content/exercises/:exerciseId')

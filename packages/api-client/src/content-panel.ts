@@ -29,16 +29,60 @@ export const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = {
   advanced: 'Avançado',
 };
 
-export const TIP_CATEGORIES: readonly TipCategory[] = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'];
+/** As quatro da prancha Pn-10 e a "geral" de antes da #408. */
+export const TIP_CATEGORIES: readonly TipCategory[] = [
+  'WORKOUT',
+  'NUTRITION',
+  'HABITS',
+  'RECOVERY',
+  'GENERAL',
+];
+
+/** As do editor (Pn-10): as quatro, e a "geral" só se a dica já é dela. */
+export function tipEditorCategories(current: TipCategory): TipCategory[] {
+  return TIP_CATEGORIES.filter((c) => c !== 'GENERAL' || current === 'GENERAL');
+}
+
+/**
+ * Negrito (`**`) e itálico (`*`) da barra do editor: em volta da seleção, ou o
+ * par no cursor. Seleção já marcada perde o marcador. Devolve o texto e a
+ * seleção nova, para o campo manter o foco no mesmo trecho.
+ */
+export function wrapSelection(
+  text: string,
+  start: number,
+  end: number,
+  marker: string,
+): { text: string; start: number; end: number } {
+  const n = marker.length;
+  if (
+    start >= n &&
+    text.slice(start - n, start) === marker &&
+    text.slice(end, end + n) === marker
+  ) {
+    return {
+      text: text.slice(0, start - n) + text.slice(start, end) + text.slice(end + n),
+      start: start - n,
+      end: end - n,
+    };
+  }
+  return {
+    text: text.slice(0, start) + marker + text.slice(start, end) + marker + text.slice(end),
+    start: start + n,
+    end: end + n,
+  };
+}
 
 export const TIP_CATEGORY_LABEL: Record<TipCategory, string> = {
   WORKOUT: 'Treino',
   NUTRITION: 'Nutrição',
   HABITS: 'Hábitos',
+  RECOVERY: 'Recuperação',
   GENERAL: 'Geral',
 };
 
-export const MAX_TIP_BODY = 4000;
+/** O texto da dica (#408, Pn-10: "156 de 600 caracteres"). */
+export const MAX_TIP_BODY = 600;
 export const MAX_SUGGESTED_MEALS = 8;
 
 /** Rascunho ou publicado, para o selo da bancada da equipe. */

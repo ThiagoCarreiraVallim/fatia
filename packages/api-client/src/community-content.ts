@@ -13,7 +13,7 @@ import type { TemplateReach } from './plan-library';
 
 export type TemplateKind = 'WORKOUT' | 'NUTRITION';
 export type PlanLevel = 'beginner' | 'intermediate' | 'advanced';
-export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'GENERAL';
+export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'RECOVERY' | 'GENERAL';
 export type MediaPurpose =
   | 'group_avatar'
   | 'group_content'
@@ -35,6 +35,8 @@ export interface MediaView {
   url: string | null;
   width: number | null;
   height: number | null;
+  /** Só no vídeo (#408): a duração lida do arquivo. */
+  durationMs?: number | null;
 }
 
 export interface NutritionGoalsInput {
@@ -237,8 +239,17 @@ export const contentApi = {
     apiFetch<GroupTip>(`${base}/${groupId}/content/tips`, json('POST', input)),
   updateTip: (groupId: string, id: string, input: Partial<TipInput>) =>
     apiFetch<GroupTip>(`${base}/${groupId}/content/tips/${id}`, json('PATCH', input)),
-  setTipState: (groupId: string, id: string, state: { published?: boolean; pinned?: boolean }) =>
-    apiFetch<GroupTip>(`${base}/${groupId}/content/tips/${id}/state`, json('POST', state)),
+  setTipState: (
+    groupId: string,
+    id: string,
+    state: { published?: boolean; pinned?: boolean },
+    /** "Anunciar no mural" (#408): ausente segue o que a comunidade escolheu. */
+    opts: { announce?: boolean } = {},
+  ) =>
+    apiFetch<GroupTip & { announced: boolean }>(
+      `${base}/${groupId}/content/tips/${id}/state`,
+      json('POST', opts.announce === undefined ? state : { ...state, announce: opts.announce }),
+    ),
   deleteTip: (groupId: string, id: string) =>
     apiFetch<{ id: string }>(`${base}/${groupId}/content/tips/${id}`, json('DELETE')),
 

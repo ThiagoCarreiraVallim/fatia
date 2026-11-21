@@ -14,6 +14,8 @@ export interface ObjectStore {
   get(key: string): Promise<Buffer>;
   /** Os primeiros `bytes` do objeto, sem baixar o resto (vídeo de 200 MB). */
   getStart(key: string, bytes: number): Promise<Buffer>;
+  /** `bytes` bytes a partir de `start` (o `moov` de um vídeo, #408). Menos no fim do objeto. */
+  getRange(key: string, start: number, bytes: number): Promise<Buffer>;
   put(key: string, body: Buffer, mime: string): Promise<void>;
   /** Apagar o que não existe não é erro. */
   delete(keys: string[]): Promise<void>;

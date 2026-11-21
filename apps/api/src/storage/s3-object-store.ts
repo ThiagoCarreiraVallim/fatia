@@ -106,6 +106,18 @@ export class S3ObjectStore implements ObjectStore {
     return Buffer.from(await r.Body.transformToByteArray());
   }
 
+  async getRange(key: string, start: number, bytes: number): Promise<Buffer> {
+    const r = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Range: `bytes=${start}-${start + bytes - 1}`,
+      }),
+    );
+    if (!r.Body) throw new Error(`Objeto ${key} sem corpo`);
+    return Buffer.from(await r.Body.transformToByteArray());
+  }
+
   async put(key: string, body: Buffer, mime: string): Promise<void> {
     await this.client.send(
       new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: mime }),

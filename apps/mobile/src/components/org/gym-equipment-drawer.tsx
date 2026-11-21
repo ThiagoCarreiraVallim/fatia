@@ -59,8 +59,9 @@ export function GymEquipmentDrawer({
     enabled: open,
   });
   const bancada = useQuery({
-    queryKey: orgKeys.exercises(groupId),
-    queryFn: () => groupExerciseApi.list(groupId),
+    // Só o equipamento: a chave própria não pisa na lista da tela (#466).
+    queryKey: [...orgKeys.exercises(groupId), 'equipment'],
+    queryFn: () => groupExerciseApi.list(groupId, { limit: 1 }),
     enabled: open,
   });
   // Dono e admin salvam (`group.update`, #404).

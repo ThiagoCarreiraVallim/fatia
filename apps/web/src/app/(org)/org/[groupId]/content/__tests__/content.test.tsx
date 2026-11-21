@@ -47,6 +47,7 @@ vi.mock('@fatia/api-client', async () => {
       createNutrition: vi.fn(),
       updateNutrition: vi.fn(),
       createTip: vi.fn(),
+      updateTip: vi.fn(),
       updatePlan: vi.fn(),
       publishPlan: vi.fn(),
       setTipState: vi.fn(),
@@ -407,31 +408,137 @@ describe('painel › planos e dicas', () => {
     expect(screen.getByText('Termine o rascunho antes de publicar.')).toBeInTheDocument();
   });
 
-  it('dica: tirar do ar confirma, fixar vale na hora e apagar volta para as dicas', async () => {
+  it('dica (Pn-10): fixar e tirar do ar vão no Salvar; tirar do ar confirma', async () => {
     ctx.group = grupo();
     ctx.params = { tipId: 'd1' };
     vi.mocked(contentApi.tips).mockResolvedValue([dica()]);
-    vi.mocked(contentApi.setTipState).mockResolvedValue(dica());
-    vi.mocked(contentApi.deleteTip).mockResolvedValue(undefined as never);
+    vi.mocked(contentApi.setTipState).mockResolvedValue({ ...dica(), announced: false });
     renderWithClient(<OrgTipPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Tirar do ar' }));
+    expect(await screen.findByText('14 de 600 caracteres')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Planos e dicas' })).toHaveAttribute(
+      'href',
+      '/org/g1/content?tab=tips',
+    );
+    expect(screen.getByText(/Dica · por Bruno · na biblioteca da/)).toBeInTheDocument();
+    // As quatro da prancha; "Geral" só aparece na dica antiga que já é geral.
+    const categorias = screen.getByRole('radiogroup', { name: 'Categoria' });
+    expect(
+      within(categorias)
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual(['Treino', 'Nutrição', 'Hábitos', 'Recuperação']);
+    // Já publicada: anunciar só vale na primeira vez.
+    expect(screen.getByRole('switch', { name: 'Anunciar no mural' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Fixar no topo' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Publicada na comunidade' }));
     expect(contentApi.setTipState).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Tirar esta dica do ar?' })).getByRole('button', {
         name: 'Tirar do ar',
       }),
     );
     await waitFor(() =>
-      expect(contentApi.setTipState).toHaveBeenCalledWith('g1', 'd1', { published: false }),
+      expect(contentApi.setTipState).toHaveBeenCalledWith(
+        'g1',
+        'd1',
+        { pinned: true, published: false },
+        {},
+      ),
     );
+    // Nada mudou no texto: não regrava a dica.
+    expect(contentApi.updateTip).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByRole('switch', { name: /Fixar no topo/ }));
+  it('dica nova: categoria, negrito pela barra, prévia do membro e publica anunciando', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'new' };
+    vi.mocked(contentApi.createTip).mockResolvedValue(dica({ id: 'nova', publishedAt: null }));
+    vi.mocked(contentApi.setTipState).mockResolvedValue({
+      ...dica({ id: 'nova' }),
+      announced: true,
+    });
+    renderWithClient(<OrgTipPage />);
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Sono' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Recuperação' }));
+    const texto = screen.getByLabelText('Texto') as HTMLTextAreaElement;
+    fireEvent.change(texto, { target: { value: 'Durma 8 h. <script>alert(1)</script>' } });
+    texto.setSelectionRange(6, 9);
+    fireEvent.click(screen.getByRole('button', { name: 'Negrito' }));
+    expect(texto).toHaveValue('Durma **8 h**. <script>alert(1)</script>');
+
+    const previa = screen.getByLabelText('Prévia da dica');
+    expect(previa.querySelector('strong')).toHaveTextContent('8 h');
+    expect(previa.querySelector('script')).toBeNull();
+    expect(previa).toHaveTextContent('<script>alert(1)</script>');
+    expect(previa).toHaveTextContent('Recuperação');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Publicada na comunidade' }));
+    expect(screen.getByRole('switch', { name: 'Anunciar no mural' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() =>
-      expect(contentApi.setTipState).toHaveBeenCalledWith('g1', 'd1', { pinned: true }),
+      expect(contentApi.createTip).toHaveBeenCalledWith('g1', {
+        title: 'Sono',
+        body: 'Durma **8 h**. <script>alert(1)</script>',
+        category: 'RECOVERY',
+        imageFileId: null,
+      }),
     );
+    await waitFor(() =>
+      expect(contentApi.setTipState).toHaveBeenCalledWith(
+        'g1',
+        'nova',
+        { published: true },
+        { announce: true },
+      ),
+    );
+    await waitFor(() =>
+      expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/content/tips/nova'),
+    );
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apagar dica' }));
+  it('publicar anunciando diz "post no mural criado" só se o post saiu', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'new' };
+    vi.mocked(contentApi.createTip).mockResolvedValue(dica({ id: 'nova', publishedAt: null }));
+    // A comunidade não deixou o autor postar (ou o post já existia).
+    vi.mocked(contentApi.setTipState).mockResolvedValue({
+      ...dica({ id: 'nova' }),
+      announced: false,
+    });
+    renderWithClient(<OrgTipPage />);
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Sono' } });
+    fireEvent.change(screen.getByLabelText('Texto'), { target: { value: 'Durma 8 h.' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Publicada na comunidade' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('Publicada para os membros.'));
+    expect(toast).not.toHaveBeenCalledWith('Publicada · post no mural criado.');
+  });
+
+  it('dica nova acima de 600 caracteres não sai do formulário', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'new' };
+    renderWithClient(<OrgTipPage />);
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Longa' } });
+    fireEvent.change(screen.getByLabelText('Texto'), { target: { value: 'a'.repeat(601) } });
+    expect(screen.getByText('601 de 600 caracteres')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('A dica vai até 600 caracteres.'));
+    expect(contentApi.createTip).not.toHaveBeenCalled();
+  });
+
+  it('dica: apagar confirma e volta para as dicas', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'd1' };
+    vi.mocked(contentApi.tips).mockResolvedValue([dica()]);
+    vi.mocked(contentApi.deleteTip).mockResolvedValue(undefined as never);
+    renderWithClient(<OrgTipPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apagar dica' }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Apagar esta dica?' })).getByRole('button', {
         name: 'Apagar',
@@ -439,34 +546,6 @@ describe('painel › planos e dicas', () => {
     );
     await waitFor(() =>
       expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/content?tab=tips'),
-    );
-  });
-
-  it('a prévia da dica desenha o markdown e mostra HTML como texto', async () => {
-    ctx.group = grupo();
-    ctx.params = { tipId: 'new' };
-    vi.mocked(contentApi.createTip).mockResolvedValue(dica({ id: 'nova' }));
-    renderWithClient(<OrgTipPage />);
-    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Sono' } });
-    fireEvent.change(screen.getByLabelText('Texto'), {
-      target: { value: 'Durma **8 h**. <script>alert(1)</script>' },
-    });
-    // Aba do Radix: ativa no mousedown, como no navegador.
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prévia' }));
-    const previa = screen.getByLabelText('Prévia da dica');
-    expect(previa.querySelector('strong')).toHaveTextContent('8 h');
-    expect(previa.querySelector('script')).toBeNull();
-    expect(previa).toHaveTextContent('<script>alert(1)</script>');
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Escrever' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
-    await waitFor(() =>
-      expect(contentApi.createTip).toHaveBeenCalledWith('g1', {
-        title: 'Sono',
-        body: 'Durma **8 h**. <script>alert(1)</script>',
-        category: 'GENERAL',
-        imageFileId: null,
-      }),
     );
   });
 });

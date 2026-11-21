@@ -1,8 +1,8 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  CatalogItem,
   DocumentExerciseView,
-  Exercise,
   MyGroup,
   PlanCopy,
   PlanTemplate,
@@ -48,27 +48,9 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 import { toast } from 'sonner';
-import { ApiError, contentApi, groupExerciseApi, planCopyApi, workoutApi } from '@fatia/api-client';
+import { ApiError, contentApi, groupExerciseApi, planCopyApi } from '@fatia/api-client';
 import OrgPlanTemplatePage from '@/app/(org)/org/[groupId]/content/plans/[templateId]/page';
 import MemberPlanCopyPage from '@/app/(org)/org/[groupId]/members/[membershipId]/plans/[offerId]/page';
-
-const catalogo = (id: number, name: string, muscleGroup = 'pernas'): Exercise =>
-  ({
-    id,
-    name,
-    muscleGroup,
-    source: 'SEED',
-    createdByUserId: null,
-    primaryMuscles: [],
-    secondaryMuscles: [],
-    equipment: 'barra',
-    level: null,
-    mechanic: null,
-    instructions: [],
-    youtubeVideoId: null,
-    youtubeVideoIdPt: null,
-    groupOwned: false,
-  }) as Exercise;
 
 const ex = (over: Partial<DocumentExerciseView> = {}): DocumentExerciseView => ({
   type: 'exercise',
@@ -127,18 +109,49 @@ const modelo = (p: Partial<PlanTemplate> = {}): PlanTemplate => ({
   ...p,
 });
 
+// A busca do editor é o catálogo da equipe (#408): a API filtra pelo texto e
+// põe os favoritos da equipe primeiro, com o padrão ao entrar num plano.
+const noCatalogo = (
+  exerciseId: number,
+  name: string,
+  muscleGroup = 'pernas',
+  p: Partial<CatalogItem> = {},
+): CatalogItem => ({
+  exerciseId,
+  name,
+  muscleGroup,
+  equipment: 'barra',
+  ownedByCommunity: false,
+  favorite: false,
+  homeFriendly: false,
+  hasGuide: false,
+  hasVideo: false,
+  photoCount: 0,
+  hasTips: false,
+  defaults: null,
+  ...p,
+});
+let catalogoDaEquipe: CatalogItem[] = [];
+
 beforeEach(() => {
   ctx.group = grupo({ role: 'PROFESSIONAL' });
   ctx.search = new URLSearchParams();
-  vi.mocked(workoutApi.searchExercises).mockResolvedValue([
-    catalogo(10, 'Agachamento livre'),
-    catalogo(20, 'Burpee', 'core'),
-    catalogo(30, 'Esteira', 'cardio'),
-  ]);
-  vi.mocked(groupExerciseApi.list).mockResolvedValue({
-    equipment: [],
-    customEquipment: [],
-    items: [],
+  catalogoDaEquipe = [
+    noCatalogo(10, 'Agachamento livre'),
+    noCatalogo(20, 'Burpee', 'core'),
+    noCatalogo(30, 'Esteira', 'cardio'),
+  ];
+  vi.mocked(groupExerciseApi.list).mockImplementation(async (_g, filters = {}) => {
+    const q = (filters.q ?? '').toLowerCase();
+    const items = catalogoDaEquipe.filter((i) => i.name.toLowerCase().includes(q));
+    return {
+      equipment: [],
+      customEquipment: [],
+      total: 3,
+      count: items.length,
+      facets: { muscles: {}, equipment: {} },
+      items,
+    };
   });
 });
 afterEach(() => vi.clearAllMocks());
@@ -275,6 +288,41 @@ describe('editor de plano de treino (#406, Pn-09)', () => {
       cardioDurationSeconds: 1800,
       cardioInclinePercent: 6,
       cardioZone: 2,
+    });
+  });
+
+  it('a busca põe o favorito da equipe primeiro e entra com o padrão dele', async () => {
+    ctx.params = { groupId: 'g1', templateId: 't1' };
+    catalogoDaEquipe = [
+      noCatalogo(40, 'Agachamento búlgaro', 'pernas', {
+        favorite: true,
+        defaults: { sets: 4, reps: '6-8', restSeconds: 120, loadMode: null },
+      }),
+      noCatalogo(10, 'Agachamento livre'),
+    ];
+    vi.mocked(contentApi.plan).mockResolvedValue(modelo());
+    vi.mocked(contentApi.updatePlan).mockResolvedValue(modelo());
+    renderWithClient(<OrgPlanTemplatePage />);
+    await screen.findByRole('heading', { name: 'Sessão A · Pernas' });
+
+    fireEvent.change(screen.getByLabelText('Adicionar exercício'), { target: { value: 'agach' } });
+    const primeiro = await screen.findByRole('button', { name: /Agachamento búlgaro/ });
+    expect(primeiro).toHaveTextContent('favorito da equipe');
+    await waitFor(() =>
+      expect(groupExerciseApi.list).toHaveBeenLastCalledWith(
+        'g1',
+        expect.objectContaining({ q: 'agach' }),
+      ),
+    );
+    fireEvent.click(primeiro);
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(contentApi.updatePlan).toHaveBeenCalled());
+    const body = vi.mocked(contentApi.updatePlan).mock.calls[0]![2];
+    expect(body.document!.sessions[0]!.items[2]).toMatchObject({
+      exerciseId: 40,
+      targetSets: 4,
+      targetReps: '6-8',
+      restSeconds: 120,
     });
   });
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Star } from 'lucide-react';
+import { Pencil, Star, TriangleAlert } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -21,6 +21,7 @@ import { ExerciseVideo } from './exercise-media';
 import { muscleLabelPt } from './muscle-labels';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import {
+  exerciseHowTo,
   feelingOf,
   formatBestSet,
   formatDecimal,
@@ -248,12 +249,15 @@ function details(exercise: Exercise): string {
 function StepsTab({ exercise }: { exercise: Exercise }) {
   const guide = exercise.community ?? null;
   const photos = guide?.photos.filter((f) => f.url) ?? [];
-  const hasSteps = exercise.instructions && exercise.instructions.length > 0;
+  const { steps, mistakes } = exerciseHowTo({
+    instructions: exercise.instructions ?? [],
+    community: guide,
+  });
   return (
     <>
-      {hasSteps ? (
-        <ol className="list-none rounded-card bg-card px-4">
-          {exercise.instructions.map((step, i) => (
+      {steps.length > 0 ? (
+        <ol aria-label="Como fazer" className="list-none rounded-card bg-card px-4">
+          {steps.map((step, i) => (
             <li
               key={i}
               className="flex gap-3 border-border py-3.5 text-sm leading-snug text-foreground [&:not(:first-child)]:border-t"
@@ -267,6 +271,19 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
         </ol>
       ) : (
         <p className="text-sm text-muted-foreground">Sem passo a passo para este exercício.</p>
+      )}
+      {mistakes.length > 0 && (
+        <div className="rounded-card bg-card p-4 text-sm">
+          <p className="mb-2 text-xs font-bold text-warning">Erros comuns</p>
+          <ul aria-label="Erros comuns" className="space-y-1.5">
+            {mistakes.map((m, i) => (
+              <li key={i} className="flex gap-2 leading-snug">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {guide?.tips && (
         <div className="rounded-card bg-card p-4 text-sm">

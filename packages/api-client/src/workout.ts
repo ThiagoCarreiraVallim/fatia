@@ -57,6 +57,27 @@ export interface CommunityGuide {
   video: MediaView | null;
   photos: MediaView[];
   tips: string | null;
+  /** "Como fazer" da casa (#408); vazio = os passos do exercício. Ausente na API antiga. */
+  steps?: string[];
+  commonMistakes?: string[];
+  /** "Dá para fazer em casa": o selo DA CASA. */
+  homeFriendly?: boolean;
+}
+
+/**
+ * "Como fazer" do membro (#408): os passos que a academia escreveu valem no
+ * lugar das instruções do catálogo; sem eles, ficam as instruções. Os erros
+ * comuns só existem no guia da casa.
+ */
+export function exerciseHowTo(e: { instructions: string[]; community?: CommunityGuide | null }): {
+  steps: string[];
+  mistakes: string[];
+} {
+  const house = e.community?.steps ?? [];
+  return {
+    steps: house.length ? house : e.instructions,
+    mistakes: e.community?.commonMistakes ?? [],
+  };
 }
 
 // Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves
