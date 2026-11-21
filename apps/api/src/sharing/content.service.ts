@@ -713,7 +713,7 @@ export class ContentService {
     id: string,
     state: { published?: boolean; pinned?: boolean },
     opts: { announce?: boolean } = {},
-  ): Promise<TipView> {
+  ): Promise<TipView & { announced: boolean }> {
     const eu = await this.assertPublisher(userId, groupId);
     const atual = await this.findTip(groupId, id);
     this.assertCanEdit(eu, userId, atual.authorId);
@@ -729,8 +729,9 @@ export class ContentService {
     });
     // "Anunciar no mural" (#408, Pn-10), como na #405: true força o post,
     // false não posta, ausente segue o `autoPosts` da comunidade.
+    let postId: string | null = null;
     if (state.published && !atual.publishedAt && opts.announce !== false) {
-      await publishAutoPost(this.prisma, {
+      postId = await publishAutoPost(this.prisma, {
         groupId,
         actorUserId: userId,
         force: opts.announce === true,
@@ -740,7 +741,8 @@ export class ContentService {
         meta: row.category ? String(row.category).toLowerCase() : null,
       });
     }
-    return this.tipView(row, userId, eu);
+    // A tela diz "post no mural criado" só quando ele saiu (#466).
+    return { ...(await this.tipView(row, userId, eu)), announced: postId !== null };
   }
 
   async deleteTip(userId: string, groupId: string, id: string): Promise<{ id: string }> {

@@ -246,7 +246,7 @@ export const contentApi = {
     /** "Anunciar no mural" (#408): ausente segue o que a comunidade escolheu. */
     opts: { announce?: boolean } = {},
   ) =>
-    apiFetch<GroupTip>(
+    apiFetch<GroupTip & { announced: boolean }>(
       `${base}/${groupId}/content/tips/${id}/state`,
       json('POST', opts.announce === undefined ? state : { ...state, announce: opts.announce }),
     ),

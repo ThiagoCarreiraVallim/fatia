@@ -118,22 +118,24 @@ function TipEditor({
       const state: { pinned?: boolean; published?: boolean } = {};
       if (pinned !== (tip?.pinned ?? false)) state.pinned = pinned;
       if (published !== wasPublished) state.published = published;
+      let announced = false;
       if (Object.keys(state).length) {
-        await contentApi.setTipState(
+        const r = await contentApi.setTipState(
           groupId,
           saved!.id,
           state,
           state.published ? { announce } : {},
         );
+        announced = r.announced === true;
       }
-      return { saved: saved!, state };
+      return { saved: saved!, state, announced };
     },
-    onSuccess: ({ saved, state }) => {
+    onSuccess: ({ saved, state, announced }) => {
       setSavedSnapshot(snapshot);
       setUnpublishing(false);
       toast(
         state.published === true
-          ? announce
+          ? announced
             ? 'Publicada · post no mural criado.'
             : 'Publicada para os membros.'
           : state.published === false
