@@ -297,9 +297,8 @@ describe('catálogo de exercícios da equipe (#408, integração)', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('"em N planos": conta os planos dos membros desta comunidade, abaixo de 5 sem número', async () => {
+    it('"em N planos": o plano pessoal dos membros não conta (só o que veio da comunidade, #466)', async () => {
       const a = await comunidade();
-      const b = await comunidade('Outra');
       const usar = async (userId: string) => {
         const p = await plans.create(userId, { name: 'Pernas' });
         await plans.addExercise(userId, p.id, {
@@ -310,16 +309,10 @@ describe('catálogo de exercícios da equipe (#408, integração)', () => {
         });
       };
       await usar(a.membro);
+      for (let i = 0; i < 5; i++) await usar(await entra(a.groupId, 'MEMBER'));
       expect((await catalog.getForTeam(a.prof, a.groupId, agachamento.id)).usage?.plans).toEqual({
-        band: 'few',
+        band: 'none',
         count: null,
-      });
-      for (let i = 0; i < 4; i++) await usar(await entra(a.groupId, 'MEMBER'));
-      // Plano de quem é de outra comunidade não conta.
-      await usar(b.membro);
-      expect((await catalog.getForTeam(a.prof, a.groupId, agachamento.id)).usage?.plans).toEqual({
-        band: 'many',
-        count: 5,
       });
     });
   });

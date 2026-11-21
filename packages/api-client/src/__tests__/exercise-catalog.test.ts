@@ -106,14 +106,17 @@ describe('catálogo da equipe e editor de dica no cliente (#408)', () => {
       'sem guia',
     );
 
+    // Abaixo de 5 alunos não diz quantos, nem se é zero (#466).
     expect(usageLabel({ templates: 0, plans: { band: 'none', count: null } })).toBe(
-      'em nenhum plano',
+      'em menos de 5 planos',
     );
-    expect(usageLabel({ templates: 2, plans: { band: 'few', count: null } })).toBe(
+    expect(usageLabel({ templates: 2, plans: { band: 'none', count: null } })).toBe(
       'em 2 modelos e menos de 5 planos',
     );
     expect(usageLabel({ templates: 0, plans: { band: 'many', count: 14 } })).toBe('em 14 planos');
-    expect(usageLabel({ templates: 1, plans: { band: 'none', count: null } })).toBe('em 1 modelo');
+    expect(usageLabel({ templates: 1, plans: { band: 'many', count: 5 } })).toBe(
+      'em 1 modelo e 5 planos',
+    );
   });
 
   it('dica: as quatro da prancha, mais a "geral" só para a dica antiga', () => {

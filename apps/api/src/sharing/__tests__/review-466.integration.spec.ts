@@ -136,6 +136,39 @@ describe('revisão adversarial da #466 (#408)', () => {
     expect(after.usage?.plans.band).toBe('none');
   });
 
+  it('F1: conta alunos distintos com plano desta comunidade, e abaixo de 5 não diz quantos', async () => {
+    const a = await community('A');
+    const template = await prisma.groupPlanTemplate.create({
+      data: {
+        groupId: a.groupId,
+        authorId: a.prof,
+        kind: 'WORKOUT',
+        title: `Modelo ${stamp}`,
+        snapshot: { sessions: [] },
+        snapshotVersion: 1,
+      },
+    });
+    const planFromTemplate = async (userId: string) => {
+      const p = await prisma.workoutPlan.create({
+        data: { userId, name: 'Do modelo', fromTemplateId: template.id },
+      });
+      await prisma.workoutPlanExercise.create({
+        data: { planId: p.id, exerciseId: squat.id, order: 0, targetSets: 3, targetReps: '10' },
+      });
+    };
+    const students: string[] = [];
+    for (let i = 0; i < 4; i++) students.push(await join(a.groupId, 'MEMBER'));
+    for (const s of students) await planFromTemplate(s);
+    // O mesmo aluno com duas cópias conta uma vez.
+    await planFromTemplate(students[0]!);
+    const four = await catalog.getForTeam(a.prof, a.groupId, squat.id);
+    expect(four.usage?.plans).toEqual({ band: 'none', count: null });
+
+    await planFromTemplate(await join(a.groupId, 'MEMBER'));
+    const five = await catalog.getForTeam(a.prof, a.groupId, squat.id);
+    expect(five.usage?.plans).toEqual({ band: 'many', count: 5 });
+  });
+
   it('F2: vídeo do exercício fragmentado de 10 min não passa no confirm (teto de 60 s)', async () => {
     const a = await community();
     const body = fragmentedMp4(600);
