@@ -342,7 +342,8 @@ describe('catálogo de exercícios da equipe (#408, integração)', () => {
       expect(row).toMatchObject({
         groupId: a.groupId,
         groupOwned: true,
-        clonedFromId: agachamento.id,
+        // Variação nova, não cópia pessoal: não herda o histórico de carga (#466).
+        clonedFromId: null,
       });
       // Duplicar de novo não colide no nome.
       const outra = await catalog.duplicate(a.prof, a.groupId, agachamento.id);
@@ -350,6 +351,20 @@ describe('catálogo de exercícios da equipe (#408, integração)', () => {
       await prisma.exercise.deleteMany({
         where: { id: { in: [copia.exerciseId, outra.exerciseId] } },
       });
+    });
+
+    it('nome comprido: a cópia corta o nome para caber em 200 com o "(cópia N)"', async () => {
+      const a = await comunidade();
+      const longo = await catalog.create(a.prof, a.groupId, {
+        name: nome('L').padEnd(200, 'x'),
+        muscleGroup: 'core',
+      });
+      const c1 = await catalog.duplicate(a.prof, a.groupId, longo.exerciseId);
+      const c2 = await catalog.duplicate(a.prof, a.groupId, longo.exerciseId);
+      expect(c1.name.length).toBeLessThanOrEqual(200);
+      expect(c1.name.endsWith(' (cópia)')).toBe(true);
+      expect(c2.name.length).toBeLessThanOrEqual(200);
+      expect(c2.name.endsWith(' (cópia 2)')).toBe(true);
     });
 
     it('não duplica exercício de outra comunidade', async () => {
