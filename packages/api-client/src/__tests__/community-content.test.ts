@@ -301,6 +301,7 @@ describe('regras do conteúdo', () => {
       'programs',
       'exercises',
       'challenges',
+      'welcome',
       'announcements',
     ]);
     expect(panelSections('OWNER').map((s) => s.section)).toContain('content');

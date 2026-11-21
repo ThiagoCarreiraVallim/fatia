@@ -541,6 +541,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/announcements', title: 'Comunicados e enquetes', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
   { pattern: '/org/:id/benefits', title: 'Benefícios', parent: '/org/:id' },
+  { pattern: '/org/:id/welcome', title: 'Boas-vindas', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];
