@@ -13,6 +13,7 @@ import {
   requestPasswordResetCode,
   requestSignupCode,
   signInWithPassword,
+  signInIdentifier,
   socialTargets,
   normalizePasswordPolicy,
   DEFAULT_PASSWORD_POLICY,
@@ -271,6 +272,28 @@ describe('fluxos da Experience API', () => {
     expect(logto.calls.every((c) => c.credentials === 'omit' && c.redirect === 'manual')).toBe(
       true,
     );
+  });
+
+  it('entra com nome de usuário quando o que foi digitado não tem @', async () => {
+    const logto = fakeLogto({
+      'GET /oidc/auth': { status: 200, text: '' },
+      'PUT /api/experience': ok,
+      'POST /api/experience/verification/password': { status: 200, body: { verificationId: 'v1' } },
+      'POST /api/experience/identification': ok,
+      'POST /api/experience/submit': {
+        status: 200,
+        body: { redirectTo: 'http://logto.test/oidc/auth/uid2' },
+      },
+      'GET /oidc/auth/uid2': { status: 200, text: FORM_POST },
+    });
+    const client = createExperienceClient({ endpoint: 'http://logto.test', fetch: logto.fetch });
+
+    await signInWithPassword(client, { authorizeUrl: AUTHORIZE, email: ' Thiago ', password: 's' });
+
+    expect(logto.calls[2]!.body).toEqual({
+      identifier: { type: 'username', value: 'Thiago' },
+      password: 's',
+    });
   });
 
   it('senha errada vira ExperienceError com o código do Logto', async () => {
@@ -532,5 +555,14 @@ describe('normalizePasswordPolicy', () => {
     const p = normalizePasswordPolicy({ length: { min: 'x', max: -1 }, rejects: { words: 'a' } });
     expect(p.length).toEqual({ min: 8, max: 256 });
     expect(p.rejects.words).toEqual([]);
+  });
+});
+
+describe('signInIdentifier', () => {
+  it('com @ é e-mail, normalizado', () => {
+    expect(signInIdentifier(' Maria@X.com ')).toEqual({ type: 'email', value: 'maria@x.com' });
+  });
+  it('sem @ é nome de usuário, sem espaços nas pontas e com a caixa preservada', () => {
+    expect(signInIdentifier('  Thiago_1 ')).toEqual({ type: 'username', value: 'Thiago_1' });
   });
 });
