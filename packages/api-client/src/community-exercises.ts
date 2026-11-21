@@ -1,6 +1,7 @@
 import { apiFetch } from './http';
 import type { GroupRole } from './community';
 import type { MediaView } from './community-content';
+import type { PlanLoadMode } from './workout';
 
 /**
  * O catálogo de exercícios da comunidade (Fase 7b, ADR 030). A equipe cria os
@@ -250,8 +251,70 @@ export interface GroupExercise {
   /** O papel de hoje de quem escreveu (#396); `null` se saiu. */
   authorRole: GroupRole | null;
   updatedAt: string;
+  /** "Como fazer" da casa (#408); vazio = os passos do exercício (`instructions`). */
+  steps: string[];
+  commonMistakes: string[];
+  /** "Dá para fazer em casa": o selo DA CASA. */
+  homeFriendly: boolean;
+  defaults: PlanDefaults | null;
   /** Só na bancada da equipe. */
   canEdit?: boolean;
+  /** Só na bancada: favorito da equipe. */
+  favorite?: boolean;
+  /** Só na bancada: já tem guia desta comunidade. */
+  hasGuide?: boolean;
+  /** Só no detalhe da bancada: "em N planos". */
+  usage?: ExerciseUsage;
+}
+
+/** O padrão ao entrar num plano (#408, Pn-11b). */
+export interface PlanDefaults {
+  sets: number | null;
+  reps: string | null;
+  restSeconds: number | null;
+  loadMode: PlanLoadMode | null;
+}
+
+export interface ExerciseUsage {
+  /** Modelos da biblioteca da comunidade que levam o exercício. */
+  templates: number;
+  /** Planos dos membros; abaixo de 5, sem o número. */
+  plans: { band: 'none' | 'few' | 'many'; count: number | null };
+}
+
+/** Filtros do catálogo da equipe (#408, Pn-11). */
+export interface CatalogFilters {
+  q?: string;
+  muscle?: string;
+  equipment?: string;
+  house?: boolean;
+  favorite?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface CatalogItem {
+  exerciseId: number;
+  name: string;
+  muscleGroup: string;
+  equipment: string | null;
+  ownedByCommunity: boolean;
+  favorite: boolean;
+  homeFriendly: boolean;
+  hasGuide: boolean;
+  hasVideo: boolean;
+  photoCount: number;
+  hasTips: boolean;
+  defaults: PlanDefaults | null;
+}
+
+export interface CatalogPage extends GymEquipmentState {
+  /** O catálogo inteiro da comunidade (geral + da casa). */
+  total: number;
+  /** O que casa com os filtros. */
+  count: number;
+  facets: { muscles: Record<string, number>; equipment: Record<string, number> };
+  items: CatalogItem[];
 }
 
 export interface GroupExerciseInput {
@@ -273,6 +336,13 @@ export interface GuideInput {
   videoFileId?: string | null;
   photoFileIds?: string[];
   tips?: string | null;
+  steps?: string[];
+  commonMistakes?: string[];
+  homeFriendly?: boolean;
+  defaultSets?: number | null;
+  defaultReps?: string | null;
+  defaultRestSeconds?: number | null;
+  defaultLoadMode?: PlanLoadMode | null;
 }
 
 const base = '/api/groups';
@@ -283,10 +353,8 @@ const json = (method: string, body?: unknown): RequestInit => ({
 
 export const groupExerciseApi = {
   /** Bancada da equipe: o catálogo, o equipamento marcado e o próprio da academia. */
-  list: (groupId: string) =>
-    apiFetch<GymEquipmentState & { items: GroupExercise[] }>(
-      `${base}/${groupId}/content/exercises`,
-    ),
+  list: (groupId: string, _filters: CatalogFilters = {}) =>
+    apiFetch<CatalogPage>(`${base}/${groupId}/content/exercises`),
   get: (groupId: string, exerciseId: number) =>
     apiFetch<GroupExercise>(`${base}/${groupId}/content/exercises/${exerciseId}`),
   create: (groupId: string, input: GroupExerciseInput & GuideInput) =>
@@ -301,6 +369,9 @@ export const groupExerciseApi = {
       `${base}/${groupId}/content/exercises/${exerciseId}/guide`,
       json('PUT', input),
     ),
+  setFavorite: (_groupId: string, _exerciseId: number, _favorite: boolean) =>
+    Promise.resolve({ exerciseId: _exerciseId, favorite: _favorite }),
+  duplicate: (_groupId: string, _exerciseId: number) => Promise.resolve({} as GroupExercise),
   remove: (groupId: string, exerciseId: number) =>
     apiFetch<{ id: number }>(`${base}/${groupId}/content/exercises/${exerciseId}`, json('DELETE')),
   /** `customEquipment` ausente mantém os equipamentos próprios que já estão. */
@@ -330,6 +401,25 @@ export function videoProblem(file: { type: string; size: number }): string | nul
   if (file.size > VIDEO_MAX_BYTES) return 'O vídeo passa de 200 MB. Grave um trecho menor.';
   if (file.size <= 0) return 'O vídeo está vazio.';
   return null;
+}
+
+export const VIDEO_MAX_SECONDS = 60;
+export function videoDurationProblem(_seconds: number): string | null {
+  return null;
+}
+export function parseRest(_text: string): number | null | undefined {
+  return null;
+}
+export function restClock(_seconds: number | null): string {
+  return '';
+}
+export function catalogGuideLabel(
+  _i: Pick<CatalogItem, 'hasGuide' | 'hasVideo' | 'hasTips' | 'photoCount' | 'ownedByCommunity'>,
+): string {
+  return '';
+}
+export function usageLabel(_u: ExerciseUsage): string {
+  return '';
 }
 
 /** "45 MB", "800 KB": para a pessoa saber o que está enviando. */

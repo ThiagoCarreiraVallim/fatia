@@ -30,11 +30,18 @@ export const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = {
 };
 
 export const TIP_CATEGORIES: readonly TipCategory[] = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'];
+export function tipEditorCategories(_current: TipCategory): TipCategory[] {
+  return [...TIP_CATEGORIES];
+}
+export function wrapSelection(text: string, start: number, end: number, _marker: string) {
+  return { text, start, end };
+}
 
 export const TIP_CATEGORY_LABEL: Record<TipCategory, string> = {
   WORKOUT: 'Treino',
   NUTRITION: 'Nutrição',
   HABITS: 'Hábitos',
+  RECOVERY: '',
   GENERAL: 'Geral',
 };
 
