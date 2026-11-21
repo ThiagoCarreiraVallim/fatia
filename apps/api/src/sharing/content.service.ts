@@ -53,6 +53,7 @@ import {
 } from './plan-document';
 import {
   documentToNutritionSnapshot,
+  keepRanges,
   legacyNutritionView,
   NUTRITION_SNAPSHOT_V2,
   nutritionDocumentView,
@@ -547,10 +548,13 @@ export class ContentService {
             'Mande o plano do editor ou metas e refeições salvas, um dos dois.',
           );
         }
-        data.snapshot = (await documentToNutritionSnapshot(
-          this.prisma,
-          parseNutritionDocument(input.document),
-        )) as unknown as Prisma.InputJsonValue;
+        const doc = parseNutritionDocument(input.document);
+        const snap = await documentToNutritionSnapshot(this.prisma, doc);
+        // O editor reabre as faixas pelo meio delas: metas que voltam iguais
+        // mantêm as faixas exatas do modelo (as que o autor v1 escreveu).
+        const ranges = keepRanges(doc.targets, storedRanges(atual.snapshot));
+        if (ranges) snap.ranges = ranges;
+        data.snapshot = snap as unknown as Prisma.InputJsonValue;
         data.snapshotVersion = NUTRITION_SNAPSHOT_V2;
       } else if (legado && atual.snapshotVersion === NUTRITION_SNAPSHOT_V2) {
         // O retrato do editor não volta ao formato da Fase 7 por um PATCH parcial.
@@ -1279,5 +1283,14 @@ export class ContentService {
       updatedAt: row.updatedAt,
       ...(teamRole ? { canEdit: this.canEdit(teamRole, userId, row.authorId) } : {}),
     };
+  }
+}
+
+/** As faixas guardadas no retrato atual; retrato que não se lê não tem nenhuma. */
+function storedRanges(raw: unknown) {
+  try {
+    return readNutritionSnapshot(raw).ranges;
+  } catch {
+    return undefined;
   }
 }
