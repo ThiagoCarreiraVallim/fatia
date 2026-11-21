@@ -89,7 +89,7 @@ Pendências da #375 (branch `redesign/375-busca-quantidade-alimentos`):
 
 Pendências da #376:
 
-- **Editor e envio:** o plano entra por `NutritionPlanService.send` (seed do demo). O editor da equipe é a #407; o envio e a notificação `PLAN_RECEIVED` ficam com a #405.
+- **Editor e envio:** o plano entra por `NutritionPlanService.send` (seed do demo). O editor da equipe chegou com a #407; o envio e a notificação `PLAN_RECEIVED` ficam com a #405.
 - **#374:** o "comi isso" e a troca gravam `MealItem.source = PLAN`. O cartão do plano no dia (`PlannedMealSuggestion`) segue só com contrato: preencher é tocar a tela do dia, fora desta issue.
 - **Agregados:** nenhum agregado da equipe sobre planos ainda; quando vier, `MIN_CELL` 5.
 - **Desvio do canvas:** metas e nutrientes são digitáveis em vez de "−/+"; o aviso da troca usa o nome sem artigo ("Helena vê no seu diário").
@@ -777,7 +777,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 | #403  | Painel: assentos, faturas, programas e ofertas | pronto na branch | api, db, api-client, web, mobile, docs |
 | #405  | Painel: biblioteca e enviar para alunos        | pronto na branch | api, db, api-client, web, mobile, docs |
 | #406  | Painel: editor de plano de treino              | pronto na branch | api, db, api-client, web, docs         |
-| #407  | Painel: editor de alimentação                  | a fazer          |                                        |
+| #407  | Painel: editor de alimentação                  | pronto na branch | api, db, api-client, web, mobile, docs |
 | #408  | Painel: dicas e catálogo de exercícios         | a fazer          |                                        |
 
 #404 (branch `redesign/404-equipe-papeis`; migration `20261120100000_team_roles`; nenhuma env nova; nenhuma tool nova no MCP; sem ADR nova, segue a 043):
@@ -913,6 +913,22 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - "Comunidade" foi para a faixa de dados do plano, como na prancha; a agenda ficou só Datas/Flexível ("Sem agenda" quebrava linha; sem escolha nenhuma = quem envia decide).
   - Na cópia, "Voltar à ficha" e "Ver original" foram para dentro do aviso "Editando a cópia".
   - Fica como está, de propósito (usabilidade acima da prancha): números digitáveis em vez de "−/+", subir/descer ao lado do arrastar, nome da sessão num campo (em vez de "Renomear"), o "Salvar na cópia" embaixo, com o aviso e "O que mudou" junto, em vez de no topo, e descanso em segundos em vez de mm:ss.
+
+#407 (branch `redesign/407-editor-alimentacao`; migration `20261120600000_nutrition_plan_editor`, só aditiva; nenhuma env nova; MCP: sem tool nova nem descrição nova, `get_nutrition_plan` traz a hora da refeição (`time`) e `log_plan_meal` responde 400 para opção sem item; sem ADR nova, segue a 010, a 027 e a 045):
+
+- **O que entrou:** retrato v2 do plano alimentar na biblioteca (metas alvo, "ajustar às metas de cada aluno", refeições com hora e opções, itens com chave e grupo de equivalentes, grupos com macro-chave), editor web do modelo (Pn-24, 24b) no lugar do formulário de faixas + refeições salvas, e a edição da cópia de um aluno pela ficha (Pn-24c, `GET/PUT groups/:g/members/:m/nutrition-plans/:p/copy`, lápis na seção Alimentação). O retrato v1 continua lido (`upgradeNutritionV1`, guardando as faixas exatas) e o modelo antigo abre no editor novo.
+- **Decisões adotadas:**
+  - **Gerar com IA: fora.** A ADR 045 proíbe a IA de gerar qualquer parte do plano (desvio da recomendação da issue); o editor diz "Só alimentos da TACO, sem sugestão da IA".
+  - **Sem tabelas de grupo de equivalentes** (desvio da proposta de schema da issue): o plano guarda os grupos do editor em `NutritionPlan.equivalenceGroups` (JSON) e cada item segue com os equivalentes calculados do modelo da #376. Colunas novas: `NutritionPlanMeal.time`/`key`, `NutritionPlanItem.key`/`groupKey`, `NutritionPlan.editedById` (fora do export).
+  - **Só alimento da base (TACO)**, nunca o próprio de alguém: a busca filtra e o servidor responde 404 no salvar.
+  - **Metas alvo viram faixas** no envio: kcal ±5%, macros ±10%; a cópia volta a alvo pelo meio da faixa. "Dentro da meta" no editor = total a ±5% das kcal.
+  - **Equivalentes:** a mesma quantidade do macro-chave do grupo (carboidrato, proteína, gordura ou kcal), arredondada a medida caseira quando cabe em ±10%, senão a 5 g. O painel marca o alimento fora de ±10% do primeiro.
+  - **Ajustar às metas de cada aluno:** fator = meio da faixa de kcal da pessoa ÷ kcal do plano, entre 0,5 e 2, e só com a porta de leitura de Alimentação aberta para quem envia (grava `nutrition_plan_adjust` no histórico de acesso); sem a porta, vai como está.
+  - **Grupo com menos de 2 alimentos e refeição sem item só avisam;** o aluno não vê o Trocar e lê "sem sugestão" (web e app), sem "Comi isso".
+  - **Editar a cópia** = versão nova pelo fluxo de versão (como a #406): `baseVersionId` → 409 "Outra pessoa salvou esta cópia; recarregue", `changeNote`, aviso opcional. No aceite, as trocas e os "comi isso" de hoje em diante passam para a versão nova pela chave do item e da refeição; nada do que a pessoa registrou é apagado. Qualquer pessoa da equipe com vínculo ativo, `member.plans` e a porta de Alimentação edita; abrir e salvar gravam `open_nutrition_copy`/`edit_nutrition_copy`.
+  - Até 8 refeições, 4 opções por refeição, 20 grupos, 8 alimentos por grupo.
+- **Fica para depois:** receitas (#334), "Preencher com as minhas metas" (o formulário antigo tinha; o editor novo começa vazio), mudar a cópia de várias pessoas de uma vez.
+- **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/407/web/` (1440 e 390, escuro e claro) contra Pn-24, 24b e 24c (`board/`): editor do modelo, item aberto com medida e grupo, grupo vazio, plano novo, a cópia da Carla e a ficha. API e web da branch na worktree (portas 3107 e 3137) contra o banco de dev, com a migration aplicada; o plano foi montado pelo editor, mandado para a Carla pelo "Enviar para…" e a cópia salva como v2. Tudo o que foi criado (modelo, as duas versões do plano, o aviso e 24 linhas do histórico de acesso) foi apagado: `before.txt` = `after-cleanup.txt`. Corrigido: a linha do item quebra em duas no celular (selo e kcal embaixo), a medida caseira cabe inteira e o subtítulo não encosta nos botões. Fica como está, de propósito (usabilidade acima da prancha): números digitáveis, medida e quantidade num painel do item, subir/descer em vez de arrastar, nome e hora da refeição em campos, "Salvar na cópia" embaixo, com o aviso e "O que mudou", e "Enviar para…" abrindo o mesmo formulário da biblioteca.
 
 ## Etapas seguintes
 

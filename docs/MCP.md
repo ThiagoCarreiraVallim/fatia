@@ -1086,7 +1086,9 @@ dentro do plano do próprio usuário (`NOT_FOUND` para o de outra pessoa).
 
 O plano em uso (`active`) e um novo esperando aceite (`pending`), com o "feito" (`logged`) e as
 trocas (`swap`) do dia, `teamSees`/`viewerName` (o autor vê as trocas só com Alimentação
-liberada) e `week` (dias com as calorias na faixa nos últimos 7, ADR 027).
+liberada) e `week` (dias com as calorias na faixa nos últimos 7, ADR 027). Cada refeição traz a
+hora sugerida (`time`, "07:00", ou nula) e pode ter opção sem item: o editor da equipe (#407)
+deixa a refeição livre, e o app mostra "sem sugestão".
 
 **Input:** `{ date?: string /* YYYY-MM-DD */ }`  
 **Output:** `{ date, active: NutritionPlan | null, pending: NutritionPlan | null, teamSees, viewerName, week: { inRangeDays, days } }`
@@ -1094,7 +1096,8 @@ liberada) e `week` (dias com as calorias na faixa nos últimos 7, ADR 027).
 ### `accept_nutrition_plan`
 
 Aceita o `pending`. O plano em uso vira substituído, as faixas viram as metas do dia (com
-`applyGoals`) e cada opção vira refeição salva. Confirmável: as metas mudam. Plano já aceito ou
+`applyGoals`) e cada opção com item vira refeição salva. As trocas e os "comi isso" de hoje em
+diante passam para a versão nova quando o item ou a refeição continua nela. Confirmável: as metas mudam. Plano já aceito ou
 substituído, ou dois aceites ao mesmo tempo: `CONFLICT`, sem mudar nada.
 
 **Input:** `{ planId: string }`  
@@ -1104,7 +1107,7 @@ substituído, ou dois aceites ao mesmo tempo: `CONFLICT`, sem mudar nada.
 
 "Comi isso": registra a opção no diário com as trocas do dia, pelo mesmo caminho de
 `log_meal_template`. Com várias opções, `optionId` é obrigatório. Uma vez por refeição e dia:
-repetir (inclusive dois toques ao mesmo tempo) devolve o mesmo registro.
+repetir (inclusive dois toques ao mesmo tempo) devolve o mesmo registro. Opção sem item: 400.
 
 **Input:** `{ planMealId: string; optionId?: string; eatenAt?: string /* ISO 8601 */ }`  
 **Output:** `{ mealId, date }`
