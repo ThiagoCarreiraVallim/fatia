@@ -32,9 +32,9 @@ Copiar para `.canvas/project/` da raiz para o `render-board.mjs`.
 
 ## Estado
 
-- [ ] db + migration
-- [ ] api red → green
-- [ ] api-client red → green
+- [x] db + migration
+- [x] api red → green (welcome-pages.integration, isolation, onboarding 'community', panel ⌘K)
+- [x] api-client red → green (community-welcome.ts, onboarding-flow, menu)
 - [ ] web painel red → green
 - [ ] onboarding web + app, Sobre web + app
 - [ ] docs (REDESIGN_PROGRESS Etapa 10, MOBILE_PARITY?)
