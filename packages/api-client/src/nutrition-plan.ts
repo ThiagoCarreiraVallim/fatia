@@ -57,6 +57,8 @@ export interface PlanMeal {
   id: string;
   mealType: MealType;
   name: string;
+  /** "07:00" (#407): a hora sugerida, quando o plano tem. */
+  time?: string | null;
   position: number;
   logged: { mealId: string; optionId: string } | null;
   options: PlanOption[];

@@ -15,13 +15,18 @@ import {
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { assertDay } from '../common/dates';
-import type { SendNutritionPlanInput } from '../nutrition/dto/nutrition-plan.dto';
 import { NutritionPlanService } from '../nutrition/nutrition-plan.service';
 import { NotificationService } from '../notifications/notification.service';
 import { addDaysIso, todayInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from './content-roles';
 import type { SendPlansDto } from './dto/plan-send.dto';
-import { parseNutritionSnapshot } from './nutrition-snapshot';
+import {
+  buildNutritionSendInput,
+  loadBaseFoods,
+  readNutritionSnapshot,
+  snapshotFoodIds,
+  studentFactor,
+} from './nutrition-document';
 import { nutritionPlanSentNotice } from './plan-offer-notices';
 import { PlanOfferService, resendTargetWhere } from './plan-offer.service';
 import { offerState, type OfferVersionState } from './plan-offer-state';
@@ -96,6 +101,8 @@ export interface SentList {
 /** Quantos envios a lista "Enviados recentemente" mostra. */
 const RECENT_LIMIT = 30;
 const ACTION = 'sends.progress';
+/** Leitura das kcal da pessoa para ajustar o plano alimentar (#407). */
+const ADJUST = 'nutrition_plan_adjust';
 const FORBIDDEN = 'Seu papel não envia planos para as pessoas';
 const MEMBER_NOT_FOUND = 'Membership not found';
 const SEND_NOT_FOUND = 'Send not found';
@@ -294,12 +301,21 @@ export class PlanSendService {
     alvos: Recipient[],
     input: SendPlansDto,
   ): Promise<SendResult> {
-    const plano = this.nutritionInput(tpl.snapshot, input.note);
+    const snap = readNutritionSnapshot(tpl.snapshot);
+    const foods = await loadBaseFoods(this.prisma, snapshotFoodIds(snap));
+    const fatores = await this.adjustFactors(autor.id, snap, alvos);
+    // Monta o plano de cada pessoa antes de gravar: um 400 não deixa o lote pela metade.
+    const planos = alvos.map((a) =>
+      buildNutritionSendInput(snap, foods, {
+        factor: fatores.get(a.userId) ?? 1,
+        note: input.note,
+      }),
+    );
     // Uma transação para o lote; versão e "o que mudou" só do mesmo modelo.
     const feitos = await this.nutritionPlans.sendFromTemplate(
       autor.id,
       alvos.map((a) => a.membershipId),
-      plano,
+      planos,
       { sourceTemplateId: tpl.id, changeNote: input.changeNote ?? null },
     );
     return {
@@ -320,45 +336,31 @@ export class PlanSendService {
   }
 
   /**
-   * O modelo de alimentação da biblioteca (metas e refeições sugeridas) como
-   * plano alimentar: cada refeição vira uma refeição com uma opção. O plano
-   * aplica metas ao ser aceito e só leva alimentos da base (ADR 045), então
-   * modelo sem metas ou com alimento pessoal do autor não se envia.
+   * "Ajustar às metas de cada aluno" (#407): as kcal da pessoa são dado de
+   * Alimentação. Só entram com a porta de leitura aberta para quem envia (a
+   * leitura fica na trilha); sem ela, a pessoa recebe o plano como está.
    */
-  private nutritionInput(snapshot: unknown, note?: string): SendNutritionPlanInput {
-    const snap = parseNutritionSnapshot(snapshot, false);
-    if (!snap.goals) {
-      throw new BadRequestException(
-        'Este plano alimentar não tem metas de calorias e macros: adicione as metas antes de enviar.',
-      );
+  private async adjustFactors(
+    viewerId: string,
+    snap: ReturnType<typeof readNutritionSnapshot>,
+    alvos: Recipient[],
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (!snap.adjustToStudent || !snap.targets) return out;
+    for (const a of alvos) {
+      try {
+        await this.access.assertReadable(viewerId, a.membershipId, ShareScope.NUTRITION, ADJUST);
+      } catch (err) {
+        if (err instanceof NotFoundException) continue;
+        throw err;
+      }
+      const metas = await this.prisma.userGoals.findUnique({
+        where: { userId: a.userId },
+        select: { kcalMin: true, kcalMax: true },
+      });
+      out.set(a.userId, studentFactor(snap, metas));
     }
-    if (snap.meals.length === 0) {
-      throw new BadRequestException('Este plano alimentar não tem refeições para enviar.');
-    }
-    const meals = snap.meals.map((m) => ({
-      // Refeição sem tipo vai como lanche: o tipo só ordena e dá o ícone.
-      mealType: m.mealType ?? 'SNACK',
-      name: m.name,
-      options: [
-        {
-          items: m.items.map((i) => {
-            if (i.foodId === null) {
-              throw new BadRequestException(
-                `"${i.foodName}" é um alimento pessoal: troque por um da base antes de enviar.`,
-              );
-            }
-            return {
-              foodId: i.foodId,
-              grams: i.grams,
-              ...(i.portionLabel
-                ? { portionLabel: i.portionLabel, portionQuantity: i.portionQuantity ?? undefined }
-                : {}),
-            };
-          }),
-        },
-      ],
-    }));
-    return { goals: snap.goals, applyGoals: true, note: note?.trim() || undefined, meals };
+    return out;
   }
 
   // ---------------------------------------------------------------- enviados

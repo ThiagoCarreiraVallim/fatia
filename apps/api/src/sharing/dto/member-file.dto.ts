@@ -110,3 +110,25 @@ export class SavePlanCopyDto {
   @IsUUID()
   baseVersionId?: string;
 }
+
+/** Salvar a cópia do plano alimentar de um aluno (#407, Pn-24c). */
+export class SaveNutritionCopyDto {
+  /** O documento do editor (metas, refeições e grupos); validado no service. */
+  @IsObject()
+  document!: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_CHANGE_NOTE)
+  changeNote?: string;
+
+  /** "Avisar a Ana no app". Padrão: avisa. */
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
+
+  /** A versão que o editor abriu: se outra pessoa salvou depois, 409. */
+  @IsOptional()
+  @IsUUID()
+  baseVersionId?: string;
+}

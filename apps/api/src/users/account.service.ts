@@ -196,7 +196,8 @@ export class AccountService {
       // desfeitas). O autor vai pelo nome, nunca pelo id de outra conta.
       this.prisma.nutritionPlan.findMany({
         where: { userId },
-        omit: { authorId: true },
+        // Quem editou a cópia (#407) é da equipe: vai pelo nome do autor, nunca pelo id.
+        omit: { authorId: true, editedById: true },
         include: {
           author: { select: { name: true } },
           meals: {

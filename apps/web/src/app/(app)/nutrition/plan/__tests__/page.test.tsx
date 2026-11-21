@@ -274,6 +274,19 @@ describe('Plano alimentar (Al-N5)', () => {
     await waitFor(() => expect(api.logMeal).toHaveBeenCalledWith('m-almoco', { optionId: 'o-a2' }));
   });
 
+  it('refeição vazia do editor (#407) diz "sem sugestão", sem "comi isso", e mostra a hora', async () => {
+    const p = plan();
+    p.meals[0] = { ...p.meals[0]!, time: '07:00' };
+    p.meals[0].options[0] = { ...p.meals[0].options[0]!, kcal: 0, items: [] };
+    api.get.mockResolvedValue(overview({ active: p }));
+    renderPage();
+
+    const cafe = await screen.findByRole('region', { name: 'Café da manhã' });
+    expect(within(cafe).getByText('07:00')).toBeInTheDocument();
+    expect(within(cafe).getByText('Sem sugestão nesta refeição.')).toBeInTheDocument();
+    expect(within(cafe).queryByRole('button', { name: 'Comi isso' })).not.toBeInTheDocument();
+  });
+
   it('refeição já registrada aparece como feita, sem registrar de novo', async () => {
     const p = plan();
     p.meals[0].logged = { mealId: 'meal-1', optionId: 'o-cafe' };
