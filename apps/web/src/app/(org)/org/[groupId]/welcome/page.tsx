@@ -450,7 +450,7 @@ export default function OrgWelcomePage() {
       )}
 
       <Dialog open={comoAluno} onOpenChange={setComoAluno}>
-        <DialogContent className="w-auto max-w-none border-none bg-transparent p-0 shadow-none">
+        <DialogContent className="w-auto max-w-none border-none bg-transparent p-0 shadow-none [&>button:last-child]:hidden">
           <DialogTitle className="sr-only">Como o aluno vê</DialogTitle>
           <PhoneFrame label="Como o aluno vê">
             <WelcomePagesView
@@ -467,7 +467,7 @@ export default function OrgWelcomePage() {
       </Dialog>
 
       <Dialog open={padrao} onOpenChange={setPadrao}>
-        <DialogContent className="w-auto max-w-none border-none bg-transparent p-0 shadow-none">
+        <DialogContent className="w-auto max-w-none border-none bg-transparent p-0 shadow-none [&>button:last-child]:hidden">
           <DialogTitle className="sr-only">O padrão do Fatia</DialogTitle>
           <PhoneFrame label="O padrão do Fatia">
             <div className="-mx-[18px] flex-1 overflow-y-auto px-5 pt-6 [&>div]:min-h-full">
