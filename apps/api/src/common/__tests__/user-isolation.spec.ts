@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
 import { ConsentService } from '../../sharing/consent.service';
 import { BenefitService } from '../../sharing/benefit.service';
+import { WelcomeService } from '../../sharing/welcome.service';
 import { ContentService } from '../../sharing/content.service';
 import { GroupExerciseService } from '../../sharing/group-exercise.service';
 import { GroupService } from '../../sharing/group.service';
@@ -4896,6 +4897,66 @@ describe('isolamento entre usuários', () => {
       expect(JSON.stringify(deA)).not.toContain('pay_do_A'); // link de cobrança não sai
       const deB = await conta.exportData(owned.userB);
       expect(JSON.stringify(deB)).not.toContain('GRACE_5_LEFT');
+    });
+  });
+
+  describe('boas-vindas da comunidade (#410)', () => {
+    const welcome = new WelcomeService(prisma);
+    const pagina = {
+      kind: 'PLAIN' as const,
+      title: 'Combinados da casa',
+      body: '- Traga toalha',
+      showTeam: false,
+    };
+
+    beforeAll(async () => {
+      await welcome.save(owned.userB, owned.groupId, {
+        pages: [pagina],
+        showOnJoin: true,
+        published: true,
+      });
+    });
+
+    it('o dono de outra comunidade não lê nem reescreve as páginas desta', async () => {
+      // O pro é dono do grupo dele, não desta academia: lá ele edita, aqui não.
+      await expect(welcome.editor(owned.userB, owned.grupoDoProId)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(
+        welcome.save(owned.userA, owned.grupoDoProId, {
+          pages: [pagina],
+          showOnJoin: true,
+          published: true,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(welcome.forMember(owned.userA, owned.grupoDoProId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      // Salvar no grupo do pro não toca as páginas da academia do user-B.
+      await welcome.save(owned.pro, owned.grupoDoProId, {
+        pages: [{ ...pagina, title: 'Do pro' }],
+        showOnJoin: true,
+        published: true,
+      });
+      const aqui = await welcome.forMember(owned.userA, owned.groupId);
+      expect(aqui.pages.map((p) => p.title)).toEqual(['Combinados da casa']);
+    });
+
+    it('o aluno lê só o publicado e não edita', async () => {
+      await expect(
+        welcome.save(owned.userA, owned.groupId, {
+          pages: [{ ...pagina, title: 'Invasão' }],
+          showOnJoin: true,
+          published: true,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(welcome.editor(owned.userA, owned.groupId)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      const lido = await welcome.forMember(owned.userA, owned.groupId);
+      expect(lido.pages.map((p) => p.title)).toEqual(['Combinados da casa']);
+      // A equipe que aparece é só nome e papel, sem colega.
+      expect(lido.team.map((t) => t.role)).not.toContain('MEMBER');
     });
   });
 
