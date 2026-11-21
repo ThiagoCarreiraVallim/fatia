@@ -35,6 +35,8 @@ import {
 import { parsePlanSnapshot, sessionExercises } from './plan-snapshot-v2';
 
 /** Abaixo disto, "em N planos" não diz o número (como o "Com quem" da #405). */
+/** O nome do exercício vai até 200 (o DTO e a coluna). */
+const MAX_EXERCISE_NAME = 200;
 const USAGE_MIN_CELL = 5;
 const CATALOG_PAGE = 60;
 const CATALOG_PAGE_MAX = 200;
@@ -612,16 +614,25 @@ export class GroupExerciseService {
     const guia = await this.prisma.groupExerciseGuide.findUnique({
       where: { groupId_exerciseId: { groupId, exerciseId } },
     });
-    const nomes = new Set(
+    // O nome corta para o "(cópia N)" caber nos 200 do exercício.
+    const copyName = (i: number) => {
+      const suffix = i === 1 ? ' (cópia)' : ` (cópia ${i})`;
+      return `${ex.name.slice(0, MAX_EXERCISE_NAME - suffix.length).trimEnd()}${suffix}`;
+    };
+    const taken = new Set(
       (
         await this.prisma.exercise.findMany({
-          where: { groupId, name: { startsWith: `${ex.name} (cópia` } },
+          where: {
+            groupId,
+            name: { startsWith: ex.name.slice(0, MAX_EXERCISE_NAME - 16).trimEnd() },
+          },
           select: { name: true },
         })
       ).map((e) => e.name),
     );
-    let name = `${ex.name} (cópia)`;
-    for (let i = 2; nomes.has(name); i++) name = `${ex.name} (cópia ${i})`;
+    let i = 1;
+    while (taken.has(copyName(i))) i++;
+    const name = copyName(i);
 
     let copia: Exercise;
     try {
@@ -638,7 +649,8 @@ export class GroupExerciseService {
           instructions: ex.instructions,
           groupOwned: true,
           groupId,
-          clonedFromId: ex.id,
+          // Sem `clonedFromId`: a cópia é uma variação nova da comunidade, e a
+          // prescrição de carga juntaria o histórico das duas (#466).
           groupGuides: {
             create: {
               groupId,
