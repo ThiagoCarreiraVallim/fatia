@@ -96,6 +96,8 @@ export interface CatalogFilters {
   house?: boolean;
   /** Só os favoritos da equipe. */
   favorite?: boolean;
+  /** Só os da equipe: criados pela comunidade ou com guia dela (painel do app, #466). */
+  team?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -292,7 +294,8 @@ export class GroupExerciseService {
         !equip ||
         (e.equipment !== null && equipmentKey(e.equipment) === equip)) &&
       (!filters.house || guiaPor.get(e.id)?.homeFriendly === true) &&
-      (!filters.favorite || fav.has(e.id));
+      (!filters.favorite || fav.has(e.id)) &&
+      (!filters.team || e.groupOwned || guiaPor.has(e.id));
 
     const muscles: Record<string, number> = {};
     const equipment: Record<string, number> = {};

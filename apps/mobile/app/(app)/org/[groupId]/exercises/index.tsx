@@ -8,7 +8,7 @@ import {
   groupCan,
   groupExerciseApi,
   workoutApi,
-  type CatalogItem,
+  type CatalogPage,
   type Exercise,
   type MyGroup,
 } from '@fatia/api-client';
@@ -37,8 +37,27 @@ import {
 import { EquipmentSummary } from '@/components/workout/equipment-chooser';
 import { colors } from '@/theme/colors';
 
-/** O que a comunidade criou ou ganhou guia dela: o que esta tela lista. */
-const isTeamGuided = (i: CatalogItem) => i.hasGuide || i.ownedByCommunity;
+const TEAM_PAGE = 200;
+const teamListKey = (groupId: string) => [...orgKeys.exercises(groupId), 'team'] as const;
+
+/**
+ * O que a comunidade criou ou ganhou guia dela: o que esta tela lista. O
+ * servidor filtra (`team`), e as páginas vêm até o fim (#466).
+ */
+async function listTeamExercises(groupId: string): Promise<CatalogPage> {
+  const first = await groupExerciseApi.list(groupId, { team: true, limit: TEAM_PAGE });
+  const items = [...first.items];
+  while (items.length < first.count) {
+    const next = await groupExerciseApi.list(groupId, {
+      team: true,
+      limit: TEAM_PAGE,
+      offset: items.length,
+    });
+    if (next.items.length === 0) break;
+    items.push(...next.items);
+  }
+  return { ...first, items };
+}
 
 /** O resumo do equipamento da academia; a lista inteira abre no drawer. */
 function GymEquipmentCard({
@@ -210,11 +229,8 @@ function ExerciseList({
 }) {
   const router = useRouter();
   const lista = useQuery({
-    queryKey: orgKeys.exercises(g.id),
-    queryFn: () => groupExerciseApi.list(g.id, { limit: 200 }),
-    // O catálogo da equipe traz o geral inteiro (#408); aqui ficam os da
-    // comunidade e os que ganharam guia.
-    select: (page) => ({ ...page, items: page.items.filter(isTeamGuided) }),
+    queryKey: teamListKey(g.id),
+    queryFn: () => listTeamExercises(g.id),
   });
   const base = `/org/${g.id}/exercises`;
 
@@ -289,9 +305,8 @@ export default function OrgExercisesScreen() {
   // A mesma consulta da lista (o React Query não repete a requisição): o drawer
   // mora fora dela e precisa saber o que já tem tutorial.
   const lista = useQuery({
-    queryKey: orgKeys.exercises(groupId),
-    queryFn: () => groupExerciseApi.list(groupId, { limit: 200 }),
-    select: (page) => ({ ...page, items: page.items.filter(isTeamGuided) }),
+    queryKey: teamListKey(groupId),
+    queryFn: () => listTeamExercises(groupId),
   });
   const existentes = new Set(lista.data?.items.map((e) => e.exerciseId) ?? []);
   return (

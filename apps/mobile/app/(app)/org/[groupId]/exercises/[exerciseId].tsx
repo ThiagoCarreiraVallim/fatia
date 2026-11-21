@@ -47,8 +47,9 @@ function EquipmentField({
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
   const bancada = useQuery({
-    queryKey: orgKeys.exercises(groupId),
-    queryFn: () => groupExerciseApi.list(groupId),
+    // Só o equipamento: a chave própria não pisa na lista da tela (#466).
+    queryKey: [...orgKeys.exercises(groupId), 'equipment'],
+    queryFn: () => groupExerciseApi.list(groupId, { limit: 1 }),
   });
   const proprios = bancada.data?.customEquipment ?? [];
   const escolhido = value === SEM ? 'Não informar' : equipmentLabel(value);

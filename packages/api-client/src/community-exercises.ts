@@ -290,6 +290,8 @@ export interface CatalogFilters {
   equipment?: string;
   house?: boolean;
   favorite?: boolean;
+  /** Só os da equipe: criados pela comunidade ou com guia dela (#466). */
+  team?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -361,6 +363,7 @@ export const groupExerciseApi = {
     if (filters.equipment) qs.set('equipment', filters.equipment);
     if (filters.house) qs.set('house', 'true');
     if (filters.favorite) qs.set('favorite', 'true');
+    if (filters.team) qs.set('team', 'true');
     if (filters.limit) qs.set('limit', String(filters.limit));
     if (filters.offset) qs.set('offset', String(filters.offset));
     const query = qs.toString();

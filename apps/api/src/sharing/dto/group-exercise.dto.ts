@@ -179,6 +179,7 @@ export class CatalogQueryDto {
 
   @IsOptional() @Transform(toBool) @IsBoolean() house?: boolean;
   @IsOptional() @Transform(toBool) @IsBoolean() favorite?: boolean;
+  @IsOptional() @Transform(toBool) @IsBoolean() team?: boolean;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
