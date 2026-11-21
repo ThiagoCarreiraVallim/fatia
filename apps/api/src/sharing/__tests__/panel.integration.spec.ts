@@ -452,6 +452,8 @@ describe('painel base (#398, integração)', () => {
       expect(await telas(a.dono, 'origem')).toContain('origins');
       expect(await telas(a.prof, 'origem')).not.toContain('origins');
       expect(prof.screens.map((s) => s.key)).not.toContain('moderation');
+      // Boas-vindas (#410) é de quem publica conteúdo: o profissional acha.
+      expect(await telas(a.prof, 'boas')).toContain('welcome');
       expect(prof.plans.map((p) => p.title)).toEqual(['Hipertrofia A/B']);
       expect((await panel.search(a.dono, a.groupId, 'hipert')).plans[0]).toMatchObject({
         title: 'Hipertrofia A/B',
