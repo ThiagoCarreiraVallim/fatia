@@ -258,7 +258,7 @@ export default function OrgExercisesPage() {
       ) : view === 'grid' ? (
         <ul
           aria-label="Exercícios do catálogo"
-          className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3"
+          className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3"
         >
           {data.items.map((i) => (
             <li key={i.exerciseId}>

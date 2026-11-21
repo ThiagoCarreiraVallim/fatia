@@ -222,7 +222,7 @@ function TipEditor({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <Link
           href={`/org/${groupId}/content?tab=tips`}
-          className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-border pl-2 pr-3 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex h-10 shrink-0 items-center gap-1 self-start rounded-xl border border-border pl-2 pr-3 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden />
           Planos e dicas
@@ -260,13 +260,13 @@ function TipEditor({
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <fieldset disabled={!canEdit} className="min-w-0 space-y-5">
           <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-            <div className="space-y-2">
+            <div className="min-w-0 max-w-full space-y-2">
               <p className="text-sm text-muted-foreground">Categoria</p>
               <Segmented<TipCategory>
                 label="Categoria"
                 value={category}
                 onChange={setCategory}
-                className="w-fit [&>button]:flex-none [&>button]:px-3.5"
+                className="max-w-full overflow-x-auto [&>button]:flex-none [&>button]:px-3.5 sm:w-fit"
                 options={tipEditorCategories(tip?.category ?? category).map((c) => ({
                   value: c,
                   label: TIP_CATEGORY_LABEL[c],

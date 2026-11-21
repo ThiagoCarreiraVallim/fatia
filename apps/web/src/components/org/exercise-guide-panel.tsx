@@ -125,6 +125,7 @@ function GuideForm({
           </p>
         )}
         <VideoField
+          frame
           groupId={groupId}
           value={video}
           onChange={setVideo}

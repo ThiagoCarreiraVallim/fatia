@@ -12,6 +12,7 @@ import {
   videoProblem,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface VideoValue {
   fileId: string;
@@ -74,6 +75,7 @@ export function VideoField({
   onChange,
   readSeconds = readVideoSeconds,
   hint = 'MP4 ou MOV, até 60 s e 200 MB.',
+  frame = false,
 }: {
   groupId: string;
   value: VideoValue | null;
@@ -81,6 +83,8 @@ export function VideoField({
   /** Para o teste: o jsdom não lê vídeo. */
   readSeconds?: (file: File) => Promise<number>;
   hint?: string;
+  /** O quadro grande do vídeo, mesmo vazio (editor e painel do guia). */
+  frame?: boolean;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -129,8 +133,25 @@ export function VideoField({
           playsInline
           preload="metadata"
           aria-label="Vídeo do tutorial"
-          className="aspect-video w-full max-w-md rounded-xl border border-subtle bg-black"
+          className={cn(
+            'aspect-video w-full rounded-xl border border-subtle bg-black',
+            !frame && 'max-w-md',
+          )}
         />
+      )}
+      {frame && !value?.url && !uploading && (
+        // O quadro vazio da prancha (Pn-11, Pn-11b): o mesmo "Escolher vídeo",
+        // maior. Fora da ordem de foco, porque o botão logo abaixo já faz isso.
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          onClick={() => input.current?.click()}
+          className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/50 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <Video className="h-6 w-6" aria-hidden />
+          {value ? 'Vídeo enviado' : 'Sem vídeo próprio ainda'}
+        </button>
       )}
       {uploading ? (
         <div className="max-w-md space-y-1" role="status">

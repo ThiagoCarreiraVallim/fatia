@@ -394,6 +394,7 @@ function ExerciseEditor({
       >
         <div className="space-y-4">
           <VideoField
+            frame
             groupId={groupId}
             value={video}
             onChange={setVideo}
