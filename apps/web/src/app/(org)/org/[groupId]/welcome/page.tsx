@@ -58,7 +58,7 @@ function PhoneFrame({ children, label }: { children: ReactNode; label: string })
     <div
       role="region"
       aria-label={label}
-      className="flex h-[600px] w-[300px] max-w-full shrink-0 flex-col overflow-hidden rounded-[36px] bg-background px-[18px] pb-5 shadow-[0_0_0_8px_hsl(var(--surface-2)),0_0_0_9px_hsl(var(--border))]"
+      className="flex h-[600px] w-[300px] max-w-full shrink-0 flex-col overflow-hidden rounded-[36px] bg-background px-[18px] pb-5 shadow-[0_0_0_8px_hsl(var(--muted)),0_0_0_9px_hsl(var(--border))]"
     >
       {children}
     </div>
@@ -203,7 +203,7 @@ export default function OrgWelcomePage() {
           <p className="text-sm text-muted-foreground">{WELCOME_COPY.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-pill bg-surface-2 px-3 py-1 text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ring-border">
             {status.tone !== 'default' && (
               <i
                 aria-hidden
@@ -275,7 +275,7 @@ export default function OrgWelcomePage() {
                 <div
                   role="tablist"
                   aria-label="Páginas"
-                  className="flex min-w-0 flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
+                  className="flex min-w-0 flex-wrap gap-1 rounded-xl bg-muted p-1"
                 >
                   {pages.map((p, k) => (
                     <button
@@ -381,7 +381,7 @@ export default function OrgWelcomePage() {
                 </span>
               </div>
 
-              <div className="divide-y divide-border rounded-xl bg-surface-2">
+              <div className="divide-y divide-border rounded-xl bg-muted">
                 <label className="flex items-center gap-3 px-3.5 py-3">
                   <span className="min-w-0 flex-1">
                     <b className="block text-sm">{WELCOME_COPY.showTeam}</b>

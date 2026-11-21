@@ -74,7 +74,13 @@ export function WelcomePagesView({
           key={d}
           className={cn(
             'h-1 flex-1 rounded-[2px]',
-            d <= i ? (cover ? 'bg-brand-foreground' : 'bg-brand') : cover ? 'bg-brand-foreground/30' : 'bg-surface-3',
+            d <= i
+              ? cover
+                ? 'bg-brand-foreground'
+                : 'bg-brand'
+              : cover
+                ? 'bg-brand-foreground/30'
+                : 'bg-surface-3',
           )}
         />
       ))}
@@ -110,7 +116,9 @@ export function WelcomePagesView({
           >
             {dots}
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-brand-foreground">{welcomePosition(i, n)}</span>
+              <span className="text-xs font-bold text-brand-foreground">
+                {welcomePosition(i, n)}
+              </span>
               {skip}
             </div>
           </div>
@@ -221,7 +229,7 @@ export function WelcomePagesView({
             aria-label="Voltar"
             onClick={() => (i > 0 ? go(i - 1) : onBackFirst?.())}
             className={cn(
-              'inline-flex shrink-0 items-center justify-center rounded-[14px] bg-surface-2 text-foreground',
+              'inline-flex shrink-0 items-center justify-center rounded-[14px] bg-muted text-foreground',
               compact ? 'h-11 w-11' : 'h-14 w-14',
             )}
           >

@@ -444,7 +444,7 @@ export default function CommunitySettingsPage() {
         </button>
       )}
       <Dialog open={reviewing} onOpenChange={setReviewing}>
-        <DialogContent className="flex h-[min(760px,100dvh)] max-w-md flex-col gap-0 p-5 pt-6 sm:rounded-card [&>button:last-child]:hidden">
+        <DialogContent className="flex h-dvh max-w-md max-sm:max-w-none max-sm:rounded-none sm:h-[min(760px,100dvh)] flex-col gap-0 p-5 pt-6 sm:rounded-card [&>button:last-child]:hidden">
           <DialogTitle className="sr-only">Boas-vindas da {g.name}</DialogTitle>
           <WelcomePagesView
             groupName={g.name}

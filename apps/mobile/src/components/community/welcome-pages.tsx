@@ -61,7 +61,13 @@ export function WelcomePagesView({
           key={d}
           className={cn(
             'h-1 flex-1 rounded-[2px]',
-            d <= i ? (cover ? 'bg-brand-foreground' : 'bg-brand') : cover ? 'bg-brand-foreground/30' : 'bg-surface-3',
+            d <= i
+              ? cover
+                ? 'bg-brand-foreground'
+                : 'bg-brand'
+              : cover
+                ? 'bg-brand-foreground/30'
+                : 'bg-surface-3',
           )}
         />
       ))}
@@ -74,7 +80,12 @@ export function WelcomePagesView({
       hitSlop={8}
       className="min-h-11 justify-center px-1"
     >
-      <Text className={cn('text-sm font-bold', cover ? 'text-brand-foreground' : 'text-muted-foreground')}>
+      <Text
+        className={cn(
+          'text-sm font-bold',
+          cover ? 'text-brand-foreground' : 'text-muted-foreground',
+        )}
+      >
         {WELCOME_COPY.skip}
       </Text>
     </Pressable>
@@ -87,7 +98,9 @@ export function WelcomePagesView({
           <View className="-mx-5 -mt-6 h-[230px] bg-brand px-6 pt-14">
             {dots}
             <View className="mt-3 flex-row items-center justify-between">
-              <Text className="text-xs font-bold text-brand-foreground">{welcomePosition(i, n)}</Text>
+              <Text className="text-xs font-bold text-brand-foreground">
+                {welcomePosition(i, n)}
+              </Text>
               {skip}
             </View>
           </View>
