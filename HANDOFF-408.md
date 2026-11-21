@@ -23,11 +23,12 @@ Prints da prancha em `~/.cache/fatia-vis/408/web/board/`.
 
 ## Estado
 
-- [ ] migration 20261120700000_exercise_catalog_tips
-- [ ] API: catálogo com filtros, favorito, guia estendido, duplicar, uso em planos, duração do vídeo
-- [ ] API: dicas (categoria, 600, announce, pinned/published no salvar)
-- [ ] MCP get_exercise_details / explain_form + docs/MCP_TOOL_SURFACE.md
-- [ ] api-client
+- [x] migration 20261120700000_exercise_catalog_tips (banco de teste fatia_t408, env em scratchpad/t408.env)
+- [x] API: catálogo com filtros, favorito, guia estendido, duplicar, uso em planos, duração do vídeo
+- [x] API: dicas (RECOVERY, 600, announce no setTipState)
+- [x] MCP get_exercise_details / explain_form + docs (MCP.md, MCP_TOOL_SURFACE.md)
+- [x] api-client (list com filtros, setFavorite, duplicate, helpers parseRest/restClock/usageLabel/...)
+- [x] isolamento em user-isolation.spec.ts (bloco #408)
 - [ ] web: Pn-10, Pn-11, Pn-11b; busca do editor de plano com favoritos primeiro
 - [ ] membro: passos/erros da casa no detalhe do exercício (web e app)
 - [ ] isolation spec, passada visual, docs, PR
