@@ -112,4 +112,14 @@ describe('boas-vindas da comunidade no cliente (#410)', () => {
     expect(emptyWelcomePage()).toEqual({ kind: 'PLAIN', title: '', body: '', showTeam: false });
     expect(WELCOME_KIND_OPTIONS.map((o) => o.label)).toEqual(['Capa com a marca', 'Simples']);
   });
+
+  it('conta como o aluno vê: emoji com tom de pele, família e acento combinado contam 1 (#469)', () => {
+    expect(welcomeCharCount('👍🏽')).toBe(1);
+    expect(welcomeCharCount('👨‍👩‍👧')).toBe(1);
+    expect(welcomeCharCount('🇧🇷 é')).toBe(3);
+    expect(welcomeCharCount('e\u0301')).toBe(1);
+    expect(
+      welcomeDraftErrors([{ kind: 'PLAIN', title: 'Oi', body: '👍🏽'.repeat(300), showTeam: false }]),
+    ).toEqual([{}]);
+  });
 });

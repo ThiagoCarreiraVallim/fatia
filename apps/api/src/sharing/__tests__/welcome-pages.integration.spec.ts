@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma.service';
 import type { EmailService } from '../../notifications/email.service';
@@ -228,5 +233,110 @@ describe('boas-vindas da comunidade (integração)', () => {
     await welcome.save(dono, groupId, { pages: [combinados], showOnJoin: true, published: true });
     await prisma.group.delete({ where: { id: groupId } });
     expect(await prisma.groupWelcomePage.count({ where: { groupId } })).toBe(0);
+  });
+
+  // --- review do PR #469 ----------------------------------------------------
+
+  it('salvar ao mesmo tempo (duas abas, retry) nunca vira 500: todos passam, o último vale', async () => {
+    const { dono, groupId } = await comunidade();
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, (_, k) =>
+        welcome.save(dono, groupId, {
+          pages: [
+            { ...combinados, title: `A${k}` },
+            { ...combinados, title: `B${k}` },
+          ],
+          showOnJoin: true,
+          published: false,
+        }),
+      ),
+    );
+    const erros = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map(
+        (r) =>
+          `${(r.reason as Error)?.constructor?.name}: ${(r.reason as { code?: string })?.code ?? ''}`,
+      );
+    expect(erros).toEqual([]);
+    const final = await welcome.editor(dono, groupId);
+    expect(final.pages).toHaveLength(2);
+    // As duas páginas são do mesmo salvamento, nunca misturadas.
+    expect(final.pages[0]?.title.slice(1)).toBe(final.pages[1]?.title.slice(1));
+  });
+
+  it('emoji com tom de pele ou família conta 1: 300 cabem, 301 não', async () => {
+    const { dono, groupId } = await comunidade();
+    const save = (body: string) =>
+      welcome.save(dono, groupId, {
+        pages: [{ ...combinados, body }],
+        showOnJoin: true,
+        published: false,
+      });
+    await expect(save('👍🏽'.repeat(300))).resolves.toBeDefined();
+    await expect(save('👨‍👩‍👧'.repeat(300))).resolves.toBeDefined();
+    await expect(save('👍🏽'.repeat(301))).rejects.toBeInstanceOf(BadRequestException);
+    // Título: 80 visíveis com tom de pele cabem.
+    await expect(
+      welcome.save(dono, groupId, {
+        pages: [{ ...combinados, title: '👍🏽'.repeat(80) }],
+        showOnJoin: true,
+        published: false,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('acima do teto do banco é 400 antes de chegar ao Postgres', async () => {
+    const { dono, groupId } = await comunidade();
+    // Um caractere visível com 2000 acentos combinados: 1 grafema, 2001 pontos de código.
+    const zalgo = 'a' + '\u0301'.repeat(2000);
+    const err = await welcome
+      .save(dono, groupId, {
+        pages: [{ ...combinados, body: zalgo }],
+        showOnJoin: true,
+        published: false,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    const errTitle = await welcome
+      .save(dono, groupId, {
+        pages: [{ ...combinados, title: 'a' + '\u0301'.repeat(600) }],
+        showOnJoin: true,
+        published: false,
+      })
+      .catch((e: unknown) => e);
+    expect(errTitle).toBeInstanceOf(BadRequestException);
+  });
+
+  it('NUL e outros controles saem do título e do texto (nada de 500)', async () => {
+    const { dono, groupId } = await comunidade();
+    const s = await welcome.save(dono, groupId, {
+      pages: [{ ...combinados, title: 'Oi\u0000 a\u0007ll', body: '- um\u0000\n- d\u001bois\t!' }],
+      showOnJoin: true,
+      published: false,
+    });
+    expect(s.pages[0]).toMatchObject({ title: 'Oi all', body: '- um\n- dois !' });
+    // Título só de controles fica vazio: 400, não erro do banco.
+    const err = await welcome
+      .save(dono, groupId, {
+        pages: [{ ...combinados, title: '\u0000\u0001' }],
+        showOnJoin: true,
+        published: false,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect(err).toBeInstanceOf(BadRequestException);
+  });
+
+  it('o convite leva o avatar da comunidade para a capa (Onb-02b)', async () => {
+    const { dono, groupId } = await comunidade();
+    await welcome.save(dono, groupId, {
+      pages: [capa],
+      showOnJoin: true,
+      published: true,
+    });
+    const preview = await invites.preview(await convite(dono, groupId));
+    expect(preview.welcome).toHaveLength(1);
+    // Sem foto: o campo existe e é nulo (a capa mostra as iniciais na cor da marca).
+    expect(preview.group).toHaveProperty('avatarUrl', null);
   });
 });

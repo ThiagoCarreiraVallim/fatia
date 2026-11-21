@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import type { OnboardingProgress } from '@fatia/api-client';
 import { OnboardingFlow } from '../onboarding-flow';
 
@@ -316,6 +316,62 @@ describe('OnboardingFlow (#371)', () => {
     await user.click(screen.getByRole('button', { name: 'Pular' }));
     expect(onboardingApi.save).toHaveBeenLastCalledWith({ step: 'share' });
     expect(await screen.findByText('Bruno (dono) e Helena (profissional)')).toBeInTheDocument();
+  });
+
+  it('a capa da comunidade no onboarding mostra o avatar do convite (#469, Onb-02b)', async () => {
+    vi.mocked(groupsApi.previewInvite).mockResolvedValue({
+      group: {
+        id: 'g1',
+        name: 'Academia Demo',
+        description: null,
+        type: 'SPONSORED',
+        avatarUrl: 'https://cdn.test/g1.webp',
+      },
+      role: 'MEMBER',
+      invitedBy: null,
+      team: [{ name: 'Bruno Lima', role: 'OWNER' }],
+      memberCount: 40,
+      emailBound: false,
+      expiresAt: null,
+      requiredSharingScopes: [],
+      activeChallenge: null,
+      welcome: [{ position: 1, kind: 'COVER', title: 'Bem-vinda', body: 'Oi.', showTeam: false }],
+    });
+    const user = userEvent.setup();
+    const { container } = renderFlow({ inviteToken: 'c'.repeat(43) });
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Bem-vinda' })).toBeInTheDocument();
+    expect(container.querySelector('img[src="https://cdn.test/g1.webp"]')).not.toBeNull();
+  });
+
+  it('se a comunidade tira as páginas no meio do caminho, a etapa anda em vez de ficar vazia (#469)', async () => {
+    const base = {
+      group: { id: 'g1', name: 'Academia Demo', description: null, type: 'SPONSORED' as const },
+      role: 'MEMBER' as const,
+      invitedBy: null,
+      team: [{ name: 'Bruno Lima', role: 'OWNER' as const }],
+      memberCount: 40,
+      emailBound: false,
+      expiresAt: null,
+      requiredSharingScopes: [],
+      activeChallenge: null,
+    };
+    vi.mocked(groupsApi.previewInvite).mockResolvedValue({
+      ...base,
+      welcome: [{ position: 1, kind: 'PLAIN', title: 'Combinados', body: 'x', showTeam: false }],
+    });
+    const user = userEvent.setup();
+    renderFlow({ inviteToken: 'c'.repeat(43) });
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Combinados' })).toBeInTheDocument();
+    // A dona voltou para rascunho: o próximo refetch chega sem páginas.
+    vi.mocked(groupsApi.previewInvite).mockResolvedValue({ ...base, welcome: [] });
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(onboardingApi.save).toHaveBeenLastCalledWith({ step: 'share' }));
+    expect(await screen.findByText('Bruno (dono)')).toBeInTheDocument();
   });
 
   it('aceitar o convite leva o obrigatório e o que a pessoa ligou', async () => {
