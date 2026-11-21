@@ -293,6 +293,8 @@ const FOCUS_ROUTES = [
   '/org/:id/content/plans/:templateId',
   // #406 (Pn-09e): editar a cópia de um aluno é editor, com "Salvar" embaixo.
   '/org/:id/members/:membershipId/plans/:offerId',
+  // #407 (Pn-24c): a cópia do plano alimentar, idem.
+  '/org/:id/members/:membershipId/nutrition-plans/:planId',
   '/org/:id/content/tips/:tipId',
   '/org/:id/exercises/:exerciseId',
 ] as const;
@@ -508,6 +510,11 @@ export const ROUTES: readonly RouteDef[] = [
   {
     pattern: '/org/:id/members/:membershipId/plans/:offerId',
     title: 'Cópia do plano',
+    parent: '/org/:id/members/:membershipId',
+  },
+  {
+    pattern: '/org/:id/members/:membershipId/nutrition-plans/:planId',
+    title: 'Cópia do plano alimentar',
     parent: '/org/:id/members/:membershipId',
   },
   { pattern: '/org/:id/team', title: 'Equipe e permissões', parent: '/org/:id' },
