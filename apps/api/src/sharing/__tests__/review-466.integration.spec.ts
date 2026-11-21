@@ -8,6 +8,7 @@ import { SessionSetService } from '../../workout/session-set.service';
 import { GroupExerciseService } from '../group-exercise.service';
 import { GroupService } from '../group.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { fragmentedMp4 as fragmentedMp4Fixture } from '../../storage/__tests__/mp4-fixture';
 
 /** Revisão adversarial da #466 (#408). */
 describe('revisão adversarial da #466 (#408)', () => {
@@ -181,6 +182,22 @@ describe('revisão adversarial da #466 (#408)', () => {
     const f = await prisma.mediaFile.findUniqueOrThrow({ where: { id: r.fileId } });
     store.upload(f.key, body, 'video/mp4');
     await expect(media.confirm(a.prof, r.fileId)).rejects.toThrow(/60 s/);
+  });
+
+  it('F2: vídeo do exercício com duração desconhecida (fragmentado sem mehd) não passa', async () => {
+    const a = await community();
+    const body = fragmentedMp4Fixture(600_000, { mehd: false, fragments: 10 });
+    const r = await media.requestUpload(a.prof, {
+      purpose: 'exercise_video',
+      groupId: a.groupId,
+      mime: 'video/mp4',
+      bytes: body.length,
+    });
+    const f = await prisma.mediaFile.findUniqueOrThrow({ where: { id: r.fileId } });
+    store.upload(f.key, body, 'video/mp4');
+    await expect(media.confirm(a.prof, r.fileId)).rejects.toThrow(/duração/);
+    // Recusado = fora do bucket e do banco.
+    expect(await prisma.mediaFile.findUnique({ where: { id: r.fileId } })).toBeNull();
   });
 
   it('F3: a lista da equipe no app ("team") traz todos os da comunidade, não só os 200 primeiros do catálogo', async () => {

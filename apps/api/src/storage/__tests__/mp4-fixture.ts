@@ -32,3 +32,36 @@ export function mp4WithDuration(
   const mdat = box('mdat', Buffer.alloc(opts.mdatBytes ?? 256));
   return opts.moovAtEnd ? Buffer.concat([ftyp, mdat, moov]) : Buffer.concat([ftyp, moov, mdat]);
 }
+
+/**
+ * MP4 fragmentado (`-movflags frag_keyframe`): o `mvhd` diz 0 e a duração,
+ * quando vem, está no `mvex/mehd` (versão 0 ou 1). Sem `mehd`, nada no
+ * cabeçalho diz quanto o vídeo dura.
+ */
+export function fragmentedMp4(
+  durationMs: number,
+  opts: { mehd?: 0 | 1 | false; fragments?: number } = {},
+): Buffer {
+  const ftyp = box('ftyp', Buffer.from('iso5\0\0\0\0iso5iso6mp41', 'latin1'));
+  const timescale = 1000;
+  const mvhdBody = Buffer.alloc(100);
+  mvhdBody.writeUInt32BE(timescale, 12);
+  const children = [box('mvhd', mvhdBody), box('trak', Buffer.alloc(16))];
+  if (opts.mehd !== false) {
+    let mehd: Buffer;
+    if (opts.mehd === 1) {
+      mehd = Buffer.alloc(12);
+      mehd.writeUInt8(1, 0);
+      mehd.writeBigUInt64BE(BigInt(durationMs), 4);
+    } else {
+      mehd = Buffer.alloc(8);
+      mehd.writeUInt32BE(durationMs, 4);
+    }
+    children.push(box('mvex', Buffer.concat([box('mehd', mehd), box('trex', Buffer.alloc(24))])));
+  }
+  const frags: Buffer[] = [];
+  for (let i = 0; i < (opts.fragments ?? 4); i++) {
+    frags.push(box('moof', Buffer.alloc(32)), box('mdat', Buffer.alloc(256)));
+  }
+  return Buffer.concat([ftyp, box('moov', Buffer.concat(children)), ...frags]);
+}
