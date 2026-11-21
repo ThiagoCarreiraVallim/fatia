@@ -5,7 +5,7 @@ Branch `redesign/408-dicas-catalogo`, PR #466. Banco de teste `fatia_t408b`
 
 ## Estado
 
-- [ ] F1 "em N planos": só planos que vieram desta comunidade (modelo da biblioteca ou oferta/programa), alunos distintos, célula mínima 5
+- [x] F1 "em N planos": só planos que vieram desta comunidade (modelo da biblioteca ou oferta/programa), alunos distintos, célula mínima 5
 - [ ] F2 vídeo fragmentado: mehd/trun; exercise_video recusa duração desconhecida
 - [ ] F3 app do painel: filtro `team=true` no servidor; chaves de query separadas
 - [ ] F4 Duplicar sem `clonedFromId`

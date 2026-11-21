@@ -279,7 +279,8 @@ export interface ExerciseUsage {
   /** Modelos da biblioteca da comunidade que levam o exercício. */
   templates: number;
   /** Planos dos membros; abaixo de 5, sem o número. */
-  plans: { band: 'none' | 'few' | 'many'; count: number | null };
+  /** Alunos com plano desta comunidade; abaixo de 5, `none` (nem o zero aparece). */
+  plans: { band: 'none' | 'many'; count: number | null };
 }
 
 /** Filtros do catálogo da equipe (#408, Pn-11). */
@@ -472,9 +473,8 @@ export function catalogGuideLabel(
 export function usageLabel(u: ExerciseUsage): string {
   const partes: string[] = [];
   if (u.templates > 0) partes.push(`${u.templates} ${u.templates === 1 ? 'modelo' : 'modelos'}`);
-  if (u.plans.band === 'many') partes.push(`${u.plans.count} planos`);
-  if (u.plans.band === 'few') partes.push('menos de 5 planos');
-  return partes.length ? `em ${partes.join(' e ')}` : 'em nenhum plano';
+  partes.push(u.plans.band === 'many' ? `${u.plans.count} planos` : 'menos de 5 planos');
+  return `em ${partes.join(' e ')}`;
 }
 
 /** "45 MB", "800 KB": para a pessoa saber o que está enviando. */

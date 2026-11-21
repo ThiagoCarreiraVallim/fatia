@@ -131,7 +131,8 @@ export interface CatalogPage {
 /** "Em N planos" (#408): os modelos da biblioteca e os planos dos membros. */
 export interface ExerciseUsage {
   templates: number;
-  plans: { band: 'none' | 'few' | 'many'; count: number | null };
+  /** Alunos com plano desta comunidade; abaixo de 5, `none` (nem o zero aparece). */
+  plans: { band: 'none' | 'many'; count: number | null };
 }
 
 export interface GroupExerciseView {
@@ -865,20 +866,29 @@ export class GroupExerciseService {
    * "Em N planos" (#408): os modelos da biblioteca desta comunidade e os
    * planos dos membros ativos dela. Abaixo de 5 planos, sem o número.
    */
+  /**
+   * "Em N planos" (#408): os modelos da biblioteca desta comunidade que levam o
+   * exercício e os alunos (distintos) com um plano que veio dela, por modelo
+   * ou por oferta. O plano pessoal de ninguém entra, nem o que veio de outra
+   * comunidade (#466). Abaixo de 5 alunos a resposta é a mesma do zero.
+   */
   private async usage(groupId: string, exerciseId: number): Promise<ExerciseUsage> {
-    const [modelos, planos] = await Promise.all([
+    const [models, students] = await Promise.all([
       this.prisma.groupPlanTemplate.findMany({
         where: { groupId, kind: 'WORKOUT' },
         select: { snapshot: true },
       }),
-      this.prisma.workoutPlan.count({
+      this.prisma.workoutPlan.findMany({
         where: {
           exercises: { some: { exerciseId } },
+          OR: [{ fromTemplate: { groupId } }, { fromOffer: { groupId } }],
           user: { memberships: { some: { groupId, status: MembershipStatus.ACTIVE } } },
         },
+        distinct: ['userId'],
+        select: { userId: true },
       }),
     ]);
-    const templates = modelos.filter((m) => {
+    const templates = models.filter((m) => {
       const snap = parsePlanSnapshot(m.snapshot);
       return (
         snap !== null &&
@@ -894,11 +904,9 @@ export class GroupExerciseService {
     return {
       templates,
       plans:
-        planos === 0
+        students.length < USAGE_MIN_CELL
           ? { band: 'none', count: null }
-          : planos < USAGE_MIN_CELL
-            ? { band: 'few', count: null }
-            : { band: 'many', count: planos },
+          : { band: 'many', count: students.length },
     };
   }
 
