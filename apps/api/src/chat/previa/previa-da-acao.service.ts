@@ -60,7 +60,7 @@ const faixa = (min: number, max: number) =>
   min === max ? numero(min, 0) : `${numero(min, 0)}–${numero(max, 0)}`;
 
 /** As metas do retrato de nutrição, ou `null` se ele não traz (ou não é o formato esperado). */
-function metasDoRetrato(snapshot: unknown): Record<CampoDaMeta, number> | null {
+function snapshotGoals(snapshot: unknown): Record<CampoDaMeta, number> | null {
   const goals = (snapshot as { goals?: unknown } | null | undefined)?.goals;
   if (typeof goals !== 'object' || goals === null) return null;
   const g = goals as Record<string, unknown>;
@@ -154,7 +154,7 @@ export class PreviaDaAcaoService {
       if (formatado) linhas.push({ rotulo: definicao.rotulo, valor: formatado });
     }
     if (nome === 'adopt_group_plan') {
-      linhas.push(...(await this.metasAntesEDepois(usuario.id, lido.data as AdocaoArgs)));
+      linhas.push(...(await this.goalsBeforeAndAfter(usuario.id, lido.data as AdocaoArgs)));
     }
     return { valida: true, linhas };
   }
@@ -164,7 +164,7 @@ export class PreviaDaAcaoService {
    * (#396): o cartão mostra cada faixa como está e como fica. O modelo é lido
    * com a mesma restrição do título (publicado, comunidade da URL, membro ativo).
    */
-  private async metasAntesEDepois(userId: string, args: AdocaoArgs): Promise<LinhaDaPrevia[]> {
+  private async goalsBeforeAndAfter(userId: string, args: AdocaoArgs): Promise<LinhaDaPrevia[]> {
     if (args.applyGoals !== true) return [];
     const modelo = await this.prisma.groupPlanTemplate.findFirst({
       where: {
@@ -176,7 +176,7 @@ export class PreviaDaAcaoService {
       },
       select: { snapshot: true },
     });
-    const plano = metasDoRetrato(modelo?.snapshot);
+    const plano = snapshotGoals(modelo?.snapshot);
     if (!plano) return [];
     const agora = await this.prisma.userGoals.findUnique({ where: { userId } });
     return FAIXAS_DAS_METAS.map(([rotulo, min, max, unidade]) => {
