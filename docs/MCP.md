@@ -1384,7 +1384,7 @@ Aceita overrides opcionais para já editar no mesmo passo, evitando um `clone_ex
 
 Detalhes completos de um exercício por ID: músculos primários/secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID — para buscar por nome, use `search_exercise` ou `explain_form`.
 
-Quando a comunidade da pessoa tem tutorial para o exercício, vem `community: { groupName, tips, hasVideo, photoCount }` — sem URL: o vídeo e as fotos abrem nas telas, com URL assinada (ADR 030).
+Quando a comunidade da pessoa tem tutorial para o exercício, vem `community: { groupName, tips, hasVideo, photoCount, steps, commonMistakes, homeFriendly }` — sem URL: o vídeo e as fotos abrem nas telas, com URL assinada (ADR 030). Desde a #408, `steps` é o "Como fazer" da casa (vazio = valem os `instructions` do exercício), `commonMistakes` os erros comuns que a equipe escreveu e `homeFriendly` o selo DA CASA (dá para fazer em casa).
 
 **Input:** `{ exerciseId: number }`
 
@@ -1394,7 +1394,7 @@ Passos de execução e detalhes de técnica de um exercício buscado **por nome*
 
 **Input:** `{ exerciseName: string }`
 
-**Output:** exercício com `instructions[]` — o insumo para o Claude explicar a execução.
+**Output:** exercício com `instructions[]` — o insumo para o Claude explicar a execução. Quando a comunidade da pessoa tem guia da casa para ele (#408), vem também `community` no mesmo formato de `get_exercise_details` (passos e erros comuns da equipe, dica e o selo DA CASA, sem URL); sem guia, o campo não aparece.
 
 ---
 

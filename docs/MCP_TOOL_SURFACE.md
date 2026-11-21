@@ -154,6 +154,10 @@ existe porque o usuário pergunta "como faz agachamento?", não "como faz o exer
 Sem ela, o Claude teria de fazer `search_exercise` → `get_exercise_details` em toda pergunta
 sobre execução.
 
+Com a #408, as duas devolvem o guia da casa da comunidade da pessoa (`community`: passos,
+erros comuns, dica e o selo DA CASA, sem URL), sem tool nova e sem mudar a descrição: a edição
+do catálogo é administração da comunidade e fica fora do MCP.
+
 ### Fica — `complete_goal`
 
 É açúcar sobre `update_goal({ status: "completed" })`. Mantida porque "concluí a meta" é uma
