@@ -3,7 +3,11 @@
 import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
-import { groupExerciseApi, workoutApi, type DocumentExerciseView } from '@fatia/api-client';
+import {
+  groupExerciseApi,
+  type DocumentExerciseView,
+  type PlanDefaults,
+} from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -14,13 +18,19 @@ export interface ExerciseHit {
   muscleGroup: string;
   equipment: string | null;
   fromGroup: boolean;
+  /** Favorito da equipe (#408): vem primeiro na busca. */
+  favorite?: boolean;
+  /** O padrão da academia ao entrar num plano (#408, Pn-11b). */
+  defaults?: PlanDefaults | null;
 }
-
-const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export const isCardioGroup = (muscleGroup: string | null | undefined) => muscleGroup === 'cardio';
 
-/** A linha nova, com a prescrição padrão de força ou de cardio. */
+/**
+ * A linha nova, com a prescrição padrão de força ou de cardio. O padrão da
+ * academia (Pn-11b) vale por cima do nosso, menos dentro do circuito, que tem
+ * a própria cadência.
+ */
 export function newExerciseRow(hit: ExerciseHit, inCircuit = false): DocumentExerciseView {
   const base = {
     type: 'exercise' as const,
@@ -40,12 +50,20 @@ export function newExerciseRow(hit: ExerciseHit, inCircuit = false): DocumentExe
       cardioDurationSeconds: 1200,
     };
   }
-  if (inCircuit) return { ...base, targetSets: 1, targetReps: '10' };
-  return { ...base, targetSets: 3, targetReps: '10', restSeconds: 90 };
+  const d = hit.defaults;
+  if (inCircuit) return { ...base, targetSets: 1, targetReps: d?.reps ?? '10' };
+  return {
+    ...base,
+    targetSets: d?.sets ?? 3,
+    targetReps: d?.reps ?? '10',
+    restSeconds: d?.restSeconds ?? 90,
+    ...(d?.loadMode ? { loadMode: d.loadMode } : {}),
+  };
 }
 
 /**
- * Busca de exercício do editor: o catálogo e os da comunidade. O cardio da
+ * Busca de exercício do editor: o catálogo da equipe (o geral e os da
+ * comunidade), com os favoritos da equipe primeiro (#408). O cardio da
  * prancha é um filtro sobre a mesma busca.
  */
 export function ExerciseSearch({
@@ -68,38 +86,24 @@ export function ExerciseSearch({
   const [q, setQ] = useState('');
   const term = q.trim();
   const catalog = useQuery({
-    queryKey: ['workout', 'exercises', 'search', term],
-    queryFn: () => workoutApi.searchExercises(term),
+    queryKey: ['community', 'org', groupId, 'exercises', 'search', term],
+    queryFn: () => groupExerciseApi.list(groupId, { q: term, limit: 24 }),
     enabled: term.length >= 2,
     staleTime: 60_000,
   });
-  const own = useQuery({
-    queryKey: ['community', 'org', groupId, 'content', 'exercises'],
-    queryFn: () => groupExerciseApi.list(groupId),
-    staleTime: 60_000,
-  });
 
-  const hits: ExerciseHit[] = [];
-  if (term.length >= 2) {
-    const want = fold(term);
-    const seen = new Set<number>();
-    for (const g of own.data?.items ?? []) {
-      if (!g.ownedByCommunity || !fold(g.name).includes(want)) continue;
-      seen.add(g.exerciseId);
-      hits.push({ ...g, fromGroup: true });
-    }
-    for (const e of catalog.data ?? []) {
-      if (e.groupOwned || seen.has(e.id) || !fold(e.name).includes(want)) continue;
-      seen.add(e.id);
-      hits.push({
-        exerciseId: e.id,
-        name: e.name,
-        muscleGroup: e.muscleGroup,
-        equipment: e.equipment,
-        fromGroup: false,
-      });
-    }
-  }
+  const hits: ExerciseHit[] =
+    term.length >= 2
+      ? (catalog.data?.items ?? []).map((i) => ({
+          exerciseId: i.exerciseId,
+          name: i.name,
+          muscleGroup: i.muscleGroup,
+          equipment: i.equipment,
+          fromGroup: i.ownedByCommunity,
+          favorite: i.favorite,
+          defaults: i.defaults,
+        }))
+      : [];
   const shown = hits.filter((h) => !cardioOnly || isCardioGroup(h.muscleGroup)).slice(0, 8);
 
   return (
@@ -158,7 +162,12 @@ export function ExerciseSearch({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium text-foreground">{h.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {[h.muscleGroup, h.equipment, h.fromGroup ? 'da comunidade' : null]
+                        {[
+                          h.muscleGroup,
+                          h.equipment,
+                          h.fromGroup ? 'da comunidade' : null,
+                          h.favorite ? 'favorito da equipe' : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ')}
                         {already ? ' · já está na sessão' : ''}

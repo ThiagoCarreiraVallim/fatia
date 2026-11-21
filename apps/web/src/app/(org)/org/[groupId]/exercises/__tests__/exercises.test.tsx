@@ -188,7 +188,7 @@ describe('painel › catálogo de exercícios (Pn-11)', () => {
     renderWithClient(<OrgExercisesPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Abrir Agachamento livre' }));
     const guia = await screen.findByRole('region', { name: 'Agachamento livre' });
-    expect(within(guia).getByLabelText('Passo 1')).toHaveValue('Costas apoiadas.');
+    expect(await within(guia).findByLabelText('Passo 1')).toHaveValue('Costas apoiadas.');
     fireEvent.click(within(guia).getByRole('button', { name: 'Adicionar passo' }));
     fireEvent.change(within(guia).getByLabelText('Passo 2'), {
       target: { value: 'Desça até 90°.' },

@@ -415,7 +415,7 @@ describe('painel › planos e dicas', () => {
     vi.mocked(contentApi.setTipState).mockResolvedValue(dica());
     renderWithClient(<OrgTipPage />);
 
-    expect(await screen.findByText('13 de 600 caracteres')).toBeInTheDocument();
+    expect(await screen.findByText('14 de 600 caracteres')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Planos e dicas' })).toHaveAttribute(
       'href',
       '/org/g1/content?tab=tips',

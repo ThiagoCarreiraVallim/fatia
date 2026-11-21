@@ -3,7 +3,14 @@
 import { useId, useRef, useState } from 'react';
 import { Trash2, Video } from 'lucide-react';
 import { toast } from 'sonner';
-import { ApiError, formatBytes, uploadMedia, VIDEO_MIMES, videoProblem } from '@fatia/api-client';
+import {
+  ApiError,
+  formatBytes,
+  uploadMedia,
+  VIDEO_MIMES,
+  videoDurationProblem,
+  videoProblem,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 
 export interface VideoValue {
@@ -35,6 +42,29 @@ export function putWithProgress(
 }
 
 /**
+ * A duração pelo próprio navegador, antes de subir 200 MB à toa. `NaN` quando
+ * não deu para ler (formato que o navegador não abre, jsdom): a API confere no
+ * confirm, pelo `mvhd`.
+ */
+export function readVideoSeconds(file: File): Promise<number> {
+  if (typeof URL.createObjectURL !== 'function') return Promise.resolve(Number.NaN);
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    const done = (seconds: number) => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(seconds);
+    };
+    const timer = setTimeout(() => done(Number.NaN), 5000);
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => done(video.duration);
+    video.onerror = () => done(Number.NaN);
+    video.src = url;
+  });
+}
+
+/**
  * O vídeo do tutorial: vai direto do navegador ao bucket (ADR 028), sem
  * conversão, e só abre por URL assinada.
  */
@@ -42,26 +72,33 @@ export function VideoField({
   groupId,
   value,
   onChange,
+  readSeconds = readVideoSeconds,
+  hint = 'MP4 ou MOV, até 60 s e 200 MB.',
 }: {
   groupId: string;
   value: VideoValue | null;
   onChange: (next: VideoValue | null) => void;
+  /** Para o teste: o jsdom não lê vídeo. */
+  readSeconds?: (file: File) => Promise<number>;
+  hint?: string;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
-  const [progresso, setProgresso] = useState<number | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
 
-  async function enviar(file: File) {
-    const problema = videoProblem(file);
-    if (problema) {
-      toast(problema);
+  async function upload(file: File) {
+    const problem = videoProblem(file) ?? videoDurationProblem(await readSeconds(file));
+    if (problem) {
+      toast(problem);
+      if (input.current) input.current.value = '';
       return;
     }
-    setProgresso(0);
+    toast(`Enviando ${formatBytes(file.size)}. Não feche a página.`);
+    setProgress(0);
     try {
       const view = await uploadMedia(
         { purpose: 'exercise_video', groupId, mime: file.type, bytes: file.size },
-        (url, headers) => putWithProgress(url, file, headers, setProgresso),
+        (url, headers) => putWithProgress(url, file, headers, setProgress),
       );
       onChange({ fileId: view.id, url: view.url });
     } catch (err) {
@@ -73,12 +110,12 @@ export function VideoField({
             : 'Não deu para enviar o vídeo. Tente de novo.',
       );
     } finally {
-      setProgresso(null);
+      setProgress(null);
       if (input.current) input.current.value = '';
     }
   }
 
-  const enviando = progresso !== null;
+  const uploading = progress !== null;
 
   return (
     <div className="space-y-2">
@@ -95,19 +132,19 @@ export function VideoField({
           className="aspect-video w-full max-w-md rounded-xl border border-subtle bg-black"
         />
       )}
-      {enviando ? (
+      {uploading ? (
         <div className="max-w-md space-y-1" role="status">
           <div
             role="progressbar"
             aria-label="Enviando o vídeo"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={Math.round(progresso * 100)}
+            aria-valuenow={Math.round(progress * 100)}
             className="h-2 overflow-hidden rounded-full bg-muted"
           >
-            <div className="h-full bg-primary" style={{ width: `${progresso * 100}%` }} />
+            <div className="h-full bg-primary" style={{ width: `${progress * 100}%` }} />
           </div>
-          <p className="text-xs text-muted-foreground">Enviando… {Math.round(progresso * 100)}%</p>
+          <p className="text-xs text-muted-foreground">Enviando… {Math.round(progress * 100)}%</p>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -132,15 +169,10 @@ export function VideoField({
         tabIndex={-1}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) {
-            toast(`Enviando ${formatBytes(file.size)}. Não feche a página.`);
-            void enviar(file);
-          }
+          if (file) void upload(file);
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        MP4 ou MOV até 200 MB. O vídeo vai como foi gravado: prefira trechos curtos.
-      </p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
