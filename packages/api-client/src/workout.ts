@@ -57,6 +57,11 @@ export interface CommunityGuide {
   video: MediaView | null;
   photos: MediaView[];
   tips: string | null;
+  /** "Como fazer" da casa (#408); vazio = os passos do exercício. Ausente na API antiga. */
+  steps?: string[];
+  commonMistakes?: string[];
+  /** "Dá para fazer em casa": o selo DA CASA. */
+  homeFriendly?: boolean;
 }
 
 // Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves

@@ -243,8 +243,13 @@ export const contentApi = {
     groupId: string,
     id: string,
     state: { published?: boolean; pinned?: boolean },
-    _opts: { announce?: boolean } = {},
-  ) => apiFetch<GroupTip>(`${base}/${groupId}/content/tips/${id}/state`, json('POST', state)),
+    /** "Anunciar no mural" (#408): ausente segue o que a comunidade escolheu. */
+    opts: { announce?: boolean } = {},
+  ) =>
+    apiFetch<GroupTip>(
+      `${base}/${groupId}/content/tips/${id}/state`,
+      json('POST', opts.announce === undefined ? state : { ...state, announce: opts.announce }),
+    ),
   deleteTip: (groupId: string, id: string) =>
     apiFetch<{ id: string }>(`${base}/${groupId}/content/tips/${id}`, json('DELETE')),
 

@@ -353,8 +353,18 @@ const json = (method: string, body?: unknown): RequestInit => ({
 
 export const groupExerciseApi = {
   /** Bancada da equipe: o catálogo, o equipamento marcado e o próprio da academia. */
-  list: (groupId: string, _filters: CatalogFilters = {}) =>
-    apiFetch<CatalogPage>(`${base}/${groupId}/content/exercises`),
+  list: (groupId: string, filters: CatalogFilters = {}) => {
+    const qs = new URLSearchParams();
+    if (filters.q?.trim()) qs.set('q', filters.q.trim());
+    if (filters.muscle) qs.set('muscle', filters.muscle);
+    if (filters.equipment) qs.set('equipment', filters.equipment);
+    if (filters.house) qs.set('house', 'true');
+    if (filters.favorite) qs.set('favorite', 'true');
+    if (filters.limit) qs.set('limit', String(filters.limit));
+    if (filters.offset) qs.set('offset', String(filters.offset));
+    const query = qs.toString();
+    return apiFetch<CatalogPage>(`${base}/${groupId}/content/exercises${query ? `?${query}` : ''}`);
+  },
   get: (groupId: string, exerciseId: number) =>
     apiFetch<GroupExercise>(`${base}/${groupId}/content/exercises/${exerciseId}`),
   create: (groupId: string, input: GroupExerciseInput & GuideInput) =>
@@ -369,9 +379,18 @@ export const groupExerciseApi = {
       `${base}/${groupId}/content/exercises/${exerciseId}/guide`,
       json('PUT', input),
     ),
-  setFavorite: (_groupId: string, _exerciseId: number, _favorite: boolean) =>
-    Promise.resolve({ exerciseId: _exerciseId, favorite: _favorite }),
-  duplicate: (_groupId: string, _exerciseId: number) => Promise.resolve({} as GroupExercise),
+  /** Estrela do catálogo: o favorito é da equipe (#408). */
+  setFavorite: (groupId: string, exerciseId: number, favorite: boolean) =>
+    apiFetch<{ exerciseId: number; favorite: boolean }>(
+      `${base}/${groupId}/content/exercises/${exerciseId}/favorite`,
+      json('PUT', { favorite }),
+    ),
+  /** "Duplicar" (Pn-11b): uma cópia da casa, sem vídeo nem fotos. */
+  duplicate: (groupId: string, exerciseId: number) =>
+    apiFetch<GroupExercise>(
+      `${base}/${groupId}/content/exercises/${exerciseId}/duplicate`,
+      json('POST'),
+    ),
   remove: (groupId: string, exerciseId: number) =>
     apiFetch<{ id: number }>(`${base}/${groupId}/content/exercises/${exerciseId}`, json('DELETE')),
   /** `customEquipment` ausente mantém os equipamentos próprios que já estão. */
@@ -403,23 +422,59 @@ export function videoProblem(file: { type: string; size: number }): string | nul
   return null;
 }
 
+/** O vídeo do exercício vai até 60 s (#408): a mesma regra da API. */
 export const VIDEO_MAX_SECONDS = 60;
-export function videoDurationProblem(_seconds: number): string | null {
-  return null;
+
+/**
+ * Recado para um vídeo longo demais, ou `null`. Duração que o navegador não
+ * leu (`NaN`) passa: a API lê do arquivo e confere de novo.
+ */
+export function videoDurationProblem(seconds: number): string | null {
+  if (!Number.isFinite(seconds)) return null;
+  return seconds > VIDEO_MAX_SECONDS + 0.5
+    ? `O vídeo vai até ${VIDEO_MAX_SECONDS} s. Corte e envie de novo.`
+    : null;
 }
-export function parseRest(_text: string): number | null | undefined {
-  return null;
+
+/**
+ * O descanso digitado: segundos ("90") ou minutos e segundos ("2:00").
+ * Vazio = sem padrão (`null`); texto que não é tempo = `undefined`.
+ */
+export function parseRest(text: string): number | null | undefined {
+  const t = text.trim();
+  if (!t) return null;
+  if (/^\d{1,3}$/.test(t)) return Number(t);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!m || Number(m[2]) > 59) return undefined;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
-export function restClock(_seconds: number | null): string {
-  return '';
+
+/** "02:00": o descanso como a prancha mostra. */
+export function restClock(seconds: number | null): string {
+  if (seconds === null) return '';
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
 }
+
+/** A coluna "Guia" da lista (Pn-11): o que a comunidade pôs no exercício. */
 export function catalogGuideLabel(
-  _i: Pick<CatalogItem, 'hasGuide' | 'hasVideo' | 'hasTips' | 'photoCount' | 'ownedByCommunity'>,
+  i: Pick<CatalogItem, 'hasGuide' | 'hasVideo' | 'hasTips' | 'photoCount' | 'ownedByCommunity'>,
 ): string {
-  return '';
+  if (!i.hasGuide) return i.ownedByCommunity ? 'sem guia' : 'do catálogo';
+  if (i.hasVideo && i.hasTips) return 'vídeo e dicas';
+  if (i.hasVideo) return 'vídeo';
+  if (i.hasTips) return 'dicas';
+  return 'guia';
 }
-export function usageLabel(_u: ExerciseUsage): string {
-  return '';
+
+/** "em 14 planos", "em 2 modelos e menos de 5 planos" (Pn-11b). */
+export function usageLabel(u: ExerciseUsage): string {
+  const partes: string[] = [];
+  if (u.templates > 0) partes.push(`${u.templates} ${u.templates === 1 ? 'modelo' : 'modelos'}`);
+  if (u.plans.band === 'many') partes.push(`${u.plans.count} planos`);
+  if (u.plans.band === 'few') partes.push('menos de 5 planos');
+  return partes.length ? `em ${partes.join(' e ')}` : 'em nenhum plano';
 }
 
 /** "45 MB", "800 KB": para a pessoa saber o que está enviando. */
