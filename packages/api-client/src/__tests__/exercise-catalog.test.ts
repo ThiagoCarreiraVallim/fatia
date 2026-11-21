@@ -47,10 +47,13 @@ describe('catálogo da equipe e editor de dica no cliente (#408)', () => {
       limit: 60,
     });
     await groupExerciseApi.list('g1');
+    await groupExerciseApi.list('g1', { team: true, limit: 200, offset: 200 });
     expect(pedido(0).url).toBe(
       '/api/groups/g1/content/exercises?q=agacha&muscle=pernas&equipment=barra&house=true&limit=60',
     );
     expect(pedido(1).url).toBe('/api/groups/g1/content/exercises');
+    // Só os da equipe (da comunidade ou com guia), para o painel do app (#466).
+    expect(pedido(2).url).toBe('/api/groups/g1/content/exercises?team=true&limit=200&offset=200');
   });
 
   it('estrela e duplicar', async () => {
