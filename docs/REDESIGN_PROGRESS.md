@@ -952,17 +952,17 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 **Ordem (orquestrador):** #410 → #413 → #412 → #372; depois a #391 e a #397 são puxadas da etapa 11 e entram antes de #409, #411 e #414, que dependem delas.
 
-| Issue | Título                                       | Estado           | Superfícies                            |
-| ----- | -------------------------------------------- | ---------------- | -------------------------------------- |
-| #410  | Painel: páginas de boas-vindas da comunidade | pronto na branch | api, db, api-client, web, mobile, docs |
-| #413  | Painel: configurações                        | a fazer          |                                        |
-| #412  | Painel: demo                                 | a fazer          |                                        |
-| #372  | Onboarding da equipe                         | a fazer          |                                        |
-| #391  | Questionários (puxada da etapa 11)           | a fazer          |                                        |
-| #397  | Agenda (puxada da etapa 11)                  | a fazer          |                                        |
-| #409  | Painel: automações                           | a fazer          |                                        |
-| #411  | Painel: assistente da equipe                 | a fazer          |                                        |
-| #414  | Painel no celular                            | a fazer          |                                        |
+| Issue | Título                                       | Estado  | Superfícies                            |
+| ----- | -------------------------------------------- | ------- | -------------------------------------- |
+| #410  | Painel: páginas de boas-vindas da comunidade | PR #469 | api, db, api-client, web, mobile, docs |
+| #413  | Painel: configurações                        | a fazer |                                        |
+| #412  | Painel: demo                                 | a fazer |                                        |
+| #372  | Onboarding da equipe                         | a fazer |                                        |
+| #391  | Questionários (puxada da etapa 11)           | a fazer |                                        |
+| #397  | Agenda (puxada da etapa 11)                  | a fazer |                                        |
+| #409  | Painel: automações                           | a fazer |                                        |
+| #411  | Painel: assistente da equipe                 | a fazer |                                        |
+| #414  | Painel no celular                            | a fazer |                                        |
 
 #410 (branch `redesign/410-boas-vindas`; migration `20261121100000_group_welcome_pages`, só aditiva; nenhuma env nova; MCP: nada muda, a administração da comunidade fica fora do MCP e o aluno não ganha tool; sem ADR nova, segue a 010 e a 026):
 
