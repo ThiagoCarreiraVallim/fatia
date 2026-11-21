@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import type { GroupRole, GroupWelcomeKind } from '@fatia/db';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { MembershipStatus, type GroupRole, type GroupWelcomeKind } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { requireContentRole } from './content-roles';
+import { TEAM_ROLES } from './permissions';
 
 /** Até 3 páginas, texto até 300 caracteres (#410: limite mantido), título até 80. */
 export const WELCOME_MAX_PAGES = 3;
@@ -44,27 +46,123 @@ export interface WelcomeMemberView {
 export class WelcomeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async editor(_actorId: string, _groupId: string): Promise<WelcomeEditorView> {
-    return { pages: [], publishedAt: null, showOnJoin: true };
+  async editor(actorId: string, groupId: string): Promise<WelcomeEditorView> {
+    await requireContentRole(this.prisma, actorId, groupId, 'content.publish');
+    return this.read(groupId);
   }
 
+  /**
+   * Reescreve o conjunto inteiro, na ordem, e publica ou volta a rascunho.
+   * Republicar mantém a data da primeira publicação; zero páginas volta ao
+   * padrão do Fatia (e não dá para publicar assim).
+   */
   async save(
     actorId: string,
     groupId: string,
-    _input: { pages: WelcomePageInput[]; showOnJoin: boolean; published: boolean },
+    input: { pages: WelcomePageInput[]; showOnJoin: boolean; published: boolean },
   ): Promise<WelcomeEditorView> {
-    return this.editor(actorId, groupId);
+    await requireContentRole(this.prisma, actorId, groupId, 'content.publish');
+    const pages = input.pages.map(cleanPage);
+    if (pages.length > WELCOME_MAX_PAGES) {
+      throw new BadRequestException(`No máximo ${WELCOME_MAX_PAGES} páginas`);
+    }
+    if (input.published && pages.length === 0) {
+      throw new BadRequestException('Crie ao menos uma página antes de publicar');
+    }
+    const atual = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { welcomePublishedAt: true },
+    });
+    const publishedAt = input.published ? (atual.welcomePublishedAt ?? new Date()) : null;
+    await this.prisma.$transaction([
+      this.prisma.groupWelcomePage.deleteMany({ where: { groupId } }),
+      this.prisma.groupWelcomePage.createMany({
+        data: pages.map((p, i) => ({ groupId, position: i + 1, ...p })),
+      }),
+      this.prisma.group.update({
+        where: { id: groupId },
+        data: { welcomePublishedAt: publishedAt, welcomeShowOnJoin: input.showOnJoin },
+      }),
+    ]);
+    return this.read(groupId);
   }
 
-  async forMember(_userId: string, _groupId: string): Promise<WelcomeMemberView> {
-    return { pages: [], team: [] };
+  /** Comunidade → Sobre: só o publicado, com os nomes da equipe. */
+  async forMember(userId: string, groupId: string): Promise<WelcomeMemberView> {
+    await requireContentRole(this.prisma, userId, groupId, 'content.read');
+    const g = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { welcomePublishedAt: true },
+    });
+    if (!g.welcomePublishedAt) return { pages: [], team: [] };
+    const [pages, team] = await Promise.all([
+      pagesOf(this.prisma, groupId),
+      teamOf(this.prisma, groupId),
+    ]);
+    return { pages, team };
   }
+
+  private async read(groupId: string): Promise<WelcomeEditorView> {
+    const [g, pages] = await Promise.all([
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: groupId },
+        select: { welcomePublishedAt: true, welcomeShowOnJoin: true },
+      }),
+      pagesOf(this.prisma, groupId),
+    ]);
+    return { pages, publishedAt: g.welcomePublishedAt, showOnJoin: g.welcomeShowOnJoin };
+  }
+}
+
+/** Caracteres como o aluno vê (emoji conta 1), o mesmo que o `char_length` do CHECK. */
+const length = (s: string) => [...s].length;
+
+/** Texto puro: quebra de linha única, sem espaço nas pontas de cada linha e do todo. */
+function cleanPage(p: WelcomePageInput): WelcomePageInput {
+  const title = p.title.trim().replace(/\s+/g, ' ');
+  const body = p.body
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .join('\n')
+    .trim();
+  if (!title) throw new BadRequestException('Toda página precisa de título');
+  if (length(title) > WELCOME_TITLE_MAX) {
+    throw new BadRequestException(`Título até ${WELCOME_TITLE_MAX} caracteres`);
+  }
+  if (length(body) > WELCOME_BODY_MAX) {
+    throw new BadRequestException(`Texto até ${WELCOME_BODY_MAX} caracteres`);
+  }
+  return { kind: p.kind, title, body, showTeam: p.showTeam };
+}
+
+function pagesOf(prisma: PrismaService, groupId: string): Promise<WelcomePageView[]> {
+  return prisma.groupWelcomePage.findMany({
+    where: { groupId },
+    orderBy: { position: 'asc' },
+    select: { position: true, kind: true, title: true, body: true, showTeam: true },
+  });
+}
+
+/** A equipe que recebe o que o aluno compartilha (ADR 026): só nome e papel. */
+async function teamOf(prisma: PrismaService, groupId: string) {
+  const rows = await prisma.groupMembership.findMany({
+    where: { groupId, status: MembershipStatus.ACTIVE, role: { in: [...TEAM_ROLES] } },
+    select: { role: true, user: { select: { name: true } } },
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+  });
+  return rows.map((m) => ({ name: m.user.name, role: m.role }));
 }
 
 /** As páginas que quem tem o convite vê ao entrar: publicadas e com "Mostrar ao entrar". */
 export async function welcomeForJoin(
-  _prisma: PrismaService,
-  _groupId: string,
+  prisma: PrismaService,
+  groupId: string,
 ): Promise<WelcomePageView[]> {
-  return [];
+  const g = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { welcomePublishedAt: true, welcomeShowOnJoin: true },
+  });
+  if (!g?.welcomePublishedAt || !g.welcomeShowOnJoin) return [];
+  return pagesOf(prisma, groupId);
 }

@@ -45,6 +45,8 @@ export class CompleteOnboardingDto {
  */
 export const ONBOARDING_STEPS = [
   'welcome',
+  // As páginas da comunidade (#410), entre as boas-vindas do Fatia e o compartilhar.
+  'community',
   'share',
   'objective',
   'body',

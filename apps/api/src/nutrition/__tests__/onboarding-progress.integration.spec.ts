@@ -91,8 +91,7 @@ describe('onboarding salvo a cada passo (integração)', () => {
 
   it('a etapa das páginas da comunidade (#410) também volta ao reabrir', async () => {
     const ana = await pessoa();
-    const step = 'community' as Parameters<typeof service.saveProgress>[1]['step'];
-    await service.saveProgress(ana, { step }, TZ);
+    await service.saveProgress(ana, { step: 'community' }, TZ);
     expect((await service.getProgress(ana)).step).toBe('community');
   });
 
