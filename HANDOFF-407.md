@@ -12,5 +12,5 @@ Provas: `apps/api/src/sharing/__tests__/nutrition-review-465.integration.spec.ts
 - [x] F3: onboarding lê metas do v2
 - [x] F4: prévia do adopt lê metas do v2
 - [x] F5: autor apagado não bifurca a linhagem
-- [ ] F6: carry-over só na mesma linhagem
+- [x] F6: carry-over só na mesma linhagem
 - [ ] testes, lint, typecheck, push; apagar este arquivo e o banco

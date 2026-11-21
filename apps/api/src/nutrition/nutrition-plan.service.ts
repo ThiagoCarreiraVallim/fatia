@@ -594,7 +594,7 @@ export class NutritionPlanService {
 
       const previous = await db.nutritionPlan.findFirst({
         where: { userId, status: 'ACCEPTED' },
-        select: { id: true },
+        select: { id: true, authorId: true, sourceTemplateId: true },
       });
       const fromPrevious = await db.nutritionPlanOption.findMany({
         where: { meal: { plan: { userId, status: 'ACCEPTED' } }, mealTemplateId: { not: null } },
@@ -611,7 +611,16 @@ export class NutritionPlanService {
         where: { id: plan.id },
         data: { status: 'ACCEPTED', acceptedAt: now },
       });
-      if (previous) await this.carryOver(db, previous.id, plan, today);
+      // Só a versão nova do mesmo plano (mesmo autor e modelo) leva as trocas e
+      // o "comi isso": outro plano tem as próprias chaves, que podem coincidir
+      // (as do v1 são por posição) sem ser a mesma refeição.
+      if (
+        previous &&
+        previous.authorId === plan.authorId &&
+        previous.sourceTemplateId === plan.sourceTemplateId
+      ) {
+        await this.carryOver(db, previous.id, plan, today);
+      }
 
       if (plan.applyGoals) {
         const goals = goalsOf(plan);
