@@ -134,11 +134,17 @@ describe('avisos no celular (integração)', () => {
   }
 
   /** Quem recebeu o que, depois de esperar o envio em segundo plano. */
+  /**
+   * Só os avisos das pessoas deste arquivo: o banco é compartilhado com as
+   * outras specs, e o `flushGrouped` fecha as janelas vencidas de todo mundo.
+   */
   async function recebidos() {
     await notifications.drain();
     const quem = new Map([...tokenDe].map(([u, t]) => [t, u]));
-    const r = enviados.splice(0).map((m) => ({ ...m, userId: quem.get(m.to) }));
-    return r;
+    return enviados
+      .splice(0)
+      .filter((m) => quem.has(m.to))
+      .map((m) => ({ ...m, userId: quem.get(m.to) }));
   }
 
   beforeEach(async () => {
@@ -227,11 +233,11 @@ describe('avisos no celular (integração)', () => {
       expect(agora.map((r) => r.title)).toEqual(['Bia comentou seu post']);
 
       // Antes do fim da janela, nada.
-      expect(await notifications.flushGrouped(new Date())).toBe(0);
+      await notifications.flushGrouped(new Date());
       expect(await recebidos()).toEqual([]);
 
       const depois = new Date(Date.now() + GROUP_WINDOW_MS + 1000);
-      expect(await notifications.flushGrouped(depois)).toBe(1);
+      await notifications.flushGrouped(depois);
       const juntos = await recebidos();
       expect(juntos).toEqual([
         expect.objectContaining({
