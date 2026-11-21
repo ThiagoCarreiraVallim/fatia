@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PrismaService } from '../common/prisma.service';
 import { NotificationService } from '../notifications/notification.service';
 import { NutritionPlanService } from '../nutrition/nutrition-plan.service';
-import { rangesToTargets, type KeyMacro } from '../nutrition/helpers/equivalents';
+import { rangesToTargets, type GoalRanges, type KeyMacro } from '../nutrition/helpers/equivalents';
 import { todayInTz } from '../progress/helpers/date-tz';
 import { MAX_CHANGE_NOTE } from './dto/plan-send.dto';
 import { resolveMemberTarget } from './member-file-target';
@@ -12,6 +12,7 @@ import {
   buildNutritionSendInput,
   documentToNutritionSnapshot,
   groupSnapSchema,
+  keepRanges,
   loadBaseFoods,
   parseNutritionDocument,
   snapshotFoodIds,
@@ -166,6 +167,20 @@ export function copyDocument(plan: CopyRow): NutritionDocumentView {
  * acompanha"): ler e salvar ficam na trilha da pessoa (`ProfessionalAccessLog`).
  * Sem administração pelo MCP.
  */
+/** Só os oito campos das faixas, sem o resto da linha do plano. */
+function pickRanges(r: GoalRanges): GoalRanges {
+  return {
+    kcalMin: r.kcalMin,
+    kcalMax: r.kcalMax,
+    proteinMinG: r.proteinMinG,
+    proteinMaxG: r.proteinMaxG,
+    carbsMinG: r.carbsMinG,
+    carbsMaxG: r.carbsMaxG,
+    fatMinG: r.fatMinG,
+    fatMaxG: r.fatMaxG,
+  };
+}
+
 @Injectable()
 export class NutritionCopyService {
   constructor(
@@ -244,6 +259,9 @@ export class NutritionCopyService {
       ...doc,
       adjustToStudent: false,
     });
+    // Metas que voltam como abriram (o meio das faixas) mantêm as faixas do plano.
+    const ranges = keepRanges(doc.targets, latest);
+    if (ranges) snap.ranges = pickRanges(ranges);
     const foods = await loadBaseFoods(this.prisma, snapshotFoodIds(snap));
     const plano = buildNutritionSendInput(snap, foods, { note: latest.note });
     plano.applyGoals = latest.applyGoals;

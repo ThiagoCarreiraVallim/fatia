@@ -265,6 +265,26 @@ export function readNutritionSnapshot(raw: unknown): NutritionSnapshotV2 {
   return v2.data;
 }
 
+/**
+ * As faixas exatas que valem para estas metas: as guardadas, se as metas não
+ * mudaram (são o meio delas), senão nenhuma, e o envio as recalcula das metas.
+ * Ida e volta pelas metas perde o arredondamento e o formato de quem escreveu
+ * as faixas (#465): reabrir e salvar sem mexer não pode mudar o que se manda.
+ */
+export function keepRanges(
+  targets: Targets | null,
+  ranges: GoalRanges | null | undefined,
+): GoalRanges | undefined {
+  if (!targets || !ranges) return undefined;
+  const mid = rangesToTargets(ranges);
+  const same =
+    mid.kcal === targets.kcal &&
+    mid.proteinG === targets.proteinG &&
+    mid.carbsG === targets.carbsG &&
+    mid.fatG === targets.fatG;
+  return same ? ranges : undefined;
+}
+
 export function nutritionDocumentView(snap: NutritionSnapshotV2): NutritionDocumentView {
   const { version, ranges, ...rest } = snap;
   void version;
@@ -292,7 +312,7 @@ export function legacyNutritionView(raw: unknown): {
   }
   const snap = readNutritionSnapshot(raw);
   return {
-    goals: snap.targets ? targetsToRanges(snap.targets) : null,
+    goals: snap.ranges ?? (snap.targets ? targetsToRanges(snap.targets) : null),
     meals: snap.meals
       .filter((m) => (m.options[0]?.items.length ?? 0) > 0)
       .map((m) => ({
