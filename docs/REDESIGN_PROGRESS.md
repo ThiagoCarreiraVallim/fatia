@@ -948,6 +948,36 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Fica para depois:** vários equipamentos e músculos por exercício (o editor escolhe um grupo e um equipamento; os músculos principais do catálogo geral só aparecem), fotos com rótulo início/meio/fim, a imagem na barra da dica (a capa é o campo próprio) e a miniatura do vídeo no cartão do catálogo.
 - **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/408/web/` (1440 e 390, escuro e claro) contra Pn-10, Pn-11 (fechado e com o painel) e Pn-11b (`board/`). API e web da branch na worktree (portas 3108 e 3138) contra o banco de dev, com a migration aplicada; a estrela foi marcada e desmarcada pela grade e o filtro Favoritos conferido (`before.txt` = `after-cleanup.txt`; só a tabela nova `GroupExerciseFavorite` passou a existir, vazia). Corrigido: quadro grande do vídeo vazio no painel e no editor, grade em 2 colunas no celular e as categorias da dica rolando dentro do segmentado em 390. Fica como está, de propósito: "Novo exercício" no cabeçalho da página (a barra de cima tem as ações globais), números digitáveis no padrão do plano, descanso aceitando "90" ou "2:00", e o equipamento da academia no fim da página.
 
+## Etapa 10: Painel: IA, configuração e celular (em andamento)
+
+**Ordem (orquestrador):** #410 → #413 → #412 → #372; depois a #391 e a #397 são puxadas da etapa 11 e entram antes de #409, #411 e #414, que dependem delas.
+
+| Issue | Título                                       | Estado           | Superfícies                            |
+| ----- | -------------------------------------------- | ---------------- | -------------------------------------- |
+| #410  | Painel: páginas de boas-vindas da comunidade | pronto na branch | api, db, api-client, web, mobile, docs |
+| #413  | Painel: configurações                        | a fazer          |                                        |
+| #412  | Painel: demo                                 | a fazer          |                                        |
+| #372  | Onboarding da equipe                         | a fazer          |                                        |
+| #391  | Questionários (puxada da etapa 11)           | a fazer          |                                        |
+| #397  | Agenda (puxada da etapa 11)                  | a fazer          |                                        |
+| #409  | Painel: automações                           | a fazer          |                                        |
+| #411  | Painel: assistente da equipe                 | a fazer          |                                        |
+| #414  | Painel no celular                            | a fazer          |                                        |
+
+#410 (branch `redesign/410-boas-vindas`; migration `20261121100000_group_welcome_pages`, só aditiva; nenhuma env nova; MCP: nada muda, a administração da comunidade fica fora do MCP e o aluno não ganha tool; sem ADR nova, segue a 010 e a 026):
+
+- **O que entrou:** tabela `GroupWelcomePage` (até 3 por comunidade, na ordem) e, em `Group`, `welcomePublishedAt` e `welcomeShowOnJoin`. Rotas `GET/PUT /groups/:groupId/welcome` (editor) e `GET /groups/:groupId/welcome/pages` (o membro, só o publicado, com os nomes da equipe); o `GET /groups/invites/:token` traz `welcome`. Editor no painel web (Pn-23, 23b, 23c) com abas das páginas, tipo, título, texto com contador, aviso de saúde, "Mostrar a equipe", "Mostrar ao entrar", prévia no celular, "Ver como aluno" e "Ver o padrão". Etapa nova `community` no onboarding do convite (web e app, Onb-02b), entre as boas-vindas do Fatia e o compartilhar, com "Pular". Rever em Comunidade → Sobre (web e app). Item "Boas-vindas" em Comunidade no menu e na busca ⌘K.
+- **Decisões adotadas (recomendações da issue):**
+  - **Texto até 300 caracteres por página** (mantido, como a issue recomenda), contados como o aluno vê (emoji conta 1, igual ao `char_length` do CHECK); título até 80. Texto puro: só "- " no começo da linha vira item de lista, nada de HTML; o servidor normaliza `\r\n` e tira espaços das pontas.
+  - **Tabela própria, não JSON em `Group`:** o limite de 3, a ordem e os tamanhos ficam no banco (CHECK) e no service. Apagar a comunidade apaga as páginas (cascade); o export LGPD do aluno não muda (a página é da comunidade e não coleta nada).
+  - **Tipo capa ou simples** (`COVER | PLAIN`, como a issue). Os três tipos da prancha (Capa, Lista, Texto) viram: capa com a marca ou simples; "- " faz lista em qualquer tipo; e a chave "Mostrar a equipe nesta página" (`showTeam`) faz a página da equipe (Bruno, Helena e Marina). O ícone da página simples segue o conteúdo: equipe, lista ou texto.
+  - **Publicar vale para o conjunto** (`Group.welcomePublishedAt`), não por página: "Publicar" e "Voltar para rascunho" no topo, como a prancha. Salvar com as páginas publicadas atualiza o que o aluno vê; republicar mantém a data da primeira publicação. Publicar sem página dá 400; apagar todas volta ao padrão do Fatia e despublica.
+  - **"Mostrar ao entrar" desligado:** as páginas publicadas ficam só em Sobre; o convite não as traz.
+  - **Quem edita:** `content.publish` (dono, admin, profissional, criador; "papéis que editam conteúdo", como a issue pede). Sem ação nova na matriz. A recepção e o membro recebem 403; quem é de fora, 404.
+  - **Só pelo convite:** a etapa aparece no onboarding de quem chega por convite com páginas. Quem entra pelo código ou já tem conta relê em Sobre.
+  - **A equipe da página** é a que recebe o consentimento (`TEAM_ROLES`: dono, profissional, criador), só nome e papel.
+- **Fica para depois:** o editor no app (entra com o painel no celular, #414; `welcome` está em `MOBILE_MISSING_SECTIONS`), cor da marca própria da comunidade (hoje vale a cor padrão de marca, como no Onb-02), imagem de capa.
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado   |
