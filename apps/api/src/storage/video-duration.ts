@@ -5,8 +5,12 @@
  * O `moov` pode vir no começo (faststart) ou depois do `mdat` (o celular grava
  * assim): as caixas de cima são percorridas pelo tamanho de cada uma.
  *
- * `null` quando não dá para ler (sem `moov`, `mvhd` torto ou duração zero, como
- * no MP4 fragmentado): quem chama decide o que fazer com o desconhecido.
+ * No MP4 fragmentado o `mvhd` diz 0 e a duração está no `mvex/mehd` (#466);
+ * vale a maior das duas.
+ *
+ * `null` quando não dá para ler (sem `moov`, `mvhd` torto, fragmentado sem
+ * `mehd`, `moov` grande demais ou caixas demais antes dele): quem chama decide
+ * o que fazer com o desconhecido.
  */
 export type ReadRange = (start: number, bytes: number) => Promise<Buffer>;
 
@@ -36,38 +40,57 @@ export async function readVideoDurationMs(
     if (size < headerSize) return null;
     if (type === 'moov') {
       if (size > MAX_MOOV_BYTES) return null;
-      return mvhdDuration(await read(offset + headerSize, size - headerSize));
+      return moovDuration(await read(offset + headerSize, size - headerSize));
     }
     offset += size;
   }
   return null;
 }
 
-/** Procura o `mvhd` entre os filhos do `moov` e converte para milissegundos. */
-function mvhdDuration(moov: Buffer): number | null {
+/** Os filhos diretos de uma caixa: tipo e corpo. Caixa torta para a leitura. */
+function children(parent: Buffer): { type: string; body: Buffer }[] | null {
+  const out: { type: string; body: Buffer }[] = [];
   let o = 0;
-  while (o + 8 <= moov.length) {
-    const size = moov.readUInt32BE(o);
-    const type = moov.toString('latin1', o + 4, o + 8);
-    if (size < 8) return null;
-    if (type === 'mvhd') {
-      const b = moov.subarray(o + 8, o + size);
-      const version = b.readUInt8(0);
-      let timescale: number;
-      let duration: number;
-      if (version === 1) {
-        if (b.length < 32) return null;
-        timescale = b.readUInt32BE(20);
-        duration = Number(b.readBigUInt64BE(24));
-      } else {
-        if (b.length < 20) return null;
-        timescale = b.readUInt32BE(12);
-        duration = b.readUInt32BE(16);
-      }
-      if (!timescale || !duration) return null;
-      return Math.round((duration / timescale) * 1000);
-    }
+  while (o + 8 <= parent.length) {
+    const size = parent.readUInt32BE(o);
+    if (size < 8 || o + size > parent.length) return null;
+    out.push({
+      type: parent.toString('latin1', o + 4, o + 8),
+      body: parent.subarray(o + 8, o + size),
+    });
     o += size;
   }
-  return null;
+  return out;
+}
+
+/** O `mvhd` (escala e duração) e o `mvex/mehd` do `moov`, em milissegundos. */
+function moovDuration(moov: Buffer): number | null {
+  const boxes = children(moov);
+  const mvhd = boxes?.find((b) => b.type === 'mvhd')?.body;
+  if (!boxes || !mvhd) return null;
+  const version = mvhd.readUInt8(0);
+  let timescale: number;
+  let duration: number;
+  if (version === 1) {
+    if (mvhd.length < 32) return null;
+    timescale = mvhd.readUInt32BE(20);
+    duration = Number(mvhd.readBigUInt64BE(24));
+  } else {
+    if (mvhd.length < 20) return null;
+    timescale = mvhd.readUInt32BE(12);
+    duration = mvhd.readUInt32BE(16);
+  }
+  if (!timescale) return null;
+  // Fragmentado: a duração do filme inteiro, na mesma escala do `mvhd`.
+  const mvex = boxes.find((b) => b.type === 'mvex')?.body;
+  const mehd = mvex ? children(mvex)?.find((b) => b.type === 'mehd')?.body : undefined;
+  if (mehd && mehd.length >= 8) {
+    const fragmented =
+      mehd.readUInt8(0) === 1 && mehd.length >= 12
+        ? Number(mehd.readBigUInt64BE(4))
+        : mehd.readUInt32BE(4);
+    duration = Math.max(duration, fragmented);
+  }
+  if (!duration) return null;
+  return Math.round((duration / timescale) * 1000);
 }

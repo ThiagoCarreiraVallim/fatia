@@ -352,12 +352,19 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException('Não deu para ler este vídeo. Envie um MP4 ou MOV.');
       }
       // A duração vem do próprio arquivo (#408): o vídeo do exercício vai até
-      // 60 s. Desconhecida (MP4 fragmentado) passa: o `ftyp` já foi conferido.
+      // 60 s. Com teto, a desconhecida não passa (#466): seria o atalho para
+      // subir um vídeo de qualquer tamanho.
       const durationMs = await readVideoDurationMs(
         (start, bytes) => store.getRange(file.key, start, bytes),
         file.bytes,
       ).catch(() => null);
       const teto = VIDEO_MAX_SECONDS[file.purpose];
+      if (teto !== undefined && durationMs === null) {
+        await this.discard([file]);
+        throw new BadRequestException(
+          'Não deu para ler a duração deste vídeo. Exporte de novo em MP4 ou MOV.',
+        );
+      }
       if (teto !== undefined && durationMs !== null && durationMs > teto * 1000) {
         await this.discard([file]);
         throw new BadRequestException(`O vídeo vai até ${teto} s. Corte e envie de novo.`);

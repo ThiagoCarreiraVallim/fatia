@@ -17,18 +17,15 @@ import { GroupExerciseService } from '../group-exercise.service';
 import { GroupService } from '../group.service';
 import { PlanMaterializerService } from '../plan-materializer.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { mp4WithDuration } from '../../storage/__tests__/mp4-fixture';
 
 /** PNG 1×1 válido: o `sharp` precisa de imagem de verdade para confirmar. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
-/** O começo de um MP4: tamanho da caixa e `ftyp`. O resto não importa à conferência. */
-const MP4 = Buffer.concat([
-  Buffer.from([0, 0, 0, 0x18]),
-  Buffer.from('ftypmp42'),
-  Buffer.alloc(64),
-]);
+/** Um MP4 de 20 s: o vídeo do exercício precisa de duração legível (#466). */
+const MP4 = mp4WithDuration(20_000);
 
 /**
  * O catálogo de exercícios da comunidade (Fase 7b, ADR 030) no Postgres real:
