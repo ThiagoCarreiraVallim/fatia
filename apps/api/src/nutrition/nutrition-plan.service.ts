@@ -346,7 +346,8 @@ export class NutritionPlanService {
    * depois, 409 e nada muda.
    */
   async writeCopyVersion(
-    authorId: string,
+    /** O autor da linhagem; nulo se ele apagou a conta (a cópia segue na mesma linhagem). */
+    authorId: string | null,
     student: { userId: string; groupId: string },
     input: SendNutritionPlanInput,
     origin: {
@@ -363,6 +364,8 @@ export class NutritionPlanService {
         changeNote: origin.changeNote,
         editedById: origin.editedById,
         baseVersionId: origin.baseVersionId,
+        // A cópia é uma linhagem só: o mesmo autor e o mesmo modelo, ou nenhum.
+        exactLineage: true,
       }),
     );
     return { plan: this.view(w.plan, new Map(), new Map()), update: w.update };
@@ -453,7 +456,7 @@ export class NutritionPlanService {
    */
   private async writePlan(
     db: Prisma.TransactionClient,
-    authorId: string,
+    authorId: string | null,
     student: { userId: string; groupId: string },
     input: SendNutritionPlanInput,
     meals: Awaited<ReturnType<NutritionPlanService['prepareMeals']>>,
@@ -462,6 +465,7 @@ export class NutritionPlanService {
       changeNote?: string | null;
       editedById?: string;
       baseVersionId?: string;
+      exactLineage?: boolean;
     },
   ) {
     await lockPlanOf(db, student.userId);
@@ -471,7 +475,8 @@ export class NutritionPlanService {
       select: { version: true },
     });
     // Pela biblioteca, só o mesmo modelo conta como versão anterior.
-    const mesmo = origin.sourceTemplateId ? { sourceTemplateId: origin.sourceTemplateId } : {};
+    const lineage = Boolean(origin.sourceTemplateId) || origin.exactLineage === true;
+    const mesmo = lineage ? { sourceTemplateId: origin.sourceTemplateId ?? null } : {};
     if (origin.baseVersionId) {
       // Duas pessoas da equipe na mesma cópia: a segunda não sobrescreve a primeira.
       const ultima = await db.nutritionPlan.findFirst({
@@ -483,7 +488,7 @@ export class NutritionPlanService {
         throw new ConflictException('Outra pessoa salvou esta cópia; recarregue.');
       }
     }
-    const previous = origin.sourceTemplateId
+    const previous = lineage
       ? await db.nutritionPlan.findFirst({
           where: {
             userId: student.userId,

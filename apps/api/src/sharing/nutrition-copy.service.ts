@@ -269,8 +269,9 @@ export class NutritionCopyService {
       ? input.changeNote.trim().slice(0, MAX_CHANGE_NOTE)
       : null;
     const r = await this.plans.writeCopyVersion(
-      // Autor que apagou a conta: quem edita assume a linhagem.
-      latest.authorId ?? viewerId,
+      // A linhagem que o resolve abriu, mesmo com o autor que apagou a conta
+      // (nulo): outra linhagem deixaria dois pendentes e a cópia presa no 409.
+      latest.authorId,
       { userId: subjectId, groupId },
       plano,
       {
