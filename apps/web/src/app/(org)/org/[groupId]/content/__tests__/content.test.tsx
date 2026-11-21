@@ -412,7 +412,7 @@ describe('painel › planos e dicas', () => {
     ctx.group = grupo();
     ctx.params = { tipId: 'd1' };
     vi.mocked(contentApi.tips).mockResolvedValue([dica()]);
-    vi.mocked(contentApi.setTipState).mockResolvedValue(dica());
+    vi.mocked(contentApi.setTipState).mockResolvedValue({ ...dica(), announced: false });
     renderWithClient(<OrgTipPage />);
 
     expect(await screen.findByText('14 de 600 caracteres')).toBeInTheDocument();
@@ -456,7 +456,10 @@ describe('painel › planos e dicas', () => {
     ctx.group = grupo();
     ctx.params = { tipId: 'new' };
     vi.mocked(contentApi.createTip).mockResolvedValue(dica({ id: 'nova', publishedAt: null }));
-    vi.mocked(contentApi.setTipState).mockResolvedValue(dica({ id: 'nova' }));
+    vi.mocked(contentApi.setTipState).mockResolvedValue({
+      ...dica({ id: 'nova' }),
+      announced: true,
+    });
     renderWithClient(<OrgTipPage />);
     fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Sono' } });
     fireEvent.click(screen.getByRole('radio', { name: 'Recuperação' }));
