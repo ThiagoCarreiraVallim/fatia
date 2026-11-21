@@ -9,7 +9,7 @@ Provas: `apps/api/src/sharing/__tests__/nutrition-review-465.integration.spec.ts
 - [x] test: provas F1a–F6 vermelhas
 - [x] F1a/F1b: cópia salva sem mexer nas metas guarda as faixas do plano
 - [x] F2: modelo v1 salvo no editor guarda as faixas
-- [ ] F3: onboarding lê metas do v2
+- [x] F3: onboarding lê metas do v2
 - [ ] F4: prévia do adopt lê metas do v2
 - [ ] F5: autor apagado não bifurca a linhagem
 - [ ] F6: carry-over só na mesma linhagem

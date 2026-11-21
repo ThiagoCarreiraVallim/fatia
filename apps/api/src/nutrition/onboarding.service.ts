@@ -17,6 +17,7 @@ import {
   type SuggestGoalsDto,
 } from './dto/onboarding.dto';
 import type { UpsertGoalsDto } from './dto/goals.dto';
+import { snapshotGoalRanges } from '../sharing/nutrition-document';
 
 const ONBOARDING_USER_SELECT = {
   sex: true,
@@ -437,8 +438,8 @@ export class OnboardingService {
       },
     });
     for (const t of templates) {
-      const raw = (t.snapshot as { goals?: unknown } | null)?.goals;
-      const goals = nutritionGoalsSchema.safeParse(raw);
+      // v1 (faixas) ou v2 do editor (#407, metas alvo): o mesmo que o adotar aplica.
+      const goals = nutritionGoalsSchema.safeParse(snapshotGoalRanges(t.snapshot));
       if (goals.success) {
         return {
           groupId: t.group.id,

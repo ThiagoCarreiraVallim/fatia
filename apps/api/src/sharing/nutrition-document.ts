@@ -327,6 +327,19 @@ export function legacyNutritionView(raw: unknown): {
   };
 }
 
+/**
+ * As faixas de metas de um retrato de nutrição, v1 ou v2, para quem só lê
+ * (sugestão do onboarding, prévia do adotar). Retrato sem metas ou que não se
+ * lê: `null`, sem erro.
+ */
+export function snapshotGoalRanges(raw: unknown): NutritionGoals | null {
+  try {
+    return legacyNutritionView(raw).goals;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------- gravar
 
 /** Os alimentos citados, só da base, com as medidas caseiras do catálogo. */
