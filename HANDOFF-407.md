@@ -21,4 +21,5 @@ Pranchas renderizadas: `~/.cache/fatia-vis/407/board/`.
 - [x] export sem editedById
 - [x] api-client (nutrition-plan-editor.ts)
 - [x] web editor + cópia (components/org/nutrition-editor, members/[membershipId]/nutrition-plans/[planId]); ficha com lápis; aluno web+app: refeição vazia e hora
-- [ ] docs / passada visual
+- [x] passada visual (web, 1440/390, claro/escuro; ~/.cache/fatia-vis/407/web; dados de demo apagados, before.txt = after-cleanup.txt)
+- [ ] docs (REDESIGN_PROGRESS), testes completos, merge origin/main, push e PR "Closes #407"
