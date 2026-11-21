@@ -230,6 +230,35 @@ describe('painel › ficha da pessoa (Pn-05)', () => {
     );
   });
 
+  it('alimentação: a cópia dela abre no editor (#407, Pn-24c)', async () => {
+    abrir(
+      ficha({
+        plans: {
+          workout: [],
+          nutrition: [
+            {
+              id: 'np1',
+              title: 'Hipertrofia 2.000 kcal',
+              status: 'ACCEPTED',
+              version: 1,
+              kcalMin: 1748,
+              kcalMax: 1932,
+              authorName: 'Helena',
+              sentAt: '2026-11-10T00:00:00Z',
+              acceptedAt: '2026-11-11T00:00:00Z',
+            },
+          ],
+          reorderedBySubject: false,
+        },
+      }),
+    );
+    await userEvent.click(await screen.findByRole('tab', { name: /Planos/ }));
+    expect(
+      screen.getByRole('link', { name: 'Editar a cópia de Hipertrofia 2.000 kcal' }),
+    ).toHaveAttribute('href', '/org/g1/members/m-ana/nutrition-plans/np1');
+    expect(screen.queryByText(/chega com o editor de dieta/)).not.toBeInTheDocument();
+  });
+
   it('adicionar plano da biblioteca: só treino, marca o que já está com ela, manda com nota', async () => {
     vi.mocked(memberFileApi.sendPlan).mockResolvedValue({ id: 'o3', versionId: 'v3', version: 1 });
     abrir(

@@ -80,6 +80,7 @@ import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
 import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
 import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
 import { PlanCopyService } from './plan-copy.service';
+import { NutritionCopyService } from './nutrition-copy.service';
 import { PlanOfferService } from './plan-offer.service';
 import { PlanSendController } from './plan-send.controller';
 import { PlanSendService } from './plan-send.service';
@@ -178,6 +179,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     TeamService,
     PlanMaterializerService,
     PlanCopyService,
+    NutritionCopyService,
     PlanOfferService,
     MemberFileService,
     PlanProgramsService,

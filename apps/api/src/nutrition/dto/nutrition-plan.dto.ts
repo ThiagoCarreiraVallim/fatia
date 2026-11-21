@@ -27,8 +27,8 @@ export class SwapPlanItemDto {
 }
 
 /**
- * O que o editor da equipe (#407) manda. Não é rota nesta issue: é a entrada de
- * `NutritionPlanService.send`, que o editor e o seed chamam.
+ * A entrada de `NutritionPlanService`: o envio pela biblioteca (#405), a cópia
+ * do aluno (#407) e o seed. Não é rota: o editor manda o documento.
  */
 export interface SendPlanFood {
   /** Alimento da base (sem dono). Personalizado de outra conta não entra (ADR 045). */
@@ -41,6 +41,10 @@ export interface SendPlanFood {
 export interface SendPlanItem extends SendPlanFood {
   equivalenceGroup?: string;
   equivalents?: SendPlanFood[];
+  /** Chave estável do item no editor (#407): casa o item entre versões. */
+  key?: string;
+  /** Chave do grupo de equivalentes do editor (#407). */
+  groupKey?: string;
 }
 
 export interface SendNutritionPlanInput {
@@ -56,9 +60,16 @@ export interface SendNutritionPlanInput {
   };
   applyGoals?: boolean;
   note?: string;
+  /** Os grupos de equivalentes como o editor os montou (#407): referência da cópia. */
+  equivalenceGroups?: unknown;
   meals: Array<{
     mealType: MealType;
     name: string;
+    /** "07:00" (#407). */
+    time?: string | null;
+    /** Chave estável da refeição no editor (#407). */
+    key?: string;
+    /** Opção sem itens é refeição "sem sugestão" (#407, Pn-24b). */
     options: Array<{ items: SendPlanItem[] }>;
   }>;
 }

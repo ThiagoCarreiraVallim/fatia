@@ -249,20 +249,33 @@ export function FilePlans({
                   <b className="block text-sm text-foreground">{n.title}</b>
                   <span className="text-xs text-muted-foreground">{`${n.kcalMin}–${n.kcalMax} kcal`}</span>
                 </span>
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                    n.status === 'ACCEPTED' ? TONE.active : TONE.pending,
+                <span className="flex items-center gap-1">
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                      n.status === 'ACCEPTED' ? TONE.active : TONE.pending,
+                    )}
+                  >
+                    {n.status === 'ACCEPTED' ? 'ativo' : 'aguardando aceite'}
+                  </span>
+                  {/* #407 (Pn-24c): a cópia dela abre no editor de alimentação. */}
+                  {file.canManagePlans && n.status !== 'SUPERSEDED' && (
+                    <Link
+                      href={`/org/${file.groupId}/members/${file.membershipId}/nutrition-plans/${n.id}`}
+                      aria-label={`Editar a cópia de ${n.title}`}
+                      title="Editar a cópia"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted"
+                    >
+                      <Pencil size={16} aria-hidden />
+                    </Link>
                   )}
-                >
-                  {n.status === 'ACCEPTED' ? 'ativo' : 'aguardando aceite'}
                 </span>
               </li>
             ))}
           </ul>
         )}
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Mandar e editar plano alimentar por aqui chega com o editor de dieta.
+          {`O lápis edita a cópia da ${firstName}. Plano alimentar novo sai da biblioteca, em Enviar para alunos.`}
         </p>
       </section>
 
