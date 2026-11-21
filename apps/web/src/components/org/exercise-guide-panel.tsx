@@ -93,7 +93,8 @@ function GuideForm({
       }
       if (!sameLines(steps, item.steps)) patch.steps = cleanLines(steps);
       if ((tips.trim() || null) !== (item.tips ?? null)) patch.tips = tips.trim() || null;
-      if (Object.keys(patch).length) await groupExerciseApi.setGuide(groupId, item.exerciseId, patch);
+      if (Object.keys(patch).length)
+        await groupExerciseApi.setGuide(groupId, item.exerciseId, patch);
       if (favorite !== Boolean(item.favorite)) {
         await groupExerciseApi.setFavorite(groupId, item.exerciseId, favorite);
       }

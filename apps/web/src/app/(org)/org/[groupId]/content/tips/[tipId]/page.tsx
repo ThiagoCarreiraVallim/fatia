@@ -303,7 +303,9 @@ function TipEditor({
               <span
                 className={cn(
                   'ml-auto pr-2 text-xs tabular-nums',
-                  body.length > MAX_TIP_BODY ? 'font-semibold text-destructive' : 'text-muted-foreground',
+                  body.length > MAX_TIP_BODY
+                    ? 'font-semibold text-destructive'
+                    : 'text-muted-foreground',
                 )}
               >
                 {`${body.length} de ${MAX_TIP_BODY} caracteres`}
@@ -342,9 +344,7 @@ function TipEditor({
               icon={<Megaphone className="h-4 w-4" aria-hidden />}
               title="Anunciar no mural"
               detail={
-                wasPublished
-                  ? 'só na primeira publicação'
-                  : `post “${firstName} publicou uma dica”`
+                wasPublished ? 'só na primeira publicação' : `post “${firstName} publicou uma dica”`
               }
               checked={canAnnounce && announce}
               disabled={!canAnnounce}
@@ -366,10 +366,7 @@ function TipEditor({
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Como o membro vê</p>
           <div className="rounded-[28px] border border-border bg-background p-3 shadow-sm">
-            <article
-              aria-label="Prévia da dica"
-              className="overflow-hidden rounded-[20px] bg-card"
-            >
+            <article aria-label="Prévia da dica" className="overflow-hidden rounded-[20px] bg-card">
               <div className="relative h-36 bg-gradient-to-br from-muted to-surface-3">
                 {image?.url && (
                   // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta

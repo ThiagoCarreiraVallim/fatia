@@ -29,7 +29,7 @@ import type { ImageValue } from '@/components/content/image-field';
 import { PhotosField } from '@/components/content/photos-field';
 import { VideoField, type VideoValue } from '@/components/content/video-field';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
-import { cleanLines, FieldHead, LinesEditor } from '@/components/org/exercise-guide-fields';
+import { cleanLines, LinesEditor } from '@/components/org/exercise-guide-fields';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { muscleLabelPt } from '@/components/workout/muscle-labels';
 import { Button } from '@/components/ui/button';
@@ -175,7 +175,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section aria-label={title} className="space-y-3 border-t border-subtle pt-5 first:border-0 first:pt-0">
+    <section
+      aria-label={title}
+      className="space-y-3 border-t border-subtle pt-5 first:border-0 first:pt-0"
+    >
       <div>
         <h2 className="text-base font-semibold">{title}</h2>
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -410,7 +413,9 @@ function ExerciseEditor({
         <div className="space-y-5">
           <Section
             title="Grupo muscular"
-            hint={owned ? 'o principal, que organiza o catálogo' : 'do catálogo geral: não muda aqui'}
+            hint={
+              owned ? 'o principal, que organiza o catálogo' : 'do catálogo geral: não muda aqui'
+            }
           >
             {owned ? (
               <div role="radiogroup" aria-label="Grupo muscular" className="flex flex-wrap gap-1.5">
@@ -651,4 +656,3 @@ function ToggleRow({
     </div>
   );
 }
-

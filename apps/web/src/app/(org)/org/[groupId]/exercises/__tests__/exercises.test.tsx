@@ -122,10 +122,9 @@ describe('painel › catálogo de exercícios (Pn-11)', () => {
     const cards = within(lista).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('DA CASA');
     expect(cards[1]).not.toHaveTextContent('DA CASA');
-    expect(within(cards[0]!).getByRole('button', { name: 'Tirar Agachamento livre dos favoritos' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(
+      within(cards[0]!).getByRole('button', { name: 'Tirar Agachamento livre dos favoritos' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/2 de 312 exercícios/)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Pernas/ })).toHaveTextContent('40');
   });
@@ -161,15 +160,16 @@ describe('painel › catálogo de exercícios (Pn-11)', () => {
     vi.mocked(groupExerciseApi.setFavorite).mockResolvedValue({ exerciseId: 42, favorite: true });
     renderWithClient(<OrgExercisesPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Favoritar Agachamento livre' }));
-    await waitFor(() =>
-      expect(groupExerciseApi.setFavorite).toHaveBeenCalledWith('g1', 42, true),
-    );
+    await waitFor(() => expect(groupExerciseApi.setFavorite).toHaveBeenCalledWith('g1', 42, true));
   });
 
   it('a lista mostra a coluna Guia', async () => {
     ctx.group = grupo();
     vi.mocked(groupExerciseApi.list).mockResolvedValue(
-      page([row({ hasGuide: true, hasVideo: true, hasTips: true }), row({ exerciseId: 7, name: 'Stiff' })]),
+      page([
+        row({ hasGuide: true, hasVideo: true, hasTips: true }),
+        row({ exerciseId: 7, name: 'Stiff' }),
+      ]),
     );
     renderWithClient(<OrgExercisesPage />);
     await screen.findByRole('list', { name: 'Exercícios do catálogo' });

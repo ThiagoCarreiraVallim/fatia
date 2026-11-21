@@ -144,7 +144,14 @@ beforeEach(() => {
   vi.mocked(groupExerciseApi.list).mockImplementation(async (_g, filters = {}) => {
     const q = (filters.q ?? '').toLowerCase();
     const items = catalogoDaEquipe.filter((i) => i.name.toLowerCase().includes(q));
-    return { equipment: [], customEquipment: [], total: 3, count: items.length, facets: { muscles: {}, equipment: {} }, items };
+    return {
+      equipment: [],
+      customEquipment: [],
+      total: 3,
+      count: items.length,
+      facets: { muscles: {}, equipment: {} },
+      items,
+    };
   });
 });
 afterEach(() => vi.clearAllMocks());
@@ -302,7 +309,10 @@ describe('editor de plano de treino (#406, Pn-09)', () => {
     const primeiro = await screen.findByRole('button', { name: /Agachamento búlgaro/ });
     expect(primeiro).toHaveTextContent('favorito da equipe');
     await waitFor(() =>
-      expect(groupExerciseApi.list).toHaveBeenLastCalledWith('g1', expect.objectContaining({ q: 'agach' })),
+      expect(groupExerciseApi.list).toHaveBeenLastCalledWith(
+        'g1',
+        expect.objectContaining({ q: 'agach' }),
+      ),
     );
     fireEvent.click(primeiro);
     fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));

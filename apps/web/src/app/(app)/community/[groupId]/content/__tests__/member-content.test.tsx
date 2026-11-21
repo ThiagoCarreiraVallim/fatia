@@ -137,6 +137,10 @@ const guia = (p: Partial<GroupExercise> = {}): GroupExercise => ({
   authorName: 'Helena',
   authorRole: 'PROFESSIONAL',
   updatedAt: '2026-11-01T12:00:00Z',
+  steps: [],
+  commonMistakes: [],
+  homeFriendly: false,
+  defaults: null,
   ...p,
 });
 

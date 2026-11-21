@@ -423,12 +423,11 @@ describe('painel › planos e dicas', () => {
     expect(screen.getByText(/Dica · por Bruno · na biblioteca da/)).toBeInTheDocument();
     // As quatro da prancha; "Geral" só aparece na dica antiga que já é geral.
     const categorias = screen.getByRole('radiogroup', { name: 'Categoria' });
-    expect(within(categorias).getAllByRole('radio').map((r) => r.textContent)).toEqual([
-      'Treino',
-      'Nutrição',
-      'Hábitos',
-      'Recuperação',
-    ]);
+    expect(
+      within(categorias)
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual(['Treino', 'Nutrição', 'Hábitos', 'Recuperação']);
     // Já publicada: anunciar só vale na primeira vez.
     expect(screen.getByRole('switch', { name: 'Anunciar no mural' })).toBeDisabled();
 

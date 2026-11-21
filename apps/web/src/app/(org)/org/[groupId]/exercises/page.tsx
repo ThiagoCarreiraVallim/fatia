@@ -96,7 +96,11 @@ export default function OrgExercisesPage() {
     mutationFn: (v: { exerciseId: number; favorite: boolean }) =>
       groupExerciseApi.setFavorite(g.id, v.exerciseId, v.favorite),
     onSuccess: (_r, v) => {
-      toast(v.favorite ? 'Favorito da equipe: aparece primeiro ao montar planos.' : 'Saiu dos favoritos.');
+      toast(
+        v.favorite
+          ? 'Favorito da equipe: aparece primeiro ao montar planos.'
+          : 'Saiu dos favoritos.',
+      );
       void qc.invalidateQueries({ queryKey: orgKeys.exercises(g.id) });
     },
     onError: (err) => toast(apiErrorMessage(err, 'Não deu para mudar agora.')),
@@ -128,9 +132,7 @@ export default function OrgExercisesPage() {
     else setInline(c);
   };
   // O painel fechado pelo "»" também tira o destaque do cartão.
-  useEffect(() => {
-    if (panel && !panel.content) setOpenId(null);
-  }, [panel, panel?.content]);
+  const highlighted = (panel ? panel.content : inline) ? openId : null;
 
   const data = list.data;
   const muscles = data ? muscleTabs(data, muscle) : [];
@@ -230,9 +232,7 @@ export default function OrgExercisesPage() {
         >
           <div className="border-b border-subtle px-4 py-3">
             <h2 className="text-sm font-semibold">{inline.title}</h2>
-            {inline.subtitle && (
-              <p className="text-xs text-muted-foreground">{inline.subtitle}</p>
-            )}
+            {inline.subtitle && <p className="text-xs text-muted-foreground">{inline.subtitle}</p>}
           </div>
           {inline.body}
         </section>
@@ -241,7 +241,10 @@ export default function OrgExercisesPage() {
       {list.isPending ? (
         <Skeleton className="h-64 rounded-2xl bg-card" />
       ) : list.isError || !data ? (
-        <ListError title="Não deu para carregar os exercícios" onRetry={() => void list.refetch()} />
+        <ListError
+          title="Não deu para carregar os exercícios"
+          onRetry={() => void list.refetch()}
+        />
       ) : data.items.length === 0 ? (
         <EmptyState
           icon={Dumbbell}
@@ -261,7 +264,7 @@ export default function OrgExercisesPage() {
             <li key={i.exerciseId}>
               <ExerciseCard
                 item={i}
-                selected={openId === i.exerciseId}
+                selected={highlighted === i.exerciseId}
                 onOpen={() => openGuide(i)}
                 onStar={() => toggleStar(i)}
               />
@@ -274,7 +277,7 @@ export default function OrgExercisesPage() {
           head={['Exercício', 'Músculo', 'Equipamento', 'Guia', 'Favorito']}
         >
           {data.items.map((i) => (
-            <tr key={i.exerciseId} className={cn(openId === i.exerciseId && 'bg-muted/60')}>
+            <tr key={i.exerciseId} className={cn(highlighted === i.exerciseId && 'bg-muted/60')}>
               <td className="px-3 py-2">
                 <button
                   type="button"
@@ -401,9 +404,7 @@ function StarButton({ item, onClick }: { item: CatalogItem; onClick: () => void 
     <button
       type="button"
       aria-pressed={item.favorite}
-      aria-label={
-        item.favorite ? `Tirar ${item.name} dos favoritos` : `Favoritar ${item.name}`
-      }
+      aria-label={item.favorite ? `Tirar ${item.name} dos favoritos` : `Favoritar ${item.name}`}
       onClick={onClick}
       className={cn(
         'relative flex h-8 w-8 items-center justify-center rounded-lg bg-background/70 backdrop-blur after:absolute after:-inset-1.5 hover:bg-background',

@@ -8,6 +8,7 @@ import {
   groupCan,
   groupExerciseApi,
   workoutApi,
+  type CatalogItem,
   type Exercise,
   type MyGroup,
 } from '@fatia/api-client';
@@ -35,6 +36,9 @@ import {
 } from '@/components/ui';
 import { EquipmentSummary } from '@/components/workout/equipment-chooser';
 import { colors } from '@/theme/colors';
+
+/** O que a comunidade criou ou ganhou guia dela: o que esta tela lista. */
+const isTeamGuided = (i: CatalogItem) => i.hasGuide || i.ownedByCommunity;
 
 /** O resumo do equipamento da academia; a lista inteira abre no drawer. */
 function GymEquipmentCard({
@@ -207,7 +211,10 @@ function ExerciseList({
   const router = useRouter();
   const lista = useQuery({
     queryKey: orgKeys.exercises(g.id),
-    queryFn: () => groupExerciseApi.list(g.id),
+    queryFn: () => groupExerciseApi.list(g.id, { limit: 200 }),
+    // O catálogo da equipe traz o geral inteiro (#408); aqui ficam os da
+    // comunidade e os que ganharam guia.
+    select: (page) => ({ ...page, items: page.items.filter(isTeamGuided) }),
   });
   const base = `/org/${g.id}/exercises`;
 
@@ -242,9 +249,9 @@ function ExerciseList({
                 {[
                   e.ownedByCommunity ? 'Da casa' : 'Catálogo',
                   e.muscleGroup,
-                  e.video ? 'vídeo' : null,
-                  e.photos.length ? `${e.photos.length} foto(s)` : null,
-                  `por ${e.authorName}`,
+                  e.hasVideo ? 'vídeo' : null,
+                  e.photoCount ? `${e.photoCount} foto(s)` : null,
+                  e.favorite ? 'favorito da equipe' : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -283,7 +290,8 @@ export default function OrgExercisesScreen() {
   // mora fora dela e precisa saber o que já tem tutorial.
   const lista = useQuery({
     queryKey: orgKeys.exercises(groupId),
-    queryFn: () => groupExerciseApi.list(groupId),
+    queryFn: () => groupExerciseApi.list(groupId, { limit: 200 }),
+    select: (page) => ({ ...page, items: page.items.filter(isTeamGuided) }),
   });
   const existentes = new Set(lista.data?.items.map((e) => e.exerciseId) ?? []);
   return (

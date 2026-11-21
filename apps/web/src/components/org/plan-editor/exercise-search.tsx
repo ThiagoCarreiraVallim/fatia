@@ -3,11 +3,7 @@
 import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
-import {
-  groupExerciseApi,
-  type DocumentExerciseView,
-  type PlanDefaults,
-} from '@fatia/api-client';
+import { groupExerciseApi, type DocumentExerciseView, type PlanDefaults } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';

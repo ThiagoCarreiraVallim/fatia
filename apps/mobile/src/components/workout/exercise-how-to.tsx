@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, Pencil, Star } from 'lucide-react-native';
 import {
+  exerciseHowTo,
   exerciseVideoSource,
   feelingOf,
   formatBestSet,
@@ -268,12 +269,14 @@ export function ExerciseHowTo({ exerciseId }: { exerciseId: number | null }) {
 function StepsTab({ exercise }: { exercise: Exercise }) {
   const guide = exercise.community ?? null;
   const photos = guide?.photos.filter((f) => f.url) ?? [];
+  // Os passos da academia valem no lugar das instruções do catálogo (#408).
+  const { steps, mistakes } = exerciseHowTo(exercise);
   return (
     <View className="gap-3">
-      {exercise.instructions.length > 0 ? (
+      {steps.length > 0 ? (
         // Prancha `Al-T9`: os passos num cartão, número no círculo verde, linha entre eles.
-        <View className="rounded-card bg-card px-4">
-          {exercise.instructions.map((step, i) => (
+        <View className="rounded-card bg-card px-4" accessibilityLabel="Como fazer">
+          {steps.map((step, i) => (
             <View
               key={`${i}-${step.slice(0, 12)}`}
               className={cn('flex-row gap-3 py-3.5', i > 0 && 'border-t border-border')}
@@ -292,6 +295,17 @@ function StepsTab({ exercise }: { exercise: Exercise }) {
           Sem passo a passo para este exercício.
         </Text>
       )}
+
+      {mistakes.length > 0 ? (
+        <View className="gap-1.5 rounded-card bg-card p-4" accessibilityLabel="Erros comuns">
+          <Text className="font-sans-bold text-sm text-foreground">Erros comuns</Text>
+          {mistakes.map((m, i) => (
+            <Text key={`${i}-${m.slice(0, 12)}`} className="text-sm leading-snug text-foreground">
+              {`· ${m}`}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       {guide?.tips ? (
         <View className="gap-1 rounded-card bg-card p-4">

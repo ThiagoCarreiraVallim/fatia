@@ -105,10 +105,11 @@ describe('Como fazer (#377, prancha Al-T9)', () => {
       </QueryClientProvider>,
     );
     const passos = screen.getByRole('list', { name: 'Como fazer' });
-    expect(within(passos).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      '1Pés firmes no chão.',
-      '2Barra na linha do mamilo.',
-    ]);
+    expect(
+      within(passos)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['1Pés firmes no chão.', '2Barra na linha do mamilo.']);
     expect(screen.queryByText('Deite no banco.')).toBeNull();
     const erros = screen.getByRole('list', { name: 'Erros comuns' });
     expect(erros).toHaveTextContent('Tirar o quadril do banco.');
