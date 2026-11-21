@@ -73,6 +73,7 @@ import {
 } from '@/components/onboarding/onboarding-steps';
 import { QrScanModal } from '@/components/onboarding/qr-scan';
 import { needsAiConsent } from '@/chat/ai-consent-state';
+import { WelcomePagesView } from '@/components/community/welcome-pages';
 import { AiConsentCard } from '@/components/chat/consent';
 import { openLegal } from '@/components/profile/legal';
 import { Drawer, LoadingState, useToast } from '@/components/ui';
@@ -141,6 +142,7 @@ export default function OnboardingScreen() {
   const ctx: FlowContext = useMemo(
     () => ({
       invitePending: Boolean(invite.data) && !inviteAnswered && !redo,
+      communityPages: (invite.data?.welcome?.length ?? 0) > 0,
       inCommunity: activeGroups.length > 0,
       healthAvailable: health.available,
       aiVariant: aiStepVariant(plan.data ?? null, canPurchase),
@@ -559,6 +561,19 @@ export default function OnboardingScreen() {
           activeChallenge={inviteData.activeChallenge}
           segment={nav.segment}
           onContinue={() => void advance({})}
+        />
+      ) : null;
+      break;
+    case 'community':
+      // As páginas da comunidade (#410, Onb-02b): "Pular" e o fim vão ao compartilhar.
+      screen = inviteData?.welcome?.length ? (
+        <WelcomePagesView
+          groupName={inviteData.group.name}
+          pages={inviteData.welcome}
+          team={inviteData.team}
+          onSkip={() => void advance({})}
+          onFinish={() => void advance({})}
+          onBackFirst={back}
         />
       ) : null;
       break;

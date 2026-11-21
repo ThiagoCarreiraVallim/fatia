@@ -74,7 +74,7 @@ export function WelcomePagesView({
           key={d}
           className={cn(
             'h-1 flex-1 rounded-[2px]',
-            d <= i ? (cover ? 'bg-white' : 'bg-brand') : cover ? 'bg-white/30' : 'bg-surface-3',
+            d <= i ? (cover ? 'bg-brand-foreground' : 'bg-brand') : cover ? 'bg-brand-foreground/30' : 'bg-surface-3',
           )}
         />
       ))}
@@ -88,7 +88,7 @@ export function WelcomePagesView({
       className={cn(
         'flex min-h-11 items-center px-1 font-bold disabled:cursor-default',
         compact ? 'text-xs' : 'text-sm',
-        cover ? 'text-white' : 'text-muted-foreground',
+        cover ? 'text-brand-foreground' : 'text-muted-foreground',
       )}
     >
       {WELCOME_COPY.skip}
@@ -110,7 +110,7 @@ export function WelcomePagesView({
           >
             {dots}
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-white">{welcomePosition(i, n)}</span>
+              <span className="text-xs font-bold text-brand-foreground">{welcomePosition(i, n)}</span>
               {skip}
             </div>
           </div>

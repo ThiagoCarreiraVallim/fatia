@@ -24,6 +24,9 @@ export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = [
   'offers',
   // Enviar para alunos (#405) entra no app com o painel no celular (Pn-M4, #414).
   'send',
+  // Boas-vindas (#410): o editor é do painel na web; no celular, com a #414.
+  // O aluno vê as páginas no app (onboarding e Sobre).
+  'welcome',
 ];
 
 /** As abas do painel no app: as do papel, menos as que não têm tela aqui. */
