@@ -4,10 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AutoPostKind, Prisma, type GroupRole, type MediaFile, type PlanLoadMode } from '@fatia/db';
+import {
+  AutoPostKind,
+  MembershipStatus,
+  PlanLoadMode,
+  Prisma,
+  type Exercise,
+  type GroupRole,
+  type MediaFile,
+} from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { publishAutoPost } from './auto-post';
-import { normalizeSearchText } from '../common/search-text';
+import { normalizeSearchText, rankByRelevance } from '../common/search-text';
 import { MediaService, type MediaView } from '../storage/media.service';
 import {
   BODYWEIGHT,
@@ -25,6 +33,15 @@ import {
   requireContentRole,
 } from './content-roles';
 import { parsePlanSnapshot, sessionExercises } from './plan-snapshot-v2';
+
+/** Abaixo disto, "em N planos" não diz o número (como o "Com quem" da #405). */
+const USAGE_MIN_CELL = 5;
+const CATALOG_PAGE = 60;
+const CATALOG_PAGE_MAX = 200;
+const MAX_DEFAULT_SETS = 20;
+const MAX_DEFAULT_REST = 900;
+const REPS_PATTERN = /^(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?$/;
+const LOAD_MODES = Object.values(PlanLoadMode) as string[];
 
 export const MAX_GUIDE_PHOTOS = 4;
 export const MAX_GUIDE_TIPS = 2000;
@@ -162,6 +179,29 @@ type GuideRow = Prisma.GroupExerciseGuideGetPayload<{ include: typeof GUIDE_INCL
 
 const TEAM_AUTHOR = 'Equipe';
 
+/** O padrão no plano do guia; nulo quando nenhum campo foi preenchido. */
+export function defaultsOf(g: {
+  defaultSets: number | null;
+  defaultReps: string | null;
+  defaultRestSeconds: number | null;
+  defaultLoadMode: PlanLoadMode | null;
+}): PlanDefaults | null {
+  if (
+    g.defaultSets === null &&
+    g.defaultReps === null &&
+    g.defaultRestSeconds === null &&
+    g.defaultLoadMode === null
+  ) {
+    return null;
+  }
+  return {
+    sets: g.defaultSets,
+    reps: g.defaultReps,
+    restSeconds: g.defaultRestSeconds,
+    loadMode: g.defaultLoadMode,
+  };
+}
+
 /**
  * O catálogo de exercícios da comunidade (Fase 7b, ADR 030).
  *
@@ -188,50 +228,136 @@ export class GroupExerciseService {
 
   // ---------------------------------------------------------------- equipe
 
+  /**
+   * O catálogo da equipe (#408, Pn-11): o catálogo geral inteiro mais o da
+   * casa, com o que a comunidade pôs em cada um. Filtra em memória: são
+   * algumas centenas de linhas, e as facetas precisam de todas.
+   *
+   * Ordem: favoritos da equipe, depois o que tem guia ou é da casa, depois o
+   * resto; com termo, por relevância dentro de cada faixa.
+   */
   async listForTeam(
     userId: string,
     groupId: string,
-    _filters: CatalogFilters = {},
+    filters: CatalogFilters = {},
   ): Promise<CatalogPage> {
-    const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
-    const [grupo, guias] = await Promise.all([
+    await requireContentRole(this.prisma, userId, groupId, 'content.publish');
+    const [grupo, todos, guias, favoritos] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: groupId },
         select: { equipment: true, customEquipment: true },
       }),
+      this.prisma.exercise.findMany({
+        where: this.visibleTo(groupId),
+        select: {
+          id: true,
+          name: true,
+          searchName: true,
+          muscleGroup: true,
+          equipment: true,
+          groupOwned: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
       this.prisma.groupExerciseGuide.findMany({
         where: { groupId },
-        include: GUIDE_INCLUDE,
-        orderBy: { exercise: { name: 'asc' } },
+        select: {
+          exerciseId: true,
+          videoFileId: true,
+          tips: true,
+          homeFriendly: true,
+          defaultSets: true,
+          defaultReps: true,
+          defaultRestSeconds: true,
+          defaultLoadMode: true,
+          _count: { select: { photos: true } },
+        },
+      }),
+      this.prisma.groupExerciseFavorite.findMany({
+        where: { groupId },
+        select: { exerciseId: true },
       }),
     ]);
-    const items = await Promise.all(guias.map((g) => this.view(g, userId, eu)));
+    const guiaPor = new Map(guias.map((g) => [g.exerciseId, g]));
+    const fav = new Set(favoritos.map((f) => f.exerciseId));
+    const term = filters.q ? normalizeSearchText(filters.q) : '';
+    const equip = filters.equipment ? equipmentKey(filters.equipment) : '';
+
+    type Row = (typeof todos)[number];
+    const passa = (e: Row, skip: 'muscle' | 'equipment' | null) =>
+      (!term || e.searchName.includes(term)) &&
+      (skip === 'muscle' || !filters.muscle || e.muscleGroup === filters.muscle) &&
+      (skip === 'equipment' ||
+        !equip ||
+        (e.equipment !== null && equipmentKey(e.equipment) === equip)) &&
+      (!filters.house || guiaPor.get(e.id)?.homeFriendly === true) &&
+      (!filters.favorite || fav.has(e.id));
+
+    const muscles: Record<string, number> = {};
+    const equipment: Record<string, number> = {};
+    for (const e of todos) {
+      if (passa(e, 'muscle')) muscles[e.muscleGroup] = (muscles[e.muscleGroup] ?? 0) + 1;
+      if (e.equipment && passa(e, 'equipment')) {
+        equipment[e.equipment] = (equipment[e.equipment] ?? 0) + 1;
+      }
+    }
+
+    const casam = todos.filter((e) => passa(e, null));
+    const faixa = (e: Row) => (fav.has(e.id) ? 0 : guiaPor.has(e.id) || e.groupOwned ? 1 : 2);
+    const ordenados = [0, 1, 2].flatMap((f) => {
+      const daFaixa = casam.filter((e) => faixa(e) === f);
+      return term ? rankByRelevance(daFaixa, term, (e) => e.name, daFaixa.length) : daFaixa;
+    });
+    const limit = Math.min(Math.max(filters.limit ?? CATALOG_PAGE, 1), CATALOG_PAGE_MAX);
+    const offset = Math.max(filters.offset ?? 0, 0);
+
     return {
       equipment: grupo.equipment,
       customEquipment: grupo.customEquipment,
-      total: items.length,
-      count: items.length,
-      facets: { muscles: {}, equipment: {} },
-      items: items.map((v) => ({
-        exerciseId: v.exerciseId,
-        name: v.name,
-        muscleGroup: v.muscleGroup,
-        equipment: v.equipment,
-        ownedByCommunity: v.ownedByCommunity,
-        favorite: false,
-        homeFriendly: false,
-        hasGuide: true,
-        hasVideo: v.video !== null,
-        photoCount: v.photos.length,
-        hasTips: v.tips !== null,
-        defaults: null,
-      })),
+      total: todos.length,
+      count: casam.length,
+      facets: { muscles, equipment },
+      items: ordenados.slice(offset, offset + limit).map((e) => {
+        const g = guiaPor.get(e.id);
+        return {
+          exerciseId: e.id,
+          name: e.name,
+          muscleGroup: e.muscleGroup,
+          equipment: e.equipment,
+          ownedByCommunity: e.groupOwned,
+          favorite: fav.has(e.id),
+          homeFriendly: g?.homeFriendly ?? false,
+          hasGuide: g !== undefined,
+          hasVideo: Boolean(g?.videoFileId),
+          photoCount: g?._count.photos ?? 0,
+          hasTips: Boolean(g?.tips),
+          defaults: g ? defaultsOf(g) : null,
+        };
+      }),
     };
   }
 
-  async getForTeam(userId: string, groupId: string, exerciseId: number) {
+  /**
+   * O exercício no painel (Pn-11b): com guia ou ainda sem (exercício do
+   * catálogo geral que a equipe vai abrir agora), o favorito e "em N planos".
+   */
+  async getForTeam(
+    userId: string,
+    groupId: string,
+    exerciseId: number,
+  ): Promise<GroupExerciseView> {
     const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
-    return this.view(await this.findGuide(groupId, exerciseId), userId, eu);
+    const ex = await this.findVisible(groupId, exerciseId);
+    const [guia, favorito, usage] = await Promise.all([
+      this.prisma.groupExerciseGuide.findUnique({
+        where: { groupId_exerciseId: { groupId, exerciseId } },
+        include: GUIDE_INCLUDE,
+      }),
+      this.prisma.groupExerciseFavorite.count({ where: { groupId, exerciseId } }),
+      this.usage(groupId, exerciseId),
+    ]);
+    const base = guia ? await this.view(guia, userId, eu) : this.bareView(ex);
+    return { ...base, favorite: favorito > 0, hasGuide: guia !== null, usage };
   }
 
   /** Exercício novo, só desta comunidade. Nasce com o tutorial (vazio ou não). */
@@ -261,6 +387,7 @@ export class GroupExerciseService {
               authorId: userId,
               videoFileId: midia.videoFileId ?? null,
               tips: this.tips(input.tips),
+              ...this.guideFields(input),
               photos: {
                 create: (midia.photoFileIds ?? []).map((fileId, order) => ({ fileId, order })),
               },
@@ -360,6 +487,7 @@ export class GroupExerciseService {
     const dados = {
       ...(input.videoFileId !== undefined ? { videoFileId: midia.videoFileId ?? null } : {}),
       ...(input.tips !== undefined ? { tips: this.tips(input.tips) } : {}),
+      ...this.guideFields(input),
     };
     const fotos =
       input.photoFileIds !== undefined
@@ -437,19 +565,96 @@ export class GroupExerciseService {
     return { id: exerciseId };
   }
 
-  /** Favorito da equipe (#408). Idempotente nos dois sentidos. */
+  /**
+   * Favorito da equipe (#408): da comunidade, não de quem marcou. Idempotente
+   * nos dois sentidos. Só o que a comunidade enxerga: o exercício de outra
+   * comunidade e o pessoal de alguém respondem como inexistentes (#92).
+   */
   async setFavorite(
-    _userId: string,
-    _groupId: string,
-    _exerciseId: number,
-    _favorite: boolean,
+    userId: string,
+    groupId: string,
+    exerciseId: number,
+    favorite: boolean,
   ): Promise<{ exerciseId: number; favorite: boolean }> {
-    return { exerciseId: _exerciseId, favorite: false };
+    await requireContentRole(this.prisma, userId, groupId, 'content.publish');
+    if (!favorite) {
+      await this.prisma.groupExerciseFavorite.deleteMany({ where: { groupId, exerciseId } });
+      return { exerciseId, favorite };
+    }
+    await this.findVisible(groupId, exerciseId);
+    try {
+      await this.prisma.groupExerciseFavorite.upsert({
+        where: { groupId_exerciseId: { groupId, exerciseId } },
+        create: { groupId, exerciseId },
+        update: {},
+      });
+    } catch (err) {
+      // Dois toques ao mesmo tempo: o outro já gravou, que é o que se queria.
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
+        throw err;
+      }
+    }
+    return { exerciseId, favorite };
   }
 
-  /** "Duplicar" (#408, Pn-11b): uma cópia da casa, com o guia sem vídeo nem fotos. */
+  /**
+   * "Duplicar" (#408, Pn-11b): uma cópia da casa, com os dados do exercício e
+   * o guia (passos, erros, dica, selo e padrão). Vídeo e fotos não vêm: cada
+   * arquivo é de um guia só, e copiar no bucket dobraria o que se guarda.
+   */
   async duplicate(userId: string, groupId: string, exerciseId: number): Promise<GroupExerciseView> {
-    return this.getForTeam(userId, groupId, exerciseId);
+    const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
+    const ex = await this.findVisible(groupId, exerciseId);
+    const guia = await this.prisma.groupExerciseGuide.findUnique({
+      where: { groupId_exerciseId: { groupId, exerciseId } },
+    });
+    const nomes = new Set(
+      (
+        await this.prisma.exercise.findMany({
+          where: { groupId, name: { startsWith: `${ex.name} (cópia` } },
+          select: { name: true },
+        })
+      ).map((e) => e.name),
+    );
+    let name = `${ex.name} (cópia)`;
+    for (let i = 2; nomes.has(name); i++) name = `${ex.name} (cópia ${i})`;
+
+    let copia: Exercise;
+    try {
+      copia = await this.prisma.exercise.create({
+        data: {
+          name,
+          searchName: normalizeSearchText(name),
+          muscleGroup: ex.muscleGroup,
+          equipment: ex.equipment,
+          level: ex.level,
+          mechanic: ex.mechanic,
+          primaryMuscles: ex.primaryMuscles,
+          secondaryMuscles: ex.secondaryMuscles,
+          instructions: ex.instructions,
+          groupOwned: true,
+          groupId,
+          clonedFromId: ex.id,
+          groupGuides: {
+            create: {
+              groupId,
+              authorId: userId,
+              tips: guia?.tips ?? null,
+              steps: guia?.steps ?? [],
+              commonMistakes: guia?.commonMistakes ?? [],
+              homeFriendly: guia?.homeFriendly ?? false,
+              defaultSets: guia?.defaultSets ?? null,
+              defaultReps: guia?.defaultReps ?? null,
+              defaultRestSeconds: guia?.defaultRestSeconds ?? null,
+              defaultLoadMode: guia?.defaultLoadMode ?? null,
+            },
+          },
+        },
+      });
+    } catch (err) {
+      throw this.conflict(err);
+    }
+    return this.view(await this.findGuide(groupId, copia.id), userId, eu);
   }
 
   /**
@@ -643,6 +848,141 @@ export class GroupExerciseService {
     return t || null;
   }
 
+  /** O que a comunidade enxerga: o catálogo geral e o que é dela. */
+  private visibleTo(groupId: string): Prisma.ExerciseWhereInput {
+    return { OR: [CATALOG_EXERCISE, { groupOwned: true, groupId }] };
+  }
+
+  private async findVisible(groupId: string, exerciseId: number): Promise<Exercise> {
+    const ex = await this.prisma.exercise.findFirst({
+      where: { id: exerciseId, ...this.visibleTo(groupId) },
+    });
+    if (!ex) throw new NotFoundException('Exercise not found');
+    return ex;
+  }
+
+  /**
+   * "Em N planos" (#408): os modelos da biblioteca desta comunidade e os
+   * planos dos membros ativos dela. Abaixo de 5 planos, sem o número.
+   */
+  private async usage(groupId: string, exerciseId: number): Promise<ExerciseUsage> {
+    const [modelos, planos] = await Promise.all([
+      this.prisma.groupPlanTemplate.findMany({
+        where: { groupId, kind: 'WORKOUT' },
+        select: { snapshot: true },
+      }),
+      this.prisma.workoutPlan.count({
+        where: {
+          exercises: { some: { exerciseId } },
+          user: { memberships: { some: { groupId, status: MembershipStatus.ACTIVE } } },
+        },
+      }),
+    ]);
+    const templates = modelos.filter((m) => {
+      const snap = parsePlanSnapshot(m.snapshot);
+      return (
+        snap !== null &&
+        snap.sessions
+          .flatMap(sessionExercises)
+          .some(
+            (e) =>
+              (e.source === 'group' && e.groupExerciseId === exerciseId) ||
+              (e.source === 'catalog' && e.catalogExerciseId === exerciseId),
+          )
+      );
+    }).length;
+    return {
+      templates,
+      plans:
+        planos === 0
+          ? { band: 'none', count: null }
+          : planos < USAGE_MIN_CELL
+            ? { band: 'few', count: null }
+            : { band: 'many', count: planos },
+    };
+  }
+
+  /** Os campos novos do guia (#408), limpos e conferidos. Ausente não mexe. */
+  private guideFields(input: GuideInput) {
+    const linhas = (v: string[] | undefined, max: number, rotulo: string) => {
+      if (v === undefined) return undefined;
+      const limpas = v.map((l) => l.trim()).filter(Boolean);
+      if (limpas.length > max) throw new BadRequestException(`Até ${max} ${rotulo}.`);
+      if (limpas.some((l) => l.length > MAX_GUIDE_LINE)) {
+        throw new BadRequestException(`Cada linha vai até ${MAX_GUIDE_LINE} caracteres.`);
+      }
+      return limpas;
+    };
+    const steps = linhas(input.steps, MAX_GUIDE_STEPS, 'passos');
+    const commonMistakes = linhas(input.commonMistakes, MAX_GUIDE_MISTAKES, 'erros comuns');
+    if (
+      input.defaultSets != null &&
+      (!Number.isInteger(input.defaultSets) ||
+        input.defaultSets < 1 ||
+        input.defaultSets > MAX_DEFAULT_SETS)
+    ) {
+      throw new BadRequestException(`Séries: de 1 a ${MAX_DEFAULT_SETS}.`);
+    }
+    let defaultReps = input.defaultReps;
+    if (defaultReps != null) {
+      const m = REPS_PATTERN.exec(defaultReps.trim());
+      if (!m || Number(m[1]) < 1 || (m[2] !== undefined && Number(m[2]) < Number(m[1]))) {
+        throw new BadRequestException('Repetições: um número ou uma faixa, como 8 ou 6-8.');
+      }
+      defaultReps = m[2] !== undefined ? `${m[1]}-${m[2]}` : m[1]!;
+    }
+    if (
+      input.defaultRestSeconds != null &&
+      (!Number.isInteger(input.defaultRestSeconds) ||
+        input.defaultRestSeconds < 0 ||
+        input.defaultRestSeconds > MAX_DEFAULT_REST)
+    ) {
+      throw new BadRequestException('Descanso: de 0 a 15 minutos.');
+    }
+    if (input.defaultLoadMode != null && !LOAD_MODES.includes(input.defaultLoadMode)) {
+      throw new BadRequestException('Carga desconhecida.');
+    }
+    return {
+      ...(steps !== undefined ? { steps } : {}),
+      ...(commonMistakes !== undefined ? { commonMistakes } : {}),
+      ...(input.homeFriendly !== undefined ? { homeFriendly: input.homeFriendly } : {}),
+      ...(input.defaultSets !== undefined ? { defaultSets: input.defaultSets } : {}),
+      ...(defaultReps !== undefined ? { defaultReps } : {}),
+      ...(input.defaultRestSeconds !== undefined
+        ? { defaultRestSeconds: input.defaultRestSeconds }
+        : {}),
+      ...(input.defaultLoadMode !== undefined ? { defaultLoadMode: input.defaultLoadMode } : {}),
+    };
+  }
+
+  /** O exercício do catálogo geral ainda sem guia desta comunidade. */
+  private bareView(ex: Exercise): GroupExerciseView {
+    return {
+      exerciseId: ex.id,
+      name: ex.name,
+      muscleGroup: ex.muscleGroup,
+      equipment: ex.equipment,
+      level: ex.level,
+      mechanic: ex.mechanic,
+      primaryMuscles: ex.primaryMuscles,
+      secondaryMuscles: ex.secondaryMuscles,
+      instructions: ex.instructions,
+      ownedByCommunity: ex.groupOwned,
+      video: null,
+      photos: [],
+      tips: null,
+      authorName: TEAM_AUTHOR,
+      authorRole: null,
+      updatedAt: ex.createdAt,
+      steps: [],
+      commonMistakes: [],
+      homeFriendly: false,
+      defaults: null,
+      // Ninguém escreveu ainda: quem publica conteúdo abre o primeiro guia.
+      canEdit: true,
+    };
+  }
+
   /** `P2002` aqui é nome repetido no catálogo da comunidade, ou arquivo já usado em outro exercício. */
   private conflict(err: unknown): unknown {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -681,10 +1021,10 @@ export class GroupExerciseService {
       authorName: g.author?.name ?? TEAM_AUTHOR,
       authorRole: g.authorId ? (roles.get(g.authorId) ?? null) : null,
       updatedAt: g.updatedAt,
-      steps: [],
-      commonMistakes: [],
-      homeFriendly: false,
-      defaults: null,
+      steps: g.steps,
+      commonMistakes: g.commonMistakes,
+      homeFriendly: g.homeFriendly,
+      defaults: defaultsOf(g),
       ...(teamRole ? { canEdit: canEditContent(teamRole, userId, g.authorId) } : {}),
     };
   }

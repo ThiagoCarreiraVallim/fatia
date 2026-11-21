@@ -14,7 +14,12 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MAX_TIP_BODY, PLAN_LEVELS, TIP_CATEGORIES, type TipCategory } from '../content.service';
+import {
+  MAX_TIP_BODY_LEGACY,
+  PLAN_LEVELS,
+  TIP_CATEGORIES,
+  type TipCategory,
+} from '../content.service';
 import { MAX_SUGGESTED_MEALS } from '../nutrition-snapshot';
 import { MAX_PLAN_TAGS, MAX_TAG_LENGTH } from '../plan-snapshot-v2';
 
@@ -118,14 +123,15 @@ export class PublishDto {
 
 export class CreateTipDto {
   @IsString() @MaxLength(100) title!: string;
-  @IsString() @MaxLength(MAX_TIP_BODY) body!: string;
+  // O teto de 600 é do service: a dica antiga mais longa salva sem mudar o texto.
+  @IsString() @MaxLength(MAX_TIP_BODY_LEGACY) body!: string;
   @IsIn(TIP_CATEGORIES) category!: TipCategory;
   @IsOptional() @IsUUID() imageFileId?: string | null;
 }
 
 export class UpdateTipDto {
   @IsOptional() @IsString() @MaxLength(100) title?: string;
-  @IsOptional() @IsString() @MaxLength(MAX_TIP_BODY) body?: string;
+  @IsOptional() @IsString() @MaxLength(MAX_TIP_BODY_LEGACY) body?: string;
   @IsOptional() @IsIn(TIP_CATEGORIES) category?: TipCategory;
   @IsOptional() @IsUUID() imageFileId?: string | null;
 }
@@ -133,6 +139,8 @@ export class UpdateTipDto {
 export class TipStateDto {
   @IsOptional() @IsBoolean() published?: boolean;
   @IsOptional() @IsBoolean() pinned?: boolean;
+  /** "Anunciar no mural" ao publicar (#408): ausente segue o `autoPosts`. */
+  @IsOptional() @IsBoolean() announce?: boolean;
 }
 
 export class AdoptDto {

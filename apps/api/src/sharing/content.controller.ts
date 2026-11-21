@@ -149,7 +149,8 @@ export class ContentController {
     @Param() p: ContentParamDto,
     @Body() dto: TipStateDto,
   ) {
-    return this.content.setTipState(user.id, p.groupId, p.id, dto);
+    const { announce, ...state } = dto;
+    return this.content.setTipState(user.id, p.groupId, p.id, state, { announce });
   }
 
   @Delete('content/tips/:id')

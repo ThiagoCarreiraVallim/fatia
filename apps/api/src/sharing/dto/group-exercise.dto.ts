@@ -2,12 +2,14 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -22,12 +24,22 @@ import {
   MUSCLE_GROUP_MAX_LENGTH,
   MUSCLE_GROUP_PATTERN,
 } from '../../workout/helpers/muscle-group';
-import { MAX_GUIDE_PHOTOS, MAX_GUIDE_TIPS } from '../group-exercise.service';
+import {
+  MAX_GUIDE_LINE,
+  MAX_GUIDE_MISTAKES,
+  MAX_GUIDE_PHOTOS,
+  MAX_GUIDE_STEPS,
+  MAX_GUIDE_TIPS,
+} from '../group-exercise.service';
+import { PlanLoadMode } from '@fatia/db';
 import { PLAN_LEVELS } from '../content.service';
 
 const normalizeMuscleGroup = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 const MUSCLES = ANATOMICAL_MUSCLES as unknown as string[];
+/** Query string: "true"/"1" é verdadeiro; o resto, falso. */
+const toBool = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value === 'true' || value === '1' : value;
 
 /** Rota de um exercício da comunidade: o id é amarrado ao `groupId` no service. */
 export class GroupExerciseParamDto {
@@ -50,6 +62,29 @@ export class GuideDto {
   photoFileIds?: string[];
 
   @IsOptional() @IsString() @MaxLength(MAX_GUIDE_TIPS) tips?: string | null;
+
+  /** "Como fazer" da casa (#408): um passo por item. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_GUIDE_STEPS)
+  @IsString({ each: true })
+  @MaxLength(MAX_GUIDE_LINE, { each: true })
+  steps?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_GUIDE_MISTAKES)
+  @IsString({ each: true })
+  @MaxLength(MAX_GUIDE_LINE, { each: true })
+  commonMistakes?: string[];
+
+  @IsOptional() @IsBoolean() homeFriendly?: boolean;
+
+  /** O padrão ao entrar num plano. `null` limpa. */
+  @IsOptional() @IsInt() @Min(1) @Max(20) defaultSets?: number | null;
+  @IsOptional() @IsString() @MaxLength(20) defaultReps?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(900) defaultRestSeconds?: number | null;
+  @IsOptional() @IsIn([...Object.values(PlanLoadMode), null]) defaultLoadMode?: PlanLoadMode | null;
 }
 
 export class UpdateGroupExerciseDto {
@@ -105,6 +140,52 @@ export class CreateGroupExerciseDto extends UpdateGroupExerciseDto {
   photoFileIds?: string[];
 
   @IsOptional() @IsString() @MaxLength(MAX_GUIDE_TIPS) tips?: string | null;
+
+  /** "Como fazer" da casa (#408): um passo por item. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_GUIDE_STEPS)
+  @IsString({ each: true })
+  @MaxLength(MAX_GUIDE_LINE, { each: true })
+  steps?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_GUIDE_MISTAKES)
+  @IsString({ each: true })
+  @MaxLength(MAX_GUIDE_LINE, { each: true })
+  commonMistakes?: string[];
+
+  @IsOptional() @IsBoolean() homeFriendly?: boolean;
+
+  /** O padrão ao entrar num plano. `null` limpa. */
+  @IsOptional() @IsInt() @Min(1) @Max(20) defaultSets?: number | null;
+  @IsOptional() @IsString() @MaxLength(20) defaultReps?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(900) defaultRestSeconds?: number | null;
+  @IsOptional() @IsIn([...Object.values(PlanLoadMode), null]) defaultLoadMode?: PlanLoadMode | null;
+}
+
+/** Filtros do catálogo da equipe (#408, Pn-11). */
+export class CatalogQueryDto {
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+
+  @IsOptional()
+  @Transform(normalizeMuscleGroup)
+  @IsString()
+  @MaxLength(MUSCLE_GROUP_MAX_LENGTH)
+  muscle?: string;
+
+  @IsOptional() @IsString() @MaxLength(CUSTOM_EQUIPMENT_MAX_LENGTH) equipment?: string;
+
+  @IsOptional() @Transform(toBool) @IsBoolean() house?: boolean;
+  @IsOptional() @Transform(toBool) @IsBoolean() favorite?: boolean;
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
+export class FavoriteDto {
+  @IsBoolean() favorite!: boolean;
 }
 
 export class EquipmentDto {

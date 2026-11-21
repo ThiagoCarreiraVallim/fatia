@@ -6295,6 +6295,148 @@ describe('isolamento entre usuários', () => {
     });
   });
 
+  describe('catálogo da equipe, favorito e guia da casa (#408)', () => {
+    const store = new MemoryObjectStore();
+    const media = new MediaService(prisma, store);
+    const catalog408 = new GroupExerciseService(prisma, media);
+    const k = { a: '', b: '', donoA: '', profA: '', membroA: '', donoB: '', membroB: '' };
+    let daB = 0;
+    let videoB = '';
+    let geral = 0;
+
+    beforeAll(async () => {
+      const stamp = `iso408-${Date.now()}`;
+      const [donoA, profA, membroA, donoB, membroB] = await Promise.all(
+        ['donoA', 'profA', 'membroA', 'donoB', 'membroB'].map((n) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${n}`, email: `${stamp}-${n}@test.local`, name: n },
+          }),
+        ),
+      );
+      Object.assign(k, {
+        donoA: donoA.id,
+        profA: profA.id,
+        membroA: membroA.id,
+        donoB: donoB.id,
+        membroB: membroB.id,
+      });
+      const grupo = (nome: string, dono: string, outros: [string, GroupRole][]) =>
+        prisma.group.create({
+          data: {
+            type: GroupType.SPONSORED,
+            name: nome,
+            slug: `${stamp}-${nome}`,
+            ownerId: dono,
+            memberships: {
+              create: [
+                { userId: dono, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+                ...outros.map(([userId, role]) => ({
+                  userId,
+                  role,
+                  status: MembershipStatus.ACTIVE,
+                })),
+              ],
+            },
+          },
+        });
+      k.a = (
+        await grupo('a', k.donoA, [
+          [k.profA, GroupRole.PROFESSIONAL],
+          [k.membroA, GroupRole.MEMBER],
+        ])
+      ).id;
+      k.b = (await grupo('b', k.donoB, [[k.membroB, GroupRole.MEMBER]])).id;
+      daB = (
+        await catalog408.create(k.donoB, k.b, {
+          name: `Máquina secreta ${stamp}`,
+          muscleGroup: 'pernas',
+          instructions: ['Segredo da B.'],
+        })
+      ).exerciseId;
+      const f = await prisma.mediaFile.create({
+        data: {
+          uploaderId: k.donoB,
+          groupId: k.b,
+          purpose: 'exercise_video',
+          kind: 'VIDEO',
+          status: 'READY',
+          key: `iso408/${randomUUID()}`,
+          mime: 'video/mp4',
+          bytes: 10,
+          confirmedAt: new Date(),
+        },
+      });
+      videoB = f.id;
+      geral = (
+        await prisma.exercise.findFirstOrThrow({
+          where: { createdByUserId: null, groupOwned: false },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        })
+      ).id;
+      await catalog408.setGuide(k.donoB, k.b, geral, {
+        steps: ['Passo só da B.'],
+        commonMistakes: ['Erro só da B.'],
+        homeFriendly: true,
+      });
+      await catalog408.setFavorite(k.donoB, k.b, geral, true);
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [k.a, k.b] } } });
+      await prisma.exercise.deleteMany({ where: { id: daB } });
+      await prisma.user.deleteMany({
+        where: { id: { in: [k.donoA, k.profA, k.membroA, k.donoB, k.membroB] } },
+      });
+    });
+
+    it('a equipe de A não acha, abre, favorita, duplica nem grava guia no exercício da B', async () => {
+      const lista = await catalog408.listForTeam(k.profA, k.a, { limit: 200, q: 'secreta' });
+      expect(lista.items.map((i) => i.exerciseId)).not.toContain(daB);
+      await expect(catalog408.getForTeam(k.profA, k.a, daB)).rejects.toThrow(NotFoundException);
+      await expect(catalog408.setFavorite(k.profA, k.a, daB, true)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(catalog408.duplicate(k.profA, k.a, daB)).rejects.toThrow(NotFoundException);
+      await expect(catalog408.setGuide(k.profA, k.a, daB, { steps: ['x'] })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(await prisma.groupExerciseFavorite.count({ where: { groupId: k.a } })).toBe(0);
+    });
+
+    it('o vídeo da B não entra no guia de A', async () => {
+      await expect(
+        catalog408.setGuide(k.profA, k.a, geral, { videoFileId: videoB }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('o favorito, o selo e os passos da B não aparecem para A', async () => {
+      const a = await catalog408.getForTeam(k.profA, k.a, geral);
+      expect(a).toMatchObject({ favorite: false, homeFriendly: false, steps: [], hasGuide: false });
+      const favs = await catalog408.listForTeam(k.profA, k.a, { favorite: true });
+      expect(favs.items).toEqual([]);
+      const casa = await catalog408.listForTeam(k.profA, k.a, { house: true });
+      expect(casa.items).toEqual([]);
+      // O membro de A, no detalhe do exercício, não vê o guia da B.
+      const detalhe = await exercises.getWithMedia(k.membroA, geral);
+      expect(detalhe.community).toBeNull();
+      expect(JSON.stringify(await exercises.explainForm(k.membroA, 'a'))).not.toContain(
+        'Passo só da B.',
+      );
+    });
+
+    it('só a equipe abre o catálogo e mexe nele; quem é de fora nem sabe que existe', async () => {
+      await expect(catalog408.listForTeam(k.membroA, k.a, {})).rejects.toThrow(ForbiddenException);
+      await expect(catalog408.setFavorite(k.membroA, k.a, geral, true)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(catalog408.listForTeam(k.donoB, k.a, {})).rejects.toThrow(NotFoundException);
+      await expect(catalog408.setFavorite(k.donoB, k.a, geral, true)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   it('o dado do user-A continua intacto depois de todas as tentativas', async () => {
     // Fecha o ciclo: nenhuma das chamadas acima pode ter tido efeito colateral.
     const meal = await meals.findById(owned.userA, owned.mealId);

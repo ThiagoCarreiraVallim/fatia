@@ -63,10 +63,20 @@ import {
 } from './nutrition-document';
 import { assertDay } from '../common/dates';
 
-export const TIP_CATEGORIES = ['WORKOUT', 'NUTRITION', 'HABITS', 'GENERAL'] as const;
+/**
+ * As quatro da prancha Pn-10 (treino, nutrição, hábitos, recuperação) e a
+ * `GENERAL` de antes da #408, que segue valendo para as dicas antigas.
+ */
+export const TIP_CATEGORIES = ['WORKOUT', 'NUTRITION', 'HABITS', 'RECOVERY', 'GENERAL'] as const;
 export type TipCategory = (typeof TIP_CATEGORIES)[number];
 export const PLAN_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
-export const MAX_TIP_BODY = 4000;
+/** O texto da dica (#408, Pn-10: "156 de 600 caracteres"). */
+export const MAX_TIP_BODY = 600;
+/**
+ * O teto de antes da #408. A dica antiga mais longa continua salvando enquanto
+ * o texto não muda; mudar o texto passa a valer os 600.
+ */
+export const MAX_TIP_BODY_LEGACY = 4000;
 
 export interface TemplateMeta {
   /** Rascunho (#405): não vai para a comunidade nem é enviado. */
@@ -674,11 +684,14 @@ export class ContentService {
     const atual = await this.findTip(groupId, id);
     this.assertCanEdit(eu, userId, atual.authorId);
 
-    const data: Prisma.GroupTipUpdateInput = this.tipFields({
-      title: input.title ?? atual.title,
-      body: input.body ?? atual.body,
-      category: input.category ?? (atual.category as TipCategory),
-    });
+    const data: Prisma.GroupTipUpdateInput = this.tipFields(
+      {
+        title: input.title ?? atual.title,
+        body: input.body ?? atual.body,
+        category: input.category ?? (atual.category as TipCategory),
+      },
+      atual.body,
+    );
     let descartar: string | null = null;
     if (input.imageFileId !== undefined && input.imageFileId !== atual.imageFileId) {
       const nova = await this.resolveCover(groupId, input.imageFileId);
@@ -699,7 +712,7 @@ export class ContentService {
     groupId: string,
     id: string,
     state: { published?: boolean; pinned?: boolean },
-    _opts: { announce?: boolean } = {},
+    opts: { announce?: boolean } = {},
   ): Promise<TipView> {
     const eu = await this.assertPublisher(userId, groupId);
     const atual = await this.findTip(groupId, id);
@@ -714,10 +727,13 @@ export class ContentService {
       },
       include: TIP_INCLUDE,
     });
-    if (state.published && !atual.publishedAt) {
+    // "Anunciar no mural" (#408, Pn-10), como na #405: true força o post,
+    // false não posta, ausente segue o `autoPosts` da comunidade.
+    if (state.published && !atual.publishedAt && opts.announce !== false) {
       await publishAutoPost(this.prisma, {
         groupId,
         actorUserId: userId,
+        force: opts.announce === true,
         kind: AutoPostKind.TIP,
         refId: row.id,
         title: row.title,
@@ -1006,11 +1022,13 @@ export class ContentService {
     return raw;
   }
 
-  private tipFields(input: TipInput) {
+  /** `previousBody`: o texto que já estava, que pode passar dos 600 se não mudar. */
+  private tipFields(input: TipInput, previousBody?: string) {
     const title = this.title(input.title);
     const body = input.body.trim();
     if (!body) throw new BadRequestException('Escreva a dica.');
-    if (body.length > MAX_TIP_BODY) {
+    const antigo = previousBody !== undefined && body === previousBody.trim();
+    if (body.length > (antigo ? MAX_TIP_BODY_LEGACY : MAX_TIP_BODY)) {
       throw new BadRequestException(
         `A dica vai até ${MAX_TIP_BODY.toLocaleString('pt-BR')} caracteres.`,
       );

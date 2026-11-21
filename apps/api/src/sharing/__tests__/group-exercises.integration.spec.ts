@@ -228,6 +228,9 @@ describe('catálogo de exercícios da comunidade (integração)', () => {
         tips: 'Cotovelo **colado** no corpo.',
         hasVideo: true,
         photoCount: 1,
+        steps: [],
+        commonMistakes: [],
+        homeFriendly: false,
       });
       expect(JSON.stringify(agente)).not.toContain('memory://');
 
