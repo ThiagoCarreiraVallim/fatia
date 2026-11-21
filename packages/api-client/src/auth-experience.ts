@@ -357,7 +357,7 @@ export function experienceErrorMessage(
 // ---------------------------------------------------------------------------
 
 type Fetch = typeof fetch;
-type Identifier = { type: 'email'; value: string };
+type Identifier = { type: 'email' | 'username'; value: string };
 export type InteractionEvent = 'SignIn' | 'Register' | 'ForgotPassword';
 /** Quantas páginas seguimos depois do submit até achar o `form_post`. */
 const MAX_HOPS = 4;
@@ -505,7 +505,7 @@ export function createExperienceClient(opts: {
     },
     async verifyPassword(address, password) {
       const { json } = await call('POST', '/api/experience/verification/password', {
-        identifier: email(address),
+        identifier: signInIdentifier(address),
         password,
       });
       return verificationIdOf(json);
@@ -570,6 +570,18 @@ export function createExperienceClient(opts: {
       throw new ExperienceError('oidc.callback_not_reached', 500);
     },
   };
+}
+
+/**
+ * O que a pessoa digitou no campo de login: com "@" é e-mail; sem, é o nome de
+ * usuário do Logto (servidor que só tem login por usuário, sem conector de
+ * e-mail). Nome de usuário mantém a caixa.
+ */
+export function signInIdentifier(value: string): Identifier {
+  const trimmed = value.trim();
+  return trimmed.includes('@')
+    ? { type: 'email', value: normalizeEmail(trimmed) }
+    : { type: 'username', value: trimmed };
 }
 
 export function normalizeEmail(value: string): string {

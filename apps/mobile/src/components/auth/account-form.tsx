@@ -68,7 +68,8 @@ export function AccountForm({
 
   const validate = (): string | null => {
     if (create && !cleanName(name)) return 'Diga seu nome.';
-    if (!EMAIL.test(email.trim())) return 'Confira o e-mail.';
+    // Para entrar vale também o nome de usuário (Logto sem login por e-mail).
+    if (create ? !EMAIL.test(email.trim()) : !email.trim()) return 'Confira o e-mail.';
     if (!password) return 'Digite a senha.';
     if (create && issues[0]) return passwordIssueMessage(issues[0], auth.passwordPolicy);
     return null;
@@ -167,8 +168,8 @@ export function AccountForm({
         />
       ) : null}
       <TextInput
-        accessibilityLabel="E-mail"
-        placeholder="E-mail"
+        accessibilityLabel={create ? 'E-mail' : 'E-mail ou usuário'}
+        placeholder={create ? 'E-mail' : 'E-mail ou usuário'}
         placeholderTextColor={colors.placeholder}
         autoComplete="email"
         textContentType={create ? 'emailAddress' : 'username'}
