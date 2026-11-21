@@ -976,6 +976,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **Quem edita:** `content.publish` (dono, admin, profissional, criador; "papéis que editam conteúdo", como a issue pede). Sem ação nova na matriz. A recepção e o membro recebem 403; quem é de fora, 404.
   - **Só pelo convite:** a etapa aparece no onboarding de quem chega por convite com páginas. Quem entra pelo código ou já tem conta relê em Sobre.
   - **A equipe da página** é a que recebe o consentimento (`TEAM_ROLES`: dono, profissional, criador), só nome e papel.
+- **Verificado:** api 4275 testes (jest, banco descartável), web 1280, api-client 1312, mobile 614, lint e typecheck. Passada visual na web (1440 e 390, claro e escuro), lado a lado com Pn-23, 23b, 23c e Onb-02b: corrigidos o fundo do status (pílula com contorno, como a prancha) e o "Rever as boas-vindas" do Sobre, que no celular agora abre em tela cheia sem o menu aparecendo embaixo. Prints em `~/.cache/fatia-vis/410/`. App: não conferido em imagem (sem emulador na hora); coberto pelos testes de lógica e pelo typecheck. O onboarding web do convite também não foi capturado (exige conta nova pelo convite); coberto pelo teste do fluxo.
 - **Fica para depois:** o editor no app (entra com o painel no celular, #414; `welcome` está em `MOBILE_MISSING_SECTIONS`), cor da marca própria da comunidade (hoje vale a cor padrão de marca, como no Onb-02), imagem de capa.
 
 ## Etapas seguintes
