@@ -195,6 +195,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   emailChangeRequests:
     'Pedido de troca de e-mail (ADR 050): estado de segurança de 15 minutos, com o hash de um ' +
     'nonce e o e-mail de destino. O e-mail atual já sai no perfil; apaga com a conta.',
+  apiKeysCreated:
+    'Chaves de API que a pessoa criou como dona da comunidade (#413): credencial B2B do ' +
+    'grupo (nome, hash e 4 últimos caracteres), nada do titular. Apagar a conta só zera o autor.',
 };
 
 /** Nomes de model do schema, para separar campo de relação de campo escalar. */

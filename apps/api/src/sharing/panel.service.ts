@@ -132,6 +132,10 @@ export const PANEL_SCREENS: readonly (SearchScreen & { action: GroupAction })[] 
   { key: 'offers', label: 'Ofertas', group: 'Comunidade', action: 'billing.read' },
   { key: 'agent', label: 'Agente da comunidade', group: 'IA', action: 'group.update' },
   { key: 'settings', label: 'Configurações', group: 'Conta', action: 'group.update' },
+  // Chaves de API e cota do mês (#413, Pn-38): só o dono.
+  { key: 'integrations', label: 'Integrações e API', group: 'Conta', action: 'integration.manage' },
+  // O que mudou no Fatia para a equipe (#413, Pn-27): toda a equipe.
+  { key: 'updates', label: 'Novidades', group: 'Conta', action: 'panel.search' },
 ];
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

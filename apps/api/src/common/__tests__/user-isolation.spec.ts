@@ -60,6 +60,8 @@ import { MediaService } from '../../storage/media.service';
 import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { ProfileService } from '../../users/profile.service';
 import { YouService } from '../../you/you.service';
+import { ApiKeyService } from '../../integrations/api-key.service';
+import { IntegrationReadService } from '../../integrations/integration-read.service';
 import { AccountService } from '../../users/account.service';
 import { DataExportService } from '../../users/data-export.service';
 import type { LogtoManagementService } from '../../auth/logto-management.service';
@@ -6506,6 +6508,146 @@ describe('isolamento entre usuários', () => {
       await expect(catalog408.setFavorite(k.donoB, k.a, geral, true)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('configurações, chaves de API e novidades do painel (#413)', () => {
+    const store = new MemoryObjectStore();
+    const media = new MediaService(prisma, store);
+    const groups413 = new GroupService(prisma, new ProfessionalLinkService(prisma), [], media);
+    const keys = new ApiKeyService(prisma);
+    const reads = new IntegrationReadService(prisma);
+    const you413 = new YouService(prisma);
+    const k = { a: '', b: '', donoA: '', adminA: '', membroA: '', donoB: '', membroB: '' };
+    let secretA = '';
+    let keyA = '';
+    let keyB = '';
+    let capaB = '';
+
+    beforeAll(async () => {
+      const stamp = `iso413-${Date.now()}`;
+      const [donoA, adminA, membroA, donoB, membroB] = await Promise.all(
+        ['donoA', 'adminA', 'membroA', 'donoB', 'membroB'].map((n) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${n}`, email: `${stamp}-${n}@test.local`, name: n },
+          }),
+        ),
+      );
+      Object.assign(k, {
+        donoA: donoA.id,
+        adminA: adminA.id,
+        membroA: membroA.id,
+        donoB: donoB.id,
+        membroB: membroB.id,
+      });
+      const grupo = (nome: string, dono: string, outros: [string, GroupRole][]) =>
+        prisma.group.create({
+          data: {
+            type: GroupType.SPONSORED,
+            name: nome,
+            slug: `${stamp}-${nome}`,
+            ownerId: dono,
+            memberships: {
+              create: [
+                { userId: dono, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+                ...outros.map(([userId, role]) => ({
+                  userId,
+                  role,
+                  status: MembershipStatus.ACTIVE,
+                })),
+              ],
+            },
+          },
+        });
+      k.a = (
+        await grupo('a', k.donoA, [
+          [k.adminA, GroupRole.ADMIN],
+          [k.membroA, GroupRole.MEMBER],
+        ])
+      ).id;
+      k.b = (await grupo('b', k.donoB, [[k.membroB, GroupRole.MEMBER]])).id;
+      const criadaA = await keys.create(k.donoA, k.a, { name: 'Zapier A' });
+      secretA = criadaA.secret;
+      keyA = criadaA.key.id;
+      keyB = (await keys.create(k.donoB, k.b, { name: 'Make B' })).key.id;
+      capaB = (
+        await prisma.mediaFile.create({
+          data: {
+            uploaderId: k.donoB,
+            groupId: k.b,
+            purpose: 'group_cover',
+            kind: 'IMAGE',
+            mime: 'image/jpeg',
+            bytes: 10,
+            key: `groups/${k.b}/cover/${stamp}.jpg`,
+            status: 'READY',
+          },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: { in: [k.a, k.b] } } });
+      await prisma.user.deleteMany({
+        where: { id: { in: [k.donoA, k.adminA, k.membroA, k.donoB, k.membroB] } },
+      });
+    });
+
+    it('a chave da A só lê a A: nenhum membro, convite ou envio da B sai por ela', async () => {
+      const ctx = await keys.authenticate(secretA);
+      expect(ctx.groupId).toBe(k.a);
+      const membros = await reads.members(ctx, {});
+      const ids = membros.items.map((m) => m.id);
+      expect(ids).not.toContain(k.membroB);
+      expect(ids).not.toContain(k.donoB);
+      expect(JSON.stringify(membros)).not.toContain('membroB');
+    });
+
+    it('a dona da B não lista, não revoga e não descobre a chave da A', async () => {
+      await expect(keys.list(k.donoB, k.a)).rejects.toThrow(NotFoundException);
+      await expect(keys.revoke(k.donoB, k.a, keyA)).rejects.toThrow(NotFoundException);
+      // O id da chave da A pela rota da B: como inexistente.
+      await expect(keys.revoke(k.donoB, k.b, keyA)).rejects.toThrow(NotFoundException);
+      expect((await prisma.groupApiKey.findUniqueOrThrow({ where: { id: keyA } })).revokedAt).toBe(
+        null,
+      );
+      expect((await keys.list(k.donoB, k.b)).keys.map((c) => c.id)).toEqual([keyB]);
+    });
+
+    it('admin e membro da A não cuidam das chaves; nenhuma resposta traz hash', async () => {
+      await expect(keys.list(k.adminA, k.a)).rejects.toThrow(ForbiddenException);
+      await expect(keys.create(k.membroA, k.a, { name: 'x' })).rejects.toThrow(ForbiddenException);
+      const lista = await keys.list(k.donoA, k.a);
+      expect(JSON.stringify(lista)).not.toMatch(/hash|fatia_live_[A-Za-z0-9]{8}/);
+    });
+
+    it('a capa de outra comunidade não entra como capa desta', async () => {
+      await expect(groups413.setCover(k.donoA, k.a, capaB)).rejects.toThrow(NotFoundException);
+      expect((await prisma.group.findUniqueOrThrow({ where: { id: k.a } })).coverFileId).toBeNull();
+      // Nem a dona da B, pela rota da A.
+      await expect(groups413.setCover(k.donoB, k.a, capaB)).rejects.toThrow(NotFoundException);
+    });
+
+    it('a dona da B não muda cor, seções nem tipo da A', async () => {
+      await expect(
+        groups413.update(k.donoB, k.a, { brandColor: '#1d4ed8', hiddenSections: ['FEED'] }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(groups413.update(k.membroA, k.a, { hiddenSections: ['FEED'] })).rejects.toThrow(
+        ForbiddenException,
+      );
+      const a = await prisma.group.findUniqueOrThrow({ where: { id: k.a } });
+      expect(a.brandColor).toBeNull();
+      expect(a.hiddenSections).toEqual([]);
+    });
+
+    it('a chave revogada pára na hora', async () => {
+      await keys.revoke(k.donoA, k.a, keyA);
+      await expect(keys.authenticate(secretA)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('o membro não lê as novidades do painel; a equipe lê', async () => {
+      await expect(you413.panelNews(k.membroB)).rejects.toThrow(NotFoundException);
+      expect((await you413.panelNews(k.adminA)).items.length).toBeGreaterThan(0);
     });
   });
 

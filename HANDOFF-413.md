@@ -19,11 +19,11 @@ Pranchas em `.canvas/project/` (Pn-15, Pn-38, Pn-38b, Pn-27, Pn-27b, Onb-C2).
 
 ## Checklist
 
-- [ ] schema + migration + seed das novidades
-- [ ] API: configurações (marca, capa, seções, tipo) — vermelho, verde
-- [ ] API: chaves, guarda, cota, log, rotas /integrations/v1 — vermelho, verde
-- [ ] API: novidades e ideias — vermelho, verde
-- [ ] isolamento (user-isolation.spec) + matriz (PERMISSIONS.md)
+- [x] schema + migration (novidades do painel em código: `you/panel-news-catalog.ts`, ids `painel-`, lidas em `UserNewsRead`)
+- [x] API: configurações (marca, capa, seções, tipo) — vermelho, verde
+- [x] API: chaves, guarda, cota, log, rotas /integrations/v1 — vermelho, verde
+- [x] API: novidades e ideias — vermelho, verde
+- [x] isolamento (user-isolation.spec) + matriz (PERMISSIONS.md)
 - [ ] api-client (tipos, rotas, helpers puros) — vermelho, verde
 - [ ] web: Configurações (Pn-15)
 - [ ] web: Integrações (Pn-38/38b)
@@ -35,4 +35,7 @@ Pranchas em `.canvas/project/` (Pn-15, Pn-38, Pn-38b, Pn-27, Pn-27b, Onb-C2).
 
 ## Estado atual
 
-Início: lendo código e pranchas.
+- Rebase sobre a main com a #469 (#410) feito; conflitos em schema e invite.service resolvidos (preview tem avatarUrl + brandColor + coverUrl).
+- API completa e verde (group-settings, integrations, panel-news, user-isolation, account.service, panel, permission-matrix). tsc api ok.
+- `invite-email-retention.spec` falhou uma vez rodando junto com outros (passa sozinho): flake de banco compartilhado, ficar de olho na rodada completa.
+- Próximo: api-client (tipos MyGroup, orgApi update/cover, apiKeys, panelNews, helpers, PanelSection 'integrations'/'updates', ROLE_ACTIONS integration.manage).

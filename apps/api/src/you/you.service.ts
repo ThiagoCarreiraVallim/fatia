@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import type { IdeaArea } from '@fatia/db';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { GroupRole, MembershipStatus, type IdeaArea } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { NEWS, NEWS_IDS, type NewsEntry } from './news-catalog';
-import type { PanelNewsEntry } from './panel-news-catalog';
+import { PANEL_NEWS, PANEL_NEWS_IDS, type PanelNewsEntry } from './panel-news-catalog';
 
 export interface NewsItemView extends NewsEntry {
   unread: boolean;
@@ -71,12 +71,48 @@ export class YouService {
     return this.news(userId);
   }
 
-  async panelNews(_userId: string): Promise<PanelNewsView> {
-    throw new Error('a fazer');
+  /**
+   * As novidades do painel (#413, Pn-27): só para quem é da equipe de alguma
+   * comunidade. Para os outros, a rota não existe (404), como o resto do painel.
+   * Mesma regra do "novo" das do aluno: só conta o que saiu depois da conta.
+   */
+  async panelNews(userId: string): Promise<PanelNewsView> {
+    await this.requireTeamSomewhere(userId);
+    return this.panelNewsOf(userId);
   }
 
-  async markPanelNewsRead(_userId: string, _ids?: string[]): Promise<PanelNewsView> {
-    throw new Error('a fazer');
+  /** Marca as do painel dadas, ou todas; id do aluno ou inventado não grava nada. */
+  async markPanelNewsRead(userId: string, ids?: string[]): Promise<PanelNewsView> {
+    await this.requireTeamSomewhere(userId);
+    const alvo = (ids ?? [...PANEL_NEWS_IDS]).filter((id) => PANEL_NEWS_IDS.has(id));
+    if (alvo.length > 0) {
+      await this.prisma.userNewsRead.createMany({
+        data: alvo.map((newsId) => ({ userId, newsId })),
+        skipDuplicates: true,
+      });
+    }
+    return this.panelNewsOf(userId);
+  }
+
+  private async panelNewsOf(userId: string): Promise<PanelNewsView> {
+    const [user, lidas] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { createdAt: true } }),
+      this.prisma.userNewsRead.findMany({
+        where: { userId, newsId: { in: [...PANEL_NEWS_IDS] } },
+        select: { newsId: true },
+      }),
+    ]);
+    const lido = new Set(lidas.map((l) => l.newsId));
+    const desde = user.createdAt.toISOString().slice(0, 10);
+    const items = PANEL_NEWS.map((n) => ({ ...n, unread: !lido.has(n.id) && n.date >= desde }));
+    return { items, unreadCount: items.filter((i) => i.unread).length };
+  }
+
+  private async requireTeamSomewhere(userId: string): Promise<void> {
+    const equipe = await this.prisma.groupMembership.count({
+      where: { userId, status: MembershipStatus.ACTIVE, role: { not: GroupRole.MEMBER } },
+    });
+    if (equipe === 0) throw new NotFoundException('Not found');
   }
 
   async tutorialsSeen(userId: string): Promise<{ seen: string[] }> {
@@ -105,13 +141,14 @@ export class YouService {
     return this.tutorialsSeen(userId);
   }
 
-  async sendIdea(userId: string, body: string, _area?: IdeaArea): Promise<{ sent: true }> {
+  /** A ideia do aluno vem sem área; a da equipe (Pn-27) diz onde ajudaria. */
+  async sendIdea(userId: string, body: string, area?: IdeaArea): Promise<{ sent: true }> {
     const texto = body.trim();
     if (!texto) throw new BadRequestException('Escreva a ideia antes de mandar.');
     if (texto.length > IDEA_MAX) {
       throw new BadRequestException(`A ideia tem no máximo ${IDEA_MAX} caracteres.`);
     }
-    await this.prisma.feedbackIdea.create({ data: { userId, body: texto } });
+    await this.prisma.feedbackIdea.create({ data: { userId, body: texto, area: area ?? null } });
     return { sent: true };
   }
 }
