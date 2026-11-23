@@ -14,6 +14,7 @@ import {
   MAX_ACTIVE_KEYS,
   usageMonth,
 } from '../api-key';
+import { ApiCallRetention } from '../api-call-retention';
 import { ApiKeyService } from '../api-key.service';
 import { IntegrationReadService } from '../integration-read.service';
 
@@ -280,6 +281,20 @@ describe('chaves de API e cota do mês (integração, #413)', () => {
       const ctx = await keys.authenticate(segredo);
       const { items } = await read.members(ctx, { since: new Date(Date.now() - 1.5 * DIA) });
       expect(items.map((i) => i.name)).toEqual(['Bia Aluna']);
+    });
+
+    it('o uso por chave fica 90 dias', async () => {
+      const velha = await prisma.groupApiCall.create({
+        data: {
+          groupId: grupo,
+          keyId: chaveId,
+          endpoint: 'members',
+          at: new Date(Date.now() - 91 * DIA),
+        },
+      });
+      await new ApiCallRetention(prisma).purge(new Date());
+      expect(await prisma.groupApiCall.findUnique({ where: { id: velha.id } })).toBeNull();
+      expect(await prisma.groupApiCall.count({ where: { keyId: chaveId } })).toBeGreaterThan(0);
     });
 
     it('a chave registra o uso: a rota, a hora e o "último uso"', async () => {

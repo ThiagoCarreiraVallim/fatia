@@ -1,4 +1,6 @@
+import { createHash, randomInt } from 'node:crypto';
 import { GroupType } from '@fatia/db';
+import { dateInTz } from '../progress/helpers/date-tz';
 
 /**
  * Chaves de API da comunidade (#413, Pn-38), sem Prisma nem Nest: o formato do
@@ -27,33 +29,42 @@ export const API_MONTHLY_QUOTA: Record<GroupType, number> = {
 
 export type QuotaState = 'ok' | 'near' | 'limit';
 
+const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const KEY_SHAPE = new RegExp(`^${API_KEY_PREFIX}[A-Za-z0-9]{${API_KEY_RANDOM_LENGTH}}$`);
+
+/** `fatia_live_` + 32 caracteres base62 do gerador criptográfico, sem viés. */
 export function generateApiKey(): string {
-  throw new Error('a fazer');
+  let out = '';
+  for (let i = 0; i < API_KEY_RANDOM_LENGTH; i++) out += BASE62[randomInt(BASE62.length)];
+  return API_KEY_PREFIX + out;
 }
 
+/**
+ * O que o banco guarda. sha256 basta (sem sal nem custo): o segredo tem ~190
+ * bits aleatórios, ninguém o adivinha por dicionário, e a busca é pelo hash.
+ */
 export function hashApiKey(raw: string): string {
-  void raw;
-  throw new Error('a fazer');
+  return createHash('sha256').update(raw).digest('hex');
 }
 
+/** Filtro barato antes do banco: o que nem tem o formato não vira consulta. */
 export function looksLikeApiKey(raw: string): boolean {
-  void raw;
-  throw new Error('a fazer');
+  return KEY_SHAPE.test(raw);
 }
 
+/** AAAA-MM no fuso da comunidade: a cota vira à meia-noite do dia 1 dela. */
 export function usageMonth(at: Date, timezone: string): string {
-  void at;
-  void timezone;
-  throw new Error('a fazer');
+  return dateInTz(at, timezone).slice(0, 7);
 }
 
+/** O primeiro dia do mês seguinte (AAAA-MM-DD). */
 export function quotaRenewsOn(month: string): string {
-  void month;
-  throw new Error('a fazer');
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const next = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  return `${next.y}-${String(next.m).padStart(2, '0')}-01`;
 }
 
 export function quotaState(used: number, limit: number): QuotaState {
-  void used;
-  void limit;
-  throw new Error('a fazer');
+  if (used >= limit) return 'limit';
+  return used >= limit * NEAR_QUOTA_RATIO ? 'near' : 'ok';
 }
