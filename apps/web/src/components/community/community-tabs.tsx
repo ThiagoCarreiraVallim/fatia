@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { communityTabs, activeCommunityTab, forYouApi } from '@fatia/api-client';
+import { communityTabs, activeCommunityTab, forYouApi, groupsApi } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { communityKeys } from './query-keys';
 
 /**
  * As abas da comunidade para o membro: Mural (a raiz), Para você (com o número
  * do que falta), Desafios e Conteúdo. A Agenda da prancha Cm-03 chega com a #397.
+ * Mural e Desafios somem quando a comunidade os esconde (#413); só visual.
  */
 export function CommunityTabs({ groupId }: { groupId: string }) {
   const pathname = usePathname() ?? '';
@@ -18,11 +19,15 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
     queryKey: communityKeys.forYou(groupId),
     queryFn: () => forYouApi.get(groupId),
   });
+  const group = useQuery({
+    queryKey: communityKeys.group(groupId),
+    queryFn: () => groupsApi.get(groupId),
+  });
   const count = forYou.data?.count ?? 0;
   return (
     <nav aria-label="Seções da comunidade" className="-mx-4 overflow-x-auto px-4">
       <ul className="flex min-w-max gap-1 border-b border-subtle">
-        {communityTabs(groupId).map((t) => (
+        {communityTabs(groupId, group.data?.hiddenSections).map((t) => (
           <li key={t.tab}>
             <Link
               href={t.href}

@@ -83,7 +83,7 @@ describe('convite', () => {
     );
     const raiz = container.firstElementChild as HTMLElement;
     // #1d4ed8 em HSL: 224 76% 48%.
-    expect(raiz.style.getPropertyValue('--brand')).toMatch(/^224 /);
+    expect(raiz.style.getPropertyValue('--brand')).toMatch(/^224(\.\d+)? /);
     expect(container.querySelector('img[src="https://cdn.test/capa.jpg"]')).not.toBeNull();
   });
 
@@ -92,7 +92,7 @@ describe('convite', () => {
       <InviteSignedOut token={TOKEN} preview={PREVIEW} socialTargets={[]} />,
     );
     expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--brand')).toMatch(
-      /^2[0-9] /,
+      /^2[0-9](\.\d+)? /,
     );
     expect(container.querySelector('img')).toBeNull();
   });

@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AccountForm } from '@/components/auth/account-form';
 import { signInHref } from '@/lib/next-path';
+import { brandStyle } from './brand-cover';
 import { ConsentForm } from './consent-form';
 
 /** Inválido, vencido ou de outra conta: a mesma frase, sem dizer o motivo. */
@@ -72,9 +73,22 @@ export function InviteSignedOut({
   socialTargets: SocialTarget[];
 }) {
   const next = `/c/${token}`;
+  const capa = preview.group.coverUrl;
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="flex h-[150px] items-end rounded-card bg-[linear-gradient(160deg,hsl(var(--brand)),#1a0c02)] px-6 pb-[18px]">
+    // A cor da comunidade (#413) entra pelo `--brand`: a faixa, o selo e o botão.
+    <div className="flex flex-col gap-3.5" style={brandStyle(preview.group.brandColor)}>
+      <div className="relative isolate flex h-[150px] items-end overflow-hidden rounded-card bg-[linear-gradient(160deg,hsl(var(--brand)),#1a0c02)] px-6 pb-[18px]">
+        {capa && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador */}
+            <img src={capa} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+            {/* O nome vai em branco sobre a foto: o véu garante o contraste. */}
+            <span
+              aria-hidden
+              className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.7))]"
+            />
+          </>
+        )}
         <div className="flex items-center gap-3">
           <span
             aria-hidden

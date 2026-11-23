@@ -14,6 +14,7 @@ import {
   feedApi,
   type FeedFilter,
   groupsApi,
+  isSectionHidden,
   panelHref,
 } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
@@ -47,6 +48,9 @@ export default function CommunityFeedPage() {
   // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
   // que a pessoa está dentro.
   const active = group.data?.status === 'ACTIVE';
+  // A comunidade escondeu o Mural (#413): a aba some e a página não lê posts.
+  // Só visual: nada do que foi postado se perde, e volta ao mostrar de novo.
+  const muralEscondido = group.data ? isSectionHidden(group.data, 'FEED') : false;
 
   const qc = useQueryClient();
   const [filter, setFilter] = useState<FeedFilter>('all');
@@ -55,7 +59,7 @@ export default function CommunityFeedPage() {
     queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filter),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: active,
+    enabled: active && !muralEscondido,
   });
 
   const firstPage = feed.data?.pages[0];
@@ -151,6 +155,19 @@ export default function CommunityFeedPage() {
       )}
 
       {active && <CommunityTabs groupId={groupId} />}
+
+      {active && muralEscondido && (
+        <EmptyState
+          icon={MessagesSquare}
+          title="O mural está escondido nesta comunidade."
+          description="A equipe escolheu não mostrar o mural por aqui. O resto da comunidade continua nas outras abas."
+          action={
+            <Button asChild variant="outline">
+              <Link href={`/community/${groupId}/for-you`}>Ver Para você</Link>
+            </Button>
+          }
+        />
+      )}
 
       {active && feed.isPending && <Skeleton className="h-40 rounded-2xl bg-card" />}
 
