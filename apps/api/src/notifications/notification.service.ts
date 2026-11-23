@@ -392,20 +392,33 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     community: string,
     actor: string | null,
   ): Promise<void> {
-    const agora = new Date();
-    // Atômico: dois comentários ao mesmo tempo não mandam dois avisos.
-    const contado = await this.prisma.pendingNotice.updateMany({
-      where: { key, userId, windowEndsAt: { gt: agora } },
-      data: { count: { increment: 1 }, ...(actor ? { actor } : {}) },
-    });
-    if (contado.count > 0) return;
-    const windowEndsAt = new Date(agora.getTime() + GROUP_WINDOW_MS);
-    await this.prisma.pendingNotice.upsert({
-      where: { key_userId: { key, userId } },
-      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt, actor },
-      update: { count: 0, community, url: notice.url, windowEndsAt, actor },
-    });
-    await this.deliver([userId], notice);
+    const now = new Date();
+    const windowEndsAt = new Date(now.getTime() + GROUP_WINDOW_MS);
+    const window = { count: 0, community, url: notice.url, windowEndsAt, actor };
+    // Cada passo é um comando só no banco, e só quem abre a janela avisa na hora:
+    // dois avisos ao mesmo tempo (o segundo comentário chega enquanto o primeiro
+    // ainda abre a janela) não mandam dois. Ler e depois gravar, como antes,
+    // deixava os dois verem "sem janela", avisarem e zerarem a conta.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const opened = await this.prisma.pendingNotice.createMany({
+        data: [{ key, userId, kind: notice.kind, ...window }],
+        skipDuplicates: true,
+      });
+      if (opened.count > 0) return this.deliver([userId], notice);
+      const counted = await this.prisma.pendingNotice.updateMany({
+        where: { key, userId, windowEndsAt: { gt: now } },
+        data: { count: { increment: 1 }, ...(actor ? { actor } : {}) },
+      });
+      if (counted.count > 0) return;
+      // Janela vencida que o `flushGrouped` ainda não fechou: reabre.
+      const reopened = await this.prisma.pendingNotice.updateMany({
+        where: { key, userId, windowEndsAt: { lte: now } },
+        data: window,
+      });
+      if (reopened.count > 0) return this.deliver([userId], notice);
+      // Outro aviso reabriu, ou o `flushGrouped` apagou, entre um passo e outro: de novo.
+    }
+    this.logger.warn(`Aviso agrupado "${notice.kind}" não entrou na janela`);
   }
 
   /** Fecha as janelas vencidas: quem teve mais avisos nelas recebe um, com o total. */

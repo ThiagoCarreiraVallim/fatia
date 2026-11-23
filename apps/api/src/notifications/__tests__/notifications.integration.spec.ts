@@ -254,6 +254,29 @@ describe('avisos no celular (integração)', () => {
       expect((await recebidos()).map((r) => r.title)).toEqual(['Bia comentou seu post']);
     });
 
+    it('avisos ao mesmo tempo sobre a mesma coisa: só um sai na hora, os outros entram na conta', async () => {
+      // Sem `await` entre um e outro: o segundo chega enquanto o primeiro ainda
+      // abre a janela — é o que acontece com comentários em sequência no CI lento.
+      const c = await comunidade();
+      const key = `comment:${stamp}-simultaneos`;
+      const url = `/community/${c.groupId}/feed`;
+      const notice = {
+        kind: NotificationKind.FEED,
+        title: 'Bia comentou seu post',
+        body: 'No mural de Academia.',
+        url,
+      };
+      for (let i = 0; i < 5; i += 1) {
+        notifications.notifyGrouped(c.membro, key, notice, 'Academia', 'Bia');
+      }
+      expect((await recebidos()).map((r) => r.title)).toEqual(['Bia comentou seu post']);
+      const pendente = await prisma.pendingNotice.findUnique({
+        where: { key_userId: { key, userId: c.membro } },
+      });
+      expect(pendente?.count).toBe(4);
+      await prisma.pendingNotice.deleteMany({ where: { key } });
+    });
+
     it('janela vencida sem comentário novo não manda nada', async () => {
       const c = await comunidade();
       const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
