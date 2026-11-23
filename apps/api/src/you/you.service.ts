@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { IdeaArea } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { NEWS, NEWS_IDS, type NewsEntry } from './news-catalog';
+import type { PanelNewsEntry } from './panel-news-catalog';
 
 export interface NewsItemView extends NewsEntry {
   unread: boolean;
@@ -8,6 +10,15 @@ export interface NewsItemView extends NewsEntry {
 
 export interface NewsView {
   items: NewsItemView[];
+  unreadCount: number;
+}
+
+export interface PanelNewsItemView extends PanelNewsEntry {
+  unread: boolean;
+}
+
+export interface PanelNewsView {
+  items: PanelNewsItemView[];
   unreadCount: number;
 }
 
@@ -60,6 +71,14 @@ export class YouService {
     return this.news(userId);
   }
 
+  async panelNews(_userId: string): Promise<PanelNewsView> {
+    throw new Error('a fazer');
+  }
+
+  async markPanelNewsRead(_userId: string, _ids?: string[]): Promise<PanelNewsView> {
+    throw new Error('a fazer');
+  }
+
   async tutorialsSeen(userId: string): Promise<{ seen: string[] }> {
     const rows = await this.prisma.userTutorialSeen.findMany({
       where: { userId },
@@ -86,7 +105,7 @@ export class YouService {
     return this.tutorialsSeen(userId);
   }
 
-  async sendIdea(userId: string, body: string): Promise<{ sent: true }> {
+  async sendIdea(userId: string, body: string, _area?: IdeaArea): Promise<{ sent: true }> {
     const texto = body.trim();
     if (!texto) throw new BadRequestException('Escreva a ideia antes de mandar.');
     if (texto.length > IDEA_MAX) {
