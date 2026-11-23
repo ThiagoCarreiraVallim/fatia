@@ -10,6 +10,7 @@ import {
   sectionSubtitle,
   sectionToast,
   teamSummaryLabel,
+  timezoneOptions,
   toggleSection,
   visibleCommunityPlans,
   visibleCommunityTips,
@@ -119,6 +120,17 @@ describe('configurações da comunidade no cliente (#413, Pn-15)', () => {
       ['MEAL_PHOTOS', 'Fotos das refeições', 'Nunca obrigatória · só quem guarda as fotos', true],
     ]);
     expect(MEAL_PHOTOS_LOCKED).toBe('Fotos das refeições não pode ser obrigatória');
+  });
+
+  it('fuso: os do Brasil com a cidade e a hora; o atual fora da lista entra no topo', () => {
+    const br = timezoneOptions('America/Cuiaba');
+    expect(br.find((o) => o.value === 'America/Cuiaba')?.label).toBe('Cuiabá (−4)');
+    expect(br.find((o) => o.value === 'America/Sao_Paulo')?.label).toBe('São Paulo (−3)');
+    expect(br.find((o) => o.value === 'America/Noronha')?.label).toBe('Noronha (−2)');
+    expect(br.find((o) => o.value === 'America/Rio_Branco')?.label).toBe('Rio Branco (−5)');
+    const fora = timezoneOptions('Europe/Lisbon');
+    expect(fora[0]).toEqual({ value: 'Europe/Lisbon', label: 'Lisbon' });
+    expect(fora.length).toBe(br.length + 1);
   });
 
   it('o resumo da equipe junta dono e admin, e diz zero com palavras', () => {

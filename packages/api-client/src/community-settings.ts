@@ -159,3 +159,7 @@ export function teamSummaryLabel(counts: Partial<Record<GroupRole, number>>): st
   ].filter(Boolean);
   return `${plural(total, 'pessoa', 'pessoas')} · ${partes.join(', ')}`;
 }
+
+export function timezoneOptions(_current: string): { value: string; label: string }[] {
+  throw new Error('a fazer');
+}
