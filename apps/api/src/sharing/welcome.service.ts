@@ -4,10 +4,20 @@ import { PrismaService } from '../common/prisma.service';
 import { requireContentRole } from './content-roles';
 import { TEAM_ROLES } from './permissions';
 
-/** Até 3 páginas, texto até 300 caracteres (#410: limite mantido), título até 80. */
+/**
+ * Até 3 páginas, texto até 300 caracteres (#410: limite mantido), título até
+ * 80, contados como o aluno vê (grafemas: emoji com tom de pele conta 1).
+ */
 export const WELCOME_MAX_PAGES = 3;
 export const WELCOME_BODY_MAX = 300;
 export const WELCOME_TITLE_MAX = 80;
+/**
+ * O teto do banco, em pontos de código (`char_length` do CHECK): folgado para
+ * 300 grafemas compostos, mas barra texto patológico (milhares de acentos num
+ * caractere). A API recusa antes de o Postgres ver.
+ */
+export const WELCOME_BODY_CAP = 2000;
+export const WELCOME_TITLE_CAP = 600;
 
 export interface WelcomePageInput {
   kind: GroupWelcomeKind;
@@ -69,21 +79,25 @@ export class WelcomeService {
     if (input.published && pages.length === 0) {
       throw new BadRequestException('Crie ao menos uma página antes de publicar');
     }
-    const atual = await this.prisma.group.findUniqueOrThrow({
-      where: { id: groupId },
-      select: { welcomePublishedAt: true },
-    });
-    const publishedAt = input.published ? (atual.welcomePublishedAt ?? new Date()) : null;
-    await this.prisma.$transaction([
-      this.prisma.groupWelcomePage.deleteMany({ where: { groupId } }),
-      this.prisma.groupWelcomePage.createMany({
+    // Dois salvamentos ao mesmo tempo (duas abas, retry) apagariam e criariam
+    // as mesmas posições em paralelo (P2002 → 500). A linha do grupo fica
+    // travada até o commit: um espera o outro e o último vale.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Group" WHERE "id" = ${groupId} FOR UPDATE`;
+      const atual = await tx.group.findUniqueOrThrow({
+        where: { id: groupId },
+        select: { welcomePublishedAt: true },
+      });
+      const publishedAt = input.published ? (atual.welcomePublishedAt ?? new Date()) : null;
+      await tx.groupWelcomePage.deleteMany({ where: { groupId } });
+      await tx.groupWelcomePage.createMany({
         data: pages.map((p, i) => ({ groupId, position: i + 1, ...p })),
-      }),
-      this.prisma.group.update({
+      });
+      await tx.group.update({
         where: { id: groupId },
         data: { welcomePublishedAt: publishedAt, welcomeShowOnJoin: input.showOnJoin },
-      }),
-    ]);
+      });
+    });
     return this.read(groupId);
   }
 
@@ -114,23 +128,51 @@ export class WelcomeService {
   }
 }
 
-/** Caracteres como o aluno vê (emoji conta 1), o mesmo que o `char_length` do CHECK. */
-const length = (s: string) => [...s].length;
+type GraphemeSegmenter = { segment(s: string): Iterable<unknown> };
+const Segmenter = (
+  Intl as unknown as {
+    Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => GraphemeSegmenter;
+  }
+).Segmenter;
+const graphemes = Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
-/** Texto puro: quebra de linha única, sem espaço nas pontas de cada linha e do todo. */
+/**
+ * Caracteres como o aluno vê: grafemas (emoji com tom de pele, família e
+ * acento combinado contam 1). Gêmeo de `welcomeCharCount` no api-client, com
+ * os mesmos casos de teste; a API não depende do api-client.
+ */
+export function welcomeLength(s: string): number {
+  if (!graphemes) return [...s].length;
+  return [...graphemes.segment(s)].length;
+}
+
+/** Pontos de código, como o `char_length` do CHECK do banco. */
+const codePoints = (s: string) => [...s].length;
+
+/** Controles C0 e DEL: o NUL derruba o Postgres; o resto não tem o que fazer no texto. */
+// eslint-disable-next-line no-control-regex
+const CONTROLS = /[\u0000-\u0008\u000B-\u001F\u007F]/g;
+
+/** Texto puro: quebra de linha única, sem controles, sem espaço nas pontas de cada linha e do todo. */
 function cleanPage(p: WelcomePageInput): WelcomePageInput {
-  const title = p.title.trim().replace(/\s+/g, ' ');
+  const title = p.title
+    .replace(/[\t\n\r]/g, ' ')
+    .replace(CONTROLS, '')
+    .trim()
+    .replace(/\s+/g, ' ');
   const body = p.body
     .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, ' ')
+    .replace(CONTROLS, '')
     .split('\n')
     .map((l) => l.trimEnd())
     .join('\n')
     .trim();
   if (!title) throw new BadRequestException('Toda página precisa de título');
-  if (length(title) > WELCOME_TITLE_MAX) {
+  if (codePoints(title) > WELCOME_TITLE_CAP || welcomeLength(title) > WELCOME_TITLE_MAX) {
     throw new BadRequestException(`Título até ${WELCOME_TITLE_MAX} caracteres`);
   }
-  if (length(body) > WELCOME_BODY_MAX) {
+  if (codePoints(body) > WELCOME_BODY_CAP || welcomeLength(body) > WELCOME_BODY_MAX) {
     throw new BadRequestException(`Texto até ${WELCOME_BODY_MAX} caracteres`);
   }
   return { kind: p.kind, title, body, showTeam: p.showTeam };

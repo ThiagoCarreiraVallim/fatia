@@ -1,4 +1,6 @@
 -- Páginas de boas-vindas da comunidade (#410). Só aditiva.
+-- Os CHECKs de título e texto são teto de segurança em pontos de código: o
+-- limite de verdade (80 e 300 grafemas, como o aluno vê) fica na API.
 
 -- CreateEnum
 CREATE TYPE "GroupWelcomeKind" AS ENUM ('COVER', 'PLAIN');
@@ -21,8 +23,8 @@ CREATE TABLE "GroupWelcomePage" (
 
     CONSTRAINT "GroupWelcomePage_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "GroupWelcomePage_position_check" CHECK ("position" BETWEEN 1 AND 3),
-    CONSTRAINT "GroupWelcomePage_title_check" CHECK (char_length("title") BETWEEN 1 AND 80),
-    CONSTRAINT "GroupWelcomePage_body_check" CHECK (char_length("body") <= 300)
+    CONSTRAINT "GroupWelcomePage_title_check" CHECK (char_length("title") BETWEEN 1 AND 600),
+    CONSTRAINT "GroupWelcomePage_body_check" CHECK (char_length("body") <= 2000)
 );
 
 -- CreateIndex

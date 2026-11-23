@@ -17,8 +17,8 @@ import {
  */
 export class WelcomePageDto {
   @IsEnum(GroupWelcomeKind) kind!: GroupWelcomeKind;
-  @IsString() @MaxLength(400) title!: string;
-  @IsString() @MaxLength(1200) body!: string;
+  @IsString() @MaxLength(1200) title!: string;
+  @IsString() @MaxLength(4000) body!: string;
   @IsBoolean() showTeam!: boolean;
 }
 

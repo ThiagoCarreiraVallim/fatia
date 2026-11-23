@@ -78,9 +78,44 @@ export const welcomeApi = {
   pages: (groupId: string) => apiFetch<WelcomeMemberView>(`${base(groupId)}/pages`),
 };
 
-/** Caracteres como o aluno vê (emoji conta 1), como a API conta. */
+type GraphemeSegmenter = { segment(s: string): Iterable<unknown> };
+const Segmenter = (
+  Intl as unknown as {
+    Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => GraphemeSegmenter;
+  }
+).Segmenter;
+const graphemes = Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;
+
+/**
+ * Caracteres como o aluno vê: grafemas (emoji com tom de pele, família,
+ * bandeira e acento combinado contam 1), como a API conta (`welcomeLength`).
+ */
 export function welcomeCharCount(text: string): number {
-  return [...text].length;
+  if (graphemes) {
+    return [...graphemes.segment(text)].length;
+  }
+  // Sem Intl.Segmenter (Hermes antigo): aproxima juntando marcas, seletores,
+  // tons de pele, o que vem depois de ZWJ e os pares de bandeira.
+  let n = 0;
+  let joined = false;
+  let flagHalf = false;
+  for (const ch of text) {
+    if (ch === '\u200d') {
+      joined = true;
+      continue;
+    }
+    if (/\p{M}|\ufe0f|[\u{1F3FB}-\u{1F3FF}]/u.test(ch)) continue;
+    if (joined) {
+      joined = false;
+      continue;
+    }
+    if (/\p{Regional_Indicator}/u.test(ch)) {
+      flagHalf = !flagHalf;
+      if (!flagHalf) continue;
+    } else flagHalf = false;
+    n += 1;
+  }
+  return n;
 }
 
 export interface WelcomeLine {

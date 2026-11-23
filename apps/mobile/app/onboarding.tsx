@@ -202,6 +202,14 @@ export default function OnboardingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumedAt]);
 
+  // A comunidade tirou as páginas no meio do caminho (voltou para rascunho):
+  // a etapa não tem o que mostrar, então anda em vez de ficar em branco.
+  const communityGone = step === 'community' && invite.isFetched && !ctx.communityPages;
+  useEffect(() => {
+    if (communityGone) void advance({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityGone]);
+
   useEffect(() => {
     if (autoFinish) void finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -569,6 +577,7 @@ export default function OnboardingScreen() {
       screen = inviteData?.welcome?.length ? (
         <WelcomePagesView
           groupName={inviteData.group.name}
+          avatarUrl={inviteData.group.avatarUrl ?? null}
           pages={inviteData.welcome}
           team={inviteData.team}
           onSkip={() => void advance({})}

@@ -283,7 +283,14 @@ export interface GroupPreview {
 
 /** `GET /groups/invites/:token`, sem login: o cartão do convite. */
 export interface InvitePreview {
-  group: { id: string; name: string; description: string | null; type: GroupType };
+  group: {
+    id: string;
+    name: string;
+    description: string | null;
+    type: GroupType;
+    /** O avatar da comunidade, para a capa das boas-vindas (#410, Onb-02b). */
+    avatarUrl?: string | null;
+  };
   role: GroupRole;
   invitedBy: string | null;
   team: TeamMember[];

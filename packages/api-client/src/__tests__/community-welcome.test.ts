@@ -122,4 +122,19 @@ describe('boas-vindas da comunidade no cliente (#410)', () => {
       welcomeDraftErrors([{ kind: 'PLAIN', title: 'Oi', body: '👍🏽'.repeat(300), showTeam: false }]),
     ).toEqual([{}]);
   });
+
+  it('sem Intl.Segmenter (Hermes antigo) a conta aproximada dá o mesmo nos casos comuns', async () => {
+    const original = (Intl as { Segmenter?: unknown }).Segmenter;
+    vi.resetModules();
+    (Intl as { Segmenter?: unknown }).Segmenter = undefined;
+    try {
+      const { welcomeCharCount: semSegmenter } = await import('../community-welcome');
+      for (const s of ['👍🏽', '👨‍👩‍👧', '🇧🇷 é', 'e\u0301', '💪 bora', '❤️ ok']) {
+        expect(semSegmenter(s)).toBe(welcomeCharCount(s));
+      }
+    } finally {
+      (Intl as { Segmenter?: unknown }).Segmenter = original;
+      vi.resetModules();
+    }
+  });
 });
