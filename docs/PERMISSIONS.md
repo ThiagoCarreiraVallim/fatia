@@ -80,6 +80,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `member.assign`        | sim   | sim   | não          | não     | não       | não    |
 | `billing.read`         | sim   | não   | não          | não     | não       | não    |
 | `billing.manage`       | sim   | não   | não          | não     | não       | não    |
+| `integration.manage`   | sim   | não   | não          | não     | não       | não    |
 | `content.publish`      | sim   | sim   | sim          | sim     | não       | não    |
 | `content.read`         | sim   | sim   | sim          | sim     | sim       | sim    |
 | `content.moderate`     | sim   | sim   | não          | não     | não       | não    |
@@ -290,6 +291,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `member.assign`        | não                  |
 | `billing.read`         | não                  |
 | `billing.manage`       | não                  |
+| `integration.manage`   | não                  |
 | `content.publish`      | não                  |
 | `content.read`         | não                  |
 | `content.moderate`     | não                  |
