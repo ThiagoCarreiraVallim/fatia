@@ -35,6 +35,7 @@ export type GroupAction =
   | 'member.assign'
   | 'billing.read'
   | 'billing.manage'
+  | 'integration.manage'
   | 'content.publish'
   | 'content.read'
   | 'content.moderate'

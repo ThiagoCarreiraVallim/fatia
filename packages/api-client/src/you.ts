@@ -53,8 +53,20 @@ export const tutorialsApi = {
 
 export const IDEA_MAX = 1000;
 
+export type IdeaArea = 'COMMUNITY' | 'MEMBERS' | 'PLANS' | 'REPORT';
+export const IDEA_AREAS: readonly { value: IdeaArea; label: string }[] = [];
+
+export const panelNewsApi = {
+  list: (): Promise<unknown> => Promise.reject(new Error('a fazer')),
+  markRead: (_ids?: string[]): Promise<unknown> => Promise.reject(new Error('a fazer')),
+};
+
+export function panelUnreadLabel(_n: number): string {
+  throw new Error('a fazer');
+}
+
 export const ideasApi = {
-  send: (body: string) =>
+  send: (body: string, _area?: IdeaArea) =>
     apiFetch<{ sent: true }>('/api/feedback/ideas', {
       method: 'POST',
       body: JSON.stringify({ body }),

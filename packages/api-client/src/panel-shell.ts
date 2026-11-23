@@ -180,6 +180,10 @@ export function panelNav(role: GroupRole, counts?: PanelCounts): PanelNavGroup[]
 
 const FOOTER_LABEL: Partial<Record<PanelSection, string>> = { settings: 'Configurações' };
 
+export function panelFooterLabel(_section: PanelSection): string {
+  throw new Error('a fazer');
+}
+
 /** "Acompanhar › Visão geral" no topo da página. */
 export function panelBreadcrumb(pathname: string): { group: string | null; label: string } {
   const section = activePanelSection(pathname);

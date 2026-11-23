@@ -1,3 +1,4 @@
+import type { CommunitySection } from './community-settings';
 import { apiFetch } from './http';
 import { markdownLitePlainText } from './markdown-lite';
 import type { MediaView } from './community-content';
@@ -599,6 +600,7 @@ export type CommunityTab = 'feed' | 'for-you' | 'challenges' | 'content';
  */
 export function communityTabs(
   groupId: string,
+  _hidden?: CommunitySection[],
 ): { tab: CommunityTab; label: string; href: string }[] {
   const base = `/community/${groupId}`;
   return [
