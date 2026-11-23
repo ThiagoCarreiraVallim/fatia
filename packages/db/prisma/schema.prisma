@@ -210,6 +210,10 @@ model User {
 
   emailChangeRequests EmailChangeRequest[]
 
+  /// Chaves de API que a pessoa criou numa comunidade (#413). A chave é da
+  /// comunidade: quem criou vira nulo ao apagar a conta.
+  apiKeysCreated GroupApiKey[] @relation("ApiKeyCreator")
+
   @@index([logtoSub])
 }
 
@@ -286,14 +290,24 @@ model UserTutorialSeen {
 /// "Sugerir uma ideia" (Você › Novidades). Texto da pessoa, lido pela equipe do
 /// Fatia; sai no export e com a conta.
 model FeedbackIdea {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   body      String
-  createdAt DateTime @default(now())
+  /// Onde ajudaria, quando a ideia vem do painel (#413, Pn-27). Nula = do app.
+  area      IdeaArea?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// Onde a ideia do painel ajudaria (#413, Pn-27).
+enum IdeaArea {
+  COMMUNITY
+  MEMBERS
+  PLANS
+  REPORT
 }
 
 /// Link de exportação dos dados (LGPD art. 18, V), válido por 24 h. Só o hash do
@@ -921,14 +935,14 @@ model Exercise {
   groupId          String?
   createdAt        DateTime @default(now())
 
-  createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  clonedFrom    Exercise?             @relation("ExerciseClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
-  clones        Exercise[]            @relation("ExerciseClones")
-  group         Group?                @relation("GroupExercises", fields: [groupId], references: [id], onDelete: SetNull)
-  planExercises WorkoutPlanExercise[]
-  sessionSets   SessionSet[]
-  groupGuides   GroupExerciseGuide[]
-  favoritedBy   FavoriteExercise[]
+  createdBy      User?                   @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  clonedFrom     Exercise?               @relation("ExerciseClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
+  clones         Exercise[]              @relation("ExerciseClones")
+  group          Group?                  @relation("GroupExercises", fields: [groupId], references: [id], onDelete: SetNull)
+  planExercises  WorkoutPlanExercise[]
+  sessionSets    SessionSet[]
+  groupGuides    GroupExerciseGuide[]
+  favoritedBy    FavoriteExercise[]
   groupFavorites GroupExerciseFavorite[]
 
   @@unique([name, createdByUserId])
@@ -1912,7 +1926,7 @@ model Group {
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner                  User                   @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner                  User                    @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   memberships            GroupMembership[]
   links                  ProfessionalLink[]
   aiUsage                AiUsage[]
@@ -1924,24 +1938,24 @@ model Group {
   /// Programas vendidos pela comunidade (#403, Pn-37).
   offers                 GroupOffer[]
   /// Avatar da comunidade (ADR 028).
-  avatarFileId           String?                @unique
-  avatarFile             MediaFile?             @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
-  mediaFiles             MediaFile[]            @relation("GroupMedia")
+  avatarFileId           String?                 @unique
+  avatarFile             MediaFile?              @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles             MediaFile[]             @relation("GroupMedia")
   planTemplates          GroupPlanTemplate[]
   tips                   GroupTip[]
   /// Equipamentos que a academia tem (Fase 7b), da lista do catálogo. Serve
   /// ao filtro "Na minha academia".
-  equipment              String[]               @default([])
+  equipment              String[]                @default([])
   /// Equipamentos que a academia nomeou por conta própria ("Hack 45° da casa"),
   /// fora da lista. Valem no filtro "Na minha academia" contra o equipamento
   /// gravado no exercício, e aparecem no editor de exercício.
-  customEquipment        String[]               @default([])
-  exercises              Exercise[]             @relation("GroupExercises")
+  customEquipment        String[]                @default([])
+  exercises              Exercise[]              @relation("GroupExercises")
   exerciseGuides         GroupExerciseGuide[]
   exerciseFavorites      GroupExerciseFavorite[]
   /// O agente da comunidade no chat (Fase 7c, ADR 031).
   agent                  GroupAgent?
-  agentChats             Conversation[]         @relation("ConversationAgent")
+  agentChats             Conversation[]          @relation("ConversationAgent")
   /// Desafios da comunidade (Fase 8a, ADR 027).
   challenges             GroupChallenge[]
   /// Planos alimentares que a equipe mandou a alunos (#376).
@@ -1951,7 +1965,7 @@ model Group {
   /// Anotações da equipe sobre os membros (#402).
   memberNotes            MemberNote[]
   /// Quem publica no mural (Fase 8b, ADR 032).
-  postPolicy             PostPolicy             @default(ALL_MEMBERS)
+  postPolicy             PostPolicy              @default(ALL_MEMBERS)
   posts                  GroupPost[]
   /// Comunicados agendados ou repetidos (#394).
   announcements          GroupAnnouncement[]
@@ -1959,22 +1973,22 @@ model Group {
   /// Que conteúdo novo vira post automático no mural (#394, prancha Pn-14).
   /// Liga por padrão só nas comunidades criadas depois da 20261118100100; as
   /// que já existiam começam desligadas (opt-in na tela de mural).
-  autoPosts              AutoPostKind[]         @default([PLAN, TIP, EXERCISE, CHALLENGE])
+  autoPosts              AutoPostKind[]          @default([PLAN, TIP, EXERCISE, CHALLENGE])
   blocksFrom             UserBlock[]
   /// Descontos de parceiros para os membros (#393).
   partnerBenefits        GroupPartnerBenefit[]
   /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
   /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
   /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
-  requiredSharingScopes  ShareScope[]           @default([])
+  requiredSharingScopes  ShareScope[]            @default([])
   /// "Em risco" (#399): dias sem registrar que põem a pessoa na lista; o
   /// dobro vira "sumiu". Entre 3 e 60 (CHECK na migration).
-  riskDays               Int                    @default(7)
+  riskDays               Int                     @default(7)
   /// Meta da equipe de sessões de treino por semana (#400), a linha do gráfico
   /// do relatório. Nula = sem meta. Entre 1 e 100.000 (CHECK na migration).
   weeklySessionsGoal     Int?
   /// O e-mail mensal do relatório (#400) sai no 1º dia útil. O dono desliga aqui.
-  reportEmailEnabled     Boolean                @default(true)
+  reportEmailEnabled     Boolean                 @default(true)
   /// O último mês (YYYY-MM) cujo relatório saiu por e-mail: gravado só depois
   /// do envio. Na migration, as comunidades que já existiam começam no mês
   /// anterior ao deploy (o 1º e-mail é o do mês do deploy).
@@ -1984,7 +1998,7 @@ model Group {
   reportEmailClaimedAt   DateTime?
   /// "Profissionais veem só quem acompanham" (#404): o profissional só lê e só
   /// lista quem tem `accompaniedById` apontando para ele. Dono e criador, não.
-  proSeeOnlyAssigned     Boolean                @default(false)
+  proSeeOnlyAssigned     Boolean                 @default(false)
   reviewSeen             ReviewSeen[]
   sessionFeedback        SessionFeedback[]
   monthReports           MonthReportSnapshot[]
@@ -1995,10 +2009,102 @@ model Group {
   welcomePublishedAt     DateTime?
   /// "Mostrar ao entrar na comunidade": desligado, as páginas publicadas ficam
   /// só em Comunidade → Sobre.
-  welcomeShowOnJoin      Boolean                @default(true)
+  welcomeShowOnJoin      Boolean                 @default(true)
+  /// Cor de destaque da comunidade (#413), em hex minúsculo. Nula = a cor
+  /// padrão. Só entra cor com 4,5:1 contra texto branco ou escuro
+  /// (`checkBrandColor`, ADR 041); o CHECK da migration fecha o formato.
+  brandColor             String?
+  /// Capa da comunidade (#413): a imagem no alto do topo, no convite e na
+  /// página pública. O avatar (`avatarFileId`) segue sendo o logo.
+  coverFileId            String?                 @unique
+  coverFile              MediaFile?              @relation("GroupCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  /// Seções escondidas para os membros (#413, Pn-15). Só visual: nunca apaga
+  /// dado nem desliga o registro, os planos adotados ou o histórico do aluno.
+  hiddenSections         CommunitySection[]      @default([])
+  /// Chaves de API da comunidade (#413, Pn-38).
+  apiKeys                GroupApiKey[]
+  apiMonthUsage          GroupApiMonthUsage[]
+  apiCalls               GroupApiCall[]
 
   @@index([ownerId])
   @@index([type])
+}
+
+/// Seções da comunidade que a equipe pode esconder dos membros (#413, Pn-15).
+enum CommunitySection {
+  /// Dicas de nutrição (Conteúdo › Dicas).
+  NUTRITION_TIPS
+  /// Planos alimentares para adotar (Conteúdo › Planos).
+  NUTRITION_PLANS
+  /// A aba Desafios e o ranking.
+  CHALLENGES
+  /// O mural: posts, enquetes e comunicados no app.
+  FEED
+  /// Aulas e eventos (a aba entra com a #397).
+  AGENDA
+}
+
+/// O que uma chave de API lê (#413). Nunca dado de saúde.
+enum ApiKeyScope {
+  /// Convites da comunidade (situação, papel, datas).
+  INVITES
+  /// Membros: nome, papel, origem e data de entrada.
+  MEMBERS
+  /// Envios da equipe (planos) e vendas de programas.
+  SENDS
+}
+
+/// Chave de API da comunidade (#413, Pn-38) para Zapier, Make e afins.
+/// Guarda só o sha256 do segredo: o valor aparece uma vez, na criação.
+model GroupApiKey {
+  id          String        @id @default(uuid())
+  groupId     String
+  name        String
+  /// sha256 do segredo inteiro (`fatia_live_…`), em hex.
+  hash        String        @unique
+  /// Os 4 últimos caracteres, para a lista ("fatia_live_…8f2a").
+  lastFour    String
+  scopes      ApiKeyScope[]
+  createdById String?
+  createdAt   DateTime      @default(now())
+  /// Revogada não autentica mais, na próxima chamada.
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+
+  group     Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?          @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  calls     GroupApiCall[]
+
+  @@index([groupId, revokedAt])
+}
+
+/// Chamadas de API da comunidade no mês (#413): a cota. Um contador por
+/// comunidade e mês (AAAA-MM, no fuso da comunidade), incrementado só abaixo
+/// do teto, numa instrução só.
+model GroupApiMonthUsage {
+  groupId String
+  month   String
+  calls   Int    @default(0)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, month])
+}
+
+/// Uso de cada chave (#413): uma linha por chamada aceita, com a rota. Sai em
+/// 90 dias (DATA_RETENTION.md).
+model GroupApiCall {
+  id       String   @id @default(uuid())
+  groupId  String
+  keyId    String
+  endpoint String
+  at       DateTime @default(now())
+
+  group Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  key   GroupApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@index([keyId, at])
+  @@index([at])
 }
 
 /// Por onde a pessoa entrou na comunidade (#398).
@@ -2957,6 +3063,7 @@ model MediaFile {
   uploader       User?                    @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
   group          Group?                   @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
   groupAvatarOf  Group?                   @relation("GroupAvatar")
+  groupCoverOf   Group?                   @relation("GroupCover")
   agentAvatarOf  GroupAgent?              @relation("AgentAvatar")
   templateCovers GroupPlanTemplate[]      @relation("TemplateCover")
   tipImages      GroupTip[]               @relation("TipImage")
@@ -3134,11 +3241,11 @@ model GroupPartnerBenefit {
 /// própria comunidade. É sobreposição, não cópia: o plano e o histórico de
 /// quem treina continuam apontando para o mesmo `exerciseId`.
 model GroupExerciseGuide {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   groupId     String
   exerciseId  Int
   authorId    String?
-  videoFileId String?  @unique
+  videoFileId String? @unique
   /// Markdown restrito (`markdown-lite`), como as dicas.
   tips        String?
 
@@ -3158,8 +3265,8 @@ model GroupExerciseGuide {
   defaultRestSeconds Int?
   defaultLoadMode    PlanLoadMode?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   group    Group                     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   exercise Exercise                  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
