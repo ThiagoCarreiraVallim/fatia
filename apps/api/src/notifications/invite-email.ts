@@ -1,3 +1,4 @@
+import { bestTextOn, checkBrandColor, DEFAULT_BRAND } from '@fatia/design';
 import type { EmailMessage } from './email.service';
 
 const ROLE_LABEL = {
@@ -37,6 +38,21 @@ export function inviteValidityText(expiresAt: Date | null, now: Date = new Date(
 }
 
 /**
+ * A cor do topo e do botão (#413): a da comunidade com o texto que dá
+ * contraste, ou a padrão. Cor recusada (inválida, verde do Fatia) cai na
+ * padrão, a mesma regra do `brandStyle` da web.
+ */
+function emailBrand(color: string | null | undefined): { bg: string; fg: string } {
+  const check = color ? checkBrandColor(color) : null;
+  if (!check || check.status === 'rejected') {
+    return { bg: DEFAULT_BRAND.color, fg: DEFAULT_BRAND.text };
+  }
+  // A gravada sempre passa (ADR 041); a de antes da regra sai no tom sugerido.
+  const bg = (check.status === 'warning' ? check.suggestion : check.color).toLowerCase();
+  return { bg, fg: bestTextOn(bg).text.toLowerCase() };
+}
+
+/**
  * Convite por e-mail (prancha Ex-01). Só o nome da comunidade, quem convidou,
  * o papel e o link — nunca dado de saúde de ninguém. O que a pessoa
  * compartilha é escolhido depois, na tela do convite, com tudo desmarcado.
@@ -72,15 +88,16 @@ export function inviteEmail(params: {
   const g = escapeHtml(params.groupName);
   const who = escapeHtml(params.inviterName);
   const marca = escapeHtml(initials(params.groupName));
+  const { bg, fg } = emailBrand(params.brandColor);
   const html = `<!doctype html><html lang="pt-BR"><body style="margin:0;background:#e9e9e6;font-family:Inter,Arial,sans-serif;color:#1b1b1b">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
-<tr><td style="background:#ff7a1a;padding:24px 32px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:44px;height:44px;border-radius:14px;background:#1f0e00;color:#ff7a1a;font-weight:800;text-align:center;vertical-align:middle">${marca}</td>
-<td style="padding-left:12px;font-size:18px;font-weight:800;color:#1f0e00">${g}</td></tr></table></td></tr>
+<tr><td style="background:${bg};padding:24px 32px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="width:44px;height:44px;border-radius:14px;background:${fg};color:${bg};font-weight:800;text-align:center;vertical-align:middle">${marca}</td>
+<td style="padding-left:12px;font-size:18px;font-weight:800;color:${fg}">${g}</td></tr></table></td></tr>
 <tr><td style="padding:32px 32px 8px;font-size:26px;line-height:1.15;font-weight:800">${who} convidou você para a ${g}</td></tr>
 <tr><td style="padding:8px 32px 20px;font-size:15px;line-height:1.55;color:#444">Entre como <b>${papel}</b>: ${ganha}. Você escolhe o que a equipe vê.</td></tr>
-<tr><td style="padding:0 32px 20px"><a href="${escapeHtml(params.url)}" style="display:inline-block;background:#ff7a1a;color:#1f0e00;font-weight:800;text-decoration:none;padding:14px 26px;border-radius:12px">Aceitar convite</a></td></tr>
+<tr><td style="padding:0 32px 20px"><a href="${escapeHtml(params.url)}" style="display:inline-block;background:${bg};color:${fg};font-weight:800;text-decoration:none;padding:14px 26px;border-radius:12px">Aceitar convite</a></td></tr>
 <tr><td style="padding:0 32px 28px;font-size:13px;color:#777">${validade} Se não esperava este e-mail, pode ignorar.</td></tr>
 <tr><td style="padding:18px 32px;border-top:1px solid #eeeeee;font-size:12px;color:#777">Fatia · Você recebe este e-mail porque alguém da ${g} convidou este endereço.</td></tr>
 </table></td></tr></table></body></html>`;

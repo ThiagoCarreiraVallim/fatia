@@ -453,7 +453,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       },
     });
     const url = this.url(token);
-    const emailSent = email ? await this.enviar(invite, url, actorId) : false;
+    const emailSent = email ? await this.sendInviteEmail(invite, url, actorId) : false;
     return { invite: view(invite, agora), url, emailSent };
   }
 
@@ -881,7 +881,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       where: { id: convite.id },
     });
     const url = this.url(token);
-    const emailSent = await this.enviar(atualizado, url, actorId);
+    const emailSent = await this.sendInviteEmail(atualizado, url, actorId);
     return { invite: view(atualizado, agora), url, emailSent };
   }
 
@@ -969,6 +969,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
           type: true,
           requiredSharingScopes: true,
           avatarFile: true,
+          brandColor: true,
+          coverFile: true,
         },
       }),
       this.prisma.groupMembership.findMany({
@@ -1001,10 +1003,12 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       }),
       welcomeForJoin(this.prisma, convite.groupId),
     ]);
-    const { requiredSharingScopes, avatarFile, ...rest } = grupo;
-    const avatar = this.media ? await this.media.viewOrNull(avatarFile) : null;
+    const { requiredSharingScopes, avatarFile, coverFile, ...rest } = grupo;
+    const [avatar, cover] = this.media
+      ? await Promise.all([this.media.viewOrNull(avatarFile), this.media.viewOrNull(coverFile)])
+      : [null, null];
     return {
-      group: { ...rest, avatarUrl: avatar?.url ?? null, brandColor: null, coverUrl: null },
+      group: { ...rest, avatarUrl: avatar?.url ?? null, coverUrl: cover?.url ?? null },
       role: convite.role,
       invitedBy: autor?.name ?? null,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
@@ -1357,7 +1361,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       where: { id: convite.id },
     });
     const url = this.url(token);
-    const emailSent = await this.enviar(atualizado, url, actorId);
+    const emailSent = await this.sendInviteEmail(atualizado, url, actorId);
     return { invite: view(atualizado, agora), url, emailSent };
   }
 
@@ -1521,7 +1525,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     return `${origem}/c/${token}`;
   }
 
-  private async enviar(
+  private async sendInviteEmail(
     convite: { email: string | null; role: GroupRole; expiresAt: Date | null; groupId: string },
     url: string,
     actorId: string,
@@ -1530,7 +1534,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const [grupo, autor] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: convite.groupId },
-        select: { name: true },
+        select: { name: true, brandColor: true },
       }),
       this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } }),
     ]);
@@ -1558,6 +1562,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         role: convite.role,
         url,
         expiresAt: convite.expiresAt,
+        brandColor: grupo.brandColor,
       }),
     );
   }

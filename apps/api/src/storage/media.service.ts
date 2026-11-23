@@ -32,6 +32,8 @@ import { readVideoDurationMs } from './video-duration';
  */
 export const MEDIA_PURPOSES = {
   group_avatar: { kinds: [MediaKind.IMAGE], action: 'group.update' },
+  /** A capa da comunidade (#413): topo, convite e página pública. */
+  group_cover: { kinds: [MediaKind.IMAGE], action: 'group.update' },
   group_content: { kinds: [MediaKind.IMAGE], action: 'content.publish' },
   /** Tutorial da comunidade para um exercício (Fase 7b): o vídeo e as fotos. */
   exercise_video: { kinds: [MediaKind.VIDEO], action: 'content.publish' },
@@ -649,6 +651,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           { status: MediaStatus.PENDING },
           {
             groupAvatarOf: { is: null },
+            groupCoverOf: { is: null },
             agentAvatarOf: { is: null },
             templateCovers: { none: {} },
             tipImages: { none: {} },
