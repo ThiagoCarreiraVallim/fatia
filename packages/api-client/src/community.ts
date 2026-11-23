@@ -299,6 +299,10 @@ export interface InvitePreview {
     type: GroupType;
     /** O avatar da comunidade, para a capa das boas-vindas (#410, Onb-02b). */
     avatarUrl?: string | null;
+    /** A cor da comunidade (#413) para a capa e o botão. Nula = a padrão. */
+    brandColor?: string | null;
+    /** A capa da comunidade (#413). Nula = a faixa na cor. */
+    coverUrl?: string | null;
   };
   role: GroupRole;
   invitedBy: string | null;

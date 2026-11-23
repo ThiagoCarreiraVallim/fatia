@@ -141,6 +141,19 @@ describe('/community/[groupId] (o mural)', () => {
     ]);
   });
 
+  it('mural escondido (#413): sem a aba e sem posts, com o caminho para o resto', async () => {
+    renderPage(pagina(), grupo({ hiddenSections: ['FEED'] }));
+    expect(await screen.findByText('O mural está escondido nesta comunidade.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver Para você' })).toHaveAttribute(
+      'href',
+      '/community/g1/for-you',
+    );
+    const abas = screen.getByRole('navigation', { name: 'Seções da comunidade' });
+    expect(within(abas).queryByRole('link', { name: 'Mural' })).toBeNull();
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(feedApi.list).not.toHaveBeenCalled();
+  });
+
   it('a equipe tem o ícone do painel ao lado da engrenagem', async () => {
     renderPage(pagina(), grupo({ role: 'PROFESSIONAL' }));
     expect(await screen.findByRole('link', { name: 'Abrir painel da equipe' })).toHaveAttribute(
