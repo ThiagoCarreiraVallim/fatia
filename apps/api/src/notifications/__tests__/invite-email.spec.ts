@@ -60,4 +60,18 @@ describe('inviteEmail (Ex-01)', () => {
     expect(m.html).not.toContain('<b>Academia</b>');
     expect(m.html).toContain('Ana &#38; Cia');
   });
+
+  it('a cor da comunidade pinta o topo e o botão, com o texto que dá contraste (#413)', () => {
+    const m = inviteEmail({ ...base, expiresAt: null, brandColor: '#1d4ed8' });
+    expect(m.html).toContain('background:#1d4ed8');
+    expect(m.html).not.toContain('#ff7a1a');
+    // Azul escuro pede texto branco por cima.
+    expect(m.html).toContain('color:#ffffff');
+  });
+
+  it('cor recusada (verde do Fatia) cai na cor padrão', () => {
+    const m = inviteEmail({ ...base, expiresAt: null, brandColor: '#2ce500' });
+    expect(m.html).toContain('background:#ff7a1a');
+    expect(m.html).not.toContain('#2ce500');
+  });
 });

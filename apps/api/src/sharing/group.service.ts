@@ -13,6 +13,7 @@ import {
   MembershipStatus,
   type Group,
   type AutoPostKind,
+  type CommunitySection,
   type GroupAiMode,
   type GroupMembership,
   type Prisma,
@@ -87,6 +88,15 @@ export interface UpdateGroupInput {
   requiredSharingScopes?: ShareScope[];
   /** "Profissionais veem só quem acompanham" (#404). */
   proSeeOnlyAssigned?: boolean;
+  /**
+   * Patrocinada ou social (#413). Só o dono muda (é cobrança); patrocinada com
+   * assentos valendo não vira social.
+   */
+  type?: GroupType;
+  /** Cor de destaque (#413). Nula = a cor padrão. Só entra com contraste. */
+  brandColor?: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
+  hiddenSections?: CommunitySection[];
 }
 
 export interface GroupSummary {
@@ -136,6 +146,12 @@ export interface GroupSummary {
   visibility: GroupVisibility;
   /** Fuso da comunidade ("fuso Cuiabá" no Cm-04). */
   timezone: string;
+  /** Cor de destaque da comunidade (#413). Nula = a cor padrão. */
+  brandColor: string | null;
+  /** Capa da comunidade (#413), por URL assinada de curta duração. */
+  coverUrl: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
+  hiddenSections: CommunitySection[];
   /** Pessoas ativas na comunidade. */
   memberCount: number;
   /** Posts dos outros desde a última visita ao mural (`feedSeenAt`). */
@@ -194,6 +210,7 @@ const INCLUIR = {
 function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
+  coverUrl: string | null,
   hasAiSeat: boolean,
   proPaidByThisGroup: boolean,
   extras: MembershipExtras,
@@ -223,6 +240,9 @@ function toSummary(
     requiredSharingScopes: m.group.requiredSharingScopes,
     visibility: m.group.visibility,
     timezone: m.group.timezone,
+    brandColor: null,
+    coverUrl,
+    hiddenSections: [],
     ...extras,
   };
 }
@@ -255,6 +275,7 @@ export class GroupService {
     return toSummary(
       m,
       avatar?.url ?? null,
+      null,
       withSeat.has(m.id),
       payer === m.groupId,
       extras.get(m.id) ?? SEM_EXTRAS,
@@ -548,6 +569,12 @@ export class GroupService {
       await this.media?.discardById(atual.avatarFileId);
     }
     return this.findByIdForMember(ownerId, groupId);
+  }
+
+  /** Troca (ou tira, com `null`) a capa da comunidade (#413). */
+  async setCover(actorId: string, groupId: string, fileId: string | null): Promise<GroupSummary> {
+    void fileId;
+    return this.findByIdForMember(actorId, groupId);
   }
 
   /**

@@ -48,6 +48,8 @@ export function inviteEmail(params: {
   role: keyof typeof ROLE_LABEL;
   url: string;
   expiresAt: Date | null;
+  /** A cor da comunidade (#413). Nula ou recusada = a cor padrão. */
+  brandColor?: string | null;
   now?: Date;
 }): EmailMessage {
   const papel = ROLE_LABEL[params.role];

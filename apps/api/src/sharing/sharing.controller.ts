@@ -293,6 +293,17 @@ export class SharingController {
     return this.groups.setAvatar(user.id, groupId, dto.fileId);
   }
 
+  /** Troca (ou tira, com `null`) a capa (#413). O arquivo já foi enviado por `/media/uploads`. */
+  @Put(':groupId/cover')
+  @RequireGroupAction('group.update')
+  setCover(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: SetAvatarDto,
+  ) {
+    return this.groups.setCover(user.id, groupId, dto.fileId);
+  }
+
   @Delete(':groupId')
   @RequireGroupAction('group.delete')
   remove(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {

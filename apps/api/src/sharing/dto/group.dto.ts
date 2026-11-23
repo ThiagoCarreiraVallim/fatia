@@ -20,6 +20,7 @@ import {
 } from 'class-validator';
 import {
   AutoPostKind,
+  CommunitySection,
   GroupRole,
   InviteOrigin,
   GroupType,
@@ -80,7 +81,7 @@ export class CreateGroupDto {
   requiredSharingScopes?: ShareScope[];
 }
 
-/** Perfil da comunidade. Tipo e slug não mudam: o slug já está em links distribuídos. */
+/** Perfil da comunidade. O slug não muda: já está em links distribuídos. */
 export class UpdateGroupDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) name?: string;
   @IsOptional() @IsString() @MaxLength(500) description?: string;
@@ -105,6 +106,26 @@ export class UpdateGroupDto {
 
   /** "Profissionais veem só quem acompanham" (#404). */
   @IsOptional() @IsBoolean() proSeeOnlyAssigned?: boolean;
+
+  /** Patrocinada ou social (#413): só o dono, e sem assentos valendo para virar social. */
+  @IsOptional() @IsEnum(GroupType) type?: GroupType;
+
+  /**
+   * Cor de destaque (#413). `null` volta à padrão. A regra do contraste é o
+   * service que aplica, com a sugestão de tom na mensagem.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(9)
+  brandColor?: string | null;
+
+  /** Seções escondidas para os membros (#413). Só visual. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(Object.keys(CommunitySection).length * 2)
+  @IsEnum(CommunitySection, { each: true })
+  hiddenSections?: CommunitySection[];
 }
 
 export class SetAvatarDto {

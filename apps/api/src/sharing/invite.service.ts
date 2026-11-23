@@ -240,6 +240,10 @@ export interface InvitePreview {
     type: string;
     /** O avatar da comunidade, para a capa das boas-vindas (Onb-02b). Nulo = iniciais. */
     avatarUrl: string | null;
+    /** A cor da comunidade (#413) para o topo e o botão do convite. Nula = padrão. */
+    brandColor: string | null;
+    /** A capa da comunidade (#413). Nula = a faixa na cor. */
+    coverUrl: string | null;
   };
   role: GroupRole;
   invitedBy: string | null;
@@ -357,7 +361,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     private readonly notifications: NotificationService,
     // Opcional: sem o módulo de cobrança, "Dar assento" no convite só não acontece.
     @Optional() private readonly seats?: SeatPoolService,
-    // Opcional: sem o storage, a capa das boas-vindas mostra as iniciais.
+    // Opcional: sem o storage, a capa das boas-vindas mostra as iniciais e o
+    // convite sai sem a capa (#413).
     @Optional() private readonly media?: MediaService,
   ) {}
 
@@ -999,7 +1004,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const { requiredSharingScopes, avatarFile, ...rest } = grupo;
     const avatar = this.media ? await this.media.viewOrNull(avatarFile) : null;
     return {
-      group: { ...rest, avatarUrl: avatar?.url ?? null },
+      group: { ...rest, avatarUrl: avatar?.url ?? null, brandColor: null, coverUrl: null },
       role: convite.role,
       invitedBy: autor?.name ?? null,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
