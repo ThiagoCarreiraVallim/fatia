@@ -26,12 +26,14 @@ import {
   Megaphone,
   MessageSquareText,
   PanelLeft,
+  Plug,
   Plus,
   Search,
   Send,
   Settings,
   Share2,
   ShieldCheck,
+  Sparkles,
   ShieldOff,
   Trophy,
   User,
@@ -46,7 +48,9 @@ import {
   panelApi,
   panelBreadcrumb,
   panelHref,
+  panelFooterLabel,
   panelNav,
+  panelNewsApi,
   panelSections,
   PANEL_FOOTER_SECTIONS,
   teamRoleLabel,
@@ -70,7 +74,7 @@ import { useTopBarCurrentTitle } from '@/components/layout/app-top-bar';
 import { signOutOfThisBrowser } from '@/components/profile/sign-out-button';
 import { cn } from '@/lib/utils';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { orgKeys } from '@/components/community/query-keys';
+import { orgKeys, panelNewsKey } from '@/components/community/query-keys';
 import { AnnouncementEditor } from './announcement-editor';
 import { PanelSearch } from './panel-search';
 import { readNavPrefs, writeNavPrefs, type NavPrefs } from './panel-prefs';
@@ -106,6 +110,8 @@ const ICONE: Record<PanelSection, LucideIcon> = {
   welcome: DoorOpen,
   offers: BadgeDollarSign,
   agent: Bot,
+  updates: Sparkles,
+  integrations: Plug,
   settings: Settings,
 };
 
@@ -340,12 +346,21 @@ function Breadcrumb({ groupId, pathname }: { groupId: string; pathname: string }
   );
 }
 
-function Contador({ n, className }: { n: number | null; className?: string }) {
+function Contador({
+  n,
+  className,
+  lime,
+}: {
+  n: number | null;
+  className?: string;
+  lime?: boolean;
+}) {
   if (!n) return null;
   return (
     <span
       className={cn(
-        'ml-auto rounded-full bg-muted px-1.5 text-[11px] font-bold tabular-nums text-foreground',
+        'ml-auto rounded-full px-1.5 text-[11px] font-bold tabular-nums',
+        lime ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
         className,
       )}
     >
@@ -361,6 +376,7 @@ function ItemMenu({
   count,
   current,
   collapsed,
+  lime,
 }: {
   href: string;
   label: string;
@@ -368,6 +384,8 @@ function ItemMenu({
   count?: number | null;
   current?: boolean;
   collapsed: boolean;
+  /** Contador em lima: as novidades não lidas. */
+  lime?: boolean;
 }) {
   return (
     <Link
@@ -385,7 +403,7 @@ function ItemMenu({
     >
       <Icone aria-hidden className={cn('h-4 w-4 shrink-0', current && 'text-primary-text')} />
       {!collapsed && <span className="truncate">{label}</span>}
-      {!collapsed && <Contador n={count ?? null} />}
+      {!collapsed && <Contador n={count ?? null} lime={lime} />}
       {collapsed && count ? (
         <span aria-hidden className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary" />
       ) : null}
@@ -409,6 +427,7 @@ function Sidebar({
   const nav = panelNav(g.role, counts);
   const pode = new Set(panelSections(g.role).map((s) => s.section));
   const recolhido = prefs.collapsed;
+  const novidades = usePanelNewsUnread();
   const alterna = (key: string) =>
     onPrefs({
       ...prefs,
@@ -482,8 +501,10 @@ function Sidebar({
         <ItemMenu
           key={s}
           href={panelHref(g.id, s)}
-          label="Configurações"
+          label={panelFooterLabel(s)}
           icon={ICONE[s]}
+          count={s === 'updates' ? novidades : null}
+          lime={s === 'updates'}
           current={s === active}
           collapsed={recolhido}
         />
@@ -497,6 +518,16 @@ function Sidebar({
       <UserMenu role={g.role} collapsed={recolhido} />
     </aside>
   );
+}
+
+/** Quantas novidades do painel faltam ler (#413): o número lima do rodapé. */
+function usePanelNewsUnread(): number | null {
+  const news = useQuery({
+    queryKey: panelNewsKey,
+    queryFn: () => panelNewsApi.list(),
+    staleTime: 5 * 60_000,
+  });
+  return news.data?.unreadCount || null;
 }
 
 function UserMenu({ role, collapsed }: { role: MyGroup['role']; collapsed: boolean }) {
@@ -571,7 +602,7 @@ function MobileNav({
   const itens = [
     ...panelNav(g.role, counts).flatMap((grupo) => grupo.items),
     ...PANEL_FOOTER_SECTIONS.filter((s) => panelSections(g.role).some((x) => x.section === s)).map(
-      (s) => ({ section: s, label: 'Configurações', count: null }),
+      (s) => ({ section: s, label: panelFooterLabel(s), count: null }),
     ),
   ];
   return (

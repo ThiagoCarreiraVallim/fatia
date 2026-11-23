@@ -149,7 +149,7 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
 ];
 
 /** Fora dos grupos: no rodapé do menu. */
-export const PANEL_FOOTER_SECTIONS: PanelSection[] = ['settings'];
+export const PANEL_FOOTER_SECTIONS: PanelSection[] = ['updates', 'integrations', 'settings'];
 
 function countOf(section: PanelSection, counts: PanelCounts | undefined): number | null {
   if (!counts) return null;
@@ -178,10 +178,21 @@ export function panelNav(role: GroupRole, counts?: PanelCounts): PanelNavGroup[]
   }).filter((g) => g.items.length > 0);
 }
 
-const FOOTER_LABEL: Partial<Record<PanelSection, string>> = { settings: 'Configurações' };
+const FOOTER_LABEL: Partial<Record<PanelSection, string>> = {
+  updates: 'Novidades',
+  integrations: 'Integrações',
+  settings: 'Configurações',
+};
 
-export function panelFooterLabel(_section: PanelSection): string {
-  throw new Error('a fazer');
+/** A migalha das telas do rodapé: "Configurações › Integrações", "Início › Novidades". */
+const FOOTER_GROUP: Partial<Record<PanelSection, string>> = {
+  updates: 'Início',
+  integrations: 'Configurações',
+};
+
+/** O nome de uma seção do rodapé do menu. */
+export function panelFooterLabel(section: PanelSection): string {
+  return FOOTER_LABEL[section] ?? section;
 }
 
 /** "Acompanhar › Visão geral" no topo da página. */
@@ -191,7 +202,7 @@ export function panelBreadcrumb(pathname: string): { group: string | null; label
     const item = g.items.find(([s]) => s === section);
     if (item) return { group: g.label, label: item[1] };
   }
-  return { group: null, label: FOOTER_LABEL[section] ?? 'Visão geral' };
+  return { group: FOOTER_GROUP[section] ?? null, label: FOOTER_LABEL[section] ?? 'Visão geral' };
 }
 
 // ---------------------------------------------------------------- Visão geral

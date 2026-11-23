@@ -91,8 +91,11 @@ export interface UpdateGroupInput {
   requiredSharingScopes?: ShareScope[];
   /** Profissionais veem só quem acompanham (#404). */
   proSeeOnlyAssigned?: boolean;
+  /** Só o dono muda; não vira Social com assentos ativos (#413). */
   type?: GroupType;
+  /** Hex; nula volta à cor padrão. A API recusa cor sem contraste (ADR 041). */
   brandColor?: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
   hiddenSections?: CommunitySection[];
 }
 
@@ -392,8 +395,9 @@ export const orgApi = {
   create: (input: CreateGroupInput) => apiFetch<GroupRecord>(base, json('POST', input)),
   update: (groupId: string, input: UpdateGroupInput) =>
     apiFetch<GroupRecord>(`${base}/${groupId}`, json('PATCH', input)),
-  setCover: (_groupId: string, _fileId: string | null): Promise<MyGroup> =>
-    Promise.reject(new Error('a fazer')),
+  /** A capa da comunidade (#413): imagem `group_cover`; `null` tira. */
+  setCover: (groupId: string, fileId: string | null) =>
+    apiFetch<MyGroup>(`${base}/${groupId}/cover`, json('PUT', { fileId })),
   remove: (groupId: string) => apiFetch<{ id: string }>(`${base}/${groupId}`, json('DELETE')),
   transferOwner: (groupId: string, membershipId: string) =>
     apiFetch<MyGroup>(`${base}/${groupId}/owner`, json('POST', { membershipId })),

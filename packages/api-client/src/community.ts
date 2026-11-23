@@ -1,3 +1,4 @@
+import type { CommunitySection } from './community-settings';
 import type { WelcomePage } from './community-welcome';
 import { apiFetch } from './http';
 import type { PostPolicy } from './community-feed';
@@ -93,6 +94,12 @@ export interface MyGroup {
   proPaidByThisGroup: boolean;
   /** Avatar da comunidade, URL assinada de curta duração. */
   avatarUrl: string | null;
+  /** Cor da comunidade (#413). Nula = a padrão. Ausente em API antiga. */
+  brandColor?: string | null;
+  /** Capa da comunidade (#413), URL assinada. */
+  coverUrl?: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
+  hiddenSections?: CommunitySection[];
   /** Quem publica no mural (Fase 8b). */
   postPolicy: PostPolicy;
   /** O que a comunidade exige que membros compartilhem (vale para quem entra como membro). */
@@ -140,6 +147,7 @@ export const ROLE_ACTIONS: Record<GroupRole, readonly GroupAction[]> = {
     'member.assign',
     'billing.read',
     'billing.manage',
+    'integration.manage',
     'content.publish',
     'content.read',
     'content.moderate',

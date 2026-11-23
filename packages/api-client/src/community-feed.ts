@@ -600,16 +600,25 @@ export type CommunityTab = 'feed' | 'for-you' | 'challenges' | 'content';
  */
 export function communityTabs(
   groupId: string,
-  _hidden?: CommunitySection[],
+  /**
+   * As seções que a comunidade escondeu (#413): sem Mural ou Desafios, a aba
+   * some. Só visual; nada do app do aluno desliga.
+   */
+  hidden?: readonly CommunitySection[] | null,
 ): { tab: CommunityTab; label: string; href: string }[] {
   const base = `/community/${groupId}`;
-  return [
+  const fora = new Set<CommunityTab>([
+    ...(hidden?.includes('FEED') ? (['feed'] as const) : []),
+    ...(hidden?.includes('CHALLENGES') ? (['challenges'] as const) : []),
+  ]);
+  const abas: { tab: CommunityTab; label: string; href: string }[] = [
     { tab: 'feed', label: 'Mural', href: base },
     { tab: 'for-you', label: 'Para você', href: `${base}/for-you` },
     { tab: 'challenges', label: 'Desafios', href: `${base}/challenges` },
     // Cm-12 (#396): a aba se chama Conteúdo (planos, dicas e guias de exercício).
     { tab: 'content', label: 'Conteúdo', href: `${base}/content` },
   ];
+  return abas.filter((a) => !fora.has(a.tab));
 }
 
 /** A aba ativa a partir do caminho (`/community/<id>/challenges/<c>` → `challenges`). */

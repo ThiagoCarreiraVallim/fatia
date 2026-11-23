@@ -40,6 +40,8 @@ export const orgKeys = {
   pendingInvites: (groupId: string, origin: string | undefined, q: string, page: number) =>
     ['community', 'org', groupId, 'invites', 'pending', origin ?? 'all', q, page] as const,
   seats: (groupId: string) => ['community', 'org', groupId, 'seats'] as const,
+  /** Chaves de API e cota do mês (#413, Pn-38). */
+  apiKeys: (groupId: string) => ['community', 'org', groupId, 'api-keys'] as const,
   /** O editor das boas-vindas (#410, Pn-23). */
   welcome: (groupId: string) => ['community', 'org', groupId, 'welcome'] as const,
   /** A tela Equipe e permissões (#404). */
@@ -100,3 +102,6 @@ export const orgKeys = {
   insights: (groupId: string, panel: string, cut: string, period: string) =>
     ['community', 'org', groupId, 'insights', panel, cut, period] as const,
 };
+
+/** As novidades do painel (#413, Pn-27): da pessoa, não de uma comunidade. */
+export const panelNewsKey = ['panel', 'news'] as const;

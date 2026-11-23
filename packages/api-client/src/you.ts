@@ -53,23 +53,56 @@ export const tutorialsApi = {
 
 export const IDEA_MAX = 1000;
 
+/** "Onde ajudaria" no "Sugerir uma ideia" da equipe (#413, Pn-27). */
 export type IdeaArea = 'COMMUNITY' | 'MEMBERS' | 'PLANS' | 'REPORT';
-export const IDEA_AREAS: readonly { value: IdeaArea; label: string }[] = [];
+export const IDEA_AREAS: readonly { value: IdeaArea; label: string }[] = [
+  { value: 'COMMUNITY', label: 'Comunidade' },
+  { value: 'MEMBERS', label: 'Membros' },
+  { value: 'PLANS', label: 'Planos' },
+  { value: 'REPORT', label: 'Relatório' },
+];
 
+/** Uma novidade do painel (#413): abre uma seção do painel, não uma rota do app. */
+export interface PanelNewsItem {
+  id: string;
+  /** AAAA-MM-DD. */
+  date: string;
+  title: string;
+  body: string;
+  icon: string;
+  /** A seção do painel (`PanelSection`) que a novidade abre. */
+  section: string | null;
+  unread: boolean;
+}
+
+export interface PanelNewsFeed {
+  items: PanelNewsItem[];
+  unreadCount: number;
+}
+
+/** As novidades do painel da equipe (#413, Pn-27): só quem é da equipe de alguma comunidade. */
 export const panelNewsApi = {
-  list: (): Promise<unknown> => Promise.reject(new Error('a fazer')),
-  markRead: (_ids?: string[]): Promise<unknown> => Promise.reject(new Error('a fazer')),
+  list: () => apiFetch<PanelNewsFeed>('/api/panel/news'),
+  /** Sem `ids`: "Marcar tudo como lido". */
+  markRead: (ids?: string[]) =>
+    apiFetch<PanelNewsFeed>('/api/panel/news/read', {
+      method: 'POST',
+      body: JSON.stringify(ids ? { ids } : {}),
+    }),
 };
 
-export function panelUnreadLabel(_n: number): string {
-  throw new Error('a fazer');
+/** O selo do topo de Novidades: "3 não lidas" ou "tudo lido" (Pn-27b). */
+export function panelUnreadLabel(n: number): string {
+  if (n <= 0) return 'tudo lido';
+  return n === 1 ? '1 não lida' : `${n} não lidas`;
 }
 
 export const ideasApi = {
-  send: (body: string, _area?: IdeaArea) =>
+  /** A do aluno vem sem área; a da equipe diz onde ajudaria. */
+  send: (body: string, area?: IdeaArea) =>
     apiFetch<{ sent: true }>('/api/feedback/ideas', {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify(area ? { body, area } : { body }),
     }),
 };
 
