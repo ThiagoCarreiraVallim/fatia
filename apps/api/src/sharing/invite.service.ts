@@ -43,6 +43,8 @@ import {
   type InviteStatus,
 } from './invite-state';
 import { can, rolesGrantableBy, TEAM_ROLES, type GroupAction } from './permissions';
+import { MediaService } from '../storage/media.service';
+import { welcomeForJoin, type WelcomePageView } from './welcome.service';
 import {
   assertNotBanned,
   MembershipService,
@@ -231,7 +233,14 @@ export interface BatchInviteResult {
 const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 
 export interface InvitePreview {
-  group: { id: string; name: string; description: string | null; type: string };
+  group: {
+    id: string;
+    name: string;
+    description: string | null;
+    type: string;
+    /** O avatar da comunidade, para a capa das boas-vindas (Onb-02b). Nulo = iniciais. */
+    avatarUrl: string | null;
+  };
   role: GroupRole;
   invitedBy: string | null;
   /** A equipe que vai receber o que a pessoa escolher compartilhar. */
@@ -250,6 +259,11 @@ export interface InvitePreview {
    * e quantos participam. Nada sobre quem participa.
    */
   activeChallenge: { title: string; participants: number } | null;
+  /**
+   * As páginas de boas-vindas da comunidade (#410, Onb-02b), entre as
+   * boas-vindas do Fatia e o que compartilhar. Vazio = só o padrão do Fatia.
+   */
+  welcome: WelcomePageView[];
 }
 
 function cleanLabel(label: string | undefined): string | null {
@@ -343,6 +357,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     private readonly notifications: NotificationService,
     // Opcional: sem o módulo de cobrança, "Dar assento" no convite só não acontece.
     @Optional() private readonly seats?: SeatPoolService,
+    // Opcional: sem o storage, a capa das boas-vindas mostra as iniciais.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   onModuleInit(): void {
@@ -938,7 +954,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   async preview(token: string): Promise<InvitePreview> {
     const convite = await this.valido(token);
     const now = new Date();
-    const [grupo, equipe, memberCount, autor, desafio] = await Promise.all([
+    const [grupo, equipe, memberCount, autor, desafio, welcome] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: convite.groupId },
         select: {
@@ -947,6 +963,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
           description: true,
           type: true,
           requiredSharingScopes: true,
+          avatarFile: true,
         },
       }),
       this.prisma.groupMembership.findMany({
@@ -977,10 +994,12 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         orderBy: { startsAt: 'desc' },
         select: { title: true, _count: { select: { participants: true } } },
       }),
+      welcomeForJoin(this.prisma, convite.groupId),
     ]);
-    const { requiredSharingScopes, ...group } = grupo;
+    const { requiredSharingScopes, avatarFile, ...rest } = grupo;
+    const avatar = this.media ? await this.media.viewOrNull(avatarFile) : null;
     return {
-      group,
+      group: { ...rest, avatarUrl: avatar?.url ?? null },
       role: convite.role,
       invitedBy: autor?.name ?? null,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
@@ -991,6 +1010,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       activeChallenge: desafio
         ? { title: desafio.title, participants: desafio._count.participants }
         : null,
+      welcome,
     };
   }
 

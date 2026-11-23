@@ -67,6 +67,7 @@ describe('quem abre o painel e com que seções', () => {
       'seats',
       'offers',
       'benefits',
+      'welcome',
       'settings',
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([
@@ -80,6 +81,7 @@ describe('quem abre o painel e com que seções', () => {
       'programs',
       'exercises',
       'challenges',
+      'welcome',
       'announcements',
     ]);
     expect(panelSections('CREATOR')).toEqual([]);

@@ -89,6 +89,12 @@ describe('onboarding salvo a cada passo (integração)', () => {
     expect(await prisma.weightLog.count({ where: { userId: ana } })).toBe(0);
   });
 
+  it('a etapa das páginas da comunidade (#410) também volta ao reabrir', async () => {
+    const ana = await pessoa();
+    await service.saveProgress(ana, { step: 'community' }, TZ);
+    expect((await service.getProgress(ana)).step).toBe('community');
+  });
+
   it('as metas escolhidas e a origem delas também voltam', async () => {
     const ana = await pessoa();
     await service.saveProgress(ana, { step: 'goals', goals: GOALS, goalSource: 'app' }, TZ);

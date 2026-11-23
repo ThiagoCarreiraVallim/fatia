@@ -948,20 +948,52 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Fica para depois:** vários equipamentos e músculos por exercício (o editor escolhe um grupo e um equipamento; os músculos principais do catálogo geral só aparecem), fotos com rótulo início/meio/fim, a imagem na barra da dica (a capa é o campo próprio) e a miniatura do vídeo no cartão do catálogo.
 - **Passada visual (2026-11-20, só web):** prints em `~/.cache/fatia-vis/408/web/` (1440 e 390, escuro e claro) contra Pn-10, Pn-11 (fechado e com o painel) e Pn-11b (`board/`). API e web da branch na worktree (portas 3108 e 3138) contra o banco de dev, com a migration aplicada; a estrela foi marcada e desmarcada pela grade e o filtro Favoritos conferido (`before.txt` = `after-cleanup.txt`; só a tabela nova `GroupExerciseFavorite` passou a existir, vazia). Corrigido: quadro grande do vídeo vazio no painel e no editor, grade em 2 colunas no celular e as categorias da dica rolando dentro do segmentado em 390. Fica como está, de propósito: "Novo exercício" no cabeçalho da página (a barra de cima tem as ações globais), números digitáveis no padrão do plano, descanso aceitando "90" ou "2:00", e o equipamento da academia no fim da página.
 
+## Etapa 10: Painel: IA, configuração e celular (em andamento)
+
+**Ordem (orquestrador):** #410 → #413 → #412 → #372; depois a #391 e a #397 são puxadas da etapa 11 e entram antes de #409, #411 e #414, que dependem delas.
+
+| Issue | Título                                       | Estado  | Superfícies                            |
+| ----- | -------------------------------------------- | ------- | -------------------------------------- |
+| #410  | Painel: páginas de boas-vindas da comunidade | PR #469 | api, db, api-client, web, mobile, docs |
+| #413  | Painel: configurações                        | a fazer |                                        |
+| #412  | Painel: demo                                 | a fazer |                                        |
+| #372  | Onboarding da equipe                         | a fazer |                                        |
+| #391  | Questionários (puxada da etapa 11)           | a fazer |                                        |
+| #397  | Agenda (puxada da etapa 11)                  | a fazer |                                        |
+| #409  | Painel: automações                           | a fazer |                                        |
+| #411  | Painel: assistente da equipe                 | a fazer |                                        |
+| #414  | Painel no celular                            | a fazer |                                        |
+
+#410 (branch `redesign/410-boas-vindas`; migration `20261121100000_group_welcome_pages`, só aditiva; nenhuma env nova; MCP: nada muda, a administração da comunidade fica fora do MCP e o aluno não ganha tool; sem ADR nova, segue a 010 e a 026):
+
+- **O que entrou:** tabela `GroupWelcomePage` (até 3 por comunidade, na ordem) e, em `Group`, `welcomePublishedAt` e `welcomeShowOnJoin`. Rotas `GET/PUT /groups/:groupId/welcome` (editor) e `GET /groups/:groupId/welcome/pages` (o membro, só o publicado, com os nomes da equipe); o `GET /groups/invites/:token` traz `welcome`. Editor no painel web (Pn-23, 23b, 23c) com abas das páginas, tipo, título, texto com contador, aviso de saúde, "Mostrar a equipe", "Mostrar ao entrar", prévia no celular, "Ver como aluno" e "Ver o padrão". Etapa nova `community` no onboarding do convite (web e app, Onb-02b), entre as boas-vindas do Fatia e o compartilhar, com "Pular". Rever em Comunidade → Sobre (web e app). Item "Boas-vindas" em Comunidade no menu e na busca ⌘K.
+- **Decisões adotadas (recomendações da issue):**
+  - **Texto até 300 caracteres por página** (mantido, como a issue recomenda), contados como o aluno vê (grafemas via `Intl.Segmenter`: emoji com tom de pele, família e bandeira contam 1, na API e no contador do cliente); título até 80. O CHECK do banco virou teto de segurança em pontos de código (texto 2000, título 600) e a API recusa acima dele com 400. Texto puro: só "- " no começo da linha vira item de lista, nada de HTML; o servidor normaliza `\r\n` e tira espaços das pontas.
+  - **Tabela própria, não JSON em `Group`:** o limite de 3, a ordem e os tamanhos ficam no banco (CHECK) e no service. Apagar a comunidade apaga as páginas (cascade); o export LGPD do aluno não muda (a página é da comunidade e não coleta nada).
+  - **Tipo capa ou simples** (`COVER | PLAIN`, como a issue). Os três tipos da prancha (Capa, Lista, Texto) viram: capa com a marca ou simples; "- " faz lista em qualquer tipo; e a chave "Mostrar a equipe nesta página" (`showTeam`) faz a página da equipe (Bruno, Helena e Marina). O ícone da página simples segue o conteúdo: equipe, lista ou texto.
+  - **Publicar vale para o conjunto** (`Group.welcomePublishedAt`), não por página: "Publicar" e "Voltar para rascunho" no topo, como a prancha. Salvar com as páginas publicadas atualiza o que o aluno vê; republicar mantém a data da primeira publicação. Publicar sem página dá 400; apagar todas volta ao padrão do Fatia e despublica.
+  - **"Mostrar ao entrar" desligado:** as páginas publicadas ficam só em Sobre; o convite não as traz.
+  - **Quem edita:** `content.publish` (dono, admin, profissional, criador; "papéis que editam conteúdo", como a issue pede). Sem ação nova na matriz. A recepção e o membro recebem 403; quem é de fora, 404.
+  - **Só pelo convite:** a etapa aparece no onboarding de quem chega por convite com páginas. Quem entra pelo código ou já tem conta relê em Sobre.
+  - **A equipe da página** é a que recebe o consentimento (`TEAM_ROLES`: dono, profissional, criador), só nome e papel.
+- **Verificado:** api 4275 testes (jest, banco descartável), web 1280, api-client 1312, mobile 614, lint e typecheck. Passada visual na web (1440 e 390, claro e escuro), lado a lado com Pn-23, 23b, 23c e Onb-02b: corrigidos o fundo do status (pílula com contorno, como a prancha) e o "Rever as boas-vindas" do Sobre, que no celular agora abre em tela cheia sem o menu aparecendo embaixo. Prints em `~/.cache/fatia-vis/410/`. App: não conferido em imagem (sem emulador na hora); coberto pelos testes de lógica e pelo typecheck. O onboarding web do convite também não foi capturado (exige conta nova pelo convite); coberto pelo teste do fluxo.
+- **Revisão adversarial (PR #469):** salvamentos simultâneos davam 500 (P2002 no índice de posição), agora a transação trava a linha do grupo e o último vale; contagem por grafema (acima); a capa do onboarding mostra o avatar da comunidade (`avatarUrl` no preview do convite); NUL e controles C0 saem do título e do texto (o NUL dava 500); a etapa `community` sem páginas (despublicadas no meio do fluxo) avança em vez de ficar em branco, na web e no app.
+- **Fica para depois:** o editor no app (entra com o painel no celular, #414; `welcome` está em `MOBILE_MISSING_SECTIONS`), cor da marca própria da comunidade (hoje vale a cor padrão de marca, como no Onb-02), imagem de capa.
+
 ## Etapas seguintes
 
-| Etapa                                   | Issues                                                                                                                                     | Estado   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | mergeado |
-| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado |
-| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | mergeado |
-| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | mergeado |
-| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | mergeado |
-| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | mergeado |
-| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | mergeado |
-| 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer  |
-| 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer  |
-| 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer  |
+| Etapa                                   | Issues                                                                                                                                     | Estado       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | mergeado     |
+| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | mergeado     |
+| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | mergeado     |
+| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | mergeado     |
+| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | mergeado     |
+| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | mergeado     |
+| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | mergeado     |
+| 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | em andamento |
+| 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer      |
+| 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer      |
 
 A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
 

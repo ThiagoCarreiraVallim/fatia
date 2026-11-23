@@ -1,3 +1,4 @@
+import type { WelcomePage } from './community-welcome';
 import { apiFetch } from './http';
 import type { PostPolicy } from './community-feed';
 import type { ShareScope } from './sharing';
@@ -282,7 +283,14 @@ export interface GroupPreview {
 
 /** `GET /groups/invites/:token`, sem login: o cartão do convite. */
 export interface InvitePreview {
-  group: { id: string; name: string; description: string | null; type: GroupType };
+  group: {
+    id: string;
+    name: string;
+    description: string | null;
+    type: GroupType;
+    /** O avatar da comunidade, para a capa das boas-vindas (#410, Onb-02b). */
+    avatarUrl?: string | null;
+  };
   role: GroupRole;
   invitedBy: string | null;
   team: TeamMember[];
@@ -295,6 +303,11 @@ export interface InvitePreview {
   requiredSharingScopes: ShareScope[];
   /** O desafio em andamento, para as boas-vindas (Onb-02): título e quantos participam. */
   activeChallenge: { title: string; participants: number } | null;
+  /**
+   * As páginas de boas-vindas da comunidade (#410, Onb-02b): publicadas e com
+   * "Mostrar ao entrar". Vazio (ou API antiga) = só o padrão do Fatia.
+   */
+  welcome?: WelcomePage[];
 }
 
 /** Resposta de entrar, aceitar ou sair. `INVITED` = aguardando o dono aprovar. */

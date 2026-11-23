@@ -1988,6 +1988,14 @@ model Group {
   reviewSeen             ReviewSeen[]
   sessionFeedback        SessionFeedback[]
   monthReports           MonthReportSnapshot[]
+  /// Páginas de boas-vindas que o aluno vê ao entrar (#410, Pn-23). Até 3.
+  welcomePages           GroupWelcomePage[]
+  /// Nulo = rascunho (ou sem páginas): quem entra vê só as boas-vindas do Fatia.
+  /// Vale para o conjunto de páginas, não por página.
+  welcomePublishedAt     DateTime?
+  /// "Mostrar ao entrar na comunidade": desligado, as páginas publicadas ficam
+  /// só em Comunidade → Sobre.
+  welcomeShowOnJoin      Boolean                @default(true)
 
   @@index([ownerId])
   @@index([type])
@@ -3057,6 +3065,35 @@ model GroupTip {
   image  MediaFile? @relation("TipImage", fields: [imageFileId], references: [id], onDelete: SetNull)
 
   @@index([groupId, publishedAt])
+}
+
+/// Capa com a marca (avatar da comunidade) ou página simples (#410).
+enum GroupWelcomeKind {
+  COVER
+  PLAIN
+}
+
+/// Uma página de boas-vindas da comunidade (#410, Pn-23 e Onb-02b). Texto puro:
+/// só "- " no começo da linha vira item de lista; nenhum HTML é interpretado.
+/// Não coleta dado do aluno: é só leitura. Sai com a comunidade (cascade).
+model GroupWelcomePage {
+  id        String           @id @default(uuid())
+  groupId   String
+  /// 1 a 3 (CHECK na migration), na ordem em que o aluno vê.
+  position  Int
+  kind      GroupWelcomeKind
+  /// Até 80 caracteres (CHECK na migration).
+  title     String
+  /// Até 300 caracteres (CHECK na migration).
+  body      String
+  /// Mostra os nomes da equipe nesta página ("A Helena revisa seu treino").
+  showTeam  Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, position])
 }
 
 /// Cupom ou link do parceiro (#393).

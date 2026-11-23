@@ -48,6 +48,8 @@ import { communityKeys } from '@/components/community/query-keys';
 import { useWebPush } from '@/components/notifications/use-web-push';
 import { hojeIso } from '@/lib/dias';
 import { AiConsentCard } from '@/components/chat/aceite';
+import { WelcomePagesView } from '@/components/community/welcome-pages';
+import { StepScreen } from './onboarding-ui';
 import {
   INVITE_COOKIE,
   SIGNUP_NAME_COOKIE,
@@ -153,6 +155,7 @@ export function OnboardingFlow({
   const ctx: FlowContext = useMemo(
     () => ({
       invitePending: Boolean(invite.data) && !inviteAnswered && !redo,
+      communityPages: (invite.data?.welcome?.length ?? 0) > 0,
       inCommunity: activeGroups.length > 0,
       healthAvailable: false,
       aiVariant: aiStepVariant(plan.data ?? null, plan.data?.webCheckout ?? false),
@@ -199,6 +202,14 @@ export function OnboardingFlow({
     // Não sobrou etapa (a salva era a última e saiu do fluxo): só terminar.
     if (!start) setAutoFinish(true);
   }
+
+  // A comunidade tirou as páginas no meio do caminho (voltou para rascunho):
+  // a etapa não tem o que mostrar, então anda em vez de ficar em branco.
+  const communityGone = step === 'community' && invite.isFetched && !ctx.communityPages;
+  useEffect(() => {
+    if (communityGone) void advance({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityGone]);
 
   useEffect(() => {
     if (autoFinish) void finish();
@@ -513,6 +524,22 @@ export function OnboardingFlow({
           onContinue={() => void advance({})}
         />
       );
+      break;
+    case 'community':
+      // As páginas da comunidade (#410, Onb-02b): "Pular" e o fim vão ao compartilhar.
+      screen = inviteData?.welcome?.length ? (
+        <StepScreen className="gap-0">
+          <WelcomePagesView
+            groupName={inviteData.group.name}
+            avatarUrl={inviteData.group.avatarUrl ?? null}
+            pages={inviteData.welcome}
+            team={inviteData.team}
+            onSkip={() => void advance({})}
+            onFinish={() => void advance({})}
+            onBackFirst={back}
+          />
+        </StepScreen>
+      ) : null;
       break;
     case 'share':
       screen = inviteData && (

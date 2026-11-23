@@ -47,6 +47,7 @@ export type PanelSection =
   | 'seats'
   | 'offers'
   | 'benefits'
+  | 'welcome'
   | 'settings';
 
 export interface PanelLink {
@@ -80,6 +81,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   offers: { section: 'offers', label: 'Ofertas', path: '/offers' },
   benefits: { section: 'benefits', label: 'Benefícios', path: '/benefits' },
+  welcome: { section: 'welcome', label: 'Boas-vindas', path: '/welcome' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
 
@@ -109,6 +111,8 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.content,
       SECTIONS.exercises,
       SECTIONS.challenges,
+      // Boas-vindas (#410): quem publica conteúdo (`content.publish`).
+      SECTIONS.welcome,
       SECTIONS.moderation,
       SECTIONS.announcements,
       SECTIONS.agent,
@@ -132,6 +136,7 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.programs,
       SECTIONS.exercises,
       SECTIONS.challenges,
+      SECTIONS.welcome,
       // Comunicar é do dono e do profissional (`announcement.publish`, #394).
       SECTIONS.announcements,
     ];

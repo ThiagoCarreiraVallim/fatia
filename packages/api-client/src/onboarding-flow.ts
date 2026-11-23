@@ -17,6 +17,8 @@ import type { ActivityLevel, BiologicalSex, BodyObjective, GoalsInput } from './
 /** As etapas, na ordem das pranchas. Mesma lista de `ONBOARDING_STEPS` da API. */
 export const ONBOARDING_FLOW_ORDER = [
   'welcome',
+  // As páginas da comunidade (#410, Onb-02b): entre as boas-vindas e o compartilhar.
+  'community',
   'share',
   'objective',
   'body',
@@ -37,6 +39,8 @@ export type AiStepVariant = 'community' | 'trial';
 export interface FlowContext {
   /** Chegou por um convite ainda não respondido: boas-vindas e compartilhar. */
   invitePending: boolean;
+  /** O convite traz páginas de boas-vindas da comunidade (#410). */
+  communityPages?: boolean;
   /** Já está numa comunidade: a etapa "Tem código?" não aparece. */
   inCommunity: boolean;
   /** Dá para ler passos de um app de saúde neste aparelho (Onb-P1). */
@@ -49,6 +53,7 @@ export interface FlowContext {
 export function onboardingSteps(ctx: FlowContext): OnboardingStepKey[] {
   return ONBOARDING_FLOW_ORDER.filter((step) => {
     if (step === 'welcome' || step === 'share') return ctx.invitePending;
+    if (step === 'community') return ctx.invitePending && Boolean(ctx.communityPages);
     if (step === 'health') return ctx.healthAvailable;
     if (step === 'code') return !ctx.inCommunity;
     if (step === 'ai') return ctx.aiVariant !== null;
@@ -99,7 +104,10 @@ export const PROGRESS_SEGMENTS = 9;
 
 /** O traço da etapa (começando em 0): saúde, código e IA dividem o último. */
 export function progressSegment(step: OnboardingStepKey): number {
-  return Math.min(orderOf(step), PROGRESS_SEGMENTS - 1);
+  // As páginas da comunidade (#410) dividem o traço das boas-vindas.
+  const order = ONBOARDING_FLOW_ORDER.filter((s) => s !== 'community');
+  const i = step === 'community' ? 0 : order.indexOf(step);
+  return Math.min(i, PROGRESS_SEGMENTS - 1);
 }
 
 /** Da etapa 8 em diante tem "Pular" no topo. */
