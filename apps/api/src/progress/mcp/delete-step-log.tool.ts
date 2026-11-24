@@ -13,9 +13,10 @@ export class DeleteStepLogTool implements McpToolDef {
   constructor(private readonly steps: StepLogService) {}
   readonly name = 'delete_step_log';
   readonly title = 'Excluir registro de passos';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: true };
   readonly hostedInference = false;
-  readonly appOnly = { screen: 'Registrar passos', path: '/progress' };
+  readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Deleta um log de passos. ' + 'Exemplo: {"stepLogId":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {

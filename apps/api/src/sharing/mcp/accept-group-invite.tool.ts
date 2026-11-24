@@ -15,9 +15,9 @@ export class AcceptGroupInviteTool implements McpToolDef {
   constructor(private readonly invites: InviteService) {}
   readonly name = 'accept_group_invite';
   readonly title = 'Aceitar um convite de comunidade';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
-  readonly card = 'confirm' as const;
+  readonly appOnly = { screen: 'Comunidades', path: '/community' };
   readonly description =
     'Aceita um convite e entra na comunidade na hora, com o papel do convite. Quem entra é ' +
     'sempre o próprio usuário; convite enviado a um e-mail só vale para a conta desse e-mail. ' +

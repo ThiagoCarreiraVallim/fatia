@@ -13,9 +13,10 @@ export class DeleteNutrientTargetTool implements McpToolDef {
   constructor(private readonly targets: NutrientTargetService) {}
   readonly name = 'delete_nutrient_target';
   readonly title = 'Excluir meta de nutriente';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: true };
   readonly hostedInference = false;
-  readonly appOnly = { screen: 'Nutrientes', path: '/nutrition/nutrient-targets' };
+  readonly card = 'confirm' as const;
+  readonly aiCategory = 'GOALS' as const;
   readonly description =
     'Remove uma meta de nutriente personalizada pelo nutrientKey. ' +
     'Exemplo: {"nutrientKey":"sodium_mg"}';

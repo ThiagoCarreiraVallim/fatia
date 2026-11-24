@@ -988,7 +988,7 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
   const writeTools = tools.filter(({ tool }) => tool.annotations?.readOnlyHint === false);
 
   /**
-   * Isenção única e declarada: `delete_my_account`.
+   * Isenções declaradas: `delete_my_account` e, abaixo, `export_my_data`.
    *
    * O input é um literal único, já soletrado duas vezes na própria description.
    * Um exemplo ali não acrescentaria informação — acrescentaria uma chamada
@@ -997,7 +997,10 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
    * iniciativa própria. Todas as outras 13 tools destrutivas pedem um ID que o
    * modelo não tem, e essa fricção é justamente o que se quer preservar aqui.
    */
-  const EXAMPLE_EXEMPT = new Set(['delete_my_account']);
+  //
+  // `export_my_data` deixou de ser leitura na #481 (o link abre sem login) e entrou aqui por
+  // outro motivo: o input é vazio, e `Exemplo: {}` não ensina nada a ninguém.
+  const EXAMPLE_EXEMPT = new Set(['delete_my_account', 'export_my_data']);
 
   it('tem exemplo de invocação em toda tool de escrita', () => {
     const missing = writeTools

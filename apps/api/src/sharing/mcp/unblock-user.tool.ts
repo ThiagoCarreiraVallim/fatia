@@ -13,9 +13,9 @@ export class UnblockUserTool implements McpToolDef {
   constructor(private readonly blocks: BlockService) {}
   readonly name = 'unblock_user';
   readonly title = 'Desbloquear pessoa';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
-  readonly card = 'confirm' as const;
+  readonly appOnly = { screen: 'Pessoas bloqueadas', path: '/you/blocked' };
   readonly description =
     'Desfaz um bloqueio: o usuário e a pessoa voltam a ver o que cada um publica nas ' +
     'comunidades. Exemplo: {"blockId":"11111111-2222-4333-8444-555555555555"}';

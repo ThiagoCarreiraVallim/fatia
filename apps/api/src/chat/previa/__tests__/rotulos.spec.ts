@@ -77,6 +77,19 @@ describe('rótulos do cartão de confirmação', () => {
     expect(semRotulo).toEqual([]);
   });
 
+  it('toda tool que apaga nomeia o registro que vai sumir (#481)', () => {
+    // Apagar com cartão só é seguro se o cartão disser O QUE some, lido no servidor a partir
+    // do id: um campo só rotulado (ou oculto) mostraria o argumento, não o registro.
+    const apagam = tools.filter((tool) => tool.annotations.destructiveHint === true);
+    expect(apagam.length).toBeGreaterThan(10);
+    const semNome = apagam
+      .filter(
+        (tool) => !Object.keys(tool.inputSchema).some((campo) => tipoDoCampo(tool.name, campo)),
+      )
+      .map((tool) => tool.name);
+    expect(semNome).toEqual([]);
+  });
+
   it('medidas do alimento aparecem com o peso de cada uma', () => {
     const ctx = { timezone: 'America/Sao_Paulo', agora: new Date() };
     const { rotulo, formato } = CAMPOS.portions;

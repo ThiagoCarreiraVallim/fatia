@@ -3,7 +3,6 @@ import { GetStepsHistoryTool } from '../../progress/mcp/get-steps-history.tool';
 import { GetStreakTool } from '../../progress/mcp/get-streak.tool';
 import { GetWaterHistoryTool } from '../../progress/mcp/get-water-history.tool';
 import { ListAchievementsTool } from '../../progress/mcp/list-achievements.tool';
-import { ExportMyDataTool } from '../../users/mcp/export-my-data.tool';
 import { ExplainFormTool } from '../../workout/mcp/explain-form.tool';
 import { genericList } from '../generic-card';
 
@@ -97,21 +96,6 @@ describe('cartões das tools no chat (#384)', () => {
     ).toEqual({ kind: 'instructions', label: 'Supino reto', steps: ['Deite.', 'Desça a barra.'] });
     expect(tool.artifact([])).toBeNull();
     expect(tool.artifact([{ name: 'Sem passos', instructions: [] }])).toBeNull();
-  });
-
-  it('exportação: o arquivo com o link e a validade', () => {
-    const expiresAt = new Date('2026-11-18T10:00:00.000Z');
-    const card = new ExportMyDataTool(semServico).artifact({
-      url: 'https://api.fatia.app/api/exports/abc',
-      expiresAt,
-    });
-    expect(card).toEqual({
-      kind: 'file',
-      label: 'Seus dados',
-      url: 'https://api.fatia.app/api/exports/abc',
-      filename: 'fatia-dados.json',
-      expiresAt: '2026-11-18T10:00:00.000Z',
-    });
   });
 
   it('sequência: a métrica em dias', () => {

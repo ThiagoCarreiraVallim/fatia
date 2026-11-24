@@ -20,6 +20,7 @@ export class SaveMealTemplateTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Salva uma refeição para registrar de novo depois. Use mealId (copia uma refeição registrada) ou items (como em log_meal), um dos dois. Nome único. ' +
     'Exemplo: {"name":"Café de sempre","mealId":"11111111-2222-4333-8444-555555555555"}';
