@@ -115,6 +115,42 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
 ];
 
+/**
+ * O que a IA do chat hospedado nunca faz, nem com cartão de confirmação (#481): as tools
+ * RESTRICTED, que o modelo nem vê (`chat/tool_policy.py`). O resto da escrita é confirmável.
+ *
+ * A pergunta que separa é "isto pode causar dano à pessoa?", e não "isto tem volta?": apagar
+ * uma refeição tem cartão; excluir a conta, expor dado, consentir e bloquear não. Quem pede
+ * uma destas no chat recebe o botão que abre a tela do app (`appOnly`).
+ */
+const NUNCA_PELA_IA: Record<string, readonly string[]> = {
+  'excluir a conta': ['delete_my_account'],
+  // Mudam QUEM vê a saúde de quem, e revogar não desfaz: quem leu, leu. Revogar e sair de uma
+  // comunidade também ficam: são decisões de consentimento, que a pessoa toma na tela.
+  // `share_my_data` e `stop_sharing` são as de intenção, e ficam onde a perna fica.
+  'compartilhar dados e consentir': [
+    'accept_group_invite',
+    'grant_data_sharing',
+    'join_group',
+    'leave_group',
+    'revoke_data_sharing',
+    'set_group_sharing',
+    'share_my_data',
+    'stop_sharing',
+  ],
+  // Um link que abre sem login, com TODOS os dados da conta, inclusive as conversas.
+  'exportar os dados': ['export_my_data'],
+  bloquear: ['block_user', 'unblock_user'],
+  // Não são nutrição nem treino: a #481 não as liberou, e liberar é outra decisão.
+  'fora da #481': ['delete_goal', 'delete_reminder'],
+};
+
+/** Onde moram as tools de nutrição, treino e progresso (água, peso, passos). */
+const DOMINIOS_QUE_A_IA_APAGA = /[\\/](nutrition|workout|progress)[\\/]mcp[\\/]/;
+
+/** Escrita desses domínios que não é registro da pessoa: não entra no modo por categoria. */
+const SEM_CATEGORIA_DE_PROPOSITO = new Set(['refresh_achievements']);
+
 /** `verb_noun` em snake_case, conforme a convenção da §Catálogo de `docs/MCP.md`. */
 const TOOL_NAME_PATTERN = /^[a-z]+(_[a-z]+)+$/;
 
@@ -750,7 +786,9 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
 
   it('declara o hint coerente com o prefixo do nome', () => {
     // `suggest_` só calcula e `find_` só procura: devolve uma proposta e não grava nada.
-    const READ = /^(get|list|search|explain|export|suggest|find)_/;
+    // `export_` saiu na #481: exportar cria um link que abre sem login com todos os dados, e
+    // isso não é leitura para o chat (ver `NUNCA_PELA_IA`).
+    const READ = /^(get|list|search|explain|suggest|find)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
     //
@@ -806,15 +844,10 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
    * registra mais peso" a um campo esquecido num decorator.
    */
   it('classifica toda tool quanto a confirmação no chat', () => {
-    // Escrevem e são reversíveis no dado, mas mudam QUEM vê a saúde de quem — e a
-    // revogação não desfaz isso: quem leu, leu. O critério da camada CONFIRMABLE
-    // é reversibilidade, e exposição não é reversível. Ficam fora do chat.
-    // `share_my_data` é a de intenção que compõe `grant_data_sharing`, e fica onde a perna fica.
-    const EXPOSICAO = new Set(['grant_data_sharing', 'join_group', 'share_my_data']);
-
+    const restritas = new Set(Object.values(NUNCA_PELA_IA).flat());
     const wrong: string[] = [];
 
-    for (const { tool } of tools) {
+    for (const { file, tool } of tools) {
       const a = tool.annotations ?? {};
 
       if (typeof a.confirmableHint !== 'boolean') {
@@ -829,15 +862,21 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
         continue;
       }
 
-      // Apagar não entra no chat nem com modal: quem clica "confirmar" está
-      // confirmando o que entendeu, não o que a tool vai fazer.
-      if (a.destructiveHint === true && a.confirmableHint !== false) {
-        wrong.push(`${tool.name}: destructiveHint com confirmableHint — apagar não confirma`);
+      // Apagar entra no chat com o cartão (#481), mas só o registro de nutrição, treino e
+      // progresso: o cartão nomeia o que vai sumir (`PreviaDaAcaoService`), e é isso que a
+      // pessoa confirma. Uma destrutiva de outro domínio confirmável é decisão que não foi
+      // tomada — cai aqui em vez de entrar no chat por um campo trocado.
+      if (
+        a.destructiveHint === true &&
+        a.confirmableHint === true &&
+        !DOMINIOS_QUE_A_IA_APAGA.test(file)
+      ) {
+        wrong.push(`${tool.name}: apagar com cartão só em nutrição, treino e progresso`);
         continue;
       }
 
-      if (a.readOnlyHint === false && a.destructiveHint === false) {
-        const esperado = !EXPOSICAO.has(tool.name);
+      if (a.readOnlyHint === false) {
+        const esperado = !restritas.has(tool.name);
         if (a.confirmableHint !== esperado) {
           wrong.push(`${tool.name}: esperado confirmableHint=${esperado}`);
         }
@@ -1075,6 +1114,35 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
   });
 });
 
+describe('o que a IA do chat nunca faz (#481)', () => {
+  /**
+   * O que a IA do chat nunca faz, nem com cartão (#481). A lista é **travada**: a restrita que
+   * vira confirmável e a confirmável que vira restrita reprovam aqui, e a decisão volta à mesa
+   * em vez de acontecer por uma anotação trocada.
+   */
+  it('restringe exatamente o que causa dano à pessoa, e nada além', () => {
+    const restritas = todas
+      .filter(
+        ({ tool }) =>
+          tool.annotations.readOnlyHint !== true && tool.annotations.confirmableHint !== true,
+      )
+      .map(({ tool }) => tool.name)
+      .sort();
+    expect(restritas).toEqual(Object.values(NUNCA_PELA_IA).flat().sort());
+  });
+
+  it('toda escrita de nutrição, treino, água, peso e passos é confirmável e tem categoria', () => {
+    const errados = todas
+      .filter(({ file }) => DOMINIOS_QUE_A_IA_APAGA.test(file))
+      .filter(({ tool }) => tool.annotations.readOnlyHint === false)
+      .filter(({ tool }) => !SEM_CATEGORIA_DE_PROPOSITO.has(tool.name))
+      .filter(({ tool }) => tool.annotations.confirmableHint !== true || !tool.aiCategory)
+      .map(({ tool }) => tool.name)
+      .sort();
+    expect(errados).toEqual([]);
+  });
+});
+
 /**
  * O contrato do cartão no chat hospedado (#384, prancha IA-Ferramentas): toda tool diz como
  * aparece na conversa. Leitura → um formato de cartão; escrita confirmável → o cartão de
@@ -1162,13 +1230,28 @@ describe('modo da IA por categoria (ADR 039, #385)', () => {
     /^(delete|forget_all|share|stop_sharing|revoke|set_group_sharing|create_group_post|comment_on|accept_group_invite|join_group|adopt_group|accept_plan_offer|decline_plan_offer|.*subscription|.*billing|.*checkout)/;
 
   it('só confirmável tem categoria, e nenhuma do que nunca é automático', () => {
+    // Apagar ganhou categoria na #481 — "Desligado" tira a exclusão do catálogo junto com o
+    // registro —, mas segue fora do automático: sem inversa e nunca elegível.
     const errados = entidade
       .filter(({ tool }) => tool.aiCategory)
       .filter(
         ({ tool }) =>
           tool.annotations.confirmableHint !== true ||
-          tool.annotations.destructiveHint === true ||
-          NUNCA_AUTOMATICO.test(tool.name),
+          (NUNCA_AUTOMATICO.test(tool.name) && !/^delete_/.test(tool.name)),
+      )
+      .map(({ tool }) => tool.name);
+    expect(errados).toEqual([]);
+  });
+
+  it('apagar nunca é automático, nem com categoria (#481)', () => {
+    const apagam = entidade.filter(
+      ({ tool }) => tool.annotations.destructiveHint === true || /^delete_/.test(tool.name),
+    );
+    expect(apagam.length).toBeGreaterThan(0);
+    const errados = apagam
+      .filter(
+        ({ tool }) =>
+          autoEligible(tool) || Object.prototype.hasOwnProperty.call(AUTO_UNDO, tool.name),
       )
       .map(({ tool }) => tool.name);
     expect(errados).toEqual([]);

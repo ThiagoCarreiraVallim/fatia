@@ -11,7 +11,10 @@ from fatia_agent.chat.errors import McpToolArgumentsInvalid, McpToolNotAllowed
 from fatia_agent.chat.mcp_client import McpToolInfo
 from fatia_agent.chat.tool_policy import (
     argumentos_do_modelo,
+    automaticas,
+    camada_confirmavel,
     camada_read_only,
+    camada_restrita,
     exigir_permitida,
     formato_openai,
 )
@@ -243,3 +246,47 @@ def test_o_schema_original_nao_e_mutado():
     formato_openai([tool_info])
 
     assert schema["properties"]["p"]["items"] == {"type": "string", "maxLength": 5}
+
+
+# --- Apagar com cartão (#481) ---
+
+_APAGA_COM_CARTAO = {"readOnlyHint": False, "destructiveHint": True, "confirmableHint": True}
+
+
+def test_apagar_com_confirmable_hint_entra_pela_camada_confirmavel():
+    """A exclusão de nutrição e treino chega anotada destrutiva E confirmável (#481).
+
+    O critério continua sendo o campo servido: destrutiva não é motivo, sozinho, para cair
+    na restrita. Quem decide o que a IA nunca apaga é o `apps/api` (`NUNCA_PELA_IA`).
+    """
+    catalogo = [
+        tool("delete_meal", _APAGA_COM_CARTAO),
+        tool(
+            "delete_my_account",
+            {"readOnlyHint": False, "destructiveHint": True, "confirmableHint": False},
+        ),
+    ]
+
+    assert [t.name for t in camada_confirmavel(catalogo)] == ["delete_meal"]
+    assert [t.name for t in camada_restrita(catalogo)] == ["delete_my_account"]
+
+
+def test_destrutiva_nunca_e_automatica_mesmo_sem_prefixo_delete():
+    """`remove_exercise_from_plan` apaga e não começa com `delete_`.
+
+    O prefixo era a segunda trava porque, até a #481, nenhuma destrutiva chegava confirmável.
+    Agora chega, e a trava tem de olhar o que a tool faz, não só como se chama: a lista do
+    `apps/api` é dado, e o "nunca automático para apagar" é regra (ADR 039).
+    """
+    catalogo = [
+        tool("remove_exercise_from_plan", _APAGA_COM_CARTAO),
+        tool("delete_meal", _APAGA_COM_CARTAO),
+        tool(
+            "log_water",
+            {"readOnlyHint": False, "destructiveHint": False, "confirmableHint": True},
+        ),
+    ]
+
+    assert automaticas(
+        catalogo, ["remove_exercise_from_plan", "delete_meal", "log_water"]
+    ) == frozenset({"log_water"})
