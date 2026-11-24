@@ -12,6 +12,7 @@ import {
   FEED_FILTERS,
   feedApi,
   groupsApi,
+  isSectionHidden,
   panelHref,
   type FeedFilter,
 } from '@fatia/api-client';
@@ -39,6 +40,9 @@ export default function CommunityFeedScreen() {
   // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
   // que a pessoa está dentro.
   const ativo = group.data?.status === 'ACTIVE';
+  // A comunidade escondeu o Mural (#413): a aba some e a tela não lê posts.
+  // Só visual: nada do que foi postado se perde.
+  const muralEscondido = group.data ? isSectionHidden(group.data, 'FEED') : false;
   const qc = useQueryClient();
   const [filtro, setFiltro] = useState<FeedFilter>('all');
   const feed = useInfiniteQuery({
@@ -46,7 +50,7 @@ export default function CommunityFeedScreen() {
     queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filtro),
     initialPageParam: null as string | null,
     getNextPageParam: (ultima) => ultima.nextCursor,
-    enabled: ativo,
+    enabled: ativo && !muralEscondido,
   });
   const primeira = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
@@ -136,7 +140,23 @@ export default function CommunityFeedScreen() {
           </View>
         ) : null}
         {ativo ? <CommunityTabs groupId={groupId} /> : null}
-        {feed.isPending && ativo ? <LoadingState label="Carregando o mural…" /> : null}
+        {ativo && muralEscondido ? (
+          <EmptyState
+            title="O mural está escondido nesta comunidade."
+            description="A equipe escolheu não mostrar o mural por aqui. O resto da comunidade continua nas outras abas."
+            action={
+              <Button
+                variant="outline"
+                onPress={() => router.push(`/community/${groupId}/for-you`)}
+              >
+                Ver Para você
+              </Button>
+            }
+          />
+        ) : null}
+        {feed.isPending && ativo && !muralEscondido ? (
+          <LoadingState label="Carregando o mural…" />
+        ) : null}
         {feed.isError ? (
           <ErrorState error={feed.error} onRetry={() => void feed.refetch()} />
         ) : null}

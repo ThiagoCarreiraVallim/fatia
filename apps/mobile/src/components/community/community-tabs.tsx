@@ -2,19 +2,24 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { usePathname, useRouter } from 'expo-router';
-import { activeCommunityTab, communityTabs, forYouApi } from '@fatia/api-client';
+import { activeCommunityTab, communityTabs, forYouApi, groupsApi } from '@fatia/api-client';
 import { forYouKey } from '@/components/feed/feed-ui';
 import { cn } from '@/components/ui';
 
 /**
  * As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`:
  * o mural é a raiz da comunidade, e o resto mora na engrenagem. Para você leva
- * o número do que falta; a Agenda chega com a #397.
+ * o número do que falta; a Agenda chega com a #397. Mural e Desafios somem
+ * quando a comunidade os esconde (#413); só visual.
  */
 export function CommunityTabs({ groupId }: { groupId: string }) {
   const router = useRouter();
   const active = activeCommunityTab(usePathname() ?? '');
   const forYou = useQuery({ queryKey: forYouKey(groupId), queryFn: () => forYouApi.get(groupId) });
+  const group = useQuery({
+    queryKey: ['community', 'group', groupId],
+    queryFn: () => groupsApi.get(groupId),
+  });
   const count = forYou.data?.count ?? 0;
   return (
     <ScrollView
@@ -23,7 +28,7 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
       accessibilityRole="tablist"
       contentContainerClassName="gap-1 border-b border-border"
     >
-      {communityTabs(groupId).map((t) => {
+      {communityTabs(groupId, group.data?.hiddenSections).map((t) => {
         const on = active === t.tab;
         return (
           <Pressable

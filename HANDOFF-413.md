@@ -39,3 +39,10 @@ Pranchas em `.canvas/project/` (Pn-15, Pn-38, Pn-38b, Pn-27, Pn-27b, Onb-C2).
 - API completa e verde (group-settings, integrations, panel-news, user-isolation, account.service, panel, permission-matrix). tsc api ok.
 - `invite-email-retention.spec` falhou uma vez rodando junto com outros (passa sozinho): flake de banco compartilhado, ficar de olho na rodada completa.
 - Próximo: api-client (tipos MyGroup, orgApi update/cover, apiKeys, panelNews, helpers, PanelSection 'integrations'/'updates', ROLE_ACTIONS integration.manage).
+
+## Pausa (2026-11-23)
+
+- Agente parado a pedido do usuário (nova lista de correções antes de seguir).
+- Último commit real: 1ff5ad95 (web: configurações, integrações e novidades). O checklist acima está atrasado: confira com `git log main..HEAD`.
+- Commit `wip` seguinte guarda o que estava em andamento: seções escondidas na comunidade do membro (web e app) e o convite no app (`c/[token].tsx`). Bug aberto no momento da pausa: com a query desligada, `feed.isPending` fica true e o loader gira para sempre (web e mobile). Corrigir antes de seguir.
+- Falta ainda: docs, passada visual, testes completos/lint/typecheck, PR.

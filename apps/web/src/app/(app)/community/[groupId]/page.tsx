@@ -169,7 +169,9 @@ export default function CommunityFeedPage() {
         />
       )}
 
-      {active && feed.isPending && <Skeleton className="h-40 rounded-2xl bg-card" />}
+      {active && !muralEscondido && feed.isPending && (
+        <Skeleton className="h-40 rounded-2xl bg-card" />
+      )}
 
       {feed.isError && (
         <EmptyState
