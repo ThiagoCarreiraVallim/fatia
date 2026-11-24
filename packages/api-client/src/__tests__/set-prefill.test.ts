@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { prefillForNextSet, restoreSetDraft, setDraftKey } from '../workout/set-prefill';
+import {
+  isTouchedForSet,
+  prefillForNextSet,
+  restoreSetDraft,
+  setDraftKey,
+} from '../workout/set-prefill';
 import type { PrescribedSet, SessionSet } from '../workout';
 
 const prescription: PrescribedSet = {
@@ -81,11 +86,15 @@ describe('prefillForNextSet', () => {
     });
   });
 
-  it('deixa a série registrada valer mesmo depois de a pessoa mexer nos campos', () => {
+  it('não sobrescreve o que a pessoa digitou na série em andamento, nem com a série da sessão', () => {
+    // #485: o refetch depois de corrigir uma série (ou a série que acabou de
+    // chegar do servidor) trocava o número no meio da digitação. `touched` é da
+    // série em andamento (`isTouchedForSet`), então a série seguinte volta a
+    // herdar a anterior.
     const sessionLastSet = makeSet({ id: 'set-2', weightKg: 70, reps: 8 });
     expect(prefillForNextSet({ touched: true, sessionLastSet })).toEqual({
-      weightKg: 70,
-      reps: 8,
+      weightKg: null,
+      reps: null,
     });
   });
 
@@ -172,5 +181,23 @@ describe('restoreSetDraft — o rascunho da série volta depois do "Como fazer"'
   it('a chave é da sessão e do exercício', () => {
     expect(setDraftKey('s1', 7)).toEqual(['workout', 'set-draft', 's1', 7]);
     expect(setDraftKey('s1', 7)).not.toEqual(setDraftKey('s1', 8));
+  });
+});
+
+/**
+ * #485: "mexeu nos campos" vale só para a série em andamento. Registrada a
+ * série, a próxima começa intocada e herda a que acabou de sair.
+ */
+describe('isTouchedForSet — o toque é da série em andamento', () => {
+  it('nada tocado', () => {
+    expect(isTouchedForSet(null, 0)).toBe(false);
+  });
+
+  it('tocou nesta série', () => {
+    expect(isTouchedForSet(2, 2)).toBe(true);
+  });
+
+  it('o toque da série anterior não vale para a seguinte', () => {
+    expect(isTouchedForSet(1, 2)).toBe(false);
   });
 });

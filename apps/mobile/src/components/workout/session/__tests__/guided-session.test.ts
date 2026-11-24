@@ -15,6 +15,7 @@ import {
   stepValue,
   isSessionDone,
 } from '../guided-session';
+import { isExerciseComplete } from '../format';
 
 function set(over: Partial<SessionSet> = {}): SessionSet {
   return {
@@ -74,6 +75,25 @@ describe('estado da sessão guiada', () => {
     expect(nextOpenIndex(groups, 1)).toBe(3);
     expect(nextOpenIndex(groups, 3)).toBe(1);
     expect(nextOpenIndex([group(1, 3), group(2, 3)], 0)).toBeNull();
+  });
+});
+
+describe('exercício encerrado sem todas as séries (#473)', () => {
+  const ended = (g: ExerciseGroup): ExerciseGroup => ({ ...g, ended: true });
+
+  it('conta como completo, mesmo com séries faltando', () => {
+    expect(isExerciseComplete(ended(group(1, 1)))).toBe(true);
+    expect(isExerciseComplete(ended(group(1, 0)))).toBe(true);
+  });
+
+  it('o próximo aberto pula o encerrado', () => {
+    const groups = [group(1, 1), ended(group(2, 0)), group(3, 0)];
+    expect(nextOpenIndex(groups, 0)).toBe(2);
+  });
+
+  it('encerrar o último que faltava fecha a sessão', () => {
+    expect(isSessionDone([group(1, 3), ended(group(2, 1))])).toBe(true);
+    expect(isSessionDone([group(1, 3), group(2, 1)])).toBe(false);
   });
 });
 
