@@ -6,6 +6,7 @@ import {
   appOnlyHref,
   chatCardTitle,
   collapsedLabel,
+  chatArtifactAsksAction,
   isEmptyChatArtifact,
   isRenderableChatArtifact,
   pauseDecisionCount,
@@ -479,5 +480,31 @@ describe('timelinePeriodLabel — o período da variação', () => {
     expect(timelinePeriodLabel([e('2026-10-06'), e('2026-11-05')])).toBe('em 30 dias');
     expect(timelinePeriodLabel([e('2026-11-04'), e('2026-11-05')])).toBe('em 1 dia');
     expect(timelinePeriodLabel([e('2026-11-05')])).toBe('no período');
+  });
+});
+
+describe('chatArtifactAsksAction — o cartão que fica aberto com as tools recolhidas (#487)', () => {
+  const t = 'c1';
+  it('o registro gravado, o "abrir no app" e o arquivo pedem um toque da pessoa', () => {
+    expect(
+      chatArtifactAsksAction({ toolCallId: t, kind: 'saved', at: '', lines: [], undoable: true }),
+    ).toBe(true);
+    expect(
+      chatArtifactAsksAction({ toolCallId: t, kind: 'app_only', tool: 'delete_meal', params: {} }),
+    ).toBe(true);
+    expect(
+      chatArtifactAsksAction({
+        toolCallId: t,
+        kind: 'file',
+        url: 'u',
+        filename: 'f',
+        expiresAt: '',
+      }),
+    ).toBe(true);
+  });
+  it('a consulta é detalhe: recolhe numa linha', () => {
+    expect(chatArtifactAsksAction({ toolCallId: t, kind: 'metric', value: 3 })).toBe(false);
+    expect(chatArtifactAsksAction({ toolCallId: t, kind: 'timeline', events: [] })).toBe(false);
+    expect(chatArtifactAsksAction({ toolCallId: t, kind: 'sources', sources: [] })).toBe(false);
   });
 });

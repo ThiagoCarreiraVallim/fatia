@@ -222,6 +222,15 @@ export function isEmptyChatArtifact(a: ChatArtifact): boolean {
   }
 }
 
+/**
+ * O cartão que pede um toque da pessoa: o registro gravado (com Desfazer), o "abrir no app" e o
+ * arquivo. Esse fica aberto na última resposta; o de consulta é detalhe e recolhe numa linha,
+ * que abre a quem quiser ver (#487).
+ */
+export function chatArtifactAsksAction(a: ChatArtifact): boolean {
+  return a.kind === 'saved' || a.kind === 'app_only' || a.kind === 'file';
+}
+
 // ---------------------------------------------------------------- linhas das ferramentas
 
 export type ToolCallStatus =
