@@ -194,6 +194,36 @@ describe('summarizeTrainingWeek (#377)', () => {
     expect(week.target).toBe(4);
   });
 
+  it('outra semana (#479): a do dia pedido, sem "hoje", com os treinos dela', () => {
+    // Quarta 04/11: a semana de 02/11 a 08/11, a anterior à de NOW.
+    const week = summarizeTrainingWeek({
+      sessions: [
+        sess('2026-11-02T12:00:00Z', '2026-11-02T13:00:00Z'),
+        // Domingo 08/11 às 23h em SP: ainda desta semana.
+        sess('2026-11-09T02:00:00Z', '2026-11-09T03:00:00Z'),
+        // A semana de NOW fica de fora.
+        sess('2026-11-11T12:00:00Z', '2026-11-11T13:00:00Z'),
+      ],
+      now: NOW,
+      timezone: TZ,
+      target: 4,
+      weekOf: '2026-11-04',
+    });
+    expect(week.start).toBe('2026-11-02');
+    expect(week.days.map((d) => d.date)[6]).toBe('2026-11-08');
+    expect(week.days.map((d) => d.trained)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(week.days.some((d) => d.today)).toBe(false);
+    expect(week.done).toBe(2);
+  });
+
   it('sem meta, o alvo é nulo e a semana tem os 7 dias', () => {
     const week = summarizeTrainingWeek({ sessions: [], now: NOW, timezone: TZ, target: null });
     expect(week).toMatchObject({ done: 0, target: null });

@@ -22,7 +22,7 @@ import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
 import { AgendaService } from './agenda.service';
-import { AgendaQueryDto, RescheduleSessionDto } from './dto/agenda.dto';
+import { AgendaQueryDto, RescheduleSessionDto, TrainingWeekQueryDto } from './dto/agenda.dto';
 import { MuscleSummaryService } from './muscle-summary.service';
 import { CreateTrainingBlockDto, TrainingBlockPreviewDto } from './dto/training-block.dto';
 import {
@@ -322,6 +322,12 @@ export class WorkoutController {
   @Get('muscles/week')
   weeklyMuscles(@CurrentUser() user: CurrentUserPayload) {
     return this.muscles.weekly(user.id, user.timezone);
+  }
+
+  /** A semana do calendário de um dia qualquer (#479): a faixa de dias arrasta para trás. */
+  @Get('week')
+  trainingWeek(@CurrentUser() user: CurrentUserPayload, @Query() q: TrainingWeekQueryDto) {
+    return this.muscles.trainingWeek(user.id, user.timezone, q.date);
   }
 
   /** O histórico (#381, Al-T10): totais e linhas das sessões concluídas, com filtro por tipo. */
