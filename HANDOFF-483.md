@@ -33,5 +33,11 @@ Brief: /home/thiago/.cache/fatia-briefs/Cc.md
 
 ## Estado atual
 
-PR 1 aberto: #489 (fix/475-treino-nutricao-app). Agora na PR 2 (fix/483-drawer-previa-treino).
-API do worktree: `node apps/api/dist/main` na 3116 com DB fatia_t475 (seed demo feito).
+- PR 1 aberto: #489 (fix/475-treino-nutricao-app), CI pendente.
+- PR 2 (fix/483-drawer-previa-treino): código pronto e commitado.
+  - #483: `drawer-state.ts` (máquina testada), Drawer só desmonta quando assenta, mostra o último conteúdo
+    enquanto desce, `useDiscardGuard`/`DiscardGuard` (confirm-drawer.tsx), folhas de plans/[id] em DrawerLayer.
+  - #484: `planPreview` (api-client) + `PlanPreviewProvider`/`usePlanPreview` no layout; plans/index, cards, agenda.
+    Comunidade: a tela do modelo já é a prévia (exercícios, séries, guia antes do "Adotar").
+- Falta: prints do PR 2 (esperando a trava do emulador, estava com frente-B), abrir o PR 2, relatório.
+- API do worktree: `node apps/api/dist/main` na 3116, DB fatia_t475 (seed demo feito).

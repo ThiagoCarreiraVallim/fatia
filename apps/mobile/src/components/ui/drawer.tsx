@@ -159,6 +159,11 @@ export function Drawer({
   const phase = useRef<DrawerPhase>(open ? 'open' : 'closed');
   const [mounted, setMounted] = useState(open);
   const guard = useRef<(() => void) | null>(null);
+  // Descendo, a folha mostra o último conteúdo de quando estava aberta: quem a
+  // abre costuma limpar o item ao fechar (`open={item != null}`), e sem isto a
+  // folha desceria vazia.
+  const [lastOpenChildren, setLastOpenChildren] = useState(children);
+  if (open && lastOpenChildren !== children) setLastOpenChildren(children);
   const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onOpenChangeRef = useRef(onOpenChange);
   useEffect(() => {
@@ -271,7 +276,7 @@ export function Drawer({
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
       >
-        {children}
+        {open ? children : lastOpenChildren}
       </BottomSheet>
     </DrawerGuard.Provider>
   );
