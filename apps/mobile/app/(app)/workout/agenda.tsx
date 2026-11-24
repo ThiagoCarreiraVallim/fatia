@@ -42,6 +42,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
 import { useStartSession } from '@/components/workout/use-start-session';
+import { usePlanPreview } from '@/components/workout/plan-preview-sheet';
 import {
   agendaWindow,
   dayDot,
@@ -363,6 +364,7 @@ function ChipIcon({ bg, fg, Icon }: ReturnType<typeof toneChip>) {
 function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () => void }) {
   const copy = agendaItemCopy(item);
   const start = useStartSession();
+  const preview = usePlanPreview();
   return (
     <View
       className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3"
@@ -381,7 +383,10 @@ function ItemCard({ item, onReschedule }: { item: AgendaItem; onReschedule: () =
         <Button
           size="xs"
           loading={start.isPending}
-          onPress={() => start.mutate({ planId: item.planId })}
+          // Com plano, a prévia antes de começar (#484).
+          onPress={() =>
+            item.planId ? preview.start(item.planId) : start.mutate({ planId: item.planId })
+          }
         >
           Abrir
         </Button>
