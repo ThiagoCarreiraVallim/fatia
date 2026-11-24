@@ -2,6 +2,7 @@ import {
   dayOfMonth,
   WEEKDAY_LETTERS,
   type MuscleTone,
+  type SetsLevel,
   type TrainingWeek,
   type WorkoutCheckinInput,
 } from '@fatia/api-client';
@@ -24,6 +25,25 @@ export function restToneColors(
   for (const [muscle, tone] of Object.entries(tones)) {
     if (tone === 'rested') out[muscle] = palette.primary;
     else if (tone === 'recovering') out[muscle] = palette.steps;
+  }
+  return out;
+}
+
+/** A opacidade (alfa hex) de cada nível de séries: 35%, 65% e cheio. */
+const SETS_LEVEL_ALPHA = { 1: '59', 2: 'A6', 3: '' } as const;
+
+/**
+ * O "Séries por músculo" (#476) pinta o corpo com a cor da marca, mais forte
+ * quanto mais perto da meta da semana. Recebe a cor (e não importa `colors`)
+ * porque os tokens são getters do tema.
+ */
+export function setsLevelColors(
+  levels: Record<string, SetsLevel>,
+  primary: string,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [muscle, level] of Object.entries(levels)) {
+    out[muscle] = `${primary}${SETS_LEVEL_ALPHA[level]}`;
   }
   return out;
 }

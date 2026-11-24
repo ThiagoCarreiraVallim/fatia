@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { checkinBody, groupColorName, restToneColors, weekChips } from '../workout-home';
+import {
+  checkinBody,
+  groupColorName,
+  restToneColors,
+  setsLevelColors,
+  weekChips,
+} from '../workout-home';
 
 describe('músculos de hoje no diagrama', () => {
   it('descansado na cor da marca, recuperando em passos, recente fica apagado', () => {
@@ -7,6 +13,16 @@ describe('músculos de hoje no diagrama', () => {
     expect(
       restToneColors({ lats: 'rested', chest: 'recovering', quadriceps: 'recent' }, palette),
     ).toEqual({ lats: '#0f0', chest: '#fa0' });
+  });
+});
+
+describe('séries da semana no diagrama (#476)', () => {
+  it('a cor da marca mais forte quanto mais perto da meta', () => {
+    expect(setsLevelColors({ chest: 3, lats: 2, quadriceps: 1 }, '#C6F432')).toEqual({
+      chest: '#C6F432',
+      lats: '#C6F432A6',
+      quadriceps: '#C6F43259',
+    });
   });
 });
 
