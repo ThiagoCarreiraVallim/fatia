@@ -9,6 +9,10 @@ import globals from 'globals';
 /** Os componentes que rolam no app nativo (ver a regra de barra de rolagem, #477). */
 const SCROLLERS =
   '/^(ScrollView|FlatList|SectionList|DrawerScrollView|DrawerFlatList|BottomSheetScrollView|BottomSheetFlatList)$/';
+/** O elemento que rola, com nome simples (`ScrollView`) ou com ponto (`Animated.ScrollView`). */
+const SCROLLER = `JSXOpeningElement:matches([name.name=${SCROLLERS}], [name.property.name=${SCROLLERS}])`;
+/** `horizontal` ou `horizontal={x}`; `horizontal={false}` rola na vertical. */
+const HORIZONTAL = `JSXAttribute[name.name='horizontal']:not([value.expression.value=false])`;
 
 /**
  * Configuração do ESLint no formato flat (ESLint 9+).
@@ -122,22 +126,24 @@ export default tseslint.config(
      * volta sozinha no próximo `ScrollView` escrito se não houver trava.
      *
      * Os três arquivos ignorados são os da #413 (pausada), que os reescreve.
+     * Os colchetes vão escapados: sem a barra, `[groupId]` é classe de
+     * caractere no glob e o arquivo não casa.
      */
     files: ['apps/mobile/**/*.tsx'],
     ignores: [
-      'apps/mobile/app/(app)/community/[groupId]/index.tsx',
+      'apps/mobile/app/(app)/community/\\[groupId\\]/index.tsx',
       'apps/mobile/src/components/community/community-tabs.tsx',
-      'apps/mobile/app/c/[token].tsx',
+      'apps/mobile/app/c/\\[token\\].tsx',
     ],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
-          selector: `JSXOpeningElement[name.name=${SCROLLERS}]:has(> JSXAttribute[name.name='horizontal']):not(:has(> JSXAttribute[name.name='showsHorizontalScrollIndicator'][value.expression.value=false]))`,
+          selector: `${SCROLLER}:has(> ${HORIZONTAL}):not(:has(> JSXAttribute[name.name='showsHorizontalScrollIndicator'][value.expression.value=false]))`,
           message: 'Rolagem horizontal sem barra: showsHorizontalScrollIndicator={false} (#477).',
         },
         {
-          selector: `JSXOpeningElement[name.name=${SCROLLERS}]:not(:has(> JSXAttribute[name.name='horizontal'])):not(:has(> JSXAttribute[name.name='showsVerticalScrollIndicator'][value.expression.value=false]))`,
+          selector: `${SCROLLER}:not(:has(> ${HORIZONTAL})):not(:has(> JSXAttribute[name.name='showsVerticalScrollIndicator'][value.expression.value=false]))`,
           message: 'Rolagem vertical sem barra: showsVerticalScrollIndicator={false} (#477).',
         },
       ],

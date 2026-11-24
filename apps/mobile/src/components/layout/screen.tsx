@@ -66,6 +66,7 @@ export function Screen({
       className="flex-1"
       onScroll={onScroll}
       scrollEventThrottle={16}
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingTop, paddingBottom }}
       keyboardShouldPersistTaps="handled"
       refreshControl={

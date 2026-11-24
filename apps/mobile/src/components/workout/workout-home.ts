@@ -7,6 +7,7 @@ import {
   type TrainingWeek,
   type WorkoutCheckinInput,
 } from '@fatia/api-client';
+import { mondayOf } from '@/components/ui/week-pager-math';
 
 /**
  * Contas da aba Treino do redesign (#377) que não dependem de tela: as cores do
@@ -63,6 +64,16 @@ export function emptyTrainingWeek(monday: string, today: string): TrainingWeek {
     done: 0,
     target: null,
   };
+}
+
+/**
+ * A virada do dia com a aba Treino montada (#479): a faixa que mostrava a
+ * semana de hoje vai para o novo hoje, mesmo quando a virada troca de semana;
+ * quem arrastou para outra semana continua nela. É o `followToday` da Nutrição,
+ * pela semana: a âncora do Treino é um dia qualquer da semana mostrada.
+ */
+export function followTodayWeek(anchor: string, previousToday: string, today: string): string {
+  return mondayOf(anchor) === mondayOf(previousToday) ? today : anchor;
 }
 
 const WEEKDAY_NAMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];

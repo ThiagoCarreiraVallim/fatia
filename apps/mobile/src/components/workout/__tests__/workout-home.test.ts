@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkinBody,
   emptyTrainingWeek,
+  followTodayWeek,
   groupColorName,
   restToneColors,
   setsLevelColors,
@@ -43,6 +44,21 @@ describe('semana ainda sem resposta (#479)', () => {
     expect(week.days.filter((d) => d.today).map((d) => d.date)).toEqual(['2026-11-25']);
     expect(week.days.some((d) => d.trained || d.active)).toBe(false);
     expect(week).toMatchObject({ done: 0, target: null });
+  });
+});
+
+describe('faixa do Treino na virada do dia (#479)', () => {
+  it('na semana de hoje, vai para o novo hoje, mesmo virando a semana', () => {
+    expect(followTodayWeek('2026-11-29', '2026-11-29', '2026-11-30')).toBe('2026-11-30');
+    expect(followTodayWeek('2026-11-25', '2026-11-25', '2026-11-26')).toBe('2026-11-26');
+  });
+
+  it('o mesmo dia da semana de hoje ainda conta (voltou do segundo plano dias depois)', () => {
+    expect(followTodayWeek('2026-11-27', '2026-11-25', '2026-12-02')).toBe('2026-12-02');
+  });
+
+  it('quem arrastou para outra semana continua nela', () => {
+    expect(followTodayWeek('2026-11-18', '2026-11-25', '2026-11-26')).toBe('2026-11-18');
   });
 });
 

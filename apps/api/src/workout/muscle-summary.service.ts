@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { assertDay } from '../common/dates';
 import { PrismaService } from '../common/prisma.service';
 import { addDaysIso, dateInTz, dayBoundsInTz, weekStartInTz } from '../progress/helpers/date-tz';
 import {
@@ -17,6 +18,12 @@ export const WEEKLY_SETS_TARGET = 12;
 
 /** Um grupo sem série há este tanto de dias (no fuso da pessoa) conta como descansado. */
 export const RESTED_AFTER_DAYS = 2;
+
+/**
+ * Os anos que `GET /workout/week` aceita (#479). Fora disso a conta de datas
+ * estoura (o ano 9999 termina a semana no ano 10000) e não há treino a mostrar.
+ */
+const TRAINING_WEEK_YEARS = { min: 2000, max: 2100 };
 
 /** Até onde a busca da última série olha para trás. Mais que isso é "nunca" no card. */
 const LOOKBACK_DAYS = 60;
@@ -236,6 +243,14 @@ export class MuscleSummaryService {
     date: string,
     now: Date = new Date(),
   ): Promise<TrainingWeek> {
+    // O regex do DTO deixa passar `2026-13-01` e `9999-12-31`: aqui vira 400, não 500.
+    assertDay(date, 'date');
+    const year = Number(date.slice(0, 4));
+    if (year < TRAINING_WEEK_YEARS.min || year > TRAINING_WEEK_YEARS.max) {
+      throw new BadRequestException(
+        `date fora do intervalo (${TRAINING_WEEK_YEARS.min} a ${TRAINING_WEEK_YEARS.max}).`,
+      );
+    }
     const start = weekStartInTz(new Date(`${date}T12:00:00Z`), 'UTC');
     const [sessions, goals] = await Promise.all([
       this.prisma.workoutSession.findMany({

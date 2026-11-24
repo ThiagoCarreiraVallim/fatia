@@ -24,7 +24,12 @@ import { Screen } from '@/components/layout/screen';
 import { Carousel, ErrorState, Skeleton, SkeletonGroup } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
-import { emptyTrainingWeek, groupColorName, weekChips } from '@/components/workout/workout-home';
+import {
+  emptyTrainingWeek,
+  followTodayWeek,
+  groupColorName,
+  weekChips,
+} from '@/components/workout/workout-home';
 import { WeekPager } from '@/components/ui/week-pager';
 import { mondayOf } from '@/components/ui/week-pager-math';
 import { useToday } from '@/components/layout/use-today';
@@ -73,6 +78,12 @@ function WeekRow({
 }) {
   const today = useToday();
   const [anchor, setAnchor] = useState(today);
+  // A aba fica montada: na virada do dia, a semana de hoje vai para o novo hoje.
+  const [seenToday, setSeenToday] = useState(today);
+  if (today !== seenToday) {
+    setSeenToday(today);
+    setAnchor(followTodayWeek(anchor, seenToday, today));
+  }
   const shown = useTrainingWeek(mondayOf(anchor), current, today);
   return (
     <View className="gap-2.5">
