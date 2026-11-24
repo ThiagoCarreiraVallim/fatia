@@ -18,6 +18,9 @@ export interface InputProps extends TextInputProps {
  *   ilegível sobre o fundo escuro do app.
  * - `selectionColor` no verde da marca — o azul padrão do sistema destoa de
  *   tudo o resto.
+ * - Texto grande (número de 34–40 px) com altura fixa: zere o padding vertical
+ *   (`py-0`) e dê a altura da linha. Com o `py-2` daqui num `h-12`, sobram
+ *   32 px para um texto de 34 e o Android esconde o número (#485).
  */
 export const Input = forwardRef<TextInput, InputProps>(function Input(
   { className, ...props },

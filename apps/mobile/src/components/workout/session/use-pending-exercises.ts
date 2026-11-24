@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addPendingExercise,
   dropPendingExercise,
+  endedExercisesKey,
+  toggleEndedExercise,
   pendingExercisesKey,
   pendingExercisesQueryOptions,
   type PendingExercise,
@@ -65,4 +67,27 @@ export function useFocusRequest(sessionId: string) {
     [qc, sessionId],
   );
   return { focus: query.data, request };
+}
+
+/**
+ * "Encerrar exercício" (#473): os exercícios encerrados antes das séries
+ * todas. Mesmo cache dos escolhidos, pelo mesmo motivo: valem na sessão guiada
+ * e no "Treino atual", e sobrevivem a sair e voltar.
+ */
+export function useEndedExercises(sessionId: string) {
+  const qc = useQueryClient();
+  const key = endedExercisesKey(sessionId);
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => qc.getQueryData<number[]>(key) ?? [],
+    initialData: [] as number[],
+    ...pendingExercisesQueryOptions,
+  });
+  const setEnded = useCallback(
+    (exerciseId: number, ended: boolean) =>
+      qc.setQueryData<number[]>(key, (current) => toggleEndedExercise(current, exerciseId, ended)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [qc, sessionId],
+  );
+  return { ended: query.data, setEnded };
 }

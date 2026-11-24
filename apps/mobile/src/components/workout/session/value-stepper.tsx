@@ -12,6 +12,11 @@ import { colors } from '@/theme/colors';
  * e o valor no meio, que vira campo de digitar no toque. Digitar ganha do −/+
  * quando o salto é grande (de 20 para 60 kg são 16 toques). O teclado é o
  * decimal com vírgula (`parseDecimalInput`) ou o numérico, para o inteiro.
+ *
+ * O que é digitado sobe a cada tecla (#485), e não só ao sair do campo: o
+ * "Concluir série" preso embaixo pode ser tocado com o teclado aberto, e o
+ * número digitado tem de ir junto. `onEditStart` avisa que a pessoa pegou o
+ * campo, para o palpite da série não trocar o número embaixo do dedo.
  */
 export function ValueStepper({
   label,
@@ -24,6 +29,7 @@ export function ValueStepper({
   stacked,
   caption,
   onChange,
+  onEditStart,
 }: {
   label: string;
   unit?: string;
@@ -39,13 +45,22 @@ export function ValueStepper({
   stacked?: { shortLabel: string };
   caption?: ReactNode;
   onChange: (value: number) => void;
+  onEditStart?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
+  const clean = (parsed: number) => Math.max(0, integer ? Math.round(parsed) : parsed);
+
+  function type(text: string) {
+    setDraft(text);
+    const parsed = parseDecimalInput(text);
+    if (parsed != null) onChange(clean(parsed));
+  }
+
   function commit() {
     const parsed = parseDecimalInput(draft);
-    if (parsed != null) onChange(Math.max(0, integer ? Math.round(parsed) : parsed));
+    if (parsed != null) onChange(clean(parsed));
     setEditing(false);
   }
 
@@ -82,21 +97,25 @@ export function ValueStepper({
       <Plus size={18} color={colors.foreground} />
     </Pressable>
   );
+  // O campo de digitar tem a altura e a fonte do número que ele substitui. O
+  // `py-2` e a altura do `Input` cortavam o texto de 34 px pela metade no
+  // Android (#485): a área útil sobrava com 32 px.
   const field = editing ? (
     <Input
       autoFocus
       value={draft}
-      onChangeText={setDraft}
+      onChangeText={type}
       onBlur={commit}
       onSubmitEditing={commit}
       returnKeyType="done"
       selectTextOnFocus
       keyboardType={integer ? 'number-pad' : 'decimal-pad'}
       accessibilityLabel={accessibilityLabel}
+      style={{ includeFontPadding: false, textAlignVertical: 'center', paddingVertical: 0 }}
       className={
         stacked
-          ? 'h-12 w-full border-0 bg-transparent px-0 text-center text-[34px] font-extrabold'
-          : 'h-12 min-w-[64px] flex-1 border-0 bg-transparent px-0 text-center text-2xl font-extrabold'
+          ? 'h-[52px] w-full border-0 bg-transparent px-0 py-0 text-center font-display text-[40px] text-foreground'
+          : 'h-12 min-w-[64px] flex-1 border-0 bg-transparent px-0 py-0 text-center font-display-semibold text-2xl text-foreground'
       }
     />
   ) : (
@@ -104,12 +123,13 @@ export function ValueStepper({
       accessibilityRole="button"
       accessibilityLabel={`${accessibilityLabel}: ${formatNumber(value)}. Tocar para digitar`}
       onPress={() => {
+        onEditStart?.();
         setDraft(formatNumber(value));
         setEditing(true);
       }}
       className={
         stacked
-          ? 'min-h-[48px] w-full justify-center'
+          ? 'h-[52px] w-full justify-center'
           : 'min-h-[48px] min-w-[64px] flex-1 justify-center'
       }
     >

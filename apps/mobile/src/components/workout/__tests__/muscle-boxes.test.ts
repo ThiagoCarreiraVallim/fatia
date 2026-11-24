@@ -11,7 +11,7 @@ import { FRONT_PATHS } from '../muscle-paths-front';
  * (M, L, C, H, V, Z), e o ponto de controle das curvas fica dentro da caixa com
  * folga de poucos pontos: é o bastante para um recorte.
  */
-function boxesOf(paths: MusclePath[]): Record<string, [number, number, number, number]> {
+function boxesOf(paths: MusclePath[]): Record<string, number[]> {
   const boxes: Record<string, [number, number, number, number]> = {};
   for (const path of paths) {
     if (!path.muscle) continue;

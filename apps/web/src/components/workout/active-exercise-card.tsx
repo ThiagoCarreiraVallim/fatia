@@ -9,6 +9,7 @@ import {
   loadToKg,
   loadUnitLabel,
   newSetClientKey,
+  isTouchedForSet,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
@@ -113,7 +114,10 @@ export function ActiveExerciseCard({
 
   const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? 0);
   const [reps, setReps] = useState<number>(lastSet?.reps ?? parseFirstRep(group.targetReps));
-  const [touched, setTouched] = useState(false);
+  // Em qual série a pessoa mexeu nos campos (#485): o toque vale só para a
+  // série em andamento, e a seguinte volta a herdar a que acabou de sair.
+  const [touchedAt, setTouchedAt] = useState<number | null>(null);
+  const touched = isTouchedForSet(touchedAt, doneSets);
 
   // Calculado no render e não dentro do efeito para que as dependências sejam
   // só os dois números: os objetos de série trocam de identidade a cada refetch
@@ -245,7 +249,7 @@ export function ActiveExerciseCard({
               value={loadFieldValue(weight, units.loadUnit)}
               step={units.loadUnit === 'LB' ? 5 : 2.5}
               onChange={(n) => {
-                setTouched(true);
+                setTouchedAt(doneSets);
                 setWeight(loadToKg(Math.max(0, n), units.loadUnit));
               }}
               caption={
@@ -269,7 +273,7 @@ export function ActiveExerciseCard({
               step={1}
               integer
               onChange={(n) => {
-                setTouched(true);
+                setTouchedAt(doneSets);
                 setReps(Math.max(0, Math.round(n)));
               }}
               caption={group.targetReps ? `meta ${group.targetReps}` : null}
