@@ -55,6 +55,8 @@ export interface ChatToolCatalogEntry {
   kind: 'read' | 'confirm' | 'app_only';
   card?: ChatCardFormat;
   appOnly?: ChatAppOnly;
+  /** Apaga (`destructiveHint`): o cartão diz "Excluir" e só libera com o registro nomeado (ADR 051). */
+  destructive?: true;
 }
 
 /**
@@ -153,7 +155,15 @@ export class McpToolRegistry implements OnModuleInit {
           return [tool.name, { title: tool.title, kind: 'read', card: tool.card }];
         }
         if (a.confirmableHint === true) {
-          return [tool.name, { title: tool.title, kind: 'confirm', card: tool.card }];
+          return [
+            tool.name,
+            {
+              title: tool.title,
+              kind: 'confirm',
+              card: tool.card,
+              ...(a.destructiveHint === true ? { destructive: true as const } : {}),
+            },
+          ];
         }
         return [
           tool.name,

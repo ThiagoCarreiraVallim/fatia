@@ -1067,4 +1067,17 @@ describe('PreviaDaAcaoService', () => {
       }
     });
   });
+
+  it('meta de nutriente pela chave que a tool aceita (normalizada) também ganha cartão', async () => {
+    await prisma.nutrientTarget.create({
+      data: { userId: dono.id, nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', max: 2000 },
+    });
+    try {
+      // `NutrientTargetService.delete` normaliza "Sodium mg" para "sodium_mg" e apaga.
+      const r = await previas.previa(dono, 'delete_nutrient_target', { nutrientKey: 'Sodium mg' });
+      expect(r.valida).toBe(true);
+    } finally {
+      await prisma.nutrientTarget.deleteMany({ where: { userId: dono.id } });
+    }
+  });
 });

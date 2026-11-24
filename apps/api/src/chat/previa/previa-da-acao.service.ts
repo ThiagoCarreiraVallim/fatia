@@ -19,6 +19,7 @@ import {
   type TipoDeRegistro,
 } from './rotulos';
 import { readableExercises } from '../../workout/helpers/exercise-access';
+import { nutrientKeySlug } from '../../nutrition/nutrient-target.service';
 import { snapshotGoalRanges } from '../../sharing/nutrition-document';
 
 export interface LinhaDaPrevia {
@@ -550,10 +551,13 @@ export class PreviaDaAcaoService {
         return exercicio?.name ?? null;
       }
       case 'metaDeNutriente': {
-        const meta = await this.prisma.nutrientTarget.findFirst({
-          where: { userId, nutrientKey: String(valor) },
-          select: { label: true, unit: true, min: true, max: true },
+        // As mesmas chaves que `NutrientTargetService.delete` tenta: a crua e a normalizada.
+        const cru = String(valor);
+        const metas = await this.prisma.nutrientTarget.findMany({
+          where: { userId, nutrientKey: { in: [cru, nutrientKeySlug(cru)] } },
+          select: { label: true, unit: true, min: true, max: true, nutrientKey: true },
         });
+        const meta = metas.find((m) => m.nutrientKey === cru) ?? metas[0];
         if (!meta) return null;
         const limite = (v: number) => `${numero(v, 0)} ${meta.unit}`;
         const faixaDaMeta =
