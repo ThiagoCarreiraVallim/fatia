@@ -12,12 +12,14 @@ import {
   circuitBarSnapshot,
   circuitRunPath,
   circuitState,
+  markEndedExercises,
   workoutApi,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Icon } from '@/components/ui';
 import { setProgress } from '@/components/workout/session/guided-session';
 import { useSessionRestTimer } from '@/components/workout/session/rest-timer-provider';
+import { useEndedExercises } from '@/components/workout/session/use-pending-exercises';
 import { colors } from '@/theme/colors';
 
 function useNow(): Date {
@@ -50,7 +52,9 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
         ),
       )
     : null;
-  const view = activeWorkoutBarView(session, rest, now, snapshot);
+  // Encerrados na sessão guiada (#473): a barra segue o mesmo foco e progresso.
+  const { ended } = useEndedExercises(session.id);
+  const view = activeWorkoutBarView(session, rest, now, snapshot, ended);
   // A sessão não traz o plano; a lista de planos já está em cache na aba Treino.
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -64,7 +68,9 @@ export function ActiveWorkoutBar({ session, bottom }: { session: WorkoutSession;
   // No circuito as séries só nascem no fim: a linha ficaria parada em zero.
   const progress = circuit
     ? { target: 0, done: 0, ratio: 0 }
-    : setProgress(buildExerciseGroups(session.plannedExercises, session.sets, []));
+    : setProgress(
+        markEndedExercises(buildExerciseGroups(session.plannedExercises, session.sets, []), ended),
+      );
 
   return (
     <View

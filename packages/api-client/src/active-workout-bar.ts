@@ -1,6 +1,7 @@
 import { formatDecimal } from './format';
 import { buildExerciseGroups, orderExerciseGroups, pickFocusedGroup } from './session-view';
 import type { WorkoutSession } from './workout';
+import { markEndedExercises } from './workout/ended-exercises';
 
 /**
  * A barra "treino em andamento" (prancha `Al-T-Cards-treino`): 56 px acima do
@@ -53,10 +54,14 @@ function elapsed(session: WorkoutSession, now: Date): string {
 }
 
 /** O exercício em foco e o texto "série X de Y" (ou a distância, no cardio). */
-function focus(session: WorkoutSession) {
-  const groups = orderExerciseGroups(
-    buildExerciseGroups(session.plannedExercises, session.sets),
-    session.exerciseOrder,
+function focus(session: WorkoutSession, ended?: readonly number[]) {
+  // Os encerrados (#473) contam como feitos, como na sessão guiada.
+  const groups = markEndedExercises(
+    orderExerciseGroups(
+      buildExerciseGroups(session.plannedExercises, session.sets),
+      session.exerciseOrder,
+    ),
+    ended,
   );
   // Sem nada por fazer (treino livre), o foco é o último exercício que teve série.
   const group = pickFocusedGroup(groups, new Set()) ?? groups.at(-1);
@@ -80,6 +85,8 @@ export function activeWorkoutBarView(
   rest: RestSnapshot | null,
   now: Date = new Date(),
   circuit?: CircuitSnapshot | null,
+  /** Exercícios encerrados antes das séries todas (`endedExercisesKey`, #473). */
+  ended?: readonly number[],
 ): ActiveWorkoutBarView {
   if (circuit?.kind === 'amrap') {
     return {
@@ -98,7 +105,7 @@ export function activeWorkoutBarView(
     };
   }
 
-  const current = focus(session);
+  const current = focus(session, ended);
   if (rest?.running && (rest.remaining ?? 0) > 0) {
     return {
       mode: 'rest',

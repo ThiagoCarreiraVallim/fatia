@@ -34,7 +34,7 @@ import { groupColorName } from '@/components/workout/workout-home';
 import { ActiveCardioCard } from './active-cardio-card';
 import { ActiveExerciseCard } from './active-exercise-card';
 import { isExerciseComplete, pluralize, targetSetsOf } from './format';
-import { guidedState, isSessionDone, nextOpenIndex } from './guided-session';
+import { endExerciseLabel, guidedState, isSessionDone, nextOpenIndex } from './guided-session';
 import { isResting, RestPanel } from './rest-panel';
 import { SESSION_HEADER_HEIGHT, SessionHeader } from './session-header';
 import {
@@ -224,12 +224,8 @@ export function ActiveSession({
         onPress: () => setEnded(current.exerciseId, false),
       });
     } else if (current && !isExerciseComplete(current)) {
-      const left = targetSetsOf(current) - current.sets.length;
       options.push({
-        label:
-          current.sets.length === 0 || current.isCardio
-            ? 'Pular exercício'
-            : `Encerrar exercício (${left} ${pluralize(left, 'série fica', 'séries ficam')} de fora)`,
+        label: endExerciseLabel(current),
         onPress: () => endExercise(current),
       });
     }

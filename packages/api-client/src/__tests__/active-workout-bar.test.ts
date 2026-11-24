@@ -167,6 +167,27 @@ describe('activeWorkoutBarView', () => {
       clock: '05:00',
     });
   });
+
+  // #473: Supino encerrado com 2 de 4; a sessão guiada já foi para o Crucifixo,
+  // e a barra do treino minimizado tem de ir junto.
+  it('o exercício encerrado passa a vez ao próximo', () => {
+    const duas = [set(1, 'Supino reto'), set(1, 'Supino reto')];
+    const view = activeWorkoutBarView(session({ sets: duas }), null, NOW, null, [1]);
+    expect(view.title).toBe('Crucifixo');
+    expect(view.detail).toBe('série 1 de 3');
+  });
+
+  it('no descanso, a próxima não é o exercício encerrado', () => {
+    const duas = [set(1, 'Supino reto'), set(1, 'Supino reto')];
+    const view = activeWorkoutBarView(
+      session({ sets: duas }),
+      { remaining: 45, running: true },
+      NOW,
+      null,
+      [1],
+    );
+    expect(view.detail).toBe('próxima: Crucifixo · série 1 de 3');
+  });
 });
 
 describe('lastSessionSummary', () => {

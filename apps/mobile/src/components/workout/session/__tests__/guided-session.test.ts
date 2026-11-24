@@ -3,6 +3,7 @@ import type { ExerciseGroup, SessionSet } from '@fatia/api-client';
 import {
   AUTO_ADVANCE_DEFAULT,
   copyLastSet,
+  endExerciseLabel,
   guidedState,
   nextOpenIndex,
   parseAutoAdvance,
@@ -136,6 +137,31 @@ describe('progresso da barra do treino em andamento', () => {
     // Feito além da meta não estoura a linha.
     expect(setProgress([group(1, 5, 3)]).ratio).toBe(1);
     expect(setProgress([]).ratio).toBe(0);
+  });
+
+  it('#473: o encerrado sai da meta com as séries que ficaram de fora', () => {
+    const ended = { ...group(1, 2, 4), ended: true };
+    // Tudo feito, um deles encerrado: a linha enche.
+    expect(setProgress([ended, group(2, 3, 3)])).toEqual({ done: 5, target: 5, ratio: 1 });
+    // Pulado sem nenhuma série: não pesa na meta.
+    expect(setProgress([{ ...group(1, 0, 4), ended: true }, group(2, 1, 2)]).ratio).toBe(0.5);
+  });
+});
+
+describe('rótulo de encerrar o exercício (#473)', () => {
+  it('sem série feita, ou no cardio, é pular', () => {
+    expect(endExerciseLabel(group(1, 0, 4))).toBe('Pular exercício');
+    expect(endExerciseLabel(group(1, 0, 1, true))).toBe('Pular exercício');
+  });
+
+  it('no plano, conta as séries que ficam de fora', () => {
+    expect(endExerciseLabel(group(1, 3, 4))).toBe('Encerrar exercício (1 série fica de fora)');
+    expect(endExerciseLabel(group(1, 1, 4))).toBe('Encerrar exercício (3 séries ficam de fora)');
+  });
+
+  it('fora do plano não há meta, então nenhuma série fica de fora', () => {
+    const free: ExerciseGroup = { ...group(5, 3), targetSets: undefined, isPlanned: false };
+    expect(endExerciseLabel(free)).toBe('Encerrar exercício');
   });
 });
 
