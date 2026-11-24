@@ -19,10 +19,13 @@ export class RevokeDataSharingTool implements McpToolDef {
    * acesso — e não para concedê-lo — poria fricção justamente no controle que o
    * titular exerce sobre o próprio dado. Nada é perdido: a linha sobrevive com
    * `revokedAt`, e conceder de novo é uma chamada.
+   *
+   * No chat hospedado é restrita (#481): consentimento é decisão da pessoa, na tela, e não
+   * pedido que a IA executa — nem o lado seguro dele.
    */
-  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
-  readonly card = 'confirm' as const;
+  readonly appOnly = { screen: 'Comunidades', path: '/community' };
   readonly description =
     'Corta o acesso de um profissional aos dados do usuário, em todas as categorias de uma vez. ' +
     'Vale a partir da próxima requisição dele. O registro de que o acesso existiu permanece, ' +

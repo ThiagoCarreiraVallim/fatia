@@ -5,12 +5,11 @@ import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
 import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
 import { blockedUserIds } from '../../sharing/block.service';
-import { hashInviteToken } from '../../sharing/invite.service';
-import { isInviteUsable } from '../../sharing/invite-state';
 import { reminderTitle } from '../../notifications/reminders/reminder-rules';
 import {
   CAMPOS,
   COMPOSTOS,
+  FOCO_DO_BLOCO,
   OCULTOS,
   ROTULO_DO_REGISTRO,
   dataEHora,
@@ -20,6 +19,7 @@ import {
   type TipoDeRegistro,
 } from './rotulos';
 import { readableExercises } from '../../workout/helpers/exercise-access';
+import { nutrientKeySlug } from '../../nutrition/nutrient-target.service';
 import { snapshotGoalRanges } from '../../sharing/nutrition-document';
 
 export interface LinhaDaPrevia {
@@ -123,7 +123,11 @@ export class PreviaDaAcaoService {
     const ctx: ContextoDoFormato = { timezone: usuario.timezone || 'UTC', agora };
     const linhas: LinhaDaPrevia[] = [];
     for (const [campo, valor] of Object.entries(lido.data as Record<string, unknown>)) {
-      if (valor === undefined || valor === null || OCULTOS.has(campo)) continue;
+      if (valor === undefined || valor === null) continue;
+      // O id da tool vence o oculto: `nutrientKey` não diz nada ao lado do rótulo, mas é o
+      // próprio registro quando a tool o apaga (#481).
+      const tipo = tipoDoCampo(nome, campo);
+      if (!tipo && OCULTOS.has(campo)) continue;
 
       if (campo === 'items' && Array.isArray(valor)) {
         for (const item of valor) {
@@ -140,7 +144,6 @@ export class PreviaDaAcaoService {
         continue;
       }
 
-      const tipo = tipoDoCampo(nome, campo);
       if (tipo) {
         const descricao = await this.resolver(tipo, valor, usuario.id, ctx);
         if (descricao === null) return naoEncontrado(linhas);
@@ -349,21 +352,6 @@ export class PreviaDaAcaoService {
         const linha = (post.poll?.question ?? post.body).replace(/\s+/g, ' ').trim();
         return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha || 'Post com imagem';
       }
-      case 'comentarioDaComunidade': {
-        const escondidos = await blockedUserIds(this.prisma, userId);
-        const c = await this.prisma.groupPostComment.findFirst({
-          where: {
-            id,
-            removedAt: null,
-            post: { group: { memberships: { some: { userId, status: 'ACTIVE' } } } },
-            ...(escondidos.length > 0 ? { author: { userId: { notIn: escondidos } } } : {}),
-          },
-          select: { body: true },
-        });
-        if (!c) return null;
-        const linha = c.body.replace(/\s+/g, ' ').trim();
-        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha;
-      }
       case 'opcaoDaEnquete': {
         // Mesmo filtro do `postDaComunidade`: a opção da enquete de quem tem
         // bloqueio com a pessoa não ganha rótulo no cartão.
@@ -386,39 +374,6 @@ export class PreviaDaAcaoService {
           select: { label: true },
         });
         return opcao?.label ?? null;
-      }
-      case 'bloqueio': {
-        // Só o bloqueio que a própria pessoa fez.
-        const b = await this.prisma.userBlock.findFirst({
-          where: { id, blockerId: userId },
-          select: { label: true },
-        });
-        return b?.label ?? null;
-      }
-      case 'convite': {
-        // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
-        const convite = await this.prisma.groupInvite.findUnique({
-          where: { tokenHash: hashInviteToken(String(valor)) },
-          select: {
-            email: true,
-            code: true,
-            revokedAt: true,
-            declinedAt: true,
-            expiresAt: true,
-            maxUses: true,
-            uses: true,
-            group: { select: { name: true } },
-          },
-        });
-        const vale = convite && isInviteUsable(convite, ctx.agora);
-        return vale ? convite.group.name : null;
-      }
-      case 'profissional': {
-        const vinculo = await this.prisma.professionalLink.findFirst({
-          where: { id, subjectUserId: userId },
-          select: { professional: { select: { name: true } } },
-        });
-        return vinculo?.professional.name ?? null;
       }
       case 'peso': {
         const registro = await this.prisma.weightLog.findFirst({
@@ -564,6 +519,65 @@ export class PreviaDaAcaoService {
         return sessao
           ? `${sessao.plan.name}, sessão ${sessao.order}, ${dia(sessao.date, ctx)}`
           : null;
+      }
+      // Apagar com cartão (#481): o registro que some, e só se for da própria pessoa.
+      case 'fotoDaRefeicao': {
+        const refeicao = await this.prisma.meal.findFirst({
+          where: { id, userId, photoFileId: { not: null } },
+          select: { mealType: true, eatenAt: true },
+        });
+        if (!refeicao) return null;
+        return `${TIPO_DA_REFEICAO[refeicao.mealType] ?? 'Refeição'} de ${dataEHora(refeicao.eatenAt.toISOString(), ctx)}`;
+      }
+      case 'alimentoProprio': {
+        const food = await this.prisma.food.findFirst({
+          where: { id, createdByUserId: userId },
+          select: { name: true },
+        });
+        return food?.name ?? null;
+      }
+      case 'medidaPropria': {
+        const medida = await this.prisma.foodPortion.findFirst({
+          where: { id, createdByUserId: userId },
+          select: { label: true, grams: true, food: { select: { name: true } } },
+        });
+        return medida ? `${medida.label} (${numero(medida.grams)} g) de ${medida.food.name}` : null;
+      }
+      case 'exercicioProprio': {
+        const exercicio = await this.prisma.exercise.findFirst({
+          where: { id, createdByUserId: userId },
+          select: { name: true },
+        });
+        return exercicio?.name ?? null;
+      }
+      case 'metaDeNutriente': {
+        // As mesmas chaves que `NutrientTargetService.delete` tenta: a crua e a normalizada.
+        const cru = String(valor);
+        const metas = await this.prisma.nutrientTarget.findMany({
+          where: { userId, nutrientKey: { in: [cru, nutrientKeySlug(cru)] } },
+          select: { label: true, unit: true, min: true, max: true, nutrientKey: true },
+        });
+        const meta = metas.find((m) => m.nutrientKey === cru) ?? metas[0];
+        if (!meta) return null;
+        const limite = (v: number) => `${numero(v, 0)} ${meta.unit}`;
+        const faixaDaMeta =
+          meta.min !== null && meta.max !== null
+            ? `${numero(meta.min, 0)}–${limite(meta.max)}`
+            : meta.max !== null
+              ? `até ${limite(meta.max)}`
+              : meta.min !== null
+                ? `pelo menos ${limite(meta.min)}`
+                : null;
+        return faixaDaMeta ? `${meta.label} (${faixaDaMeta})` : meta.label;
+      }
+      case 'bloco': {
+        const bloco = await this.prisma.trainingBlock.findFirst({
+          where: { id, userId },
+          select: { kind: true, weeksTotal: true, startDate: true },
+        });
+        if (!bloco) return null;
+        const foco = FOCO_DO_BLOCO[bloco.kind] ?? 'Bloco';
+        return `${foco}, ${bloco.weeksTotal} semanas, desde ${dia(bloco.startDate, ctx)}`;
       }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({

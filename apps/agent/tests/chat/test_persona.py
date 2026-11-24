@@ -32,7 +32,7 @@ def test_a_persona_vem_depois_das_regras_e_antes_da_memoria_com_as_orientacoes_c
     )
 
     assert sistema.startswith(SISTEMA)
-    regras = sistema.index("Você NÃO tem ferramenta para apagar")
+    regras = sistema.index("Você NÃO tem ferramenta para excluir a conta")
     data = sistema.index("Hoje é")
     persona = sistema.index("Nesta conversa você se apresenta como Treinador Norte")
     orientacoes = sistema.index(f"<<<{CERCA}>>>\nFale de treino de força")

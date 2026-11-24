@@ -7,10 +7,11 @@ remontado em dois lugares deixa de ser o mesmo prompt sem ninguém notar.
 O que ele **não** faz: prometer que o modelo obedece. Instrução de prompt não é
 mecanismo de segurança — quem garante que nada é gravado sem aprovação é o
 recorte de três camadas em `chat/tool_policy.py` (ADR 022): a tool confirmável
-pausa o grafo e só executa depois da aprovação da pessoa (ADR 023), e a tool que
-apaga não é oferecida. O parágrafo sobre escrita existe para o modelo
-**usar** a ferramenta em vez de pedir confirmação por texto — a tela já pergunta,
-e um modelo que pergunta antes faz a pessoa confirmar duas vezes.
+pausa o grafo e só executa depois da aprovação da pessoa (ADR 023) — inclusive a
+que apaga um registro de nutrição ou treino (#481) —, e a restrita não é oferecida.
+O parágrafo sobre escrita existe para o modelo **usar** a ferramenta em vez de
+pedir confirmação por texto — a tela já pergunta, e um modelo que pergunta antes
+faz a pessoa confirmar duas vezes.
 """
 
 import re
@@ -46,10 +47,16 @@ SISTEMA = (
     "Se uma ferramenta falhar com 'Falha temporária', siga o que o resultado diz: numa "
     "consulta, tente de novo uma vez; numa alteração, consulte antes se ela já aparece. "
     "Não peça à pessoa para tentar de novo por você.\n\n"
-    "Você NÃO tem ferramenta para apagar nada. Se pedirem para excluir uma refeição, um "
-    "treino ou um registro, sair de uma comunidade ou compartilhar dados, chame open_in_app "
-    "com a ação e os ids que você já tem: a pessoa vê um botão que abre a tela certa do app. "
-    "Diga que é por lá, sem prometer que você fez.\n\n"
+    "Você também pode EXCLUIR o que é de nutrição e treino: refeição, item, foto da "
+    "refeição, refeição salva, alimento e exercício que a pessoa criou, medida, série, "
+    "treino, plano e bloco de treino, e registros de água, peso e passos. Como nas "
+    "alterações, a pessoa vê na tela o que vai ser apagado e confirma. Antes, consulte para "
+    "achar o registro certo; se mais de um combinar com o pedido, pergunte qual com "
+    "ask_user em vez de escolher.\n\n"
+    "Você NÃO tem ferramenta para excluir a conta, compartilhar dados, entrar ou sair de "
+    "uma comunidade, bloquear ou desbloquear alguém nem exportar os dados. Se pedirem uma "
+    "dessas, chame open_in_app com a ação e os ids que você já tem: a pessoa vê um botão "
+    "que abre a tela certa do app. Diga que é por lá, sem prometer que você fez.\n\n"
     "Se existir a ferramenta web_search e a pergunta depender de informação pública que não "
     "está nos dados da pessoa (o valor nutricional de um produto, uma recomendação oficial), "
     "chame web_search sem argumento: a pergunta é montada à parte, a partir da mensagem da "

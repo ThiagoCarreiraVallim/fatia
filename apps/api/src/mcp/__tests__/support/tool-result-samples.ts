@@ -56,7 +56,6 @@ import type { ListGroupExerciseGuidesTool } from '../../../sharing/mcp/list-grou
 import type { ListMyGroupsTool } from '../../../sharing/mcp/list-my-groups.tool';
 import type { ListMyStudentsTool } from '../../../sharing/mcp/list-my-students.tool';
 import type { ListPlanOffersTool } from '../../../sharing/mcp/list-plan-offers.tool';
-import type { ExportMyDataTool } from '../../../users/mcp/export-my-data.tool';
 import type { ExplainFormTool } from '../../../workout/mcp/explain-form.tool';
 import type { GetActiveWorkoutSessionTool } from '../../../workout/mcp/get-active-workout-session.tool';
 import type { GetExerciseDetailsTool } from '../../../workout/mcp/get-exercise-details.tool';
@@ -767,10 +766,6 @@ export const TOOL_RESULT_SAMPLES: Record<string, ToolResultSample> = {
   // ------------------------------------------------------------------ instructions / file
   explain_form: sample<ExplainFormTool>([exercicio(7, 'Supino reto', 'peito')], {
     exerciseName: 'supino',
-  }),
-  export_my_data: sample<ExportMyDataTool>({
-    url: 'https://api.fatia.app/api/exports/abc',
-    expiresAt: dia('2026-11-18T10:00:00Z'),
   }),
 
   // ------------------------------------------------------------------ list

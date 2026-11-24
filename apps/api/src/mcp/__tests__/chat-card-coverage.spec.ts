@@ -51,6 +51,16 @@ describe('todo formato declarado vira cartão (#384)', () => {
     expect(comCartao).toContainEqual(['refresh_achievements', 'badges']);
   });
 
+  it('o catálogo marca como exclusão só o que apaga, para o cartão dizer "Excluir" (#490)', () => {
+    const exclusoes = Object.entries(catalogo)
+      .filter(([, e]) => e.destructive === true)
+      .map(([nome]) => nome);
+    expect(exclusoes).toEqual(expect.arrayContaining(['delete_meal', 'remove_exercise_from_plan']));
+    expect(exclusoes.every((nome) => catalogo[nome]?.kind === 'confirm')).toBe(true);
+    expect(catalogo.log_meal?.destructive).toBeUndefined();
+    expect(catalogo.update_meal?.destructive).toBeUndefined();
+  });
+
   it('o catálogo do chat declara o mesmo formato que a tool', () => {
     const divergentes = comCartao.filter(([nome, card]) => catalogo[nome]?.card !== card);
     expect(divergentes).toEqual([]);

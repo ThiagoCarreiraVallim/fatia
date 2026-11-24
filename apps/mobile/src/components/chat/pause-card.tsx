@@ -9,6 +9,7 @@ import {
   pauseDecisionCount,
   webConsentToSaveOnSend,
   askFieldsOf,
+  isDestructiveChatTool,
   previewChatAction,
   questionAnswer,
   type ChatAskField,
@@ -19,6 +20,7 @@ import {
   type ChatWebConsentAction,
 } from '@fatia/api-client';
 import { useAcceptAiConsent, useAiConsent } from '@/chat/ai-consent';
+import { useChatToolCatalog } from './artifact-card';
 import { Button, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 
@@ -297,7 +299,9 @@ function Escrita({
   });
   // Gravar antes de ler o resumo seria aprovar às cegas.
   const invalida = previa.data?.valida === false;
-  const travado = previa.isPending || invalida;
+  // Exclusão só com o registro nomeado (ADR 051): sem a prévia, não há o que confirmar.
+  const exclusao = isDestructiveChatTool(useChatToolCatalog(), acao.tool);
+  const travado = previa.isPending || invalida || (exclusao && previa.isError);
   return (
     <View
       className={cn(
@@ -315,14 +319,24 @@ function Escrita({
           )
         }
         acima={acao.title}
-        titulo={invalida ? 'Não dá para gravar assim' : 'Confere antes de gravar'}
-        perigo={invalida}
+        titulo={
+          invalida
+            ? exclusao
+              ? 'Não dá para excluir assim'
+              : 'Não dá para gravar assim'
+            : exclusao
+              ? 'Confere antes de excluir'
+              : 'Confere antes de gravar'
+        }
+        perigo={invalida || exclusao}
       />
       {previa.isPending ? (
         <Text className="text-xs text-muted-foreground">Preparando o resumo…</Text>
       ) : previa.isError ? (
         <Text className="text-xs text-muted-foreground">
-          Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.
+          {exclusao
+            ? 'Não consegui mostrar o que vai ser excluído. Toque em Ajustar e peça de novo.'
+            : 'Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.'}
         </Text>
       ) : previa.data.valida === false ? (
         <Text accessibilityRole="alert" className="text-sm text-foreground">
@@ -352,7 +366,9 @@ function Escrita({
             className={cn('flex-1', decisao === false && 'opacity-40')}
             accessibilityState={{ selected: decisao === true, disabled: ocupado || travado }}
           >
-            <Text className="text-sm font-bold text-background">Gravar</Text>
+            <Text className="text-sm font-bold text-background">
+              {exclusao ? 'Excluir' : 'Gravar'}
+            </Text>
           </Button>
         )}
         <Button
@@ -365,7 +381,11 @@ function Escrita({
             emLote && 'bg-card',
             decisao === true && 'opacity-40',
           )}
-          accessibilityHint="Não grava. Diga no campo o que mudar."
+          accessibilityHint={
+            exclusao
+              ? 'Não exclui. Diga no campo o que mudar.'
+              : 'Não grava. Diga no campo o que mudar.'
+          }
           accessibilityState={{ selected: decisao === false, disabled: ocupado }}
         >
           <Text className="text-sm font-semibold text-secondary-foreground">Ajustar</Text>

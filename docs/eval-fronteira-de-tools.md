@@ -119,7 +119,7 @@ As 18 tools de intenção, derivadas do conjunto de tarefas e não de arquitetur
 | `finish_workout`       | confirmável | `get_active_workout_session`, `finish_workout_session`                                                                                                                                 |
 | `edit_workout_plan`    | confirmável | `list_workout_plans`, `get_workout_plan`, `search_exercise`, `add_exercise_to_plan`, `update_plan_exercise`, `reorder_plan_exercises`                                                  |
 | `mark_goal_done`       | confirmável | `list_goals`, `update_goal`, `complete_goal`                                                                                                                                           |
-| `stop_sharing`         | confirmável | `list_data_sharing`, `revoke_data_sharing`                                                                                                                                             |
+| `stop_sharing`         | RESTRICTED  | `list_data_sharing`, `revoke_data_sharing`                                                                                                                                             |
 | `share_my_data`        | RESTRICTED  | `list_data_sharing`, `list_my_groups`, `grant_data_sharing`                                                                                                                            |
 
 E as 22 que o braço B serve **iguais** às do A: `create_custom_food`, `update_me`, `export_my_data`,
@@ -133,6 +133,14 @@ não atravessa classe de reversibilidade. A primeira versão deste desenho tinha
 o que lava uma deleção pela tela de confirmação, exatamente o que a ADR 022 fecha. O
 `tool-catalog.spec.ts` não pegaria: ele reconhece deletora pelo prefixo `delete_` do nome, e
 `corrigir_` não casa. O guarda novo compara a anotação com a das pernas.
+
+Depois da medição, a #481 ([ADR 051](./ADR/051-ia-apaga-nutricao-e-treino-com-cartao.md)) mudou o
+recorte: as 16 exclusões de nutrição, treino e progresso passaram a confirmáveis (com cartão que
+nomeia o registro), e compartilhar, consentir, exportar e bloquear passaram a RESTRICTED —
+`stop_sharing` junto com a perna, `revoke_data_sharing`. A regra acima continua: uma tool de
+intenção não lava uma deleção, porque a anotação dela segue a da perna. O conjunto RESTRICTED das
+rodadas medidas (as 18 abaixo) não é o de hoje; o comparador deriva a recusa esperada do catálogo
+servido em cada rodada, e uma rodada nova mede com o recorte novo.
 
 **Destrutiva não se redesenha.** As 16 tools com `destructiveHint` são as mesmas nos dois braços —
 nome, descrição e schema. A métrica 6 mede o quanto a **vizinhança** de uma destrutiva leva o modelo a
@@ -247,7 +255,7 @@ domínio continua dentro do número. Serve para comparar direção de efeito, n�
 ### A métrica 6 precisa do braço sem política
 
 A política de 3 camadas já **impede** que `delete_my_account` chegue ao modelo no chat hospedado:
-ela é RESTRICTED, não entra no `tools/list`, e `exigir_permitida` recusa mesmo se o modelo inventar
+ela é RESTRICTED, não entra no `tools/list`, e `require_allowed` recusa mesmo se o modelo inventar
 o nome. Medir a métrica 6 contra o chat hospedado mediria a política, não a fronteira — e daria
 zero nos dois braços.
 
