@@ -289,11 +289,11 @@ describe('chatCardTitle e isEmptyChatArtifact — o título do cartão e o "nada
       chatCardTitle({
         toolCallId: t,
         kind: 'app_only',
-        tool: 'delete_meal',
-        title: 'Excluir refeição',
+        tool: 'leave_group',
+        title: 'Sair de um grupo',
         params: {},
       }),
-    ).toBe('Excluir refeição é pelo app');
+    ).toBe('Sair de um grupo é pelo app');
   });
 
   it('vazio é o cartão sem linhas; métrica, arquivo e só no app nunca são vazios', () => {

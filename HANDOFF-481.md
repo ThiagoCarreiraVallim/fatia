@@ -24,11 +24,11 @@
 
 ## Checklist
 
-- [ ] testes vermelhos (API tool-catalog lock, rotulos; agente automaticas destrutiva)
-- [ ] anotações das tools
-- [ ] prévia (rotulos/previa) para as exclusões; remover resolvers mortos de consentimento/bloqueio
-- [ ] intenção stop_sharing → RESTRICTED
-- [ ] agente: tool_policy, prompt, app_only
+- [x] testes vermelhos (API tool-catalog lock, rotulos, prévia; agente auto_writable destrutiva)
+- [x] anotações das tools
+- [x] prévia (rotulos/previa) para as exclusões; remover resolvers mortos de consentimento/bloqueio
+- [x] intenção stop_sharing → RESTRICTED
+- [x] agente: tool_policy, prompt, app_only (renomeadas: automaticas→auto_writable, exigir_permitida→require_allowed)
 - [ ] docs: MCP_TOOL_SURFACE, eval-fronteira, PERMISSIONS, MCP.md, ADR
 - [ ] números do MCP pelos specs
 - [ ] lint/typecheck/testes
@@ -36,4 +36,5 @@
 
 ## Estado
 
-Início.
+Código e testes verdes (api src/mcp+src/chat 514, previa 28, agente 595). Falta: docs, ADR 051, suíte completa, lint, PR.
+export_my_data: isento de exemplo (input vazio); sample/teste do cartão 'file' removidos; formato 'file' segue no contrato sem produtor.
