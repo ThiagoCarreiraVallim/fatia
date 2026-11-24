@@ -65,4 +65,29 @@ describe('createFollowEnd', () => {
     f.followAgain();
     expect(f.following).toBe(true);
   });
+  it('a rolagem animada do próprio app gera inércia no Android, e não desliga o seguir', () => {
+    const f = createFollowEnd();
+    f.followAgain();
+    f.appScroll();
+    f.momentumStart();
+    f.scroll(em(100));
+    f.momentumEnd(em(250));
+    expect(f.following).toBe(true);
+  });
+  it('soltar perto do fim e o app rolar depois: a inércia do app não conta como da pessoa', () => {
+    const f = createFollowEnd();
+    f.dragStart();
+    f.dragEnd(em(390));
+    f.appScroll();
+    f.momentumStart();
+    f.scroll(em(120));
+    expect(f.following).toBe(true);
+  });
+  it('não rola sozinho enquanto a pessoa arrasta', () => {
+    const f = createFollowEnd();
+    f.dragStart();
+    expect(f.shouldAutoScroll).toBe(false);
+    f.dragEnd(em(400));
+    expect(f.shouldAutoScroll).toBe(true);
+  });
 });

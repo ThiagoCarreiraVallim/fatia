@@ -18,39 +18,57 @@ export function isNearEnd(m: ScrollMetrics, folga = FOLGA_PX): boolean {
 
 /**
  * Se a conversa segue o fim enquanto a resposta chega (#486). Quem decide é a pessoa: só o
- * arrasto dela (e a inércia que ele deixa) muda a decisão. A rolagem que o próprio app faz
- * (`scrollToEnd` animado) passa por posições longe do fim no meio do caminho, e não pode
- * desligar o seguir.
+ * arrasto dela (e a inércia que esse arrasto deixa) muda a decisão.
+ *
+ * A rolagem que o próprio app faz (`scrollToEnd` animado) passa por posições longe do fim no meio
+ * do caminho e, no Android, ainda dispara `onMomentumScrollBegin/End` como se fosse inércia. Por
+ * isso a inércia só conta quando vem logo depois de um arrasto, e o app avisa quando rola
+ * (`appScroll`) para a inércia dele não ser lida como da pessoa.
  */
 export function createFollowEnd() {
   let following = true;
-  let pessoaRolando = false;
+  let arrastando = false;
+  // Soltou o dedo: a próxima inércia, se vier, é o arremesso da pessoa.
+  let podeVirArremesso = false;
+  let inerciaDaPessoa = false;
   return {
     get following() {
       return following;
     },
+    /** Rolar sozinho só seguindo o fim e nunca contra o dedo de quem arrasta. */
+    get shouldAutoScroll() {
+      return following && !arrastando;
+    },
+    /** O app vai rolar (`scrollToEnd`): a inércia que vier é dele. */
+    appScroll() {
+      podeVirArremesso = false;
+      inerciaDaPessoa = false;
+    },
     dragStart() {
-      pessoaRolando = true;
+      arrastando = true;
+      inerciaDaPessoa = false;
     },
     dragEnd(m: ScrollMetrics) {
+      arrastando = false;
       following = isNearEnd(m);
-      // Se vier inércia, `momentumStart` liga de novo; se não, a próxima rolagem é do app.
-      pessoaRolando = false;
+      podeVirArremesso = true;
     },
     momentumStart() {
-      pessoaRolando = true;
+      inerciaDaPessoa = podeVirArremesso;
+      podeVirArremesso = false;
     },
     momentumEnd(m: ScrollMetrics) {
-      if (!pessoaRolando) return;
-      following = isNearEnd(m);
-      pessoaRolando = false;
+      if (inerciaDaPessoa) following = isNearEnd(m);
+      inerciaDaPessoa = false;
     },
     scroll(m: ScrollMetrics) {
-      if (pessoaRolando) following = isNearEnd(m);
+      if (arrastando || inerciaDaPessoa) following = isNearEnd(m);
     },
     /** Mandou mensagem ou tocou em "Ir para o fim": volta a seguir. */
     followAgain() {
       following = true;
+      podeVirArremesso = false;
+      inerciaDaPessoa = false;
     },
   };
 }
