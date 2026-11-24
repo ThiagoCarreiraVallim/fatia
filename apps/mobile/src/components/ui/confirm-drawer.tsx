@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Button } from './button';
 import {
@@ -9,6 +9,7 @@ import {
   DrawerHeader,
   DrawerLayer,
   DrawerTitle,
+  useDrawerGuard,
 } from './drawer';
 import { FormMessage } from './form';
 
@@ -211,4 +212,40 @@ export function useActionSheet(): (request: ActionSheetRequest) => void {
     },
     [context],
   );
+}
+
+/**
+ * Rascunho mexido dentro de uma folha (#483): enquanto `dirty`, arrastar para
+ * baixo, tocar fora ou o voltar do Android devolvem a folha ao lugar e
+ * perguntam antes de descartar. Chame dentro do conteúdo do `Drawer`.
+ */
+export function useDiscardGuard(
+  dirty: boolean,
+  description = 'O que você mudou aqui ainda não foi salvo.',
+) {
+  const drawer = useDrawerGuard();
+  const confirm = useConfirm();
+  useEffect(() => {
+    if (!drawer) return;
+    drawer.setGuard(
+      dirty
+        ? () =>
+            confirm({
+              title: 'Descartar alterações?',
+              description,
+              confirmLabel: 'Descartar',
+              cancelLabel: 'Continuar editando',
+              destructive: true,
+              onConfirm: drawer.discard,
+            })
+        : null,
+    );
+    return () => drawer.setGuard(null);
+  }, [drawer, dirty, confirm, description]);
+}
+
+/** `useDiscardGuard` como elemento, para quem monta o próprio `Drawer` (o hook precisa estar dentro dele). */
+export function DiscardGuard({ dirty, description }: { dirty: boolean; description?: string }) {
+  useDiscardGuard(dirty, description);
+  return null;
 }

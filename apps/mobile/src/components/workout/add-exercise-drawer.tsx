@@ -12,6 +12,7 @@ import {
 } from '@fatia/api-client';
 import {
   cn,
+  DiscardGuard,
   Drawer,
   DrawerDescription,
   DrawerFlatList,
@@ -19,6 +20,7 @@ import {
   DrawerHeader,
   DrawerTextInput,
   DrawerTitle,
+  useConfirm,
 } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { headerButtonClass } from '@/components/layout/tab-header';
@@ -69,6 +71,7 @@ export function AddExerciseDrawer({
   initialTab,
 }: Props) {
   const qc = useQueryClient();
+  const ask = useConfirm();
   const multi = !!planId || !!onAddMany;
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -152,12 +155,27 @@ export function AddExerciseDrawer({
   return (
     // Al-T8: tela cheia, abaixo só da área segura; a barra de baixo some com a folha.
     <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
+      {/* Exercícios marcados e não adicionados: fechar pergunta antes (#483). */}
+      <DiscardGuard
+        dirty={count > 0 && !addBatch.isPending}
+        description="Os exercícios marcados ainda não entraram no plano."
+      />
       <DrawerHeader>
         <View className="flex-row items-center gap-2">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Fechar"
-            onPress={() => onOpenChange(false)}
+            onPress={() => {
+              if (count === 0) return onOpenChange(false);
+              ask({
+                title: 'Descartar alterações?',
+                description: 'Os exercícios marcados ainda não entraram no plano.',
+                confirmLabel: 'Descartar',
+                cancelLabel: 'Continuar editando',
+                destructive: true,
+                onConfirm: () => onOpenChange(false),
+              });
+            }}
             className={headerButtonClass()}
           >
             <X size={22} color={colors.foreground} />

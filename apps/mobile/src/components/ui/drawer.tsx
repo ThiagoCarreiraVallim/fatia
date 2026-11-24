@@ -25,6 +25,7 @@ import { cssInterop } from 'nativewind';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';
 import { SHEET_ANIMATION } from '@/theme/motion';
+import { drawerStep, type DrawerEvent, type DrawerPhase } from './drawer-state';
 
 /**
  * Faz `className` funcionar nos componentes do `@gorhom/bottom-sheet`.
@@ -64,9 +65,11 @@ cssInterop(BottomSheetFlatList, {
  * 2. **Lista dentro do sheet** precisa ser `DrawerScrollView`/`DrawerFlatList`.
  *    Um `ScrollView` comum disputa o gesto com o arrasto do sheet: a lista fica
  *    presa, ou o sheet fecha quando a pessoa quis rolar.
- * 3. **Fechar pelo gesto** tem que refletir no estado. `onChange(-1)` chama
- *    `onOpenChange(false)`; sem isso o `open` do React fica `true` depois do
- *    sheet sumir, e a próxima abertura não acontece.
+ * 3. **Fechar pelo gesto** tem que refletir no estado. O começo da descida
+ *    (`onAnimate` para -1) chama `onOpenChange(false)`, e o `onChange(-1)` cobre
+ *    o fling rápido demais para avisar o começo; sem isso o `open` do React
+ *    fica `true` depois do sheet sumir, e a próxima abertura não acontece. A
+ *    folha só desmonta quando a descida assenta (#483, `drawer-state.ts`).
  *
  * ## Onde montar — a diferença que mais confunde quem vem do PWA
  *
@@ -111,6 +114,25 @@ export function useAnyDrawerOpen(): boolean {
   return (useContext(DrawerPresence)?.count ?? 0) > 0;
 }
 
+/**
+ * O rascunho de quem está dentro da folha (#483): `useDiscardGuard` (em
+ * `confirm-drawer.tsx`, que já depende daqui) registra a pergunta, e o
+ * `Drawer` a faz antes de deixar a pessoa fechar com mudança não salva.
+ */
+const DrawerGuard = createContext<{
+  /** `null` libera o fechar; uma função é a pergunta a fazer. */
+  setGuard: (ask: (() => void) | null) => void;
+  /** Fecha sem perguntar: o "Descartar" da pergunta. */
+  discard: () => void;
+} | null>(null);
+
+export function useDrawerGuard() {
+  return useContext(DrawerGuard);
+}
+
+/** Tempo máximo da descida; passou disso sem o aviso do @gorhom, a folha desmonta. */
+const CLOSE_FALLBACK_MS = 1200;
+
 export function Drawer({
   open,
   onOpenChange,
@@ -132,10 +154,59 @@ export function Drawer({
   const ref = useRef<BottomSheet>(null);
   const add = useContext(DrawerPresence)?.add;
 
+  // O ciclo da folha (`drawer-state.ts`): montada enquanto abre, fica aberta ou
+  // desce; só desmonta quando a descida assenta, por mais rápido o arrasto.
+  const phase = useRef<DrawerPhase>(open ? 'open' : 'closed');
+  const [mounted, setMounted] = useState(open);
+  const guard = useRef<(() => void) | null>(null);
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
   useEffect(() => {
-    if (open) ref.current?.expand();
-    else ref.current?.close();
-  }, [open]);
+    onOpenChangeRef.current = onOpenChange;
+  }, [onOpenChange]);
+
+  const send = useCallback(function step(type: DrawerEvent['type']) {
+    const next = drawerStep(phase.current, { type }, guard.current != null);
+    phase.current = next.phase;
+    if (fallback.current) {
+      clearTimeout(fallback.current);
+      fallback.current = null;
+    }
+    if (next.phase === 'closing') {
+      fallback.current = setTimeout(() => step('closed'), CLOSE_FALLBACK_MS);
+    }
+    for (const effect of next.effects) {
+      if (effect === 'expand') ref.current?.expand();
+      else if (effect === 'animateClose') ref.current?.close();
+      else if (effect === 'snapBack') ref.current?.snapToIndex(0);
+      else if (effect === 'confirmDiscard') guard.current?.();
+      else if (effect === 'notifyClosed') onOpenChangeRef.current(false);
+    }
+    setMounted(next.phase !== 'closed');
+  }, []);
+
+  useEffect(() => {
+    send(open ? 'open' : 'close');
+  }, [open, send]);
+  useEffect(
+    () => () => {
+      if (fallback.current) clearTimeout(fallback.current);
+    },
+    [],
+  );
+
+  const guardValue = useMemo(
+    () => ({
+      setGuard: (ask: (() => void) | null) => {
+        guard.current = ask;
+      },
+      discard: () => {
+        guard.current = null;
+        onOpenChangeRef.current(false);
+      },
+    }),
+    [],
+  );
 
   // Aberto, esconde a barra de baixo (ver `DrawerPresence`). Só na tela em
   // foco: as abas ficam montadas, e uma folha aberta numa aba de trás não pode
@@ -143,15 +214,16 @@ export function Drawer({
   const focused = useIsFocused();
   useEffect(() => (open && focused && add ? add() : undefined), [open, focused, add]);
 
-  // O voltar do Android fecha a folha em vez de sair da tela com ela aberta.
+  // O voltar do Android fecha a folha em vez de sair da tela com ela aberta,
+  // pelo mesmo caminho do arrasto: com rascunho mexido, pergunta.
   useEffect(() => {
     if (!open || !focused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onOpenChange(false);
+      send('dismiss');
       return true;
     });
     return () => sub.remove();
-  }, [open, focused, onOpenChange]);
+  }, [open, focused, send]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -166,35 +238,42 @@ export function Drawer({
     [],
   );
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
-    <BottomSheet
-      ref={ref}
-      index={0}
-      snapPoints={snapPoints}
-      topInset={topInset}
-      enableDynamicSizing={!snapPoints}
-      enablePanDownToClose
-      // 550 ms com a curva do DS; com reduzir movimento, pula para o fim.
-      animationConfigs={SHEET_ANIMATION}
-      onChange={(index) => {
-        if (index === -1) onOpenChange(false);
-      }}
-      backdropComponent={renderBackdrop}
-      // Fundo por classe, não por `colors.background`: assim fundo e texto
-      // (`text-foreground`) saem da mesma variável do tema, e nunca de temas
-      // diferentes quando o JS e o NativeWind divergem por um instante.
-      backgroundComponent={SheetBackground}
-      handleIndicatorStyle={{ backgroundColor: colors.muted, width: 48 }}
-      // `interactive` acompanha o teclado enquanto ele sobe, em vez de saltar
-      // para a posição final — é o que torna digitar dentro do sheet suportável.
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
-    >
-      {children}
-    </BottomSheet>
+    <DrawerGuard.Provider value={guardValue}>
+      <BottomSheet
+        ref={ref}
+        index={0}
+        snapPoints={snapPoints}
+        topInset={topInset}
+        enableDynamicSizing={!snapPoints}
+        enablePanDownToClose
+        // 550 ms com a curva do DS; com reduzir movimento, pula para o fim.
+        animationConfigs={SHEET_ANIMATION}
+        // O começo da descida (arrasto, toque fora): o pai fica sabendo já, e a
+        // folha continua montada até assentar (#483).
+        onAnimate={(from, to) => {
+          if (to === -1 && from !== -1) send('dismiss');
+        }}
+        onChange={(index) => {
+          if (index === -1) send('closed');
+        }}
+        backdropComponent={renderBackdrop}
+        // Fundo por classe, não por `colors.background`: assim fundo e texto
+        // (`text-foreground`) saem da mesma variável do tema, e nunca de temas
+        // diferentes quando o JS e o NativeWind divergem por um instante.
+        backgroundComponent={SheetBackground}
+        handleIndicatorStyle={{ backgroundColor: colors.muted, width: 48 }}
+        // `interactive` acompanha o teclado enquanto ele sobe, em vez de saltar
+        // para a posição final — é o que torna digitar dentro do sheet suportável.
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
+      >
+        {children}
+      </BottomSheet>
+    </DrawerGuard.Provider>
   );
 }
 
