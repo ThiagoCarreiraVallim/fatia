@@ -102,3 +102,26 @@ export function useEndedExercises(sessionId: string) {
   );
   return { ended: query.data, setEnded };
 }
+
+/**
+ * O exercício aberto na sessão guiada, para a notificação do treino (#472)
+ * mostrar o mesmo. A sessão guiada publica; o `WorkoutNotificationSync`, que
+ * mora acima das telas, lê.
+ */
+export function useCurrentExercise(sessionId: string) {
+  const qc = useQueryClient();
+  const key = ['workout', 'session', sessionId, 'current'] as const;
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => qc.getQueryData<number | null>(key) ?? null,
+    initialData: null as number | null,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const publish = useCallback(
+    (exerciseId: number | null) => qc.setQueryData<number | null>(key, exerciseId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [qc, sessionId],
+  );
+  return { current: query.data, publish };
+}

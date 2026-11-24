@@ -209,6 +209,20 @@ export function resolveWorkoutAction(
   }
 }
 
+/**
+ * A série que um toque sem série marcada registra: a próxima do exercício. É o
+ * caso do aviso do fim do descanso no iOS, agendado logo depois de registrar,
+ * antes de a série nova chegar do servidor.
+ */
+export function nextSetToken(
+  groups: ExerciseGroup[],
+  exerciseId: number,
+): WorkoutActionToken | null {
+  const group = groups.find((g) => g.exerciseId === exerciseId);
+  if (!group || group.isCardio || isExerciseComplete(group)) return null;
+  return { exerciseId, setNumber: group.sets.length + 1 };
+}
+
 /** O pacote que vem do nativo (`{ action, token }`, com o token em JSON). */
 export function parseWorkoutAction(
   raw: unknown,

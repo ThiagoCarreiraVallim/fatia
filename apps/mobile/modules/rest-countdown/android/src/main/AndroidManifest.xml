@@ -1,3 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <application>
+    <!-- Os botões da notificação do treino (#472). Só o próprio app dispara. -->
+    <receiver
+      android:name="expo.modules.restcountdown.WorkoutActionReceiver"
+      android:exported="false" />
+  </application>
 </manifest>

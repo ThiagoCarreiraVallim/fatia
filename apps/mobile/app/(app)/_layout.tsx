@@ -10,6 +10,7 @@ import { peekPendingInvite, takePendingInvite } from '@/community/pending-invite
 import { useAuth } from '@/auth/auth-context';
 import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
 import { AiMenuProvider } from '@/components/layout/ai-menu';
+import { WorkoutNotificationSync } from '@/components/workout/session/workout-notification-sync';
 import { RestTimerProvider } from '@/components/workout/session/rest-timer-provider';
 import { ConfirmProvider, DrawerPresenceProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
@@ -90,6 +91,8 @@ export default function AppLayout() {
       <DrawerPresenceProvider>
         <ConfirmProvider>
           <RestTimerProvider>
+            {/* A notificação fixa do treino (#472), com o descanso daqui. */}
+            <WorkoutNotificationSync />
             <BottomChromeProvider>
               {/* A tela atual encolhe até o notch quando o menu da IA abre
               (prancha Al-H6c5); a barra de abas some por cima dele. */}

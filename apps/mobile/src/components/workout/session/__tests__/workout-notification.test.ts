@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ExerciseGroup, PrescribedSet, SessionSet, SetDraft } from '@fatia/api-client';
 import {
   currentGroup,
+  nextSetToken,
   notificationSetClientKey,
   parseWorkoutAction,
   predictedSet,
@@ -241,5 +242,20 @@ describe('a chave e o pacote do toque', () => {
     });
     expect(parseWorkoutAction(null)).toBeNull();
     expect(parseWorkoutAction({ token: 'x' })).toBeNull();
+  });
+});
+
+describe('nextSetToken — o toque do iOS, resolvido na hora da resposta', () => {
+  // O aviso do fim do descanso é agendado logo depois de registrar, antes de a
+  // série nova chegar do servidor: a série certa só se sabe quando o toque vem.
+  it('a próxima série do exercício', () => {
+    expect(nextSetToken([group(7, [set(), set()])], 7)).toEqual({ exerciseId: 7, setNumber: 3 });
+  });
+
+  it('exercício completo, encerrado, cardio ou fora do treino: nada', () => {
+    expect(nextSetToken([group(7, [set(), set(), set(), set()])], 7)).toBeNull();
+    expect(nextSetToken([group(7, [], { ended: true })], 7)).toBeNull();
+    expect(nextSetToken([group(7, [], { isCardio: true })], 7)).toBeNull();
+    expect(nextSetToken([group(8)], 7)).toBeNull();
   });
 });

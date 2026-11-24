@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { RestCountdown } from '../../../../modules/rest-countdown';
 import { expoRestNotifier } from './expo-rest-notifier';
 import { createRestNotifications, restWasInterrupted } from './rest-notification';
 
@@ -23,10 +22,9 @@ import { createRestNotifications, restWasInterrupted } from './rest-notification
  * dispara quando o app volta, ou seja, tarde. A notificação é agendada pelo
  * sistema, então chega na hora mesmo com o JS parado.
  *
- * E, no Android, a contagem em si aparece na notificação e na tela de
- * bloqueio, contada pelo cronômetro do sistema (`modules/rest-countdown`): a
- * tela não apaga durante o treino (`useKeepAwake`), mas quem bloqueia o
- * celular entre as séries quer ver quanto falta sem desbloquear.
+ * E, no Android, a contagem em si aparece na notificação do treino e na tela
+ * de bloqueio, contada pelo cronômetro do sistema: quem desenha é o
+ * `WorkoutNotificationSync` (#472), que lê o `deadline` daqui.
  */
 
 export const DEFAULT_REST_SECONDS = 90;
@@ -38,6 +36,8 @@ export interface RestTimer {
   total: number;
   running: boolean;
   finished: boolean;
+  /** Fim do descanso em ms (a notificação do treino conta até ele). `null`: parado. */
+  deadline: number | null;
   start: (seconds?: number) => void;
   addTime: (seconds: number) => void;
   toggle: () => void;
@@ -67,28 +67,6 @@ export function useRestTimer(defaultSeconds: number = DEFAULT_REST_SECONDS): Res
       if (restWasInterrupted(deadline, Date.now())) void notifications.cancel();
     };
   }, [deadline, notifications]);
-
-  // A contagem da tela de bloqueio acompanha o mesmo `deadline`: some ao
-  // pausar, pular ou acabar, e no desmonte — sair da sessão não pode deixar um
-  // cronômetro órfão na barra de notificações.
-  useEffect(() => {
-    try {
-      if (deadline == null) RestCountdown?.hide();
-      else RestCountdown?.show(deadline, 'Descanso', 'Próxima série quando zerar.');
-    } catch {
-      // É o extra: sem ela o descanso segue na tela e no aviso agendado.
-    }
-  }, [deadline]);
-  useEffect(
-    () => () => {
-      try {
-        RestCountdown?.hide();
-      } catch {
-        // idem
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     if (deadline == null) return;
@@ -144,6 +122,7 @@ export function useRestTimer(defaultSeconds: number = DEFAULT_REST_SECONDS): Res
       total,
       running: deadline != null,
       finished: remaining === 0,
+      deadline,
       start,
       addTime,
       toggle,
