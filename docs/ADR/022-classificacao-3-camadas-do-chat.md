@@ -39,7 +39,7 @@ servidor `/mcp` anuncia:
    `done`/`reason: "awaiting_confirmation"`. Se a pessoa aprovar, o PWA abre um turno novo com a
    proposta em `approved`, e o agente a executa antes de falar com o modelo.
 3. **RESTRICTED** — nunca oferecida ao modelo. Se o modelo inventar um nome de tool RESTRICTED,
-   `exigir_permitida` rejeita antes da chamada (falha fechada).
+   `require_allowed` rejeita antes da chamada (falha fechada).
 
 ## Dois turnos HTTP, e não uma pausa no grafo
 

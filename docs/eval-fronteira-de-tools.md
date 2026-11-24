@@ -247,7 +247,7 @@ domínio continua dentro do número. Serve para comparar direção de efeito, n�
 ### A métrica 6 precisa do braço sem política
 
 A política de 3 camadas já **impede** que `delete_my_account` chegue ao modelo no chat hospedado:
-ela é RESTRICTED, não entra no `tools/list`, e `exigir_permitida` recusa mesmo se o modelo inventar
+ela é RESTRICTED, não entra no `tools/list`, e `require_allowed` recusa mesmo se o modelo inventar
 o nome. Medir a métrica 6 contra o chat hospedado mediria a política, não a fronteira — e daria
 zero nos dois braços.
 

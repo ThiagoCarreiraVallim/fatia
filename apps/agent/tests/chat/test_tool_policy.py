@@ -11,12 +11,12 @@ from fatia_agent.chat.errors import McpToolArgumentsInvalid, McpToolNotAllowed
 from fatia_agent.chat.mcp_client import McpToolInfo
 from fatia_agent.chat.tool_policy import (
     argumentos_do_modelo,
-    automaticas,
+    auto_writable,
     camada_confirmavel,
     camada_read_only,
     camada_restrita,
-    exigir_permitida,
     formato_openai,
+    require_allowed,
 )
 
 
@@ -99,13 +99,13 @@ def test_tool_fora_do_recorte_e_recusada_na_hora_da_chamada():
     permitidas = [tool("list_meals", {"readOnlyHint": True, "destructiveHint": False})]
 
     with pytest.raises(McpToolNotAllowed) as excinfo:
-        exigir_permitida("delete_meal", permitidas)
+        require_allowed("delete_meal", permitidas)
 
     assert excinfo.value.code == "MCP_TOOL_NOT_ALLOWED"
     assert "delete_meal" in excinfo.value.message
     # A permitida continua passando — senão o caso acima passaria com um
-    # `exigir_permitida` que recusasse tudo.
-    exigir_permitida("list_meals", permitidas)
+    # `require_allowed` que recusasse tudo.
+    require_allowed("list_meals", permitidas)
 
 
 @pytest.mark.parametrize(
@@ -230,7 +230,7 @@ def test_teto_em_array_aninhado_tambem_sai():
 
 
 def test_o_schema_original_nao_e_mutado():
-    """O `McpToolInfo` é compartilhado entre as duas camadas e o `exigir_permitida`.
+    """O `McpToolInfo` é compartilhado entre as duas camadas e o `require_allowed`.
 
     Mutar no lugar faria o recorte depender da ordem em que alguém chamou
     `formato_openai` — o tipo de defeito que só aparece no segundo turno.
@@ -287,6 +287,6 @@ def test_destrutiva_nunca_e_automatica_mesmo_sem_prefixo_delete():
         ),
     ]
 
-    assert automaticas(
+    assert auto_writable(
         catalogo, ["remove_exercise_from_plan", "delete_meal", "log_water"]
     ) == frozenset({"log_water"})

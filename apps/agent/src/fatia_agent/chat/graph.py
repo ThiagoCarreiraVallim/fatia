@@ -111,8 +111,8 @@ from .tool_policy import (
     argumentos_do_modelo,
     camada_confirmavel,
     camada_read_only,
-    exigir_permitida,
     formato_openai,
+    require_allowed,
 )
 
 # Handler é do uvicorn. **Nada de Bearer nem de conteúdo de conversa passa por
@@ -684,7 +684,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                     continue
 
             try:
-                exigir_permitida(nome, contexto.permitidas)
+                require_allowed(nome, contexto.permitidas)
                 if nome in confirmaveis:
                     _exigir_argumentos_no_teto(nome, chamada["args"])
                 # Leitura repete uma vez a queda de conexão dentro do cliente
@@ -1067,7 +1067,7 @@ async def _auto_write(contexto: ContextoDoTurno, chamada: dict[str, Any]) -> Mcp
         "toolCallId": chamada["id"],
     }
     try:
-        exigir_permitida(nome, contexto.permitidas)
+        require_allowed(nome, contexto.permitidas)
         _exigir_argumentos_no_teto(nome, chamada["args"])
         saida = await contexto.client.call_tool(nome, chamada["args"], auto_write=pedido)
     except (McpToolRejected, McpUnauthorized):

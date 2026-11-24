@@ -11,17 +11,19 @@ servidor já serve em toda sessão.
 
 ## Por que três camadas, e não leitura vs escrita
 
-Ler é reversível; gravar não; apagar não é nem reversível nem confirmável. A
-camada do meio existe porque a tela de confirmação passou a existir (ADR 022): é
-ela que mantém a propriedade da #139 — o que a IA produz é sugestão, quem grava
-é a pessoa — agora que a escrita entrou no chat. A confirmação é obrigatória por
-**construção**, não por disciplina: a confirmável não executa sem uma decisão
-da pessoa gravada no estado do grafo (ADR 023).
+Ler é reversível; gravar não. A camada do meio existe porque a tela de
+confirmação passou a existir (ADR 022): é ela que mantém a propriedade da #139 —
+o que a IA produz é sugestão, quem grava é a pessoa — agora que a escrita entrou
+no chat. A confirmação é obrigatória por **construção**, não por disciplina: a
+confirmável não executa sem uma decisão da pessoa gravada no estado do grafo
+(ADR 023).
 
-O que fica de fora nas três camadas é o que não tem volta. "Apaga minha refeição
-de ontem" dita para um modelo pequeno é um `delete_meal` a uma alucinação de
-distância, e um modal não conserta isso — quem clica "confirmar" num modal está
-confirmando o que entendeu, não o que a tool vai fazer.
+Apagar também passa pelo cartão quando o registro é de nutrição, treino, água,
+peso ou passos (#481, ADR 051): o cartão nomeia o que vai sumir, lido no servidor
+a partir do id, e é isso que a pessoa confirma — não o que o modelo entendeu. O
+que fica de fora é o que causa dano à pessoa: excluir a conta, expor ou consentir
+dado, exportar tudo num link e bloquear. Essa lista mora no `apps/api`
+(`NUNCA_PELA_IA` em `tool-catalog.spec.ts`), travada por teste.
 
 ## Por que um critério derivado, e não uma lista
 
@@ -40,13 +42,10 @@ não é o booleano `True`, entra em **RESTRICTED** (de fora). Em Python
 `1 == True`, e um `if anotacoes.get("confirmableHint")` deixaria `"true"` e
 `1` entrarem como confirmáveis. As checagens são por identidade com `True`.
 
-Deletora (`delete_...`) é RESTRICTED, mas **quem garante isso é o `apps/api`**, e
-não este módulo: o `tool-catalog.spec.ts` exige `destructiveHint: true` para todo
-nome com prefixo `delete_` e reprova `destructiveHint` junto de `confirmableHint`.
-As duas regras juntas tornam impossível uma deletora chegar aqui anotada como
-confirmável. Reimplementar a checagem por prefixo neste arquivo seria trocar o
-critério derivado por uma heurística de nome — exatamente o que a seção acima
-descarta.
+Destrutiva pode ser confirmável (#481), mas **nunca automática**: `auto_writable`
+recusa `destructiveHint` e o prefixo `delete_`/`forget_`, mesmo que a lista do
+`apps/api` diga o contrário. O nome sozinho não basta — `remove_exercise_from_plan`
+apaga e não começa com `delete_`.
 """
 
 import json
@@ -108,18 +107,23 @@ def sem_desligadas(
     """O catálogo sem as escritas das categorias **Desligadas** (ADR 039, #385).
 
     Fora do catálogo, e não "recusada quando pedida": o modelo não oferece o que não vê, e
-    um pedido mesmo assim cai em `exigir_permitida`, como qualquer tool desconhecida.
+    um pedido mesmo assim cai em `require_allowed`, como qualquer tool desconhecida.
     """
     fora = set(desligadas)
     return [tool for tool in permitidas if tool.name not in fora]
 
 
-def automaticas(permitidas: Iterable[McpToolInfo], nomes: Iterable[str]) -> frozenset[str]:
+def auto_writable(permitidas: Iterable[McpToolInfo], nomes: Iterable[str]) -> frozenset[str]:
     """Das tools que o `apps/api` marcou como automáticas, as que podem sê-lo aqui.
 
-    Só confirmável oferecida neste turno, e nunca uma de apagar.
+    Só confirmável oferecida neste turno, e nunca uma de apagar — nem pelo nome, nem pela
+    anotação (`remove_exercise_from_plan` apaga sem começar com `delete_`).
     """
-    confirmaveis = {tool.name for tool in camada_confirmavel(permitidas)}
+    confirmaveis = {
+        tool.name
+        for tool in camada_confirmavel(permitidas)
+        if tool.annotations.get("destructiveHint") is not True
+    }
     return frozenset(
         nome for nome in nomes if nome in confirmaveis and not _NUNCA_AUTOMATICA.match(nome)
     )
@@ -201,7 +205,7 @@ def _sem_teto(schema: object) -> object:
     return saida
 
 
-def exigir_permitida(nome: str, permitidas: Iterable[McpToolInfo]) -> None:
+def require_allowed(nome: str, permitidas: Iterable[McpToolInfo]) -> None:
     """Recusa antes de chamar, quando o modelo pede uma tool fora do recorte.
 
     Segunda barreira, e não redundância: a primeira é não oferecer a tool ao
@@ -215,8 +219,8 @@ def exigir_permitida(nome: str, permitidas: Iterable[McpToolInfo]) -> None:
     raise McpToolNotAllowed(
         f"O modelo pediu a tool '{nome}', que não está no recorte permitido ao agente. "
         "O chat hospedado chama tools de leitura direto e tools confirmáveis só depois "
-        "de aprovação na tela (ADR 022); o que apaga continua sendo o caminho manual "
-        "do app."
+        "de aprovação na tela (ADR 022); excluir a conta, compartilhar dados e bloquear "
+        "continuam sendo o caminho manual do app."
     )
 
 
@@ -257,13 +261,13 @@ def classificar_tools(catalogo: Iterable[McpToolInfo]) -> dict[str, list[McpTool
 
 __all__ = [
     "argumentos_do_modelo",
-    "automaticas",
+    "auto_writable",
     "camada_confirmavel",
     "camada_read_only",
     "camada_restrita",
     "classificar_tools",
-    "exigir_permitida",
     "formato_openai",
+    "require_allowed",
     "sem_desligadas",
     "todas_permitidas",
 ]
