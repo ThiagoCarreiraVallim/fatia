@@ -26,17 +26,27 @@ Brief: /home/thiago/.cache/fatia-briefs/A.md
 
 ## Checklist PR 1
 
-- [ ] api-client: `chatArtifactAsksAction` + teste
-- [ ] mobile: follow-end + teste; [id].tsx
-- [ ] mobile: message-list (reasoning, plan, duração, cartões recolhidos)
-- [ ] mobile: topo + config na lista
-- [ ] mobile: composer câmera direta
-- [ ] web: thread/partes/chat-screen/conversas
-- [ ] agente: visão cai para o modelo de texto + teste; prompt sobre foto
-- [ ] lint/typecheck/testes
-- [ ] prints app + web
+- [x] api-client: `chatArtifactAsksAction` + teste
+- [x] mobile: follow-end + teste; [id].tsx
+- [x] mobile: message-list (reasoning, plan, duração, cartões recolhidos)
+- [x] mobile: topo + config na lista
+- [x] mobile: composer câmera direta
+- [x] web: thread/partes/chat-screen/conversas (renomeados: ConversationsDrawer, AiSettingsDrawer, MemoriesDrawer)
+- [x] agente: visão cai para o modelo de texto + teste; prompt sobre foto
+- [x] lint/typecheck/testes (api-client 1316, web 1281, mobile 622, agente 597)
+- [x] prints web em ~/.cache/fatia-vis/486/web-*.png
+- [ ] prints app (esperando a trava do emulador)
 - [ ] PR
+
+## Ambiente de teste (vivo)
+
+- env: /tmp/claude-1000/fa/env.sh (banco fatia_t486, API 3114 com AI_REQUIRES_PLAN=false,
+  agente uv na 8114 com o .env do agente de dev, web 3144 via /tmp/claude-1000/fa/webctl.sh)
+- sessão web do demo: /tmp/claude-1000/fa/demo.json (login feito com a web na 3030: o Logto
+  não tem redirect da 3144; cookie de localhost vale para qualquer porta)
+- script de prints web: /tmp/claude-1000/fa/pw/web-chat.mjs (copiar para e2e/ e rodar com node)
+- prova de vermelho web: ~/.cache/fatia-vis/486/red-web.txt
 
 ## Estado atual
 
-Início. Nada commitado ainda.
+PR 1 implementado e verde, falta print do app e abrir o PR. Depois PR 2 (#488).
