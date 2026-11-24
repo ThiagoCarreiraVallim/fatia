@@ -1,5 +1,6 @@
 import {
   dayOfMonth,
+  shiftDay,
   WEEKDAY_LETTERS,
   type MuscleTone,
   type SetsLevel,
@@ -46,6 +47,22 @@ export function setsLevelColors(
     out[muscle] = `${primary}${SETS_LEVEL_ALPHA[level]}`;
   }
   return out;
+}
+
+/**
+ * A semana arrastada enquanto a resposta não chega (#479): os sete dias, sem
+ * treino marcado. Os dias vêm de `weekPages`, então a faixa já tem as datas.
+ */
+export function emptyTrainingWeek(monday: string, today: string): TrainingWeek {
+  return {
+    start: monday,
+    days: Array.from({ length: 7 }, (_, i) => {
+      const date = shiftDay(monday, i);
+      return { date, trained: false, active: false, today: date === today };
+    }),
+    done: 0,
+    target: null,
+  };
 }
 
 const WEEKDAY_NAMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];

@@ -24,7 +24,10 @@ import { Screen } from '@/components/layout/screen';
 import { Carousel, ErrorState, Skeleton, SkeletonGroup } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
-import { groupColorName, weekChips } from '@/components/workout/workout-home';
+import { emptyTrainingWeek, groupColorName, weekChips } from '@/components/workout/workout-home';
+import { WeekPager } from '@/components/ui/week-pager';
+import { mondayOf } from '@/components/ui/week-pager-math';
+import { useToday } from '@/components/layout/use-today';
 import { colors } from '@/theme/colors';
 import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 import { cn } from '@/components/ui/utils';
@@ -57,11 +60,20 @@ function SectionTitle({ children, action }: { children: string; action?: React.R
 
 /**
  * A faixa da semana (prancha Al-T1), no desenho do `DayStrip` da Nutrição:
- * hoje em verde, os dias treinados (e o do treino aberto) contornados.
+ * hoje em verde, os dias treinados (e o do treino aberto) contornados. Arrasta
+ * de semana em semana (#479) com o mesmo `WeekPager` da Nutrição; a semana
+ * atual vem do resumo dos músculos, as outras de `GET /workout/week`.
  */
-function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionId?: string }) {
-  const router = useRouter();
-  const chips = weekChips(week);
+function WeekRow({
+  current,
+  activeSessionId,
+}: {
+  current: TrainingWeek;
+  activeSessionId?: string;
+}) {
+  const today = useToday();
+  const [anchor, setAnchor] = useState(today);
+  const shown = useTrainingWeek(mondayOf(anchor), current, today);
   return (
     <View className="gap-2.5">
       <View className="flex-row items-baseline justify-between">
@@ -71,52 +83,95 @@ function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionI
         >
           Semana
         </Text>
-        <Text className="text-[13px] text-muted-foreground">{trainingWeekLabel(week)}</Text>
+        <Text className="text-[13px] text-muted-foreground">{trainingWeekLabel(shown)}</Text>
       </View>
-      <View className="flex-row justify-between gap-1.5">
-        {chips.map((chip) => {
-          const target =
-            chip.state === 'active' && activeSessionId
-              ? `/workout/session/${activeSessionId}`
-              : chip.state === 'trained'
-                ? '/workout/history'
-                : null;
-          const outlined = !chip.today && chip.state !== 'rest';
-          return (
-            <Pressable
-              key={chip.date}
-              accessibilityRole={target ? 'button' : 'text'}
-              accessibilityLabel={chip.label}
-              disabled={!target}
-              onPress={() => target && router.push(target as never)}
+      <WeekPager
+        anchor={anchor}
+        today={today}
+        onAnchorChange={setAnchor}
+        bleed={20}
+        renderWeek={(monday) => (
+          <WeekChips
+            monday={monday}
+            current={current}
+            today={today}
+            activeSessionId={activeSessionId}
+          />
+        )}
+      />
+    </View>
+  );
+}
+
+/** A semana da segunda `monday`: a atual sem ir ao servidor; enquanto carrega, sem marcas. */
+function useTrainingWeek(monday: string, current: TrainingWeek, today: string): TrainingWeek {
+  const isCurrent = monday === current.start;
+  const week = useQuery({
+    queryKey: ['workout', 'week', monday],
+    queryFn: () => workoutApi.getTrainingWeek(monday),
+    enabled: !isCurrent,
+  });
+  if (isCurrent) return current;
+  return week.data ?? emptyTrainingWeek(monday, today);
+}
+
+function WeekChips({
+  monday,
+  current,
+  today,
+  activeSessionId,
+}: {
+  monday: string;
+  current: TrainingWeek;
+  today: string;
+  activeSessionId?: string;
+}) {
+  const router = useRouter();
+  const chips = weekChips(useTrainingWeek(monday, current, today));
+  return (
+    <View className="flex-row justify-between gap-1.5">
+      {chips.map((chip) => {
+        const target =
+          chip.state === 'active' && activeSessionId
+            ? `/workout/session/${activeSessionId}`
+            : chip.state === 'trained'
+              ? '/workout/history'
+              : null;
+        const outlined = !chip.today && chip.state !== 'rest';
+        return (
+          <Pressable
+            key={chip.date}
+            accessibilityRole={target ? 'button' : 'text'}
+            accessibilityLabel={chip.label}
+            disabled={!target}
+            onPress={() => target && router.push(target as never)}
+            className={cn(
+              'h-16 flex-1 items-center justify-center gap-0.5 rounded-field',
+              chip.today ? 'bg-primary' : 'bg-muted',
+            )}
+            style={
+              outlined ? { borderWidth: 1.5, borderColor: `${colors.primaryText}80` } : undefined
+            }
+          >
+            <Text
               className={cn(
-                'h-16 flex-1 items-center justify-center gap-0.5 rounded-field',
-                chip.today ? 'bg-primary' : 'bg-muted',
+                'font-sans-semibold text-xs',
+                chip.today ? 'text-primary-foreground' : 'text-faint',
               )}
-              style={
-                outlined ? { borderWidth: 1.5, borderColor: `${colors.primaryText}80` } : undefined
-              }
             >
-              <Text
-                className={cn(
-                  'font-sans-semibold text-xs',
-                  chip.today ? 'text-primary-foreground' : 'text-faint',
-                )}
-              >
-                {chip.letter}
-              </Text>
-              <Text
-                className={cn(
-                  'font-display-semibold text-base',
-                  chip.today ? 'text-primary-foreground' : 'text-foreground',
-                )}
-              >
-                {chip.day}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+              {chip.letter}
+            </Text>
+            <Text
+              className={cn(
+                'font-display-semibold text-base',
+                chip.today ? 'text-primary-foreground' : 'text-foreground',
+              )}
+            >
+              {chip.day}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -420,7 +475,7 @@ export default function WorkoutScreen() {
         })}
 
         {summary.data?.week ? (
-          <WeekRow week={summary.data.week} activeSessionId={active.data?.id} />
+          <WeekRow current={summary.data.week} activeSessionId={active.data?.id} />
         ) : null}
 
         <WorkoutCardsCarousel />

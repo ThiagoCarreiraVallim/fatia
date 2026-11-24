@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkinBody,
+  emptyTrainingWeek,
   groupColorName,
   restToneColors,
   setsLevelColors,
@@ -23,6 +24,25 @@ describe('séries da semana no diagrama (#476)', () => {
       lats: '#C6F432A6',
       quadriceps: '#C6F43259',
     });
+  });
+});
+
+describe('semana ainda sem resposta (#479)', () => {
+  it('os sete dias a partir da segunda, sem treino, com hoje marcado', () => {
+    const week = emptyTrainingWeek('2026-11-23', '2026-11-25');
+    expect(week.start).toBe('2026-11-23');
+    expect(week.days.map((d) => d.date)).toEqual([
+      '2026-11-23',
+      '2026-11-24',
+      '2026-11-25',
+      '2026-11-26',
+      '2026-11-27',
+      '2026-11-28',
+      '2026-11-29',
+    ]);
+    expect(week.days.filter((d) => d.today).map((d) => d.date)).toEqual(['2026-11-25']);
+    expect(week.days.some((d) => d.trained || d.active)).toBe(false);
+    expect(week).toMatchObject({ done: 0, target: null });
   });
 });
 
