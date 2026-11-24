@@ -521,7 +521,7 @@ function SwapDrawer({
                   : 'Opções equivalentes do plano. A quantidade já vem ajustada.'}
               </DrawerDescription>
             </DrawerHeader>
-            <DrawerScrollView>
+            <DrawerScrollView showsVerticalScrollIndicator={false}>
               <View
                 accessibilityRole="radiogroup"
                 className="mx-4 overflow-hidden rounded-2xl bg-card"

@@ -183,7 +183,7 @@ function NewPlanCard({ width }: { width: number }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Novo plano"
-      onPress={() => router.push('/workout/plans')}
+      onPress={() => router.push('/workout/plans/new')}
       style={{ width, borderWidth: 1.5, borderColor: colors.borderStrong }}
       className="items-center justify-center gap-2 rounded-card p-4 active:opacity-80"
     >
@@ -376,7 +376,7 @@ export default function WorkoutScreen() {
           >
             <History size={20} color={colors.foreground} />
           </HeaderButton>
-          <HeaderButton label="Novo plano" onPress={() => router.push('/workout/plans')}>
+          <HeaderButton label="Novo plano" onPress={() => router.push('/workout/plans/new')}>
             <Plus size={22} color={colors.foreground} />
           </HeaderButton>
         </TabHeader>
@@ -455,7 +455,8 @@ export default function WorkoutScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 10 }}
+              className="-mx-5"
+              contentContainerStyle={{ gap: 10, paddingHorizontal: 20 }}
             >
               {/* Os circuitos têm o atalho deles em "Outros jeitos de treinar". */}
               {plans.data
@@ -513,6 +514,7 @@ export default function WorkoutScreen() {
         <View className="gap-3">
           <SectionTitle>Treinos rápidos</SectionTitle>
           <Carousel
+            bleed={20}
             data={QUICK_TEMPLATES}
             itemWidth={quickCardWidth}
             keyExtractor={(t) => t.id}

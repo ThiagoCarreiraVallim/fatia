@@ -87,7 +87,7 @@ function Toggle({
   );
 }
 
-function NovoComunicado({ g, onDone }: { g: MyGroup; onDone: () => void }) {
+function NewAnnouncementForm({ g, onDone }: { g: MyGroup; onDone: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [comoGrupo, setComoGrupo] = useState<'group' | 'me'>('group');
@@ -236,7 +236,8 @@ function NovoComunicado({ g, onDone }: { g: MyGroup; onDone: () => void }) {
             horizontal
             showsHorizontalScrollIndicator={false}
             accessibilityLabel="Dia"
-            contentContainerClassName="gap-2"
+            className="-mx-4"
+            contentContainerClassName="gap-2 px-4"
           >
             {dias.map((d, i) => (
               <Chip
@@ -258,7 +259,8 @@ function NovoComunicado({ g, onDone }: { g: MyGroup; onDone: () => void }) {
             horizontal
             showsHorizontalScrollIndicator={false}
             accessibilityLabel="Horário"
-            contentContainerClassName="gap-2"
+            className="-mx-4"
+            contentContainerClassName="gap-2 px-4"
           >
             {slots.map((s) => (
               <Chip
@@ -409,7 +411,9 @@ function Comunicados({ g }: { g: MyGroup }) {
           </Button>
         </View>
       ) : null}
-      {aberto === 'announcement' ? <NovoComunicado g={g} onDone={() => setAberto(null)} /> : null}
+      {aberto === 'announcement' ? (
+        <NewAnnouncementForm g={g} onDone={() => setAberto(null)} />
+      ) : null}
       {aberto === 'poll' ? <NovaEnquete g={g} onDone={() => setAberto(null)} /> : null}
 
       <PanelCard title="Agendados">

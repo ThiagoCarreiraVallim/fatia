@@ -555,7 +555,7 @@ export function FoodSearchDrawer({
             onCancel={() => setModo('busca')}
           />
         ) : modo === 'manual' ? (
-          <FormularioManual
+          <ManualForm
             valores={manual}
             onChange={setManual}
             metasDeNutrientes={(metas.data ?? []).map((m) => ({
@@ -836,6 +836,7 @@ function SearchPanel({
 
       <View className="mx-4 mt-3.5 flex-1 overflow-hidden rounded-card bg-card">
         <DrawerFlatList
+          showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           data={linhas}
           keyExtractor={(linha: Row) =>
@@ -1067,7 +1068,10 @@ function SelectedFoodPanel({
     .join(' · ');
 
   return (
-    <DrawerScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-2">
+    <DrawerScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerClassName="gap-4 px-4 pb-6 pt-2"
+    >
       {/* Quantidade (prancha Al-N3): nome grande, de onde vem e para onde vai. */}
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1 gap-0.5">
@@ -1156,7 +1160,7 @@ function MacroTile({ value, label, color }: { value: string; label: string; colo
   );
 }
 
-function FormularioManual({
+function ManualForm({
   valores,
   onChange,
   metasDeNutrientes,
@@ -1186,6 +1190,7 @@ function FormularioManual({
 
   return (
     <DrawerScrollView
+      showsVerticalScrollIndicator={false}
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
       keyboardShouldPersistTaps="handled"

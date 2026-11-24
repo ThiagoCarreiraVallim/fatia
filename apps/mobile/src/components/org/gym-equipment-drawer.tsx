@@ -133,6 +133,7 @@ export function GymEquipmentDrawer({
       </DrawerHeader>
 
       <DrawerScrollView
+        showsVerticalScrollIndicator={false}
         className="flex-1 px-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

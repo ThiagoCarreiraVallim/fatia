@@ -643,6 +643,7 @@ function AiMenuPanel({
             />
           ) : (
             <ScrollView
+              showsVerticalScrollIndicator={false}
               style={styles.fill}
               contentContainerStyle={{ gap: 24, paddingBottom: 16 }}
               keyboardShouldPersistTaps="handled"

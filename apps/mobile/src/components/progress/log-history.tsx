@@ -70,6 +70,7 @@ export function LogHistory({
         // empurra o formulário para fora da tela.
         // O cartão é o próprio rolável: assim os cantos de baixo não somem na rolagem.
         <DrawerScrollView
+          showsVerticalScrollIndicator={false}
           style={{
             maxHeight: 250,
             borderRadius: 20,

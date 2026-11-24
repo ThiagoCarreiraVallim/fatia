@@ -783,6 +783,7 @@ export default function OnboardingScreen() {
   return (
     <View className="flex-1 bg-background">
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: insets.top + 24,

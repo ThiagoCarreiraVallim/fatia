@@ -50,6 +50,7 @@ export function GoalsSheet({
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32, gap: 16 }}
       >
         <View className="flex-row items-center justify-between pt-1">

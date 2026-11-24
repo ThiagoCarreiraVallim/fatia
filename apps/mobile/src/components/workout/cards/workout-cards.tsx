@@ -170,7 +170,7 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
     <Card label="Repetir o último treino">
       <Eyebrow>Último treino · {lastWorkoutWhen(session.startedAt)}</Eyebrow>
       <View className="gap-1.5">
-        <Text numberOfLines={2} className="font-display text-[28px] leading-[30px] text-foreground">
+        <Text numberOfLines={2} className="font-display text-[22px] leading-[26px] text-foreground">
           {summary.name}
         </Text>
         <Text className="text-[13px] text-muted-foreground">{facts.join(' · ')}</Text>
@@ -252,6 +252,7 @@ export function WorkoutCardsCarousel() {
 
   return (
     <Carousel
+      bleed={20}
       data={keys}
       keyExtractor={(k) => k}
       itemWidth={Math.round((width - 40) * 0.86)}

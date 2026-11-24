@@ -113,7 +113,8 @@ export default function CommunityForYouScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerClassName="gap-3"
+              className="-mx-5"
+              contentContainerClassName="gap-3 px-5"
             >
               {v.recommended.map((r) => (
                 <Pressable
