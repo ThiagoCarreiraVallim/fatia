@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { ExerciseGroup, PrescribedSet, SessionSet, SetDraft } from '@fatia/api-client';
 import {
   currentGroup,
-  nextSetToken,
+  nativePayload,
   notificationSetClientKey,
   parseWorkoutAction,
   predictedSet,
   resolveWorkoutAction,
+  sessionAfterLog,
   workoutNotification,
+  type WorkoutActionToken,
 } from '../workout-notification';
 
 /**
@@ -116,33 +118,69 @@ describe('currentGroup — o exercício da notificação', () => {
   });
 });
 
+const NOW = 1_800_000_000_000;
+
+function offer(over: Partial<WorkoutActionToken> = {}): WorkoutActionToken {
+  return {
+    sessionId: 'S',
+    exerciseId: 7,
+    setNumber: 2,
+    after: 'x',
+    weightKg: 62.5,
+    reps: 10,
+    ...over,
+  };
+}
+
 describe('workoutNotification — o que aparece', () => {
-  it('na série: exercício, série, meta e o botão de registrar com os valores', () => {
+  it('na série: exercício, série, meta e o botão de registrar com a oferta', () => {
     const n = workoutNotification({
+      sessionId: 'S',
       group: group(7, [set()]),
       predicted: { weightKg: 62.5, reps: 10 },
       restDeadline: null,
+      now: NOW,
     });
     expect(n.title).toBe('Remada 7 · série 2 de 4');
     expect(n.body).toBe('Meta: 10 reps × 62,5 kg');
     expect(n.actions).toEqual([{ id: 'log-set', label: 'Registrar 10 × 62,5 kg' }]);
-    expect(n.token).toEqual({ exerciseId: 7, setNumber: 2 });
+    expect(n.token).toEqual(offer());
     expect(n.restDeadline).toBeNull();
+    expect(n.next).toBeNull();
   });
 
-  it('descansando: o cronômetro e os botões do descanso (o Android mostra só 3)', () => {
+  it('descansando: o cronômetro, os botões do descanso e o estado de depois para o nativo trocar no prazo', () => {
     const n = workoutNotification({
+      sessionId: 'S',
       group: group(7, [set()]),
       predicted: { weightKg: 62.5, reps: 10 },
-      restDeadline: 123_000,
+      restDeadline: NOW + 60_000,
+      now: NOW,
     });
-    expect(n.restDeadline).toBe(123_000);
+    expect(n.restDeadline).toBe(NOW + 60_000);
     expect(n.body).toBe('Descanso · próxima: 10 reps × 62,5 kg');
     expect(n.actions.map((a) => a.id)).toEqual(['rest-minus', 'rest-plus', 'rest-skip']);
+    expect(n.token).toBeNull();
+    // Com o app em segundo plano o tique do JS não roda: o "Registrar" já vai junto.
+    expect(n.next?.actions).toEqual([{ id: 'log-set', label: 'Registrar 10 × 62,5 kg' }]);
+    expect(n.next?.token).toEqual(offer());
+  });
+
+  it('prazo vencido (o tique do JS não rodou): já é o estado de registrar', () => {
+    const n = workoutNotification({
+      sessionId: 'S',
+      group: group(7, [set()]),
+      predicted: { weightKg: 62.5, reps: 10 },
+      restDeadline: NOW - 30_000,
+      now: NOW,
+    });
+    expect(n.restDeadline).toBeNull();
+    expect(n.actions.map((a) => a.id)).toEqual(['log-set']);
   });
 
   it('sem carga, só as reps', () => {
     const n = workoutNotification({
+      sessionId: 'S',
       group: group(7),
       predicted: { weightKg: 0, reps: 12 },
       restDeadline: null,
@@ -153,6 +191,7 @@ describe('workoutNotification — o que aparece', () => {
 
   it('em libras, a carga na unidade da pessoa', () => {
     const n = workoutNotification({
+      sessionId: 'S',
       group: group(7),
       predicted: { weightKg: 45.359237, reps: 10 },
       restDeadline: null,
@@ -163,6 +202,7 @@ describe('workoutNotification — o que aparece', () => {
 
   it('cardio não tem previsão para registrar', () => {
     const n = workoutNotification({
+      sessionId: 'S',
       group: group(7, [], { isCardio: true }),
       predicted: { weightKg: 0, reps: 0 },
       restDeadline: null,
@@ -172,9 +212,32 @@ describe('workoutNotification — o que aparece', () => {
   });
 
   it('tudo feito: só o descanso, se houver', () => {
-    const n = workoutNotification({ group: undefined, predicted: null, restDeadline: null });
+    const n = workoutNotification({
+      sessionId: 'S',
+      group: undefined,
+      predicted: null,
+      restDeadline: null,
+    });
     expect(n.title).toBe('Treino em andamento');
     expect(n.actions).toEqual([]);
+  });
+
+  it('o pacote do nativo leva o token como texto, também no estado de depois', () => {
+    const n = workoutNotification({
+      sessionId: 'S',
+      group: group(7, [set()]),
+      predicted: { weightKg: 62.5, reps: 10 },
+      restDeadline: NOW + 60_000,
+      now: NOW,
+    });
+    const payload = JSON.parse(nativePayload(n)) as {
+      restDeadline: number;
+      token: string;
+      next: { token: string };
+    };
+    expect(payload.restDeadline).toBe(NOW + 60_000);
+    expect(payload.token).toBe('');
+    expect(JSON.parse(payload.next.token)).toEqual(offer());
   });
 });
 
@@ -182,80 +245,119 @@ describe('resolveWorkoutAction — o toque, com o app aberto ou não', () => {
   const groups = [group(7, [set()])];
 
   it('descanso: ±15 s e pular', () => {
-    expect(resolveWorkoutAction({ id: 'rest-minus', token: null }, groups)).toEqual({
+    expect(resolveWorkoutAction({ id: 'rest-minus', token: null }, groups, 'S')).toEqual({
       type: 'rest',
       delta: -15,
     });
-    expect(resolveWorkoutAction({ id: 'rest-plus', token: null }, groups)).toEqual({
+    expect(resolveWorkoutAction({ id: 'rest-plus', token: null }, groups, 'S')).toEqual({
       type: 'rest',
       delta: 15,
     });
-    expect(resolveWorkoutAction({ id: 'rest-skip', token: null }, groups)).toEqual({
+    expect(resolveWorkoutAction({ id: 'rest-skip', token: null }, groups, 'S')).toEqual({
       type: 'skip-rest',
     });
   });
 
-  it('registrar: a série que a notificação mostrava, com chave fixa', () => {
-    expect(
-      resolveWorkoutAction({ id: 'log-set', token: { exerciseId: 7, setNumber: 2 } }, groups),
-    ).toEqual({ type: 'log', exerciseId: 7, clientKey: 'ntf:7:2' });
+  it('registrar: a oferta da notificação, com os valores dela e a chave da oferta', () => {
+    expect(resolveWorkoutAction({ id: 'log-set', token: offer() }, groups, 'S')).toEqual({
+      type: 'log',
+      exerciseId: 7,
+      clientKey: 'ntf:7:2:x',
+      weightKg: 62.5,
+      reps: 10,
+    });
   });
 
   it('a série já entrou (no app ou num toque anterior): ignora', () => {
-    const after = [group(7, [set(), set()])];
-    expect(
-      resolveWorkoutAction({ id: 'log-set', token: { exerciseId: 7, setNumber: 2 } }, after),
-    ).toEqual({ type: 'ignore' });
+    const after = [group(7, [set(), set({ id: 'y' })])];
+    expect(resolveWorkoutAction({ id: 'log-set', token: offer() }, after, 'S')).toEqual({
+      type: 'ignore',
+    });
+  });
+
+  it('toque de outra sessão: ignora', () => {
+    expect(resolveWorkoutAction({ id: 'log-set', token: offer() }, groups, 'OUTRA')).toEqual({
+      type: 'ignore',
+    });
+  });
+
+  it('a série anterior mudou (apagada e refeita): a oferta é velha', () => {
+    const redone = [group(7, [set({ id: 'z' })])];
+    expect(resolveWorkoutAction({ id: 'log-set', token: offer() }, redone, 'S')).toEqual({
+      type: 'ignore',
+    });
   });
 
   it('exercício encerrado, completo ou fora do treino: ignora', () => {
-    const token = { exerciseId: 7, setNumber: 2 };
     expect(
-      resolveWorkoutAction({ id: 'log-set', token }, [group(7, [set()], { ended: true })]),
+      resolveWorkoutAction(
+        { id: 'log-set', token: offer() },
+        [group(7, [set()], { ended: true })],
+        'S',
+      ),
     ).toEqual({ type: 'ignore' });
-    expect(resolveWorkoutAction({ id: 'log-set', token }, [group(8)])).toEqual({ type: 'ignore' });
+    expect(resolveWorkoutAction({ id: 'log-set', token: offer() }, [group(8)], 'S')).toEqual({
+      type: 'ignore',
+    });
   });
 
   it('ação desconhecida: ignora', () => {
-    expect(resolveWorkoutAction({ id: 'outra', token: null }, groups)).toEqual({ type: 'ignore' });
+    expect(resolveWorkoutAction({ id: 'outra', token: null }, groups, 'S')).toEqual({
+      type: 'ignore',
+    });
   });
 });
 
-describe('a chave e o pacote do toque', () => {
-  it('a chave cabe no limite da API (64) e é a mesma para a mesma série', () => {
-    const key = notificationSetClientKey({ exerciseId: 123456, setNumber: 12 });
-    expect(key).toBe('ntf:123456:12');
+describe('a chave da oferta', () => {
+  it('cabe no limite da API (64) com o uuid da série', () => {
+    const key = notificationSetClientKey(
+      offer({ exerciseId: 123456, setNumber: 12, after: '8c4f7e0a-1b2c-4d3e-9f80-0123456789ab' }),
+    );
     expect(key.length).toBeLessThanOrEqual(64);
   });
 
-  it('lê o que vem do nativo e descarta lixo', () => {
-    expect(
-      parseWorkoutAction({ action: 'log-set', token: '{"exerciseId":7,"setNumber":2}' }),
-    ).toEqual({ id: 'log-set', token: { exerciseId: 7, setNumber: 2 } });
-    expect(parseWorkoutAction({ action: 'rest-plus', token: '' })).toEqual({
-      id: 'rest-plus',
-      token: null,
+  it('apagar uma série anterior gera outra oferta, com chave que não colide com a série que ficou', () => {
+    // Série 1 (app) e série 2 (notificação); apagada a 1, sobra só a 2. A
+    // notificação oferece a "série 2" de novo, e a chave não pode ser a da que
+    // ficou — a API devolveria aquela e nada seria gravado.
+    const first = group(7, [set({ id: 'set-1' })]);
+    const keyOfSet2 = notificationSetClientKey(offer({ after: 'set-1' }));
+    const remaining = group(7, [set({ id: 'set-2', setNumber: 2 })]);
+    const n = workoutNotification({
+      sessionId: 'S',
+      group: remaining,
+      predicted: { weightKg: 60, reps: 10 },
+      restDeadline: null,
     });
-    expect(parseWorkoutAction({ action: 'log-set', token: '{quebrado' })).toEqual({
-      id: 'log-set',
-      token: null,
-    });
-    expect(parseWorkoutAction(null)).toBeNull();
-    expect(parseWorkoutAction({ token: 'x' })).toBeNull();
+    expect(first.sets).toHaveLength(1);
+    expect(n.token && notificationSetClientKey(n.token)).not.toBe(keyOfSet2);
   });
 });
 
-describe('nextSetToken — o toque do iOS, resolvido na hora da resposta', () => {
-  // O aviso do fim do descanso é agendado logo depois de registrar, antes de a
-  // série nova chegar do servidor: a série certa só se sabe quando o toque vem.
-  it('a próxima série do exercício', () => {
-    expect(nextSetToken([group(7, [set(), set()])], 7)).toEqual({ exerciseId: 7, setNumber: 3 });
+describe('o pacote do toque e a sessão depois do registro', () => {
+  it('lê o que vem do nativo e descarta lixo', () => {
+    expect(
+      parseWorkoutAction({ action: 'log-set', token: JSON.stringify(offer()), requestId: '3' }),
+    ).toEqual({ id: 'log-set', token: offer(), requestId: '3' });
+    expect(parseWorkoutAction({ action: 'rest-plus', token: '' })).toEqual({
+      id: 'rest-plus',
+      token: null,
+      requestId: null,
+    });
+    // Token do formato antigo (sem sessão nem valores) não grava.
+    expect(
+      parseWorkoutAction({ action: 'log-set', token: '{"exerciseId":7,"setNumber":2}' })?.token,
+    ).toBeNull();
+    expect(parseWorkoutAction({ action: 'log-set', token: '{quebrado' })?.token).toBeNull();
+    expect(parseWorkoutAction(null)).toBeNull();
+    expect(parseWorkoutAction({ token: 'x' })).toBeNull();
   });
 
-  it('exercício completo, encerrado, cardio ou fora do treino: nada', () => {
-    expect(nextSetToken([group(7, [set(), set(), set(), set()])], 7)).toBeNull();
-    expect(nextSetToken([group(7, [], { ended: true })], 7)).toBeNull();
-    expect(nextSetToken([group(7, [], { isCardio: true })], 7)).toBeNull();
-    expect(nextSetToken([group(8)], 7)).toBeNull();
+  it('sessionAfterLog acrescenta a série devolvida, sem dobrar a que já estava', () => {
+    const s = { id: 'S', sets: [set({ id: 'a' })] } as unknown as Parameters<
+      typeof sessionAfterLog
+    >[0];
+    expect(sessionAfterLog(s, set({ id: 'b' })).sets?.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(sessionAfterLog(s, set({ id: 'a' })).sets?.map((x) => x.id)).toEqual(['a']);
   });
 });

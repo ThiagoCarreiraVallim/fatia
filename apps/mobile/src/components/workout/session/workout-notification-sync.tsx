@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { AppState } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  buildExerciseGroups,
-  endedExercisesKey,
-  markEndedExercises,
-  orderExerciseGroups,
-  pendingExercisesKey,
   setDraftKey,
   workoutApi,
-  type ExerciseGroup,
   type LoadPrescription,
-  type PendingExercise,
-  type SessionSet,
   type SetDraft,
   type WorkoutSession,
 } from '@fatia/api-client';
@@ -22,20 +15,25 @@ import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { setRestNotificationExercise } from './expo-rest-notifier';
 import { isRestNotification } from './rest-notification';
 import { useSessionRestTimer } from './rest-timer-provider';
-import type { RestTimer } from './use-rest-timer';
 import {
   useCurrentExercise,
   useEndedExercises,
   usePendingExercises,
 } from './use-pending-exercises';
 import {
+  applyWorkoutAction,
+  lastSetKey,
+  prescriptionKey,
+  sessionGroups,
+  type WorkoutActionContext,
+  type WorkoutNotifier,
+} from './workout-action';
+import {
   currentGroup,
-  nextSetToken,
+  nativePayload,
   parseWorkoutAction,
   predictedSet,
-  resolveWorkoutAction,
   workoutNotification,
-  type WorkoutActionToken,
 } from './workout-notification';
 
 /**
@@ -43,8 +41,9 @@ import {
  *
  * Mora acima das telas, junto do descanso global (`RestTimerProvider`): a
  * notificação vale com a sessão minimizada, o app em segundo plano e a tela
- * bloqueada. Desenha o que `workoutNotification` decide e responde aos botões
- * pelo `resolveWorkoutAction` — a mesma regra para o toque com o app aberto, em
+ * bloqueada. Desenha o que `workoutNotification` decide (com o estado de depois
+ * do descanso, que o nativo troca sozinho no prazo) e responde aos botões pelo
+ * `applyWorkoutAction` — a mesma regra para o toque com o app aberto, em
  * segundo plano ou guardado com o app encerrado (`consumePendingActions`).
  *
  * No iOS não há notificação fixa: o aviso do fim do descanso ganha os botões
@@ -52,6 +51,25 @@ import {
  * por aqui. No Expo Go do Android, sem módulo nenhum, fica o de antes.
  */
 const enabled = RestCountdown != null || Notifications != null;
+
+const notifier: WorkoutNotifier | null = RestCountdown
+  ? {
+      post(notification) {
+        try {
+          RestCountdown?.update(nativePayload(notification));
+        } catch {
+          // É o extra: sem ela o treino segue na tela e o fim do descanso avisa.
+        }
+      },
+      hide() {
+        try {
+          RestCountdown?.hide();
+        } catch {
+          // idem
+        }
+      },
+    }
+  : null;
 
 export function WorkoutNotificationSync() {
   const active = useActiveSession(enabled);
@@ -63,30 +81,9 @@ export function WorkoutNotificationSync() {
 
 function HideWorkoutNotification() {
   useEffect(() => {
-    try {
-      RestCountdown?.hide();
-    } catch {
-      // É o extra: sem ela o treino segue na tela.
-    }
+    notifier?.hide();
   }, []);
   return null;
-}
-
-/** Último descanso prescrito, para o descanso de depois de um registro pela notificação. */
-type Prescription = LoadPrescription | undefined;
-
-function sessionGroups(
-  session: WorkoutSession,
-  pending: PendingExercise[] | undefined,
-  ended: number[] | undefined,
-): ExerciseGroup[] {
-  return markEndedExercises(
-    orderExerciseGroups(
-      buildExerciseGroups(session.plannedExercises, session.sets, pending ?? []),
-      session.exerciseOrder,
-    ),
-    ended,
-  );
 }
 
 function SessionNotification({ session }: { session: WorkoutSession }) {
@@ -103,12 +100,12 @@ function SessionNotification({ session }: { session: WorkoutSession }) {
   // As mesmas chaves do card da série: o cache é dividido com a tela.
   const exerciseId = group?.exerciseId ?? 0;
   const previous = useQuery({
-    queryKey: ['workout', 'last-set', exerciseId, session.startedAt],
+    queryKey: lastSetKey(exerciseId, session.startedAt),
     queryFn: () => workoutApi.getLastSet(exerciseId, session.startedAt),
     enabled: group != null && !group.isCardio,
   });
   const prescription = useQuery({
-    queryKey: ['workout', 'prescription', exerciseId, group?.targetReps],
+    queryKey: prescriptionKey(exerciseId, group?.targetReps),
     queryFn: () => workoutApi.getPrescription(exerciseId, group?.targetReps),
     enabled: group != null && !group.isCardio,
     staleTime: 60_000,
@@ -133,6 +130,7 @@ function SessionNotification({ session }: { session: WorkoutSession }) {
         })
       : null;
   const content = workoutNotification({
+    sessionId: session.id,
     group,
     predicted,
     restDeadline: rest.deadline,
@@ -147,51 +145,62 @@ function SessionNotification({ session }: { session: WorkoutSession }) {
   }, [restExercise]);
 
   // O nativo só recebe o que mudou: o card escreve o rascunho a cada tecla.
-  const serialized = JSON.stringify(content);
+  const serialized = nativePayload(content);
   useEffect(() => {
-    const c = JSON.parse(serialized) as typeof content;
     try {
-      RestCountdown?.update(
-        c.title,
-        c.body,
-        c.restDeadline ?? 0,
-        c.actions.map((a) => a.id),
-        c.actions.map((a) => a.label),
-        c.token ? JSON.stringify(c.token) : '',
-      );
+      RestCountdown?.update(serialized);
     } catch {
       // É o extra: sem ela o treino segue na tela e o fim do descanso avisa.
     }
   }, [serialized]);
-  useEffect(
-    () => () => {
+  useEffect(() => () => notifier?.hide(), []);
+
+  // Permissão concedida com a notificação já montada (Android 13+): o nativo
+  // guardou o último estado e o desenha quando o app volta à frente.
+  useEffect(() => {
+    if (!RestCountdown) return;
+    const refresh = () => {
       try {
-        RestCountdown?.hide();
+        RestCountdown?.refresh();
       } catch {
         // idem
       }
-    },
-    [],
-  );
+    };
+    const change = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    const focus = AppState.addEventListener('focus', refresh);
+    return () => {
+      change.remove();
+      focus.remove();
+    };
+  }, []);
 
   // O toque chega a qualquer momento; o tratador lê o estado mais recente.
-  const restRef = useRef(rest);
-  useEffect(() => {
-    restRef.current = rest;
-  }, [rest]);
+  const ctxRef = useRef<WorkoutActionContext | null>(null);
   const inFlight = useRef(new Set<string>());
+  useEffect(() => {
+    ctxRef.current = { qc, session, rest, notifier, units, inFlight: inFlight.current };
+  });
 
-  const handle = useCallback(
-    (raw: unknown) => {
-      const action = parseWorkoutAction(raw);
-      if (!action) return;
-      void applyAction(qc, session, action, restRef.current, inFlight.current);
-    },
-    [qc, session],
-  );
+  const handle = useCallback((raw: unknown) => {
+    const action = parseWorkoutAction(raw);
+    const ctx = ctxRef.current;
+    if (!action || !ctx) return;
+    void applyWorkoutAction(ctx, action).finally(() => {
+      // Solta o broadcast segurado pelo receiver (`goAsync`).
+      if (action.requestId) {
+        try {
+          RestCountdown?.finishAction(action.requestId);
+        } catch {
+          // O nativo solta sozinho no tempo limite.
+        }
+      }
+    });
+  }, []);
 
   // iOS: os botões do aviso do fim do descanso. A série é a próxima do
-  // exercício na hora do toque (`nextSetToken`).
+  // exercício na hora do toque, com os valores previstos nessa hora.
   useEffect(() => {
     if (!Notifications) return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -203,22 +212,17 @@ function SessionNotification({ session }: { session: WorkoutSession }) {
         typeof data === 'object' && data && typeof data.exerciseId === 'number'
           ? data.exerciseId
           : null;
-      void applyAction(
-        qc,
-        session,
-        { id, token: null },
-        restRef.current,
-        inFlight.current,
-        exerciseId,
-      );
+      const ctx = ctxRef.current;
+      if (ctx) void applyWorkoutAction(ctx, { id, token: null }, exerciseId);
     });
     return () => subscription.remove();
-  }, [qc, session]);
+  }, []);
 
   useEffect(() => {
     if (!RestCountdown) return;
     const subscription = RestCountdown.addListener('onAction', handle);
-    // Toques feitos com o app encerrado: valem agora, se a série ainda for a mesma.
+    // Toques feitos com o app encerrado: valem agora, se a oferta ainda for a
+    // desta sessão e desta série (`resolveWorkoutAction`).
     try {
       for (const pendingAction of RestCountdown.consumePendingActions()) handle(pendingAction);
     } catch {
@@ -228,90 +232,4 @@ function SessionNotification({ session }: { session: WorkoutSession }) {
   }, [handle]);
 
   return null;
-}
-
-/**
- * Aplica o toque. "Registrar série" relê a sessão do servidor antes de decidir:
- * o cache pode estar velho com o app em segundo plano, e é a contagem de
- * séries de agora que diz se o toque ainda vale.
- */
-async function applyAction(
-  qc: QueryClient,
-  session: WorkoutSession,
-  action: { id: string; token: WorkoutActionToken | null },
-  rest: RestTimer,
-  inFlight: Set<string>,
-  /** Toque sem série marcada (iOS): registra a próxima deste exercício. */
-  nextOf: number | null = null,
-): Promise<void> {
-  const quick = resolveWorkoutAction(action, []);
-  if (quick.type === 'rest') {
-    // Descanso já acabado (o "+15 s" do aviso do fim): começa um de 15 s.
-    if (rest.deadline == null) {
-      if (quick.delta > 0) rest.start(quick.delta);
-    } else {
-      rest.addTime(quick.delta);
-    }
-    return;
-  }
-  if (quick.type === 'skip-rest') {
-    rest.stop();
-    return;
-  }
-  if (action.id !== 'log-set' || (!action.token && nextOf == null)) return;
-
-  try {
-    const fresh = await qc.fetchQuery({
-      queryKey: ['workout', 'session', session.id],
-      queryFn: () => workoutApi.getSession(session.id),
-      staleTime: 0,
-    });
-    const groups = sessionGroups(
-      fresh,
-      qc.getQueryData<PendingExercise[]>(pendingExercisesKey(session.id)),
-      qc.getQueryData<number[]>(endedExercisesKey(session.id)),
-    );
-    const token = action.token ?? (nextOf != null ? nextSetToken(groups, nextOf) : null);
-    const plan = resolveWorkoutAction({ id: action.id, token }, groups);
-    if (plan.type !== 'log' || inFlight.has(plan.clientKey)) return;
-    const group = groups.find((g) => g.exerciseId === plan.exerciseId);
-    if (!group) return;
-
-    inFlight.add(plan.clientKey);
-    try {
-      const prescription = qc.getQueryData<Prescription>([
-        'workout',
-        'prescription',
-        group.exerciseId,
-        group.targetReps,
-      ]);
-      const ok = prescription?.status === 'ok' ? prescription : null;
-      const values = predictedSet({
-        group,
-        draft: qc.getQueryData<SetDraft>(setDraftKey(session.id, group.exerciseId)),
-        previousSessionSet: qc.getQueryData<SessionSet | null>([
-          'workout',
-          'last-set',
-          group.exerciseId,
-          session.startedAt,
-        ]),
-        prescription: ok,
-      });
-      await workoutApi.logSet(session.id, {
-        exerciseId: group.exerciseId,
-        weightKg: values.weightKg,
-        reps: values.reps || undefined,
-        clientKey: plan.clientKey,
-      });
-      void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      void qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
-      // Como na tela: registrada a série, começa o descanso (o prescrito, se houver).
-      rest.start(ok?.restSeconds);
-    } finally {
-      inFlight.delete(plan.clientKey);
-    }
-  } catch {
-    // Sem rede: a notificação continua oferecendo a mesma série, e a chave fixa
-    // faz o próximo toque não dobrar o que talvez tenha chegado ao servidor.
-  }
 }

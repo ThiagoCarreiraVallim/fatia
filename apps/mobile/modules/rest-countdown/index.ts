@@ -1,26 +1,31 @@
 import { requireOptionalNativeModule, type NativeModule } from 'expo';
 
 type RestCountdownEvents = {
-  /** Toque num botão da notificação do treino: `token` é JSON (ou vazio). */
-  onAction: (event: { action: string; token: string }) => void;
+  /**
+   * Toque num botão da notificação do treino: `token` é JSON (ou vazio).
+   * `requestId` identifica o broadcast segurado (`goAsync`): devolva em
+   * `finishAction` quando terminar de tratar o toque.
+   */
+  onAction: (event: { action: string; token: string; requestId: string }) => void;
 };
 
 declare class RestCountdownNative extends NativeModule<RestCountdownEvents> {
   /**
-   * Mostra ou atualiza a notificação do treino. `restDeadlineMs` 0: sem
-   * descanso. `actionIds` e `actionLabels` andam juntos (no máximo 3).
+   * Mostra ou atualiza a notificação do treino. `payload` é o JSON de
+   * `nativePayload` (`workout-notification.ts`): o estado de agora, o prazo do
+   * descanso e o estado de depois, para onde o nativo troca sozinho no prazo.
    */
-  update(
-    title: string,
-    body: string,
-    restDeadlineMs: number,
-    actionIds: string[],
-    actionLabels: string[],
-    token: string,
-  ): void;
+  update(payload: string): void;
+  /** Tira a notificação e esquece o estado guardado. */
   hide(): void;
+  /** Redesenha o último estado (a permissão pode ter sido concedida depois). */
+  refresh(): void;
+  /** Saída da conta: tira a notificação e descarta os toques guardados. */
+  reset(): void;
   /** Toques de "Registrar série" feitos com o app encerrado, desde a última leitura. */
   consumePendingActions(): { action: string; token: string }[];
+  /** O toque `requestId` foi tratado: o broadcast segurado pode terminar. */
+  finishAction(requestId: string): void;
 }
 
 /**

@@ -108,9 +108,12 @@ export function useEndedExercises(sessionId: string) {
  * mostrar o mesmo. A sessão guiada publica; o `WorkoutNotificationSync`, que
  * mora acima das telas, lê.
  */
+export const currentExerciseKey = (sessionId: string) =>
+  ['workout', 'session', sessionId, 'current'] as const;
+
 export function useCurrentExercise(sessionId: string) {
   const qc = useQueryClient();
-  const key = ['workout', 'session', sessionId, 'current'] as const;
+  const key = currentExerciseKey(sessionId);
   const query = useQuery({
     queryKey: key,
     queryFn: () => qc.getQueryData<number | null>(key) ?? null,
