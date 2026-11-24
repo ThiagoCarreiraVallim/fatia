@@ -41,8 +41,8 @@ export interface McpToolAnnotations {
   /** Apaga ou torna irrecuperável. O Claude sempre confirma antes. */
   destructiveHint: boolean;
   /**
-   * Escreve, mas de forma reversível ou idempotente — o chat hospedado pode
-   * propô-la, e só executa depois de a pessoa aprovar na tela (ADR 022).
+   * Escreve — o chat hospedado pode propô-la, e só executa depois de a pessoa aprovar na
+   * tela (ADR 022).
    *
    * **Não é anotação da spec MCP**, e sim política nossa servida no mesmo
    * objeto: o cliente MCP externo ignora um campo que não conhece, e o agente
@@ -55,8 +55,10 @@ export interface McpToolAnnotations {
    * ou seja fora do chat, e a capacidade sumiria sem ninguém ligar o sintoma à
    * anotação esquecida. Quem esquece, esquece na direção que dá para notar.
    *
-   * Incompatível com `destructiveHint: true` — apagar não é reversível, e não
-   * entra no chat nem com confirmação. O `tool-catalog.spec.ts` reprova o par.
+   * Junto de `destructiveHint: true` só nas exclusões de nutrição, treino e progresso
+   * (ADR 051): o cartão nomeia o registro que some, e apagar nunca é automático. O que causa
+   * dano à pessoa — excluir a conta, compartilhar, consentir, exportar, bloquear — fica `false`,
+   * numa lista travada no `tool-catalog.spec.ts`.
    */
   confirmableHint: boolean;
 }

@@ -53,7 +53,7 @@ aquela divisão não dava 91. Custo de contexto que ninguém confere apodrece ig
 tools — e apodreceu duas vezes: a média voltou a ficar errada neste mesmo rebase, quando as
 tools de grupo entraram e ninguém refez a conta. Agora o teste refaz.
 
-O formato, a isenção de `delete_my_account` e o motivo de o exemplo morar na `description` —
+O formato, as isenções de `delete_my_account` e `export_my_data` e o motivo de o exemplo morar na `description` —
 e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.md).
 
 ## Classificação por custo de inferência
@@ -177,6 +177,23 @@ corrigido para refletir o contrato real (`notes` apenas).
 
 O código já usava `start_workout_session` e `finish_workout_session`; a doc ficou nos nomes
 antigos. Corrigido — e o teste-guarda impede que volte a divergir.
+
+### O que a IA do chat faz, e o que nunca faz (#481)
+
+O catálogo é o mesmo para o Claude e para a IA do chat hospedado; o que muda é o recorte, derivado
+de `confirmableHint` ([ADR 022](./ADR/022-classificacao-3-camadas-do-chat.md),
+[ADR 051](./ADR/051-ia-apaga-nutricao-e-treino-com-cartao.md)).
+
+- **Toda escrita de nutrição, treino, água, peso e passos é confirmável e tem categoria**,
+  inclusive as 16 exclusões (`delete_meal`, `delete_set`, `remove_exercise_from_plan`…). O cartão
+  diz qual registro some, lido no banco e só da conta da pessoa. Apagar nunca é automático.
+- **Restritas, numa lista travada** (`NUNCA_PELA_IA` em `tool-catalog.spec.ts`): excluir a conta;
+  compartilhar e consentir (`grant_data_sharing`, `revoke_data_sharing`, `set_group_sharing`,
+  `accept_group_invite`, `join_group`, `leave_group`, e as de intenção `share_my_data` e
+  `stop_sharing`); `export_my_data`, cujo link abre sem login; `block_user` e `unblock_user`; e
+  `delete_goal` e `delete_reminder`, que não são nutrição nem treino e ficaram fora da #481.
+- O mural (publicar, comentar, votar), os desafios e os planos recebidos ou adotados continuam
+  confirmáveis: não expõem dado de saúde que a pessoa não ditou, e o cartão mostra o texto.
 
 ## Planejadas pelo redesign
 

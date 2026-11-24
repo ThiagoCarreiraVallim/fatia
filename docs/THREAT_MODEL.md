@@ -322,7 +322,7 @@ para poder pausar e retomar. Isso abre cinco perguntas, e cada uma tem resposta 
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Carregar a conversa de outra pessoa mandando o id dela | A thread é `{userId}:{conversationId}`, e o `userId` sai do `get_me` chamado **com o próprio Bearer**, não do corpo. Um id alheio cai numa thread nova e vazia com o prefixo de quem chamou (`test_chat_route.py`, `test_graph.py`); o histórico da API é escopado pela conversa (`conversation.service.ts`) |
 | Responder uma pausa com a resposta de outra            | A retomada traz o `interruptId`; o agente compara com a pausa pendente e recusa com 409 `CHAT_RESUME_MISMATCH` ou `CHAT_NOTHING_TO_RESUME` antes de o fluxo abrir. Sem isso, um "sim" dado a uma pergunta barata poderia ser reenviado contra uma confirmação de escrita                                     |
-| Executar uma escrita diferente da que a pessoa aprovou | O que executa é o `tool_call` guardado no checkpoint; o cliente só responde sim ou não por `toolCallId` e não carrega argumento. Aprovação ausente ou malformada é **não**. Tool RESTRICTED nunca é oferecida, e `require_allowed` recusa o nome inventado na hora de chamar                                |
+| Executar uma escrita diferente da que a pessoa aprovou | O que executa é o `tool_call` guardado no checkpoint; o cliente só responde sim ou não por `toolCallId` e não carrega argumento. Aprovação ausente ou malformada é **não**. Tool RESTRICTED nunca é oferecida, e `require_allowed` recusa o nome inventado na hora de chamar                                 |
 | Foto ou áudio persistidos por tabela de estado         | Os bytes da foto entram só no prompt do turno; o checkpoint grava uma marca no lugar (`tests/chat/test_fotos.py` lê o checkpoint gravado). O áudio do ditado nunca entra no grafo. `Message` guarda só **quantas** fotos                                                                                     |
 | Checkpoint sobrevivendo à conversa ou à conta          | `checkpoint-purge.service.ts` apaga a thread ao apagar a conversa e todas as threads da pessoa **antes** do `delete` da conta — se a purga falhar, a conta fica inteira. O cascade do Prisma não alcança o schema, e é por isso que a purga é explícita e testada                                            |
 
@@ -333,7 +333,9 @@ isso num modelo de linguagem, e este documento não finge que há. O que existe 
 todo resultado de tool e toda memória entram no prompt **cercados como dado** (`cercar` em
 `apps/agent/src/fatia_agent/prompts/chat_pt_br.py`, que tira os delimitadores do conteúdo para a
 cerca não poder ser fechada de dentro); nenhuma escrita executa sem a pessoa aprovar a chamada exata
-na tela; e o que não tem volta (toda `delete_*`) nem é oferecido ao modelo. O benchmark do chat tem
+na tela — inclusive apagar um registro de nutrição ou treino, cujo cartão nomeia o registro lido
+no banco, e que nunca é automático —; e o que causa dano à pessoa (excluir a conta, compartilhar ou
+consentir dado, exportar tudo num link, bloquear) nem é oferecido ao modelo (ADR 051). O benchmark do chat tem
 um caso para isto (`injecao-na-anotacao-nao-e-obedecida`, em `apps/agent/eval/chat/README.md`) — ele
 mede o modelo configurado, e não prova nada sobre outro.
 

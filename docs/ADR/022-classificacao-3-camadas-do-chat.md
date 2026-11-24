@@ -1,6 +1,6 @@
 # ADR 022 — Classificação de tools em 3 camadas para o chat MCP
 
-**Status:** Accepted — regra 2 alterada pela [ADR 039](./039-ia-grava-no-modo-automatico.md) (modo automático)  
+**Status:** Accepted — regra 2 alterada pela [ADR 039](./039-ia-grava-no-modo-automatico.md) (modo automático); regras de anotação 2 e 5 alteradas pela [ADR 051](./051-ia-apaga-nutricao-e-treino-com-cartao.md) (apagar nutrição e treino com cartão)  
 **Data:** 2026-08-12  
 **Substitui parcialmente:** [ADR 021](./021-agente-recebe-o-bearer-do-usuario.md), §"O recorte: o
 chat hospedado só chama tool de **leitura**" — o recorte deixa de ser só leitura. O resto da 021
