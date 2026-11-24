@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { figureTone, figureViewBox } from '@fatia/api-client';
+import { figureSideFor, figureTone, figureViewBox, muscleFocusViewBox } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 import { describeMuscles } from './muscle-labels';
 import type { MusclePath } from './muscle-path';
@@ -38,9 +38,18 @@ function themed(original: string | null | undefined): string | undefined {
 interface MuscleDiagramProps {
   primaryMuscles: string[];
   secondaryMuscles?: string[];
-  view?: 'front' | 'back' | 'both';
+  /**
+   * `auto` (#474): um lado só, o dos músculos treinados (`figureSideFor`) — as
+   * costas na remada, a frente no supino.
+   */
+  view?: 'front' | 'back' | 'both' | 'auto';
   /** Largura de cada boneco. O PWA usa `w-32` (128px). */
   width?: number;
+  /**
+   * Recorta o boneco em volta dos músculos principais (`muscleFocusViewBox`),
+   * com o mesmo SVG completo: dá zoom no que está sendo treinado.
+   */
+  focus?: boolean;
   /**
    * Cor por músculo (chave `data-muscle`), no lugar de principal/secundário:
    * o "Seus músculos hoje" pinta cada um no tom do descanso. Os de fora apagam.
@@ -92,6 +101,7 @@ export function MuscleDiagram({
   secondaryMuscles = [],
   view = 'both',
   width = 128,
+  focus = false,
   colors: muscleColors,
   accessibilityLabel,
 }: MuscleDiagramProps) {
@@ -105,6 +115,13 @@ export function MuscleDiagram({
     return map;
   }, [primaryMuscles, secondaryMuscles, muscleColors]);
 
+  const shown = view === 'auto' ? figureSideFor(primaryMuscles, secondaryMuscles) : view;
+  // O quadro comum às duas vistas (`figureViewBox`): com o de cada arquivo, a
+  // frente saía maior e mais baixa que as costas. Com foco, o recorte é dentro
+  // desse quadro.
+  const frame = (side: 'front' | 'back') =>
+    focus ? muscleFocusViewBox(side, primaryMuscles, secondaryMuscles) : figureViewBox(side);
+
   return (
     <View
       accessible
@@ -112,23 +129,16 @@ export function MuscleDiagram({
       accessibilityLabel={accessibilityLabel ?? describeMuscles(primaryMuscles, secondaryMuscles)}
       className="flex-row justify-center gap-2"
     >
-      {view === 'front' || view === 'both' ? (
-        // O quadro comum às duas vistas (`figureViewBox`): com o de cada
-        // arquivo, a frente saía maior e mais baixa que as costas.
+      {shown === 'front' || shown === 'both' ? (
         <BodyView
           paths={FRONT_PATHS}
-          viewBox={figureViewBox('front')}
+          viewBox={frame('front')}
           width={width}
           highlight={highlight}
         />
       ) : null}
-      {view === 'back' || view === 'both' ? (
-        <BodyView
-          paths={BACK_PATHS}
-          viewBox={figureViewBox('back')}
-          width={width}
-          highlight={highlight}
-        />
+      {shown === 'back' || shown === 'both' ? (
+        <BodyView paths={BACK_PATHS} viewBox={frame('back')} width={width} highlight={highlight} />
       ) : null}
     </View>
   );

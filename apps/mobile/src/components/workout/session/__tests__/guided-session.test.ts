@@ -3,6 +3,7 @@ import type { ExerciseGroup, SessionSet } from '@fatia/api-client';
 import {
   AUTO_ADVANCE_DEFAULT,
   copyLastSet,
+  endExerciseLabel,
   guidedState,
   nextOpenIndex,
   parseAutoAdvance,
@@ -15,6 +16,7 @@ import {
   stepValue,
   isSessionDone,
 } from '../guided-session';
+import { isExerciseComplete } from '../format';
 
 function set(over: Partial<SessionSet> = {}): SessionSet {
   return {
@@ -77,6 +79,25 @@ describe('estado da sessão guiada', () => {
   });
 });
 
+describe('exercício encerrado sem todas as séries (#473)', () => {
+  const ended = (g: ExerciseGroup): ExerciseGroup => ({ ...g, ended: true });
+
+  it('conta como completo, mesmo com séries faltando', () => {
+    expect(isExerciseComplete(ended(group(1, 1)))).toBe(true);
+    expect(isExerciseComplete(ended(group(1, 0)))).toBe(true);
+  });
+
+  it('o próximo aberto pula o encerrado', () => {
+    const groups = [group(1, 1), ended(group(2, 0)), group(3, 0)];
+    expect(nextOpenIndex(groups, 0)).toBe(2);
+  });
+
+  it('encerrar o último que faltava fecha a sessão', () => {
+    expect(isSessionDone([group(1, 3), ended(group(2, 1))])).toBe(true);
+    expect(isSessionDone([group(1, 3), group(2, 1)])).toBe(false);
+  });
+});
+
 describe('textos da série', () => {
   it('só "Série N de M": a meta e a última vez não entram na linha (pedido do dono)', () => {
     // Quem chamava com a meta do plano e a última vez continua só com a contagem:
@@ -116,6 +137,31 @@ describe('progresso da barra do treino em andamento', () => {
     // Feito além da meta não estoura a linha.
     expect(setProgress([group(1, 5, 3)]).ratio).toBe(1);
     expect(setProgress([]).ratio).toBe(0);
+  });
+
+  it('#473: o encerrado sai da meta com as séries que ficaram de fora', () => {
+    const ended = { ...group(1, 2, 4), ended: true };
+    // Tudo feito, um deles encerrado: a linha enche.
+    expect(setProgress([ended, group(2, 3, 3)])).toEqual({ done: 5, target: 5, ratio: 1 });
+    // Pulado sem nenhuma série: não pesa na meta.
+    expect(setProgress([{ ...group(1, 0, 4), ended: true }, group(2, 1, 2)]).ratio).toBe(0.5);
+  });
+});
+
+describe('rótulo de encerrar o exercício (#473)', () => {
+  it('sem série feita, ou no cardio, é pular', () => {
+    expect(endExerciseLabel(group(1, 0, 4))).toBe('Pular exercício');
+    expect(endExerciseLabel(group(1, 0, 1, true))).toBe('Pular exercício');
+  });
+
+  it('no plano, conta as séries que ficam de fora', () => {
+    expect(endExerciseLabel(group(1, 3, 4))).toBe('Encerrar exercício (1 série fica de fora)');
+    expect(endExerciseLabel(group(1, 1, 4))).toBe('Encerrar exercício (3 séries ficam de fora)');
+  });
+
+  it('fora do plano não há meta, então nenhuma série fica de fora', () => {
+    const free: ExerciseGroup = { ...group(5, 3), targetSets: undefined, isPlanned: false };
+    expect(endExerciseLabel(free)).toBe('Encerrar exercício');
   });
 });
 

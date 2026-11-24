@@ -9,6 +9,11 @@ export interface ExerciseGroup {
   targetSets?: number;
   targetReps?: string;
   isPlanned: boolean;
+  /**
+   * Encerrado antes de completar as séries ("Encerrar exercício", #473): conta
+   * como completo. Só na tela (`markEndedExercises`).
+   */
+  ended?: boolean;
 }
 
 /** Exercício escolhido na busca que ainda não tem série registrada. */
@@ -82,6 +87,7 @@ export function buildExerciseGroups(
 }
 
 function isIncomplete(group: ExerciseGroup): boolean {
+  if (group.ended) return false;
   if (group.isCardio) return group.sets.length === 0;
   const target = group.targetSets ?? 0;
   return target === 0 || group.sets.length < target;

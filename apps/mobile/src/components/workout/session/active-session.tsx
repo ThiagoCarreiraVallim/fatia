@@ -8,6 +8,7 @@ import {
   buildExerciseGroups,
   exerciseDetailPath,
   exerciseVideoSource,
+  markEndedExercises,
   muscleGroupLabel,
   orderExerciseGroups,
   pickFocusedGroup,
@@ -17,7 +18,15 @@ import {
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
-import { Button, ConfirmDrawer, DrawerLayer, cn, useConfirm } from '@/components/ui';
+import {
+  Button,
+  ConfirmDrawer,
+  DrawerLayer,
+  cn,
+  useActionSheet,
+  useConfirm,
+  useToast,
+} from '@/components/ui';
 import { ExerciseDetailContext } from '@/components/workout/exercise-detail-context';
 import { ExerciseHeading, useExerciseDetail } from '@/components/workout/exercise-media';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
@@ -25,7 +34,7 @@ import { groupColorName } from '@/components/workout/workout-home';
 import { ActiveCardioCard } from './active-cardio-card';
 import { ActiveExerciseCard } from './active-exercise-card';
 import { isExerciseComplete, pluralize, targetSetsOf } from './format';
-import { guidedState, isSessionDone, nextOpenIndex } from './guided-session';
+import { endExerciseLabel, guidedState, isSessionDone, nextOpenIndex } from './guided-session';
 import { isResting, RestPanel } from './rest-panel';
 import { SESSION_HEADER_HEIGHT, SessionHeader } from './session-header';
 import {
@@ -38,8 +47,9 @@ import { SessionExerciseCard, useSessionExerciseActions } from './session-exerci
 import { dockLayout } from './session-dock-store';
 import { useAutoAdvance } from './use-auto-advance';
 import { useSessionExitGuard } from './use-exit-guard';
+import { useCancelSession } from './use-cancel-session';
 import { useFinishSession } from './use-finish-session';
-import { useFocusRequest, usePendingExercises } from './use-pending-exercises';
+import { useEndedExercises, useFocusRequest, usePendingExercises } from './use-pending-exercises';
 import { useSessionRestTimer } from './rest-timer-provider';
 import { colors } from '@/theme/colors';
 
@@ -54,6 +64,11 @@ import { colors } from '@/theme/colors';
  * - escolhendo: o exercício acabou — a lista do que falta, "Adicionar
  *   exercício" e "Finalizar treino". Com "Passar sozinho" ligado, a tela pula
  *   direto para o próximo aberto quando o descanso termina.
+ *
+ * O "⋯" do cabeçalho (#473) encerra o exercício sem as séries que faltam (ele
+ * passa a contar como feito e a tela segue para o próximo, com "Desfazer" no
+ * aviso) e sai sem salvar, com confirmação (`useCancelSession`, o mesmo
+ * "Cancelar treino" do "Treino atual").
  *
  * Reordenar e tirar exercícios saíram daqui para o "Treino atual" (`Al-T17`,
  * rota `edit`), que é onde o canvas os põe.
@@ -81,8 +96,12 @@ export function ActiveSession({
   const exit = useSessionExitGuard();
   const rest = useSessionRestTimer();
   const confirm = useConfirm();
+  const actionSheet = useActionSheet();
+  const toast = useToast();
   const finish = useFinishSession(session.id);
+  const cancel = useCancelSession(session.id);
   const { pending, add } = usePendingExercises(session.id);
+  const { ended, setEnded } = useEndedExercises(session.id);
   const { focus: requestedFocus, request: requestFocus } = useFocusRequest(session.id);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const scrollRef = useRef<ScrollView>(null);
@@ -99,11 +118,14 @@ export function ActiveSession({
 
   const groups = useMemo(
     () =>
-      orderExerciseGroups(
-        buildExerciseGroups(session.plannedExercises, session.sets, pending),
-        session.exerciseOrder,
+      markEndedExercises(
+        orderExerciseGroups(
+          buildExerciseGroups(session.plannedExercises, session.sets, pending),
+          session.exerciseOrder,
+        ),
+        ended,
       ),
-    [session.plannedExercises, session.sets, session.exerciseOrder, pending],
+    [session.plannedExercises, session.sets, session.exerciseOrder, pending, ended],
   );
 
   const index = (() => {
@@ -171,6 +193,48 @@ export function ActiveSession({
       cancelLabel: 'Continuar treinando',
       onConfirm: () => finish.mutate(),
     });
+  }
+
+  // "Encerrar exercício": as séries que faltam ficam de fora e a tela segue
+  // para o próximo aberto. O aviso desfaz, porque o menu fica a um toque do
+  // "Finalizar" e o engano é fácil.
+  function endExercise(target: ExerciseGroup) {
+    setEnded(target.exerciseId, true);
+    setAdvanceFrom(null);
+    const from = groups.indexOf(target);
+    const to = from >= 0 ? nextOpenIndex(groups, from) : null;
+    if (to != null) goTo(to);
+    toast.show({
+      message: `${target.exerciseName} encerrado`,
+      action: {
+        label: 'Desfazer',
+        onPress: () => {
+          setEnded(target.exerciseId, false);
+          setCurrentId(target.exerciseId);
+        },
+      },
+    });
+  }
+
+  function openMenu() {
+    const options = [];
+    if (current?.ended) {
+      options.push({
+        label: 'Retomar exercício',
+        onPress: () => setEnded(current.exerciseId, false),
+      });
+    } else if (current && !isExerciseComplete(current)) {
+      options.push({
+        label: endExerciseLabel(current),
+        onPress: () => endExercise(current),
+      });
+    }
+    options.push({
+      label: 'Sair sem salvar',
+      destructive: true,
+      onPress: () => cancel.setCancelOpen(true),
+    });
+    actionSheet({ title: 'Treino', options });
   }
 
   const nextLabel = (() => {
@@ -254,6 +318,7 @@ export function ActiveSession({
               startedAt={session.startedAt}
               onMinimize={exit.leave}
               onFinish={requestFinish}
+              onMore={openMenu}
               overVideo={videoTop}
             />
             <ScrollView
@@ -445,6 +510,18 @@ export function ActiveSession({
           confirmLabel="Sair por enquanto"
           cancelLabel="Continuar treinando"
           onConfirm={exit.leave}
+        />
+        <ConfirmDrawer
+          open={cancel.cancelOpen}
+          onOpenChange={cancel.setCancelOpen}
+          title="Sair sem salvar?"
+          description="O treino é descartado, com todas as séries registradas. Não dá para desfazer."
+          confirmLabel="Sair sem salvar"
+          cancelLabel="Continuar treinando"
+          destructive
+          loading={cancel.isPending}
+          error={cancel.error}
+          onConfirm={cancel.cancel}
         />
       </DrawerLayer>
     </>

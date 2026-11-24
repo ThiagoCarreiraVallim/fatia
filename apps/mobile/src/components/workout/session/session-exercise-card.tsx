@@ -143,7 +143,13 @@ export function SessionExerciseCard({
   // O que está pela metade é o "Continuar" em verde, com o cartão contornado;
   // o que não começou é "Iniciar", discreto.
   const inProgress = !done && group.sets.length > 0;
-  const action = done ? '✓ Feito' : inProgress ? 'Continuar' : 'Iniciar';
+  const action = group.ended
+    ? 'Encerrado'
+    : done
+      ? '✓ Feito'
+      : inProgress
+        ? 'Continuar'
+        : 'Iniciar';
   const editingSet = editing != null ? group.sets[editing] : undefined;
 
   return (
