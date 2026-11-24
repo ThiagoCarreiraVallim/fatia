@@ -80,7 +80,7 @@ agente → ferramentas (READ_ONLY roda; CONFIRMABLE fica pendente) → portão
 - **A retomada prova a qual pausa responde.** O `resume` traz o `interruptId`, e o agente recusa um
   id que não é o pendente — sem isso, uma resposta dada a uma pergunta poderia ser reenviada contra
   uma confirmação.
-- **RESTRICTED continua fora.** Nunca oferecida ao modelo; `exigir_permitida` recusa o nome
+- **RESTRICTED continua fora.** Nunca oferecida ao modelo; `require_allowed` recusa o nome
   inventado antes da chamada.
 
 ## Consequências

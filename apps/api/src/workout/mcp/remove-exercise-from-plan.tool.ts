@@ -16,10 +16,11 @@ export class RemoveExerciseFromPlanTool implements McpToolDef {
 
   readonly title = 'Remover exercício do plano';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: true };
 
   readonly hostedInference = false;
-  readonly appOnly = { screen: 'Plano de treino', path: '/workout/plans/:planId' };
+  readonly card = 'confirm' as const;
+  readonly aiCategory = 'WORKOUT' as const;
   readonly description =
     'Remove um exercício de um plano de treino. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","planExerciseId":"66666666-7777-4888-8999-aaaaaaaaaaaa"}';

@@ -424,6 +424,45 @@ describe('ActiveExerciseCard', () => {
     expect(repsValue()).toBe('9');
   });
 
+  it('#485: a série da sessão corrigida não troca o que a pessoa já mexeu na série em andamento', async () => {
+    const user = userEvent.setup();
+    const client = makeClient();
+    const first = makeSet({ id: 'de-hoje', weightKg: 70, reps: 8 });
+    const view = renderCard(makeGroup({ sets: [first] }), client);
+    await waitFor(() => expect(weightValue()).toBe('70'));
+
+    await user.click(increaseWeight());
+    expect(weightValue()).toBe('72,5');
+
+    // A pessoa corrige a série 1 (ou o refetch traz outro número para ela).
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Harness
+          group={makeGroup({ sets: [{ ...first, weightKg: 75 }] })}
+          onAskRpe={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+    expect(weightValue()).toBe('72,5');
+
+    // Registrada a série 2, a 3 começa intocada e herda a que acabou de sair.
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Harness
+          group={makeGroup({
+            sets: [
+              { ...first, weightKg: 75 },
+              makeSet({ id: 'segunda', setNumber: 2, weightKg: 72.5, reps: 7 }),
+            ],
+          })}
+          onAskRpe={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+    expect(weightValue()).toBe('72,5');
+    expect(repsValue()).toBe('7');
+  });
+
   it('aceita carga digitada com vírgula e mostra do mesmo jeito', async () => {
     const user = userEvent.setup();
     renderCard();

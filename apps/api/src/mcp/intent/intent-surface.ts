@@ -501,7 +501,8 @@ export const INTENT_TOOLS = [
   {
     name: 'stop_sharing',
     title: 'Revogar acesso de um profissional',
-    annotations: CONFIRMABLE,
+    // Fica onde a perna fica: `revoke_data_sharing` é restrita no chat (#481).
+    annotations: RESTRICTED,
     description:
       'Revoga todo o acesso de um profissional aos dados da pessoa. Para tirar só uma categoria, ' +
       'é o caminho de liberar de novo com a lista menor. Exemplo: {"professional":"Carlos"}',

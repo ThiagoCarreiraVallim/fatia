@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   addPendingExercise,
   dropPendingExercise,
+  endedExercisesKey,
+  toggleEndedExercise,
   pendingExercisesKey,
   pendingExercisesQueryOptions,
   type PendingExercise,
@@ -33,15 +35,26 @@ export function usePendingExercises(sessionId: string) {
     [qc, sessionId],
   );
 
+  // Tirar do treino: dos escolhidos e dos encerrados (`forgetRemovedExercise`).
   const drop = useCallback(
-    (exerciseId: number) =>
-      qc.setQueryData<PendingExercise[]>(pendingExercisesKey(sessionId), (current) =>
-        dropPendingExercise(current, exerciseId),
-      ),
+    (exerciseId: number) => forgetRemovedExercise(qc, sessionId, exerciseId),
     [qc, sessionId],
   );
 
   return { pending: query.data, add, drop };
+}
+
+/**
+ * Tirar o exercício do treino (#473): some dos escolhidos na busca e deixa de
+ * estar encerrado. Reescolhido depois, ele volta aberto, e não "Encerrado".
+ */
+export function forgetRemovedExercise(qc: QueryClient, sessionId: string, exerciseId: number) {
+  qc.setQueryData<PendingExercise[]>(pendingExercisesKey(sessionId), (current) =>
+    dropPendingExercise(current, exerciseId),
+  );
+  qc.setQueryData<number[]>(endedExercisesKey(sessionId), (current) =>
+    toggleEndedExercise(current, exerciseId, false),
+  );
 }
 
 /**
@@ -65,4 +78,27 @@ export function useFocusRequest(sessionId: string) {
     [qc, sessionId],
   );
   return { focus: query.data, request };
+}
+
+/**
+ * "Encerrar exercício" (#473): os exercícios encerrados antes das séries
+ * todas. Mesmo cache dos escolhidos, pelo mesmo motivo: valem na sessão guiada
+ * e no "Treino atual", e sobrevivem a sair e voltar.
+ */
+export function useEndedExercises(sessionId: string) {
+  const qc = useQueryClient();
+  const key = endedExercisesKey(sessionId);
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => qc.getQueryData<number[]>(key) ?? [],
+    initialData: [] as number[],
+    ...pendingExercisesQueryOptions,
+  });
+  const setEnded = useCallback(
+    (exerciseId: number, ended: boolean) =>
+      qc.setQueryData<number[]>(key, (current) => toggleEndedExercise(current, exerciseId, ended)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [qc, sessionId],
+  );
+  return { ended: query.data, setEnded };
 }

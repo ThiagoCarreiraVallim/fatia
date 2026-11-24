@@ -6,7 +6,7 @@ import {
   type LoadUnit,
   type SessionSet,
 } from '@fatia/api-client';
-import { formatNumber, loadValue, targetSetsOf, isExerciseComplete } from './format';
+import { formatNumber, loadValue, pluralize, targetSetsOf, isExerciseComplete } from './format';
 
 /**
  * As contas da sessão guiada (prancha `Al-T3-Sessao`), fora dos componentes
@@ -98,7 +98,8 @@ export function setProgress(groups: readonly ExerciseGroup[]): {
   let target = 0;
   for (const g of groups) {
     done += g.sets.length;
-    target += targetSetsOf(g);
+    // Encerrado (#473): as séries que ficaram de fora saem da meta.
+    target += g.ended ? g.sets.length : targetSetsOf(g);
   }
   return { done, target, ratio: target === 0 ? 0 : Math.min(1, done / target) };
 }
@@ -142,4 +143,16 @@ export function parseAutoAdvance(raw: string | null | undefined): boolean {
 
 export function serializeAutoAdvance(on: boolean): string {
   return on ? '1' : '0';
+}
+
+/**
+ * O item do "⋯" que encerra o exercício (#473). Sem série feita é pular; no
+ * plano, diz quantas séries ficam de fora. Fora do plano não há meta, e nada
+ * fica de fora: só "Encerrar exercício".
+ */
+export function endExerciseLabel(group: ExerciseGroup): string {
+  if (group.sets.length === 0 || group.isCardio) return 'Pular exercício';
+  const left = group.targetSets ? group.targetSets - group.sets.length : 0;
+  if (left <= 0) return 'Encerrar exercício';
+  return `Encerrar exercício (${left} ${pluralize(left, 'série fica', 'séries ficam')} de fora)`;
 }

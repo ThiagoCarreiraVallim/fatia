@@ -17,6 +17,7 @@ export class CreateCustomFoodTool implements McpToolDef {
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Cria um alimento custom para o usuário. Valores sempre por 100 g, micronutrientes inclusive: ' +
     'converta o rótulo ("porção de 30 g") e mande a porção em portions. ' +

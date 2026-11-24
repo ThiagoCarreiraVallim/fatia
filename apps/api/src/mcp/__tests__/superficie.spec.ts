@@ -84,10 +84,13 @@ import {
  * A #406 acrescentou os campos do editor da equipe (% de 1RM, aquecimento, calorias,
  * inclinação, zona, ritmo e esforço) a `add_exercise_to_plan` e `update_plan_exercise`
  * (nenhuma destrutiva nem de intenção): muda o braço A.
+ * A #481 mudou as anotações de 22 tools (as exclusões de nutrição e treino ficam confirmáveis;
+ * compartilhar, consentir, bloquear e exportar ficam restritas, e `export_my_data` deixa de ser
+ * leitura) e a de `stop_sharing` (restrita): mudam os dois braços.
  */
 
-const SHA_ENTIDADE = 'cf601d06320b6292dcd1f2eb7f6465f7627db6e9548cbf2bc180a724bc22303d';
-const SHA_INTENCAO = 'b46079a1e14e37752736709ce35d7203f98ca24106f3793cdab8160882b7c36e';
+const SHA_ENTIDADE = '07c881337fa310b12d245cecc2f1fa0ebda3ea29e600824c6df8b8c716adf8e5';
+const SHA_INTENCAO = 'f1b385fa61fbeac6781a3b90d58d90545958271495bd0268e4a3d9cb198a8e64';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {

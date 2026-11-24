@@ -13,9 +13,9 @@ export class BlockUserTool implements McpToolDef {
   constructor(private readonly blocks: BlockService) {}
   readonly name = 'block_user';
   readonly title = 'Bloquear pessoa';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
-  readonly card = 'confirm' as const;
+  readonly appOnly = { screen: 'Mural', path: '/community/:groupId/feed' };
   readonly description =
     'Bloqueia quem escreveu um post (ou, com commentId, um comentário) do mural de uma ' +
     'comunidade. O usuário deixa de ver os posts, comentários e reações dessa pessoa em todas ' +

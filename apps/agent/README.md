@@ -107,7 +107,7 @@ para o gateway; sem a segunda, não há dado a alcançar. É a inversão registr
 anotações que o `/mcp` anuncia a cada conversa, e nenhuma lista de nomes mora neste repositório
 (`chat/tool_policy.py`): `readOnlyHint` executa direto; `confirmableHint` pausa o grafo e só executa
 com o sim da pessoa; o resto — toda `delete_*` inclusive — nunca é oferecido ao modelo, e
-`exigir_permitida` confere de novo na hora de chamar, porque modelo pequeno inventa nome de função.
+`require_allowed` confere de novo na hora de chamar, porque modelo pequeno inventa nome de função.
 A escrita aprovada executa **o `tool_call` guardado no checkpoint**: o cliente responde sim ou não
 por `toolCallId` e nunca carrega argumento de escrita de volta. O que a pessoa viu é o que executa,
 sem comparação de texto no meio.

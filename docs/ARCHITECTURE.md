@@ -146,8 +146,10 @@ de inferência do agente devolvem `usage` (modelo e tokens), e é por ele que a 
 
 **O chat lê e escreve, com confirmação.** O recorte é o das três camadas da
 [ADR 022](ADR/022-classificacao-3-camadas-do-chat.md), derivado das anotações que o `/mcp` serve:
-READ_ONLY executa direto, CONFIRMABLE pausa e só executa com o sim da pessoa, RESTRICTED (inclusive
-toda `delete_*`) nunca é oferecida ao modelo. O que executa depois do sim é o `tool_call` guardado
+READ_ONLY executa direto, CONFIRMABLE pausa e só executa com o sim da pessoa, RESTRICTED nunca é
+oferecida ao modelo. Apagar registro de nutrição, treino, água, peso e passos é CONFIRMABLE, com o
+cartão nomeando o que some; excluir a conta, compartilhar e consentir dados, exportar e bloquear
+são RESTRICTED, numa lista travada por teste ([ADR 051](ADR/051-ia-apaga-nutricao-e-treino-com-cartao.md)). O que executa depois do sim é o `tool_call` guardado
 no checkpoint — o que a pessoa viu é o que roda, sem o cliente como portador dos argumentos.
 
 **Três tipos de pausa, um mecanismo só** (`interrupt()` + retomada, ADR 023): `confirm` (escrita

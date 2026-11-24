@@ -26,6 +26,16 @@ import { AcceptPlanOfferTool } from '../../../sharing/mcp/accept-plan-offer.tool
 import { DeclinePlanOfferTool } from '../../../sharing/mcp/decline-plan-offer.tool';
 import { AdoptGroupPlanTool } from '../../../sharing/mcp/adopt-group-plan.tool';
 import { ReschedulePlannedSessionTool } from '../../../workout/mcp/reschedule-planned-session.tool';
+import { CreateGroupPostTool } from '../../../sharing/mcp/create-group-post.tool';
+import { DeleteMealTool } from '../../../nutrition/mcp/delete-meal.tool';
+import { DeleteMealPhotoTool } from '../../../nutrition/mcp/delete-meal-photo.tool';
+import { DeleteMealTemplateTool } from '../../../nutrition/mcp/delete-meal-template.tool';
+import { DeleteCustomFoodTool } from '../../../nutrition/mcp/delete-custom-food.tool';
+import { DeleteFoodPortionTool } from '../../../nutrition/mcp/delete-food-portion.tool';
+import { DeleteNutrientTargetTool } from '../../../nutrition/mcp/delete-nutrient-target.tool';
+import { DeleteWaterLogTool } from '../../../progress/mcp/delete-water-log.tool';
+import { DeleteTrainingBlockTool } from '../../../workout/mcp/delete-training-block.tool';
+import { DeleteCustomExerciseTool } from '../../../workout/mcp/delete-custom-exercise.tool';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
 /**
@@ -65,6 +75,16 @@ describe('PreviaDaAcaoService', () => {
     DeclinePlanOfferTool,
     ReschedulePlannedSessionTool,
     AdoptGroupPlanTool,
+    CreateGroupPostTool,
+    DeleteMealTool,
+    DeleteMealPhotoTool,
+    DeleteMealTemplateTool,
+    DeleteCustomFoodTool,
+    DeleteFoodPortionTool,
+    DeleteNutrientTargetTool,
+    DeleteWaterLogTool,
+    DeleteTrainingBlockTool,
+    DeleteCustomExerciseTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -592,30 +612,6 @@ describe('PreviaDaAcaoService', () => {
     expect(JSON.stringify(alheia)).not.toContain('Café');
   });
 
-  it('consentimento à comunidade: o nome dela e as categorias, nunca o grupo de alimento', async () => {
-    // `groupId` é grupo de alimento no resto do catálogo; aqui é a comunidade.
-    await expect(
-      previas.previa(dono, 'set_group_sharing', {
-        groupId: comunidade,
-        scopes: ['WORKOUT', 'HABITS'],
-        statsOptIn: false,
-      }),
-    ).resolves.toEqual({
-      valida: true,
-      linhas: [
-        { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
-        { rotulo: 'Compartilha com a equipe', valor: 'Treino, Água e passos' },
-        { rotulo: 'Estatísticas agregadas', valor: 'Não participa' },
-      ],
-    });
-    const semNada = await previas.previa(dono, 'set_group_sharing', {
-      groupId: comunidade,
-      scopes: [],
-      statsOptIn: true,
-    });
-    expect(semNada.linhas).toContainEqual({ rotulo: 'Compartilha com a equipe', valor: 'Nada' });
-  });
-
   it('entrar num desafio: o nome do desafio e o apelido; de quem não é membro, nada', async () => {
     const desafio = await prisma.groupChallenge.create({
       data: {
@@ -803,7 +799,7 @@ describe('PreviaDaAcaoService', () => {
     }
   });
 
-  it('mural (#394): opção da enquete e bloqueio no cartão; post de quem tem bloqueio não aparece', async () => {
+  it('mural (#394): opção da enquete no cartão; post de quem tem bloqueio não aparece', async () => {
     const m = await prisma.groupMembership.findFirstOrThrow({
       where: { groupId: comunidade, userId: dono.id },
     });
@@ -857,31 +853,18 @@ describe('PreviaDaAcaoService', () => {
           { rotulo: 'Opção', valor: '8h' },
         ],
       });
-      const bloquear = await previas.previa(dono, 'block_user', {
-        groupId: comunidade,
-        postId: daGabi.id,
-      });
-      expect(bloquear.valida).toBe(true);
-
-      const b = await prisma.userBlock.create({
+      // Bloquear é só no app (#481): o bloqueio entra direto no banco, e o cartão de
+      // comentar não mostra o trecho do post de quem tem bloqueio com a pessoa.
+      await prisma.userBlock.create({
         data: { blockerId: dono.id, blockedId: gabi.id, label: 'Gabi' },
       });
-      await expect(previas.previa(dono, 'unblock_user', { blockId: b.id })).resolves.toEqual({
-        valida: true,
-        linhas: [{ rotulo: 'Pessoa', valor: 'Gabi' }],
-      });
-      // Com o bloqueio, o post da Gabi não ganha trecho no cartão.
-      const depois = await previas.previa(dono, 'block_user', {
+      const comentar = await previas.previa(dono, 'comment_on_group_post', {
         groupId: comunidade,
         postId: daGabi.id,
+        body: 'Boa!',
       });
-      expect(depois.valida).toBe(false);
-      expect(JSON.stringify(depois)).not.toContain('agachamento');
-      // E o bloqueio de outra pessoa não resolve.
-      const alheio = await previas.previa({ id: gabi.id, timezone: TZ }, 'unblock_user', {
-        blockId: b.id,
-      });
-      expect(alheio.valida).toBe(false);
+      expect(comentar.valida).toBe(false);
+      expect(JSON.stringify(comentar)).not.toContain('agachamento');
 
       // A opção da enquete de quem tem bloqueio também não aparece no cartão,
       // nem quando o post pedido é outro, visível (o modelo pode trocar ids).
@@ -931,41 +914,15 @@ describe('PreviaDaAcaoService', () => {
       },
     });
     try {
-      const previa = await previas.previa({ id: estranho.id, timezone: TZ }, 'set_group_sharing', {
+      const previa = await previas.previa({ id: estranho.id, timezone: TZ }, 'create_group_post', {
         groupId: comunidade,
-        scopes: ['BODY'],
-        statsOptIn: false,
+        body: 'Oi, gente',
       });
       expect(previa.valida).toBe(false);
       expect(JSON.stringify(previa)).not.toContain('Academia da Prévia');
     } finally {
       await prisma.user.delete({ where: { id: estranho.id } });
     }
-  });
-
-  it('aceitar convite mostra a comunidade, e convite vencido recusa o resumo', async () => {
-    await expect(
-      previas.previa(
-        dono,
-        'accept_group_invite',
-        { token: TOKEN, scopes: ['NUTRITION'], statsOptIn: true },
-        AGORA,
-      ),
-    ).resolves.toEqual({
-      valida: true,
-      linhas: [
-        { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
-        { rotulo: 'Compartilha com a equipe', valor: 'Alimentação' },
-        { rotulo: 'Estatísticas agregadas', valor: 'Participa' },
-      ],
-    });
-    const vencido = await previas.previa(
-      dono,
-      'accept_group_invite',
-      { token: TOKEN_VENCIDO, scopes: [], statsOptIn: false },
-      AGORA,
-    );
-    expect(vencido.valida).toBe(false);
   });
 
   it('tool que não pede confirmação não tem resumo', async () => {
@@ -975,5 +932,152 @@ describe('PreviaDaAcaoService', () => {
     await expect(previas.previa(dono, 'nao_existe', {})).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('consentir, entrar por convite e bloquear não têm cartão: são só no app (#481)', async () => {
+    const pedidos: Array<[string, Record<string, unknown>]> = [
+      ['set_group_sharing', { groupId: comunidade, scopes: ['WORKOUT'], statsOptIn: false }],
+      ['accept_group_invite', { token: TOKEN, scopes: [], statsOptIn: false }],
+      ['block_user', { groupId: comunidade, postId: comunidade }],
+      ['unblock_user', { blockId: comunidade }],
+    ];
+    for (const [nome, args] of pedidos) {
+      expect(registry.buscar(nome)).toBeDefined();
+      await expect(previas.previa(dono, nome, args)).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
+  describe('apagar (#481): o cartão nomeia o que vai sumir, e só o que é da pessoa', () => {
+    it('refeição e refeição salva', async () => {
+      const refeicao = await previas.previa(dono, 'delete_meal', { id: refeicaoDoDono });
+      expect(refeicao.valida).toBe(true);
+      expect(refeicao.linhas).toHaveLength(1);
+      expect(refeicao.linhas[0]?.rotulo).toBe('Refeição');
+      expect(refeicao.linhas[0]?.valor).toMatch(/^Almoço de /);
+      expect((await previas.previa(outro, 'delete_meal', { id: refeicaoDoDono })).valida).toBe(
+        false,
+      );
+
+      await expect(
+        previas.previa(dono, 'delete_meal_template', { id: modeloDoDono }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [{ rotulo: 'Refeição salva', valor: expect.stringMatching(/^Café de sempre: /) }],
+      });
+    });
+
+    it('foto da refeição: só a refeição que tem foto', async () => {
+      const semFoto = await previas.previa(dono, 'delete_meal_photo', { id: refeicaoDoDono });
+      expect(semFoto.valida).toBe(false);
+    });
+
+    it('alimento e medida: só os que a pessoa criou, nunca os do catálogo', async () => {
+      await expect(
+        previas.previa(dono, 'delete_custom_food', { id: alimentoDoDono }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [{ rotulo: 'Alimento', valor: 'Arroz branco cozido' }],
+      });
+      expect(
+        (await previas.previa(outro, 'delete_custom_food', { id: alimentoDoDono })).valida,
+      ).toBe(false);
+      const doCatalogo = await prisma.food.findFirstOrThrow({
+        where: { createdByUserId: null },
+        select: { id: true },
+      });
+      expect((await previas.previa(dono, 'delete_custom_food', { id: doCatalogo.id })).valida).toBe(
+        false,
+      );
+
+      await expect(
+        previas.previa(dono, 'delete_food_portion', { id: medidaDoDono }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [{ rotulo: 'Medida', valor: 'colher de sopa (25 g) de Arroz branco cozido' }],
+      });
+      expect(
+        (await previas.previa(dono, 'delete_food_portion', { id: medidaDoOutro })).valida,
+      ).toBe(false);
+    });
+
+    it('meta de nutriente: o nome e o limite, pela chave da própria pessoa', async () => {
+      await prisma.nutrientTarget.create({
+        data: { userId: dono.id, nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', max: 2000 },
+      });
+      try {
+        await expect(
+          previas.previa(dono, 'delete_nutrient_target', { nutrientKey: 'sodium_mg' }),
+        ).resolves.toEqual({
+          valida: true,
+          linhas: [{ rotulo: 'Meta de nutriente', valor: 'Sódio (até 2.000 mg)' }],
+        });
+        expect(
+          (await previas.previa(outro, 'delete_nutrient_target', { nutrientKey: 'sodium_mg' }))
+            .valida,
+        ).toBe(false);
+      } finally {
+        await prisma.nutrientTarget.deleteMany({ where: { userId: dono.id } });
+      }
+    });
+
+    it('água, bloco e exercício criado pela pessoa', async () => {
+      const agua = await prisma.waterLog.create({
+        data: { userId: dono.id, ml: 500, date: '2026-09-25' },
+      });
+      const bloco = await prisma.trainingBlock.create({
+        data: { userId: dono.id, kind: 'hypertrophy', startDate: '2026-09-01', weeksTotal: 4 },
+      });
+      const exercicio = await prisma.exercise.create({
+        data: { name: 'Remada do dono', muscleGroup: 'costas', createdByUserId: dono.id },
+      });
+      const doCatalogo = await prisma.exercise.findFirstOrThrow({
+        where: { createdByUserId: null },
+        select: { id: true },
+      });
+      try {
+        await expect(previas.previa(dono, 'delete_water_log', { id: agua.id })).resolves.toEqual({
+          valida: true,
+          linhas: [{ rotulo: 'Registro de água', valor: expect.stringMatching(/^500 ml, /) }],
+        });
+        const blocoDoDono = await previas.previa(dono, 'delete_training_block', {
+          blockId: bloco.id,
+        });
+        expect(blocoDoDono.linhas).toEqual([
+          {
+            rotulo: 'Bloco de treino',
+            valor: expect.stringMatching(/^Hipertrofia, 4 semanas, desde /),
+          },
+        ]);
+        expect(
+          (await previas.previa(outro, 'delete_training_block', { blockId: bloco.id })).valida,
+        ).toBe(false);
+        await expect(
+          previas.previa(dono, 'delete_custom_exercise', { id: exercicio.id }),
+        ).resolves.toEqual({
+          valida: true,
+          linhas: [{ rotulo: 'Exercício', valor: 'Remada do dono' }],
+        });
+        expect(
+          (await previas.previa(dono, 'delete_custom_exercise', { id: doCatalogo.id })).valida,
+        ).toBe(false);
+      } finally {
+        await prisma.waterLog.deleteMany({ where: { id: agua.id } });
+        await prisma.trainingBlock.deleteMany({ where: { id: bloco.id } });
+        await prisma.exercise.deleteMany({ where: { id: exercicio.id } });
+      }
+    });
+  });
+
+  it('meta de nutriente pela chave que a tool aceita (normalizada) também ganha cartão', async () => {
+    await prisma.nutrientTarget.create({
+      data: { userId: dono.id, nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', max: 2000 },
+    });
+    try {
+      // `NutrientTargetService.delete` normaliza "Sodium mg" para "sodium_mg" e apaga.
+      const r = await previas.previa(dono, 'delete_nutrient_target', { nutrientKey: 'Sodium mg' });
+      expect(r.valida).toBe(true);
+    } finally {
+      await prisma.nutrientTarget.deleteMany({ where: { userId: dono.id } });
+    }
   });
 });

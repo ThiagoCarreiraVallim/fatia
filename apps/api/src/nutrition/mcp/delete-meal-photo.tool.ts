@@ -17,9 +17,10 @@ export class DeleteMealPhotoTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'delete_meal_photo';
   readonly title = 'Apagar a foto da refeição';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: true };
   readonly hostedInference = false;
-  readonly appOnly = { screen: 'Ações da refeição', path: '/nutrition/meals/:id' };
+  readonly card = 'confirm' as const;
+  readonly aiCategory = 'DAY_LOG' as const;
   readonly description =
     'Apaga só a foto guardada de uma refeição (a que tem hasPhoto: true); a refeição e os itens ficam. ' +
     'Não tem volta. Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';
