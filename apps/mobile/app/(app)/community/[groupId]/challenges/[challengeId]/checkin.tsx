@@ -308,6 +308,7 @@ export default function ChallengeCheckinScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingTop: insets.top + 8,

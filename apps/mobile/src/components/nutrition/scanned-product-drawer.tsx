@@ -147,7 +147,7 @@ export function ScannedProductDrawer({
         </DrawerHeader>
 
         {resultado.status === 'ok' ? (
-          <PainelDoProduto
+          <ProductPanel
             // O código de barras como `key` reinicia quantidade e formulário
             // quando outro produto é escaneado sem fechar o drawer. Sincronizar
             // por efeito custaria um render a mais e o aviso de `setState`
@@ -160,7 +160,7 @@ export function ScannedProductDrawer({
             onSubmit={(escolha) => adicionar.mutate(escolha)}
           />
         ) : (
-          <PainelIncompleto
+          <IncompletePanel
             key={resultado.partial.barcode}
             resultado={resultado}
             guardados={guardados}
@@ -180,7 +180,7 @@ export function ScannedProductDrawer({
   );
 }
 
-function PainelDoProduto({
+function ProductPanel({
   resultado,
   guardados,
   onSubmit,
@@ -207,6 +207,7 @@ function PainelDoProduto({
 
   return (
     <DrawerScrollView
+      showsVerticalScrollIndicator={false}
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
       keyboardShouldPersistTaps="handled"
@@ -287,7 +288,7 @@ function PainelDoProduto({
   );
 }
 
-function PainelIncompleto({
+function IncompletePanel({
   resultado,
   guardados,
   onSubmit,
@@ -316,6 +317,7 @@ function PainelIncompleto({
 
   return (
     <DrawerScrollView
+      showsVerticalScrollIndicator={false}
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
       keyboardShouldPersistTaps="handled"

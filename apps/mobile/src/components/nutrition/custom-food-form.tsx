@@ -137,6 +137,7 @@ export function CustomFoodForm({
 
   return (
     <DrawerScrollView
+      showsVerticalScrollIndicator={false}
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
       keyboardShouldPersistTaps="handled"

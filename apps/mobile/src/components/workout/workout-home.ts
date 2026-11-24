@@ -1,10 +1,13 @@
 import {
   dayOfMonth,
+  shiftDay,
   WEEKDAY_LETTERS,
   type MuscleTone,
+  type SetsLevel,
   type TrainingWeek,
   type WorkoutCheckinInput,
 } from '@fatia/api-client';
+import { mondayOf } from '@/components/ui/week-pager-math';
 
 /**
  * Contas da aba Treino do redesign (#377) que não dependem de tela: as cores do
@@ -26,6 +29,51 @@ export function restToneColors(
     else if (tone === 'recovering') out[muscle] = palette.steps;
   }
   return out;
+}
+
+/** A opacidade (alfa hex) de cada nível de séries: 35%, 65% e cheio. */
+const SETS_LEVEL_ALPHA = { 1: '59', 2: 'A6', 3: '' } as const;
+
+/**
+ * O "Séries por músculo" (#476) pinta o corpo com a cor da marca, mais forte
+ * quanto mais perto da meta da semana. Recebe a cor (e não importa `colors`)
+ * porque os tokens são getters do tema.
+ */
+export function setsLevelColors(
+  levels: Record<string, SetsLevel>,
+  primary: string,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [muscle, level] of Object.entries(levels)) {
+    out[muscle] = `${primary}${SETS_LEVEL_ALPHA[level]}`;
+  }
+  return out;
+}
+
+/**
+ * A semana arrastada enquanto a resposta não chega (#479): os sete dias, sem
+ * treino marcado. Os dias vêm de `weekPages`, então a faixa já tem as datas.
+ */
+export function emptyTrainingWeek(monday: string, today: string): TrainingWeek {
+  return {
+    start: monday,
+    days: Array.from({ length: 7 }, (_, i) => {
+      const date = shiftDay(monday, i);
+      return { date, trained: false, active: false, today: date === today };
+    }),
+    done: 0,
+    target: null,
+  };
+}
+
+/**
+ * A virada do dia com a aba Treino montada (#479): a faixa que mostrava a
+ * semana de hoje vai para o novo hoje, mesmo quando a virada troca de semana;
+ * quem arrastou para outra semana continua nela. É o `followToday` da Nutrição,
+ * pela semana: a âncora do Treino é um dia qualquer da semana mostrada.
+ */
+export function followTodayWeek(anchor: string, previousToday: string, today: string): string {
+  return mondayOf(anchor) === mondayOf(previousToday) ? today : anchor;
 }
 
 const WEEKDAY_NAMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];

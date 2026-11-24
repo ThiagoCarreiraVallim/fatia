@@ -213,7 +213,8 @@ export function AddExerciseDrawer({
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerClassName="gap-2"
+          className="-mx-4"
+          contentContainerClassName="gap-2 px-4"
           accessibilityLabel="Filtrar por grupo"
         >
           {TABS.map((t) => {
@@ -255,6 +256,7 @@ export function AddExerciseDrawer({
       </View>
 
       <DrawerFlatList
+        showsVerticalScrollIndicator={false}
         className="flex-1"
         contentContainerClassName="px-4"
         data={search.isFetching ? [] : results}

@@ -192,7 +192,7 @@ export default function HelpScreen() {
                 <DrawerTitle>{open.title}</DrawerTitle>
                 <DrawerDescription>{tutorialSubtitle(open, online)}</DrawerDescription>
               </DrawerHeader>
-              <DrawerScrollView>
+              <DrawerScrollView showsVerticalScrollIndicator={false}>
                 <View className="gap-3">
                   {open.body.map((p) => (
                     <Text key={p} className="text-[15px] text-foreground">

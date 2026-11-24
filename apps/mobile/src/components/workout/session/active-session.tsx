@@ -322,6 +322,7 @@ export function ActiveSession({
               overVideo={videoTop}
             />
             <ScrollView
+              showsVerticalScrollIndicator={false}
               ref={scrollRef}
               className="flex-1"
               contentContainerStyle={{

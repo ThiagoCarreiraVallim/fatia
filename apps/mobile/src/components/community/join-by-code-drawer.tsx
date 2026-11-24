@@ -216,7 +216,10 @@ export function JoinByCodeDrawer({
           </DrawerDescription>
         </DrawerHeader>
         {sharing && found ? (
-          <DrawerScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>
+          <DrawerScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}
+          >
             <ConsentForm
               team={found.team}
               required={found.required}
@@ -234,6 +237,7 @@ export function JoinByCodeDrawer({
         ) : (
           <>
             <DrawerScrollView
+              showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}
             >

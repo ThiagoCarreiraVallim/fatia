@@ -596,6 +596,9 @@ export type PlanExerciseInput = Partial<{
 export const workoutApi = {
   /** Séries por grupo nos últimos 7 dias, os descansados e um plano que os trabalha. */
   getWeeklyMuscleSummary: () => apiFetch<WeeklyMuscleSummary>('/api/workout/muscles/week'),
+  /** A semana do calendário (segunda a domingo) de um dia qualquer: a faixa do Treino arrasta (#479). */
+  getTrainingWeek: (date: string) =>
+    apiFetch<TrainingWeek>(`/api/workout/week?date=${encodeURIComponent(date)}`),
   /** A última sessão concluída ou não, para o card "Repetir o último". */
   getLastSession: async (): Promise<WorkoutSession | null> =>
     (await workoutApi.listSessions({ limit: 1 }))[0] ?? null,

@@ -97,6 +97,7 @@ export function ExercisePickerDrawer({
 
           {!exercises.isLoading && !exercises.error ? (
             <DrawerFlatList
+              showsVerticalScrollIndicator={false}
               data={filtered}
               style={{ height: Math.round(height * 0.45) }}
               keyExtractor={(exercise: Exercise) => String(exercise.id)}

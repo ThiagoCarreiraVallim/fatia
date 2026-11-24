@@ -6,6 +6,14 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import nextPlugin from '@next/eslint-plugin-next';
 import globals from 'globals';
 
+/** Os componentes que rolam no app nativo (ver a regra de barra de rolagem, #477). */
+const SCROLLERS =
+  '/^(ScrollView|FlatList|SectionList|DrawerScrollView|DrawerFlatList|BottomSheetScrollView|BottomSheetFlatList)$/';
+/** O elemento que rola, com nome simples (`ScrollView`) ou com ponto (`Animated.ScrollView`). */
+const SCROLLER = `JSXOpeningElement:matches([name.name=${SCROLLERS}], [name.property.name=${SCROLLERS}])`;
+/** `horizontal` ou `horizontal={x}`; `horizontal={false}` rola na vertical. */
+const HORIZONTAL = `JSXAttribute[name.name='horizontal']:not([value.expression.value=false])`;
+
 /**
  * Configuração do ESLint no formato flat (ESLint 9+).
  *
@@ -107,6 +115,38 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
+    },
+  },
+
+  {
+    /**
+     * O app não mostra barra de rolagem (#477): todo componente que rola diz
+     * `shows…ScrollIndicator={false}` no eixo em que rola. O padrão do React
+     * Native é mostrar, e a barra cinza no meio de um carrossel ou de um drawer
+     * volta sozinha no próximo `ScrollView` escrito se não houver trava.
+     *
+     * Os três arquivos ignorados são os da #413 (pausada), que os reescreve.
+     * Os colchetes vão escapados: sem a barra, `[groupId]` é classe de
+     * caractere no glob e o arquivo não casa.
+     */
+    files: ['apps/mobile/**/*.tsx'],
+    ignores: [
+      'apps/mobile/app/(app)/community/\\[groupId\\]/index.tsx',
+      'apps/mobile/src/components/community/community-tabs.tsx',
+      'apps/mobile/app/c/\\[token\\].tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `${SCROLLER}:has(> ${HORIZONTAL}):not(:has(> JSXAttribute[name.name='showsHorizontalScrollIndicator'][value.expression.value=false]))`,
+          message: 'Rolagem horizontal sem barra: showsHorizontalScrollIndicator={false} (#477).',
+        },
+        {
+          selector: `${SCROLLER}:not(:has(> ${HORIZONTAL})):not(:has(> JSXAttribute[name.name='showsVerticalScrollIndicator'][value.expression.value=false]))`,
+          message: 'Rolagem vertical sem barra: showsVerticalScrollIndicator={false} (#477).',
+        },
+      ],
     },
   },
 

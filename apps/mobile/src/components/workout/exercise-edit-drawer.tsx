@@ -104,7 +104,11 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
         </DrawerDescription>
       </DrawerHeader>
 
-      <DrawerScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
+      <DrawerScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1 px-4"
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="gap-4 py-2">
           <View className="gap-1.5">
             <Label>Nome</Label>

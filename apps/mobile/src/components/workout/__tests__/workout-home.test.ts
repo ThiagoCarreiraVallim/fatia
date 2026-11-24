@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { checkinBody, groupColorName, restToneColors, weekChips } from '../workout-home';
+import {
+  checkinBody,
+  emptyTrainingWeek,
+  followTodayWeek,
+  groupColorName,
+  restToneColors,
+  setsLevelColors,
+  weekChips,
+} from '../workout-home';
 
 describe('músculos de hoje no diagrama', () => {
   it('descansado na cor da marca, recuperando em passos, recente fica apagado', () => {
@@ -7,6 +15,50 @@ describe('músculos de hoje no diagrama', () => {
     expect(
       restToneColors({ lats: 'rested', chest: 'recovering', quadriceps: 'recent' }, palette),
     ).toEqual({ lats: '#0f0', chest: '#fa0' });
+  });
+});
+
+describe('séries da semana no diagrama (#476)', () => {
+  it('a cor da marca mais forte quanto mais perto da meta', () => {
+    expect(setsLevelColors({ chest: 3, lats: 2, quadriceps: 1 }, '#C6F432')).toEqual({
+      chest: '#C6F432',
+      lats: '#C6F432A6',
+      quadriceps: '#C6F43259',
+    });
+  });
+});
+
+describe('semana ainda sem resposta (#479)', () => {
+  it('os sete dias a partir da segunda, sem treino, com hoje marcado', () => {
+    const week = emptyTrainingWeek('2026-11-23', '2026-11-25');
+    expect(week.start).toBe('2026-11-23');
+    expect(week.days.map((d) => d.date)).toEqual([
+      '2026-11-23',
+      '2026-11-24',
+      '2026-11-25',
+      '2026-11-26',
+      '2026-11-27',
+      '2026-11-28',
+      '2026-11-29',
+    ]);
+    expect(week.days.filter((d) => d.today).map((d) => d.date)).toEqual(['2026-11-25']);
+    expect(week.days.some((d) => d.trained || d.active)).toBe(false);
+    expect(week).toMatchObject({ done: 0, target: null });
+  });
+});
+
+describe('faixa do Treino na virada do dia (#479)', () => {
+  it('na semana de hoje, vai para o novo hoje, mesmo virando a semana', () => {
+    expect(followTodayWeek('2026-11-29', '2026-11-29', '2026-11-30')).toBe('2026-11-30');
+    expect(followTodayWeek('2026-11-25', '2026-11-25', '2026-11-26')).toBe('2026-11-26');
+  });
+
+  it('o mesmo dia da semana de hoje ainda conta (voltou do segundo plano dias depois)', () => {
+    expect(followTodayWeek('2026-11-27', '2026-11-25', '2026-12-02')).toBe('2026-12-02');
+  });
+
+  it('quem arrastou para outra semana continua nela', () => {
+    expect(followTodayWeek('2026-11-18', '2026-11-25', '2026-11-26')).toBe('2026-11-18');
   });
 });
 

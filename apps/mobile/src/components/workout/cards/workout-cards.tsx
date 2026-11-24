@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import {
   MUSCLE_TONE_LEGEND,
   restedHeadline,
   weeklySetsBars,
+  weeklySetsOverview,
   workoutApi,
   type MuscleTone,
   type WeeklyMuscleSummary,
@@ -23,7 +24,7 @@ import {
 import { Carousel, LoadingState } from '@/components/ui';
 import { MuscleDiagram } from '@/components/workout/muscle-diagram';
 import { useStartSession } from '@/components/workout/use-start-session';
-import { restToneColors } from '@/components/workout/workout-home';
+import { restToneColors, setsLevelColors } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
 
 /**
@@ -170,7 +171,7 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
     <Card label="Repetir o último treino">
       <Eyebrow>Último treino · {lastWorkoutWhen(session.startedAt)}</Eyebrow>
       <View className="gap-1.5">
-        <Text numberOfLines={2} className="font-display text-[28px] leading-[30px] text-foreground">
+        <Text numberOfLines={2} className="font-display text-[22px] leading-[26px] text-foreground">
           {summary.name}
         </Text>
         <Text className="text-[13px] text-muted-foreground">{facts.join(' · ')}</Text>
@@ -188,41 +189,93 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
   );
 }
 
+/**
+ * "Séries por músculo" (#476): o corpo pintado pela intensidade da semana e os
+ * mais treinados e esquecidos, de relance. Os números de cada grupo ficam a um
+ * toque ("Ver números"), no mesmo card, sem drawer: o carrossel não tem onde
+ * montar uma folha.
+ */
 function WeeklySetsByMuscleCard({ summary }: { summary: WeeklyMuscleSummary }) {
+  const [numbers, setNumbers] = useState(false);
+  const overview = weeklySetsOverview(summary);
   const bars = weeklySetsBars(summary);
+  const figureLabel = overview.top.length
+    ? `Mais treinados: ${overview.top.map((t) => `${t.label}, ${t.sets} séries`).join('; ')}. ${overview.forgottenText}.`
+    : overview.forgottenText;
   return (
     <Card label="Séries por músculo na semana">
       <View className="flex-row items-center justify-between">
         <Eyebrow>Séries por músculo · semana</Eyebrow>
         <Text className="text-[13px] text-muted-foreground">meta {summary.target}</Text>
       </View>
-      <View className="gap-2">
-        {bars.map((b) => (
-          <View
-            key={b.group}
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityLabel={`${b.label}: ${b.sets} de ${summary.target} séries`}
-            accessibilityValue={{
-              min: 0,
-              max: summary.target,
-              now: Math.min(b.sets, summary.target),
-            }}
-            className="gap-1"
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] text-foreground">{b.label}</Text>
-              <Text className="text-[13px] text-muted-foreground">{b.sets}</Text>
+      {numbers ? (
+        <View className="gap-2">
+          {bars.map((b) => (
+            <View
+              key={b.group}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={`${b.label}: ${b.sets} de ${summary.target} séries`}
+              accessibilityValue={{
+                min: 0,
+                max: summary.target,
+                now: Math.min(b.sets, summary.target),
+              }}
+              className="gap-1"
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[13px] text-foreground">{b.label}</Text>
+                <Text className="text-[13px] text-muted-foreground">{b.sets}</Text>
+              </View>
+              <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <View
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${b.ratio * 100}%` }}
+                />
+              </View>
             </View>
-            <View className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <View
-                className="h-full rounded-full bg-primary"
-                style={{ width: `${b.ratio * 100}%` }}
-              />
-            </View>
+          ))}
+        </View>
+      ) : (
+        <View className="flex-row items-center gap-3.5">
+          <MuscleDiagram
+            primaryMuscles={[]}
+            colors={setsLevelColors(overview.muscleLevels, colors.primary)}
+            width={52}
+            accessibilityLabel={figureLabel}
+          />
+          <View className="min-w-0 flex-1 gap-2">
+            {overview.top.map((t, i) => (
+              <View key={t.group} className="flex-row items-baseline justify-between gap-2">
+                <Text
+                  numberOfLines={1}
+                  className={
+                    i === 0
+                      ? 'font-sans-bold text-base text-foreground'
+                      : 'font-sans-semibold text-sm text-foreground'
+                  }
+                >
+                  {t.label}
+                </Text>
+                <Text className="text-[13px] text-muted-foreground">
+                  {t.sets} {t.sets === 1 ? 'série' : 'séries'}
+                </Text>
+              </View>
+            ))}
+            <Text className="text-[13px] text-muted-foreground">{overview.forgottenText}</Text>
           </View>
-        ))}
-      </View>
+        </View>
+      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={numbers ? 'Ver a figura' : 'Ver os números de cada grupo'}
+        onPress={() => setNumbers((v) => !v)}
+        className="mt-auto min-h-11 justify-center self-start"
+      >
+        <Text className="font-sans-bold text-[13px] text-primary-text">
+          {numbers ? 'Ver figura' : 'Ver números'}
+        </Text>
+      </Pressable>
     </Card>
   );
 }
@@ -252,6 +305,7 @@ export function WorkoutCardsCarousel() {
 
   return (
     <Carousel
+      bleed={20}
       data={keys}
       keyExtractor={(k) => k}
       itemWidth={Math.round((width - 40) * 0.86)}

@@ -120,6 +120,7 @@ function JoinForm({
         </DrawerDescription>
       </DrawerHeader>
       <DrawerScrollView
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 14 }}
       >

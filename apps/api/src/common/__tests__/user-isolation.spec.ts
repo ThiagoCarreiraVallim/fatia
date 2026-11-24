@@ -567,6 +567,17 @@ describe('isolamento entre usuários', () => {
       expect(vizinho.suggestedPlan?.id).not.toBe(owned.planId);
     });
 
+    it('a semana de qualquer dia (#479): o dono vê o treino dele, o vizinho uma semana vazia', async () => {
+      const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
+      // Caminho feliz primeiro: a sessão aberta do user-A aparece na semana dele.
+      const dono = await muscles.trainingWeek(owned.userA, TZ, hoje);
+      expect(dono.days.some((d) => d.active || d.trained)).toBe(true);
+
+      const vizinho = await muscles.trainingWeek(owned.userB, TZ, hoje);
+      expect(vizinho.days.some((d) => d.active || d.trained)).toBe(false);
+      expect(vizinho.done).toBe(0);
+    });
+
     it('list_meals volta vazio', async () => {
       await expect(meals.list(owned.userB, {}, TZ)).resolves.toEqual([]);
     });

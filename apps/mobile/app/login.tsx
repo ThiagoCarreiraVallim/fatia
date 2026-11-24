@@ -27,6 +27,7 @@ export default function LoginScreen() {
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
       className="flex-1 bg-background"
       contentContainerStyle={{
         flexGrow: 1,
