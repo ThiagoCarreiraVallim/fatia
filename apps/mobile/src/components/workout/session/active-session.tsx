@@ -49,7 +49,12 @@ import { useAutoAdvance } from './use-auto-advance';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useCancelSession } from './use-cancel-session';
 import { useFinishSession } from './use-finish-session';
-import { useEndedExercises, useFocusRequest, usePendingExercises } from './use-pending-exercises';
+import {
+  useCurrentExercise,
+  useEndedExercises,
+  useFocusRequest,
+  usePendingExercises,
+} from './use-pending-exercises';
 import { useSessionRestTimer } from './rest-timer-provider';
 import { colors } from '@/theme/colors';
 
@@ -102,6 +107,7 @@ export function ActiveSession({
   const cancel = useCancelSession(session.id);
   const { pending, add } = usePendingExercises(session.id);
   const { ended, setEnded } = useEndedExercises(session.id);
+  const { publish: publishCurrent } = useCurrentExercise(session.id);
   const { focus: requestedFocus, request: requestFocus } = useFocusRequest(session.id);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const scrollRef = useRef<ScrollView>(null);
@@ -147,6 +153,12 @@ export function ActiveSession({
   const nextIndex = index >= 0 ? nextOpenIndex(groups, index) : null;
   const next = nextIndex != null ? groups[nextIndex] : undefined;
   const detail = useExerciseDetail(current?.exerciseId ?? 0);
+
+  // A notificação do treino (#472) mostra o exercício aberto aqui.
+  const currentExerciseId = current?.exerciseId ?? null;
+  useEffect(() => {
+    publishCurrent(currentExerciseId);
+  }, [currentExerciseId, publishCurrent]);
 
   function goTo(i: number) {
     const target = groups[i];
