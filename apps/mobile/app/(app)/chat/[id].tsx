@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { List, Settings2, SquarePen } from 'lucide-react-native';
+import { ArrowDown, List, SquarePen } from 'lucide-react-native';
 import {
-  AI_SETTINGS_COPY,
   AI_STATES_COPY,
   aiTurnState,
   quotaResetLabel,
@@ -19,24 +26,14 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { ErrorState, LoadingState, cn } from '@/components/ui';
-import {
-  AssistantBlock,
-  PlanCard,
-  Thinking,
-  TurnError,
-  UserBubble,
-} from '@/components/chat/message-list';
+import { AssistantBlock, Thinking, TurnError, UserBubble } from '@/components/chat/message-list';
 import { AiStateCard } from '@/components/chat/ai-state-card';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
-import {
-  ChatConsentSheet,
-  QuickReplies,
-  WebSearchSwitch,
-  useChatUnlocked,
-} from '@/components/chat/consent';
+import { ChatConsentSheet, QuickReplies, useChatUnlocked } from '@/components/chat/consent';
 import { CHAT_KEYS, useChatSession, useChatSnapshot } from '@/chat/chat-provider';
 import { useKeyboardOverlap } from '@/chat/use-keyboard-overlap';
+import { createFollowEnd } from '@/chat/follow-end';
 import { colors } from '@/theme/colors';
 
 /**
@@ -105,10 +102,31 @@ function Conversation({ id }: { id: string | undefined }) {
     Platform.OS === 'android',
   );
 
+  // Segue a resposta só de quem está no fim (#486): quem subiu para ler fica onde está, com o
+  // botão "Ir para o fim". O teclado que abre também empurra para o fim, se a pessoa já estava lá.
+  const [seguir] = useState(createFollowEnd);
+  const [longeDoFim, setLongeDoFim] = useState(false);
+  const irParaOFim = (animated = true) =>
+    requestAnimationFrame(() => lista.current?.scrollToEnd({ animated }));
+  const segueSeEstiverNoFim = () => {
+    if (seguir.following) irParaOFim();
+  };
+  const voltarAoFim = () => {
+    seguir.followAgain();
+    setLongeDoFim(false);
+    irParaOFim();
+  };
+  const onScrollEvent =
+    (passo: 'scroll' | 'dragEnd' | 'momentumEnd') =>
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      seguir[passo](e.nativeEvent);
+      setLongeDoFim(!seguir.following);
+    };
+
   useEffect(() => {
-    if (thread.messages.length)
-      requestAnimationFrame(() => lista.current?.scrollToEnd({ animated: true }));
-  }, [thread.messages, thread.interrupt, thread.error, tecladoCobre]);
+    segueSeEstiverNoFim();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `seguir` é estável (useState)
+  }, [thread.interrupt, thread.error, tecladoCobre]);
 
   const novaConversa = () => {
     const nova = sessao.startNew();
@@ -121,15 +139,6 @@ function Conversation({ id }: { id: string | undefined }) {
       scroll={false}
       actions={
         <>
-          <WebSearchSwitch />
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={AI_SETTINGS_COPY.title}
-            onPress={() => router.push('/chat/settings')}
-            className={TOP_BAR_ACTION}
-          >
-            <Settings2 size={20} color={colors.primaryText} />
-          </Pressable>
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Conversas"
@@ -174,6 +183,15 @@ function Conversation({ id }: { id: string | undefined }) {
               keyExtractor={(m) => m.id}
               contentContainerStyle={{ padding: 16, gap: 16, flexGrow: 1 }}
               keyboardShouldPersistTaps="handled"
+              // O conteúdo cresce a cada pedaço da resposta: é aqui, e não a cada mudança de
+              // `messages`, que a lista sabe a altura nova para seguir o fim.
+              onContentSizeChange={segueSeEstiverNoFim}
+              onScrollBeginDrag={() => seguir.dragStart()}
+              onScrollEndDrag={onScrollEvent('dragEnd')}
+              onMomentumScrollBegin={() => seguir.momentumStart()}
+              onMomentumScrollEnd={onScrollEvent('momentumEnd')}
+              onScroll={onScrollEvent('scroll')}
+              scrollEventThrottle={100}
               ListEmptyComponent={
                 <View className="flex-1 justify-center gap-4">
                   <Text className="text-center text-sm text-muted-foreground">
@@ -246,7 +264,6 @@ function Conversation({ id }: { id: string | undefined }) {
               }
               ListFooterComponent={
                 <View className="gap-3">
-                  {thread.plan ? <PlanCard steps={thread.plan} /> : null}
                   {pensando ? <Thinking /> : null}
                   {thread.interrupt && !thread.running ? (
                     <PauseCard
@@ -281,9 +298,27 @@ function Conversation({ id }: { id: string | undefined }) {
               }
             />
           )}
+          {longeDoFim && thread.messages.length ? (
+            <View pointerEvents="box-none" className="items-center">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ir para o fim"
+                onPress={voltarAoFim}
+                className="-mt-[52px] mb-2 size-11 items-center justify-center rounded-full border border-border bg-card"
+              >
+                <ArrowDown size={20} color={colors.foreground} />
+              </Pressable>
+            </View>
+          ) : null}
           {liberado ? (
             <>
-              <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
+              <QuickReplies
+                thread={thread}
+                onSend={(text) => {
+                  voltarAoFim();
+                  void sessao.send({ text });
+                }}
+              />
               <Composer
                 running={thread.running}
                 disabled={!aberta || loading || cota.data?.allowed === false}
@@ -297,9 +332,10 @@ function Conversation({ id }: { id: string | undefined }) {
                 }
                 photosEnabled={disponibilidade.data?.photos ?? false}
                 dictationEnabled={disponibilidade.data?.dictation ?? false}
-                onSend={(text, photos) =>
-                  void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
-                }
+                onSend={(text, photos) => {
+                  voltarAoFim();
+                  void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) });
+                }}
                 queue={queue}
                 queuePaused={queuePaused}
                 onSendQueued={(id) => void sessao.sendQueued(id)}
