@@ -3,8 +3,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, LoaderCircle, MessagesSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import {
+  Check,
+  LoaderCircle,
+  MessagesSquare,
+  Pencil,
+  Plus,
+  Search,
+  Settings2,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  AI_SETTINGS_COPY,
   deleteConversation,
   listConversations,
   groupConversationsByDay,
@@ -175,7 +186,17 @@ function Item({
   );
 }
 
-export function GavetaDeConversas({ aberta }: { aberta: string | undefined }) {
+/**
+ * A gaveta das conversas. A config da IA (modos, busca na web, memórias) abre daqui: o topo do
+ * chat fica só com o essencial, a lista e a conversa nova (#487).
+ */
+export function ConversationsDrawer({
+  aberta,
+  onOpenSettings,
+}: {
+  aberta: string | undefined;
+  onOpenSettings?: () => void;
+}) {
   const router = useRouter();
   const [visivel, setVisivel] = useState(false);
   const [busca, setBusca] = useState('');
@@ -207,6 +228,20 @@ export function GavetaDeConversas({ aberta }: { aberta: string | undefined }) {
               Abrir, renomear ou apagar uma conversa com o assistente.
             </DrawerDescription>
           </div>
+          {onOpenSettings ? (
+            <button
+              type="button"
+              aria-label={AI_SETTINGS_COPY.title}
+              title={AI_SETTINGS_COPY.title}
+              onClick={() => {
+                setVisivel(false);
+                onOpenSettings();
+              }}
+              className={cn(ghostButton, 'ml-auto rounded-full p-2 text-foreground/70')}
+            >
+              <Settings2 size={18} aria-hidden />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => abrir(novaConversa())}

@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Apple,
   BookOpen,
-  Brain,
   Clock,
   Info,
   ShieldCheck,
@@ -30,7 +29,6 @@ import {
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
 } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
 import { ghostButton } from '@/components/elements/surfaces';
@@ -168,16 +166,16 @@ function ApagarTodas() {
 
 /**
  * O que a IA lembra (prancha Al-M9): cada memória com categoria e data, o "n de 50", o aviso de
- * que a equipe não vê e o "Apagar todas" com confirmação. `aberta`/`onAberta` deixam a Config da
- * IA abrir esta gaveta pelo atalho "O que a IA lembra".
+ * que a equipe não vê e o "Apagar todas" com confirmação. Abre pelo atalho "O que a IA lembra" da
+ * Config da IA; não tem botão no topo do chat (#487).
  */
-export function GavetaDeMemorias({
-  aberta,
-  onAberta,
-}: { aberta?: boolean; onAberta?: (aberta: boolean) => void } = {}) {
-  const [interna, setInterna] = useState(false);
-  const visivel = aberta ?? interna;
-  const setVisivel = onAberta ?? setInterna;
+export function MemoriesDrawer({
+  open: visivel,
+  onOpenChange: setVisivel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const {
     data: memorias = [],
     isLoading,
@@ -191,12 +189,6 @@ export function GavetaDeMemorias({
 
   return (
     <Drawer open={visivel} onOpenChange={setVisivel}>
-      <DrawerTrigger
-        aria-label={MEMORIES_COPY.title}
-        className={cn(ghostButton, 'rounded-full p-2 text-foreground/70')}
-      >
-        <Brain size={20} aria-hidden />
-      </DrawerTrigger>
       <DrawerContent className="max-h-[85vh]">
         <DrawerHeader>
           <DrawerTitle>{MEMORIES_COPY.title}</DrawerTitle>

@@ -156,6 +156,11 @@ vi.mock('@fatia/api-client', async () => {
     sendChatFeedback: vi.fn(async () => undefined),
     getChatQuota: vi.fn(async () => cota),
     listChatMemories: vi.fn(async () => memorias),
+    getAiSettings: vi.fn(async () => ({
+      modes: { DAY_LOG: 'ASK', WORKOUT: 'ASK', GOALS: 'ASK', MEMORIES: 'ASK' },
+      webSearchEnabled: aceites.webSearchEnabled,
+      memories: { count: memorias.length, limit: 50 },
+    })),
     deleteChatMemory: deleteChatMemoryMock,
   };
 });
@@ -388,9 +393,9 @@ describe('ChatScreen', () => {
     expect(screen.queryByLabelText('Pensando')).not.toBeInTheDocument();
   });
 
-  it('o raciocínio chega colapsado, e continua lá depois da resposta final', async () => {
+  it('o raciocínio do modelo não aparece: só o "Pensando" e depois a resposta (#487)', async () => {
     montar();
-    const user = await enviar('quanto comi hoje?');
+    await enviar('quanto comi hoje?');
     const pensou = { type: 'reasoning', reasoning: 'Preciso somar os itens.', index: 0 };
 
     fontes[0].emitir({
@@ -400,11 +405,9 @@ describe('ChatScreen', () => {
         { langgraph_node: 'agente' },
       ],
     });
-    // Enquanto pensa, o painel diz isso — e o aviso genérico de espera some.
-    expect(await screen.findByRole('button', { name: /Pensando…/ })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Pensando')).not.toBeInTheDocument();
-    // Colapsado: o rascunho só aparece para quem abrir.
-    expect(screen.queryByText('Preciso somar os itens.')).not.toBeInTheDocument();
+    // O rascunho não é resposta: enquanto só ele chega, a tela segue dizendo que pensa.
+    await waitFor(() => expect(screen.getByLabelText('Pensando')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Pensando…|Como pensei/ })).not.toBeInTheDocument();
 
     fontes[0].emitir(fragmento('ai-1', 'Você comeu 640 kcal.'), {
       event: 'messages/complete',
@@ -419,13 +422,8 @@ describe('ChatScreen', () => {
     fontes[0].fechar();
 
     expect(await screen.findByText('Você comeu 640 kcal.')).toBeInTheDocument();
-    // A mensagem inteira substitui a montada pelos fragmentos: sem o raciocínio
-    // nela, o painel sumiria aqui.
-    const painel = await screen.findByRole('button', { name: /Como pensei/ });
-    await user.click(painel);
-    expect(await screen.findByText('Preciso somar os itens.')).toBeInTheDocument();
-    // O rascunho não vira parte da resposta.
-    expect(screen.getByText('Você comeu 640 kcal.').textContent).not.toMatch(/Preciso somar/);
+    expect(screen.queryByRole('button', { name: /Como pensei/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Preciso somar os itens.')).not.toBeInTheDocument();
   });
 
   it('rotula a tool pelo título que o agente anunciou', async () => {
@@ -629,7 +627,7 @@ describe('ChatScreen', () => {
     ).toBeTruthy();
   });
 
-  it('mostra quanto a resposta demorou, com o tempo que o agente mediu', async () => {
+  it('não mostra quanto a resposta demorou: medida de desenvolvimento, não de quem conversa (#487)', async () => {
     montar();
     await enviar('oi');
     fontes[0].emitir(
@@ -639,53 +637,16 @@ describe('ChatScreen', () => {
     );
     fontes[0].fechar();
 
-    expect(await screen.findByText('4,2 s')).toBeInTheDocument();
-    expect(screen.getByText('950 ms')).toBeInTheDocument();
-  });
-
-  it('num turno com tool, o tempo aparece na resposta que a tela desenha', async () => {
-    // Duas mensagens de IA no turno (a que pede a tool e a que responde), e o
-    // assistant-ui as junta numa só com o id da PRIMEIRA. O `persisted` traz o id
-    // da última: guardar por ele deixava o rodapé procurando um id que não existe.
-    montar();
-    await enviar('quanto comi hoje?');
-    fontes[0].emitir(
-      {
-        event: 'updates',
-        data: {
-          agente: {
-            messages: [
-              {
-                type: 'ai',
-                id: 'ai-1',
-                content: '',
-                tool_calls: [{ id: 'c1', name: 'list_meals', args: {} }],
-              },
-            ],
-          },
-        },
-      },
-      {
-        event: 'updates',
-        data: {
-          ferramentas: {
-            messages: [
-              { type: 'tool', id: 't1', tool_call_id: 'c1', name: 'list_meals', content: '[]' },
-            ],
-          },
-        },
-      },
-      fragmento('ai-2', 'Nada ainda hoje.'),
-      { event: 'done', data: { status: 'completed', durationMs: 4180, ttftMs: 950 } },
-      { event: 'persisted', data: { messageId: 'ai-2', assistantMessageId: 'linha-1' } },
+    expect(await screen.findByText('Olá!')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copiar resposta' })).toBeInTheDocument(),
     );
-    fontes[0].fechar();
-
-    expect(await screen.findByText('Nada ainda hoje.')).toBeInTheDocument();
-    expect(await screen.findByText('4,2 s')).toBeInTheDocument();
+    expect(screen.queryByText('4,2 s')).not.toBeInTheDocument();
+    expect(screen.queryByText('950 ms')).not.toBeInTheDocument();
+    expect(screen.queryByText(/respondeu em|começou em/)).not.toBeInTheDocument();
   });
 
-  it('depois do F5, confirmação e retomada viram uma resposta, com o tempo e o estado da última parte', async () => {
+  it('depois do F5, confirmação e retomada viram uma resposta, com o estado da última parte', async () => {
     const linha = (id: string, extra: Partial<ChatConversation['messages'][number]>) => ({
       id,
       role: 'assistant' as const,
@@ -873,7 +834,7 @@ describe('ChatScreen', () => {
     );
   });
 
-  it('depois do F5, a resposta parada e o tempo gravado voltam', async () => {
+  it('depois do F5, a resposta parada volta, sem o tempo gravado', async () => {
     const linha = (id: string, extra: Partial<ChatConversation['messages'][number]>) => ({
       id,
       role: 'assistant' as const,
@@ -902,8 +863,8 @@ describe('ChatScreen', () => {
     };
     montar();
 
-    expect(await screen.findByText('2,3 s')).toBeInTheDocument();
-    expect(screen.getByText('Resposta interrompida')).toBeInTheDocument();
+    expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+    expect(screen.queryByText('2,3 s')).not.toBeInTheDocument();
   });
 
   it('F5 com pausa pendente traz o cartão de volta', async () => {
@@ -981,7 +942,7 @@ describe('ChatScreen', () => {
       messages,
     });
 
-    it('o cartão da tool volta', async () => {
+    it('o cartão da tool volta, recolhido na linha; tocar abre (#487)', async () => {
       conversaGravada = conversa([
         linha('m1', { role: 'user', content: 'quanto comi hoje?' }),
         linha('m2', {
@@ -1005,6 +966,10 @@ describe('ChatScreen', () => {
       ]);
       montar();
 
+      const linhaDaTool = await screen.findByRole('button', { name: /Resumo de hoje/ });
+      expect(linhaDaTool).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('figure', { name: 'Calorias de hoje' })).not.toBeInTheDocument();
+      await userEvent.setup().click(linhaDaTool);
       const cartao = await screen.findByRole('figure', { name: 'Calorias de hoje' });
       expect(within(cartao).getByText('1.832')).toBeInTheDocument();
     });
@@ -1124,9 +1089,9 @@ describe('ChatScreen', () => {
     expect(screen.getAllByText('Listar refeições · não deu certo')).not.toHaveLength(0);
   });
 
-  it('o artefato da tool aparece no cartão dela, com o número inteiro', async () => {
+  it('o artefato da tool fica recolhido na linha e abre no cartão dela, com o número inteiro', async () => {
     montar();
-    await enviar('quanto comi hoje?');
+    const user = await enviar('quanto comi hoje?');
 
     fontes[0].emitir(
       {
@@ -1173,34 +1138,35 @@ describe('ChatScreen', () => {
       },
     );
 
+    // Consulta é detalhe (#487): a linha diz o resultado, e o cartão abre a quem tocar.
+    const linhaDaTool = await screen.findByRole('button', { name: /Resumo de hoje/ });
+    expect(screen.queryByRole('figure', { name: 'Calorias de hoje' })).not.toBeInTheDocument();
+    await user.click(linhaDaTool);
     const cartao = await screen.findByRole('figure', { name: 'Calorias de hoje' });
     expect(within(cartao).getByText('1.832')).toBeInTheDocument();
     expect(within(cartao).getByText('meta 1.800–2.200')).toBeInTheDocument();
   });
 
-  it('mostra o plano do turno e o passo em andamento', async () => {
+  it('o plano de passos do turno não aparece (#487)', async () => {
     montar();
     await enviar('compara minha semana com a anterior');
 
-    fontes[0].emitir({
-      event: 'plan',
-      data: {
-        steps: [
-          { id: '1', title: 'Ler esta semana', status: 'done' },
-          { id: '2', title: 'Ler a semana anterior', status: 'running' },
-          { id: '3', title: 'Comparar', status: 'pending' },
-        ],
+    fontes[0].emitir(
+      {
+        event: 'plan',
+        data: {
+          steps: [
+            { id: '1', title: 'Ler esta semana', status: 'done' },
+            { id: '2', title: 'Ler a semana anterior', status: 'running' },
+          ],
+        },
       },
-    });
+      fragmento('ai-1', 'Comparando.'),
+    );
 
-    const plano = await screen.findByRole('region', { name: 'Plano' });
-    const passos = within(plano).getAllByRole('listitem');
-    expect(passos.map((p) => p.textContent)).toEqual([
-      'Ler esta semana(feito)',
-      'Ler a semana anterior(em andamento)',
-      'Comparar(a fazer)',
-    ]);
-    expect(passos[1]).toHaveAttribute('aria-current', 'step');
+    expect(await screen.findByText('Comparando.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Plano' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ler esta semana')).not.toBeInTheDocument();
   });
 
   it('avisa quando a cota de IA do dia acabou', async () => {
@@ -1254,11 +1220,12 @@ describe('ChatScreen', () => {
     expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
   });
 
-  it('enquanto pensa, diz que dá para sair da tela (Al-M11, segundo plano)', async () => {
+  it('enquanto pensa, só o "Pensando", sem cartão nem texto a mais (#487)', async () => {
     montar();
     await enviar('oi');
 
-    expect(await screen.findByText(/Pode sair da tela/)).toBeInTheDocument();
+    expect(await screen.findByLabelText('Pensando')).toBeInTheDocument();
+    expect(screen.queryByText(/Pode sair da tela/)).not.toBeInTheDocument();
   });
 
   it('a resposta parada oferece "Continuar"', async () => {
@@ -1283,7 +1250,11 @@ describe('ChatScreen', () => {
     const user = userEvent.setup();
     montar();
 
-    await user.click(await screen.findByRole('button', { name: 'O que a IA lembra' }));
+    // O topo tem só o essencial (#487): as memórias ficam na config da IA, dentro das conversas.
+    expect(screen.queryByRole('button', { name: 'O que a IA lembra' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Conversas' }));
+    await user.click(await screen.findByRole('button', { name: 'Configurações da IA' }));
+    await user.click(await screen.findByRole('button', { name: /O que a IA lembra/ }));
     expect(await screen.findByText('Não come carne nem ovo.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Esquecer: Não come carne nem ovo.' }));
@@ -1535,7 +1506,7 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
       expect(screen.queryByRole('figure')).not.toBeInTheDocument();
     });
 
-    it('o cartão de uma resposta antiga recolhe numa linha, e tocar abre de novo', async () => {
+    it('o cartão de consulta recolhe numa linha, também na última resposta, e tocar abre (#487)', async () => {
       montar();
       await enviar('quanto comi hoje?');
       fontes[0].emitir(
@@ -1555,7 +1526,10 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
         fim(),
       );
       fontes[0].fechar();
-      expect(await screen.findByRole('figure', { name: 'Calorias de hoje' })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', { name: /Resumo de hoje · Calorias de hoje/ }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('figure', { name: 'Calorias de hoje' })).not.toBeInTheDocument();
 
       const user = await enviar('valeu');
       fontes[1].emitir(fragmento('ai-3', 'De nada!'), fim());
@@ -1567,9 +1541,9 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
       expect(screen.getByRole('figure', { name: 'Calorias de hoje' })).toBeInTheDocument();
     });
 
-    it('as fontes da busca são links numerados, e o só no app abre a tela certa', async () => {
+    it('as fontes da busca recolhem na linha; o só no app, que pede um toque, fica aberto (#487)', async () => {
       montar();
-      await enviar('quanto de proteína por kg?');
+      const user = await enviar('quanto de proteína por kg?');
       fontes[0].emitir(
         pedido('ai-1', [
           { id: 'w1', name: 'web_search' },
@@ -1599,12 +1573,14 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
         },
       );
 
+      const soNoApp = await screen.findByRole('figure', { name: 'Excluir refeição é pelo app' });
+      expect(screen.queryByRole('figure', { name: 'Fontes · 1 site' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Pesquisei na web · 1 site/ }));
       const fontesDaBusca = await screen.findByRole('figure', { name: 'Fontes · 1 site' });
       expect(within(fontesDaBusca).getByRole('link', { name: /Protein intake/ })).toHaveAttribute(
         'href',
         'https://bjsm.bmj.com/x',
       );
-      const soNoApp = await screen.findByRole('figure', { name: 'Excluir refeição é pelo app' });
       expect(
         await within(soNoApp).findByRole('link', { name: 'Abrir Ações da refeição' }),
       ).toHaveAttribute('href', '/nutrition/meals/m1');
@@ -1771,11 +1747,16 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
       vi.unstubAllGlobals();
     });
 
-    it('a chave da busca no cabeçalho liga e desliga a web', async () => {
+    it('a busca na web saiu do cabeçalho: mora na config da IA, dentro das conversas (#487)', async () => {
       montar();
       const user = userEvent.setup();
-      const chave = await screen.findByRole('switch', { name: 'Buscar na web' });
-      await waitFor(() => expect(chave).toBeChecked());
+      await screen.findByRole('textbox', { name: 'Mensagem para o Fatia' });
+      expect(screen.queryByRole('switch', { name: 'Buscar na web' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Configurações da IA' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Conversas' }));
+      await user.click(await screen.findByRole('button', { name: 'Configurações da IA' }));
+      const chave = await screen.findByRole('switch', { name: /Busca na web/ });
       await user.click(chave);
       expect(setWebSearchEnabledMock).toHaveBeenCalledWith(false);
     });
