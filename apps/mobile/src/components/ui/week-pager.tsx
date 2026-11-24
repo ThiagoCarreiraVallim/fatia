@@ -64,7 +64,9 @@ export function WeekPager({
   return (
     <View
       style={{ marginHorizontal: -bleed, minHeight: height }}
-      onLayout={(e) => setWidth(Math.round(e.nativeEvent.layout.width))}
+      // Sem arredondar: 0,4 px a menos por página, vezes as 156 semanas de trás,
+      // deixava a semana assentada torta.
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
       {width ? (
         <FlatList
