@@ -255,8 +255,8 @@ function StripedBackdrop() {
 
 /**
  * Sem vídeo (prancha `Al-T3d-Sessao-sem-video`): o que ajuda a fazer o
- * exercício quando não há o que assistir — o boneco com os músculos (frente e
- * costas), no lugar do vídeo, com o mesmo gradiente.
+ * exercício quando não há o que assistir — o boneco com os músculos, do lado
+ * e com o zoom do que é treinado, no lugar do vídeo, com o mesmo gradiente.
  */
 export function ExerciseVisual({
   exercise,
@@ -276,11 +276,14 @@ export function ExerciseVisual({
           // O boneco fica um pouco acima do meio: embaixo, o título sobe sobre o degradê.
         >
           <View style={{ marginTop: -height * 0.12 }}>
+            {/* O lado e o recorte dos músculos treinados (#474); frente e costas
+                inteiras ficam na aba "Músculos", logo abaixo. */}
             <MuscleDiagram
               primaryMuscles={exercise.primaryMuscles}
               secondaryMuscles={exercise.secondaryMuscles}
-              view="both"
-              width={Math.round(height * 0.3)}
+              view="auto"
+              focus
+              width={Math.round(height * 0.45)}
             />
           </View>
         </View>
@@ -405,12 +408,17 @@ export function ExerciseHeading({
           {hasVideo && !playing ? null : howTo}
         </View>
         {!hasVideo && exercise && exercise.primaryMuscles.length > 0 ? (
-          <MuscleDiagram
-            primaryMuscles={exercise.primaryMuscles}
-            secondaryMuscles={exercise.secondaryMuscles}
-            view="front"
-            width={84}
-          />
+          // #474: o lado dos músculos (costas na remada), com zoom neles e
+          // maior que o boneco inteiro de 84 px de antes.
+          <View className="overflow-hidden rounded-2xl bg-card">
+            <MuscleDiagram
+              primaryMuscles={exercise.primaryMuscles}
+              secondaryMuscles={exercise.secondaryMuscles}
+              view="auto"
+              focus
+              width={116}
+            />
+          </View>
         ) : null}
       </View>
     </View>
