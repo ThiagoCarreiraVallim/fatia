@@ -18,6 +18,47 @@ export interface ImageValue {
 }
 
 /**
+ * O envio de uma imagem da comunidade, sem a tela: quem usa põe o `<input>`
+ * (com o `ref`) e o botão. Usado pelo `ImageField` e pelos seletores compactos
+ * de avatar e capa das Configurações (#413).
+ */
+export function useImageUpload(
+  groupId: string,
+  purpose: MediaPurpose,
+  onDone: (next: ImageValue) => void,
+) {
+  const input = useRef<HTMLInputElement>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar(file: File) {
+    const problema = imageProblem(file);
+    if (problema) {
+      toast(problema);
+      return;
+    }
+    setEnviando(true);
+    try {
+      const view = await uploadMedia(
+        { purpose, groupId, mime: file.type, bytes: file.size },
+        (url, headers) => fetch(url, { method: 'PUT', body: file, headers }),
+      );
+      onDone({ fileId: view.id, url: view.url });
+    } catch (err) {
+      toast(
+        err instanceof ApiError && err.status === 503
+          ? 'O envio de imagens não está disponível agora.'
+          : 'Não deu para enviar a imagem. Tente de novo.',
+      );
+    } finally {
+      setEnviando(false);
+      if (input.current) input.current.value = '';
+    }
+  }
+
+  return { input, enviando, enviar, pick: () => input.current?.click() };
+}
+
+/**
  * Escolher e enviar uma imagem da comunidade. O arquivo vai direto do
  * navegador ao bucket pela URL assinada; a API só registra e confirma
  * (ADR 028). O item que usa a imagem guarda o `fileId` ao salvar.
@@ -38,33 +79,7 @@ export function ImageField({
   aspect?: string;
 }) {
   const id = useId();
-  const input = useRef<HTMLInputElement>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  async function enviar(file: File) {
-    const problema = imageProblem(file);
-    if (problema) {
-      toast(problema);
-      return;
-    }
-    setEnviando(true);
-    try {
-      const view = await uploadMedia(
-        { purpose, groupId, mime: file.type, bytes: file.size },
-        (url, headers) => fetch(url, { method: 'PUT', body: file, headers }),
-      );
-      onChange({ fileId: view.id, url: view.url });
-    } catch (err) {
-      toast(
-        err instanceof ApiError && err.status === 503
-          ? 'O envio de imagens não está disponível agora.'
-          : 'Não deu para enviar a imagem. Tente de novo.',
-      );
-    } finally {
-      setEnviando(false);
-      if (input.current) input.current.value = '';
-    }
-  }
+  const { input, enviando, enviar } = useImageUpload(groupId, purpose, onChange);
 
   return (
     <div className="space-y-2">

@@ -542,6 +542,9 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
   { pattern: '/org/:id/benefits', title: 'Benefícios', parent: '/org/:id' },
   { pattern: '/org/:id/welcome', title: 'Boas-vindas', parent: '/org/:id' },
+  // Integrações sai de Configurações; Novidades, do rodapé do menu (#413).
+  { pattern: '/org/:id/integrations', title: 'Integrações', parent: '/org/:id/settings' },
+  { pattern: '/org/:id/updates', title: 'Novidades', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];

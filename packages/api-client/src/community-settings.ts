@@ -160,6 +160,33 @@ export function teamSummaryLabel(counts: Partial<Record<GroupRole, number>>): st
   return `${plural(total, 'pessoa', 'pessoas')} · ${partes.join(', ')}`;
 }
 
-export function timezoneOptions(_current: string): { value: string; label: string }[] {
-  throw new Error('a fazer');
+// ---------------------------------------------------------------- Fuso
+
+/** Os fusos do Brasil, de leste a oeste, como a prancha mostra ("Cuiabá (−4)"). */
+const BR_TIMEZONES: readonly [string, string, number][] = [
+  ['America/Noronha', 'Noronha', -2],
+  ['America/Sao_Paulo', 'São Paulo', -3],
+  ['America/Bahia', 'Salvador', -3],
+  ['America/Fortaleza', 'Fortaleza', -3],
+  ['America/Recife', 'Recife', -3],
+  ['America/Belem', 'Belém', -3],
+  ['America/Araguaina', 'Araguaína', -3],
+  ['America/Maceio', 'Maceió', -3],
+  ['America/Campo_Grande', 'Campo Grande', -4],
+  ['America/Cuiaba', 'Cuiabá', -4],
+  ['America/Manaus', 'Manaus', -4],
+  ['America/Porto_Velho', 'Porto Velho', -4],
+  ['America/Boa_Vista', 'Boa Vista', -4],
+  ['America/Rio_Branco', 'Rio Branco', -5],
+];
+
+/** As opções do fuso: as do Brasil e, se a comunidade usa outro, ele no topo. */
+export function timezoneOptions(current: string): { value: string; label: string }[] {
+  const br = BR_TIMEZONES.map(([value, cidade, h]) => ({
+    value,
+    label: `${cidade} (−${Math.abs(h)})`,
+  }));
+  if (!current || br.some((o) => o.value === current)) return br;
+  const cidade = (current.split('/').pop() ?? current).replace(/_/g, ' ');
+  return [{ value: current, label: cidade }, ...br];
 }
