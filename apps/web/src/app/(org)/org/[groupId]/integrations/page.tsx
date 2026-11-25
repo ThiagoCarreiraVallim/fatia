@@ -198,13 +198,15 @@ function IntegrationsBody({ groupId }: { groupId: string }) {
 
 function KeysTable({ keys, onRevoke }: { keys: ApiKey[]; onRevoke: (k: ApiKey) => void }) {
   return (
-    <div className="-mx-1 overflow-x-auto">
-      <table aria-label="Chaves de API" className="w-full min-w-[420px] text-sm">
+    // Sem rolagem de lado no celular: lá a data desce para baixo do nome e o
+    // "Revogar" fica sempre à vista.
+    <div className="-mx-1">
+      <table aria-label="Chaves de API" className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-muted-foreground">
             <th className="px-1 pb-2 font-semibold">Nome</th>
             <th className="px-1 pb-2 font-semibold">Chave</th>
-            <th className="px-1 pb-2 font-semibold">Criada</th>
+            <th className="hidden px-1 pb-2 font-semibold sm:table-cell">Criada</th>
             <th className="px-1 pb-2">
               <span className="sr-only">Revogar</span>
             </th>
@@ -213,13 +215,20 @@ function KeysTable({ keys, onRevoke }: { keys: ApiKey[]; onRevoke: (k: ApiKey) =
         <tbody className="divide-y divide-border">
           {keys.map((k) => (
             <tr key={k.id} className="h-12">
-              <td className="px-1 font-semibold">{k.name}</td>
+              <td className="px-1 py-1.5">
+                <b className="block break-words font-semibold">{k.name}</b>
+                <span className="block text-xs text-muted-foreground sm:hidden">
+                  {`criada ${apiKeyDateLabel(k.createdAt)}`}
+                </span>
+              </td>
               <td className="px-1">
                 <code className="font-mono text-[13px] text-muted-foreground">
                   {apiKeyMask(k.lastFour)}
                 </code>
               </td>
-              <td className="px-1 text-muted-foreground">{apiKeyDateLabel(k.createdAt)}</td>
+              <td className="hidden px-1 text-muted-foreground sm:table-cell">
+                {apiKeyDateLabel(k.createdAt)}
+              </td>
               <td className="px-1 text-right">
                 <Button
                   variant="text"

@@ -62,7 +62,7 @@ describe('painel › integrações e API (#413, Pn-38)', () => {
       '32',
     );
     expect(screen.getAllByRole('button', { name: /Usar receita/ })).toHaveLength(3);
-    expect(screen.getByText(/Dados de saúde só saem com o consentimento/)).toBeInTheDocument();
+    expect(screen.getByText(/Dados de saúde nunca saem pelas chaves/)).toBeInTheDocument();
   });
 
   it('perto do limite, o aviso de Pn-38b: nada no app muda', async () => {

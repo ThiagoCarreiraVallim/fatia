@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   API_KEY_SCOPE_LABEL,
+  API_KEYS_HINT,
   INTEGRATION_RECIPES,
   apiKeyMask,
   apiKeyNameError,
@@ -75,6 +76,11 @@ describe('integrações e API no cliente (#413, Pn-38)', () => {
       MEMBERS: 'Membros (nome e papel)',
       SENDS: 'Envios',
     });
+  });
+
+  it('o aviso não promete dado de saúde: a chave nunca lê, nem com consentimento', () => {
+    expect(API_KEYS_HINT).toMatch(/Dados de saúde nunca saem pelas chaves/);
+    expect(API_KEYS_HINT).not.toMatch(/consentimento/);
   });
 
   it('a cota do mês: número com milhar, barra, renovação e o aviso perto do fim', () => {

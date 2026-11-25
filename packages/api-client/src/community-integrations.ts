@@ -54,7 +54,7 @@ export const API_KEY_SCOPE_LABEL: Record<ApiKeyScope, string> = {
 };
 
 export const API_KEYS_HINT =
-  'As chaves leem convites, membros (nome e papel) e envios. Dados de saúde só saem com o consentimento de cada aluno.';
+  'As chaves leem convites, membros (nome e papel) e envios. Dados de saúde nunca saem pelas chaves.';
 
 const base = '/api/groups';
 
