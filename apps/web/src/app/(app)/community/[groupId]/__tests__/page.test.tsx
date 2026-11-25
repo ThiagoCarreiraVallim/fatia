@@ -152,6 +152,9 @@ describe('/community/[groupId] (o mural)', () => {
     expect(within(abas).queryByRole('link', { name: 'Mural' })).toBeNull();
     expect(screen.queryByRole('article')).toBeNull();
     expect(feedApi.list).not.toHaveBeenCalled();
+    // Com a leitura desligada, `isPending` fica true para sempre: o carregamento
+    // do mural não pode aparecer no lugar do aviso.
+    expect(document.querySelector('.anim-shim')).toBeNull();
   });
 
   it('a equipe tem o ícone do painel ao lado da engrenagem', async () => {

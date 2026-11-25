@@ -167,9 +167,8 @@ export default function CommunityFeedScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 accessibilityLabel="Avisos fixados"
-                contentContainerClassName="gap-3"
                 className="-mx-5"
-                contentContainerStyle={{ paddingHorizontal: 20 }}
+                contentContainerClassName="gap-3 px-5"
               >
                 {pins.map((p) => (
                   <View key={p.id} className="w-[300px]">
@@ -197,7 +196,9 @@ export default function CommunityFeedScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               accessibilityLabel="Filtrar o mural"
-              contentContainerClassName="gap-2"
+              // Até a borda da tela, com o respiro dentro (#477).
+              className="-mx-5"
+              contentContainerClassName="gap-2 px-5"
             >
               {FEED_FILTERS.map((f) => (
                 <Chip

@@ -124,17 +124,8 @@ export default tseslint.config(
      * `shows…ScrollIndicator={false}` no eixo em que rola. O padrão do React
      * Native é mostrar, e a barra cinza no meio de um carrossel ou de um drawer
      * volta sozinha no próximo `ScrollView` escrito se não houver trava.
-     *
-     * Os três arquivos ignorados são os da #413 (pausada), que os reescreve.
-     * Os colchetes vão escapados: sem a barra, `[groupId]` é classe de
-     * caractere no glob e o arquivo não casa.
      */
     files: ['apps/mobile/**/*.tsx'],
-    ignores: [
-      'apps/mobile/app/(app)/community/\\[groupId\\]/index.tsx',
-      'apps/mobile/src/components/community/community-tabs.tsx',
-      'apps/mobile/app/c/\\[token\\].tsx',
-    ],
     rules: {
       'no-restricted-syntax': [
         'error',
