@@ -50,3 +50,11 @@ Brief: /home/thiago/.cache/fatia-briefs/A.md
 ## Estado atual
 
 PR 1 implementado e verde, falta print do app e abrir o PR. Depois PR 2 (#488).
+
+## Merge com a main (2026-11-24)
+
+- Mergeada a origin/main b78791ac (#490, #491, #489, #492). Conflitos resolvidos: prompt (exclusão com
+  cartão da #481 + parágrafo da foto), teste do chat-screen (app_only agora é sair de grupo),
+  chat-cards.test (os dois imports), `chat/[id].tsx` (nosso layout + `showsVerticalScrollIndicator`).
+- Depois do merge, verde: api-client 1346, mobile 702, web 1284, agente 599, api chat-card 89;
+  typecheck e lint ok.
