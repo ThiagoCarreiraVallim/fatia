@@ -37,7 +37,7 @@ export const AiPriceTableSchema = z.record(z.string().min(1), AiModelPriceSchema
 export type AiPriceTable = z.infer<typeof AiPriceTableSchema>;
 
 export type AiCallUnits = {
-  /** Tokens de entrada, ou segundos de áudio. `undefined` quando o provedor não devolveu `usage`. */
+  /** Tokens de entrada (o áudio do ditado também, desde a #488). `undefined` sem `usage`. */
   inputUnits?: number;
   /**
    * Tokens de saída. **`0` explícito, e nunca `undefined`, quando a capacidade não tem saída
@@ -104,6 +104,37 @@ export function parseAiPriceTable(raw: string): AiPriceTable {
 }
 
 /**
+ * Preços que valem sem a `AI_PRICE_TABLE`, só para o que o agente liga **sozinho** (#488).
+ *
+ * O ditado é o caso: na OpenRouter, com `AI_MODEL_TRANSCRIPTION` vazia, o agente usa
+ * `google/gemini-3.5-flash-lite` (`OPENROUTER_TRANSCRIPTION_MODEL`, em `apps/agent/.../settings.py`).
+ * "Se a IA funciona, a voz funciona" não pode depender de alguém lembrar da tabela: sem preço, cada
+ * ditado entra como não medido, e a 20ª chamada não medida do dia (`AI_QUOTA_UNPRICED_DAILY_CALLS`)
+ * fecha a IA da instância inteira. A tabela do ambiente vale por cima, se o preço mudar.
+ *
+ * Gemini 3.5 Flash Lite no endpoint padrão do Google na OpenRouter (24/11/2026): US$ 0,30/M de
+ * entrada (o áudio entra aí, ~30 tokens por segundo) e US$ 2,50/M de saída. Os endpoints
+ * `priority` custam mais; o roteamento padrão da OpenRouter prefere o mais barato.
+ */
+export const DEFAULT_AI_PRICES: AiPriceTable = {
+  'google/gemini-3.5-flash-lite': { in: 300_000, out: 2_500_000 },
+};
+
+function priceOf(model: string, table: AiPriceTable): AiModelPrice | undefined {
+  return table[model] ?? DEFAULT_AI_PRICES[model];
+}
+
+/**
+ * O nome sem a variante da OpenRouter (`modelo:nitro`, `modelo:floor`). O `model` da resposta é o
+ * de quem executou, e uma variante devolvida ali não pode tirar a chamada da tabela: na dúvida, o
+ * preço do modelo base, que é o da chamada comum.
+ */
+function baseModel(model: string): string {
+  const variante = model.indexOf(':');
+  return variante > 0 ? model.slice(0, variante) : model;
+}
+
+/**
  * Custo estimado de uma chamada, a partir do modelo e das unidades que o provedor reportou.
  *
  * Três casos devolvem `pricingKnown: false`, e a diferença entre eles não muda a conta — muda o que
@@ -117,7 +148,7 @@ export function parseAiPriceTable(raw: string): AiPriceTable {
  *    correto, não é buraco. O que não pode é *ausência* de preço virar gratuidade.
  */
 export function estimateAiCost(model: string, units: AiCallUnits, table: AiPriceTable): AiCost {
-  const price = table[model];
+  const price = priceOf(model, table) ?? priceOf(baseModel(model), table);
   const { inputUnits, outputUnits } = units;
 
   if (price === undefined) return { costMicros: 0, pricingKnown: false };

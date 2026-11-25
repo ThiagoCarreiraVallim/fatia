@@ -147,7 +147,7 @@ papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a
   mídia; apagar a foto, a refeição ou a conta tira o arquivo do bucket na hora. No export, a refeição
   leva os metadados da foto e, pelo link de baixar, uma URL assinada que vale 24 h.
 - **Áudio do chat.** O áudio do ditado vai ao provedor naquele turno e some com a requisição; do
-  banco, só sai quanto ele durou. A **foto** do chat deixou de estar nesta lista: desde a
+  banco, só sai quanto a transcrição custou, em tokens. A **foto** do chat deixou de estar nesta lista: desde a
   [ADR 046](./ADR/046-foto-do-chat-guardada.md) ela é guardada por 24 h, ou com a refeição que
   virou (ver a tabela acima e "Foto no chat", abaixo).
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
@@ -180,7 +180,8 @@ Anthropic, não por esta. Custo de inferência para a Fatia: zero, por construç
 
 **Caminho 2 — a IA hospedada pela Fatia.** O código existe — reconhecimento por foto (#139), chat
 hospedado e ditado (#141). O destino revisado é o **OpenRouter** (host `openrouter.ai`), servindo o
-modelo **GLM 5.3 Flash** (`z-ai/glm-5.3-flash`, da Z.ai) para texto e visão, e só em endpoint de
+modelo **GLM 5.3 Flash** (`z-ai/glm-5.3-flash`, da Z.ai) para texto e visão e o **Gemini 3.5 Flash
+Lite** (`google/gemini-3.5-flash-lite`, do Google) para o áudio do ditado (#488), e só em endpoint de
 retenção zero (ver adiante). Ligar isso na instância oficial continua dependendo da #112 e do
 consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
 `apps/agent` e de lá ao provedor, pelo OpenRouter. É este caminho que a tabela abaixo descreve.
@@ -191,7 +192,7 @@ consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `app
 | Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso                                                                                                          | a conversa, sim — em `Message`; ver adiante                                                                                                                 |
 | Visão — rótulo (#375)       | a foto da tabela nutricional, reencodada em JPEG **sem EXIF**, e o prompt                                                                                                                             | **não** — só o custo em `AiUsage` (`label_photo`)                                                                                                           |
 | Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**                                                                                                                  | **sim**, no bucket, por 24 h (ADR 046), salvo a que virou refeição                                                                                          |
-| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                                                                                                                                      | **não** — só a duração, como custo                                                                                                                          |
+| Transcrição — ditado (#141) | o áudio gravado (até 150 s) e o formato dele, ao Gemini 3.5 Flash Lite                                                                                                                                | **não** — só o custo em tokens, em `AiUsage` (`transcription`)                                                                                              |
 | Busca na web (chat, #384)   | só a pergunta da busca, escrita por uma chamada à parte que vê só a última mensagem da pessoa (sem perfil, memórias, dados da conta nem o resto da conversa), depois sem e-mail, telefone e documento | fora da retenção zero: a Exa, via OpenRouter, segue a política dela; aqui, só a contagem. A chamada que escreve a pergunta vai ao modelo, com retenção zero |
 
 A linha do chat é diferente das outras, e é por isso que ela está escrita por extenso: para
@@ -445,7 +446,7 @@ do agente, na [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md).
 | Modo da IA por categoria (`AiWriteModeSetting`)   | Postgres                                             | Até a pessoa mudar, ou apagar a conta. Entra no export                                                                                                                                                                                                                                  |
 | Gravação automática (`AiAutoWrite`, ADR 039)      | Postgres                                             | O pedido, os retratos de antes e depois, o resultado e o cartão: **24 h** (a janela do Desfazer), menos se o registro for apagado na tela dele ou a gravação for desfeita. Depois fica só tool, categoria, horários e se foi desfeita, até a conversa ou a conta sumir. Entra no export |
 | Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)                                                                                                                                                                                                                          |
-| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`                                                                                                                                                                                                                      |
+| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só o **custo em tokens** da transcrição, em `AiUsage`                                                                                                                                                                                                                     |
 | Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima                                                                                                                                                                                                               |
 
 ### As cópias da gravação automática
@@ -558,11 +559,18 @@ guardada, e `Message.metadata.photos` registra só quantas foram.
 ### Ditado
 
 O áudio do ditado vive na memória da aba enquanto grava, vai cru à API (`POST /api/chat/transcribe`)
-e dela ao agente, que o manda ao provedor de transcrição e devolve o texto. Nada do áudio é gravado
-ou logado em ponto nenhum. O texto volta para o campo de mensagem e **não** é enviado sozinho:
-transcrição erra nome de alimento e número, e mandar sem a pessoa ler faria o erro virar registro.
-Do áudio, o que fica é a duração em segundos, em `AiUsage`, porque é a unidade de preço da
-transcrição.
+e dela ao agente, que o manda ao provedor de transcrição e devolve o texto. Desde a #488 o provedor é
+o **Gemini 3.5 Flash Lite** (`google/gemini-3.5-flash-lite`), pelo OpenRouter, com a mesma exigência
+de retenção zero e de não-treinamento do resto: o áudio vai numa chamada de chat (`input_audio`), que
+é o caminho em que o OpenRouter aplica o `provider.zdr`. Nada do áudio é gravado ou logado em ponto
+nenhum; quando o agente não consegue ler a duração do contêiner, o log diz só o formato e o tamanho
+em bytes. O texto volta para o campo de mensagem e **não** é enviado sozinho: transcrição erra nome
+de alimento e número, e mandar sem a pessoa ler faria o erro virar registro. Do áudio, o que fica é o
+custo da transcrição em tokens de entrada e de saída, em `AiUsage`; o áudio passa de 150 s e o agente
+o recusa antes do provedor, porque o preço acompanha a duração.
+
+A própria voz pode identificar quem fala. O áudio não vai junto de nome, e-mail ou id de conta, mas
+isso não o torna anônimo, e por isso ele segue as mesmas regras de retenção zero do resto.
 
 ## Autenticação e OAuth
 

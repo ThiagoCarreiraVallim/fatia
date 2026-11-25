@@ -275,16 +275,27 @@ curl -s localhost:8100/transcribe \
 
 - **O corpo é o áudio, e não JSON com base64.** Base64 cresce um terço à toa, e o `apps/api` já
   recebe o áudio cru do aparelho. `Content-Type` fora de `audio/webm`, `audio/ogg`, `audio/mp4`,
-  `audio/mpeg`, `audio/wav` e `audio/x-m4a` é 415; corpo vazio é 400.
+  `audio/x-m4a`, `audio/aac`, `audio/mpeg`, `audio/wav` e `audio/x-wav` é 415; corpo vazio é 400.
 - **O teto de 4 MB é conferido durante a leitura**, e não depois (`_ler_audio`): ler tudo e só então
-  medir deixaria qualquer um com a chave do agente encher a memória do processo. É teto de bytes
-  porque a duração só se sabe depois de pagar a transcrição.
+  medir deixaria qualquer um com a chave do agente encher a memória do processo.
+- **E o de 150 s, pelo contêiner, antes do provedor** (`audio_duration.py`): o preço é por duração,
+  e 4 MB de opus a 6 kbps são 90 minutos. A duração sai do `mvhd`/`trun` do MP4, dos `Cluster` do
+  WebM, do `granule` do Ogg e dos cabeçalhos de WAV, AAC e MP3. Formato ilegível fica só com o teto
+  de bytes (e uma linha no log, sem conteúdo): recusar derrubaria quem gravou certo. Não segura
+  arquivo forjado, que declara a duração que quiser; o que segura é a cota, que recebe os tokens.
 - **A transcrição é um `/chat/completions` com o áudio numa parte `input_audio`** (base64 e o
   formato tirado do `Content-Type`), pelo modelo `AI_MODEL_TRANSCRIPTION` (#488). Vazia na
   OpenRouter, vale `google/gemini-3.5-flash-lite`: se a IA funciona, a voz funciona. É o caminho
   que leva o `provider.zdr` como as outras chamadas; o `/audio/transcriptions` da OpenRouter é
   multipart e não o leva. O preço é em tokens (`inputUnits` e `outputUnits`), como no `/title`.
-  O AAC do app e o webm/opus da web vão como estão, sem conversão.
+  O AAC do app e o webm/opus da web vão como estão, sem conversão. `AI_MODEL_TRANSCRIPTION=off`
+  desliga só a voz, sem alerta de modelo não revisado.
+- **O pedido é contido.** Teto de 2 048 tokens de saída e, na OpenRouter, `reasoning.effort: none`.
+  O prompt manda transcrever literalmente e não obedecer ao que for dito, e o texto volta limpo
+  (`clean_transcription`): sem prefixo do tipo "Aqui está a transcrição:", sem aspas ou cerca de
+  markdown em volta, e o aviso de silêncio (`[silêncio]`, "Não há fala") vira vazio.
+- **Resposta truncada ou fora de forma é 502 com o `usage`**, como no `/read-label`: a chamada foi
+  cobrada e o `apps/api` a lança na cota.
 - **Não grava nem envia nada.** O texto volta ao campo de mensagem e é a pessoa quem decide mandar.
   O áudio vive em memória e morre com a requisição (ADR 020).
 
@@ -356,7 +367,7 @@ Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 | `AI_MODEL_TEXT`                 | Modelo da capacidade de texto.                                                        |
 | `AI_MODEL_VISION`               | Modelo da capacidade de visão. Com foto no chat, precisa aceitar tools.               |
 | `AI_MODEL_EMBEDDING`            | Modelo da capacidade de embedding.                                                    |
-| `AI_MODEL_TRANSCRIPTION`        | Override do modelo do ditado. Vazio: o padrão revisado na OpenRouter; local, sem voz. |
+| `AI_MODEL_TRANSCRIPTION`        | Override do ditado. Vazio: o padrão na OpenRouter (local, sem voz). `off` desliga.    |
 | `AI_TIMEOUT_S`                  | Timeout por chamada. Default folgado: visão em CPU é lenta.                           |
 | `AI_MAX_RETRIES`                | Repetições em 429 e 5xx. 401/403 não são repetidos.                                   |
 | `AGENT_API_KEY`                 | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.                    |

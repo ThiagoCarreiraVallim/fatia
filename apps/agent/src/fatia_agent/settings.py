@@ -28,6 +28,9 @@ LM_STUDIO_URL = "http://localhost:1234/v1"
 # revisão de privacidade) e é servido pelo Google em endpoint de retenção zero.
 OPENROUTER_TRANSCRIPTION_MODEL = "google/gemini-3.5-flash-lite"
 
+# `AI_MODEL_TRANSCRIPTION=off`: sem ditado, com o resto da IA ligado.
+TRANSCRIPTION_OFF = "off"
+
 
 class AgentSettings(BaseSettings):
     """Env do agente. Nada aqui levanta exceção: configuração faltando vira
@@ -107,7 +110,13 @@ class AgentSettings(BaseSettings):
 
         Só na OpenRouter: o padrão é um nome dela, revisado em `allowed_models`. No LM Studio
         local o nome não existe, e a capacidade fica desligada até alguém configurar uma.
+
+        `off` desliga a voz sem mexer no resto da IA (o endpoint de retenção zero sumiu, o custo
+        subiu): vira vazia, que é "não configurada", e não um modelo não revisado no `/health`.
         """
+        if self.ai_model_transcription.strip().lower() == TRANSCRIPTION_OFF:
+            self.ai_model_transcription = ""
+            return self
         if (
             not self.ai_model_transcription.strip()
             and endpoint_host(self.ai_base_url) == "openrouter.ai"

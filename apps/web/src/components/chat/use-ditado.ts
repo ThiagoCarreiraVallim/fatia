@@ -20,6 +20,12 @@ export type EstadoDoDitado = 'parado' | 'gravando' | 'transcrevendo';
  */
 const FORMATOS = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'] as const;
 
+/**
+ * O ditado para sozinho aqui, como no app. O agente recusa áudio acima de 150 s antes de
+ * transcrever, porque o preço é por duração (#488): sem o corte, quem fala três minutos perde tudo.
+ */
+export const DURACAO_MAXIMA_DO_DITADO_MS = 120_000;
+
 export function formatoDeGravacao(
   suporta: (tipo: string) => boolean = (tipo) => MediaRecorder.isTypeSupported(tipo),
 ): string | undefined {
@@ -33,6 +39,7 @@ export function useDitado(
 ) {
   const [estado, setEstado] = useState<EstadoDoDitado>('parado');
   const gravador = useRef<MediaRecorder | null>(null);
+  const limite = useRef<ReturnType<typeof setTimeout> | null>(null);
   const descartar = useRef(false);
   const callbacks = useRef({ onTexto, onErro, onSemAceite });
   useEffect(() => {
@@ -63,6 +70,8 @@ export function useDitado(
       if (evento.data.size > 0) pedacos.push(evento.data);
     };
     recorder.onstop = async () => {
+      if (limite.current) clearTimeout(limite.current);
+      limite.current = null;
       for (const trilha of fluxo.getTracks()) trilha.stop();
       gravador.current = null;
       if (descartar.current || pedacos.length === 0) {
@@ -90,11 +99,21 @@ export function useDitado(
     gravador.current = recorder;
     recorder.start();
     setEstado('gravando');
+    limite.current = setTimeout(() => {
+      limite.current = null;
+      if (recorder.state !== 'inactive') recorder.stop();
+    }, DURACAO_MAXIMA_DO_DITADO_MS);
   }, []);
 
-  const parar = useCallback(() => gravador.current?.stop(), []);
+  const parar = useCallback(() => {
+    if (limite.current) clearTimeout(limite.current);
+    limite.current = null;
+    gravador.current?.stop();
+  }, []);
 
   const cancelar = useCallback(() => {
+    if (limite.current) clearTimeout(limite.current);
+    limite.current = null;
     descartar.current = true;
     gravador.current?.stop();
   }, []);

@@ -42,6 +42,7 @@ serializado, e a foto do turno entra só no prompt, com uma marca no estado.
 import base64
 import binascii
 import json
+import logging
 import secrets
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -55,6 +56,7 @@ from pydantic import UUID4, BaseModel, Field, model_validator
 
 from . import __version__
 from .allowed_models import unreviewed_host_reason, unreviewed_models, usable_models
+from .audio_duration import audio_duration_seconds
 from .chat import (
     Checkpointer,
     ContextoDoTurno,
@@ -95,6 +97,7 @@ from .providers.errors import (
     AIProviderNotConfigured,
     AIProviderRefused,
     AIProviderTimeout,
+    AIResponseTruncated,
     AIResponseUnparseable,
 )
 from .recognition import MEDIA_TYPES_ACEITOS, read_label, recognize_meal
@@ -213,13 +216,28 @@ class ChatPersona(BaseModel):
         }
 
 
+logger = logging.getLogger(__name__)
+
 MAX_FOTOS_POR_MENSAGEM = 3
 
-# O ditado é curto por natureza: dois minutos de opus mal passam de 1 MB. O teto
-# é de bytes porque a duração só se sabe depois de pagar a transcrição.
+# O ditado é curto por natureza: dois minutos de opus mal passam de 1 MB, e dois de AAC a
+# 128 kbps (o app) ficam perto de 2 MB. O teto de bytes protege a memória do processo.
 MAX_AUDIO_BYTES = 4 * 1024 * 1024
+# O custo protege outro teto (#488): a transcrição é cobrada em tokens de áudio, proporcionais à
+# duração, e 4 MB de opus a 6 kbps são 90 minutos. O app para em 120 s e a web também; a folga é
+# para o fim do contêiner, que passa um pouco do que foi gravado. Ver `audio_duration`.
+MAX_AUDIO_SECONDS = 150
 AUDIO_ACEITO = frozenset(
-    {"audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"}
+    {
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/x-m4a",
+        "audio/aac",
+        "audio/mpeg",
+        "audio/wav",
+        "audio/x-wav",
+    }
 )
 
 
@@ -562,12 +580,12 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         )
         return {"title": gerado.titulo, "usage": _usage_body(usage)}
 
-    @app.post("/transcribe")
+    @app.post("/transcribe", response_model=None)
     async def transcribe_route(
         request: Request,
         content_type: Annotated[str | None, Header()] = None,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
-    ) -> dict[str, object]:
+    ) -> dict[str, object] | JSONResponse:
         """Ditado do chat (#141): o áudio cru no corpo, o texto de volta.
 
         Não grava nada e não envia nada: o texto volta para o campo de mensagem,
@@ -588,12 +606,24 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         audio = await _ler_audio(request)
         if not audio:
             raise HTTPException(status_code=400, detail="O corpo veio sem áudio.")
+        _exigir_duracao_do_ditado(audio, media_type)
 
         provider = build_provider(resolved, transport=provider_transport)
         try:
             transcricao = await provider.transcribe(audio, media_type=media_type)
+        except (AIResponseUnparseable, AIResponseTruncated) as erro:
+            # Mesmo envelope do handler, mais o consumo, como no `/read-label`: a chamada
+            # respondeu e foi cobrada, e conta na cota de quem ditou.
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "error": {"code": erro.code, "message": erro.message},
+                    "usage": _usage_body(getattr(erro, "usage", None)),
+                },
+            )
         finally:
             await provider.aclose()
+        uso = transcricao.usage
         # O áudio não vai; o texto ditado, mascarado, sim — é o que a pessoa ia digitar.
         record_generation(
             resolved,
@@ -601,6 +631,10 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             model=transcricao.model,
             input={"media_type": media_type, "bytes": len(audio)},
             output=transcricao.text,
+            usage={
+                "input": uso.input_units if uso else None,
+                "output": uso.output_units if uso else None,
+            },
         )
         # Sem `usage`, o modelo vai mesmo assim: o `apps/api` lança a chamada como custo não
         # medido daquele modelo, e não como chamada sem dono.
@@ -813,6 +847,30 @@ async def _ler_audio(request: Request) -> bytes:
                 detail=f"O áudio passa de {MAX_AUDIO_BYTES} bytes. Grave um trecho mais curto.",
             )
     return bytes(lido)
+
+
+def _exigir_duracao_do_ditado(audio: bytes, media_type: str) -> None:
+    """Recusa com 413, antes do provedor, o áudio que o contêiner declara longo demais.
+
+    Sem duração legível, vale só o teto de bytes: recusar um formato que o leitor não entendeu
+    derrubaria o ditado de quem gravou certo. O caso fica no log, sem conteúdo, para aparecer.
+    """
+    segundos = audio_duration_seconds(audio)
+    if segundos is None:
+        logger.warning(
+            "Duração do ditado ilegível (%s, %d bytes); vale só o teto de bytes.",
+            media_type,
+            len(audio),
+        )
+        return
+    if segundos > MAX_AUDIO_SECONDS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"O áudio tem {round(segundos)} s; o ditado vai até {MAX_AUDIO_SECONDS} s. "
+                "Grave um trecho mais curto."
+            ),
+        )
 
 
 def _usage_body(usage: Usage | None) -> dict[str, object] | None:

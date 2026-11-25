@@ -216,7 +216,9 @@ export default function PrivacyPage() {
           O <strong>ditado por voz</strong> do chat também vai pelo <strong>OpenRouter</strong>, mas
           a outro modelo: o <strong>Gemini 3.5 Flash Lite</strong>, do Google, porque o GLM não ouve
           áudio. Ele recebe só o áudio e devolve o texto, que volta para o campo de mensagem: nada é
-          enviado sem você ler e mandar.
+          enviado sem você ler e mandar. O áudio vai sem nome, e-mail ou id de conta, mas a sua voz
+          em si pode identificar você; por isso ele segue as mesmas regras de retenção zero do
+          resto, e cada gravação vai até dois minutos e meio.
         </p>
 
         <p>
@@ -354,8 +356,8 @@ export default function PrivacyPage() {
             <strong>OpenRouter e o provedor de voz</strong> (modelo Gemini 3.5 Flash Lite, do
             Google) — somente quando a IA hospedada está ativa nesta instância, você consentiu com
             ela e usa o ditado do chat. Recebem o áudio gravado e o pedido de transcrição,{' '}
-            <strong>sem nenhum identificador seu</strong>. Valem as mesmas exigências de retenção
-            zero e de não-treinamento.
+            <strong>sem nenhum identificador seu</strong> junto — a voz, em si, pode identificar
+            quem fala. Valem as mesmas exigências de retenção zero e de não-treinamento.
           </li>
           <li>
             <strong>Serviços de aviso</strong> — somente se você ligar os avisos no app ou no

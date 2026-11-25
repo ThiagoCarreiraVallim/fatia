@@ -739,6 +739,15 @@ o provedor devolve. Para o GLM 5.3 Flash no OpenRouter (preço de 19/10/2026, o 
 foto): `AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}`. Confira o preço em
 <https://openrouter.ai/z-ai/glm-5.3-flash> quando trocar de modelo ou de provedor.
 
+**O ditado não depende da tabela.** A voz liga sozinha quando a IA está na OpenRouter (#488), com o
+Gemini 3.5 Flash Lite, e o preço dele vem no código (`DEFAULT_AI_PRICES`, em `ai-pricing.ts`:
+US$ 0,30/M de entrada, em que entra o áudio, ~30 tokens por segundo, e US$ 2,50/M de saída, o
+endpoint padrão de 24/11/2026). Sem isso, a 20ª transcrição do dia fecharia a IA da instância pela
+tolerância de não medidos. Uma entrada com o mesmo nome na `AI_PRICE_TABLE` vale por cima, e um
+sufixo de variante na resposta (`:nitro`, `:floor`) cai no preço do modelo base. O agente recusa
+áudio acima de 150 s antes do provedor (o preço acompanha a duração), corta a saída em 2 048 tokens e
+manda `reasoning.effort: none`. Para desligar só a voz: `AI_MODEL_TRANSCRIPTION=off`.
+
 **Quanto custa, medido no formato da tabela:**
 
 | Chamada                                                 | Tokens (entrada / saída) | Custo                         |
@@ -746,6 +755,7 @@ foto): `AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}`. Confir
 | Foto de refeição                                        | ~1 200 / ~90             | ~71 micro-dólares             |
 | Turno de chat com três voltas de tool (~20 k por volta) | ~60 000 / ~1 500         | ~3 065 micro-dólares          |
 | Título da conversa                                      | ~300 / ~15               | ~16 micro-dólares (arredonda) |
+| Ditado de 2 min (Gemini 3.5 Flash Lite)                 | ~3 900 / ~400            | ~2 170 micro-dólares          |
 
 **Cotas sugeridas para o piloto:** `AI_QUOTA_DAILY_MICROS=60000` (US$ 0,06 por pessoa por dia, ~20
 turnos longos; no pior caso ~US$ 1,80/mês por PRO, abaixo do preço do plano) e
@@ -765,7 +775,8 @@ docker exec -i $(docker ps -qf name=postgres) psql -U fatia -d fatia -c "
 
 Linha com `pricingKnown = f` e `model` preenchido: acrescente esse nome à `AI_PRICE_TABLE`. Com
 `model` vazio: o agente não devolveu `usage` (versão antiga do agente, ou o provedor não mandou o
-bloco).
+bloco), um turno quebrou no meio, ou um ditado estourou o tempo depois de chegar ao provedor — a
+chamada pode ter sido cobrada, e por isso entra como não medida em vez de sumir.
 
 ### Langfuse — o que cada turno fez (ADR 034)
 

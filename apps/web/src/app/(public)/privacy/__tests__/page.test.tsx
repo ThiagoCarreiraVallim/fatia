@@ -66,6 +66,11 @@ describe('/privacy — o que é prometido sobre a IA hospedada', () => {
     expect(texto).toMatch(/ditado[^.]*Gemini 3\.5 Flash Lite[^.]*Google/i);
   });
 
+  it('não vende o áudio como anônimo: a própria voz pode identificar quem fala (#488)', () => {
+    // "Sem nenhum identificador seu" é verdade sobre o que vai junto do áudio, não sobre o áudio.
+    expect(textoDaPagina()).toMatch(/voz[^.]*pode identificar/i);
+  });
+
   it('não esconde que o chat manda dados da conta ao modelo', () => {
     // "Você não vai junto" é verdade no reconhecimento por foto e falso no chat, que precisa ler a
     // conta para responder. Uma promessa escrita para um caminho não pode cobrir o outro.
