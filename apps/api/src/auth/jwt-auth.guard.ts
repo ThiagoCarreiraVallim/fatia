@@ -1,10 +1,17 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { JwtValidationService } from './jwt-validation.service';
 import { UserProvisioningService } from './user-provisioning.service';
+import { DemoSessionService } from './demo-session.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -12,6 +19,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly validation: JwtValidationService,
     private readonly provisioning: UserProvisioningService,
+    @Optional() private readonly demo?: DemoSessionService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {

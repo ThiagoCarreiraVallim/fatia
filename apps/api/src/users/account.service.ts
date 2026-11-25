@@ -940,6 +940,7 @@ export class AccountService {
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
       })),
+      demoCommunity: null as null | { name: string; student: { name: string } },
       counts: {
         achievements: achievements.length,
         conversations: conversations.length,
