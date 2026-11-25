@@ -83,6 +83,7 @@ export * from './workout/history-copy';
 export * from './workout/pending-exercises';
 export * from './workout/ended-exercises';
 export * from './workout/session-cache';
+export * from './workout/plan-preview';
 export * from './session-view';
 export * from './active-workout-bar';
 export * from './workout-cards';

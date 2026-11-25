@@ -8,20 +8,13 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 import { randomUUID } from 'expo-crypto';
+import { fetch as expoFetch } from 'expo/fetch';
 import { useQueryClient } from '@tanstack/react-query';
-import { uploadChatPhoto } from '@fatia/api-client';
-import { ChatSession, type ChatPhotoUploader, type ChatSessionSnapshot } from './chat-session';
+import { ChatSession, type ChatSessionSnapshot } from './chat-session';
+import { createChatPhotoUploader } from './photo-upload';
 
-/**
- * Sobe a foto escolhida direto ao bucket (ADR 046): o corpo sai do arquivo do
- * seletor e não passa pela API.
- */
-const subirFoto: ChatPhotoUploader = async (foto) => {
-  const arquivo = await (await fetch(foto.uri)).blob();
-  return uploadChatPhoto({ mime: 'image/jpeg', bytes: arquivo.size }, (url, headers) =>
-    fetch(url, { method: 'PUT', headers, body: arquivo }),
-  );
-};
+/** Sobe a foto direto ao bucket (ADR 046): o corpo não passa pela API. */
+const uploadPhoto = createChatPhotoUploader((url, init) => expoFetch(url, init));
 
 /**
  * A sessão do chat, uma por app, acima das abas (ADR 035): a resposta segue
@@ -42,7 +35,7 @@ const ChatContext = createContext<ChatSession | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const [sessao] = useState(() => new ChatSession(randomUUID, subirFoto));
+  const [sessao] = useState(() => new ChatSession(randomUUID, uploadPhoto));
 
   useEffect(() => {
     sessao.setTurnEndListener(() => {

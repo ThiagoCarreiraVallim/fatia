@@ -24,6 +24,7 @@ import {
 import { Carousel, LoadingState } from '@/components/ui';
 import { MuscleDiagram } from '@/components/workout/muscle-diagram';
 import { useStartSession } from '@/components/workout/use-start-session';
+import { usePlanPreview } from '@/components/workout/plan-preview-sheet';
 import { restToneColors, setsLevelColors } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
 
@@ -117,7 +118,7 @@ function BodyToneLegend() {
 
 function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
   const router = useRouter();
-  const start = useStartSession();
+  const preview = usePlanPreview();
   const plan = summary.suggestedPlan;
   const tones = restToneColors(musclesByRestTone(summary.rested), {
     primary: colors.primary,
@@ -146,8 +147,7 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
             primary
             icon={Play}
             label={plan.name}
-            disabled={start.isPending}
-            onPress={() => start.mutate({ planId: plan.id })}
+            onPress={() => preview.start(plan.id)}
           />
         ) : null}
         <CardButton label="Outro plano" onPress={() => router.push('/workout/plans')} />
@@ -159,6 +159,7 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
 function RepeatLastCard({ session }: { session: WorkoutSession }) {
   const router = useRouter();
   const start = useStartSession();
+  const preview = usePlanPreview();
   const summary = lastSessionSummary(session);
   const feeling = feelingOf(session.feeling);
   const facts = [
@@ -181,7 +182,12 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
           label="Repetir"
           icon={Repeat}
           disabled={start.isPending}
-          onPress={() => start.mutate({ planId: session.planId })}
+          // Com plano, a prévia antes (#484); treino livre não tem o que mostrar.
+          onPress={() =>
+            session.planId
+              ? preview.start(session.planId)
+              : start.mutate({ planId: session.planId })
+          }
         />
         <CardButton primary label="Escolher outro" onPress={() => router.push('/workout/plans')} />
       </View>

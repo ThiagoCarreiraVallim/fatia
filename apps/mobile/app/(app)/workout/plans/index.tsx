@@ -28,6 +28,7 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { cn, EmptyState, ErrorState, LoadingState, Segmented } from '@/components/ui';
 import { CircuitBadge } from '@/components/workout/circuit/circuit-badge';
+import { usePlanPreview } from '@/components/workout/plan-preview-sheet';
 import { useStartCircuit } from '@/components/workout/circuit/use-start-circuit';
 import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
 import { colors } from '@/theme/colors';
@@ -69,14 +70,8 @@ export default function PlansScreen() {
     },
   });
 
-  const start = useMutation({
-    mutationFn: (planId: string) =>
-      workoutApi.startSession({ planId, startedAt: new Date().toISOString() }),
-    onSuccess: (session) => {
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      router.push(`/workout/session/${session.id}`);
-    },
-  });
+  // "Começar" abre a prévia do treino (#484); o "Começar" dela inicia a sessão.
+  const preview = usePlanPreview();
 
   // A ordem é da pessoa (#402): o primeiro é o treino de hoje. A equipe dá a
   // ordem inicial; depois de reordenar aqui, a lista não muda mais pela ficha.
@@ -103,8 +98,8 @@ export default function PlansScreen() {
 
   const activeBlock = block.data ?? null;
   const shown = plans.data?.filter((p) => (p.kind === 'CIRCUIT') === circuitsTab);
-  const starting = start.isPending || startCircuit.isPending;
-  const startFailed = start.isError || startCircuit.isError;
+  const starting = startCircuit.isPending;
+  const startFailed = startCircuit.isError;
 
   return (
     <Screen
@@ -144,8 +139,8 @@ export default function PlansScreen() {
         {!circuitsTab && activeBlock ? (
           <BlockCard
             block={activeBlock}
-            starting={start.isPending}
-            onStart={() => activeBlock.planId && start.mutate(activeBlock.planId)}
+            starting={false}
+            onStart={() => activeBlock.planId && preview.start(activeBlock.planId)}
           />
         ) : null}
 
@@ -248,7 +243,7 @@ export default function PlansScreen() {
                     : `/workout/plans/${plan.id}`) as Href,
                 )
               }
-              onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : start.mutate(plan.id))}
+              onStart={() => (circuitsTab ? startCircuit.mutate(plan.id) : preview.start(plan.id))}
               onAsk={() => {
                 remove.reset();
                 setAskId(plan.id);

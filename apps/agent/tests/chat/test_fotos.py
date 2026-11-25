@@ -87,8 +87,45 @@ async def test_o_turno_seguinte_nao_ve_a_foto_e_volta_ao_modelo_de_texto(
     assert MARCA_DE_FOTO.format(n=1) in json.dumps(enviado, ensure_ascii=False)
 
 
-def test_rota_recusa_foto_sem_modelo_de_visao(settings_factory, monkeypatch) -> None:
-    client, _, _ = app_com(settings_factory, turnos=[], monkeypatch=monkeypatch, ai_model_vision="")
+def test_sem_modelo_de_visao_proprio_a_foto_vai_ao_modelo_de_texto(
+    settings_factory, monkeypatch
+) -> None:
+    """#482: a câmera do chat funciona sempre que a IA funciona, pelo mesmo provedor.
+
+    `AI_MODEL_VISION` vira só um override no gateway revisado: vazio, a foto vai ao modelo de
+    texto, que passa pela revisão da lista de visão como qualquer outro.
+    """
+    client, provider, _ = app_com(
+        settings_factory,
+        turnos=[_responde("Parece uma salada.")],
+        monkeypatch=monkeypatch,
+        ai_base_url="https://openrouter.ai/api/v1",
+        ai_api_key="or-token",
+        ai_model_text="z-ai/glm-5.3-flash",
+        ai_model_vision="",
+        agent_api_key="segredo",
+    )
+
+    resposta = client.post(
+        "/chat",
+        json=corpo(
+            message="o que é isso?", photos=[{"mediaType": "image/jpeg", "data": FOTO.base64}]
+        ),
+        headers={**BEARER, "X-Fatia-Agent-Key": "segredo"},
+    )
+
+    assert resposta.status_code == 200, resposta.text
+    assert provider.corpos[0]["model"] == "z-ai/glm-5.3-flash"
+
+
+def test_rota_recusa_foto_sem_modelo_nenhum(settings_factory, monkeypatch) -> None:
+    client, _, _ = app_com(
+        settings_factory,
+        turnos=[],
+        monkeypatch=monkeypatch,
+        ai_model_vision="",
+        ai_model_text="",
+    )
 
     resposta = client.post(
         "/chat",
@@ -146,3 +183,14 @@ def test_rota_manda_a_foto_ao_provedor(settings_factory, monkeypatch) -> None:
     assert resposta.status_code == 200
     assert FOTO.base64 in json.dumps(provedor.corpos[0])
     assert FOTO.base64 not in resposta.text
+
+
+def test_o_prompt_conversa_sobre_a_foto_e_oferece_o_registro() -> None:
+    """#482: a câmera do chat não é só a foto do prato. A IA conversa sobre o que vê (cardápio,
+    rótulo, equipamento) e, se for uma refeição, usa a ferramenta de registro, que pede o sim."""
+    from fatia_agent.prompts.chat_pt_br import SISTEMA
+
+    trecho = SISTEMA[SISTEMA.find("Se a pessoa mandar foto") :]
+    assert trecho.startswith("Se a pessoa mandar foto")
+    assert "cardápio" in trecho
+    assert "log_meal" in trecho

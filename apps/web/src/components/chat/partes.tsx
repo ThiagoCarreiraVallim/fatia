@@ -13,12 +13,12 @@ import { Streamdown } from 'streamdown';
 import {
   useAuiState,
   useMessagePartText,
-  type ReasoningMessagePartComponent,
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
 import {
   AGENT_LOCAL_TOOLS,
+  chatArtifactAsksAction,
   chatCardTitle,
   collapsedLabel,
   isEmptyChatArtifact,
@@ -27,7 +27,6 @@ import {
   type ToolCallStatus,
 } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
-import { ReasoningPanel } from '@/components/elements/reasoning-panel';
 import { ToolGroup } from '@/components/elements/tool-group';
 import { useArtefato, useArtefatos, useTitulosDasTools } from './chat-runtime-provider';
 import { ChatArtifactCard } from './artefato';
@@ -45,20 +44,6 @@ export const TextoDoAssistente: TextMessagePartComponent = () => {
   const { text } = useMessagePartText();
   return <Streamdown className="w-full text-sm leading-relaxed">{text}</Streamdown>;
 };
-
-/**
- * O raciocínio do modelo, colapsado. Não é gravado: depois de um F5, a resposta
- * volta sem ele — o que fica no histórico é o que o modelo respondeu, e não o
- * rascunho (ver `events._with_reasoning` no agente).
- */
-export const AssistantReasoning: ReasoningMessagePartComponent = ({ text, status }) => (
-  <ReasoningPanel
-    text={text}
-    streaming={status.type === 'running'}
-    activeLabel="Pensando…"
-    label="Como pensei"
-  />
-);
 
 export type StepState =
   'rodando' | 'aguardando' | 'feito' | 'vazio' | 'falhou' | 'recusada' | 'nao_rodou';
@@ -234,9 +219,10 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
   // A escrita à espera do sim já está no cartão logo abaixo: uma linha a mais só repetiria.
   if (estado === 'aguardando') return null;
 
-  // O cartão da última resposta fica aberto, com o nome da tool no cabeçalho dele; o de uma
-  // resposta antiga recolhe numa linha com ✓ e o resultado, e tocar abre de novo.
-  if (cartao && ultima) {
+  // O cartão que pede um toque (gravado, abrir no app, arquivo) fica aberto na última resposta,
+  // com o nome da tool no cabeçalho dele. O de consulta, e o de uma resposta antiga, recolhe numa
+  // linha com ✓ e o resultado, e tocar abre (#487).
+  if (cartao && ultima && chatArtifactAsksAction(cartao)) {
     return (
       <div className="flex w-full flex-col gap-2">
         <ChatArtifactCard artifact={cartao} toolTitle={titulo} />
@@ -362,12 +348,15 @@ export function ToolCallGroup({
     return `${falhou ? 1 : 0}${rodando ? 1 : 0}${ids.join('\u0000')}`;
   });
   const algumaFalhou = resumo[0] === '1';
-  const rodando = resumo[1] === '1';
   const ids = resumo.length > 2 ? resumo.slice(2).split('\u0000') : [];
   if (ids.length < TOOL_GROUP_MIN || algumaFalhou) return <>{children}</>;
-  const temCartao = ids.some((id) => artefatos[id] !== undefined);
+  // Recolhido, a não ser que traga um cartão que pede a pessoa (#487).
+  const pedeAcao = ids.some((id) => {
+    const artefato = artefatos[id];
+    return artefato !== undefined && chatArtifactAsksAction(artefato);
+  });
   return (
-    <ToolGroup label={collapsedLabel(ids.length)} defaultOpen={rodando || temCartao}>
+    <ToolGroup label={collapsedLabel(ids.length)} defaultOpen={pedeAcao}>
       {children}
     </ToolGroup>
   );

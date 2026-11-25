@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, ListPlus, Mic, Square, X } from 'lucide-react-native';
 import type { LocalChatPhoto, QueuedChatMessage } from '@/chat/chat-session';
-import { cn, useActionSheet, useToast } from '@/components/ui';
+import { cn, useToast } from '@/components/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDictation } from '@/chat/dictation';
 import { AI_CONSENT_KEY } from '@/chat/ai-consent';
@@ -16,14 +16,15 @@ const MAX_FOTOS = 3;
 const MAX_CARACTERES = 4000;
 
 /**
- * O campo de mensagem. Foto vai em JPEG recomprimido (`quality: 0.6`), sem EXIF,
- * e é guardada no bucket (ADR 046); a API a reprocessa no `confirm` (reduz a
- * 1280 px e tira metadado de novo). O ditado devolve o texto para o campo e não
- * envia nada.
+ * O campo de mensagem. A câmera manda a foto para a conversa num passo (#482): tocar abre a
+ * câmera e a foto sai na hora, com o que estiver escrito no campo; segurar abre a galeria (até
+ * três). Foto vai em JPEG recomprimido (`quality: 0.6`), sem EXIF, e é guardada no bucket
+ * (ADR 046); a API a reprocessa no `confirm` (reduz a 1280 px e tira metadado de novo). O ditado
+ * devolve o texto para o campo e não envia nada.
  *
  * Com a resposta correndo, o texto vai para a fila (`onQueue`) e sai sozinho
- * quando a conversa fica livre. Foto não entra na fila: ela sobe para o bucket
- * na hora do envio, e guardada aqui ficaria presa ao app aberto.
+ * quando a conversa fica livre. Foto não entra na fila (a câmera fica apagada): ela sobe para o
+ * bucket na hora do envio, e guardada aqui ficaria presa ao app aberto.
  */
 export function Composer({
   running,
@@ -60,9 +61,7 @@ export function Composer({
   onStop: () => void;
 }) {
   const toast = useToast();
-  const actionSheet = useActionSheet();
   const [texto, setTexto] = useState('');
-  const [fotos, setFotos] = useState<LocalChatPhoto[]>([]);
   const aoDitar = useCallback(
     (ditado: string) => setTexto((t) => (t.trim() ? `${t.trimEnd()} ${ditado}` : ditado)),
     [],
@@ -75,9 +74,10 @@ export function Composer({
   );
   const ditado = useDictation(aoDitar, semAceite);
 
-  const podeEnviar = !disabled && !running && (texto.trim().length > 0 || fotos.length > 0);
+  const podeEnviar = !disabled && !running && texto.trim().length > 0;
+  const podeFoto = !disabled && !running;
 
-  const podeEnfileirar = !disabled && running && texto.trim().length > 0 && fotos.length === 0;
+  const podeEnfileirar = !disabled && running && texto.trim().length > 0;
 
   const enfileirar = () => {
     if (!podeEnfileirar) return;
@@ -85,24 +85,26 @@ export function Composer({
     setTexto('');
   };
 
-  const enviar = () => {
-    if (!podeEnviar) return;
+  const send = (fotos: LocalChatPhoto[] = []) => {
+    if (fotos.length ? !podeFoto : !podeEnviar) return;
     onSend(texto, fotos);
     setTexto('');
-    setFotos([]);
   };
 
-  const pickPhoto = async (fonte: 'camera' | 'galeria') => {
+  const sendPhoto = async (fonte: 'camera' | 'galeria') => {
     const opcoes: ImagePicker.ImagePickerOptions = {
       mediaTypes: ['images'],
       base64: true,
       quality: 0.6,
       exif: false,
+      ...(fonte === 'galeria' ? { allowsMultipleSelection: true, selectionLimit: MAX_FOTOS } : {}),
     };
     if (fonte === 'camera') {
       const p = await ImagePicker.requestCameraPermissionsAsync();
       if (!p.granted) {
-        toast.show({ message: 'Câmera bloqueada. Libere para o Fatia nos ajustes do sistema.' });
+        toast.show({
+          message: 'Câmera bloqueada. Libere nos ajustes, ou segure o botão para usar a galeria.',
+        });
         return;
       }
     }
@@ -110,19 +112,13 @@ export function Composer({
       fonte === 'camera'
         ? await ImagePicker.launchCameraAsync(opcoes)
         : await ImagePicker.launchImageLibraryAsync(opcoes);
-    const foto = r.canceled ? undefined : r.assets[0];
-    if (foto?.base64)
-      setFotos((f) => [...f, { uri: foto.uri, data: foto.base64! }].slice(0, MAX_FOTOS));
+    if (r.canceled) return;
+    const fotos = r.assets
+      .filter((a) => a.base64)
+      .slice(0, MAX_FOTOS)
+      .map((a) => ({ uri: a.uri, data: a.base64! }));
+    if (fotos.length) send(fotos);
   };
-
-  const attachPhoto = () =>
-    actionSheet({
-      title: 'Anexar foto',
-      options: [
-        { label: 'Câmera', onPress: () => void pickPhoto('camera') },
-        { label: 'Galeria', onPress: () => void pickPhoto('galeria') },
-      ],
-    });
 
   return (
     <View className="gap-2 border-t border-border bg-background px-3 pt-2 pb-2">
@@ -210,39 +206,24 @@ export function Composer({
           </Pressable>
         </View>
       ) : null}
-      {fotos.length ? (
-        <View className="flex-row gap-2">
-          {fotos.map((f, i) => (
-            <View key={f.uri} className="relative">
-              <Image
-                source={{ uri: f.uri }}
-                className="h-14 w-14 rounded-lg"
-                accessibilityIgnoresInvertColors
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Tirar a foto ${i + 1}`}
-                onPress={() => setFotos((fs) => fs.filter((_, j) => j !== i))}
-                className="absolute -top-2 -right-2 h-6 w-6 items-center justify-center rounded-full bg-card"
-              >
-                <X size={12} color={colors.foreground} />
-              </Pressable>
-            </View>
-          ))}
-        </View>
-      ) : null}
       <View className="flex-row items-end gap-2">
         {/* A câmera fica dentro do campo, com a borda verde (prancha Al-M20). */}
         <View className="min-h-11 flex-1 flex-row items-end rounded-3xl border border-primary/35 bg-card">
           {photosEnabled ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Anexar foto"
-              disabled={disabled || running || fotos.length >= MAX_FOTOS}
-              onPress={attachPhoto}
+              accessibilityLabel="Tirar foto e mandar"
+              accessibilityHint="Segure para escolher da galeria"
+              accessibilityActions={[{ name: 'longpress', label: 'Escolher da galeria' }]}
+              onAccessibilityAction={(e) => {
+                if (e.nativeEvent.actionName === 'longpress') void sendPhoto('galeria');
+              }}
+              disabled={!podeFoto}
+              onPress={() => void sendPhoto('camera')}
+              onLongPress={() => void sendPhoto('galeria')}
               className={cn(
                 'h-11 w-10 items-center justify-center pl-1',
-                (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
+                !podeFoto && 'opacity-40',
               )}
             >
               <Camera size={20} color={colors.mutedForeground} />
@@ -318,7 +299,7 @@ export function Composer({
             accessibilityRole="button"
             accessibilityLabel="Enviar mensagem"
             disabled={!podeEnviar}
-            onPress={enviar}
+            onPress={() => send()}
             className={cn(
               'h-11 w-11 items-center justify-center rounded-full bg-primary',
               !podeEnviar && 'opacity-40',

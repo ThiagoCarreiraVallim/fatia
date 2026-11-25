@@ -12,6 +12,7 @@ import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav'
 import { AiMenuProvider } from '@/components/layout/ai-menu';
 import { WorkoutNotificationSync } from '@/components/workout/session/workout-notification-sync';
 import { RestTimerProvider } from '@/components/workout/session/rest-timer-provider';
+import { PlanPreviewProvider } from '@/components/workout/plan-preview-sheet';
 import { ConfirmProvider, DrawerPresenceProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
 import { ChatProvider } from '@/chat/chat-provider';
@@ -90,17 +91,20 @@ export default function AppLayout() {
       {/* Drawer aberto em qualquer tela esconde a barra de baixo (`ui/drawer.tsx`). */}
       <DrawerPresenceProvider>
         <ConfirmProvider>
-          <RestTimerProvider>
-            {/* A notificação fixa do treino (#472), com o descanso daqui. */}
-            <WorkoutNotificationSync />
-            <BottomChromeProvider>
-              {/* A tela atual encolhe até o notch quando o menu da IA abre
+          {/* A prévia do treino (#484): qualquer tela pede, a folha mora aqui. */}
+          <PlanPreviewProvider>
+            <RestTimerProvider>
+              {/* A notificação fixa do treino (#472), com o descanso daqui. */}
+              <WorkoutNotificationSync />
+              <BottomChromeProvider>
+                {/* A tela atual encolhe até o notch quando o menu da IA abre
               (prancha Al-H6c5); a barra de abas some por cima dele. */}
-              <AiMenuProvider nav={<BottomNav />}>
-                <AppTabs />
-              </AiMenuProvider>
-            </BottomChromeProvider>
-          </RestTimerProvider>
+                <AiMenuProvider nav={<BottomNav />}>
+                  <AppTabs />
+                </AiMenuProvider>
+              </BottomChromeProvider>
+            </RestTimerProvider>
+          </PlanPreviewProvider>
         </ConfirmProvider>
       </DrawerPresenceProvider>
     </ChatProvider>

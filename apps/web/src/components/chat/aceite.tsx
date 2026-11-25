@@ -3,12 +3,11 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Globe } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AI_CONSENT_TEXTS, aiConsentBody, erroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
-import { floating, ghostButton, grayButton, limeButton } from '@/components/elements/surfaces';
-import { CHAVE_DOS_ACEITES, useAceitar, useAceitesDaIa, useChaveDaBusca } from './catalogo';
+import { floating, grayButton, limeButton } from '@/components/elements/surfaces';
+import { CHAVE_DOS_ACEITES, useAceitar, useAceitesDaIa } from './catalogo';
 import { useTurnError } from './chat-runtime-provider';
 
 /**
@@ -115,35 +114,4 @@ export function AiConsentCard({
 export function useChatUnlocked(): boolean {
   const { data } = useAceitesDaIa();
   return data?.chat.accepted === true;
-}
-
-/**
- * A chave da busca na web no cabeçalho (prancha Al-M16): ligada, a IA pode buscar (pedindo o
- * aceite na primeira vez); desligada, ela responde só com o que sabe e os dados da pessoa.
- */
-export function WebSearchSwitch() {
-  const { data } = useAceitesDaIa();
-  const mudar = useChaveDaBusca();
-  if (!data) return null;
-  const ligada = data.webSearchEnabled;
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={ligada}
-      aria-label="Buscar na web"
-      title={ligada ? 'Busca na web ligada' : 'Busca na web desligada'}
-      onClick={() => mudar.mutate(!ligada)}
-      className={cn(
-        ghostButton,
-        'relative rounded-full p-2',
-        ligada ? 'text-success' : 'text-foreground/45',
-      )}
-    >
-      <Globe size={20} aria-hidden />
-      {ligada ? (
-        <span aria-hidden className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
-      ) : null}
-    </button>
-  );
 }
