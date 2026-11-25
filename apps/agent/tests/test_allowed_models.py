@@ -17,6 +17,8 @@ Nenhum teste aqui fala com rede: a recusa acontece **antes** de a requisição
 existir, que é o único momento em que ela ainda protege alguma coisa.
 """
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -408,6 +410,22 @@ def test_todo_gateway_revisado_tem_a_exigencia_de_retencao_no_corpo():
     assert not sem_roteamento, (
         f"{sorted(sem_roteamento)} está em ALLOWED_HOSTS sem entrada em ZERO_RETENTION_ROUTING"
     )
+
+
+def test_todo_modelo_revisado_esta_no_documento_de_retencao():
+    """A `/privacy` tem teste próprio no web; o `docs/DATA_RETENTION.md` é o mesmo compromisso.
+
+    Um modelo revisado que o documento não nomeia é um terceiro recebendo dado sem estar na
+    tabela do que vai a quem (a voz da #488 entrou na lista e o documento ficou só com o GLM).
+    """
+    documento = (Path(__file__).parents[3] / "docs" / "DATA_RETENTION.md").read_text()
+    faltando = sorted(
+        modelo
+        for modelos in allowed_models.ALLOWED_MODELS.values()
+        for modelo in modelos
+        if f"`{modelo}`" not in documento
+    )
+    assert not faltando, f"docs/DATA_RETENTION.md não nomeia {faltando}"
 
 
 def test_visao_emprestada_do_texto_passa_pela_lista_de_visao(settings_factory, monkeypatch):

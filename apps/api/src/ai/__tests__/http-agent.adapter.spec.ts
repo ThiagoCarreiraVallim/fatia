@@ -4,6 +4,7 @@ import {
   ConflictException,
   GatewayTimeoutException,
   Logger,
+  PayloadTooLargeException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -595,7 +596,9 @@ describe('HttpAgentAdapter.readLabel (#375)', () => {
 
 describe('HttpAgentAdapter.transcribe', () => {
   it('manda o áudio cru, sem Bearer, e lê o texto e o usage', async () => {
-    dublarFetch(json({ text: 'almocei arroz', usage: { model: 'whisper-1', inputUnits: 4.2 } }));
+    dublarFetch(
+      json({ text: 'almocei arroz', usage: { model: 'g', inputUnits: 150, outputUnits: 12 } }),
+    );
 
     const lido = await montar({ AGENT_API_KEY: 'k' }).transcribe(Buffer.from('ogg'), 'audio/ogg');
 
@@ -604,7 +607,7 @@ describe('HttpAgentAdapter.transcribe', () => {
     expect(init.headers).toEqual({ 'X-Fatia-Agent-Key': 'k', 'Content-Type': 'audio/ogg' });
     expect(lido).toEqual({
       text: 'almocei arroz',
-      usage: { model: 'whisper-1', inputUnits: 4.2 },
+      usage: { model: 'g', inputUnits: 150, outputUnits: 12 },
     });
   });
 
@@ -612,6 +615,37 @@ describe('HttpAgentAdapter.transcribe', () => {
     dublarFetch(json({ detail: 'vazio' }, 400));
     await expect(montar().transcribe(Buffer.from('x'), 'audio/ogg')).rejects.toBeInstanceOf(
       BadRequestException,
+    );
+  });
+
+  it('transcrição truncada traz o consumo da chamada, para a cota contar (#488)', async () => {
+    dublarFetch(
+      json(
+        {
+          error: { code: 'AI_RESPONSE_TRUNCATED', message: 'x' },
+          usage: { model: 'google/gemini-3.5-flash-lite', inputUnits: 4000, outputUnits: 2048 },
+        },
+        502,
+      ),
+    );
+
+    const erro = await montar()
+      .transcribe(Buffer.from('x'), 'audio/mp4')
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(BadGatewayException);
+    expect(spentUsage(erro)).toEqual({
+      model: 'google/gemini-3.5-flash-lite',
+      inputUnits: 4000,
+      outputUnits: 2048,
+    });
+  });
+
+  it('áudio longo demais (413 do agente) vira a recusa que a pessoa entende', async () => {
+    dublarFetch(json({ detail: 'O áudio tem 200 s' }, 413));
+
+    await expect(montar().transcribe(Buffer.from('x'), 'audio/mp4')).rejects.toBeInstanceOf(
+      PayloadTooLargeException,
     );
   });
 });

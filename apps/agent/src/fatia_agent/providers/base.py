@@ -177,25 +177,22 @@ class EmbeddingCapability(Protocol):
 
 @dataclass(frozen=True)
 class Transcription:
-    """O texto do áudio, e a duração que o provedor mediu — a unidade de preço.
+    """O texto do áudio, o modelo e o consumo em tokens, como em `Description`.
 
-    `duration_seconds` é `None` quando o provedor não a devolveu, pelo mesmo
-    motivo das unidades de `Usage`: ausência é custo não medido, e não zero.
+    `usage` é `None` quando o provedor não o devolveu: ausência é custo não medido, e não zero.
     """
 
     text: str
-    duration_seconds: float | None
     model: str
+    usage: Usage | None = None
 
 
 @runtime_checkable
 class TranscriptionCapability(Protocol):
     """Áudio entra, texto sai (#141).
 
-    O contrato é o `/audio/transcriptions` da OpenAI (`verbose_json`), que o
-    gateway e os servidores compatíveis implementam. O LM Studio local não serve
-    modelo de transcrição, então os testes seguem a forma documentada do
-    contrato; o primeiro endpoint de verdade confere o resto.
+    Um modelo de chat que aceita áudio, com o áudio numa parte `input_audio` (#488): é o que a
+    OpenRouter serve com a mesma exigência de retenção zero do resto.
     """
 
     async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription: ...

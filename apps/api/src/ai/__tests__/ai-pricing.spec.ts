@@ -170,3 +170,53 @@ describe('estimateAiCost', () => {
     ).toBe(true);
   });
 });
+
+describe('o modelo padrão da voz tem preço sem a AI_PRICE_TABLE (#488)', () => {
+  // O agente liga o ditado sozinho na OpenRouter, com este modelo. Sem preço, cada ditado entra
+  // como não medido, e a 20ª chamada não medida do dia fecha a IA da instância inteira.
+  const VOZ = 'google/gemini-3.5-flash-lite';
+  // A tabela de produção de antes da #488: só o GLM.
+  const SO_O_GLM = parseAiPriceTable('{"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}');
+
+  it('ditado de 2 min custa o preço padrão do endpoint de retenção zero', () => {
+    // 3 900 tokens de áudio a US$ 0,30/M + 400 de texto a US$ 2,50/M.
+    expect(estimateAiCost(VOZ, { inputUnits: 3_900, outputUnits: 400 }, SO_O_GLM)).toEqual({
+      costMicros: 2_170,
+      pricingKnown: true,
+    });
+    expect(estimateAiCost(VOZ, { inputUnits: 3_900, outputUnits: 400 }, {})).toMatchObject({
+      pricingKnown: true,
+    });
+  });
+
+  it('a AI_PRICE_TABLE vale por cima do preço padrão', () => {
+    const tabela = parseAiPriceTable(`{"${VOZ}":{"in":1000000,"out":0}}`);
+
+    expect(estimateAiCost(VOZ, { inputUnits: 1_000, outputUnits: 400 }, tabela)).toEqual({
+      costMicros: 1_000,
+      pricingKnown: true,
+    });
+  });
+
+  it('sufixo de variante da OpenRouter cai no preço do modelo base', () => {
+    // `model` da resposta é o nome de quem executou; a OpenRouter pode devolver `:nitro`/`:floor`.
+    expect(estimateAiCost(`${VOZ}:nitro`, { inputUnits: 3_900, outputUnits: 400 }, {})).toEqual({
+      costMicros: 2_170,
+      pricingKnown: true,
+    });
+    expect(
+      estimateAiCost(
+        'z-ai/glm-5.3-flash:floor',
+        { inputUnits: 1_000_000, outputUnits: 0 },
+        SO_O_GLM,
+      ),
+    ).toEqual({ costMicros: 47_076, pricingKnown: true });
+  });
+
+  it('modelo sem preço continua não medido, com ou sem sufixo', () => {
+    expect(estimateAiCost('outro/modelo:nitro', { inputUnits: 1, outputUnits: 1 }, {})).toEqual({
+      costMicros: 0,
+      pricingKnown: false,
+    });
+  });
+});

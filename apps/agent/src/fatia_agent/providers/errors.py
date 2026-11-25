@@ -121,3 +121,5 @@ class AIResponseTruncated(AIProviderError):
     """
 
     code = "AI_RESPONSE_TRUNCATED"
+    # Mesmo motivo do `AIResponseUnparseable.usage`: parou no teto, mas foi cobrada (#488).
+    usage: object | None = None

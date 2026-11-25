@@ -27,7 +27,7 @@ export class FakeAgentAdapter extends AgentAdapter {
   readonly transcribe = jest.fn(
     async (_audio: Buffer, _contentType: string): Promise<AgentTranscription> => ({
       text: 'registra 200 g de frango',
-      usage: { model: 'whisper-1', inputUnits: 3.4 },
+      usage: { model: 'google/gemini-3.5-flash-lite', inputUnits: 150, outputUnits: 22 },
     }),
   );
   readonly title = jest.fn(async (_text: string): Promise<AgentTitle | null> => null);

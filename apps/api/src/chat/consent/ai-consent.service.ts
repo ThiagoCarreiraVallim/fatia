@@ -33,7 +33,10 @@ export function aiProcessorFromEnv(env: Record<string, string | undefined>): AiP
   const nome = (valor: string | undefined, padrao: string) => valor?.trim() || padrao;
   return {
     provider: nome(env.AI_CONSENT_PROVIDER, 'OpenRouter'),
-    model: nome(env.AI_CONSENT_MODEL, 'GLM 5.3 Flash, da Z.ai'),
+    model: nome(
+      env.AI_CONSENT_MODEL,
+      'GLM 5.3 Flash, da Z.ai (na voz, Gemini 3.5 Flash Lite, do Google)',
+    ),
     searchEngine: nome(env.AI_CONSENT_SEARCH_ENGINE, 'Exa'),
   };
 }

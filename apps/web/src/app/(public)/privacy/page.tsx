@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '19 de outubro de 2026';
+const LAST_UPDATED = '24 de novembro de 2026';
 
 export default function PrivacyPage() {
   const controlador = legalEntity();
@@ -213,6 +213,15 @@ export default function PrivacyPage() {
         </p>
 
         <p>
+          O <strong>ditado por voz</strong> do chat também vai pelo <strong>OpenRouter</strong>, mas
+          a outro modelo: o <strong>Gemini 3.5 Flash Lite</strong>, do Google, porque o GLM não ouve
+          áudio. Ele recebe só o áudio e devolve o texto, que volta para o campo de mensagem: nada é
+          enviado sem você ler e mandar. O áudio vai sem nome, e-mail ou id de conta, mas a sua voz
+          em si pode identificar você; por isso ele segue as mesmas regras de retenção zero do
+          resto, e cada gravação vai até dois minutos e meio.
+        </p>
+
+        <p>
           Esta segunda opção depende de configuração: cada instância decide se a liga. Na instância
           pública ela só será ativada com <strong>consentimento específico seu</strong>. Se você
           auto-hospeda, quem decide é você — e o endereço que você escolher está sujeito às mesmas
@@ -342,6 +351,13 @@ export default function PrivacyPage() {
             as coordenadas de onde você estava, é removido no seu aparelho antes do envio. Cada
             chamada exige <strong>retenção zero</strong> e proíbe o uso para treino; o fornecedor
             que não cumprir não recebe a chamada. Veja <strong>Inteligência artificial</strong>.
+          </li>
+          <li>
+            <strong>OpenRouter e o provedor de voz</strong> (modelo Gemini 3.5 Flash Lite, do
+            Google) — somente quando a IA hospedada está ativa nesta instância, você consentiu com
+            ela e usa o ditado do chat. Recebem o áudio gravado e o pedido de transcrição,{' '}
+            <strong>sem nenhum identificador seu</strong> junto — a voz, em si, pode identificar
+            quem fala. Valem as mesmas exigências de retenção zero e de não-treinamento.
           </li>
           <li>
             <strong>Serviços de aviso</strong> — somente se você ligar os avisos no app ou no

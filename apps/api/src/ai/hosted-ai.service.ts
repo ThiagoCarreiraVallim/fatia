@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { GatewayTimeoutException, Injectable, Logger } from '@nestjs/common';
 import { AiAccessService, type Pagador } from './ai-access.service';
 import { AiUsageService } from './ai-usage.service';
 import { AiConsentService } from '../chat/consent/ai-consent.service';
@@ -10,6 +10,7 @@ import {
   type AgentLabelReading,
   type AgentMealRecognition,
   type AgentStream,
+  type AgentTranscription,
   type AgentUsage,
   type TurnInput,
   spentUsage,
@@ -93,13 +94,25 @@ export class HostedAiService {
    */
   async transcribe(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
     const payer = await this.gate(userId);
-    const { text, usage } = await this.agent.transcribe(audio, contentType);
-    // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
-    await this.record(userId, payer, 'transcription', usage?.model ?? null, {
-      inputUnits: usage?.inputUnits,
-      outputUnits: 0,
-    });
-    return { text };
+    let transcription: AgentTranscription;
+    try {
+      transcription = await this.agent.transcribe(audio, contentType);
+    } catch (error) {
+      // Truncada ou fora de forma: o agente devolveu o consumo junto do erro. Estourou o tempo
+      // (no agente ou aqui): o provedor pode ter cobrado sem dizer quanto, e a chamada entra como
+      // não medida, como o turno quebrado — sumir dela é que não pode. As outras recusas (formato,
+      // duração, agente fora do ar, provedor recusou) não chegam a gastar.
+      const spent = spentUsage(error);
+      if (spent) {
+        await this.record(userId, payer, 'transcription', ...modelAndUnits(spent));
+      } else if (error instanceof GatewayTimeoutException) {
+        await this.record(userId, payer, 'transcription', null, {});
+      }
+      throw error;
+    }
+    // A transcrição é uma chamada de chat com o áudio (#488): tokens de entrada e de saída.
+    await this.record(userId, payer, 'transcription', ...modelAndUnits(transcription.usage));
+    return { text: transcription.text };
   }
 
   /** Foto JPEG já sem metadados → alimentos candidatos. Não grava refeição. */

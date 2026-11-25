@@ -135,7 +135,7 @@ export type AgentCapabilities = { vision: boolean; transcription: boolean };
 
 export type AgentTranscription = {
   text: string;
-  /** `inputUnits` são segundos de áudio. `null` quando o agente não disse o modelo. */
+  /** Tokens de entrada e de saída, como no chat (#488). `null` quando o agente não disse o modelo. */
   usage: AgentUsage | null;
 };
 

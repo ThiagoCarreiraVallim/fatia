@@ -1,4 +1,12 @@
-import { ForbiddenException, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ForbiddenException,
+  GatewayTimeoutException,
+  Logger,
+  PayloadTooLargeException,
+  ServiceUnavailableException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { AiConsentService } from '../../chat/consent/ai-consent.service';
 import type { AiPaidBy } from '@prisma/client';
 import { AiAccessService, AiPlanRequiredException } from '../ai-access.service';
@@ -217,6 +225,55 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
     expect(usage.record).not.toHaveBeenCalled();
   });
 
+  it('ditado truncado ou fora de forma que o provedor cobrou conta na cota, e o erro segue', async () => {
+    const { service, agent, usage } = build();
+    const falha = withSpentUsage(new BadGatewayException('truncado'), {
+      model: 'google/gemini-3.5-flash-lite',
+      inputUnits: 4000,
+      outputUnits: 2048,
+    });
+    agent.transcribe.mockRejectedValueOnce(falha);
+
+    await expect(service.transcribe(USER, Buffer.from('a'), 'audio/mp4')).rejects.toBe(falha);
+
+    expect(usage.record).toHaveBeenCalledWith(USER, {
+      feature: 'transcription',
+      ...comunidade,
+      model: 'google/gemini-3.5-flash-lite',
+      units: { inputUnits: 4000, outputUnits: 2048 },
+    });
+  });
+
+  it('ditado que estourou o tempo depois de chegar ao provedor vira lançamento não medido', async () => {
+    // O agente ou a própria API desistiram (504), mas o provedor pode ter cobrado: sem a linha,
+    // a chamada some da cota e da tolerância de não medidos.
+    const { service, agent, usage } = build();
+    const falha = new GatewayTimeoutException('o modelo não respondeu a tempo');
+    agent.transcribe.mockRejectedValueOnce(falha);
+
+    await expect(service.transcribe(USER, Buffer.from('a'), 'audio/mp4')).rejects.toBe(falha);
+
+    expect(usage.record).toHaveBeenCalledWith(USER, {
+      feature: 'transcription',
+      ...comunidade,
+      model: null,
+      units: {},
+    });
+  });
+
+  it.each([
+    ['formato recusado', new UnsupportedMediaTypeException('formato')],
+    ['longo demais', new PayloadTooLargeException('longo')],
+    ['agente fora do ar', new ServiceUnavailableException('fora do ar')],
+    ['provedor recusou', new BadGatewayException('recusou')],
+  ])('ditado que falhou sem cobrança (%s) não lança custo', async (_caso, falha) => {
+    const { service, agent, usage } = build();
+    agent.transcribe.mockRejectedValueOnce(falha);
+
+    await expect(service.transcribe(USER, Buffer.from('a'), 'audio/mp4')).rejects.toBe(falha);
+    expect(usage.record).not.toHaveBeenCalled();
+  });
+
   it('foto sem usage do agente vira lançamento não medido, e não nenhum', async () => {
     const { service, agent, usage } = build();
     agent.recognizeMeal.mockResolvedValueOnce({ items: [], note: null, usage: null });
@@ -231,7 +288,7 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
     });
   });
 
-  it('ditado grava os segundos de áudio, com saída zero', async () => {
+  it('ditado grava os tokens de entrada e de saída, como qualquer chamada de chat (#488)', async () => {
     const { service, usage } = build();
 
     await expect(service.transcribe(USER, Buffer.from('a'), 'audio/webm')).resolves.toEqual({
@@ -241,8 +298,8 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
     expect(usage.record).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
       ...comunidade,
-      model: 'whisper-1',
-      units: { inputUnits: 3.4, outputUnits: 0 },
+      model: 'google/gemini-3.5-flash-lite',
+      units: { inputUnits: 150, outputUnits: 22 },
     });
   });
 
