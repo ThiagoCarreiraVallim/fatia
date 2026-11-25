@@ -153,6 +153,12 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
       expect(minhas.map((g) => g.id)).toEqual([real]);
     });
 
+    it('as notificações da dona não listam a demo entre as comunidades', async () => {
+      const s = await notifications.settings(u.dona);
+      expect(JSON.stringify(s)).not.toContain(demoId);
+      expect(JSON.stringify(s)).not.toContain('Academia Exemplo');
+    });
+
     it('a demo não tem preview nem entrada pelo slug, mesmo pública e aberta', async () => {
       const { slug } = await prisma.group.findUniqueOrThrow({ where: { id: demoId } });
       await expect(groups.previewByCode(slug)).rejects.toBeInstanceOf(NotFoundException);

@@ -10,7 +10,7 @@ import type { MediaFile } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
-import { ownWorkoutPurge } from '../common/workout-purge';
+import { demoStudentPurge, ownWorkoutPurge } from '../common/workout-purge';
 import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 import { presentMeal } from '../nutrition/meal-presenter';
@@ -53,6 +53,26 @@ export class AccountService {
    * (alimentos e exercícios), porque é conteúdo autoral dele — mas não o catálogo
    * público TACO, que não é dado pessoal e tornaria o export inútil de tamanho.
    */
+  /**
+   * A comunidade de demonstração que a pessoa criou (#412), se houver. Os dados
+   * da Ana Exemplo são fictícios e saem do sistema com a demo; o export registra
+   * que ela existe, sem copiar o conteúdo inventado. A Ana não aparece em export
+   * de mais ninguém.
+   */
+  private async exportDemoCommunity(userId: string) {
+    const demo = await this.prisma.group.findUnique({
+      where: { demoOwnerId: userId },
+      select: { name: true, createdAt: true, demoStudent: { select: { name: true } } },
+    });
+    if (!demo) return null;
+    return {
+      name: demo.name,
+      createdAt: demo.createdAt,
+      student: demo.demoStudent ? { name: demo.demoStudent.name } : null,
+      note: 'Comunidade de demonstração com dados fictícios. Apagar a demo apaga tudo dela.',
+    };
+  }
+
   async exportData(userId: string, opts: { photoLinks?: boolean } = {}) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -941,7 +961,7 @@ export class AccountService {
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
       })),
-      demoCommunity: null as null | { name: string; student: { name: string } },
+      demoCommunity: await this.exportDemoCommunity(userId),
       counts: {
         achievements: achievements.length,
         conversations: conversations.length,
@@ -1161,11 +1181,11 @@ export class AccountService {
       data: { revokedAt: new Date() },
     });
 
-    // A demo da pessoa (#412) cai junto: a Ana Exemplo dela também tem treino.
+    // A demo da pessoa (#412) cai junto: a Ana Exemplo dela sai antes, e o
+    // grupo da demo vai na cascata da conta, como as outras comunidades dela.
     await this.prisma.$transaction([
-      ...ownWorkoutPurge(this.prisma, {
-        OR: [{ id: userId }, { demoGroup: { demoOwnerId: userId } }],
-      }),
+      ...demoStudentPurge(this.prisma, { demoGroup: { demoOwnerId: userId } }),
+      ...ownWorkoutPurge(this.prisma, { id: userId }),
       this.prisma.user.delete({ where: { id: userId } }),
     ]);
 

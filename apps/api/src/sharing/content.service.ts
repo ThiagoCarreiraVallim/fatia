@@ -779,7 +779,8 @@ export class ContentService {
    */
   async listWorkoutTemplatesForMe(userId: string): Promise<WorkoutTemplatesByGroup[]> {
     const memberships = await this.prisma.groupMembership.findMany({
-      where: { userId, status: MembershipStatus.ACTIVE },
+      // O modelo publicado na demo (#412) fica na demo.
+      where: { userId, status: MembershipStatus.ACTIVE, group: { isDemo: false } },
       select: { group: { select: { id: true, name: true } } },
       orderBy: { joinedAt: 'asc' },
     });

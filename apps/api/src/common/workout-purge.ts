@@ -18,3 +18,15 @@ export function ownWorkoutPurge(
     prisma.workoutPlan.deleteMany({ where: { user: users } }),
   ];
 }
+
+/**
+ * A aluna fictícia da demo (#412), com tudo o que é dela: treinos e planos
+ * antes (pelo motivo acima), a conta depois. Sai antes do grupo da demo.
+ */
+export function demoStudentPurge(
+  prisma: PrismaService,
+  users: Prisma.UserWhereInput,
+): Prisma.PrismaPromise<unknown>[] {
+  const fictitious: Prisma.UserWhereInput = { AND: [users, { demoGroupId: { not: null } }] };
+  return [...ownWorkoutPurge(prisma, fictitious), prisma.user.deleteMany({ where: fictitious })];
+}

@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { GroupRole, ShareScope } from '@fatia/db';
 
 /**
@@ -501,6 +502,37 @@ export function permissionTable(): PermissionTable {
 }
 
 /** As ações que o papel exerce, na ordem da matriz (o que a tela pode mostrar). */
-export function actionsOf(role: GroupRole): GroupAction[] {
-  return GROUP_ACTIONS.filter((a) => can(role, a));
+export function actionsOf(role: GroupRole, isDemo = false): GroupAction[] {
+  return GROUP_ACTIONS.filter((a) => can(role, a) && (!isDemo || !blockedInDemo(a)));
+}
+
+/**
+ * O que a comunidade de demonstração (#412) não faz, para ninguém, nem a dona:
+ * o que chama gente de fora (convite, aprovar entrada), o que mexe em pessoas
+ * de verdade (papel, remover, banir, leitor), o que cobra (assentos) e o que
+ * abre a comunidade para fora (chave de API, passar a posse). O resto (painel,
+ * conteúdo, comunicado, desafio, aparência, apagar) funciona, para a dona
+ * experimentar. Tabela legível em `docs/PERMISSIONS.md`.
+ */
+export const DEMO_BLOCKED_ACTIONS = [
+  'invite.create',
+  'member.grant_reader',
+  'member.approve',
+  'member.remove',
+  'member.role',
+  'member.ban',
+  'group.transfer',
+  'billing.manage',
+  'integration.manage',
+] as const satisfies readonly GroupAction[];
+
+export function blockedInDemo(action: GroupAction): boolean {
+  return (DEMO_BLOCKED_ACTIONS as readonly GroupAction[]).includes(action);
+}
+
+/** O 403 da demo, igual em todo lugar que confere a ação. */
+export const DEMO_FORBIDDEN = 'A demonstração não faz isso: ela é só para experimentar';
+
+export function assertAllowedInDemo(isDemo: boolean, action: GroupAction): void {
+  if (isDemo && blockedInDemo(action)) throw new ForbiddenException(DEMO_FORBIDDEN);
 }

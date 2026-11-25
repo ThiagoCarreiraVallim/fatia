@@ -22,7 +22,7 @@ import { DEFAULT_BRAND } from '@fatia/design';
 import { DemoSessionService } from '../auth/demo-session.service';
 import { DEMO_EMAIL_DOMAIN, DEMO_SUB_PREFIX } from '../common/demo';
 import { PrismaService } from '../common/prisma.service';
-import { ownWorkoutPurge } from '../common/workout-purge';
+import { demoStudentPurge } from '../common/workout-purge';
 import { addDaysIso, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz';
 import { COMMUNITY_ACTIVE_MIN_MEMBERS, isCommunityActive } from './community-active';
 import {
@@ -208,8 +208,7 @@ export class DemoService {
     // Os mesmos ganchos de apagar comunidade: a dona pode ter posto capa ou
     // foto na demo, e o arquivo sai do armazenamento junto.
     for (const hook of this.deletionHooks ?? []) await hook.beforeDelete(group.id);
-    const [, , { count }] = await this.purge(group.id, ownerId);
-    return { removed: count > 0 };
+    return { removed: (await this.purge(group.id, ownerId)) > 0 };
   }
 
   /** A sessão curta "Abrir no app como Ana Exemplo" (só leitura, 30 minutos). */
@@ -253,14 +252,18 @@ export class DemoService {
     };
   }
 
-  /** Apaga a demo: a cascata do grupo leva a Ana, e a dela leva o resto. */
-  private purge(groupId: string, ownerId: string) {
-    const [sessions, plans] = ownWorkoutPurge(this.prisma, { demoGroupId: groupId });
-    return this.prisma.$transaction([
-      sessions!,
-      plans!,
+  /**
+   * Apaga a demo numa transação de lote: a Ana sai antes do grupo (a cascata
+   * dela leva o resto do que é dela), e o grupo depois. Na ordem inversa, o
+   * `SET NULL` de `PlanOffer.groupId` esbarra na oferta que a cascata da Ana
+   * ainda não apagou.
+   */
+  private async purge(groupId: string, ownerId: string): Promise<number> {
+    const results = await this.prisma.$transaction([
+      ...demoStudentPurge(this.prisma, { demoGroupId: groupId }),
       this.prisma.group.deleteMany({ where: { id: groupId, demoOwnerId: ownerId, isDemo: true } }),
     ]);
+    return (results.at(-1) as { count: number }).count;
   }
 
   /** A comunidade de verdade mais recente de que a pessoa é dona. */

@@ -42,7 +42,13 @@ import {
   type InviteKind,
   type InviteStatus,
 } from './invite-state';
-import { can, rolesGrantableBy, TEAM_ROLES, type GroupAction } from './permissions';
+import {
+  assertAllowedInDemo,
+  can,
+  type GroupAction,
+  rolesGrantableBy,
+  TEAM_ROLES,
+} from './permissions';
 import { MediaService } from '../storage/media.service';
 import { welcomeForJoin, type WelcomePageView } from './welcome.service';
 import {
@@ -1123,12 +1129,16 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async valido(token: string) {
-    const convite = await this.prisma.groupInvite.findUnique({
+    const found = await this.prisma.groupInvite.findUnique({
       where: { tokenHash: hashInviteToken(token) },
+      include: { group: { select: { isDemo: true } } },
     });
-    if (!convite || inviteStatus(convite) !== 'active') {
+    // Convite da demo (#412) é como convite que não existe: ela não recebe ninguém.
+    if (!found || found.group.isDemo || inviteStatus(found) !== 'active') {
       throw new NotFoundException(INVITE_NOT_FOUND);
     }
+    const { group: _group, ...convite } = found;
+    void _group;
     return convite;
   }
 
@@ -1140,13 +1150,14 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   private async assertCan(userId: string, groupId: string, action: GroupAction) {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
     if (!can(eu.role, action)) {
       throw new ForbiddenException('Seu papel nesta comunidade não permite cuidar de convites');
     }
-    return eu;
+    assertAllowedInDemo(eu.group.isDemo, action);
+    return { role: eu.role, status: eu.status };
   }
 
   /** Quem cria convite: a matriz, mais o que só o dono faz (papel de equipe, assento). */
@@ -1541,7 +1552,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     // Quem já tem conta com este e-mail recebe também no celular. O caminho é
     // o mesmo do link do e-mail: o convite só aceita a conta deste endereço.
     const convidada = await this.prisma.user.findFirst({
-      where: { email: { equals: convite.email, mode: 'insensitive' } },
+      // A aluna fictícia da demo (#412) não é convidada de nada.
+      where: { email: { equals: convite.email, mode: 'insensitive' }, demoGroupId: null },
       select: { id: true },
     });
     if (convidada) {

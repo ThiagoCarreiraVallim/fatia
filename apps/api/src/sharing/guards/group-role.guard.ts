@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { MembershipStatus } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
-import { can, canWhilePending, type GroupAction } from '../permissions';
+import { assertAllowedInDemo, can, canWhilePending, type GroupAction } from '../permissions';
 import { GROUP_ACTION_KEY } from '../decorators/require-group-action.decorator';
 
 /** Mesma resposta para "grupo não existe" e "não sou membro dele" (#92). */
@@ -69,7 +69,7 @@ export class GroupRoleGuard implements CanActivate {
 
     const membership = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
 
     // Associação encerrada (`LEFT`/`REMOVED`) não vale nada, e o papel guardado
@@ -91,6 +91,8 @@ export class GroupRoleGuard implements CanActivate {
     if (!can(membership.role, action)) {
       throw new ForbiddenException('Seu papel neste grupo não permite esta ação');
     }
+    // A demo (#412) não convida, não cobra e não mexe em gente de verdade.
+    assertAllowedInDemo(membership.group.isDemo, action);
 
     return true;
   }

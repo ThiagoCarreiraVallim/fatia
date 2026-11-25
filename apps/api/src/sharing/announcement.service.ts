@@ -411,7 +411,10 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
     const porEmail = a.alsoEmail && Boolean(this.mail?.available);
     if (!a.push && !porEmail) return { pushSkipped: false };
     const [grupo, membros, autor] = await Promise.all([
-      this.prisma.group.findUniqueOrThrow({ where: { id: a.groupId }, select: { name: true } }),
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: a.groupId },
+        select: { name: true, isDemo: true },
+      }),
       this.prisma.groupMembership.findMany({
         where: { groupId: a.groupId, status: MembershipStatus.ACTIVE, id: { not: a.membershipId } },
         select: { userId: true },
@@ -421,6 +424,8 @@ export class AnnouncementService implements OnModuleInit, OnModuleDestroy {
         select: { userId: true },
       }),
     ]);
+    // Na demo (#412) o comunicado fica no mural: nem push nem e-mail.
+    if (grupo.isDemo) return { pushSkipped: false };
     const fora =
       a.publishedAs === PostAuthorAs.PERSON
         ? new Set(await blockedUserIds(this.prisma, autor.userId))
