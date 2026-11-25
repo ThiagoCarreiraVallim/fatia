@@ -7,13 +7,7 @@ import {
 } from '@nestjs/common';
 import { GroupRole, GroupType, MembershipStatus } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
-import {
-  API_KEY_PREFIX,
-  API_MONTHLY_QUOTA,
-  hashApiKey,
-  MAX_ACTIVE_KEYS,
-  usageMonth,
-} from '../api-key';
+import { API_KEY_PREFIX, hashApiKey, MAX_ACTIVE_KEYS, usageMonth } from '../api-key';
 import { ApiCallRetention } from '../api-call-retention';
 import { ApiKeyService } from '../api-key.service';
 import { IntegrationReadService } from '../integration-read.service';
@@ -34,6 +28,9 @@ describe('chaves de API e cota do mês (integração, #413)', () => {
   let grupo = '';
   let grupoB = '';
   const DIA = 24 * 60 * 60 * 1000;
+  /** O teto do mês vem do assento pago (decisão da revisão da #413), não do tipo. */
+  const COM_ASSENTO = 10_000;
+  const SEM_ASSENTO = 2_000;
 
   async function pessoa(nome: string) {
     const x = await prisma.user.create({
@@ -322,14 +319,34 @@ describe('chaves de API e cota do mês (integração, #413)', () => {
       expect(todos.items.length).toBe(2);
     });
 
+    it('pendente com `since`: o convite de 1 hora não volta como pendente', async () => {
+      const ctx = await keys.authenticate(segredo);
+      const recente = await prisma.groupInvite.create({
+        data: {
+          groupId: grupo,
+          tokenHash: `${stamp}-mail-recente`,
+          role: GroupRole.MEMBER,
+          email: 'recente@exemplo.com',
+          expiresAt: new Date(Date.now() + 27 * DIA),
+          createdAt: new Date(Date.now() - 60 * 60 * 1000),
+        },
+      });
+      try {
+        const { items } = await read.invites(ctx, {
+          pending: true,
+          since: new Date(Date.now() - 4 * DIA),
+        });
+        expect(items.map((i) => i.email)).toEqual(['convidada@exemplo.com']);
+      } finally {
+        await prisma.groupInvite.delete({ where: { id: recente.id } });
+      }
+    });
+
     it('envios: planos mandados e programas vendidos (pagos), sem as faixas do plano', async () => {
       const ctx = await keys.authenticate(segredo);
       const { items } = await read.sends(ctx, {});
-      expect(items.map((i) => i.kind).sort()).toEqual([
-        'NUTRITION_PLAN',
-        'PROGRAM_SALE',
-        'WORKOUT_PLAN',
-      ]);
+      // Plano alimentar de uma pessoa beira dado de saúde: a chave não lê (#413).
+      expect(items.map((i) => i.kind).sort()).toEqual(['PROGRAM_SALE', 'WORKOUT_PLAN']);
       expect(items.find((i) => i.kind === 'WORKOUT_PLAN')).toMatchObject({
         title: 'Hipertrofia A/B',
         name: 'Ana Aluna',
@@ -360,11 +377,24 @@ describe('chaves de API e cota do mês (integração, #413)', () => {
     });
   });
 
+  describe('teto do mês pelo assento pago', () => {
+    it('patrocinada sem assento valendo tem o teto menor; com assento ativo, o maior', async () => {
+      expect((await keys.quota(grupo)).limit).toBe(SEM_ASSENTO);
+      await prisma.groupSeatPool.create({
+        data: { groupId: grupo, seats: 5, unitPriceCents: 1490, status: 'ACTIVE' },
+      });
+      expect((await keys.quota(grupo)).limit).toBe(COM_ASSENTO);
+      // Vale o que se paga, não o tipo que a dona escolhe: a social sem assento fica no menor.
+      const b = await keys.quota(grupoB);
+      expect(b.limit).toBe(SEM_ASSENTO);
+    });
+  });
+
   describe('cota no limite (Pn-38b)', () => {
     it('no limite, as chamadas pausam até a renovação e nada se perde', async () => {
       const ctx = await keys.authenticate(segredo);
       const mes = usageMonth(new Date(), 'America/Cuiaba');
-      const teto = API_MONTHLY_QUOTA[GroupType.SPONSORED];
+      const teto = COM_ASSENTO;
       await prisma.groupApiMonthUsage.update({
         where: { groupId_month: { groupId: grupo, month: mes } },
         data: { calls: teto - 1 },
@@ -390,7 +420,7 @@ describe('chaves de API e cota do mês (integração, #413)', () => {
     it('concorrência não passa do teto', async () => {
       const ctx = await keys.authenticate(segredo);
       const mes = usageMonth(new Date(), 'America/Cuiaba');
-      const teto = API_MONTHLY_QUOTA[GroupType.SPONSORED];
+      const teto = COM_ASSENTO;
       await prisma.groupApiMonthUsage.update({
         where: { groupId_month: { groupId: grupo, month: mes } },
         data: { calls: teto - 3 },

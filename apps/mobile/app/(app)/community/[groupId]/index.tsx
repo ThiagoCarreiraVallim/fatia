@@ -52,6 +52,9 @@ export default function CommunityFeedScreen() {
     getNextPageParam: (ultima) => ultima.nextCursor,
     enabled: ativo && !muralEscondido,
   });
+  // Só mostra (e só marca como visto) com o grupo carregado e o Mural à mostra:
+  // o cache de uma visita anterior não vaza com a seção escondida.
+  const muralVisivel = ativo && !muralEscondido;
   const primeira = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
   // O nome do perfil; `suggestedDisplayName` cobre a API de antes, que mandava null.
@@ -73,11 +76,11 @@ export default function CommunityFeedScreen() {
     },
   });
   useEffect(() => {
-    if (!primeira || marcou.current || filtro !== 'all') return;
+    if (!primeira || !muralVisivel || marcou.current || filtro !== 'all') return;
     marcou.current = true;
     setNovos(primeira.unseen ?? 0);
     visto.mutate();
-  }, [primeira, filtro, visto]);
+  }, [primeira, muralVisivel, filtro, visto]);
 
   if (group.isError) {
     const sumiu = group.error instanceof ApiError && group.error.isNotFound;
@@ -157,10 +160,11 @@ export default function CommunityFeedScreen() {
         {feed.isPending && ativo && !muralEscondido ? (
           <LoadingState label="Carregando o mural…" />
         ) : null}
-        {feed.isError ? (
+        {muralVisivel && feed.isError ? (
           <ErrorState error={feed.error} onRetry={() => void feed.refetch()} />
         ) : null}
-        {primeira && me ? (
+        {/* Escondido com posts já em cache: o mural some inteiro, fica o aviso. */}
+        {muralVisivel && primeira && me ? (
           <>
             {pins.length > 0 ? (
               <ScrollView

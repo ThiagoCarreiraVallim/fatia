@@ -422,15 +422,17 @@ function RequiredScopesCard({
       <ul className="flex flex-col">
         {REQUIRED_SCOPE_ITEMS.map((item) => {
           const on = value.includes(item.scope);
+          // A trava vale para marcar; a comunidade antiga que já marcou desmarca.
+          const blocked = item.locked && !on;
           return (
             <li key={item.scope}>
               <button
                 type="button"
                 role="checkbox"
                 aria-checked={on}
-                aria-disabled={!editable || item.locked}
+                aria-disabled={!editable || blocked}
                 onClick={() => {
-                  if (item.locked) return toast(MEAL_PHOTOS_LOCKED);
+                  if (blocked) return toast(MEAL_PHOTOS_LOCKED);
                   if (!editable) return;
                   onChange(toggleScope(value, item.scope));
                 }}
@@ -443,7 +445,7 @@ function RequiredScopesCard({
                     on
                       ? 'bg-primary text-primary-foreground'
                       : 'shadow-[inset_0_0_0_1.5px_hsl(var(--border-strong))]',
-                    item.locked && 'opacity-50',
+                    blocked && 'opacity-50',
                   )}
                 >
                   {on && <Icon name="check" size={16} />}

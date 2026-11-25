@@ -30,6 +30,10 @@ import {
   ShareScope,
   TeamSpecialty,
 } from '@prisma/client';
+import { REQUIRABLE_SCOPES } from '../consent-scopes';
+
+/** Foto do prato nunca é obrigatória (#413): nem ao criar, nem ao editar. */
+const REQUIRABLE_SCOPES_MESSAGE = 'Fotos das refeições não pode ser obrigatória';
 
 /**
  * Papéis que o dono pode conceder ao aprovar uma entrada.
@@ -76,8 +80,8 @@ export class CreateGroupDto {
   /** O que quem entra como membro precisa compartilhar. Ausente = nada obrigatório. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(Object.keys(ShareScope).length)
-  @IsEnum(ShareScope, { each: true })
+  @ArrayMaxSize(REQUIRABLE_SCOPES.length)
+  @IsIn(REQUIRABLE_SCOPES, { each: true, message: REQUIRABLE_SCOPES_MESSAGE })
   requiredSharingScopes?: ShareScope[];
 }
 
@@ -100,8 +104,8 @@ export class UpdateGroupDto {
   /** Vale para quem entrar dali em diante; ver `consent-scopes.ts`. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(Object.keys(ShareScope).length)
-  @IsEnum(ShareScope, { each: true })
+  @ArrayMaxSize(REQUIRABLE_SCOPES.length)
+  @IsIn(REQUIRABLE_SCOPES, { each: true, message: REQUIRABLE_SCOPES_MESSAGE })
   requiredSharingScopes?: ShareScope[];
 
   /** "Profissionais veem só quem acompanham" (#404). */

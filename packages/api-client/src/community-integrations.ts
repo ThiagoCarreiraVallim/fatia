@@ -54,7 +54,7 @@ export const API_KEY_SCOPE_LABEL: Record<ApiKeyScope, string> = {
 };
 
 export const API_KEYS_HINT =
-  'As chaves leem convites, membros (nome e papel) e envios. Dados de saúde nunca saem pelas chaves.';
+  'As chaves leem convites, membros (nome e papel) e envios (planos de treino e programas vendidos). Dados de saúde nunca saem pelas chaves.';
 
 const base = '/api/groups';
 
@@ -151,15 +151,17 @@ export const INTEGRATION_RECIPES: readonly IntegrationRecipe[] = [
       'Ação: "Google Sheets › Create Spreadsheet Row", com as colunas name, origin e joinedAt.',
   },
   {
-    id: 'pending-invite-whatsapp',
+    // O convite guarda só o e-mail: não há telefone para um WhatsApp. Quem
+    // quiser WhatsApp cruza o e-mail com a própria planilha ou CRM.
+    id: 'pending-invite-email',
     tool: 'Make',
-    title: 'Convite sem aceite → WhatsApp',
-    body: 'Depois de 2 dias, manda lembrete pelo seu número.',
+    title: 'Convite sem aceite → lembrete por e-mail',
+    body: 'Depois de 2 dias sem aceite, um lembrete para o e-mail do convite.',
     path: '/integrations/v1/invites?pending=true',
     url: 'https://www.make.com/en/login',
-    trigger: 'Crie um cenário com o módulo "HTTP › Make a request", agendado uma vez por dia.',
-    action:
-      'Ação: "WhatsApp Business Cloud › Send a Message" pelo seu número, para cada convite da lista.',
+    trigger:
+      'Crie um cenário com o módulo "HTTP › Make a request", agendado uma vez por dia. Some à URL &since= com a data da última execução menos 2 dias: cada convite entra numa execução só, sem lembrete repetido.',
+    action: 'Ação: "Email › Send an Email" para o e-mail de cada convite da lista.',
   },
   {
     id: 'program-sale-welcome',

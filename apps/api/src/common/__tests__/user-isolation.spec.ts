@@ -6594,13 +6594,78 @@ describe('isolamento entre usuários', () => {
     });
 
     it('a chave da A só lê a A: nenhum membro, convite ou envio da B sai por ela', async () => {
+      const stamp = `iso413b-${Date.now()}`;
       const ctx = await keys.authenticate(secretA);
       expect(ctx.groupId).toBe(k.a);
+      // O que existe na B: associações, um convite, um plano enviado e uma venda.
+      const assocB = (
+        await prisma.groupMembership.findMany({ where: { groupId: k.b }, select: { id: true } })
+      ).map((m) => m.id);
+      expect(assocB).toHaveLength(2);
+      const conviteB = await prisma.groupInvite.create({
+        data: {
+          groupId: k.b,
+          tokenHash: `${stamp}-convite-b`,
+          role: GroupRole.MEMBER,
+          email: 'convidada-b@exemplo.com',
+          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        },
+      });
+      const ofertaB = await prisma.planOffer.create({
+        data: {
+          userId: k.membroB,
+          authorId: k.donoB,
+          groupId: k.b,
+          versions: {
+            create: [
+              {
+                version: 1,
+                title: 'Treino da B',
+                snapshot: {},
+                snapshotVersion: 1,
+                schedule: 'FLEXIBLE',
+              },
+            ],
+          },
+        },
+        include: { versions: true },
+      });
+      const vendaB = await prisma.groupOfferPurchase.create({
+        data: {
+          offer: {
+            create: {
+              groupId: k.b,
+              slug: `${stamp}-oferta-b`,
+              title: 'Programa da B',
+              priceCents: 9900,
+              status: 'ACTIVE',
+            },
+          },
+          buyerName: 'Compradora B',
+          buyerEmail: 'compradora-b@exemplo.com',
+          amountCents: 9900,
+          status: 'PAID',
+          paidAt: new Date(),
+        },
+      });
+
       const membros = await reads.members(ctx, {});
-      const ids = membros.items.map((m) => m.id);
-      expect(ids).not.toContain(k.membroB);
-      expect(ids).not.toContain(k.donoB);
-      expect(JSON.stringify(membros)).not.toContain('membroB');
+      expect(membros.items.length).toBeGreaterThan(0);
+      for (const id of assocB) expect(membros.items.map((m) => m.id)).not.toContain(id);
+      expect(JSON.stringify(membros)).not.toMatch(/membroB|donoB/);
+
+      const convites = [
+        ...(await reads.invites(ctx, {})).items,
+        ...(await reads.invites(ctx, { pending: true })).items,
+      ];
+      expect(convites.map((i) => i.id)).not.toContain(conviteB.id);
+      expect(JSON.stringify(convites)).not.toContain('convidada-b');
+
+      const envios = (await reads.sends(ctx, {})).items;
+      const idsEnvios = envios.map((e) => e.id);
+      expect(idsEnvios).not.toContain(ofertaB.versions[0]!.id);
+      expect(idsEnvios).not.toContain(vendaB.id);
+      expect(JSON.stringify(envios)).not.toMatch(/Treino da B|Programa da B|Compradora B/);
     });
 
     it('a dona da B não lista, não revoga e não descobre a chave da A', async () => {

@@ -7,13 +7,13 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ApiKeyScope, type GroupApiKey, type GroupType } from '@fatia/db';
+import { ApiKeyScope, type GroupApiKey } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import { requireContentRole } from '../sharing/content-roles';
 import {
-  API_MONTHLY_QUOTA,
   generateApiKey,
+  monthlyQuotaFor,
   hashApiKey,
   looksLikeApiKey,
   MAX_ACTIVE_KEYS,
@@ -61,7 +61,8 @@ export interface CreatedApiKey {
 export interface ApiKeyContext {
   keyId: string;
   groupId: string;
-  groupType: GroupType;
+  /** Teto do mês, pelo assento pago da comunidade (`monthlyQuotaFor`). */
+  monthlyLimit: number;
   timezone: string;
   scopes: ApiKeyScope[];
 }
@@ -75,6 +76,8 @@ const INVALID = 'Chave de API inválida ou revogada';
 const KEY_NOT_FOUND = 'API key not found';
 const FORBIDDEN = 'Só o dono cuida das integrações';
 const ALL_SCOPES = Object.values(ApiKeyScope);
+/** O fuso conta o mês; o pacote de assentos dá o teto. */
+const GROUP_QUOTA_SELECT = { timezone: true, seatPool: { select: { status: true } } } as const;
 
 type KeyRow = GroupApiKey & { createdBy: { name: string } | null };
 
@@ -97,7 +100,7 @@ export class ApiKeyService {
     await requireContentRole(this.prisma, actorId, groupId, 'integration.manage', FORBIDDEN);
     const group = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
-      select: { type: true, timezone: true },
+      select: GROUP_QUOTA_SELECT,
     });
     const now = new Date();
     const month = usageMonth(now, group.timezone);
@@ -113,7 +116,7 @@ export class ApiKeyService {
     );
     return {
       keys: rows.map((r) => toView(r, calls.get(r.id) ?? 0)),
-      quota: await this.quotaOf(groupId, group.type, month),
+      quota: await this.quotaOf(groupId, monthlyQuotaFor(group.seatPool?.status), month),
     };
   }
 
@@ -164,13 +167,13 @@ export class ApiKeyService {
     if (!looksLikeApiKey(secret)) throw new UnauthorizedException(INVALID);
     const row = await this.prisma.groupApiKey.findUnique({
       where: { hash: hashApiKey(secret) },
-      include: { group: { select: { type: true, timezone: true } } },
+      include: { group: { select: GROUP_QUOTA_SELECT } },
     });
     if (!row || row.revokedAt) throw new UnauthorizedException(INVALID);
     return {
       keyId: row.id,
       groupId: row.groupId,
-      groupType: row.group.type,
+      monthlyLimit: monthlyQuotaFor(row.group.seatPool?.status),
       timezone: row.group.timezone,
       scopes: row.scopes,
     };
@@ -186,7 +189,7 @@ export class ApiKeyService {
     }
     const now = new Date();
     const month = usageMonth(now, ctx.timezone);
-    const limit = API_MONTHLY_QUOTA[ctx.groupType];
+    const limit = ctx.monthlyLimit;
     // Um INSERT … ON CONFLICT só soma enquanto abaixo do teto: duas chamadas ao
     // mesmo tempo não passam juntas da última vaga.
     const rows = await this.prisma.$queryRaw<{ calls: number }[]>`
@@ -218,18 +221,21 @@ export class ApiKeyService {
   async quota(groupId: string, now: Date = new Date()): Promise<ApiQuotaView> {
     const group = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
-      select: { type: true, timezone: true },
+      select: GROUP_QUOTA_SELECT,
     });
-    return this.quotaOf(groupId, group.type, usageMonth(now, group.timezone));
+    return this.quotaOf(
+      groupId,
+      monthlyQuotaFor(group.seatPool?.status),
+      usageMonth(now, group.timezone),
+    );
   }
 
-  private async quotaOf(groupId: string, type: GroupType, month: string): Promise<ApiQuotaView> {
+  private async quotaOf(groupId: string, limit: number, month: string): Promise<ApiQuotaView> {
     const row = await this.prisma.groupApiMonthUsage.findUnique({
       where: { groupId_month: { groupId, month } },
       select: { calls: true },
     });
     const used = row?.calls ?? 0;
-    const limit = API_MONTHLY_QUOTA[type];
     return { month, used, limit, renewsOn: quotaRenewsOn(month), state: quotaState(used, limit) };
   }
 

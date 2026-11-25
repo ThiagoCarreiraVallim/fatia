@@ -55,7 +55,7 @@ export class InvitesQueryDto extends PageQueryDto {
   pending?: boolean;
 }
 
-export const API_SEND_KINDS = ['WORKOUT_PLAN', 'NUTRITION_PLAN', 'PROGRAM_SALE'] as const;
+export const API_SEND_KINDS = ['WORKOUT_PLAN', 'PROGRAM_SALE'] as const;
 
 export class SendsQueryDto extends PageQueryDto {
   @IsOptional()

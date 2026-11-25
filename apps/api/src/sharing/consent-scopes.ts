@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { GroupRole, ShareScope } from '@fatia/db';
 
 /**
@@ -9,6 +9,21 @@ import { GroupRole, ShareScope } from '@fatia/db';
 export function normalizarEscopos(scopes: ShareScope[]): ShareScope[] {
   const pedidos = new Set(scopes);
   return Object.values(ShareScope).filter((scope) => pedidos.has(scope));
+}
+
+/**
+ * O que a comunidade pode exigir para entrar. A foto do prato só existe para
+ * quem escolheu guardar (ADR 038): exigir seria cobrar o que a pessoa pode nem
+ * ter (#413, Pn-15). Vale ao criar e ao editar.
+ */
+export const REQUIRABLE_SCOPES: readonly ShareScope[] = Object.values(ShareScope).filter(
+  (scope) => scope !== ShareScope.MEAL_PHOTOS,
+);
+
+export function assertRequirableScopes(scopes: readonly ShareScope[] | undefined): void {
+  if (scopes?.includes(ShareScope.MEAL_PHOTOS)) {
+    throw new BadRequestException('Fotos das refeições não pode ser obrigatória');
+  }
 }
 
 /** Os mesmos rótulos do app (`SHARE_SCOPE_LABEL`): a mensagem de erro chega à tela como está. */

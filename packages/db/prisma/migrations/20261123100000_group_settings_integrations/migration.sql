@@ -62,6 +62,10 @@ CREATE UNIQUE INDEX "GroupApiKey_hash_key" ON "GroupApiKey"("hash");
 CREATE INDEX "GroupApiKey_groupId_revokedAt_idx" ON "GroupApiKey"("groupId", "revokedAt");
 
 -- CreateIndex
+-- O apagar em cascata da comunidade acha as linhas por aqui.
+CREATE INDEX "GroupApiCall_groupId_idx" ON "GroupApiCall"("groupId");
+
+-- CreateIndex
 CREATE INDEX "GroupApiCall_keyId_at_idx" ON "GroupApiCall"("keyId", "at");
 
 -- CreateIndex

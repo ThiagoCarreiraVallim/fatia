@@ -1,5 +1,5 @@
 import { createHash, randomInt } from 'node:crypto';
-import { GroupType } from '@fatia/db';
+import { SubscriptionStatus } from '@fatia/db';
 import { dateInTz } from '../progress/helpers/date-tz';
 
 /**
@@ -18,14 +18,26 @@ export const KEY_CALLS_PER_MINUTE = 60;
 export const NEAR_QUOTA_RATIO = 0.9;
 
 /**
- * Chamadas por mês, pelo plano da comunidade (decisão da #413: contar
- * chamadas, teto por plano). A academia (patrocinada) tem o da prancha; a
- * comunidade social, que não paga, um teto menor.
+ * Chamadas por mês, por comunidade (decisão da #413: contar chamadas, teto por
+ * plano). Quem paga assento tem o da prancha; quem não paga — social, ou
+ * patrocinada sem assento valendo — um teto menor. O que decide é o assento
+ * pago, não o tipo: o tipo muda num toque e não custa nada.
  */
-export const API_MONTHLY_QUOTA: Record<GroupType, number> = {
-  [GroupType.SPONSORED]: 10_000,
-  [GroupType.SOCIAL]: 2_000,
-};
+export const API_MONTHLY_QUOTA_WITH_SEATS = 10_000;
+export const API_MONTHLY_QUOTA_FREE = 2_000;
+
+/** Assento pago: cobrança em dia ou atrasada ainda na tolerância. */
+const PAID_POOL_STATUSES: readonly SubscriptionStatus[] = [
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+];
+
+/** O teto do mês pelo status do pacote de assentos (`null` = sem pacote). */
+export function monthlyQuotaFor(poolStatus: SubscriptionStatus | null | undefined): number {
+  return poolStatus && PAID_POOL_STATUSES.includes(poolStatus)
+    ? API_MONTHLY_QUOTA_WITH_SEATS
+    : API_MONTHLY_QUOTA_FREE;
+}
 
 export type QuotaState = 'ok' | 'near' | 'limit';
 

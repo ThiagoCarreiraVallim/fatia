@@ -52,6 +52,8 @@ describe('/community/new', () => {
     renderWithClient(<NewCommunityPage />);
     const grupo = screen.getByRole('group', { name: 'O que os membros precisam compartilhar' });
     expect(within(grupo).getByText(/não consegue desmarcar/)).toBeInTheDocument();
+    // Fotos das refeições nunca é obrigatória (ADR 038): nem aparece aqui.
+    expect(within(grupo).queryByRole('checkbox', { name: /Fotos das refeições/ })).toBeNull();
     await userEvent.type(screen.getByLabelText('Nome'), 'Box Centro');
     await userEvent.click(within(grupo).getByRole('checkbox', { name: /Metas/ }));
     await userEvent.click(within(grupo).getByRole('checkbox', { name: /Treino/ }));

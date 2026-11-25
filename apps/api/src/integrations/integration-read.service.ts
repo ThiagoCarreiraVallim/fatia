@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import {
   GroupRole,
   MembershipStatus,
-  NutritionPlanStatus,
   OfferPurchaseStatus,
   type InviteOrigin,
   type JoinVia,
@@ -58,7 +57,8 @@ export interface ApiInvite {
   acceptedAt: Date | null;
 }
 
-export type ApiSendKind = 'WORKOUT_PLAN' | 'NUTRITION_PLAN' | 'PROGRAM_SALE';
+// Plano alimentar fica de fora: encosta em dado de saúde (PERMISSIONS.md).
+export type ApiSendKind = 'WORKOUT_PLAN' | 'PROGRAM_SALE';
 
 export interface ApiSend {
   id: string;
@@ -133,11 +133,13 @@ export class IntegrationReadService {
   ): Promise<{ items: ApiInvite[] }> {
     const now = new Date();
     const pendente = activationPendingWhere(ctx.groupId, GroupRole.OWNER, now);
+    // `since` soma ao limiar dos 2 dias, não o substitui: o convite de 1 hora
+    // não é pendente só porque é novo.
+    const desde = q.since ? { gt: q.since } : {};
     const rows = await this.prisma.groupInvite.findMany({
-      where: {
-        ...(q.pending ? { ...pendente, declinedAt: null } : { groupId: ctx.groupId }),
-        ...(q.since ? { createdAt: { gt: q.since } } : {}),
-      },
+      where: q.pending
+        ? { ...pendente, declinedAt: null, createdAt: { ...pendente.createdAt, ...desde } }
+        : { groupId: ctx.groupId, ...(q.since ? { createdAt: desde } : {}) },
       orderBy: { createdAt: 'desc' },
       take: pageSize(q.limit),
     });
@@ -181,7 +183,7 @@ export class IntegrationReadService {
   ): Promise<{ items: ApiSend[] }> {
     const take = pageSize(q.limit);
     const wants = (k: ApiSendKind) => !q.kind || q.kind === k;
-    const [treinos, alimentares, vendas] = await Promise.all([
+    const [treinos, vendas] = await Promise.all([
       wants('WORKOUT_PLAN')
         ? this.prisma.planOfferVersion.findMany({
             where: {
@@ -194,23 +196,6 @@ export class IntegrationReadService {
               status: true,
               sentAt: true,
               offer: { select: { user: { select: { name: true } } } },
-            },
-            orderBy: { sentAt: 'desc' },
-            take,
-          })
-        : [],
-      wants('NUTRITION_PLAN')
-        ? this.prisma.nutritionPlan.findMany({
-            where: {
-              groupId: ctx.groupId,
-              ...(q.since ? { sentAt: { gt: q.since } } : {}),
-            },
-            select: {
-              id: true,
-              status: true,
-              sentAt: true,
-              user: { select: { name: true } },
-              sourceTemplate: { select: { title: true } },
             },
             orderBy: { sentAt: 'desc' },
             take,
@@ -244,20 +229,6 @@ export class IntegrationReadService {
         email: null,
         status: SEND_STATUS[v.status],
         at: v.sentAt,
-      })),
-      ...alimentares.map((p) => ({
-        id: p.id,
-        kind: 'NUTRITION_PLAN' as const,
-        title: p.sourceTemplate?.title ?? 'Plano alimentar',
-        name: p.user.name,
-        email: null,
-        status:
-          p.status === NutritionPlanStatus.SENT
-            ? 'SENT'
-            : p.status === NutritionPlanStatus.ACCEPTED
-              ? 'ACCEPTED'
-              : 'SUPERSEDED',
-        at: p.sentAt,
       })),
       ...vendas.map((c) => ({
         id: c.id,

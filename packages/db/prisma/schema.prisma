@@ -2103,6 +2103,7 @@ model GroupApiCall {
   group Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
   key   GroupApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
 
+  @@index([groupId])
   @@index([keyId, at])
   @@index([at])
 }

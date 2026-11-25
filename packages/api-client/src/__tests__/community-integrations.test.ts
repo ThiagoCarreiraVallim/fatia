@@ -107,10 +107,11 @@ describe('integrações e API no cliente (#413, Pn-38)', () => {
         'Cada pessoa que entra vira uma linha (nome, origem, data).',
         '/integrations/v1/members',
       ],
+      // O convite não tem telefone: o lembrete vai pelo e-mail do convite.
       [
         'Make',
-        'Convite sem aceite → WhatsApp',
-        'Depois de 2 dias, manda lembrete pelo seu número.',
+        'Convite sem aceite → lembrete por e-mail',
+        'Depois de 2 dias sem aceite, um lembrete para o e-mail do convite.',
         '/integrations/v1/invites?pending=true',
       ],
       [
@@ -121,6 +122,23 @@ describe('integrações e API no cliente (#413, Pn-38)', () => {
       ],
     ]);
     for (const r of INTEGRATION_RECIPES) expect(r.url).toMatch(/^https:\/\//);
+  });
+
+  it('o lembrete do convite não promete telefone e não reenvia todo dia', () => {
+    const r = INTEGRATION_RECIPES.find((x) => x.id === 'pending-invite-email')!;
+    const texto = [r.title, r.body, r.action, ...recipeSteps(r, 'https://api.fatia.app')].join(
+      '\n',
+    );
+    expect(texto).not.toMatch(/WhatsApp|seu número/);
+    expect(texto).toMatch(/E-?mail/i);
+    // Cada convite entra numa execução só: since = última execução menos 2 dias.
+    expect(texto).toContain('since=');
+    expect(texto).toMatch(/última execução menos 2 dias/);
+  });
+
+  it('o aviso diz que envios são só planos de treino e programas vendidos', () => {
+    expect(API_KEYS_HINT).toMatch(/planos de treino e programas vendidos/);
+    expect(API_KEYS_HINT).not.toMatch(/alimentar/);
   });
 
   it('o passo a passo leva a URL inteira e o cabeçalho, nunca a chave', () => {

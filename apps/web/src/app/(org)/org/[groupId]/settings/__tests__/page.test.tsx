@@ -73,6 +73,20 @@ describe('painel › configurações (#413, Pn-15)', () => {
     );
   });
 
+  it('fotos das refeições já marcada (comunidade antiga) desmarca: a trava vale só para marcar', async () => {
+    abrir({ requiredSharingScopes: ['WORKOUT', 'MEAL_PHOTOS'] });
+    const card = screen.getByRole('group', { name: 'O que o membro precisa compartilhar' });
+    const fotos = within(card).getByRole('checkbox', { name: /Fotos das refeições/ });
+    expect(fotos).toBeChecked();
+    await userEvent.click(fotos);
+    expect(fotos).not.toBeChecked();
+    expect(toast).not.toHaveBeenCalledWith('Fotos das refeições não pode ser obrigatória');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() =>
+      expect(orgApi.update).toHaveBeenCalledWith('g1', { requiredSharingScopes: ['WORKOUT'] }),
+    );
+  });
+
   it('esconder uma seção salva na hora e promete que nada some do app do aluno', async () => {
     abrir({ hiddenSections: ['FEED'] });
     const card = screen.getByRole('group', { name: 'Seções da comunidade' });

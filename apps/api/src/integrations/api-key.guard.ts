@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -32,5 +33,13 @@ export class ApiKeyThrottlerGuard extends ThrottlerGuard {
   protected override getTracker(req: Request): Promise<string> {
     const key = (req as ApiKeyRequest).apiKey;
     return Promise.resolve(key ? `apikey:${key.keyId}` : (req.ip ?? 'anon'));
+  }
+
+  /**
+   * A chave padrão leva classe e rota: cada rota teria o seu contador, e
+   * alternar entre as quatro dobraria o teto quatro vezes. Aqui é a chave só.
+   */
+  protected override generateKey(_ctx: ExecutionContext, suffix: string, name: string): string {
+    return createHash('sha256').update(`apikey-${name}-${suffix}`).digest('hex');
   }
 }

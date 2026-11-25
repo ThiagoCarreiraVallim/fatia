@@ -257,6 +257,12 @@ futura:
   dono. A tabela "O que cada papel pode fazer" sai de `PERMISSION_SUMMARY`, calculada desta matriz
   e de `canReceiveLink` — a mesma fonte do guarda. "Profissionais veem só quem acompanham"
   (`Group.proSeeOnlyAssigned`) é `group.update`.
+- **Chaves de API (#413): `integration.manage` é `OWNER` e só.** A chave fala pela comunidade
+  inteira, então só quem responde por ela cria e revoga. O que sai por `integrations/v1` é o mínimo
+  para automação: convites, membros (nome e papel) e envios — **só planos de treino e programas
+  vendidos**. Plano alimentar fica de fora de propósito: diz o que a pessoa come e encosta em dado
+  de saúde, que nunca sai por chave. Cada consulta é amarrada ao `groupId` da chave; nada vem da
+  URL nem do corpo.
 
 **Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
 grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.

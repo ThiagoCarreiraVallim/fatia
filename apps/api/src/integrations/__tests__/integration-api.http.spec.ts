@@ -16,7 +16,7 @@ import { IntegrationReadService } from '../integration-read.service';
 const CTX: ApiKeyContext = {
   keyId: 'k1',
   groupId: 'g1',
-  groupType: 'SPONSORED',
+  monthlyLimit: 10_000,
   timezone: 'America/Sao_Paulo',
   scopes: ['INVITES', 'MEMBERS', 'SENDS'],
 };
@@ -115,6 +115,17 @@ describe('API das integrações (HTTP, #413)', () => {
     const status: number[] = [];
     for (let i = 0; i <= KEY_CALLS_PER_MINUTE; i++) {
       status.push((await fetch(`${c.base}/members`, com(`Bearer ${SEGREDO}`))).status);
+    }
+    expect(status.slice(0, KEY_CALLS_PER_MINUTE).every((s) => s === 200)).toBe(true);
+    expect(status.at(-1)).toBe(429);
+  });
+
+  it('o teto é da chave, não da rota: alternar rotas não multiplica o limite', async () => {
+    const rotas = ['members', 'invites', 'sends', 'me'];
+    const status: number[] = [];
+    for (let i = 0; i <= KEY_CALLS_PER_MINUTE; i++) {
+      const r = await fetch(`${c.base}/${rotas[i % rotas.length]}`, com(`Bearer ${SEGREDO}`));
+      status.push(r.status);
     }
     expect(status.slice(0, KEY_CALLS_PER_MINUTE).every((s) => s === 200)).toBe(true);
     expect(status.at(-1)).toBe(429);

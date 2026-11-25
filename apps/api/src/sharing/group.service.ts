@@ -34,7 +34,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
-import { normalizarEscopos } from './consent-scopes';
+import { assertRequirableScopes, normalizarEscopos } from './consent-scopes';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import {
   actionsOf,
@@ -74,7 +74,11 @@ export interface CreateGroupInput {
   requiredSharingScopes?: ShareScope[];
 }
 
-/** O que o dono pode mudar no perfil. Tipo e slug ficam: o slug está em links já distribuídos. */
+/**
+ * O que o dono pode mudar no perfil. O slug fica: está em links já distribuídos.
+ * O tipo muda, mas só pelo dono e nunca para Social com assentos ativos
+ * (`assertTypeChange`).
+ */
 export interface UpdateGroupInput {
   name?: string;
   description?: string | null;
@@ -404,6 +408,7 @@ export class GroupService {
    * interativa (pgbouncer, ADR 010).
    */
   async create(ownerId: string, input: CreateGroupInput): Promise<Group> {
+    assertRequirableScopes(input.requiredSharingScopes);
     const slug = input.slug ?? this.derivarSlug(input.name);
 
     try {
@@ -551,11 +556,7 @@ export class GroupService {
     if (requiredSharingScopes !== undefined && !can(eu.role, 'group.sharing')) {
       throw new ForbiddenException('Só o dono muda o que é obrigatório compartilhar');
     }
-    // A foto do prato só existe para quem escolheu guardar (ADR 038): exigir
-    // seria cobrar o que a pessoa pode nem ter (#413, Pn-15).
-    if (requiredSharingScopes?.includes(ShareScope.MEAL_PHOTOS)) {
-      throw new BadRequestException('Fotos das refeições não pode ser obrigatória');
-    }
+    assertRequirableScopes(requiredSharingScopes);
     const cor = brandColor === undefined ? undefined : brandColorToStore(brandColor);
     if (type !== undefined) await this.assertTypeChange(eu, groupId, type);
     const trilha: Prisma.PrismaPromise<unknown>[] = [];

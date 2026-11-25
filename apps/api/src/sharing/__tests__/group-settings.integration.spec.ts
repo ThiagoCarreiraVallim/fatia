@@ -13,6 +13,12 @@ import { MemoryObjectStore } from '../../storage/memory-object-store';
 import { GroupService } from '../group.service';
 import { InviteService } from '../invite.service';
 import { MembershipService } from '../membership.service';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { CreateGroupDto, UpdateGroupDto } from '../dto/group.dto';
+import { ForYouService } from '../for-you.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 
 /**
@@ -26,6 +32,7 @@ describe('configurações da comunidade (integração, #413)', () => {
   const media = new MediaService(prisma, store);
   const links = new ProfessionalLinkService(prisma);
   const groups = new GroupService(prisma, links, [], media);
+  const forYou = new ForYouService(prisma);
   const memberships = new MembershipService(prisma, links, silentNotifications);
   const config = { get: () => undefined } as unknown as ConfigService;
   const invites = new InviteService(
@@ -219,6 +226,62 @@ describe('configurações da comunidade (integração, #413)', () => {
       expect((await groups.findByIdForMember(u.aluna, grupo)).hiddenSections).toEqual([]);
     });
 
+    it('planos alimentares e dicas de nutrição escondidos saem dos Recomendados de Para você', async () => {
+      const agora = Date.now();
+      await prisma.groupPlanTemplate.createMany({
+        data: [
+          {
+            groupId: grupo,
+            kind: 'NUTRITION',
+            title: 'Cardápio escondido',
+            snapshot: {},
+            snapshotVersion: 1,
+            publishedAt: new Date(agora),
+          },
+          {
+            groupId: grupo,
+            kind: 'WORKOUT',
+            title: 'Treino visível',
+            snapshot: {},
+            snapshotVersion: 1,
+            publishedAt: new Date(agora - 1000),
+          },
+        ],
+      });
+      await prisma.groupTip.createMany({
+        data: [
+          {
+            groupId: grupo,
+            title: 'Dica de nutrição escondida',
+            body: 'x',
+            category: 'NUTRITION',
+            publishedAt: new Date(agora),
+          },
+          {
+            groupId: grupo,
+            title: 'Dica de treino visível',
+            body: 'x',
+            category: 'WORKOUT',
+            publishedAt: new Date(agora - 1000),
+          },
+        ],
+      });
+      try {
+        await groups.update(u.dono, grupo, {
+          hiddenSections: ['NUTRITION_PLANS', 'NUTRITION_TIPS'],
+        });
+        const titulos = (await forYou.get(u.aluna, grupo)).recommended.map((r) => r.title);
+        expect(titulos).toContain('Treino visível');
+        expect(titulos).toContain('Dica de treino visível');
+        expect(titulos).not.toContain('Cardápio escondido');
+        expect(titulos).not.toContain('Dica de nutrição escondida');
+      } finally {
+        await groups.update(u.dono, grupo, { hiddenSections: [] });
+        await prisma.groupPlanTemplate.deleteMany({ where: { groupId: grupo } });
+        await prisma.groupTip.deleteMany({ where: { groupId: grupo } });
+      }
+    });
+
     it('o membro não esconde seção', async () => {
       await expect(groups.update(u.aluna, grupo, { hiddenSections: ['FEED'] })).rejects.toThrow(
         ForbiddenException,
@@ -257,6 +320,38 @@ describe('configurações da comunidade (integração, #413)', () => {
       ).rejects.toThrow(BadRequestException);
       const g = await groups.update(u.dono, grupo, { requiredSharingScopes: ['WORKOUT'] });
       expect(g.requiredSharingScopes).toEqual(['WORKOUT']);
+    });
+
+    it('nem ao criar a comunidade (o service e o DTO recusam)', async () => {
+      await expect(
+        groups.create(u.dono, {
+          type: GroupType.SOCIAL,
+          name: 'Com foto obrigatória',
+          slug: `${stamp}-foto`,
+          requiredSharingScopes: ['WORKOUT', 'MEAL_PHOTOS'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(await prisma.group.count({ where: { slug: `${stamp}-foto` } })).toBe(0);
+      const corpo = { type: 'SOCIAL', name: 'Comunidade', requiredSharingScopes: ['MEAL_PHOTOS'] };
+      const naCriacao = await validate(plainToInstance(CreateGroupDto, corpo));
+      expect(naCriacao.map((e) => e.property)).toContain('requiredSharingScopes');
+      const naEdicao = await validate(plainToInstance(UpdateGroupDto, corpo));
+      expect(naEdicao.map((e) => e.property)).toContain('requiredSharingScopes');
+    });
+
+    it('a migration tira fotos das refeições das comunidades que já a exigiam', async () => {
+      const dir = join(__dirname, '../../../../../packages/db/prisma/migrations');
+      const pasta = readdirSync(dir).find((d) => d.endsWith('_meal_photos_never_required'));
+      expect(pasta).toBeDefined();
+      const sql = readFileSync(join(dir, pasta!, 'migration.sql'), 'utf8');
+      await prisma.group.update({
+        where: { id: grupoB },
+        data: { requiredSharingScopes: ['WORKOUT', 'MEAL_PHOTOS'] },
+      });
+      await prisma.$executeRawUnsafe(sql);
+      const b = await prisma.group.findUniqueOrThrow({ where: { id: grupoB } });
+      expect(b.requiredSharingScopes).toEqual(['WORKOUT']);
+      await prisma.group.update({ where: { id: grupoB }, data: { requiredSharingScopes: [] } });
     });
   });
 });

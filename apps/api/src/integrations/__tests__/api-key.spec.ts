@@ -1,8 +1,9 @@
-import { GroupType } from '@fatia/db';
 import {
   API_KEY_PREFIX,
   API_KEY_RANDOM_LENGTH,
-  API_MONTHLY_QUOTA,
+  API_MONTHLY_QUOTA_FREE,
+  API_MONTHLY_QUOTA_WITH_SEATS,
+  monthlyQuotaFor,
   generateApiKey,
   hashApiKey,
   looksLikeApiKey,
@@ -46,9 +47,14 @@ describe('chave de API (#413)', () => {
     expect(quotaRenewsOn('2026-12')).toBe('2027-01-01');
   });
 
-  it('o teto é por plano: a academia tem o da prancha', () => {
-    expect(API_MONTHLY_QUOTA[GroupType.SPONSORED]).toBe(10_000);
-    expect(API_MONTHLY_QUOTA[GroupType.SOCIAL]).toBeLessThan(10_000);
+  it('o teto vem do assento pago, não do tipo: com assento, o da prancha', () => {
+    expect(API_MONTHLY_QUOTA_WITH_SEATS).toBe(10_000);
+    expect(API_MONTHLY_QUOTA_FREE).toBe(2_000);
+    expect(monthlyQuotaFor('ACTIVE')).toBe(10_000);
+    expect(monthlyQuotaFor('PAST_DUE')).toBe(10_000);
+    for (const s of ['PENDING', 'TRIALING', 'CANCELED', 'EXPIRED', null] as const) {
+      expect(monthlyQuotaFor(s)).toBe(2_000);
+    }
   });
 
   it('estado: ok, quase (90%) e no limite', () => {

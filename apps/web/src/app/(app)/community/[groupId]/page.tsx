@@ -61,6 +61,9 @@ export default function CommunityFeedPage() {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: active && !muralEscondido,
   });
+  // Só mostra (e só marca como visto) com o grupo carregado e o Mural à mostra:
+  // o cache de uma visita anterior não vaza com a seção escondida.
+  const muralVisivel = active && !muralEscondido;
 
   const firstPage = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
@@ -84,11 +87,11 @@ export default function CommunityFeedPage() {
     },
   });
   useEffect(() => {
-    if (!firstPage || marcou.current || filter !== 'all') return;
+    if (!firstPage || !muralVisivel || marcou.current || filter !== 'all') return;
     marcou.current = true;
     setNovos(firstPage.unseen ?? 0);
     visto.mutate();
-  }, [firstPage, filter, visto]);
+  }, [firstPage, muralVisivel, filter, visto]);
 
   if (group.isError) {
     const notFound = group.error instanceof ApiError && group.error.isNotFound;
@@ -173,7 +176,7 @@ export default function CommunityFeedPage() {
         <Skeleton className="h-40 rounded-2xl bg-card" />
       )}
 
-      {feed.isError && (
+      {muralVisivel && feed.isError && (
         <EmptyState
           title="Não deu para carregar o mural"
           action={
@@ -184,7 +187,8 @@ export default function CommunityFeedPage() {
         />
       )}
 
-      {firstPage && me && (
+      {/* Escondido com posts já em cache: o mural some inteiro, fica o aviso. */}
+      {muralVisivel && firstPage && me && (
         <>
           {pins.length > 0 && (
             <section aria-label="Avisos fixados" className="-mx-4 overflow-x-auto px-4">
