@@ -263,6 +263,22 @@ futura:
   vendidos**. Plano alimentar fica de fora de propósito: diz o que a pessoa come e encosta em dado
   de saúde, que nunca sai por chave. Cada consulta é amarrada ao `groupId` da chave; nada vem da
   URL nem do corpo.
+- **Comunidade de demonstração (#412): a dona manda, mas não convida, não cobra e não integra.**
+  A demo (`Group.isDemo`, uma por dona, `demoOwnerId`) tem a dona como `OWNER` e a Ana Exemplo
+  (`User.demoGroupId`) como única aluna. Dentro dela, `actionsOf(role, isDemo)` tira
+  `DEMO_BLOCKED_ACTIONS` — `invite.create`, `member.grant_reader`, `member.approve`,
+  `member.remove`, `member.role`, `member.ban`, `group.transfer`, `billing.manage` e
+  `integration.manage` — e `assertAllowedInDemo` recusa com 403 nas quatro portas (o
+  `GroupRoleGuard`, o `requireContentRole`, o `assertAction` do `GroupService` e o `assertCan` do
+  `InviteService`). A tabela acima segue valendo para a comunidade de verdade; a demo só tira.
+  `GET/POST/DELETE /groups/demo` e `POST /groups/demo/session` são `@SelfOnly`: a demo é achada
+  pela dona logada, nunca por id vindo da requisição. `GET /groups/:groupId/first-steps` é
+  `panel.overview`.
+- **Sessão de demo ("Abrir no app como Ana Exemplo", #412): só leitura e só o Hoje.** O token
+  `fatia_demo_…` (30 min, guardado só o hash em `DemoSession`) autentica como a Ana apenas em rota
+  `@DemoReadable` (Hoje, perfil, avisos, metas, peso, água, primeiros passos) e só em `GET`; em
+  qualquer outra rota é 401. Não carrega a sessão de quem abriu: a web lê por `/api/demo/*`, que
+  repassa só o token, e o app vai direto à API com ele. Sem push, sem cobrança, sem IA.
 
 **Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
 grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.

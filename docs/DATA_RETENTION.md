@@ -132,6 +132,21 @@ Cada linha entra nesta página, no export e na exclusão no PR da issue dona.
 | Onboarding salvo a cada passo (`onboardingStep`, rascunho `onboardingDraft`) e o cartão "Primeiros passos" (`firstStepsSince`, `firstStepsDoneAt`) | Colunas de `User`: o rascunho (metas ainda não aceitas) é apagado ao concluir as metas ou o onboarding; tudo vai embora com a conta e sai no export                  | #371                                                                                                   |
 | Link de exportação (`DataExport`)                                                                                                                  | Só o hash do token, com validade de 24 h; os vencidos da pessoa saem no pedido seguinte e todos vão com a conta. O arquivo é montado no download e não fica guardado | #387                                                                                                   |
 
+### Comunidade de demonstração (#412)
+
+A demo é da dona e de mais ninguém. A comunidade (`Group.isDemo`, `demoOwnerId`) e a aluna fictícia
+Ana Exemplo (`User.demoGroupId`, e-mail em `.invalid`, sem login no Logto) carregam só dado inventado
+pelo seed: metas, plano, treinos feitos, refeições, peso, água e um desafio.
+
+- **Retenção:** enquanto a dona quiser. "Apagar demo" apaga a comunidade e a Ana na hora, com tudo
+  dela; excluir a conta da dona faz o mesmo (a Ana sai antes da conta, na mesma transação).
+- **Sessão "Abrir no app como Ana Exemplo" (`DemoSession`):** só o hash do token, 30 minutos. As
+  vencidas da mesma demo saem quando a dona abre outra; todas saem com a demo ou com a conta.
+- **Export:** a dona leva `demoCommunity` (nome, data e o nome da aluna fictícia, sem os registros
+  inventados). A Ana não aparece no export, na lista de alunos, nos relatórios, nos assentos, nas
+  métricas, na cota da API nem em nenhuma outra conta; não recebe e-mail, push nem WhatsApp, e
+  nenhum aviso da demo chega a pessoa de verdade.
+
 O compartilhamento passa a ter **6 categorias**: as 5 de hoje (`WORKOUT`, `NUTRITION`, `BODY`,
 `HABITS`, `GOALS`) e "Fotos das refeições" (ADR 038). A equipe só vê o que o membro liberou, por
 papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a negada — fica em
