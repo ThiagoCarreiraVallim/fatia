@@ -15,7 +15,7 @@ import { Screen } from '@/components/layout/screen';
 import { Button, ErrorState, LoadingState, Segmented, cn, useConfirm } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
-import { useStartSession } from '@/components/workout/use-start-session';
+import { usePlanPreview } from '@/components/workout/plan-preview-sheet';
 import {
   activeWeekRows,
   BLOCK_KIND_OPTIONS,
@@ -43,7 +43,8 @@ export default function BlockScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const start = useStartSession();
+  // "Começar" o treino do bloco passa pela prévia (#484).
+  const planPreview = usePlanPreview();
   const [kind, setKind] = useState<TrainingBlockKind>('hypertrophy');
   const [weeks, setWeeks] = useState<number>(4);
   const [planId, setPlanId] = useState<string | undefined>(undefined);
@@ -101,9 +102,8 @@ export default function BlockScreen() {
   ) : active?.planId && active.planName ? (
     <Pressable
       accessibilityRole="button"
-      disabled={start.isPending}
-      onPress={() => start.mutate({ planId: active.planId })}
-      className={cn(PILL, 'bg-primary', start.isPending && 'opacity-40')}
+      onPress={() => active.planId && planPreview.start(active.planId)}
+      className={cn(PILL, 'bg-primary')}
     >
       <Text className="font-sans-bold text-[15px] text-primary-foreground">
         Começar {active.planName}
