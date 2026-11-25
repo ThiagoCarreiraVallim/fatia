@@ -15,6 +15,7 @@ import type { WebPushService } from '../../notifications/web-push.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 import { MediaService } from '../../storage/media.service';
 import { MemoryObjectStore } from '../../storage/memory-object-store';
+import { ExerciseService } from '../../workout/exercise.service';
 import { AnnouncementService } from '../announcement.service';
 import { challengeCreatedNotice } from '../community-notices';
 import { DemoService } from '../demo.service';
@@ -24,6 +25,7 @@ import { InviteService } from '../invite.service';
 import { MembershipService } from '../membership.service';
 import { offerSentNotice } from '../plan-offer-notices';
 import type { GroupAction } from '../permissions';
+import { PlanMaterializerService } from '../plan-materializer.service';
 import { PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 import { ReportEmailService } from '../report-email.service';
@@ -39,7 +41,11 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
   const prisma = new PrismaService();
   const links = new ProfessionalLinkService(prisma);
   const groups = new GroupService(prisma, links, []);
-  const demo = new DemoService(prisma, new DemoSessionService(prisma));
+  const demo = new DemoService(
+    prisma,
+    new DemoSessionService(prisma),
+    new PlanMaterializerService(prisma, new ExerciseService(prisma)),
+  );
   const memberships = new MembershipService(prisma, links, silentNotifications);
   const config = {
     get: (k: string) =>
@@ -135,7 +141,7 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
 
   afterAll(async () => {
     await Promise.all([notifications.drain(), announcements.drain()]);
-    await prisma.group.deleteMany({ where: { demoOwnerId: u.dona } });
+    await demo.remove(u.dona);
     await prisma.group.deleteMany({ where: { id: { in: grupos } } });
     await prisma.user.deleteMany({ where: { id: { in: usuarios } } });
     await prisma.$disconnect();

@@ -6720,7 +6720,11 @@ describe('isolamento entre usuários', () => {
 
   describe('comunidade de demonstração (#412)', () => {
     const demoSessions = new DemoSessionService(prisma);
-    const demos = new DemoService(prisma, demoSessions);
+    const demos = new DemoService(
+      prisma,
+      demoSessions,
+      new PlanMaterializerService(prisma, exercises),
+    );
     const studentView412 = new StudentViewService(
       prisma,
       access,
@@ -6786,7 +6790,7 @@ describe('isolamento entre usuários', () => {
     });
 
     afterAll(async () => {
-      await prisma.group.deleteMany({ where: { demoOwnerId: { in: [d.donaA, d.donaB] } } });
+      for (const id of [d.donaA, d.donaB]) await demos.remove(id);
       await prisma.group.deleteMany({ where: { id: { in: [d.realA, d.realB] } } });
       await prisma.user.deleteMany({ where: { id: { in: [d.donaA, d.donaB, d.alunaA] } } });
     });

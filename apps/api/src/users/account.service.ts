@@ -10,6 +10,7 @@ import type { MediaFile } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
+import { ownWorkoutPurge } from '../common/workout-purge';
 import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 import { presentMeal } from '../nutrition/meal-presenter';
@@ -1160,7 +1161,13 @@ export class AccountService {
       data: { revokedAt: new Date() },
     });
 
-    await this.prisma.user.delete({ where: { id: userId } });
+    // A demo da pessoa (#412) cai junto: a Ana Exemplo dela também tem treino.
+    await this.prisma.$transaction([
+      ...ownWorkoutPurge(this.prisma, {
+        OR: [{ id: userId }, { demoGroup: { demoOwnerId: userId } }],
+      }),
+      this.prisma.user.delete({ where: { id: userId } }),
+    ]);
 
     this.logger.log({
       event: 'account_deleted',

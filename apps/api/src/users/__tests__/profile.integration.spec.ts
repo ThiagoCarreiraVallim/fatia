@@ -327,6 +327,36 @@ describe('Você: perfil, conta e novidades (integração)', () => {
       expect(await prisma.feedbackIdea.count({ where: { userId: ana } })).toBe(0);
       expect(await prisma.dataExport.count({ where: { userId: ana } })).toBe(0);
     });
+
+    it('apaga quem tem exercício próprio no plano e no treino feito (#412)', async () => {
+      // O exercício próprio cai com a conta, e o plano e a série que apontam
+      // para ele também: a ordem da cascata não pode travar a exclusão.
+      const ana = await pessoa();
+      const ex = await prisma.exercise.create({
+        data: { name: `${stamp}-remada`, muscleGroup: 'costas', createdByUserId: ana },
+      });
+      const plano = await prisma.workoutPlan.create({
+        data: {
+          userId: ana,
+          name: 'A',
+          exercises: { create: { exerciseId: ex.id, order: 0, targetSets: 3, targetReps: '10' } },
+        },
+      });
+      await prisma.workoutSession.create({
+        data: {
+          userId: ana,
+          planId: plano.id,
+          startedAt: new Date(),
+          completedAt: new Date(),
+          sets: { create: { exerciseId: ex.id, setNumber: 1, weightKg: 20, reps: 10 } },
+        },
+      });
+
+      await account.deleteAccount(ana, APP_DELETE_CONFIRMATION, APP_DELETE_CONFIRMATION);
+
+      expect(await prisma.user.findUnique({ where: { id: ana } })).toBeNull();
+      expect(await prisma.exercise.findUnique({ where: { id: ex.id } })).toBeNull();
+    });
   });
 
   describe('novidades, tutoriais e ideias', () => {

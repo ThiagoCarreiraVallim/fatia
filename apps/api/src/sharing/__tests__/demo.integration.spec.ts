@@ -7,11 +7,13 @@ import { NutritionSummaryService } from '../../nutrition/nutrition-summary.servi
 import { ProgressService } from '../../progress/progress.service';
 import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
+import { ExerciseService } from '../../workout/exercise.service';
 import { AccessAuditService } from '../access-audit.service';
 import { COMMUNITY_ACTIVE_MIN_MEMBERS, isCommunityActive } from '../community-active';
 import { DemoService } from '../demo.service';
 import { MemberFileService } from '../member-file.service';
 import { MemberNoteService } from '../member-note.service';
+import { PlanMaterializerService } from '../plan-materializer.service';
 import { ProfessionalAccessService } from '../professional-access.service';
 
 /**
@@ -23,7 +25,11 @@ import { ProfessionalAccessService } from '../professional-access.service';
 describe('comunidade de demonstração (integração, #412)', () => {
   const prisma = new PrismaService();
   const sessions = new DemoSessionService(prisma);
-  const demo = new DemoService(prisma, sessions);
+  const demo = new DemoService(
+    prisma,
+    sessions,
+    new PlanMaterializerService(prisma, new ExerciseService(prisma)),
+  );
   const file = new MemberFileService(
     prisma,
     new ProfessionalAccessService(prisma, new AccessAuditService(prisma)),
@@ -78,7 +84,7 @@ describe('comunidade de demonstração (integração, #412)', () => {
     u.aluna = await pessoa('Carla Real');
     u.outraDona = await pessoa('Outra Dona');
     // A cor da comunidade de verdade é a primeira da demo: a demo tem de trocar.
-    real = await comunidade(u.dona, 'Academia Demo', '#c2410c');
+    real = await comunidade(u.dona, 'Academia Demo', '#2563eb');
     await prisma.groupMembership.create({
       data: {
         groupId: real,
@@ -92,7 +98,7 @@ describe('comunidade de demonstração (integração, #412)', () => {
   });
 
   afterAll(async () => {
-    await prisma.group.deleteMany({ where: { demoOwnerId: { in: usuarios } } });
+    for (const id of usuarios) await demo.remove(id);
     await prisma.group.deleteMany({ where: { id: { in: grupos } } });
     await prisma.user.deleteMany({ where: { id: { in: usuarios } } });
     await prisma.$disconnect();
@@ -116,7 +122,7 @@ describe('comunidade de demonstração (integração, #412)', () => {
     expect(d).not.toBeNull();
     expect(d!.name).toBe('Academia Exemplo');
     // Outro nome e outra cor que a comunidade de verdade.
-    expect(d!.brandColor).not.toBe('#c2410c');
+    expect(d!.brandColor).not.toBe('#2563eb');
     expect(d!.student.name).toBe('Ana Exemplo');
     expect(d!.plan).toEqual({
       title: 'Hipertrofia A/B',
@@ -258,7 +264,8 @@ describe('comunidade de demonstração (integração, #412)', () => {
       activeMembers: 1,
       threshold: COMMUNITY_ACTIVE_MIN_MEMBERS,
     });
-    const novos = await Promise.all([1, 2, 3, 4].map((i) => pessoa(`Membro ${i}`)));
+    const novos: string[] = [];
+    for (const i of [1, 2, 3, 4]) novos.push(await pessoa(`Membro ${i}`));
     await prisma.groupMembership.createMany({
       data: novos.map((userId) => ({
         groupId: real,
