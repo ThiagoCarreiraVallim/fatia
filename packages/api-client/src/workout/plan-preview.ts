@@ -1,4 +1,4 @@
-import { BODYWEIGHT_EQUIPMENT, equipmentLabel } from '../community-exercises';
+import { BODYWEIGHT_EQUIPMENT, OTHER_EQUIPMENT, equipmentLabel } from '../community-exercises';
 import type { WorkoutPlan } from '../workout';
 import { planExerciseSummary, planSummaryLine } from './plan-config';
 
@@ -9,7 +9,7 @@ export interface PlanPreview {
   primaryMuscles: string[];
   /** Só os que não são principais de nenhum exercício. */
   secondaryMuscles: string[];
-  /** Rótulos do equipamento, sem repetir; peso corporal não é equipamento. */
+  /** Rótulos do equipamento, sem repetir; peso corporal e "outro" não entram. */
   equipment: string[];
   exercises: { id: string; exerciseId: number; name: string; group: string; summary: string }[];
 }
@@ -28,7 +28,10 @@ export function planPreview(plan: Pick<WorkoutPlan, 'exercises'>): PlanPreview {
     for (const m of pe.exercise?.primaryMuscles ?? []) primary.add(m);
     for (const m of pe.exercise?.secondaryMuscles ?? []) secondary.add(m);
     const eq = pe.exercise?.equipment;
-    if (eq && eq !== BODYWEIGHT_EQUIPMENT) equipment.add(equipmentLabel(eq));
+    // "Outro" não diz o que levar: fica de fora como o peso corporal.
+    if (eq && eq !== BODYWEIGHT_EQUIPMENT && eq !== OTHER_EQUIPMENT) {
+      equipment.add(equipmentLabel(eq));
+    }
   }
   return {
     info: ordered.length ? planSummaryLine(ordered) : '0 exercícios · 0 séries',

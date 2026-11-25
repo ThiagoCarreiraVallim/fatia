@@ -68,6 +68,14 @@ describe('prévia do plano (#484)', () => {
     expect(planPreview(plan).equipment).toEqual(['Barra', 'Polia']);
   });
 
+  it('"outro" não é equipamento a levar', () => {
+    // 122 exercícios do catálogo vêm com "other", gravado como "outro".
+    const withOther = {
+      exercises: [line(1, 'Algo', { primaryMuscles: ['chest'], equipment: 'outro' })],
+    } as unknown as WorkoutPlan;
+    expect(planPreview(withOther).equipment).toEqual([]);
+  });
+
   it('o resumo com a duração estimada, a mesma do cartão do plano', () => {
     // O cartão da lista de planos e o detalhe estimam pelo tempo de cada série
     // e descanso (`estimatePlanMinutes`); a prévia não pode dizer outro número.

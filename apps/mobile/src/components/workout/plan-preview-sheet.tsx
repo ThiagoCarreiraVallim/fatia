@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
 import { exerciseDetailPath, planPreview, workoutApi } from '@fatia/api-client';
@@ -15,6 +15,7 @@ import {
   DrawerScrollView,
   DrawerTitle,
   ErrorState,
+  FormMessage,
   LoadingState,
 } from '@/components/ui';
 import { Text } from '@/components/ui/text';
@@ -22,6 +23,8 @@ import { colors } from '@/theme/colors';
 import { MuscleDiagram } from './muscle-diagram';
 import { ExerciseGroupLine, ExerciseThumb } from './plan-exercise-row';
 import { useStartSession } from './use-start-session';
+import { startSessionErrorMessage } from './start-session-handlers';
+import { previewAfterNavigation, type PreviewRequest } from './plan-preview-return';
 
 /**
  * A prévia do treino antes de começar (#484): exercícios com séries e
@@ -33,23 +36,36 @@ import { useStartSession } from './use-start-session';
  * tem onde montar uma folha, então só chama `usePlanPreview().start(planId)`.
  */
 
-interface PreviewRequest {
-  planId: string;
-}
-
 const PlanPreviewContext = createContext<{ start: (planId: string) => void } | null>(null);
 
 export function PlanPreviewProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname() ?? '/';
   const [request, setRequest] = useState<PreviewRequest | null>(null);
   const [value] = useState(() => ({ start: (planId: string) => setRequest({ planId }) }));
+
+  // Ajuste durante o render, e não num efeito (#187): a prévia que saiu para o
+  // "Como fazer" reabre quando a pessoa volta para a tela de origem.
+  const next = previewAfterNavigation(request, pathname);
+  if (next !== request) setRequest(next);
+
   return (
     <PlanPreviewContext.Provider value={value}>
       {children}
       <DrawerLayer>
         <PlanPreviewSheet
-          planId={request?.planId ?? null}
+          planId={request && !request.away ? request.planId : null}
           onOpenChange={(open) => {
             if (!open) setRequest(null);
+          }}
+          onShowExercise={(exerciseId) => {
+            const to = exerciseDetailPath(exerciseId);
+            // A folha sai da frente (ela fica por cima de todas as telas) e
+            // volta junto com a pessoa.
+            setRequest(
+              (r) => r && { planId: r.planId, away: { from: pathname, to, arrived: false } },
+            );
+            router.push(to as never);
           }}
         />
       </DrawerLayer>
@@ -77,11 +93,12 @@ export function usePlanPreview(): { start: (planId: string) => void; isPending: 
 function PlanPreviewSheet({
   planId,
   onOpenChange,
+  onShowExercise,
 }: {
   planId: string | null;
   onOpenChange: (open: boolean) => void;
+  onShowExercise: (exerciseId: number) => void;
 }) {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const start = useStartSession();
   const plan = useQuery({
@@ -90,6 +107,15 @@ function PlanPreviewSheet({
     enabled: planId != null,
   });
   const preview = plan.data ? planPreview(plan.data) : null;
+  const empty = preview != null && preview.exercises.length === 0;
+  // Erro que não é o 409 da sessão já aberta fica na folha, que não fecha (#484).
+  const startError = startSessionErrorMessage(start.error);
+
+  // Cada abertura começa sem o erro da anterior.
+  const resetStart = start.reset;
+  useEffect(() => {
+    if (planId) resetStart();
+  }, [planId, resetStart]);
 
   return (
     <Drawer open={planId != null} onOpenChange={onOpenChange} snapPoints={['85%']}>
@@ -125,17 +151,13 @@ function PlanPreviewSheet({
               </View>
             </View>
 
-            <View className="rounded-card bg-card px-4">
+            <View className={empty ? 'hidden' : 'rounded-card bg-card px-4'}>
               {preview.exercises.map((e, i) => (
                 <Pressable
                   key={e.id}
                   accessibilityRole="button"
                   accessibilityLabel={`${e.name}, ${e.summary}. Ver como fazer`}
-                  onPress={() => {
-                    // A folha fecha antes: o "Como fazer" é uma tela.
-                    onOpenChange(false);
-                    router.push(exerciseDetailPath(e.exerciseId) as never);
-                  }}
+                  onPress={() => onShowExercise(e.exerciseId)}
                   className={
                     i > 0
                       ? 'min-h-[64px] flex-row items-center gap-3 border-t border-border py-2.5 active:opacity-80'
@@ -157,11 +179,28 @@ function PlanPreviewSheet({
           </DrawerScrollView>
           <View style={{ paddingBottom: insets.bottom + 16 }}>
             <DrawerFooter className="pt-3">
+              {empty ? (
+                <Text className="text-center text-sm text-muted-foreground">
+                  Este plano ainda não tem exercícios. Adicione pelo menos um para começar.
+                </Text>
+              ) : null}
+              {startError ? <FormMessage>{startError}</FormMessage> : null}
               <Button
                 loading={start.isPending}
+                disabled={empty}
                 onPress={() => {
-                  if (!planId) return;
-                  start.mutate({ planId }, { onSettled: () => onOpenChange(false) });
+                  if (!planId || empty) return;
+                  // Fecha quando a sessão abre, ou quando o 409 leva à que já
+                  // estava aberta; outro erro fica na folha, com a mensagem.
+                  start.mutate(
+                    { planId },
+                    {
+                      onSuccess: () => onOpenChange(false),
+                      onError: (error) => {
+                        if (!startSessionErrorMessage(error)) onOpenChange(false);
+                      },
+                    },
+                  );
                 }}
               >
                 Começar

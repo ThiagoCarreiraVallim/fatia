@@ -38,9 +38,34 @@ export function drawerStep(
       return { phase: 'closing', effects: ['notifyClosed', 'animateClose'] };
     case 'closed':
       if (phase === 'closing') return { phase: 'closed', effects: [] };
-      // Fechou sem passar pelo início da animação (fling rápido demais): o pai
-      // ainda precisa saber, senão o `open` dele fica preso em `true`.
-      if (phase === 'open') return { phase: 'closed', effects: ['notifyClosed'] };
+      // Fechou sem passar pelo início da animação (descida instantânea com
+      // "reduzir movimento", fling rápido demais, fechar durante a subida).
+      if (phase === 'open') {
+        // Com rascunho mexido, é o mesmo arrasto de sempre: a folha volta e pergunta.
+        if (dirty) return { phase: 'open', effects: ['snapBack', 'confirmDiscard'] };
+        // Sem rascunho, o pai ainda precisa saber, senão o `open` dele fica preso em `true`.
+        return { phase: 'closed', effects: ['notifyClosed'] };
+      }
       return { phase, effects: [] };
   }
+}
+
+/**
+ * Os avisos do @gorhom traduzidos em eventos da folha.
+ *
+ * - `onAnimate` para -1 é o começo da descida (`dismiss`). O gorhom o pula
+ *   quando a animação já terminou ao chegar no JS ("reduzir movimento"), e
+ *   também durante a subida, em que o índice atual ainda é -1.
+ * - O fim é o `onClose`, e não o `onChange(-1)`: o `onChange` só vem quando o
+ *   índice muda, e fechar durante a subida (índice -1 → -1) não o emite. Sem
+ *   aviso nenhum, a folha ficava `open`, o pai preso em `true` e a barra de
+ *   baixo escondida. O `onClose` vem sempre que a animação termina em -1.
+ */
+export function drawerSheetCallbacks(send: (type: DrawerEvent['type']) => void) {
+  return {
+    onAnimate: (from: number, to: number) => {
+      if (to === -1 && from !== -1) send('dismiss');
+    },
+    onClose: () => send('closed'),
+  };
 }

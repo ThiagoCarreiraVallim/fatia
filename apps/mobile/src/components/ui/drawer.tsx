@@ -25,7 +25,12 @@ import { cssInterop } from 'nativewind';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';
 import { SHEET_ANIMATION } from '@/theme/motion';
-import { drawerStep, type DrawerEvent, type DrawerPhase } from './drawer-state';
+import {
+  drawerSheetCallbacks,
+  drawerStep,
+  type DrawerEvent,
+  type DrawerPhase,
+} from './drawer-state';
 
 /**
  * Faz `className` funcionar nos componentes do `@gorhom/bottom-sheet`.
@@ -66,8 +71,8 @@ cssInterop(BottomSheetFlatList, {
  *    Um `ScrollView` comum disputa o gesto com o arrasto do sheet: a lista fica
  *    presa, ou o sheet fecha quando a pessoa quis rolar.
  * 3. **Fechar pelo gesto** tem que refletir no estado. O começo da descida
- *    (`onAnimate` para -1) chama `onOpenChange(false)`, e o `onChange(-1)` cobre
- *    o fling rápido demais para avisar o começo; sem isso o `open` do React
+ *    (`onAnimate` para -1) chama `onOpenChange(false)`, e o `onClose` cobre a
+ *    descida que não avisou o começo; sem isso o `open` do React
  *    fica `true` depois do sheet sumir, e a próxima abertura não acontece. A
  *    folha só desmonta quando a descida assenta (#483, `drawer-state.ts`).
  *
@@ -190,6 +195,8 @@ export function Drawer({
     setMounted(next.phase !== 'closed');
   }, []);
 
+  const sheetCallbacks = useMemo(() => drawerSheetCallbacks(send), [send]);
+
   useEffect(() => {
     send(open ? 'open' : 'close');
   }, [open, send]);
@@ -257,13 +264,10 @@ export function Drawer({
         // 550 ms com a curva do DS; com reduzir movimento, pula para o fim.
         animationConfigs={SHEET_ANIMATION}
         // O começo da descida (arrasto, toque fora): o pai fica sabendo já, e a
-        // folha continua montada até assentar (#483).
-        onAnimate={(from, to) => {
-          if (to === -1 && from !== -1) send('dismiss');
-        }}
-        onChange={(index) => {
-          if (index === -1) send('closed');
-        }}
+        // folha continua montada até assentar no `onClose` (#483). Por que não o
+        // `onChange(-1)`: ver `drawerSheetCallbacks`.
+        onAnimate={sheetCallbacks.onAnimate}
+        onClose={sheetCallbacks.onClose}
         backdropComponent={renderBackdrop}
         // Fundo por classe, não por `colors.background`: assim fundo e texto
         // (`text-foreground`) saem da mesma variável do tema, e nunca de temas

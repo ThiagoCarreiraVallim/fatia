@@ -86,7 +86,8 @@ function SheetForm({
   const [initial] = useState<PlanExerciseDraft>(() => draftFromPlanExercise(item, loadUnit));
   const [draft, setDraft] = useState<PlanExerciseDraft>(initial);
   // Mexeu e não salvou: arrastar para baixo ou tocar fora pergunta antes (#483).
-  useDiscardGuard(JSON.stringify(draft) !== JSON.stringify(initial));
+  // Salvando, não pergunta: o rascunho já está indo para o plano.
+  useDiscardGuard(!saving && JSON.stringify(draft) !== JSON.stringify(initial));
   const errors = validateDraft(draft);
   const valid = Object.keys(errors).length === 0;
   const set = (patch: Partial<PlanExerciseDraft>) => setDraft((d) => ({ ...d, ...patch }));
