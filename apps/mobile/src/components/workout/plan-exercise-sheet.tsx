@@ -34,6 +34,7 @@ import {
   Segmented,
   Switch,
   useConfirm,
+  useDiscardGuard,
 } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/theme/colors';
@@ -66,7 +67,7 @@ function todayLocal(): string {
 export function PlanExerciseSheet({ item, open, onOpenChange, ...rest }: Props) {
   return (
     <Drawer open={open && !!item} onOpenChange={onOpenChange} snapPoints={['85%']}>
-      {/* Fechar sem salvar descarta o rascunho: nada é gravado até o Salvar. */}
+      {/* Nada é gravado até o Salvar; fechar com mudança pergunta antes (`useDiscardGuard`). */}
       {item ? <SheetForm key={item.id} item={item} {...rest} /> : null}
     </Drawer>
   );
@@ -82,9 +83,11 @@ function SheetForm({
   error,
 }: Omit<Props, 'open' | 'item' | 'onOpenChange'> & { item: WorkoutPlanExercise }) {
   const confirm = useConfirm();
-  const [draft, setDraft] = useState<PlanExerciseDraft>(() =>
-    draftFromPlanExercise(item, loadUnit),
-  );
+  const [initial] = useState<PlanExerciseDraft>(() => draftFromPlanExercise(item, loadUnit));
+  const [draft, setDraft] = useState<PlanExerciseDraft>(initial);
+  // Mexeu e não salvou: arrastar para baixo ou tocar fora pergunta antes (#483).
+  // Salvando, não pergunta: o rascunho já está indo para o plano.
+  useDiscardGuard(!saving && JSON.stringify(draft) !== JSON.stringify(initial));
   const errors = validateDraft(draft);
   const valid = Object.keys(errors).length === 0;
   const set = (patch: Partial<PlanExerciseDraft>) => setDraft((d) => ({ ...d, ...patch }));

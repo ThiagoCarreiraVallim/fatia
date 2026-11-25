@@ -6,6 +6,8 @@ export {
   ConfirmProvider,
   useActionSheet,
   useConfirm,
+  useDiscardGuard,
+  DiscardGuard,
   type ActionSheetOption,
   type ActionSheetRequest,
   type ConfirmRequest,

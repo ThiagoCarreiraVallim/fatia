@@ -22,6 +22,7 @@ import { headerButtonClass } from '@/components/layout/tab-header';
 import {
   Button,
   cn,
+  DrawerLayer,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -392,36 +393,40 @@ export default function PlanDetailScreen() {
         </View>
       </Screen>
 
-      <PlanExerciseSheet
-        item={configuring}
-        open={configuring != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfigId(null);
-            updateExercise.reset();
+      {/* Irmãs do `Screen`, na camada dos drawers (#483): fora dela a folha fica
+          abaixo da barra de baixo e disputa toque com a tela. */}
+      <DrawerLayer>
+        <PlanExerciseSheet
+          item={configuring}
+          open={configuring != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setConfigId(null);
+              updateExercise.reset();
+            }
+          }}
+          loadUnit={loadUnit}
+          birthDate={me.data?.birthDate ?? null}
+          saving={updateExercise.isPending}
+          error={
+            updateExercise.isError
+              ? `Não foi possível salvar. ${updateExercise.error instanceof Error ? updateExercise.error.message : ''}`
+              : null
           }
-        }}
-        loadUnit={loadUnit}
-        birthDate={me.data?.birthDate ?? null}
-        saving={updateExercise.isPending}
-        error={
-          updateExercise.isError
-            ? `Não foi possível salvar. ${updateExercise.error instanceof Error ? updateExercise.error.message : ''}`
-            : null
-        }
-        onSave={(body) =>
-          configuring && updateExercise.mutate({ exerciseId: configuring.id, body })
-        }
-        onRemove={() => configuring && removeExercise.mutate(configuring.id)}
-      />
+          onSave={(body) =>
+            configuring && updateExercise.mutate({ exerciseId: configuring.id, body })
+          }
+          onRemove={() => configuring && removeExercise.mutate(configuring.id)}
+        />
 
-      <AddExerciseDrawer
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        planId={id}
-        planName={planData.name}
-        existingExerciseIds={existingIds}
-      />
+        <AddExerciseDrawer
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          planId={id}
+          planName={planData.name}
+          existingExerciseIds={existingIds}
+        />
+      </DrawerLayer>
     </>
   );
 }

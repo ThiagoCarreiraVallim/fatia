@@ -24,6 +24,16 @@ export interface StartSessionVars {
  * a sessão "já aberta" é a que o primeiro toque acabou de abrir: abrir de novo
  * empilhava a mesma tela duas vezes.
  */
+/**
+ * O que dizer quando começar falhou. O 409 da sessão já aberta não é falha: a
+ * pessoa cai nela (`onError` abaixo). Qualquer outro erro precisa aparecer —
+ * a prévia (#484) fechava a folha e ninguém ficava sabendo.
+ */
+export function startSessionErrorMessage(error: unknown): string | null {
+  if (!error || activeSessionIdFromError(error)) return null;
+  return 'Não foi possível começar o treino.';
+}
+
 export function startSessionHandlers(qc: StartSessionCache, open: (sessionId: string) => void) {
   const opened = new Set<string>();
   return {
