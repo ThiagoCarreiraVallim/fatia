@@ -105,6 +105,13 @@ model User {
   /// aceite da primeira busca (`AiConsent` WEB_SEARCH); desligada, a IA nem oferece a busca.
   webSearchEnabled Boolean @default(true)
 
+  /// Aluna fictícia da comunidade de demonstração (#412): a "Ana Exemplo". Não
+  /// nasce do Logto (o `logtoSub` é `demo|<uuid>`, que nenhum token traz) e o
+  /// e-mail termina em `.invalid`. Apagar a demo apaga a conta e tudo dela
+  /// (cascade). Nulo em toda conta de verdade. Nunca recebe e-mail, push nem
+  /// WhatsApp, e não entra em contagem nem listagem fora da demo.
+  demoGroupId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -213,6 +220,13 @@ model User {
   /// Chaves de API que a pessoa criou numa comunidade (#413). A chave é da
   /// comunidade: quem criou vira nulo ao apagar a conta.
   apiKeysCreated GroupApiKey[] @relation("ApiKeyCreator")
+
+  /// Demonstração (#412): a comunidade de demo que a pessoa criou (uma por
+  /// dono), a comunidade da aluna fictícia e as sessões "Abrir no app como Ana".
+  demoCommunity    Group?        @relation("DemoCommunityOwner")
+  demoGroup        Group?        @relation("DemoStudent", fields: [demoGroupId], references: [id], onDelete: Cascade)
+  demoSessions     DemoSession[] @relation("DemoSessionStudent")
+  demoSessionsMade DemoSession[] @relation("DemoSessionOpener")
 
   @@index([logtoSub])
 }
@@ -2025,9 +2039,45 @@ model Group {
   apiKeys                GroupApiKey[]
   apiMonthUsage          GroupApiMonthUsage[]
   apiCalls               GroupApiCall[]
+  /// Comunidade de demonstração (#412, Pn-21): a "Academia Exemplo" com a aluna
+  /// fictícia. Não aparece em `GET /groups`, preview, código, convite, página
+  /// pública, métricas, relatório, assentos nem cota de API; nada sai dela por
+  /// e-mail, push ou WhatsApp. O CHECK da migration amarra `isDemo` ao
+  /// `demoOwnerId` e o `demoOwnerId` ao `ownerId`.
+  isDemo                 Boolean                 @default(false)
+  /// O dono que criou a demo. Único: uma demo por dono. Nulo nas reais.
+  demoOwnerId            String?                 @unique
+  demoOwner              User?                   @relation("DemoCommunityOwner", fields: [demoOwnerId], references: [id], onDelete: Cascade)
+  /// A aluna fictícia (a conta sai junto com a demo).
+  demoStudent            User?                   @relation("DemoStudent")
+  demoSessions           DemoSession[]
 
   @@index([ownerId])
   @@index([type])
+}
+
+/// "Abrir no app como Ana Exemplo" (#412): sessão curta, só de leitura, na conta
+/// da aluna fictícia. O banco guarda só o sha256 do token (`fatia_demo_…`), que
+/// vale 30 minutos e só abre as leituras do Hoje marcadas com `@DemoReadable`.
+/// Não escreve, não chama IA, não registra aparelho para push. Sai com a demo.
+model DemoSession {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique
+  groupId     String
+  /// A aluna fictícia: é a conta que a sessão lê.
+  userId      String
+  /// Quem abriu (o dono da demo).
+  createdById String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User  @relation("DemoSessionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("DemoSessionOpener", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([userId])
+  @@index([createdById])
 }
 
 /// Seções da comunidade que a equipe pode esconder dos membros (#413, Pn-15).
