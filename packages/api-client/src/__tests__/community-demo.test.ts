@@ -6,6 +6,9 @@ import {
   demoMenuLabel,
   demoSessionExpiry,
   demoSessionPath,
+  demoSessionRequest,
+  demoTokenFromUrl,
+  isDemoSessionToken,
   demoShortcuts,
   demoStats,
   demoStudentLine,
@@ -167,5 +170,38 @@ describe('comunidade de demonstração (#412, Pn-21)', () => {
     expect(demoSessionPath('fatia_demo_abc')).toBe('/demo/fatia_demo_abc');
     const agora = new Date('2026-11-25T12:00:00.000Z');
     expect(demoSessionExpiry('2026-11-25T12:30:00.000Z', agora)).toBe('vale por 30 min');
+  });
+});
+
+describe('sessão da demo fora do painel (web e app)', () => {
+  const TOKEN = 'fatia_demo_' + 'aB3'.repeat(10) + 'xy';
+
+  it('reconhece o token da demo e nada mais', () => {
+    expect(isDemoSessionToken(TOKEN)).toBe(true);
+    expect(isDemoSessionToken('fatia_demo_curto')).toBe(false);
+    expect(isDemoSessionToken('eyJhbGciOi.jwt.qualquer')).toBe(false);
+    expect(isDemoSessionToken(`${TOKEN}/../x`)).toBe(false);
+    expect(isDemoSessionToken(undefined)).toBe(false);
+  });
+
+  it('tira o token do link universal, do esquema do app e do caminho', () => {
+    expect(demoTokenFromUrl(`https://app.fat.ia.br/demo/${TOKEN}`)).toBe(TOKEN);
+    expect(demoTokenFromUrl(`fatia://demo/${TOKEN}?x=1`)).toBe(TOKEN);
+    expect(demoTokenFromUrl(`/demo/${TOKEN}/`)).toBe(TOKEN);
+    expect(demoTokenFromUrl(`/c/${TOKEN}`)).toBeNull();
+    expect(demoTokenFromUrl('/demo/qualquer-coisa')).toBeNull();
+  });
+
+  it('o pedido é só GET, só das rotas do Hoje e com o token como Bearer', () => {
+    const req = demoSessionRequest('https://api.fat.ia.br/', TOKEN, 'dashboard/today');
+    expect(req).toEqual({
+      url: 'https://api.fat.ia.br/api/dashboard/today',
+      init: {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' },
+      },
+    });
+    expect(demoSessionRequest('https://api', TOKEN, 'users/me/export')).toBeNull();
+    expect(demoSessionRequest('https://api', 'eyJ.jwt', 'users/me')).toBeNull();
   });
 });

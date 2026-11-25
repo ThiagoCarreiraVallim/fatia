@@ -29,6 +29,10 @@ export const communityKeys = {
 /** Chaves do painel da equipe. Sob `['community', 'org', groupId]`: uma mudança invalida o painel inteiro. */
 export const orgKeys = {
   all: (groupId: string) => ['community', 'org', groupId] as const,
+  /** A demo da dona (#412): é da pessoa, não de uma comunidade. */
+  demo: ['community', 'demo'] as const,
+  /** "Primeiros passos" da comunidade de verdade (#412). */
+  firstSteps: (groupId: string) => ['community', 'org', groupId, 'first-steps'] as const,
   group: (groupId: string) => ['community', 'group', groupId] as const,
   members: (groupId: string) => ['community', 'org', groupId, 'members'] as const,
   /** Membros com quem saiu (aba "Saíram", #401): chave própria, sob `members`. */

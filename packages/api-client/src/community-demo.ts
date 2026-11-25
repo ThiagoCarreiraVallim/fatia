@@ -288,3 +288,48 @@ export function demoSessionExpiry(expiresAt: string, now: Date = new Date()): st
 
 export const DEMO_SESSION_HINT =
   'Abra no celular com o Fatia instalado. É só leitura: nada é gravado, a IA fica de fora e ninguém recebe aviso.';
+
+/** O token da sessão de demo: o mesmo formato que a API emite (`fatia_demo_` + base62). */
+const DEMO_SESSION_TOKEN = /^fatia_demo_[A-Za-z0-9]{16,64}$/;
+
+/**
+ * O que a sessão de demo lê: o Hoje da Ana e nada mais. A API confere de novo
+ * (o token só vale em rota `@DemoReadable`); aqui o cliente nem tenta o resto.
+ */
+export const DEMO_SESSION_ROUTES: readonly string[] = [
+  'dashboard/today',
+  'users/me',
+  'users/me/inbox',
+];
+
+export function isDemoSessionToken(value: string | null | undefined): value is string {
+  return typeof value === 'string' && DEMO_SESSION_TOKEN.test(value);
+}
+
+/** O token de `https://…/demo/<t>`, `fatia://demo/<t>` ou `/demo/<t>`; senão `null`. */
+export function demoTokenFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = /(?:^|\/)demo\/([^/?#]+)\/?(?:[?#].*)?$/.exec(url);
+  const token = match?.[1] ? decodeURIComponent(match[1]) : null;
+  return isDemoSessionToken(token) ? token : null;
+}
+
+/**
+ * O pedido da sessão de demo direto à API (o app não tem o proxy do Next):
+ * só GET, só as rotas do Hoje, e o token curto como Bearer, nunca a sessão de
+ * quem abriu. `null` quando a rota ou o token não servem.
+ */
+export function demoSessionRequest(
+  apiBase: string,
+  token: string,
+  route: string,
+): { url: string; init: { method: 'GET'; headers: Record<string, string> } } | null {
+  if (!DEMO_SESSION_ROUTES.includes(route) || !isDemoSessionToken(token)) return null;
+  return {
+    url: `${apiBase.replace(/\/+$/, '')}/api/${route}`,
+    init: {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    },
+  };
+}

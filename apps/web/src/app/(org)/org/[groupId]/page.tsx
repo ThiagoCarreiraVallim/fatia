@@ -18,6 +18,7 @@ import {
   panelSections,
   seatSummary,
   seatsApi,
+  type MyGroup,
   type OverviewCell,
   type OverviewColumn,
   type OverviewDays,
@@ -25,6 +26,7 @@ import {
   type PanelOverview,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
+import { DemoOverview } from '@/components/org/demo-panel';
 import { InsightsCard } from '@/components/org/insights-card';
 import { AnnouncementEditor } from '@/components/org/announcement-editor';
 import { linePaths } from '@/components/org/chart-paths';
@@ -461,6 +463,18 @@ function Itens({
  * de agregação não conta refeições).
  */
 export default function OrgOverviewPage() {
+  const g = useOrgGroup();
+  // A demo (#412) tem a Visão geral dela: a Ana, a regra dos 5 e "Experimente".
+  if (g.isDemo) return <DemoOverviewPage g={g} />;
+  return <RealOverviewPage />;
+}
+
+function DemoOverviewPage({ g }: { g: MyGroup }) {
+  useTopBarTitle(g.name);
+  return <DemoOverview g={g} />;
+}
+
+function RealOverviewPage() {
   const g = useOrgGroup();
   const dono = g.role === 'OWNER';
   useTopBarTitle(g.name);

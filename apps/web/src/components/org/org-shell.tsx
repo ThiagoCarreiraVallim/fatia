@@ -52,7 +52,8 @@ import {
   panelNav,
   panelNewsApi,
   panelSections,
-  PANEL_FOOTER_SECTIONS,
+  panelFooterSections,
+  type PanelLabelOptions,
   teamRoleLabel,
   usersApi,
   type GroupRole,
@@ -76,6 +77,7 @@ import { cn } from '@/lib/utils';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { orgKeys, panelNewsKey } from '@/components/community/query-keys';
 import { AnnouncementEditor } from './announcement-editor';
+import { DemoBanner, useFirstSteps } from './demo-panel';
 import { PanelSearch } from './panel-search';
 import { readNavPrefs, writeNavPrefs, type NavPrefs } from './panel-prefs';
 import { SidePanel, SidePanelProvider, useSidePanel } from './side-panel';
@@ -110,6 +112,7 @@ const ICONE: Record<PanelSection, LucideIcon> = {
   welcome: DoorOpen,
   offers: BadgeDollarSign,
   agent: Bot,
+  demo: Eye,
   updates: Sparkles,
   integrations: Plug,
   settings: Settings,
@@ -259,7 +262,7 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
               <PanelLeft aria-hidden className="h-4 w-4" />
             </button>
             <span aria-hidden className="h-4 w-px bg-border" />
-            <Breadcrumb groupId={g.id} pathname={pathname} />
+            <Breadcrumb g={g} pathname={pathname} />
             <div className="flex-1" />
             <button
               type="button"
@@ -299,6 +302,7 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
             )}
           </header>
           <div className="min-w-0 flex-1 px-4 pb-16 pt-4 md:overflow-y-auto md:px-6 md:pb-8 md:pt-5">
+            {g.isDemo && <DemoBanner />}
             {children}
           </div>
         </main>
@@ -310,8 +314,9 @@ function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
   );
 }
 
-function Breadcrumb({ groupId, pathname }: { groupId: string; pathname: string }) {
-  const migalha = panelBreadcrumb(pathname);
+function Breadcrumb({ g, pathname }: { g: MyGroup; pathname: string }) {
+  const groupId = g.id;
+  const migalha = panelBreadcrumb(pathname, usePanelLabelOptions(g));
   const titulo = useTopBarCurrentTitle();
   const section = activePanelSection(pathname);
   const raiz = pathname.replace(/\/$/, '') === panelHref(groupId, section);
@@ -425,7 +430,7 @@ function Sidebar({
   active: PanelSection;
 }) {
   const nav = panelNav(g.role, counts);
-  const pode = new Set(panelSections(g.role).map((s) => s.section));
+  const labelOpts = usePanelLabelOptions(g);
   const recolhido = prefs.collapsed;
   const novidades = usePanelNewsUnread();
   const alterna = (key: string) =>
@@ -497,11 +502,11 @@ function Sidebar({
 
       <div className="min-h-4 flex-1" />
 
-      {PANEL_FOOTER_SECTIONS.filter((s) => pode.has(s)).map((s) => (
+      {panelFooterSections(g).map((s) => (
         <ItemMenu
           key={s}
           href={panelHref(g.id, s)}
-          label={panelFooterLabel(s)}
+          label={panelFooterLabel(s, labelOpts)}
           icon={ICONE[s]}
           count={s === 'updates' ? novidades : null}
           lime={s === 'updates'}
@@ -518,6 +523,15 @@ function Sidebar({
       <UserMenu role={g.role} collapsed={recolhido} />
     </aside>
   );
+}
+
+/**
+ * O nome do item da demo e a migalha (#412): "Primeiros passos" com a
+ * comunidade ativa; dentro da demo, "Demonstração › Academia Exemplo".
+ */
+function usePanelLabelOptions(g: MyGroup): PanelLabelOptions {
+  const steps = useFirstSteps(g);
+  return g.isDemo ? { demoName: g.name } : { communityActive: Boolean(steps.data?.active) };
 }
 
 /** Quantas novidades do painel faltam ler (#413): o número lima do rodapé. */
@@ -599,11 +613,14 @@ function MobileNav({
   active: PanelSection;
   onSearch: () => void;
 }) {
+  const labelOpts = usePanelLabelOptions(g);
   const itens = [
     ...panelNav(g.role, counts).flatMap((grupo) => grupo.items),
-    ...PANEL_FOOTER_SECTIONS.filter((s) => panelSections(g.role).some((x) => x.section === s)).map(
-      (s) => ({ section: s, label: panelFooterLabel(s), count: null }),
-    ),
+    ...panelFooterSections(g).map((s) => ({
+      section: s,
+      label: panelFooterLabel(s, labelOpts),
+      count: null,
+    })),
   ];
   return (
     <div className="sticky top-14 z-30 -mt-px border-b border-subtle bg-background/95 backdrop-blur md:hidden">
