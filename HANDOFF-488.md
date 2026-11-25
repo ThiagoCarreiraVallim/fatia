@@ -30,13 +30,13 @@ Brief: /home/thiago/.cache/fatia-briefs/A.md
 
 - [x] agente: testes vermelhos (transcrição por chat, padrão, formato) → implementação (red em ~/.cache/fatia-vis/488/red-agent.txt)
 - [x] API: hosted-ai grava tokens de entrada e saída do ditado (red-api.txt)
-- [ ] /privacy + aceite (nome do modelo da voz)
+- [x] /privacy + aceite (nome do modelo da voz; aceite do chat pede de novo porque o nome mudou)
 - [x] .env.example, apps/agent/.env.example, .env.production.example (AI_PRICE_TABLE), README do agente
-- [ ] lint/typecheck/testes
-- [ ] teste ao vivo: /transcribe do agente 8114 com o m4a
+- [x] lint/typecheck/testes
+- [x] teste ao vivo: /transcribe do agente 8114 com m4a e webm (~/.cache/fatia-vis/488/agente-ao-vivo.txt)
 - [ ] prints do app (microfone aparecendo, transcrição no campo) — trava do emulador
 - [ ] PR (apagar este arquivo antes)
 
 ## Estado atual
 
-Agente e API feitos e verdes. Falta aceite + /privacy, teste ao vivo, prints, PR.
+Tudo verde e testado ao vivo no agente. Falta print do app (trava) e o PR.

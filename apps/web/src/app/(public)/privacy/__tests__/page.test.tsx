@@ -57,6 +57,15 @@ describe('/privacy — o que é prometido sobre a IA hospedada', () => {
     expect(textoDaPagina()).toMatch(/quem responde é a política dele/i);
   });
 
+  it('nomeia quem recebe o áudio do ditado: o modelo da voz é outro (#488)', () => {
+    // `allowed_models.py` revisa o Gemini 3.5 Flash Lite para a transcrição. Um modelo revisado
+    // que a página não nomeia é um terceiro recebendo áudio sem estar na política.
+    const texto = textoDaPagina();
+
+    expect(texto).toMatch(/Gemini 3\.5 Flash Lite/);
+    expect(texto).toMatch(/ditado[^.]*Gemini 3\.5 Flash Lite[^.]*Google/i);
+  });
+
   it('não esconde que o chat manda dados da conta ao modelo', () => {
     // "Você não vai junto" é verdade no reconhecimento por foto e falso no chat, que precisa ler a
     // conta para responder. Uma promessa escrita para um caminho não pode cobrir o outro.

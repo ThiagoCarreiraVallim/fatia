@@ -82,9 +82,10 @@ describe('AiConsentService', () => {
   });
 
   it('os nomes do provedor, do modelo e da busca vêm do ambiente, com o padrão de hoje', () => {
+    // A voz do ditado vai a outro modelo (#488): o aceite nomeia os dois.
     expect(aiProcessorFromEnv({})).toEqual({
       provider: 'OpenRouter',
-      model: 'GLM 5.3 Flash, da Z.ai',
+      model: 'GLM 5.3 Flash, da Z.ai (na voz, Gemini 3.5 Flash Lite, do Google)',
       searchEngine: 'Exa',
     });
     expect(
