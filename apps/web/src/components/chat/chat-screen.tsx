@@ -7,22 +7,21 @@ import { SquarePen } from 'lucide-react';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
 import { ghostButton } from '@/components/elements/surfaces';
 import { TopBarActions, useTopBarTitle } from '@/components/layout/app-top-bar';
-import { WebSearchSwitch } from './aceite';
 import {
   useCabecalhoDaConversa,
   useConversaAberta,
   useDisponibilidadeDoChat,
 } from './chat-runtime-provider';
 import { LinhaDoAgente } from './agente';
-import { GavetaDeConversas, novaConversa } from './conversas';
-import { GavetaDeMemorias } from './memorias';
-import { ConfigDaIa } from './config-da-ia';
+import { ConversationsDrawer, novaConversa } from './conversas';
+import { MemoriesDrawer } from './memorias';
+import { AiSettingsDrawer } from './config-da-ia';
 import { UpsellIA } from './upsell-ia';
 import { ChatThread } from './thread';
 import { cn } from '@/lib/utils';
 
 /**
- * A tela do chat: o nome da conversa e as gavetas (memórias, conversas) vão
+ * A tela do chat: o nome da conversa e a gaveta de conversas (com a config da IA dentro) vão
  * para a barra de topo; aqui ficam a conversa e o composer.
  *
  * Instância sem agente mostra que o chat não existe aqui, em vez de uma caixa
@@ -39,6 +38,7 @@ export function ChatScreen() {
   const title = fromServer ?? fromRuntime ?? 'Chat';
   const availability = useDisponibilidadeDoChat();
   const [memoriasAbertas, setMemoriasAbertas] = useState(false);
+  const [configAberta, setConfigAberta] = useState(false);
   useTopBarTitle(title);
 
   return (
@@ -55,10 +55,9 @@ export function ChatScreen() {
       className="flex h-[calc(100dvh-6.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
     >
       <TopBarActions>
-        <WebSearchSwitch />
-        <GavetaDeMemorias aberta={memoriasAbertas} onAberta={setMemoriasAbertas} />
-        <ConfigDaIa onAbrirMemorias={() => setMemoriasAbertas(true)} />
-        <GavetaDeConversas aberta={openId} />
+        {/* Só o essencial no topo (#487): a lista e a conversa nova. A config da IA (e, por
+            dentro dela, as memórias e a busca na web) abre da gaveta de conversas. */}
+        <ConversationsDrawer aberta={openId} onOpenSettings={() => setConfigAberta(true)} />
         {/* Como no app: começar outra conversa a um toque, sem abrir a gaveta. */}
         <button
           type="button"
@@ -69,6 +68,12 @@ export function ChatScreen() {
           <SquarePen size={20} aria-hidden />
         </button>
       </TopBarActions>
+      <AiSettingsDrawer
+        open={configAberta}
+        onOpenChange={setConfigAberta}
+        onOpenMemories={() => setMemoriasAbertas(true)}
+      />
+      <MemoriesDrawer open={memoriasAbertas} onOpenChange={setMemoriasAbertas} />
       <LinhaDoAgente />
 
       {availability?.available === false ? (

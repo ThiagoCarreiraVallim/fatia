@@ -49,8 +49,8 @@ const COR_DO_MODO: Record<AiWriteMode, string> = {
 
 /**
  * Config da IA (prancha Al-M24, ADR 039): o modo de cada categoria (toque gira Perguntar
- * antes → Automático → Desligado), o que nunca é automático, a busca na web (a mesma chave
- * do topo do chat) e os atalhos. A escolha do agente fica na conversa nova, como antes.
+ * antes → Automático → Desligado), o que nunca é automático, a busca na web (só aqui: saiu do
+ * topo do chat, #487) e os atalhos. A escolha do agente fica na conversa nova, como antes.
  */
 export default function AiSettingsScreen() {
   const router = useRouter();

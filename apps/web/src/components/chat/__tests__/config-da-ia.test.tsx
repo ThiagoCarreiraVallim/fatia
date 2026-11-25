@@ -32,8 +32,8 @@ vi.mock('@fatia/api-client', async () => {
 });
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
-const { ConfigDaIa } = await import('../config-da-ia');
-const { GavetaDeMemorias } = await import('../memorias');
+const { AiSettingsDrawer } = await import('../config-da-ia');
+const { MemoriesDrawer } = await import('../memorias');
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -72,8 +72,7 @@ function comCliente(ui: React.ReactNode) {
 
 describe('Config da IA (Al-M24)', () => {
   it('mostra o modo de cada categoria e o toque gira para o próximo', async () => {
-    comCliente(<ConfigDaIa />);
-    await userEvent.click(screen.getByRole('button', { name: 'Configurações da IA' }));
+    comCliente(<AiSettingsDrawer open onOpenChange={() => {}} />);
 
     const registros = await screen.findByRole('button', { name: /Registros do dia/ });
     expect(registros).toHaveTextContent('Perguntar antes');
@@ -86,8 +85,7 @@ describe('Config da IA (Al-M24)', () => {
   });
 
   it('o que nunca é automático, e a busca na web pela mesma preferência do chat', async () => {
-    comCliente(<ConfigDaIa />);
-    await userEvent.click(screen.getByRole('button', { name: 'Configurações da IA' }));
+    comCliente(<AiSettingsDrawer open onOpenChange={() => {}} />);
 
     const nunca = await screen.findByRole('list', { name: 'Nunca é automático' });
     expect(
@@ -108,8 +106,7 @@ describe('Config da IA (Al-M24)', () => {
 
 describe('O que a IA lembra (Al-M9)', () => {
   it('categoria e data, o "n de 50", o aviso da equipe e o Apagar todas com confirmação', async () => {
-    comCliente(<GavetaDeMemorias />);
-    await userEvent.click(screen.getByRole('button', { name: 'O que a IA lembra' }));
+    comCliente(<MemoriesDrawer open onOpenChange={() => {}} />);
 
     expect(await screen.findByText('Não come carne')).toBeInTheDocument();
     expect(screen.getByText(/preferência · 12 out/)).toBeInTheDocument();

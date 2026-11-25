@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { List, Settings2, SquarePen } from 'lucide-react-native';
+import { ArrowDown, List, SquarePen } from 'lucide-react-native';
 import {
-  AI_SETTINGS_COPY,
   AI_STATES_COPY,
   aiTurnState,
   quotaResetLabel,
@@ -19,24 +26,14 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { ErrorState, LoadingState, cn } from '@/components/ui';
-import {
-  AssistantBlock,
-  PlanCard,
-  Thinking,
-  TurnError,
-  UserBubble,
-} from '@/components/chat/message-list';
+import { AssistantBlock, Thinking, TurnError, UserBubble } from '@/components/chat/message-list';
 import { AiStateCard } from '@/components/chat/ai-state-card';
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
-import {
-  ChatConsentSheet,
-  QuickReplies,
-  WebSearchSwitch,
-  useChatUnlocked,
-} from '@/components/chat/consent';
+import { ChatConsentSheet, QuickReplies, useChatUnlocked } from '@/components/chat/consent';
 import { CHAT_KEYS, useChatSession, useChatSnapshot } from '@/chat/chat-provider';
 import { useKeyboardOverlap } from '@/chat/use-keyboard-overlap';
+import { createFollowEnd } from '@/chat/follow-end';
 import { colors } from '@/theme/colors';
 
 /**
@@ -105,10 +102,33 @@ function Conversation({ id }: { id: string | undefined }) {
     Platform.OS === 'android',
   );
 
+  // Segue a resposta só de quem está no fim (#486): quem subiu para ler fica onde está, com o
+  // botão "Ir para o fim". O teclado que abre também empurra para o fim, se a pessoa já estava lá.
+  const [seguir] = useState(createFollowEnd);
+  const [longeDoFim, setLongeDoFim] = useState(false);
+  const scrollToEnd = () => {
+    seguir.appScroll();
+    requestAnimationFrame(() => lista.current?.scrollToEnd({ animated: true }));
+  };
+  const followIfAtEnd = () => {
+    if (seguir.shouldAutoScroll) scrollToEnd();
+  };
+  const jumpToEnd = () => {
+    seguir.followAgain();
+    setLongeDoFim(false);
+    scrollToEnd();
+  };
+  const onScrollEvent =
+    (passo: 'scroll' | 'dragEnd' | 'momentumEnd') =>
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      seguir[passo](e.nativeEvent);
+      setLongeDoFim(!seguir.following);
+    };
+
   useEffect(() => {
-    if (thread.messages.length)
-      requestAnimationFrame(() => lista.current?.scrollToEnd({ animated: true }));
-  }, [thread.messages, thread.interrupt, thread.error, tecladoCobre]);
+    followIfAtEnd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `seguir` é estável (useState)
+  }, [thread.interrupt, thread.error, tecladoCobre]);
 
   const novaConversa = () => {
     const nova = sessao.startNew();
@@ -121,15 +141,6 @@ function Conversation({ id }: { id: string | undefined }) {
       scroll={false}
       actions={
         <>
-          <WebSearchSwitch />
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={AI_SETTINGS_COPY.title}
-            onPress={() => router.push('/chat/settings')}
-            className={TOP_BAR_ACTION}
-          >
-            <Settings2 size={20} color={colors.primaryText} />
-          </Pressable>
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Conversas"
@@ -163,128 +174,156 @@ function Conversation({ id }: { id: string | undefined }) {
           className="flex-1"
           style={{ paddingBottom: tecladoCobre }}
         >
-          {loading || !aberta ? (
-            <LoadingState />
-          ) : loadError ? (
-            <ErrorState error={loadError} onRetry={() => void sessao.reload()} />
-          ) : (
-            <FlatList
-              showsVerticalScrollIndicator={false}
-              ref={lista}
-              data={thread.messages}
-              keyExtractor={(m) => m.id}
-              contentContainerStyle={{ padding: 16, gap: 16, flexGrow: 1 }}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <View className="flex-1 justify-center gap-4">
-                  <Text className="text-center text-sm text-muted-foreground">
-                    Peça para registrar refeição, consultar treino ou ver sua evolução.
-                  </Text>
-                  {isNew && agentes.data?.agents.length ? (
-                    <View className="gap-2">
-                      <Text className="text-center text-xs text-muted-foreground">
-                        Quem responde
-                      </Text>
-                      <View className="flex-row flex-wrap justify-center gap-2">
-                        {[{ groupId: null, name: FATIA_AGENT_NAME }, ...agentes.data.agents].map(
-                          (a) => {
-                            const ativo = (agenteDaNova?.groupId ?? null) === a.groupId;
-                            return (
-                              <Pressable
-                                key={a.groupId ?? 'fatia'}
-                                accessibilityRole="radio"
-                                accessibilityState={{ checked: ativo }}
-                                onPress={() => setEscolhido(a.groupId)}
-                                className={cn(
-                                  'min-h-[44px] justify-center rounded-full border px-4',
-                                  ativo ? 'border-primary bg-primary' : 'border-border',
-                                )}
-                              >
-                                <Text
+          {/* A lista e o "Ir para o fim" dividem a mesma caixa: o botão fica por cima, dentro dela.
+              Fora dos limites do pai, o Android não entrega o toque. */}
+          <View className="relative flex-1">
+            {loading || !aberta ? (
+              <LoadingState />
+            ) : loadError ? (
+              <ErrorState error={loadError} onRetry={() => void sessao.reload()} />
+            ) : (
+              <FlatList
+                showsVerticalScrollIndicator={false}
+                ref={lista}
+                data={thread.messages}
+                keyExtractor={(m) => m.id}
+                contentContainerStyle={{ padding: 16, gap: 16, flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                // O conteúdo cresce a cada pedaço da resposta: é aqui, e não a cada mudança de
+                // `messages`, que a lista sabe a altura nova para seguir o fim.
+                onContentSizeChange={followIfAtEnd}
+                onScrollBeginDrag={() => seguir.dragStart()}
+                onScrollEndDrag={onScrollEvent('dragEnd')}
+                onMomentumScrollBegin={() => seguir.momentumStart()}
+                onMomentumScrollEnd={onScrollEvent('momentumEnd')}
+                onScroll={onScrollEvent('scroll')}
+                scrollEventThrottle={100}
+                ListEmptyComponent={
+                  <View className="flex-1 justify-center gap-4">
+                    <Text className="text-center text-sm text-muted-foreground">
+                      Peça para registrar refeição, consultar treino ou ver sua evolução.
+                    </Text>
+                    {isNew && agentes.data?.agents.length ? (
+                      <View className="gap-2">
+                        <Text className="text-center text-xs text-muted-foreground">
+                          Quem responde
+                        </Text>
+                        <View className="flex-row flex-wrap justify-center gap-2">
+                          {[{ groupId: null, name: FATIA_AGENT_NAME }, ...agentes.data.agents].map(
+                            (a) => {
+                              const ativo = (agenteDaNova?.groupId ?? null) === a.groupId;
+                              return (
+                                <Pressable
+                                  key={a.groupId ?? 'fatia'}
+                                  accessibilityRole="radio"
+                                  accessibilityState={{ checked: ativo }}
+                                  onPress={() => setEscolhido(a.groupId)}
                                   className={cn(
-                                    'text-sm',
-                                    ativo ? 'text-primary-foreground' : 'text-foreground',
+                                    'min-h-[44px] justify-center rounded-full border px-4',
+                                    ativo ? 'border-primary bg-primary' : 'border-border',
                                   )}
                                 >
-                                  {a.name}
-                                </Text>
-                              </Pressable>
-                            );
-                          },
-                        )}
+                                  <Text
+                                    className={cn(
+                                      'text-sm',
+                                      ativo ? 'text-primary-foreground' : 'text-foreground',
+                                    )}
+                                  >
+                                    {a.name}
+                                  </Text>
+                                </Pressable>
+                              );
+                            },
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  ) : null}
-                </View>
-              }
-              renderItem={({ item, index }) =>
-                item.role === 'user' ? (
-                  <UserBubble
-                    text={item.text}
-                    photos={item.photos}
-                    images={item.images}
-                    headline={index === 0}
-                  />
-                ) : (
-                  <AssistantBlock
-                    message={item}
-                    thread={thread}
-                    agentName={nomeDoAgente}
-                    showName={thread.messages[index - 1]?.role !== 'assistant'}
-                    // A resposta do turno atual pode vir em mais de uma fala do assistente:
-                    // "última" é não ter fala da pessoa depois.
-                    last={!thread.messages.slice(index + 1).some((m) => m.role === 'user')}
-                    onVote={(rowId, review) =>
-                      void sessao.vote(rowId, review).catch(() => undefined)
-                    }
-                    onQuote={(text) => sessao.setQuote(text)}
-                    onExplain={(rowId, reasons) =>
-                      void sessao.explainVote(rowId, reasons).catch(() => undefined)
-                    }
-                    onContinue={continuar}
-                  />
-                )
-              }
-              ListFooterComponent={
-                <View className="gap-3">
-                  {thread.plan ? <PlanCard steps={thread.plan} /> : null}
-                  {pensando ? <Thinking /> : null}
-                  {thread.interrupt && !thread.running ? (
-                    <PauseCard
-                      pausa={thread.interrupt.value}
-                      ocupado={thread.running}
-                      onResponder={(valor) => void sessao.resume(valor)}
+                    ) : null}
+                  </View>
+                }
+                renderItem={({ item, index }) =>
+                  item.role === 'user' ? (
+                    <UserBubble
+                      text={item.text}
+                      photos={item.photos}
+                      images={item.images}
+                      headline={index === 0}
                     />
-                  ) : null}
-                  {thread.error ? (
-                    <TurnError
-                      error={thread.error}
-                      // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
-                      onRetry={() => void sessao.retry()}
+                  ) : (
+                    <AssistantBlock
+                      message={item}
+                      thread={thread}
+                      agentName={nomeDoAgente}
+                      showName={thread.messages[index - 1]?.role !== 'assistant'}
+                      // A resposta do turno atual pode vir em mais de uma fala do assistente:
+                      // "última" é não ter fala da pessoa depois.
+                      last={!thread.messages.slice(index + 1).some((m) => m.role === 'user')}
+                      onVote={(rowId, review) =>
+                        void sessao.vote(rowId, review).catch(() => undefined)
+                      }
+                      onQuote={(text) => sessao.setQuote(text)}
+                      onExplain={(rowId, reasons) =>
+                        void sessao.explainVote(rowId, reasons).catch(() => undefined)
+                      }
                       onContinue={continuar}
                     />
-                  ) : null}
-                  {cota.data && !cota.data.allowed && !thread.error ? (
-                    // Prancha Al-M11, "Cota": a hora da volta e o registro manual a um toque.
-                    <AiStateCard
-                      tone="warning"
-                      title={AI_STATES_COPY.quotaTitle}
-                      body={`${quotaResetLabel(cota.data.resetsAt)} ${AI_STATES_COPY.quotaManual}`}
-                      actionLabel={AI_STATES_COPY.quotaAction}
-                      onAction={() => router.push('/nutrition')}
-                    />
-                  ) : cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
-                    <Text className="text-center text-xs text-muted-foreground">
-                      {`Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`}
-                    </Text>
-                  ) : null}
-                </View>
-              }
-            />
-          )}
+                  )
+                }
+                ListFooterComponent={
+                  <View className="gap-3">
+                    {pensando ? <Thinking /> : null}
+                    {thread.interrupt && !thread.running ? (
+                      <PauseCard
+                        pausa={thread.interrupt.value}
+                        ocupado={thread.running}
+                        onResponder={(valor) => void sessao.resume(valor)}
+                      />
+                    ) : null}
+                    {thread.error ? (
+                      <TurnError
+                        error={thread.error}
+                        // Reenvia a mensagem que falhou, como foi: não a citação que estiver no campo.
+                        onRetry={() => void sessao.retry()}
+                        onContinue={continuar}
+                      />
+                    ) : null}
+                    {cota.data && !cota.data.allowed && !thread.error ? (
+                      // Prancha Al-M11, "Cota": a hora da volta e o registro manual a um toque.
+                      <AiStateCard
+                        tone="warning"
+                        title={AI_STATES_COPY.quotaTitle}
+                        body={`${quotaResetLabel(cota.data.resetsAt)} ${AI_STATES_COPY.quotaManual}`}
+                        actionLabel={AI_STATES_COPY.quotaAction}
+                        onAction={() => router.push('/nutrition')}
+                      />
+                    ) : cota.data?.usedRatio != null && cota.data.usedRatio >= 0.8 ? (
+                      <Text className="text-center text-xs text-muted-foreground">
+                        {`Você já usou ${Math.round(cota.data.usedRatio * 100)}% do assistente hoje.`}
+                      </Text>
+                    ) : null}
+                  </View>
+                }
+              />
+            )}
+            {longeDoFim && thread.messages.length ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ir para o fim"
+                onPress={jumpToEnd}
+                className="absolute bottom-2 size-11 items-center justify-center self-center rounded-full border border-border bg-card"
+              >
+                <ArrowDown size={20} color={colors.foreground} />
+              </Pressable>
+            ) : null}
+          </View>
           {liberado ? (
             <>
-              <QuickReplies thread={thread} onSend={(text) => void sessao.send({ text })} />
+              <QuickReplies
+                thread={thread}
+                onSend={(text) => {
+                  jumpToEnd();
+                  void sessao.send({ text });
+                }}
+              />
               <Composer
                 running={thread.running}
                 disabled={!aberta || loading || cota.data?.allowed === false}
@@ -298,9 +337,10 @@ function Conversation({ id }: { id: string | undefined }) {
                 }
                 photosEnabled={disponibilidade.data?.photos ?? false}
                 dictationEnabled={disponibilidade.data?.dictation ?? false}
-                onSend={(text, photos) =>
-                  void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
-                }
+                onSend={(text, photos) => {
+                  jumpToEnd();
+                  void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) });
+                }}
                 queue={queue}
                 queuePaused={queuePaused}
                 onSendQueued={(id) => void sessao.sendQueued(id)}

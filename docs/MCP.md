@@ -67,11 +67,11 @@ Toda tool declara `title` (nome de exibição legível) e o hint aplicável. É 
 diretório de conectores da Anthropic, e é o que define quando o Claude pede confirmação
 ao usuário antes de executar.
 
-| Grupo         | Prefixos                                      | `readOnlyHint` | `destructiveHint` | Efeito no Claude   |
-| ------------- | --------------------------------------------- | -------------- | ----------------- | ------------------ |
-| Leitura       | `get_` `list_` `search_` `explain_`           | `true`         | `false`           | roda sem confirmar |
-| Destrutiva    | `delete_` + `remove_exercise_from_plan`       | `false`        | `true`            | sempre confirma    |
-| Escrita comum | os demais                                     | `false`        | `false`           | roda sem confirmar |
+| Grupo         | Prefixos                                | `readOnlyHint` | `destructiveHint` | Efeito no Claude   |
+| ------------- | --------------------------------------- | -------------- | ----------------- | ------------------ |
+| Leitura       | `get_` `list_` `search_` `explain_`     | `true`         | `false`           | roda sem confirmar |
+| Destrutiva    | `delete_` + `remove_exercise_from_plan` | `false`        | `true`            | sempre confirma    |
+| Escrita comum | os demais                               | `false`        | `false`           | roda sem confirmar |
 
 `export_my_data` não é leitura desde a #481: o link que ela cria abre sem login com todos os
 dados da conta, e por isso ela é escrita (e restrita no chat hospedado).

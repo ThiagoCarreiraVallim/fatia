@@ -234,6 +234,15 @@ export function isEmptyChatArtifact(a: ChatArtifact): boolean {
   }
 }
 
+/**
+ * O cartão que pede um toque da pessoa: o registro gravado (com Desfazer), o "abrir no app" e o
+ * arquivo. Esse fica aberto na última resposta; o de consulta é detalhe e recolhe numa linha,
+ * que abre a quem quiser ver (#487).
+ */
+export function chatArtifactAsksAction(a: ChatArtifact): boolean {
+  return a.kind === 'saved' || a.kind === 'app_only' || a.kind === 'file';
+}
+
 // ---------------------------------------------------------------- linhas das ferramentas
 
 export type ToolCallStatus =
@@ -523,9 +532,16 @@ export const AI_CONSENT_TEXTS = {
       'cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
-    footnote: 'Dá para desligar no globo, no topo do chat.',
   },
 } as const;
+
+/**
+ * O rodapé do aceite da busca: onde fica a chave, e não o que vai a quem. Por isso mora fora de
+ * `AI_CONSENT_TEXTS` e do hash da versão: mudar a chave de lugar (#487) não pede o aceite de
+ * novo, nem recusa o aceite do app que ainda mostra o rodapé antigo.
+ */
+export const WEB_SEARCH_CONSENT_FOOTNOTE =
+  'Dá para desligar em Configurações da IA, na lista de conversas.';
 
 /** Quem recebe: o provedor, o modelo e a busca, como a API os nomeia (`AI_CONSENT_*`). */
 export interface AiProcessor {

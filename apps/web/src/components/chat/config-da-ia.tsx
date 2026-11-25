@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,7 +11,6 @@ import {
   Link2,
   Lock,
   Search,
-  Settings2,
   Target,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,10 +33,8 @@ import {
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
 } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
-import { ghostButton } from '@/components/elements/surfaces';
 import { useChaveDaBusca } from './catalogo';
 
 export const CHAVE_DA_CONFIG_DA_IA = ['chat', 'settings'] as const;
@@ -61,9 +57,18 @@ const COR_DO_MODO: Record<AiWriteMode, string> = {
  * Config da IA (prancha Al-M24, ADR 039): o modo de cada categoria, o que nunca é
  * automático, a busca na web e os atalhos. O chip gira Perguntar antes → Automático →
  * Desligado a cada toque; a API grava e o próximo turno já obedece.
+ *
+ * Sem botão próprio no topo do chat (#487): abre de dentro da gaveta de conversas.
  */
-export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }) {
-  const [aberta, setAberta] = useState(false);
+export function AiSettingsDrawer({
+  open: aberta,
+  onOpenChange: setAberta,
+  onOpenMemories,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenMemories?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     queryKey: CHAVE_DA_CONFIG_DA_IA,
@@ -84,12 +89,6 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
 
   return (
     <Drawer open={aberta} onOpenChange={setAberta}>
-      <DrawerTrigger
-        aria-label={textos.title}
-        className={cn(ghostButton, 'rounded-full p-2 text-foreground/70')}
-      >
-        <Settings2 size={20} aria-hidden />
-      </DrawerTrigger>
       <DrawerContent className="max-h-[85vh]">
         <DrawerHeader>
           <DrawerTitle>{textos.title}</DrawerTitle>
@@ -208,7 +207,7 @@ export function ConfigDaIa({ onAbrirMemorias }: { onAbrirMemorias?: () => void }
                     type="button"
                     onClick={() => {
                       setAberta(false);
-                      onAbrirMemorias?.();
+                      onOpenMemories?.();
                     }}
                     className="flex min-h-12 items-center gap-3 px-2 text-left text-sm text-foreground hover:bg-foreground/[0.04]"
                   >

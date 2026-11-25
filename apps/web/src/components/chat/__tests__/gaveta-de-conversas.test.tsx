@@ -33,7 +33,7 @@ vi.mock('@fatia/api-client', async () => {
 });
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
-const { GavetaDeConversas } = await import('../conversas');
+const { ConversationsDrawer } = await import('../conversas');
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -49,12 +49,12 @@ beforeAll(() => {
   Element.prototype.releasePointerCapture = () => {};
 });
 
-describe('GavetaDeConversas (#384)', () => {
+describe('ConversationsDrawer (#384)', () => {
   it('agrupa em Hoje, Esta semana e Antes, com a última fala embaixo do nome', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <GavetaDeConversas aberta={undefined} />
+        <ConversationsDrawer aberta={undefined} />
       </QueryClientProvider>,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Conversas' }));
