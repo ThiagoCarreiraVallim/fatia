@@ -29,3 +29,8 @@
 ## Estado atual
 
 Código pronto (commit d7ccc839). Falta docs, prints, PR.
+
+## Pausa (2026-11-25)
+
+Pausado a pedido do usuário logo depois do commit dcc48fbf (docs). Árvore limpa. Branch `worktree-agent-a9b837780734dde27` (o nome da branch no worktree; renomear para `redesign/412-demo` ao abrir o PR). O banco `fatia_t412` continua existindo. A API da porta 3112 foi parada. A trava do emulador não estava pega.
+Falta: rever o que os commits wip cobrem contra o checklist acima, rodar as suítes completas, lint e typecheck, fazer a passada visual (prancha | web | app em ~/.cache/fatia-vis/412/), abrir o PR e esperar o CI.
