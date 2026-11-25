@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Patch, Post } from '@nestjs/common';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CompleteOnboardingDto, SaveOnboardingDto } from './dto/onboarding.dto';
 import { OnboardingService } from './onboarding.service';
+import { DemoReadable } from '../common/decorators/demo-readable.decorator';
 
 /** O assistente de primeira vez. Mora aqui porque o que ele grava são metas. */
 @Controller('users/me/onboarding')
@@ -41,6 +42,7 @@ export class OnboardingController {
 
   /** O cartão "Primeiros passos" do Hoje; `null` para quem não o tem. */
   @Get('first-steps')
+  @DemoReadable()
   firstSteps(@CurrentUser() user: CurrentUserPayload) {
     return this.onboarding.firstSteps(user.id, user.timezone);
   }

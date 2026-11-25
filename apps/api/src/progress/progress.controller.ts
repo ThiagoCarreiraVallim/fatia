@@ -21,6 +21,7 @@ import { CreateWeightLogDto, ListWeightLogsDto, UpdateWeightLogDto } from './dto
 import { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
 import { ConsistencyQueryDto } from './dto/consistency.dto';
 import { CreateWaterLogDto, ListWaterLogsDto, UpdateWaterLogDto } from './dto/water-log.dto';
+import { DemoReadable } from '../common/decorators/demo-readable.decorator';
 
 @Controller()
 export class ProgressController {
@@ -96,6 +97,7 @@ export class ProgressController {
   }
 
   @Get('water-logs')
+  @DemoReadable()
   listWater(@CurrentUser() user: CurrentUserPayload, @Query() q: ListWaterLogsDto) {
     return this.waters.list(q, user.id);
   }
@@ -121,6 +123,7 @@ export class ProgressController {
 
   // -------- Progress queries --------
   @Get('progress/weight')
+  @DemoReadable()
   weightProgress(
     @CurrentUser() user: CurrentUserPayload,
     @Query('days', new ParseIntPipe({ optional: true })) days?: number,
@@ -191,6 +194,7 @@ export class ProgressController {
 
   // -------- Dashboard --------
   @Get('dashboard/today')
+  @DemoReadable()
   today(@CurrentUser() user: CurrentUserPayload) {
     return this.dashboard.today({ userId: user.id, timezone: user.timezone });
   }

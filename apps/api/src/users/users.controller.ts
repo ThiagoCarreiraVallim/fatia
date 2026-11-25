@@ -22,6 +22,7 @@ import { McpConnectionService } from '../auth/mcp-connection.service';
 import { IdentitySyncService } from '../auth/identity-sync.service';
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
 import { ConfirmEmailChangeDto, RequestEmailChangeDto, SyncIdentityDto } from './dto/identity.dto';
+import { DemoReadable } from '../common/decorators/demo-readable.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -34,6 +35,7 @@ export class UsersController {
   ) {}
 
   @Get('me')
+  @DemoReadable()
   getMe(@CurrentUser() user: CurrentUserPayload) {
     return this.profile.getMe(user.id);
   }

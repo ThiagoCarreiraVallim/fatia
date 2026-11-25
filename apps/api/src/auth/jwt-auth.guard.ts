@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Optional,
   UnauthorizedException,
@@ -8,6 +9,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
+import { DEMO_READABLE_KEY } from '../common/decorators/demo-readable.decorator';
+import { isDemoToken } from '../common/demo';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { JwtValidationService } from './jwt-validation.service';
 import { UserProvisioningService } from './user-provisioning.service';
@@ -36,6 +39,22 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) {
       this.setChallenge(req, res);
       throw new UnauthorizedException('Missing bearer token');
+    }
+
+    // A sessão "Abrir no app como Ana Exemplo" (#412): token opaco da demo, que
+    // nunca passa pelo Logto. Vale só em GET das leituras do Hoje marcadas com
+    // `@DemoReadable`; escrever, chamar a IA, cadastrar push ou qualquer outra
+    // rota recusa antes de olhar o token. A conta é sempre a aluna fictícia.
+    if (isDemoToken(token)) {
+      const readable = this.reflector.getAllAndOverride<boolean>(DEMO_READABLE_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]);
+      if (!readable || req.method !== 'GET' || !this.demo) {
+        throw new ForbiddenException('A demonstração é só leitura');
+      }
+      (req as Request & { user: CurrentUserPayload }).user = await this.demo.authenticate(token);
+      return true;
     }
 
     try {

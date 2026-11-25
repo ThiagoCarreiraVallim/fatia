@@ -10,6 +10,7 @@ import { LogtoManagementService } from './logto-management.service';
 import { IdentitySyncService } from './identity-sync.service';
 import { McpConnectionRecorder } from './mcp-connection.service';
 import { McpConnectionsModule } from './mcp-connections.module';
+import { DemoSessionService } from './demo-session.service';
 
 @Module({
   imports: [McpConnectionsModule],
@@ -18,6 +19,7 @@ import { McpConnectionsModule } from './mcp-connections.module';
     JwtValidationService,
     UserProvisioningService,
     JwtAuthGuard,
+    DemoSessionService,
     OAuthFacadeService,
     LogtoManagementService,
     IdentitySyncService,
@@ -28,6 +30,7 @@ import { McpConnectionsModule } from './mcp-connections.module';
     },
   ],
   exports: [
+    DemoSessionService,
     JwtValidationService,
     UserProvisioningService,
     JwtAuthGuard,
