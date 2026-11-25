@@ -26,6 +26,7 @@ import {
   type ChatToolCatalogEntry,
 } from '../chat-cards';
 import { CHAT_ERROR_CODES, textoDeErroDoChat, type ChatArtifact } from '../chat';
+import { AI_SETTINGS_COPY } from '../ai-settings';
 
 const apagarRefeicao: ChatToolCatalogEntry = {
   title: 'Apagar refeição',
@@ -174,7 +175,7 @@ describe('groupConversationsByDay — Hoje, Esta semana e Antes (#384)', () => {
 });
 
 const HASH_CHAT = '4e35b2fd';
-const HASH_BUSCA = '48166ae7';
+const HASH_BUSCA = 'd104c22f';
 
 describe('textos dos aceites (#384)', () => {
   // FNV-1a de 32 bits do texto: basta para notar que ele mudou.
@@ -197,7 +198,12 @@ describe('textos dos aceites (#384)', () => {
     expect({
       versao: AI_CONSENT_VERSIONS.webSearch,
       texto: sha(AI_CONSENT_TEXTS.webSearch),
-    }).toEqual({ versao: '2026-11-17', texto: HASH_BUSCA });
+    }).toEqual({ versao: '2026-11-24', texto: HASH_BUSCA });
+  });
+
+  it('o rodapé da busca aponta para onde a chave mora agora, não para o globo que saiu do topo (#487)', () => {
+    expect(AI_CONSENT_TEXTS.webSearch.footnote).not.toMatch(/globo|topo do chat/);
+    expect(AI_CONSENT_TEXTS.webSearch.footnote).toContain(AI_SETTINGS_COPY.title);
   });
 
   it('os nomes do provedor, do modelo e da busca vêm da API, não do texto', () => {

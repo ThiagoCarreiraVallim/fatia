@@ -13,7 +13,7 @@ import { PrismaService } from '../../common/prisma.service';
  * (`ai-consent.ts`), igual no PWA e no app, com a mesma versão: mudar o texto é mudar a versão
  * dos dois lados, e todo mundo aceita de novo — quem leu o texto antigo não aceitou o novo.
  */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-24' } as const;
 
 /**
  * Os nomes que o texto do aceite mostra (#384): quem recebe as mensagens, o modelo e a busca.

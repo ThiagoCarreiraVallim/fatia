@@ -504,7 +504,7 @@ export function groupConversationsByDay<T extends { updatedAt: string }>(
  * As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar a
  * versão aqui e lá — o teste amarra um hash do texto à versão, para não esquecer.
  */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-24' } as const;
 
 /**
  * Os textos dos aceites. Os nomes (`{provider}`, `{model}`, `{searchEngine}`) não moram aqui:
@@ -532,7 +532,7 @@ export const AI_CONSENT_TEXTS = {
       'cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
-    footnote: 'Dá para desligar no globo, no topo do chat.',
+    footnote: 'Dá para desligar em Configurações da IA, na lista de conversas.',
   },
 } as const;
 
