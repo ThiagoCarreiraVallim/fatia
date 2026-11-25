@@ -1,10 +1,9 @@
 import { BODYWEIGHT_EQUIPMENT, equipmentLabel } from '../community-exercises';
 import type { WorkoutPlan } from '../workout';
-import { planCardInfo } from '../workout-session-copy';
-import { planExerciseSummary } from './plan-config';
+import { planExerciseSummary, planSummaryLine } from './plan-config';
 
 export interface PlanPreview {
-  /** "3 exercícios · 10 séries · ~26 min": a duração estimada do cartão do plano. */
+  /** "3 exercícios · 10 séries · ~22 min": o mesmo resumo (e a mesma duração) do cartão do plano. */
   info: string;
   /** Músculos do diagrama (chaves `data-muscle`), na ordem em que aparecem. */
   primaryMuscles: string[];
@@ -32,7 +31,7 @@ export function planPreview(plan: Pick<WorkoutPlan, 'exercises'>): PlanPreview {
     if (eq && eq !== BODYWEIGHT_EQUIPMENT) equipment.add(equipmentLabel(eq));
   }
   return {
-    info: planCardInfo(plan),
+    info: ordered.length ? planSummaryLine(ordered) : '0 exercícios · 0 séries',
     primaryMuscles: [...primary],
     secondaryMuscles: [...secondary].filter((m) => !primary.has(m)),
     equipment: [...equipment],

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planPreview } from '../workout/plan-preview';
+import { planSummaryLine } from '../workout/plan-config';
 import type { WorkoutPlan, WorkoutPlanExercise } from '../workout';
 
 /** A prévia antes de começar ou adicionar um plano (#484). */
@@ -67,7 +68,11 @@ describe('prévia do plano (#484)', () => {
     expect(planPreview(plan).equipment).toEqual(['Barra', 'Polia']);
   });
 
-  it('o resumo com a duração estimada', () => {
-    expect(planPreview(plan).info).toBe('3 exercícios · 10 séries · ~26 min');
+  it('o resumo com a duração estimada, a mesma do cartão do plano', () => {
+    // O cartão da lista de planos e o detalhe estimam pelo tempo de cada série
+    // e descanso (`estimatePlanMinutes`); a prévia não pode dizer outro número.
+    const info = planPreview(plan).info;
+    expect(info).toBe(planSummaryLine(plan.exercises as never));
+    expect(info).toMatch(/^3 exercícios · 10 séries · ~\d+ min$/);
   });
 });
