@@ -71,7 +71,11 @@ const config: ExpoConfig = {
         {
           action: 'VIEW',
           autoVerify: true,
-          data: [{ scheme: 'https', host: APP_LINKS_HOST, pathPrefix: '/c/' }],
+          data: [
+            { scheme: 'https', host: APP_LINKS_HOST, pathPrefix: '/c/' },
+            // "Abrir no app como Ana Exemplo" (#412).
+            { scheme: 'https', host: APP_LINKS_HOST, pathPrefix: '/demo/' },
+          ],
           category: ['BROWSABLE', 'DEFAULT'],
         },
       ],

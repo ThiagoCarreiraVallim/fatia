@@ -44,7 +44,7 @@ describe('Hoje da Ana Exemplo', () => {
       ),
     );
     renderToday();
-    expect(await screen.findByText(/Olá, Ana/)).toBeTruthy();
+    expect(await screen.findByText(/, Ana$/)).toBeTruthy();
     expect(screen.getByText('Demonstração · dados fictícios')).toBeTruthy();
     expect(screen.getByText(/só leitura/i)).toBeTruthy();
     const urls = fetchMock.mock.calls.map((c) => c[0] as string);
@@ -64,7 +64,7 @@ describe('Hoje da Ana Exemplo', () => {
       ),
     );
     const { container } = renderToday();
-    await screen.findByText(/Olá, Ana/);
+    await screen.findByText(/, Ana$/);
     const cards = container.querySelector('[data-demo-cards]');
     expect(cards?.hasAttribute('inert')).toBe(true);
   });
@@ -73,6 +73,6 @@ describe('Hoje da Ana Exemplo', () => {
     fetchMock.mockResolvedValue(json({ message: 'Unauthorized' }, 401));
     renderToday();
     await waitFor(() => expect(screen.getByText(/link da demonstração venceu/i)).toBeTruthy());
-    expect(screen.queryByText(/Olá, Ana/)).toBeNull();
+    expect(screen.queryByText(/, Ana$/)).toBeNull();
   });
 });

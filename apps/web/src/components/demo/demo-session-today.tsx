@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { DEMO_BANNER_TITLE, type MeUser, type TodaySummary } from '@fatia/api-client';
+import { DEMO_BANNER_TITLE, greetingLine, type MeUser, type TodaySummary } from '@fatia/api-client';
 import { ErrorState } from '@/components/ui/error-state';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,7 +50,6 @@ export function DemoSessionToday({ token }: { token: string }) {
 
   const expired = me.error instanceof DemoExpired || today.error instanceof DemoExpired;
   const data = today.data;
-  const firstName = me.data?.name.split(' ')[0] ?? '';
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,7 +89,7 @@ export function DemoSessionToday({ token }: { token: string }) {
         </div>
       ) : (
         <>
-          <h1 className="font-display text-2xl font-bold">Olá, {firstName}</h1>
+          <h1 className="font-display text-2xl font-bold">{greetingLine(me.data.name)}</h1>
           <div data-demo-cards inert className="flex flex-col gap-4">
             <KcalCard nutrition={data.nutrition} />
             <NextWorkoutCard workout={data.workout} />

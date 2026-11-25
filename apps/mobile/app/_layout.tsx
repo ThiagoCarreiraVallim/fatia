@@ -133,6 +133,8 @@ export default function RootLayout() {
                     <Stack.Screen name="forgot-password" />
                     {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
                     <Stack.Screen name="c/[token]" />
+                    {/* A demo da dona (#412): só o token curto, nunca a sessão de quem está logado. */}
+                    <Stack.Screen name="demo/[token]" />
                   </Stack>
                 </ToastProvider>
               </QueryClientProvider>
