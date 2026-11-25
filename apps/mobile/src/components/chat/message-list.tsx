@@ -6,7 +6,6 @@ import * as Clipboard from 'expo-clipboard';
 import {
   Check,
   ChevronDown,
-  ChevronRight,
   CircleAlert,
   Copy,
   Image as ImageIcon,
@@ -21,6 +20,7 @@ import {
   CHAT_FEEDBACK_REASON_LABELS,
   AI_STATES_COPY,
   aiTurnState,
+  chatArtifactAsksAction,
   chatCardTitle,
   chatMarkdownPlainText,
   collapsedLabel,
@@ -34,7 +34,6 @@ import {
   splitQuote,
   textoDeErroDoChat,
   type ChatAssistantMessage,
-  type ChatPlanStep,
   type ChatReviewReason,
   type ChatStreamError,
   type ChatThreadState,
@@ -158,7 +157,6 @@ export function AssistantBlock({
   /** "Continuar" da resposta parada (prancha Al-M11, "Interrompida"). */
   onContinue?: () => void;
 }) {
-  const [pensamentoAberto, setPensamentoAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [motivo, setMotivo] = useState<'fechado' | 'aberto' | 'enviado'>('fechado');
   return (
@@ -167,26 +165,6 @@ export function AssistantBlock({
           de uma comunidade, sim, porque a pessoa precisa saber com quem fala. */}
       {showName && agentName ? (
         <Text className="text-xs font-semibold text-primary">{agentName}</Text>
-      ) : null}
-      {message.reasoning ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: pensamentoAberto }}
-          onPress={() => setPensamentoAberto((v) => !v)}
-          className="gap-1"
-        >
-          <View className="flex-row items-center gap-1">
-            {pensamentoAberto ? (
-              <ChevronDown size={14} color={colors.mutedForeground} />
-            ) : (
-              <ChevronRight size={14} color={colors.mutedForeground} />
-            )}
-            <Text className="text-xs text-muted-foreground">Raciocínio</Text>
-          </View>
-          {pensamentoAberto ? (
-            <Text className="text-xs leading-5 text-muted-foreground">{message.reasoning}</Text>
-          ) : null}
-        </Pressable>
       ) : null}
       {/* O texto vem antes das linhas e dos cartões, como no PWA (prancha IA-Estados). */}
       {message.text ? <ChatMarkdown source={message.text} /> : null}
@@ -269,11 +247,6 @@ export function AssistantBlock({
               </Pressable>
             </>
           ) : null}
-          {message.durationMs ? (
-            <Text className="text-xs text-muted-foreground">
-              {(message.durationMs / 1000).toFixed(1).replace('.', ',')} s
-            </Text>
-          ) : null}
         </View>
       ) : null}
       {motivo !== 'fechado' && message.rowId && onExplain ? (
@@ -290,51 +263,19 @@ export function AssistantBlock({
   );
 }
 
+/**
+ * O "pensando" antes do primeiro pedaço da resposta: uma linha, sem cartão (#487). O raciocínio
+ * do modelo e o plano de passos não aparecem: para quem está começando, eram ruído.
+ */
 export function Thinking() {
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityLabel="Pensando"
-      className="gap-2.5 rounded-3xl bg-card p-4"
+      className="flex-row items-center gap-2.5 px-1"
     >
-      <View className="flex-row items-center gap-3">
-        <ActivityIndicator size="small" color={colors.primaryText} />
-        <Text className="text-[15px] font-bold text-foreground">{AI_STATES_COPY.thinking}</Text>
-      </View>
-      {/* Prancha Al-M11, "Segundo plano": a resposta segue no servidor (ADR 035). */}
-      <Text className="text-sm text-muted-foreground">{AI_STATES_COPY.background}</Text>
-    </View>
-  );
-}
-
-export function PlanCard({ steps }: { steps: ChatPlanStep[] }) {
-  return (
-    <View className="gap-1.5 rounded-xl border border-border bg-card p-3">
-      <View className="flex-row items-baseline justify-between">
-        <Text className="text-xs font-semibold uppercase text-muted-foreground">Plano</Text>
-        <Text className="text-xs text-muted-foreground">
-          {steps.filter((p) => p.status === 'done').length} de {steps.length} passos
-        </Text>
-      </View>
-      {steps.map((p) => (
-        <View key={p.id} className="flex-row items-center gap-2">
-          {p.status === 'done' ? (
-            <Check size={14} color={colors.primaryText} />
-          ) : p.status === 'running' ? (
-            <ActivityIndicator size="small" color={colors.primaryText} />
-          ) : (
-            <View className="h-3.5 w-3.5 rounded-full border border-border" />
-          )}
-          <Text
-            className={cn(
-              'flex-1 text-sm',
-              p.status === 'done' ? 'text-muted-foreground' : 'text-foreground',
-            )}
-          >
-            {p.title}
-          </Text>
-        </View>
-      ))}
+      <ActivityIndicator size="small" color={colors.primaryText} />
+      <Text className="text-sm text-muted-foreground">{AI_STATES_COPY.thinking}</Text>
     </View>
   );
 }
@@ -454,9 +395,12 @@ function ToolLines({
             <ToolLine key={segmento.item.tool.id} {...segmento.item} thread={thread} last={last} />
           );
         }
-        // Com cartão na última resposta, o grupo nasce aberto: o cartão é o resultado.
-        const temCartao = segmento.items.some((l) => thread.artifacts[l.tool.id]);
-        const aberto = grupoAberto[i] ?? (last && temCartao);
+        // Fechado, a não ser que a última resposta tenha um cartão que pede a pessoa (#487).
+        const pedeAcao = segmento.items.some((l) => {
+          const cartao = thread.artifacts[l.tool.id];
+          return cartao !== undefined && chatArtifactAsksAction(cartao);
+        });
+        const aberto = grupoAberto[i] ?? (last && pedeAcao);
         return (
           <View key={segmento.items[0]!.tool.id} className="gap-2">
             <Pressable
@@ -512,7 +456,9 @@ function ToolLine({
       </Text>
     ) : null;
 
-  if (cartao && last) {
+  // O cartão que pede um toque (gravado, abrir no app, arquivo) fica aberto na última resposta;
+  // o de consulta recolhe na linha, e abre a quem tocar (#487).
+  if (cartao && last && chatArtifactAsksAction(cartao)) {
     return (
       <View className="gap-2">
         <ArtifactCard artifact={cartao} tool={titulo} />

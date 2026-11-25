@@ -12,6 +12,7 @@ import {
   isDestructiveChatTool,
   previewChatAction,
   questionAnswer,
+  WEB_SEARCH_CONSENT_FOOTNOTE,
   type ChatAskField,
   type ChatConfirmAction,
   type ChatInterruptValue,
@@ -476,7 +477,7 @@ function AceiteDaBusca({
           <Text className="text-sm font-semibold text-secondary-foreground">{textos.decline}</Text>
         </Button>
       </View>
-      <Text className="text-[11px] text-muted-foreground">{textos.footnote}</Text>
+      <Text className="text-[11px] text-muted-foreground">{WEB_SEARCH_CONSENT_FOOTNOTE}</Text>
     </View>
   );
 }

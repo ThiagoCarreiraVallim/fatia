@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe } from 'lucide-react-native';
 import {
   AI_CONSENT_TEXTS,
   aiConsentBody,
@@ -13,16 +12,9 @@ import {
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui';
-import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import {
-  AI_CONSENT_KEY,
-  useAcceptAiConsent,
-  useAiConsent,
-  useWebSearchSwitch,
-} from '@/chat/ai-consent';
+import { AI_CONSENT_KEY, useAcceptAiConsent, useAiConsent } from '@/chat/ai-consent';
 import { chatUnlocked, showChatConsent } from '@/chat/ai-consent-state';
 import { openLegal } from '@/components/profile/legal';
-import { colors } from '@/theme/colors';
 
 /**
  * O aceite da primeira conversa (prancha IA-Visao), no lugar do campo enquanto não houver: a
@@ -105,26 +97,6 @@ export function AiConsentCard({
  */
 export function useChatUnlocked(): boolean {
   return chatUnlocked(useAiConsent().data);
-}
-
-/** A chave da busca na web no topo (prancha Al-M16): o globo verde com ponto quando ligada. */
-export function WebSearchSwitch() {
-  const { data } = useAiConsent();
-  const mudar = useWebSearchSwitch();
-  if (!data) return null;
-  const ligada = data.webSearchEnabled;
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityLabel="Buscar na web"
-      accessibilityState={{ checked: ligada }}
-      onPress={() => mudar.mutate(!ligada)}
-      className={TOP_BAR_ACTION}
-    >
-      <Globe size={20} color={ligada ? colors.primaryText : colors.faintForeground} />
-      {ligada ? <View className="absolute right-2 top-2 size-2 rounded-full bg-primary" /> : null}
-    </Pressable>
-  );
 }
 
 /**

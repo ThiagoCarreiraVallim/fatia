@@ -3,8 +3,9 @@ import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal, Plus, Search, SquarePen } from 'lucide-react-native';
+import { MoreHorizontal, Plus, Search, Settings2, SquarePen } from 'lucide-react-native';
 import {
+  AI_SETTINGS_COPY,
   deleteConversation,
   groupConversationsByDay,
   getChatAvailability,
@@ -133,14 +134,26 @@ export default function ConversationsScreen() {
           )
         }
         actions={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Nova conversa"
-            onPress={nova}
-            className={TOP_BAR_ACTION}
-          >
-            <SquarePen size={20} color={colors.primaryText} />
-          </Pressable>
+          <>
+            {/* A config da IA (modos, busca na web, memórias) mora aqui, e não no topo da
+                conversa: lá ficam só o essencial, a lista e a conversa nova (#487). */}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={AI_SETTINGS_COPY.title}
+              onPress={() => router.push('/chat/settings')}
+              className={TOP_BAR_ACTION}
+            >
+              <Settings2 size={20} color={colors.primaryText} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Nova conversa"
+              onPress={nova}
+              className={TOP_BAR_ACTION}
+            >
+              <SquarePen size={20} color={colors.primaryText} />
+            </Pressable>
+          </>
         }
         onRefresh={() => void conversas.refetch()}
         refreshing={conversas.isRefetching}

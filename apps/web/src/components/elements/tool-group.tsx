@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
  * dobra. O cabeçalho resume; as linhas continuam lá, iguais, para quem abrir — é
  * a auditoria do que o assistente fez, e ela não some.
  *
- * Aberto por padrão quando `defaultOpen`: quem chama abre o grupo que ainda está
- * rodando ou que tem cartão (a folha do dia, o gráfico), porque esconder o cartão
- * atrás de um toque esconderia o resultado.
+ * Aberto quando `defaultOpen`: quem chama abre o grupo que traz um cartão que pede a pessoa
+ * (o "Gravado" com Desfazer, o "abrir no app"). Ao vivo, o grupo nasce antes do cartão chegar:
+ * `defaultOpen` que vira `true` depois abre o grupo, e quem fechar à mão continua no comando.
  */
 /** "Consultei 3 coisas" com a contagem em destaque, como na prancha IA-Estados. */
 function destaque(label: string) {
@@ -41,6 +41,12 @@ export function ToolGroup({
   className?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // Ajuste no render, não em efeito: o cartão que chegou abre o grupo no mesmo quadro.
+  const [pediuAntes, setPediuAntes] = useState(defaultOpen);
+  if (defaultOpen !== pediuAntes) {
+    setPediuAntes(defaultOpen);
+    if (defaultOpen) setOpen(true);
+  }
   return (
     <Collapsible
       data-slot="tool-group"

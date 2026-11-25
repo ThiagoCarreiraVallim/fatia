@@ -299,7 +299,9 @@ async def test_capacidade_sem_modelo_continua_dizendo_que_falta_configurar(setti
     fornecedor". Sem este caso, a lista vazia transformaria todo esquecimento de
     configuração numa acusação de privacidade.
     """
-    settings = settings_factory(ai_base_url=GATEWAY, ai_api_key="cf-token", ai_model_vision="")
+    settings = settings_factory(
+        ai_base_url=GATEWAY, ai_api_key="cf-token", ai_model_vision="", ai_model_text=""
+    )
     duplo = RecordingTransport(lambda _r: chat_response("x"))
     provider = build_provider(settings, transport=duplo)
 
@@ -406,3 +408,33 @@ def test_todo_gateway_revisado_tem_a_exigencia_de_retencao_no_corpo():
     assert not sem_roteamento, (
         f"{sorted(sem_roteamento)} está em ALLOWED_HOSTS sem entrada em ZERO_RETENTION_ROUTING"
     )
+
+
+def test_visao_emprestada_do_texto_passa_pela_lista_de_visao(settings_factory, monkeypatch):
+    """O modelo de texto só vira o de visão se também foi revisado para visão (#482).
+
+    Receber a foto do prato é outra decisão de privacidade que receber texto: a lista de
+    visão continua sendo quem diz sim.
+    """
+    _permitir_host(monkeypatch, GATEWAY_HOST)
+    _permitir(monkeypatch, "text", "ornith-1.0-9b")
+    settings = settings_factory(ai_base_url=GATEWAY, ai_api_key="cf-token", ai_model_vision="")
+
+    assert configured_models(settings)["vision"] == "ornith-1.0-9b"
+    assert usable_models(settings)["vision"] is None
+
+    _permitir(monkeypatch, "vision", "ornith-1.0-9b")
+    assert usable_models(settings)["vision"] == "ornith-1.0-9b"
+
+
+def test_visao_vazia_no_destino_local_nao_empresta_o_texto(settings_factory):
+    """No destino local a lista de visão não vale: emprestar o modelo de texto ali anunciaria
+    visão num modelo que pode nem ler imagem (#482).
+
+    Sem a lista para dizer "este aceita foto", a câmera do chat e a foto do prato apareceriam e
+    toda foto falharia no provedor. Visão vazia no local continua sem foto, como antes.
+    """
+    settings = settings_factory(ai_model_text="qwen3-8b-so-texto", ai_model_vision="")
+
+    assert configured_models(settings)["vision"] == ""
+    assert usable_models(settings)["vision"] is None

@@ -8,6 +8,7 @@ que sabe disso.
 
 from urllib.parse import urlparse
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Endereços que não exigem credencial: LM Studio em dev, direto ou visto de
@@ -93,6 +94,24 @@ class AgentSettings(BaseSettings):
     langfuse_sample_rate: float = 1.0
     # `production`, `staging`, `dev`… — separa os traces no mesmo projeto.
     langfuse_environment: str = "default"
+
+    @model_validator(mode="after")
+    def _vision_falls_back_to_text(self) -> "AgentSettings":
+        """`AI_MODEL_VISION` vazia é o modelo de texto (#482), **só no destino remoto**: a foto do
+        chat funciona sempre que a IA funciona, pelo mesmo provedor. Não abre a porta da
+        privacidade: o nome ainda passa pela lista de **visão** de `allowed_models`, e o modelo de
+        texto que não foi revisado para receber foto continua recusado ali.
+
+        No destino local essa lista não vale, e nada diria se o modelo de texto lê imagem:
+        emprestá-lo ligaria a câmera do chat e a foto do prato para toda foto falhar. Lá, visão
+        vazia continua sem foto. A fronteira é a da privacidade (`PRIVACY_LOCAL_HOSTS`), a mesma
+        que decide se a lista vale; o import é tardio porque `allowed_models` importa este módulo.
+        """
+        from .allowed_models import is_local_destination
+
+        if not self.ai_model_vision.strip() and not is_local_destination(self.ai_base_url):
+            self.ai_model_vision = self.ai_model_text
+        return self
 
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"

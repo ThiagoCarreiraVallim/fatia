@@ -48,13 +48,11 @@ import {
 import { ErrorState } from '@/components/elements/error-state';
 import { ThinkingIndicator } from '@/components/elements/thinking-indicator';
 import { MobileComposer } from '@/components/elements/mobile-composer';
-import { MessageTiming } from '@/components/elements/message-timing';
 import { StoppedRun } from '@/components/elements/stopped-run';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
-import { AssistantReasoning, TextoDoAssistente, ToolCallGroup, ToolCallPart } from './partes';
+import { TextoDoAssistente, ToolCallGroup, ToolCallPart } from './partes';
 import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
-import { PlanoDoTurno } from './plano';
 import { AvisoDeCota, useCotaEsgotada } from './cota';
 import { AiStateCard } from './ai-state-card';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
@@ -69,9 +67,7 @@ import {
   useIsStopped,
   useMarkStopped,
   useTurnError,
-  useTurnTiming,
 } from './chat-runtime-provider';
-import { timingStats } from './turn-timing';
 import { useDitado } from './use-ditado';
 import { AutorDaResposta, SeletorDeAgente } from './agente';
 
@@ -210,51 +206,35 @@ function TurnErrorNotice() {
  * O "pensando": antes do primeiro token, e de novo quando a resposta trava no
  * meio — o modelo decidindo uma tool, ou o provedor lento. Sem a segunda parte, o
  * texto parava por dez segundos e a tela parecia congelada.
+ *
+ * Uma linha, sem cartão (#487): o raciocínio do modelo não aparece, então ele não conta como
+ * resposta, e o "pensando" fica enquanto só ele chega.
  */
-function Pensando() {
+function ThinkingNotice() {
   const rodando = useAuiState((s) => s.message.status?.type === 'running');
-  // O raciocínio conta: o painel dele já diz "Pensando…", e dois avisos de
-  // espera empilhados é ruído.
-  const temConteudo = useAuiState((s) =>
-    s.message.parts.some(
-      (parte) => (parte.type === 'text' || parte.type === 'reasoning') && parte.text.trim() !== '',
-    ),
+  const temTexto = useAuiState((s) =>
+    s.message.parts.some((parte) => parte.type === 'text' && parte.text.trim() !== ''),
   );
   const { stalled } = unstable_useMessageStallDetection({ thresholdMs: 2500 });
-  if (!rodando || (temConteudo && !stalled)) return null;
+  if (!rodando || (temTexto && !stalled)) return null;
   // `aria-label` além do rótulo visível: é o nome estável pelo qual o leitor de
   // tela encontra o único retorno entre apertar enviar e o primeiro token.
-  // No meio da resposta (travou): só o indicador, como na prancha IA-Estados.
-  if (temConteudo) return <ThinkingIndicator aria-label="Pensando" label="Pensando" />;
-  // Antes do primeiro token: o cartão da prancha Al-M11, "Segundo plano" — a resposta segue no
-  // servidor (ADR 035), então dá para sair da tela.
-  return (
-    <div
-      role="status"
-      aria-label="Pensando"
-      className="flex w-full flex-col gap-2 rounded-3xl bg-foreground/[0.04] p-4"
-    >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className="size-5 shrink-0 animate-spin rounded-full border-2 border-foreground/15 border-t-primary motion-reduce:animate-none"
-        />
-        <p className="text-[15px] font-bold text-foreground">{AI_STATES_COPY.thinking}</p>
-      </div>
-      <p className="text-sm text-foreground/75">{AI_STATES_COPY.background}</p>
-    </div>
-  );
+  return <ThinkingIndicator role="status" aria-label="Pensando" label={AI_STATES_COPY.thinking} />;
 }
 
-/** "Resposta interrompida" e o tempo da resposta, quando ela já não está chegando. */
+/** O raciocínio do modelo não aparece para quem conversa (#487). */
+const HiddenReasoning = () => null;
+
+/**
+ * "Resposta interrompida", quando ela já não está chegando. O tempo da resposta não aparece: é
+ * medida de desenvolvimento, não de quem conversa (#487).
+ */
 function AnswerFooter() {
   const id = useAuiState((s) => s.message.id);
   const running = useAuiState((s) => s.message.status?.type === 'running');
   const stopped = useIsStopped(id);
-  const stats = timingStats(useTurnTiming(id));
-  if (running) return null;
-  if (stopped) return <StoppedLine />;
-  return <MessageTiming stats={stats} />;
+  if (running || !stopped) return null;
+  return <StoppedLine />;
 }
 
 /**
@@ -336,12 +316,12 @@ function MensagemDoAssistente() {
       <MessagePrimitive.Parts
         components={{
           Text: TextoDoAssistente,
-          Reasoning: AssistantReasoning,
+          Reasoning: HiddenReasoning,
           tools: { Fallback: ToolCallPart },
           ToolGroup: ToolCallGroup,
         }}
       />
-      <Pensando />
+      <ThinkingNotice />
       <ErroDaResposta />
       <AnswerFooter />
       <BarraDeAcoes />
@@ -736,7 +716,6 @@ export function ChatThread() {
               logo acima, e é lá que a pessoa relê "200 g de frango". */}
           <TurnErrorNotice />
           <StoppedBeforeAnswer />
-          <PlanoDoTurno />
           <PausaDoAgente />
           <MotivoDoVoto />
         </ConversationContent>
