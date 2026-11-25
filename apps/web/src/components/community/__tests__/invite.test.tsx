@@ -66,6 +66,37 @@ describe('convite', () => {
     );
   });
 
+  it('o convite sai na cor e com a capa da comunidade (#413)', () => {
+    const { container } = render(
+      <InviteSignedOut
+        token={TOKEN}
+        preview={{
+          ...PREVIEW,
+          group: {
+            ...PREVIEW.group,
+            brandColor: '#1d4ed8',
+            coverUrl: 'https://cdn.test/capa.jpg',
+          },
+        }}
+        socialTargets={[]}
+      />,
+    );
+    const raiz = container.firstElementChild as HTMLElement;
+    // #1d4ed8 em HSL: 224 76% 48%.
+    expect(raiz.style.getPropertyValue('--brand')).toMatch(/^224(\.\d+)? /);
+    expect(container.querySelector('img[src="https://cdn.test/capa.jpg"]')).not.toBeNull();
+  });
+
+  it('sem cor nem capa: a cor padrão, sem imagem', () => {
+    const { container } = render(
+      <InviteSignedOut token={TOKEN} preview={PREVIEW} socialTargets={[]} />,
+    );
+    expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--brand')).toMatch(
+      /^2[0-9](\.\d+)? /,
+    );
+    expect(container.querySelector('img')).toBeNull();
+  });
+
   it('conta com o onboarding por fazer vai às boas-vindas da comunidade (#371)', async () => {
     vi.mocked(usersApi.me).mockResolvedValue({ onboardedAt: null, onboardingStep: null } as never);
     renderAccept();

@@ -303,6 +303,7 @@ describe('regras do conteúdo', () => {
       'challenges',
       'welcome',
       'announcements',
+      'updates',
     ]);
     expect(panelSections('OWNER').map((s) => s.section)).toContain('content');
     expect(panelHref('g1', 'content')).toBe('/org/g1/content');

@@ -6,6 +6,7 @@ import {
   joinResultMessage,
   lockedScopes,
   membershipBadge,
+  REQUIRABLE_SCOPES,
   SCOPE_DETAILS,
   SHARE_SCOPES,
   teamRoleLabel,
@@ -19,6 +20,10 @@ describe('consentimento ao entrar na comunidade', () => {
   it('explica toda categoria, na ordem do rótulo', () => {
     expect(Object.keys(SCOPE_DETAILS)).toEqual([...SHARE_SCOPES]);
     expect(Object.keys(SHARE_SCOPE_LABEL)).toEqual([...SHARE_SCOPES]);
+  });
+
+  it('fotos das refeições nunca entra no que a dona pode exigir (ADR 038, #413)', () => {
+    expect(REQUIRABLE_SCOPES).toEqual(['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS']);
   });
 
   it('liga e desliga uma categoria mantendo a ordem canônica', () => {

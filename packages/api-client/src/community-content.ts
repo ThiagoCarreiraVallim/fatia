@@ -16,6 +16,8 @@ export type PlanLevel = 'beginner' | 'intermediate' | 'advanced';
 export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'RECOVERY' | 'GENERAL';
 export type MediaPurpose =
   | 'group_avatar'
+  /** Capa da comunidade (#413). */
+  | 'group_cover'
   | 'group_content'
   | 'exercise_video'
   | 'exercise_photo'

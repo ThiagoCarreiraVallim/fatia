@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import {
+  CommunitySection,
   NutritionPlanStatus,
   PlanOfferStatus,
   PostAuthorAs,
   PostKind,
+  PlanTemplateKind,
   type Prisma,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
@@ -77,11 +79,12 @@ export class ForYouService {
         feedSeenAt: true,
         joinedAt: true,
         createdAt: true,
-        group: { select: { name: true } },
+        group: { select: { name: true, hiddenSections: true } },
       },
     });
     const vistoAte = m.feedSeenAt ?? m.joinedAt ?? m.createdAt;
     const escondidos = await blockedUserIds(this.prisma, userId);
+    const escondidas = m.group.hiddenSections;
 
     const [ofertas, planos, comunicados, modelos, dicas] = await Promise.all([
       this.prisma.planOffer.findMany({
@@ -133,14 +136,27 @@ export class ForYouService {
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
+      // Seção escondida pelo dono (#413) some também dos Recomendados.
       this.prisma.groupPlanTemplate.findMany({
-        where: { groupId, publishedAt: { not: null } },
+        where: {
+          groupId,
+          publishedAt: { not: null },
+          ...(escondidas.includes(CommunitySection.NUTRITION_PLANS)
+            ? { kind: { not: PlanTemplateKind.NUTRITION } }
+            : {}),
+        },
         select: { id: true, title: true, kind: true, author: { select: { name: true } } },
         orderBy: { publishedAt: 'desc' },
         take: 2,
       }),
       this.prisma.groupTip.findMany({
-        where: { groupId, publishedAt: { not: null } },
+        where: {
+          groupId,
+          publishedAt: { not: null },
+          ...(escondidas.includes(CommunitySection.NUTRITION_TIPS)
+            ? { category: { not: 'NUTRITION' } }
+            : {}),
+        },
         select: { id: true, title: true, author: { select: { name: true } } },
         orderBy: { publishedAt: 'desc' },
         take: 1,

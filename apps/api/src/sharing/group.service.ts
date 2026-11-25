@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -7,12 +8,15 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import { checkBrandColor } from '@fatia/design';
 import {
+  CommunitySection as CommunitySectionEnum,
   GroupRole,
   GroupType,
   MembershipStatus,
   type Group,
   type AutoPostKind,
+  type CommunitySection,
   type GroupAiMode,
   type GroupMembership,
   type Prisma,
@@ -20,7 +24,8 @@ import {
   type JoinPolicy,
   type MediaFile,
   type PostPolicy,
-  type ShareScope,
+  ShareScope,
+  SubscriptionStatus,
 } from '@fatia/db';
 import {
   membershipsWithEffectiveSeat,
@@ -29,7 +34,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
-import { normalizarEscopos } from './consent-scopes';
+import { assertRequirableScopes, normalizarEscopos } from './consent-scopes';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import {
   actionsOf,
@@ -69,7 +74,11 @@ export interface CreateGroupInput {
   requiredSharingScopes?: ShareScope[];
 }
 
-/** O que o dono pode mudar no perfil. Tipo e slug ficam: o slug está em links já distribuídos. */
+/**
+ * O que o dono pode mudar no perfil. O slug fica: está em links já distribuídos.
+ * O tipo muda, mas só pelo dono e nunca para Social com assentos ativos
+ * (`assertTypeChange`).
+ */
 export interface UpdateGroupInput {
   name?: string;
   description?: string | null;
@@ -87,6 +96,15 @@ export interface UpdateGroupInput {
   requiredSharingScopes?: ShareScope[];
   /** "Profissionais veem só quem acompanham" (#404). */
   proSeeOnlyAssigned?: boolean;
+  /**
+   * Patrocinada ou social (#413). Só o dono muda (é cobrança); patrocinada com
+   * assentos valendo não vira social.
+   */
+  type?: GroupType;
+  /** Cor de destaque (#413). Nula = a cor padrão. Só entra com contraste. */
+  brandColor?: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
+  hiddenSections?: CommunitySection[];
 }
 
 export interface GroupSummary {
@@ -136,6 +154,12 @@ export interface GroupSummary {
   visibility: GroupVisibility;
   /** Fuso da comunidade ("fuso Cuiabá" no Cm-04). */
   timezone: string;
+  /** Cor de destaque da comunidade (#413). Nula = a cor padrão. */
+  brandColor: string | null;
+  /** Capa da comunidade (#413), por URL assinada de curta duração. */
+  coverUrl: string | null;
+  /** Seções escondidas para os membros (#413). Só visual. */
+  hiddenSections: CommunitySection[];
   /** Pessoas ativas na comunidade. */
   memberCount: number;
   /** Posts dos outros desde a última visita ao mural (`feedSeenAt`). */
@@ -188,12 +212,39 @@ export interface GroupPreview {
 }
 
 const INCLUIR = {
-  group: { include: { avatarFile: true } },
+  group: { include: { avatarFile: true, coverFile: true } },
 } as const;
+
+/** Assentos que ainda cobram ou dão PRO: com eles, a comunidade não vira social (#413). */
+const LIVE_POOL_STATUSES: SubscriptionStatus[] = [
+  SubscriptionStatus.PENDING,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+  SubscriptionStatus.TRIALING,
+];
+
+/** As seções escondidas sem repetição, na ordem do enum (como os escopos). */
+function normalizeSections(sections: readonly CommunitySection[]): CommunitySection[] {
+  const asked = new Set(sections);
+  return Object.values(CommunitySectionEnum).filter((s) => asked.has(s));
+}
+
+/**
+ * A cor que a comunidade grava (#413): hex minúsculo, só com 4,5:1 contra texto
+ * branco ou escuro (`checkBrandColor`, ADR 041). A cor sem contraste volta com
+ * o motivo e a sugestão de tom, como no editor da marca.
+ */
+export function brandColorToStore(value: string | null): string | null {
+  if (value === null) return null;
+  const check = checkBrandColor(value);
+  if (check.status !== 'ok') throw new BadRequestException(check.message);
+  return check.color.toLowerCase();
+}
 
 function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
+  coverUrl: string | null,
   hasAiSeat: boolean,
   proPaidByThisGroup: boolean,
   extras: MembershipExtras,
@@ -223,6 +274,9 @@ function toSummary(
     requiredSharingScopes: m.group.requiredSharingScopes,
     visibility: m.group.visibility,
     timezone: m.group.timezone,
+    brandColor: m.group.brandColor,
+    coverUrl,
+    hiddenSections: m.group.hiddenSections,
     ...extras,
   };
 }
@@ -246,15 +300,23 @@ export class GroupService {
   ) {}
 
   private async summaryOf(
-    m: GroupMembership & { group: Group & { avatarFile: MediaFile | null } },
+    m: GroupMembership & {
+      group: Group & { avatarFile: MediaFile | null; coverFile: MediaFile | null };
+    },
     withSeat: ReadonlySet<string>,
     payer: string | null,
     extras: ReadonlyMap<string, MembershipExtras>,
   ): Promise<GroupSummary> {
-    const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
+    const [avatar, cover] = this.media
+      ? await Promise.all([
+          this.media.viewOrNull(m.group.avatarFile),
+          this.media.viewOrNull(m.group.coverFile),
+        ])
+      : [null, null];
     return toSummary(
       m,
       avatar?.url ?? null,
+      cover?.url ?? null,
       withSeat.has(m.id),
       payer === m.groupId,
       extras.get(m.id) ?? SEM_EXTRAS,
@@ -346,6 +408,7 @@ export class GroupService {
    * interativa (pgbouncer, ADR 010).
    */
   async create(ownerId: string, input: CreateGroupInput): Promise<Group> {
+    assertRequirableScopes(input.requiredSharingScopes);
     const slug = input.slug ?? this.derivarSlug(input.name);
 
     try {
@@ -479,15 +542,23 @@ export class GroupService {
     };
   }
 
-  /** Perfil da comunidade. O guarda já conferiu `group.update`; o dono de novo aqui. */
+  /**
+   * Perfil, marca, acesso e seções (#413, Pn-15). O guarda já conferiu
+   * `group.update`; o service confere de novo e cobra o papel do que é só do
+   * dono: o que todo membro precisa compartilhar (`group.sharing`) e o tipo
+   * (`billing.manage`, porque patrocinada é a que paga).
+   */
   async update(actorId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
     const eu = await this.assertAction(actorId, groupId, 'group.update');
-    const { requiredSharingScopes, autoPosts, ...resto } = input;
+    const { requiredSharingScopes, autoPosts, brandColor, hiddenSections, type, ...resto } = input;
     // O que todo membro precisa compartilhar decide o que a equipe recebe: é
     // do dono, que define a equipe (#404, ADR 043).
     if (requiredSharingScopes !== undefined && !can(eu.role, 'group.sharing')) {
       throw new ForbiddenException('Só o dono muda o que é obrigatório compartilhar');
     }
+    assertRequirableScopes(requiredSharingScopes);
+    const cor = brandColor === undefined ? undefined : brandColorToStore(brandColor);
+    if (type !== undefined) await this.assertTypeChange(eu, groupId, type);
     const trilha: Prisma.PrismaPromise<unknown>[] = [];
     if (input.proSeeOnlyAssigned !== undefined) {
       const atual = await this.prisma.group.findUniqueOrThrow({
@@ -519,11 +590,39 @@ export class GroupService {
             ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
             : {}),
           ...(autoPosts ? { autoPosts: [...new Set(autoPosts)] } : {}),
+          ...(cor !== undefined ? { brandColor: cor } : {}),
+          ...(hiddenSections ? { hiddenSections: normalizeSections(hiddenSections) } : {}),
+          ...(type !== undefined ? { type } : {}),
         },
       }),
       ...trilha,
     ])) as [Group, ...unknown[]];
     return grupo;
+  }
+
+  /**
+   * Trocar o tipo é do dono (#413): patrocinada é a comunidade que paga o PRO.
+   * Com assentos ainda cobrando ou valendo, ela não vira social: os assentos
+   * saem antes, em Assentos e faturas.
+   */
+  private async assertTypeChange(
+    eu: GroupMembership,
+    groupId: string,
+    type: GroupType,
+  ): Promise<void> {
+    if (!can(eu.role, 'billing.manage')) {
+      throw new ForbiddenException('Só o dono muda o tipo da comunidade');
+    }
+    if (type !== GroupType.SOCIAL) return;
+    const pool = await this.prisma.groupSeatPool.findUnique({
+      where: { groupId },
+      select: { status: true },
+    });
+    if (pool && LIVE_POOL_STATUSES.includes(pool.status)) {
+      throw new ConflictException(
+        'Com assentos valendo, a comunidade segue patrocinada. Cancele os assentos em Assentos e faturas antes.',
+      );
+    }
   }
 
   /**
@@ -548,6 +647,30 @@ export class GroupService {
       await this.media?.discardById(atual.avatarFileId);
     }
     return this.findByIdForMember(ownerId, groupId);
+  }
+
+  /**
+   * Troca a capa da comunidade (#413). Mesma regra do avatar: o arquivo foi
+   * enviado para esta comunidade como capa; a anterior sai do bucket.
+   */
+  async setCover(actorId: string, groupId: string, fileId: string | null): Promise<GroupSummary> {
+    await this.assertAction(actorId, groupId, 'group.update');
+    if (fileId && !this.media) throw new NotFoundException('File not found');
+    const atual = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { coverFileId: true },
+    });
+    if (fileId !== atual.coverFileId) {
+      const nova = fileId
+        ? await this.media!.resolveForGroup(groupId, fileId, 'group_cover')
+        : null;
+      await this.prisma.group.update({
+        where: { id: groupId },
+        data: { coverFileId: nova?.id ?? null },
+      });
+      await this.media?.discardById(atual.coverFileId);
+    }
+    return this.findByIdForMember(actorId, groupId);
   }
 
   /**

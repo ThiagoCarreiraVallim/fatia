@@ -21,6 +21,7 @@ import { StorageModule } from './storage/storage.module';
 import { InsightsModule } from './insights/insights.module';
 import { ChatModule } from './chat/chat.module';
 import { McpModule } from './mcp/mcp.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { McpModule } from './mcp/mcp.module';
     InsightsModule,
     ChatModule,
     McpModule,
+    IntegrationsModule,
   ],
 })
 export class AppModule {}

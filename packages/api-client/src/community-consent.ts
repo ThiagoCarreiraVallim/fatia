@@ -23,6 +23,14 @@ export const SHARE_SCOPES: readonly ShareScope[] = [
   'MEAL_PHOTOS',
 ];
 
+/**
+ * O que a comunidade pode exigir para entrar. Foto do prato fica de fora: é
+ * escolha de cada membro, nunca condição (a API recusa ao criar e ao marcar).
+ */
+export const REQUIRABLE_SCOPES: readonly ShareScope[] = SHARE_SCOPES.filter(
+  (s) => s !== 'MEAL_PHOTOS',
+);
+
 /** O que a equipe passa a ver em cada categoria — o mesmo que o painel dela lê. */
 export const SCOPE_DETAILS: Record<ShareScope, string> = {
   WORKOUT: 'Planos, sessões e volume de treino',

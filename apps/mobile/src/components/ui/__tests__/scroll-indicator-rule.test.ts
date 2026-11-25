@@ -55,8 +55,8 @@ describe('regra da barra de rolagem (#477)', () => {
     'apps/mobile/app/(app)/community/[groupId]/index.tsx',
     'apps/mobile/src/components/community/community-tabs.tsx',
     'apps/mobile/app/c/[token].tsx',
-  ])('os arquivos da #413 ficam fora da regra: %s', async (rel) => {
+  ])('os arquivos da comunidade, liberados pela #413, também seguem a regra: %s', async (rel) => {
     const config = await eslint.calculateConfigForFile(path.join(ROOT, rel));
-    expect(config.rules?.['no-restricted-syntax']).toBeUndefined();
+    expect(JSON.stringify(config.rules?.['no-restricted-syntax'])).toMatch(RULE);
   });
 });

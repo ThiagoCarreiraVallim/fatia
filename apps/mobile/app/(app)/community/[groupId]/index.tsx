@@ -12,6 +12,7 @@ import {
   FEED_FILTERS,
   feedApi,
   groupsApi,
+  isSectionHidden,
   panelHref,
   type FeedFilter,
 } from '@fatia/api-client';
@@ -39,6 +40,9 @@ export default function CommunityFeedScreen() {
   // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
   // que a pessoa está dentro.
   const ativo = group.data?.status === 'ACTIVE';
+  // A comunidade escondeu o Mural (#413): a aba some e a tela não lê posts.
+  // Só visual: nada do que foi postado se perde.
+  const muralEscondido = group.data ? isSectionHidden(group.data, 'FEED') : false;
   const qc = useQueryClient();
   const [filtro, setFiltro] = useState<FeedFilter>('all');
   const feed = useInfiniteQuery({
@@ -46,8 +50,11 @@ export default function CommunityFeedScreen() {
     queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filtro),
     initialPageParam: null as string | null,
     getNextPageParam: (ultima) => ultima.nextCursor,
-    enabled: ativo,
+    enabled: ativo && !muralEscondido,
   });
+  // Só mostra (e só marca como visto) com o grupo carregado e o Mural à mostra:
+  // o cache de uma visita anterior não vaza com a seção escondida.
+  const muralVisivel = ativo && !muralEscondido;
   const primeira = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
   // O nome do perfil; `suggestedDisplayName` cobre a API de antes, que mandava null.
@@ -69,11 +76,11 @@ export default function CommunityFeedScreen() {
     },
   });
   useEffect(() => {
-    if (!primeira || marcou.current || filtro !== 'all') return;
+    if (!primeira || !muralVisivel || marcou.current || filtro !== 'all') return;
     marcou.current = true;
     setNovos(primeira.unseen ?? 0);
     visto.mutate();
-  }, [primeira, filtro, visto]);
+  }, [primeira, muralVisivel, filtro, visto]);
 
   if (group.isError) {
     const sumiu = group.error instanceof ApiError && group.error.isNotFound;
@@ -136,20 +143,36 @@ export default function CommunityFeedScreen() {
           </View>
         ) : null}
         {ativo ? <CommunityTabs groupId={groupId} /> : null}
-        {feed.isPending && ativo ? <LoadingState label="Carregando o mural…" /> : null}
-        {feed.isError ? (
+        {ativo && muralEscondido ? (
+          <EmptyState
+            title="O mural está escondido nesta comunidade."
+            description="A equipe escolheu não mostrar o mural por aqui. O resto da comunidade continua nas outras abas."
+            action={
+              <Button
+                variant="outline"
+                onPress={() => router.push(`/community/${groupId}/for-you`)}
+              >
+                Ver Para você
+              </Button>
+            }
+          />
+        ) : null}
+        {feed.isPending && ativo && !muralEscondido ? (
+          <LoadingState label="Carregando o mural…" />
+        ) : null}
+        {muralVisivel && feed.isError ? (
           <ErrorState error={feed.error} onRetry={() => void feed.refetch()} />
         ) : null}
-        {primeira && me ? (
+        {/* Escondido com posts já em cache: o mural some inteiro, fica o aviso. */}
+        {muralVisivel && primeira && me ? (
           <>
             {pins.length > 0 ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 accessibilityLabel="Avisos fixados"
-                contentContainerClassName="gap-3"
                 className="-mx-5"
-                contentContainerStyle={{ paddingHorizontal: 20 }}
+                contentContainerClassName="gap-3 px-5"
               >
                 {pins.map((p) => (
                   <View key={p.id} className="w-[300px]">
@@ -177,7 +200,9 @@ export default function CommunityFeedScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               accessibilityLabel="Filtrar o mural"
-              contentContainerClassName="gap-2"
+              // Até a borda da tela, com o respiro dentro (#477).
+              className="-mx-5"
+              contentContainerClassName="gap-2 px-5"
             >
               {FEED_FILTERS.map((f) => (
                 <Chip

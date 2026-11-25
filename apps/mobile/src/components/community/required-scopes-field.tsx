@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/text';
 import {
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
+  REQUIRABLE_SCOPES,
   SHARE_SCOPES,
   toggleScope,
   type ShareScope,
@@ -23,13 +24,16 @@ export function RequiredScopesField({
   onChange: (next: ShareScope[]) => void;
   hint: string;
 }) {
+  // Foto do prato nunca é obrigatória (#413). Só aparece se uma comunidade
+  // antiga já a marcou, para poder desmarcar.
+  const shown = SHARE_SCOPES.filter((s) => REQUIRABLE_SCOPES.includes(s) || value.includes(s));
   return (
     <View className="gap-2">
       <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
         O que os membros precisam compartilhar
       </Text>
       <Text className="text-xs text-muted-foreground">{hint}</Text>
-      {SHARE_SCOPES.map((scope) => (
+      {shown.map((scope) => (
         <ScopeOption
           key={scope}
           label={SHARE_SCOPE_LABEL[scope]}

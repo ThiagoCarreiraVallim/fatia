@@ -291,7 +291,7 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     expect(usadas.filter((acao) => !GROUP_ACTIONS.includes(acao as GroupAction))).toEqual([]);
   });
 
-  it('o decorator não escapa de sharing/, billing/ e insights/', () => {
+  it('o decorator não escapa de sharing/, billing/, insights/ e integrations/', () => {
     // `@RequireGroupAction` numa rota de domínio faria um service de domínio
     // depender de grupo — o oposto do que a ADR 014 decidiu.
     //
@@ -299,8 +299,12 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     // administração de grupo, como billing, e não leitura de dado de titular —
     // não há indivíduo do outro lado, por construção. A lista é curta de
     // propósito; crescer nela é a discussão, não a solução.
+    //
+    // `integrations/` entra com a #413: as chaves de API são administração da
+    // comunidade (só o dono, `integration.manage`), e o módulo não tem caminho
+    // até a leitura de dado de saúde — a chave nunca o lê.
     const API_SRC = resolve(SHARING_SRC, '..');
-    const PERMITIDOS = ['sharing/', 'billing/', 'insights/'];
+    const PERMITIDOS = ['sharing/', 'billing/', 'insights/', 'integrations/'];
     const fora = readdirSync(API_SRC, { recursive: true, encoding: 'utf8' })
       .filter((entry) => entry.endsWith('.ts'))
       .filter((entry) => !PERMITIDOS.some((prefixo) => entry.startsWith(prefixo)))

@@ -27,6 +27,9 @@ export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = [
   // Boas-vindas (#410): o editor é do painel na web; no celular, com a #414.
   // O aluno vê as páginas no app (onboarding e Sobre).
   'welcome',
+  // Novidades e Integrações (#413): telas do painel na web; no celular, com a #414.
+  'updates',
+  'integrations',
 ];
 
 /** As abas do painel no app: as do papel, menos as que não têm tela aqui. */

@@ -47,6 +47,7 @@ vi.mock('@fatia/api-client', async () => {
 import { blocksApi, feedApi, forYouApi, groupsApi, moderationApi } from '@fatia/api-client';
 import { toast } from 'sonner';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
+import { communityKeys } from '@/components/community/query-keys';
 import CommunityFeedPage from '../page';
 
 const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
@@ -139,6 +140,42 @@ describe('/community/[groupId] (o mural)', () => {
       ['Desafios', '/community/g1/challenges'],
       ['Conteúdo', '/community/g1/content'],
     ]);
+  });
+
+  it('mural escondido (#413): sem a aba e sem posts, com o caminho para o resto', async () => {
+    renderPage(pagina(), grupo({ hiddenSections: ['FEED'] }));
+    expect(await screen.findByText('O mural está escondido nesta comunidade.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver Para você' })).toHaveAttribute(
+      'href',
+      '/community/g1/for-you',
+    );
+    const abas = screen.getByRole('navigation', { name: 'Seções da comunidade' });
+    expect(within(abas).queryByRole('link', { name: 'Mural' })).toBeNull();
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(feedApi.list).not.toHaveBeenCalled();
+    // Com a leitura desligada, `isPending` fica true para sempre: o carregamento
+    // do mural não pode aparecer no lugar do aviso.
+    expect(document.querySelector('.anim-shim')).toBeNull();
+  });
+
+  it('mural escondido com os posts já em cache: some tudo do mural, fica só o aviso', async () => {
+    vi.mocked(groupsApi.get).mockResolvedValue(grupo({ hiddenSections: ['FEED'] }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // A pessoa viu o mural antes de a equipe escondê-lo: o cache tem a página.
+    client.setQueryData(communityKeys.feedList('g1', 'all'), {
+      pages: [pagina({ pins: [post({ id: 'pin1', title: 'Aviso fixado' })] })],
+      pageParams: [null],
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <CommunityFeedPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('O mural está escondido nesta comunidade.')).toBeInTheDocument();
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+    expect(screen.queryByRole('group', { name: 'Filtrar o mural' })).toBeNull();
+    expect(screen.queryByText(/Escreva para a comunidade|só a equipe publica/)).toBeNull();
+    expect(feedApi.markSeen).not.toHaveBeenCalled();
   });
 
   it('a equipe tem o ícone do painel ao lado da engrenagem', async () => {

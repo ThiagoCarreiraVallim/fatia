@@ -60,6 +60,8 @@ export * from './community-feed';
 export * from './community-home';
 export * from './community-benefits';
 export * from './community-welcome';
+export * from './community-settings';
+export * from './community-integrations';
 export * from './content-panel';
 export * from './markdown-lite';
 export * from './users';

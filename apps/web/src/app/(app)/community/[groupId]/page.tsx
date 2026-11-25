@@ -14,6 +14,7 @@ import {
   feedApi,
   type FeedFilter,
   groupsApi,
+  isSectionHidden,
   panelHref,
 } from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
@@ -47,6 +48,9 @@ export default function CommunityFeedPage() {
   // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
   // que a pessoa está dentro.
   const active = group.data?.status === 'ACTIVE';
+  // A comunidade escondeu o Mural (#413): a aba some e a página não lê posts.
+  // Só visual: nada do que foi postado se perde, e volta ao mostrar de novo.
+  const muralEscondido = group.data ? isSectionHidden(group.data, 'FEED') : false;
 
   const qc = useQueryClient();
   const [filter, setFilter] = useState<FeedFilter>('all');
@@ -55,8 +59,11 @@ export default function CommunityFeedPage() {
     queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam, filter),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: active,
+    enabled: active && !muralEscondido,
   });
+  // Só mostra (e só marca como visto) com o grupo carregado e o Mural à mostra:
+  // o cache de uma visita anterior não vaza com a seção escondida.
+  const muralVisivel = active && !muralEscondido;
 
   const firstPage = feed.data?.pages[0];
   const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
@@ -80,11 +87,11 @@ export default function CommunityFeedPage() {
     },
   });
   useEffect(() => {
-    if (!firstPage || marcou.current || filter !== 'all') return;
+    if (!firstPage || !muralVisivel || marcou.current || filter !== 'all') return;
     marcou.current = true;
     setNovos(firstPage.unseen ?? 0);
     visto.mutate();
-  }, [firstPage, filter, visto]);
+  }, [firstPage, muralVisivel, filter, visto]);
 
   if (group.isError) {
     const notFound = group.error instanceof ApiError && group.error.isNotFound;
@@ -152,9 +159,24 @@ export default function CommunityFeedPage() {
 
       {active && <CommunityTabs groupId={groupId} />}
 
-      {active && feed.isPending && <Skeleton className="h-40 rounded-2xl bg-card" />}
+      {active && muralEscondido && (
+        <EmptyState
+          icon={MessagesSquare}
+          title="O mural está escondido nesta comunidade."
+          description="A equipe escolheu não mostrar o mural por aqui. O resto da comunidade continua nas outras abas."
+          action={
+            <Button asChild variant="outline">
+              <Link href={`/community/${groupId}/for-you`}>Ver Para você</Link>
+            </Button>
+          }
+        />
+      )}
 
-      {feed.isError && (
+      {active && !muralEscondido && feed.isPending && (
+        <Skeleton className="h-40 rounded-2xl bg-card" />
+      )}
+
+      {muralVisivel && feed.isError && (
         <EmptyState
           title="Não deu para carregar o mural"
           action={
@@ -165,7 +187,8 @@ export default function CommunityFeedPage() {
         />
       )}
 
-      {firstPage && me && (
+      {/* Escondido com posts já em cache: o mural some inteiro, fica o aviso. */}
+      {muralVisivel && firstPage && me && (
         <>
           {pins.length > 0 && (
             <section aria-label="Avisos fixados" className="-mx-4 overflow-x-auto px-4">

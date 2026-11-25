@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, Info, Lightbulb, Video } from 'lucide-react';
-import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
+import {
+  groupContentApi,
+  groupExerciseApi,
+  groupsApi,
+  sortTips,
+  visibleCommunityPlans,
+  visibleCommunityTips,
+} from '@fatia/api-client';
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
 import { ListError } from '@/components/content/content-ui';
@@ -53,6 +60,11 @@ export default function CommunityContentPage() {
     queryFn: () => groupContentApi.tips(groupId),
   });
   useTopBarTitle(group.data?.name ?? 'Conteúdo');
+  // Seções escondidas pela comunidade (#413): só some daqui. O plano que a
+  // pessoa já adotou e o que ela registrou continuam no app dela.
+  const hidden = group.data?.hiddenSections;
+  const planList = plans.data ? visibleCommunityPlans(plans.data, hidden) : undefined;
+  const tipList = tips.data ? visibleCommunityTips(tips.data, hidden) : undefined;
 
   return (
     <div className="space-y-4 p-4">
@@ -80,9 +92,9 @@ export default function CommunityContentPage() {
               title="Não deu para carregar os planos"
               onRetry={() => void plans.refetch()}
             />
-          ) : plans.data.length ? (
+          ) : planList?.length ? (
             <ul className="space-y-2" aria-label="Planos da equipe">
-              {plans.data.map((t) => (
+              {planList.map((t) => (
                 <li key={t.id}>
                   <MemberTemplateRow template={t} href={`/community/${groupId}/content/${t.id}`} />
                 </li>
@@ -101,9 +113,9 @@ export default function CommunityContentPage() {
             <Skeleton className="h-24 rounded-2xl bg-card" />
           ) : tips.isError ? (
             <ListError title="Não deu para carregar as dicas" onRetry={() => void tips.refetch()} />
-          ) : tips.data.length ? (
+          ) : tipList?.length ? (
             <ul className="space-y-2" aria-label="Dicas da equipe">
-              {sortTips(tips.data).map((d) => (
+              {sortTips(tipList).map((d) => (
                 <li key={d.id}>
                   <MemberTipCard tip={d} href={`/community/${groupId}/content/tips/${d.id}`} />
                 </li>

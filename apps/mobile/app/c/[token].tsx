@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +21,9 @@ import { AccountForm } from '@/components/auth/account-form';
 import { ConsentForm } from '@/components/community/consent-form';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, LoadingState } from '@/components/ui';
+import { brandColors } from '@/components/ui/ds-math';
+import { hexToHslTriplet } from '@fatia/design';
+import { vars } from 'nativewind';
 
 /** Inválido, vencido ou de outra conta: a mesma frase do PWA, sem dizer o motivo. */
 const INDISPONIVEL =
@@ -132,6 +135,8 @@ export default function InviteScreen() {
           ? accept.error.message
           : 'Não deu para aceitar agora. Tente de novo.'
       : null;
+  const marca = brandColors(preview.data.group.brandColor);
+  const textoCapa = preview.data.group.coverUrl ? '#ffffff' : marca.foreground;
 
   return (
     <Screen title="Convite">
@@ -153,21 +158,47 @@ export default function InviteScreen() {
           />
         ) : (
           // Onb-01a · Conta pelo convite: quem convidou, a comunidade e a conta.
-          <View className="gap-3.5">
-            <View className="h-[150px] justify-end rounded-card bg-brand px-6 pb-[18px]">
+          <View
+            className="gap-3.5"
+            // O botão "Criar conta" (`bg-brand`) também sai na cor da comunidade.
+            style={vars({
+              '--brand': hexToHslTriplet(marca.background),
+              '--brand-foreground': hexToHslTriplet(marca.foreground),
+            })}
+          >
+            {/* A cor e a capa da comunidade (#413). Com capa, o texto vai em
+                branco sobre um véu escuro, que garante o contraste. */}
+            <View
+              className="h-[150px] justify-end overflow-hidden rounded-card px-6 pb-[18px]"
+              style={{ backgroundColor: marca.background }}
+            >
+              {preview.data.group.coverUrl ? (
+                <>
+                  <Image
+                    source={{ uri: preview.data.group.coverUrl }}
+                    accessibilityIgnoresInvertColors
+                    className="absolute inset-0"
+                    resizeMode="cover"
+                  />
+                  <View className="absolute inset-0 bg-black/50" />
+                </>
+              ) : null}
               <View className="flex-row items-center gap-3">
-                <View className="h-14 w-14 items-center justify-center rounded-[18px] border-[3px] border-black/25 bg-brand">
-                  <Text className="font-display text-lg text-brand-foreground">
+                <View
+                  className="h-14 w-14 items-center justify-center rounded-[18px] border-[3px] border-black/25"
+                  style={{ backgroundColor: marca.background }}
+                >
+                  <Text className="font-display text-lg" style={{ color: marca.foreground }}>
                     {initialsOf(preview.data.group.name)}
                   </Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[13px] font-bold text-brand-foreground/80">
+                  <Text className="text-[13px] font-bold opacity-80" style={{ color: textoCapa }}>
                     {preview.data.invitedBy
                       ? `${preview.data.invitedBy} te convidou`
                       : 'Você foi convidado'}
                   </Text>
-                  <Text className="font-display text-h2 text-brand-foreground">
+                  <Text className="font-display text-h2" style={{ color: textoCapa }}>
                     {preview.data.group.name}
                   </Text>
                 </View>

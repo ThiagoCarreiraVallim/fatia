@@ -48,6 +48,8 @@ export type PanelSection =
   | 'offers'
   | 'benefits'
   | 'welcome'
+  | 'updates'
+  | 'integrations'
   | 'settings';
 
 export interface PanelLink {
@@ -82,6 +84,8 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   offers: { section: 'offers', label: 'Ofertas', path: '/offers' },
   benefits: { section: 'benefits', label: 'Benefícios', path: '/benefits' },
   welcome: { section: 'welcome', label: 'Boas-vindas', path: '/welcome' },
+  updates: { section: 'updates', label: 'Novidades', path: '/updates' },
+  integrations: { section: 'integrations', label: 'Integrações', path: '/integrations' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
 
@@ -116,11 +120,13 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.moderation,
       SECTIONS.announcements,
       SECTIONS.agent,
+      // Novidades do painel (#413): toda a equipe. Integrações é só do dono.
+      SECTIONS.updates,
       SECTIONS.settings,
     ];
   }
   if (role === 'RECEPTION') {
-    return [SECTIONS.overview, SECTIONS.members, SECTIONS.announcements];
+    return [SECTIONS.overview, SECTIONS.members, SECTIONS.announcements, SECTIONS.updates];
   }
   if (role === 'PROFESSIONAL') {
     return [
@@ -139,6 +145,7 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.welcome,
       // Comunicar é do dono e do profissional (`announcement.publish`, #394).
       SECTIONS.announcements,
+      SECTIONS.updates,
     ];
   }
   return [];

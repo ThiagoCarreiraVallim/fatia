@@ -4,6 +4,7 @@ import { useId } from 'react';
 import {
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
+  REQUIRABLE_SCOPES,
   SHARE_SCOPES,
   toggleScope,
   type ShareScope,
@@ -25,12 +26,15 @@ export function RequiredScopesField({
   hint: string;
 }) {
   const id = useId();
+  // Foto do prato nunca é obrigatória (#413). Só aparece se uma comunidade
+  // antiga já a marcou, para poder desmarcar.
+  const shown = SHARE_SCOPES.filter((s) => REQUIRABLE_SCOPES.includes(s) || value.includes(s));
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">O que os membros precisam compartilhar</legend>
       <p className="text-xs text-muted-foreground">{hint}</p>
       <ul className="space-y-2">
-        {SHARE_SCOPES.map((scope) => (
+        {shown.map((scope) => (
           <li key={scope}>
             <ScopeOption
               id={`${id}-${scope}`}

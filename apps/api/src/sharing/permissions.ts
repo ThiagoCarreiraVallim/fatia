@@ -98,6 +98,12 @@ export const GROUP_PERMISSIONS = {
   'billing.read': [GroupRole.OWNER],
   'billing.manage': [GroupRole.OWNER],
   /**
+   * Chaves de API da comunidade (#413, Pn-38): criar, listar e revogar. A chave
+   * leva nomes de membros para fora do Fatia e gasta a cota do plano: só o
+   * dono, o mais restritivo.
+   */
+  'integration.manage': [GroupRole.OWNER],
+  /**
    * Publicar planos prontos e dicas (Fase 7). O dono entra: numa academia é
    * ela quem publica o conteúdo da casa. Publicar não dá leitura de dado de
    * ninguém — é escrever para a comunidade, não ler dela.

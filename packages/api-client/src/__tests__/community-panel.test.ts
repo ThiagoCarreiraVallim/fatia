@@ -68,6 +68,8 @@ describe('quem abre o painel e com que seções', () => {
       'offers',
       'benefits',
       'welcome',
+      'updates',
+      'integrations',
       'settings',
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).toEqual([
@@ -83,6 +85,7 @@ describe('quem abre o painel e com que seções', () => {
       'challenges',
       'welcome',
       'announcements',
+      'updates',
     ]);
     expect(panelSections('CREATOR')).toEqual([]);
     expect(panelSections('MEMBER')).toEqual([]);
@@ -101,6 +104,7 @@ describe('quem abre o painel e com que seções', () => {
       'overview',
       'members',
       'announcements',
+      'updates',
     ]);
     expect(panelSections('PROFESSIONAL').map((s) => s.section)).not.toContain('team');
   });

@@ -3,7 +3,14 @@ import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Info } from 'lucide-react-native';
-import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
+import {
+  groupContentApi,
+  groupExerciseApi,
+  groupsApi,
+  sortTips,
+  visibleCommunityPlans,
+  visibleCommunityTips,
+} from '@fatia/api-client';
 import {
   GuideRow,
   GymEquipmentCard,
@@ -85,6 +92,12 @@ export default function CommunityContentScreen() {
     queryFn: () => groupContentApi.tips(groupId),
   });
 
+  // Seções escondidas pela comunidade (#413): só some daqui. O plano que a
+  // pessoa já adotou e o que ela registrou continuam no app.
+  const ocultas = grupo.data?.hiddenSections;
+  const listaPlanos = planos.data ? visibleCommunityPlans(planos.data, ocultas) : [];
+  const listaDicas = dicas.data ? visibleCommunityTips(dicas.data, ocultas) : [];
+
   return (
     <Screen
       title={grupo.data?.name ?? 'Conteúdo'}
@@ -120,8 +133,8 @@ export default function CommunityContentScreen() {
               <LoadingState label="Carregando os planos…" />
             ) : planos.isError ? (
               <ErrorState error={planos.error} onRetry={() => void planos.refetch()} />
-            ) : planos.data.length ? (
-              planos.data.map((t) => (
+            ) : listaPlanos.length ? (
+              listaPlanos.map((t) => (
                 <MemberTemplateRow
                   key={t.id}
                   template={t}
@@ -138,8 +151,8 @@ export default function CommunityContentScreen() {
             <LoadingState label="Carregando as dicas…" />
           ) : dicas.isError ? (
             <ErrorState error={dicas.error} onRetry={() => void dicas.refetch()} />
-          ) : dicas.data.length ? (
-            sortTips(dicas.data).map((d) => (
+          ) : listaDicas.length ? (
+            sortTips(listaDicas).map((d) => (
               <MemberTipCard
                 key={d.id}
                 tip={d}
