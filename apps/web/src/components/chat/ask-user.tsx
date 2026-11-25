@@ -17,10 +17,11 @@ import {
   pauseDecisionCount,
   webConsentToSaveOnSend,
   askFieldsOf,
+  isDestructiveChatTool,
   previewChatAction,
   questionAnswer,
 } from '@fatia/api-client';
-import { useAceitar, useAceitesDaIa } from './catalogo';
+import { useAceitar, useAceitesDaIa, useCatalogoDasTools } from './catalogo';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { field, floating, grayButton, inkButton, limeButton } from '../elements/surfaces';
@@ -124,7 +125,10 @@ function Escrita({
   // Gravar antes de o resumo chegar seria aprovar sem ler; e o argumento que a
   // própria tool recusaria só levaria a um erro depois.
   const invalida = previa?.valida === false;
-  const travado = isPending || invalida;
+  // Exclusão só com o registro nomeado (ADR 051): sem a prévia, não há o que confirmar.
+  const exclusao = isDestructiveChatTool(useCatalogoDasTools(), acao.tool);
+  const travado = isPending || invalida || (exclusao && isError);
+  const verbo = exclusao ? 'Excluir' : 'Gravar';
   useEffect(() => {
     // O foco vai para "Gravar" quando o resumo aparece: quem conversa pelo
     // teclado estava no campo de texto, e sem isto tabularia a conversa inteira.
@@ -142,14 +146,24 @@ function Escrita({
       <Cabecalho
         icone={invalida ? <AlertCircle size={18} /> : <PencilLine size={18} />}
         acima={acao.title}
-        titulo={invalida ? 'Não dá para gravar assim' : 'Confere antes de gravar'}
-        perigo={invalida}
+        titulo={
+          invalida
+            ? exclusao
+              ? 'Não dá para excluir assim'
+              : 'Não dá para gravar assim'
+            : exclusao
+              ? 'Confere antes de excluir'
+              : 'Confere antes de gravar'
+        }
+        perigo={invalida || exclusao}
       />
       {isPending ? (
         <p className="text-xs text-muted-foreground">Preparando o resumo…</p>
       ) : isError ? (
         <p className="text-xs text-muted-foreground">
-          Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.
+          {exclusao
+            ? 'Não consegui mostrar o que vai ser excluído. Toque em Ajustar e peça de novo.'
+            : 'Não consegui mostrar os detalhes. Se tiver dúvida, toque em Ajustar e peça de novo.'}
         </p>
       ) : invalida ? (
         <p role="alert" className="text-sm text-foreground/75">
@@ -180,7 +194,7 @@ function Escrita({
               (ocupado || travado) && 'pointer-events-none opacity-50',
             )}
           >
-            Gravar
+            {verbo}
           </button>
         )}
         {/* Nunca desabilitado por texto digitado: recusar é a saída, e uma saída
@@ -188,7 +202,11 @@ function Escrita({
         <button
           type="button"
           aria-pressed={emLote ? decisao === false : undefined}
-          aria-description="Não grava. Diga no campo o que mudar."
+          aria-description={
+            exclusao
+              ? 'Não exclui. Diga no campo o que mudar.'
+              : 'Não grava. Diga no campo o que mudar.'
+          }
           disabled={ocupado}
           onClick={() => onDecidir(false)}
           className={cn(

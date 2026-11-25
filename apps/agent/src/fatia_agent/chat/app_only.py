@@ -1,7 +1,8 @@
 """`open_in_app`: o "só no app" do chat (#384, prancha IA-Ferramentas).
 
-As ações sem volta (apagar, sair de comunidade, compartilhar dados) são restritas: a IA nunca
-as executa (ADR 022). Antes, pedir uma delas dava um parágrafo explicando onde ficava a tela.
+As ações que podem causar dano à pessoa (excluir a conta, sair de comunidade, compartilhar
+dados, bloquear) são restritas: a IA nunca as executa (ADR 022, #481). Antes, pedir uma
+delas dava um parágrafo explicando onde ficava a tela.
 Agora a IA chama esta ferramenta, que **não faz nada** além de pôr na tela um cartão com o
 botão que abre a tela certa — o caminho de cada uma é declarado na própria tool do `apps/api`
 (`appOnly`) e servido em `GET /chat/tool-catalog`; aqui só vai o nome e os ids.
@@ -36,10 +37,10 @@ def definition(restricted: Sequence[McpToolInfo]) -> dict[str, Any] | None:
         "function": {
             "name": NAME,
             "description": (
-                "Quando a pessoa pede algo que só pode ser feito no app — apagar um registro, "
-                "sair ou entrar numa comunidade, compartilhar dados —, use esta ferramenta para "
-                "mostrar o botão que abre a tela certa. Ela NÃO faz a ação. Passe a ação e, em "
-                "`params`, os ids que você já tem (ex.: o id da refeição)."
+                "Quando a pessoa pede algo que só pode ser feito no app — excluir a conta, "
+                "sair ou entrar numa comunidade, compartilhar dados, bloquear alguém —, use "
+                "esta ferramenta para mostrar o botão que abre a tela certa. Ela NÃO faz a "
+                "ação. Passe a ação e, em `params`, os ids que você já tem."
             ),
             "parameters": {
                 "type": "object",

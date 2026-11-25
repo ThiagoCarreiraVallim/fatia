@@ -7,6 +7,7 @@ import {
   chatCardTitle,
   collapsedLabel,
   chatArtifactAsksAction,
+  isDestructiveChatTool,
   isEmptyChatArtifact,
   isRenderableChatArtifact,
   pauseDecisionCount,
@@ -54,6 +55,28 @@ describe('appOnlyHref — o botão "Abrir" do só no app (#384)', () => {
   it('sem tela declarada não há botão', () => {
     expect(appOnlyHref({ title: 'x', kind: 'app_only' }, {})).toBeNull();
     expect(appOnlyHref(undefined, {})).toBeNull();
+  });
+});
+
+describe('isDestructiveChatTool — o cartão de exclusão (#490, ADR 051)', () => {
+  it('segue o catálogo quando ele conhece a tool', () => {
+    const catalogo = {
+      delete_meal: {
+        title: 'Excluir refeição',
+        kind: 'confirm' as const,
+        destructive: true as const,
+      },
+      update_meal: { title: 'Editar refeição', kind: 'confirm' as const },
+    };
+    expect(isDestructiveChatTool(catalogo, 'delete_meal')).toBe(true);
+    expect(isDestructiveChatTool(catalogo, 'update_meal')).toBe(false);
+  });
+
+  it('sem o catálogo, decide pelo nome: nunca trata exclusão como escrita comum', () => {
+    expect(isDestructiveChatTool(undefined, 'delete_set')).toBe(true);
+    expect(isDestructiveChatTool(undefined, 'remove_exercise_from_plan')).toBe(true);
+    expect(isDestructiveChatTool({}, 'delete_meal')).toBe(true);
+    expect(isDestructiveChatTool(undefined, 'log_meal')).toBe(false);
   });
 });
 
@@ -290,11 +313,11 @@ describe('chatCardTitle e isEmptyChatArtifact — o título do cartão e o "nada
       chatCardTitle({
         toolCallId: t,
         kind: 'app_only',
-        tool: 'delete_meal',
-        title: 'Excluir refeição',
+        tool: 'leave_group',
+        title: 'Sair de um grupo',
         params: {},
       }),
-    ).toBe('Excluir refeição é pelo app');
+    ).toBe('Sair de um grupo é pelo app');
   });
 
   it('vazio é o cartão sem linhas; métrica, arquivo e só no app nunca são vazios', () => {

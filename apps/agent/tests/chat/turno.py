@@ -16,7 +16,7 @@ from fatia_agent.chat.graph import GrafoDaConversa, montar_grafo, stream_chat_ev
 from fatia_agent.chat.mcp_client import McpClient
 from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
 from fatia_agent.chat.tool_policy import (
-    automaticas,
+    auto_writable,
     camada_restrita,
     sem_desligadas,
     todas_permitidas,
@@ -182,7 +182,7 @@ async def turno(
         write_search_query=write_search_query or _eco,
         pause_after_tools=pause_after_tools,
         conversation_id=CONVERSA,
-        auto_write=automaticas(permitidas, auto_write),
+        auto_write=auto_writable(permitidas, auto_write),
         run_token=run_token,
     )
     brutos = [

@@ -133,10 +133,10 @@ vi.mock('@fatia/api-client', async () => {
       get_today_summary: 'Resumo de hoje',
     })),
     getChatToolCatalog: vi.fn(async () => ({
-      delete_meal: {
-        title: 'Excluir refeição',
+      leave_group: {
+        title: 'Sair de um grupo',
         kind: 'app_only',
-        appOnly: { screen: 'Ações da refeição', path: '/nutrition/meals/:id' },
+        appOnly: { screen: 'Sobre a comunidade', path: '/community/:groupId/settings' },
       },
     })),
     getAiConsent: vi.fn(async () => {
@@ -1566,14 +1566,14 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
           data: {
             toolCallId: 'a1',
             kind: 'app_only',
-            tool: 'delete_meal',
-            title: 'Excluir refeição',
-            params: { id: 'm1' },
+            tool: 'leave_group',
+            title: 'Sair de um grupo',
+            params: { groupId: 'g1' },
           },
         },
       );
 
-      const soNoApp = await screen.findByRole('figure', { name: 'Excluir refeição é pelo app' });
+      const soNoApp = await screen.findByRole('figure', { name: 'Sair de um grupo é pelo app' });
       expect(screen.queryByRole('figure', { name: 'Fontes · 1 site' })).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /Pesquisei na web · 1 site/ }));
       const fontesDaBusca = await screen.findByRole('figure', { name: 'Fontes · 1 site' });
@@ -1582,8 +1582,8 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
         'https://bjsm.bmj.com/x',
       );
       expect(
-        await within(soNoApp).findByRole('link', { name: 'Abrir Ações da refeição' }),
-      ).toHaveAttribute('href', '/nutrition/meals/m1');
+        await within(soNoApp).findByRole('link', { name: 'Abrir Sobre a comunidade' }),
+      ).toHaveAttribute('href', '/community/g1/settings');
     });
 
     it('a busca pede o aceite com a pergunta à vista; concordar grava o aceite e busca', async () => {

@@ -15,9 +15,9 @@ export class SetGroupSharingTool implements McpToolDef {
   constructor(private readonly consent: ConsentService) {}
   readonly name = 'set_group_sharing';
   readonly title = 'Definir o que compartilho com a comunidade';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
-  readonly card = 'confirm' as const;
+  readonly appOnly = { screen: 'Sobre a comunidade', path: '/community/:groupId/settings' };
   readonly description =
     'Define o que a equipe de uma comunidade do usuário (dono, profissionais e criadores) pode ' +
     'ver. A lista enviada passa a ser a lista inteira e substitui as autorizações por ' +

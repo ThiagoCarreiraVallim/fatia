@@ -15,12 +15,13 @@ export class ExportMyDataTool implements McpToolDef {
 
   readonly title = 'Exportar meus dados';
 
-  // Cria um link (uma linha nova, que vence sozinha em 24 h) e não mexe em
-  // dado nenhum da pessoa: para quem conversa, é leitura.
-  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
+  // Cria um link que abre SEM login, com todos os dados da conta (conversas inclusive), e
+  // por isso não é leitura: quem tem o link tem tudo. Fora do chat hospedado (#481), para que
+  // a IA nunca ponha esse link no contexto do modelo nem num texto que ela proponha publicar.
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
-  readonly card = 'file' as const;
+  readonly appOnly = { screen: 'Você', path: '/you' };
   readonly description =
     'Gera um link para baixar TODOS os dados do usuário em um arquivo JSON: perfil, metas, refeições e itens, treinos e séries, peso, passos, hidratação, conversas, comunidades e os alimentos e exercícios custom que ele criou. ' +
     'O link vale 24 horas (`expiresAt`) e abre sem login, então entregue-o só ao próprio usuário. Use quando ele pedir uma cópia dos dados, quiser levá-los para outro app, ou antes de apagar a conta.';
@@ -28,17 +29,5 @@ export class ExportMyDataTool implements McpToolDef {
 
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
     return this.exports.createLink(userId);
-  }
-
-  /** O arquivo com o link de 24 h (prancha IA-Cartoes, #384). */
-  artifact(result: unknown) {
-    const link = result as { url: string; expiresAt: Date };
-    return {
-      kind: 'file',
-      label: 'Seus dados',
-      url: link.url,
-      filename: 'fatia-dados.json',
-      expiresAt: new Date(link.expiresAt).toISOString(),
-    };
   }
 }

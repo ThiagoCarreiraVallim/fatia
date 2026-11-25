@@ -35,9 +35,21 @@ export interface ChatToolCatalogEntry {
   kind: 'read' | 'confirm' | 'app_only';
   card?: ChatCardFormat;
   appOnly?: { screen: string; path: string };
+  /** Apaga: o cartão diz "Excluir" e só libera com o registro nomeado pela prévia (ADR 051). */
+  destructive?: true;
 }
 
 export type ChatToolCatalog = Record<string, ChatToolCatalogEntry>;
+
+/**
+ * Se a confirmação é de uma exclusão. Sem o catálogo (ainda carregando ou fora do ar), decide
+ * pelo nome: tratar uma exclusão como escrita comum liberaria apagar sem o registro nomeado.
+ */
+export function isDestructiveChatTool(catalog: ChatToolCatalog | undefined, tool: string): boolean {
+  const entry = catalog?.[tool];
+  if (entry) return entry.destructive === true;
+  return /^(delete|remove|forget)_/.test(tool);
+}
 
 /**
  * As ferramentas que moram no agente, fora do `/mcp` — e por isso fora do catálogo da API —,

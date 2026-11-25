@@ -55,6 +55,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [047](./047-checkin-com-foto-aceite-e-fila.md)                         | Check-in com foto: aceite próprio, sinais do servidor e fila         | Accepted (complementa 044)             |
 | [048](./048-sem-chat-entre-equipe-e-aluno.md)                          | Sem chat entre equipe e aluno: a conversa é no WhatsApp              | Accepted                               |
 | [050](./050-login-e-cadastro-dentro-do-app.md)                         | Login, cadastro e "esqueci a senha" dentro do app (Experience API)   | Accepted (revê parte da 008)           |
+| [051](./051-ia-apaga-nutricao-e-treino-com-cartao.md)                  | A IA apaga nutrição e treino com cartão; o dano fica no app          | Accepted (altera 022)                  |
 
 ## Template
 

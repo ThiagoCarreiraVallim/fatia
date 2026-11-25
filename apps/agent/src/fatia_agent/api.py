@@ -60,7 +60,7 @@ from .chat import (
     ContextoDoTurno,
     GrafoDaConversa,
     McpClient,
-    automaticas,
+    auto_writable,
     build_mcp_client,
     camada_restrita,
     interrupcao_pendente,
@@ -726,7 +726,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             pause_after_tools=resolved.agent_chat_pause_after_tools,
             conversation_id=str(payload.conversation_id),
             # Sem a credencial do agente o `/mcp` recusaria o header (403): nem tenta.
-            auto_write=automaticas(permitidas, modos.auto)
+            auto_write=auto_writable(permitidas, modos.auto)
             if resolved.agent_api_key.strip() and payload.run_token
             else frozenset(),
             run_token=payload.run_token,

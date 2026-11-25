@@ -160,7 +160,10 @@ const CATEGORIA_DA_MEMORIA: Record<string, string> = {
   HABIT: 'Hábito',
 };
 
-const FOCO_DO_BLOCO: Record<string, string> = { strength: 'Força', hypertrophy: 'Hipertrofia' };
+export const FOCO_DO_BLOCO: Record<string, string> = {
+  strength: 'Força',
+  hypertrophy: 'Hipertrofia',
+};
 /** Os tipos de lembrete (#389), como a prancha Al-V3 os chama. */
 const TIPO_DE_LEMBRETE: Record<string, string> = {
   WATER: 'Água',
@@ -263,19 +266,6 @@ const fuso: Formato = (valor) => {
   return cidade === 'Sao Paulo' ? 'São Paulo' : cidade;
 };
 
-/** As categorias do consentimento (ADR 026), como a tela de entrar na comunidade diz. */
-const ESCOPOS: Record<string, string> = {
-  WORKOUT: 'Treino',
-  NUTRITION: 'Alimentação',
-  BODY: 'Peso e medidas',
-  HABITS: 'Água e passos',
-  GOALS: 'Metas',
-};
-
-/** Lista vazia é uma escolha, e o cartão diz qual: não compartilhar nada. */
-const escopos: Formato = (valor, ctx) =>
-  Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
-
 const TECNICA: Record<string, string> = {
   NORMAL: 'Normal',
   DROP_SET: 'Drop-set',
@@ -336,7 +326,6 @@ export const CAMPOS: Record<string, Campo> = {
     formato: (valor) =>
       Array.isArray(valor) ? (valor.length === 1 ? '1 aviso' : `${valor.length} avisos`) : null,
   },
-  scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
   applyGoals: {
     rotulo: 'Trocar minhas metas pelas do plano',
     formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
@@ -344,11 +333,6 @@ export const CAMPOS: Record<string, Campo> = {
   saveMeals: {
     rotulo: 'Guardar as refeições sugeridas',
     formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
-  },
-  statsOptIn: {
-    rotulo: 'Estatísticas agregadas',
-    formato: (valor) =>
-      typeof valor === 'boolean' ? (valor ? 'Participa' : 'Não participa') : null,
   },
   mealType: { rotulo: 'Refeição', formato: deMapa(TIPO_DA_REFEICAO) },
   eatenAt: { rotulo: 'Quando', formato: dataEHora },
@@ -620,7 +604,6 @@ export const IDS = {
   sessionId: 'treino',
   goalId: 'meta',
   memoryId: 'memoria',
-  linkId: 'profissional',
   weightLogId: 'peso',
   stepLogId: 'passos',
   setId: 'serie',
@@ -634,13 +617,10 @@ export type TipoDeRegistro =
   | 'itemDaRefeicao'
   | 'agua'
   | 'comunidade'
-  | 'convite'
   | 'planoDaComunidade'
   | 'desafioDaComunidade'
   | 'postDaComunidade'
-  | 'comentarioDaComunidade'
   | 'opcaoDaEnquete'
-  | 'bloqueio'
   | 'lembrete'
   | 'planoAlimentar'
   | 'refeicaoDoPlano'
@@ -650,33 +630,32 @@ export type TipoDeRegistro =
   | 'trocaDoPlano'
   | 'planoRecebido'
   | 'versaoDoPlanoRecebido'
-  | 'sessaoDaAgenda';
+  | 'sessaoDaAgenda'
+  // O que só a própria pessoa apaga (#481): o do catálogo não ganha nome no cartão.
+  | 'fotoDaRefeicao'
+  | 'alimentoProprio'
+  | 'medidaPropria'
+  | 'exercicioProprio'
+  | 'metaDeNutriente'
+  | 'bloco';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
- * `create_custom_food` e comunidade em `set_group_sharing`: resolver o segundo
- * pelo primeiro recusava todo cartão de consentimento.
+ * `create_custom_food` e comunidade em `create_group_post`: resolver o segundo
+ * pelo primeiro recusava todo cartão do mural.
  */
 export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
-  set_group_sharing: { groupId: 'comunidade' },
-  accept_group_invite: { token: 'convite' },
   // `templateId` aqui é plano pronto da comunidade, não refeição salva.
   adopt_group_plan: { groupId: 'comunidade', templateId: 'planoDaComunidade' },
   join_group_challenge: { groupId: 'comunidade', challengeId: 'desafioDaComunidade' },
   create_group_post: { groupId: 'comunidade' },
   comment_on_group_post: { groupId: 'comunidade', postId: 'postDaComunidade' },
-  // Mural do redesign (#394): enquete e bloqueio.
+  // Mural do redesign (#394): enquete.
   vote_group_poll: {
     groupId: 'comunidade',
     postId: 'postDaComunidade',
     optionId: 'opcaoDaEnquete',
   },
-  block_user: {
-    groupId: 'comunidade',
-    postId: 'postDaComunidade',
-    commentId: 'comentarioDaComunidade',
-  },
-  unblock_user: { blockId: 'bloqueio' },
   // Plano alimentar do profissional (#376): `planId` aqui não é plano de treino.
   accept_nutrition_plan: { planId: 'planoAlimentar' },
   log_plan_meal: { planMealId: 'refeicaoDoPlano', optionId: 'opcaoDoPlano' },
@@ -685,6 +664,10 @@ export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   // Plano de treino recebido da equipe (#379).
   accept_plan_offer: { offerId: 'planoRecebido', versionId: 'versaoDoPlanoRecebido' },
   decline_plan_offer: { offerId: 'planoRecebido', versionId: 'versaoDoPlanoRecebido' },
+  // Apagar com cartão (#481).
+  delete_training_block: { blockId: 'bloco' },
+  // `nutrientKey` é oculto no resto (o rótulo ao lado diz o nome); aqui é o próprio registro.
+  delete_nutrient_target: { nutrientKey: 'metaDeNutriente' },
 };
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
@@ -699,6 +682,15 @@ export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   clone_exercise: 'exercicio',
   update_custom_exercise: 'exercicio',
   reschedule_planned_session: 'sessaoDaAgenda',
+  // Apagar com cartão (#481): o cartão diz o que some, lido do banco pelo id.
+  delete_meal: 'refeicao',
+  delete_meal_item: 'itemDaRefeicao',
+  delete_meal_photo: 'fotoDaRefeicao',
+  delete_meal_template: 'modelo',
+  delete_custom_food: 'alimentoProprio',
+  delete_food_portion: 'medidaPropria',
+  delete_water_log: 'agua',
+  delete_custom_exercise: 'exercicioProprio',
 };
 
 export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
@@ -710,7 +702,6 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   treino: 'Treino',
   meta: 'Meta',
   memoria: 'Memória',
-  profissional: 'Profissional',
   peso: 'Registro de peso',
   passos: 'Registro de passos',
   serie: 'Série',
@@ -720,13 +711,10 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   itemDaRefeicao: 'Item',
   agua: 'Registro de água',
   comunidade: 'Comunidade',
-  convite: 'Comunidade',
   planoDaComunidade: 'Plano da comunidade',
   desafioDaComunidade: 'Desafio',
   postDaComunidade: 'Post',
-  comentarioDaComunidade: 'Comentário',
   opcaoDaEnquete: 'Opção',
-  bloqueio: 'Pessoa',
   lembrete: 'Lembrete',
   planoAlimentar: 'Plano alimentar',
   refeicaoDoPlano: 'Refeição do plano',
@@ -737,6 +725,12 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   planoRecebido: 'Plano recebido',
   versaoDoPlanoRecebido: 'Versão',
   sessaoDaAgenda: 'Sessão da agenda',
+  fotoDaRefeicao: 'Foto da refeição',
+  alimentoProprio: 'Alimento',
+  medidaPropria: 'Medida',
+  exercicioProprio: 'Exercício',
+  metaDeNutriente: 'Meta de nutriente',
+  bloco: 'Bloco de treino',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */

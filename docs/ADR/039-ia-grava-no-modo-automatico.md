@@ -135,3 +135,11 @@ regras os fecham:
 - **A tela.** `GET /chat/auto-writes/:id` dá o estado, e o cartão recarregado mostra "Desfeito" ou
   o prazo vencido. As recusas (`AUTO_WRITE_UNDONE`, `AUTO_WRITE_EXPIRED`, `AUTO_WRITE_CHANGED`) viram
   texto no web e no app. Numa alteração, o "Gravado" mostra antes → depois.
+
+## Nota — apagar com cartão (#481, 2026-11-23)
+
+A [ADR 051](./051-ia-apaga-nutricao-e-treino-com-cartao.md) põe as exclusões de nutrição, treino,
+água, peso e passos no chat, com cartão. O item 2 desta ADR continua valendo inteiro: elas ganham
+categoria (e "Desligado" as tira do catálogo), mas nenhuma é automática — sem inversa em
+`AUTO_UNDO`, recusadas pelo `autoEligible` por serem destrutivas e recusadas de novo pelo agente
+pela anotação. Compartilhar, consentir e bloquear saíram do chat (restritas).

@@ -67,11 +67,19 @@ Toda tool declara `title` (nome de exibição legível) e o hint aplicável. É 
 diretório de conectores da Anthropic, e é o que define quando o Claude pede confirmação
 ao usuário antes de executar.
 
-| Grupo         | Prefixos                                      | `readOnlyHint` | `destructiveHint` | Efeito no Claude   |
-| ------------- | --------------------------------------------- | -------------- | ----------------- | ------------------ |
-| Leitura       | `get_` `list_` `search_` `explain_` `export_` | `true`         | `false`           | roda sem confirmar |
-| Destrutiva    | `delete_` + `remove_exercise_from_plan`       | `false`        | `true`            | sempre confirma    |
-| Escrita comum | os demais                                     | `false`        | `false`           | roda sem confirmar |
+| Grupo         | Prefixos                                | `readOnlyHint` | `destructiveHint` | Efeito no Claude   |
+| ------------- | --------------------------------------- | -------------- | ----------------- | ------------------ |
+| Leitura       | `get_` `list_` `search_` `explain_`     | `true`         | `false`           | roda sem confirmar |
+| Destrutiva    | `delete_` + `remove_exercise_from_plan` | `false`        | `true`            | sempre confirma    |
+| Escrita comum | os demais                               | `false`        | `false`           | roda sem confirmar |
+
+`export_my_data` não é leitura desde a #481: o link que ela cria abre sem login com todos os
+dados da conta, e por isso ela é escrita (e restrita no chat hospedado).
+
+O terceiro campo, `confirmableHint`, não é da spec: é o recorte do chat hospedado (ADR 022). Toda
+escrita é confirmável — inclusive apagar registro de nutrição, treino, água, peso e passos, que
+continua `destructiveHint: true` para o Claude —, menos o que causa dano à pessoa: excluir a conta,
+compartilhar e consentir dados, exportar e bloquear ([ADR 051](./ADR/051-ia-apaga-nutricao-e-treino-com-cartao.md)).
 
 ⚠️ Os dois hints são declarados **sempre**, nunca omitidos. Dois motivos:
 
@@ -130,7 +138,7 @@ dedicado a impedir que ele volte para lá.
 ### Exemplo de invocação
 
 Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada
-concreta — exceto `delete_my_account`, isenta pelo motivo listado abaixo. O `.describe()` de
+concreta — exceto `delete_my_account` e `export_my_data`, isentas pelos motivos listados abaixo. O `.describe()` de
 campo já explica _aquele_ campo; o que faltava era mostrar o
 **conjunto** de campos de uma chamada válida — o problema real de `log_set`, cujo schema é
 plano com tudo opcional, mas que na prática aceita dois conjuntos disjuntos.
@@ -162,7 +170,8 @@ Regras:
   o formato do argumento, não um registro que existe — o ID real vem de um `search_`/`list_`.
 - **Tool somente-leitura é isenta.** Input curto, raramente ambíguo, e o custo em token é
   cobrado em toda sessão.
-- **`delete_my_account` é a única tool de escrita isenta.** O input é um literal único, já
+- **`export_my_data` não tem input** (`{}`): `Exemplo: {}` não ensinaria nada.
+- **`delete_my_account` é isenta.** O input é um literal único, já
   soletrado na própria description: o exemplo não acrescentaria informação, acrescentaria
   uma chamada completa e disparável — sem ID para buscar antes — encerrando a description
   num template pronto para colar, logo depois da frase que manda nunca chamar por iniciativa
@@ -247,7 +256,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Perfil**                 | `get_me`                       | R        |
 |                            | `update_me`                    | U        |
 |                            | `update_timezone`              | U        |
-| **Conta (LGPD)**           | `export_my_data`               | R        |
+| **Conta (LGPD)**           | `export_my_data`               | C        |
 |                            | `delete_my_account`            | D        |
 | **Metas (macros)**         | `get_nutrition_goals`          | R        |
 |                            | `set_nutrition_goals`          | C/U      |
