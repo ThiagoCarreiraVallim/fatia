@@ -37,6 +37,7 @@ import { makePkce, type Pkce } from './pkce';
 import { SessionManager, toStoredSession } from './session-manager';
 import { secureTokenStore } from './token-store';
 import { sairDaLoja } from '@/billing/purchases';
+import { RestCountdown } from '../../modules/rest-countdown';
 
 // Fecha a aba do navegador do sistema assim que o callback volta (login social).
 WebBrowser.maybeCompleteAuthSession();
@@ -356,6 +357,12 @@ export function AuthProvider({
     await SecureStore.deleteItemAsync(VIA_KEY).catch(() => undefined);
     // A próxima pessoa no aparelho não herda a compra da loja (ADR 024).
     await sairDaLoja();
+    // Nem a notificação do treino, nem os toques guardados com o app encerrado (#472).
+    try {
+      RestCountdown?.reset();
+    } catch {
+      // Sem o módulo, nada guardado.
+    }
     setStatus('signedOut');
     try {
       const discovery = await endpoints();

@@ -43,7 +43,10 @@ export function ShareSheet({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerScrollView contentContainerStyle={{ paddingBottom: 32, gap: 16 }}>
+      <DrawerScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 32, gap: 16 }}
+      >
         <DrawerHeader className="px-5">
           <DrawerTitle>Compartilhar</DrawerTitle>
         </DrawerHeader>

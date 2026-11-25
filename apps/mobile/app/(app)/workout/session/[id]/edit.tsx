@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import {
   buildExerciseGroups,
+  markEndedExercises,
   moveExerciseInOrder,
   orderExerciseGroups,
   workoutApi,
@@ -29,6 +30,7 @@ import {
 import { useCancelSession } from '@/components/workout/session/use-cancel-session';
 import { useFinishSession } from '@/components/workout/session/use-finish-session';
 import {
+  useEndedExercises,
   useFocusRequest,
   usePendingExercises,
 } from '@/components/workout/session/use-pending-exercises';
@@ -73,17 +75,22 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
   const finish = useFinishSession(session.id);
   const cancel = useCancelSession(session.id);
   const { pending, add } = usePendingExercises(session.id);
+  // Encerrado na sessão guiada (#473): aqui também conta como feito.
+  const { ended } = useEndedExercises(session.id);
   const { request: requestFocus } = useFocusRequest(session.id);
   const [searchOpen, setSearchOpen] = useState(false);
   const [editing, setEditing] = useState<{ exerciseId: number; index: number } | null>(null);
 
   const groups = useMemo(
     () =>
-      orderExerciseGroups(
-        buildExerciseGroups(session.plannedExercises, session.sets, pending),
-        session.exerciseOrder,
+      markEndedExercises(
+        orderExerciseGroups(
+          buildExerciseGroups(session.plannedExercises, session.sets, pending),
+          session.exerciseOrder,
+        ),
+        ended,
       ),
-    [session.plannedExercises, session.sets, session.exerciseOrder, pending],
+    [session.plannedExercises, session.sets, session.exerciseOrder, pending, ended],
   );
 
   function backToSession(exerciseId?: number) {

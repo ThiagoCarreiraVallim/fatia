@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react';
 import { AccessibilityInfo, Pressable, View } from 'react-native';
 import Animated, {
   ReduceMotion,
@@ -7,13 +7,17 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toastDuration } from '@/theme/motion-values';
 import { Text } from './text';
+import { TOAST_IDLE, toastReducer } from './toast-queue';
 
 /**
- * Aviso curto que cai do topo com mola (prancha Movimento · Toast), com uma
- * ação opcional ("Desfazer"). Espelho do `Toaster` do PWA: fundo claro sobre o
+ * Aviso curto que cai do topo com mola (prancha Movimento · Toast) e sobe ao
+ * sair, com uma ação opcional ("Desfazer"). Chegando outro com um na tela, o
+ * atual sai antes e o novo entra de cima (`toast-queue.ts`, #471). Espelho do
+ * `Toaster` do PWA: fundo claro sobre o
  * escuro (e o contrário no claro), some em 2,5 s, ou 5 s com ação
  * (`toastDuration`). Feito à mão: é um componente só, e uma dependência nativa
  * para isso pediria um build novo do app.
@@ -42,36 +46,59 @@ export function useToast() {
 /** De onde o toast cai: acima da borda de cima, fora da tela. */
 const START_Y = -96;
 
+/** Saída: sobe de volta e apaga, mais rápida que a entrada. */
+const EXIT_MS = 180;
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const [slot, dispatch] = useReducer(toastReducer<ToastState>, TOAST_IDLE);
+  const toast = slot.visible;
+  // Invariante (#471): fora da vez (`idle`) os valores ficam sempre fora da
+  // tela. Começam assim e a saída termina assim, então o toast novo já nasce
+  // em cima, no primeiro quadro, sem passar pela posição do anterior.
   const translateY = useSharedValue(START_Y);
   const opacity = useSharedValue(0);
   const nextId = useRef(0);
 
   const show = useCallback((input: ToastInput) => {
     nextId.current += 1;
-    setToast({ ...input, id: nextId.current });
+    dispatch({ type: 'show', toast: { ...input, id: nextId.current } });
     // A região viva do Android não cobre o iOS; o anúncio cobre os dois.
     AccessibilityInfo.announceForAccessibility(
       input.action ? `${input.message}. ${input.action.label} disponível.` : input.message,
     );
   }, []);
 
+  const exited = useCallback(() => dispatch({ type: 'exited' }), []);
+
   useEffect(() => {
     if (!toast) return;
-    translateY.value = START_Y;
-    opacity.value = 0;
-    // "Reduzir movimento" ligado: a mola pula direto para o fim.
-    translateY.value = withSpring(0, {
-      damping: 16,
-      stiffness: 220,
-      reduceMotion: ReduceMotion.System,
+    if (slot.phase === 'entering') {
+      // "Reduzir movimento" ligado: a mola pula direto para o fim.
+      translateY.value = withSpring(0, {
+        damping: 16,
+        stiffness: 220,
+        reduceMotion: ReduceMotion.System,
+      });
+      opacity.value = withTiming(1, { duration: 150, reduceMotion: ReduceMotion.System });
+      const timer = setTimeout(
+        () => dispatch({ type: 'dismiss' }),
+        toastDuration(Boolean(toast.action)),
+      );
+      return () => clearTimeout(timer);
+    }
+    // Saindo (o tempo acabou ou chegou outro): sobe e apaga; no fim, os valores
+    // ficam de novo fora da tela e a vez passa para o da fila.
+    const config = { duration: EXIT_MS, reduceMotion: ReduceMotion.System };
+    opacity.value = withTiming(0, config);
+    translateY.value = withTiming(START_Y, config, () => {
+      'worklet';
+      translateY.value = START_Y;
+      opacity.value = 0;
+      scheduleOnRN(exited);
     });
-    opacity.value = withTiming(1, { duration: 150, reduceMotion: ReduceMotion.System });
-    const timer = setTimeout(() => setToast(null), toastDuration(Boolean(toast.action)));
-    return () => clearTimeout(timer);
-  }, [toast, translateY, opacity]);
+    return undefined;
+  }, [toast, slot.phase, translateY, opacity, exited]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -84,7 +111,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {toast ? (
         <Animated.View
           key={toast.id}
-          pointerEvents="box-none"
+          // Saindo, não recebe toque: o "Desfazer" de um toast que já foi não vale.
+          pointerEvents={slot.phase === 'leaving' ? 'none' : 'box-none'}
           style={[{ position: 'absolute', left: 16, right: 16, top: insets.top + 12 }, style]}
         >
           <View
@@ -106,7 +134,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 hitSlop={8}
                 onPress={() => {
                   const action = toast.action;
-                  setToast(null);
+                  dispatch({ type: 'dismiss' });
                   action?.onPress();
                 }}
                 className="min-h-11 justify-center px-2"

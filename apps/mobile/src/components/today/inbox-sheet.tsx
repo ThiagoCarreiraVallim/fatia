@@ -55,6 +55,7 @@ export function InboxSheet({
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32, gap: 16 }}
       >
         <Text accessibilityRole="header" className="pt-1 font-display text-h2 text-foreground">

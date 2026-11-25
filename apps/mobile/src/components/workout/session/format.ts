@@ -159,6 +159,8 @@ export function targetSetsOf(group: ExerciseGroup): number {
 }
 
 export function isExerciseComplete(group: ExerciseGroup): boolean {
+  // "Encerrar exercício" (#473): as séries que faltavam foram puladas.
+  if (group.ended) return true;
   if (group.isCardio) return group.sets.length > 0;
   const target = group.targetSets;
   if (target == null || target === 0) return false;

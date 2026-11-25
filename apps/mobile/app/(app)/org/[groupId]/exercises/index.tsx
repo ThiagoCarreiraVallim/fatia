@@ -181,6 +181,7 @@ function CatalogPickerDrawer({
         </View>
       </View>
       <DrawerFlatList
+        showsVerticalScrollIndicator={false}
         className="flex-1"
         data={itens.slice(0, 30)}
         keyboardShouldPersistTaps="handled"

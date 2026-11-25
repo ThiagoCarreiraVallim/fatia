@@ -99,6 +99,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick, muscleGroup }
       </View>
 
       <DrawerFlatList
+        showsVerticalScrollIndicator={false}
         className="flex-1"
         data={filtered ?? []}
         keyboardShouldPersistTaps="handled"

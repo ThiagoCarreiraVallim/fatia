@@ -174,7 +174,7 @@ function CardContent({ artifact }: { artifact: ChatArtifact }) {
     case 'list':
       return <ListaRica artifact={artifact} />;
     case 'report':
-      return <Tabela artifact={artifact} />;
+      return <ReportTable artifact={artifact} />;
     case 'range':
       return <Faixa artifact={artifact} />;
     case 'progress':
@@ -395,12 +395,12 @@ function ListaRica({ artifact }: De<'list'>) {
   );
 }
 
-function Tabela({ artifact }: De<'report'>) {
+function ReportTable({ artifact }: De<'report'>) {
   if (artifact.rows.length === 0) return <Vazio texto="Nada no período." />;
   const linhas = artifact.rows.slice(0, MAX_LINHAS);
   return (
     <View className="rounded-xl bg-secondary py-1">
-      <ScrollView horizontal>
+      <ScrollView showsHorizontalScrollIndicator={false} horizontal>
         <View>
           {[artifact.columns, ...linhas].map((linha, r) => (
             <View key={r} className={cn('flex-row', r > 0 && 'border-t border-border')}>

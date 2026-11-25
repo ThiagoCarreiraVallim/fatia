@@ -68,7 +68,12 @@ export function ChatMarkdown({ source }: { source: string }) {
         }
         if (b.type === 'code') {
           return (
-            <ScrollView key={i} horizontal className="rounded-lg bg-secondary p-3">
+            <ScrollView
+              showsHorizontalScrollIndicator={false}
+              key={i}
+              horizontal
+              className="rounded-lg bg-secondary p-3"
+            >
               <Text className="font-mono text-[13px] text-foreground">{b.text}</Text>
             </ScrollView>
           );
@@ -91,7 +96,7 @@ export function ChatMarkdown({ source }: { source: string }) {
         }
         if (b.type === 'table') {
           return (
-            <ScrollView key={i} horizontal>
+            <ScrollView showsHorizontalScrollIndicator={false} key={i} horizontal>
               <View className="rounded-lg border border-border">
                 {[b.header, ...b.rows].map((linha, r) => (
                   <View

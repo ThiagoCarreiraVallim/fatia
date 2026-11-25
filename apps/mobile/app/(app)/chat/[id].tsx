@@ -183,6 +183,7 @@ function Conversation({ id }: { id: string | undefined }) {
               <ErrorState error={loadError} onRetry={() => void sessao.reload()} />
             ) : (
               <FlatList
+                showsVerticalScrollIndicator={false}
                 ref={lista}
                 data={thread.messages}
                 keyExtractor={(m) => m.id}

@@ -125,7 +125,11 @@ function SheetForm({
         </DrawerDescription>
       </DrawerHeader>
 
-      <DrawerScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
+      <DrawerScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1 px-4"
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="gap-4 pb-6 pt-1">
           {draft.cardio ? (
             <CardioFields draft={draft} set={set} error={errors.cardio} birthDate={birthDate} />

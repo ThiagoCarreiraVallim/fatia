@@ -12,3 +12,8 @@ export class AgendaQueryDto {
 export class RescheduleSessionDto {
   @IsString() @Matches(DIA, { message: 'date deve ser YYYY-MM-DD' }) date!: string;
 }
+
+/** A faixa de dias do Treino (#479): a semana, segunda a domingo, de um dia qualquer. */
+export class TrainingWeekQueryDto {
+  @IsString() @Matches(DIA, { message: 'date deve ser YYYY-MM-DD' }) date!: string;
+}

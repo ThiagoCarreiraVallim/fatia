@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronDown } from 'lucide-react-native';
+import { Check, ChevronDown, MoreHorizontal } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { formatClock } from './format';
 import { colors } from '@/theme/colors';
@@ -11,6 +11,9 @@ import { colors } from '@/theme/colors';
  * (o treino segue na barra de baixo, `ActiveWorkoutBar`), o relógio numa
  * pílula no meio e, à direita, o check que finaliza. O "Treino atual" (`Al-T17`)
  * abre pelo "Todas ›" ao lado das séries.
+ *
+ * O "⋯" ao lado do check (#473) guarda o que é raro e não cabe na prancha:
+ * encerrar o exercício sem as séries que faltam e sair sem salvar.
  */
 /** Altura do cabeçalho abaixo da área segura: 8 + botão de 44 + 12. */
 export const SESSION_HEADER_HEIGHT = 64;
@@ -19,11 +22,14 @@ export function SessionHeader({
   startedAt,
   onMinimize,
   onFinish,
+  onMore,
   overVideo = false,
 }: {
   startedAt: string;
   onMinimize: () => void;
   onFinish: () => void;
+  /** Abre o menu "⋯" (encerrar exercício, sair sem salvar). */
+  onMore?: () => void;
   /**
    * Prancha `Al-T3`: o vídeo do exercício fica no fundo do topo, e o
    * cabeçalho flutua por cima dele, com os botões escuros translúcidos.
@@ -43,15 +49,18 @@ export function SessionHeader({
           : 'flex-row items-center justify-between gap-2 bg-background px-4 pb-3'
       }
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Minimizar treino"
-        accessibilityHint="O treino continua na barra de baixo"
-        onPress={onMinimize}
-        className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
-      >
-        <ChevronDown size={20} color={ink} />
-      </Pressable>
+      {/* Os lados com a mesma largura: o relógio fica no meio com o "⋯" à direita. */}
+      <View className="w-[96px] flex-row">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Minimizar treino"
+          accessibilityHint="O treino continua na barra de baixo"
+          onPress={onMinimize}
+          className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
+        >
+          <ChevronDown size={20} color={ink} />
+        </Pressable>
+      </View>
       <View
         accessible
         accessibilityLabel={`Tempo de treino ${clock}`}
@@ -65,14 +74,26 @@ export function SessionHeader({
           {clock}
         </Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Finalizar treino"
-        onPress={onFinish}
-        className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
-      >
-        <Check size={20} color={ink} />
-      </Pressable>
+      <View className="w-[96px] flex-row justify-end gap-2">
+        {onMore ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mais opções do treino"
+            onPress={onMore}
+            className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
+          >
+            <MoreHorizontal size={20} color={ink} />
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Finalizar treino"
+          onPress={onFinish}
+          className={`h-11 w-11 items-center justify-center rounded-full ${button} active:opacity-80`}
+        >
+          <Check size={20} color={ink} />
+        </Pressable>
+      </View>
     </View>
   );
 }

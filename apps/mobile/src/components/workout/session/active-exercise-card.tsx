@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { Check, Trophy } from 'lucide-react-native';
 import {
   feelingToRpe,
+  isTouchedForSet,
   loadFieldValue,
   loadToKg,
   loadUnitLabel,
@@ -115,11 +116,16 @@ export function ActiveExerciseCard({
   const [weight, setWeight] = useState(saved?.weightKg ?? 0);
   const [reps, setReps] = useState(() => saved?.reps ?? parseFirstRep(group.targetReps));
   const [feeling, setFeeling] = useState<number | null>(saved?.feeling ?? null);
-  const [touched, setTouched] = useState(saved?.touched ?? false);
+  // Em qual série a pessoa mexeu nos campos (#485): o toque vale só para a
+  // série em andamento, e a seguinte volta a herdar a que acabou de sair.
+  const [touchedAt, setTouchedAt] = useState<number | null>(saved?.touched ? doneSets : null);
+  const touched = isTouchedForSet(touchedAt, doneSets);
+  const touch = () => setTouchedAt(doneSets);
 
   // O palpite é aplicado durante o render, comparando os dois números (#187):
   // os objetos de série trocam de identidade a cada refetch e reescreveriam o
-  // que a pessoa digitou.
+  // que a pessoa digitou. Com o campo tocado ele não vem (`prefillForNextSet`),
+  // nem quando a série da sessão muda por baixo (correção, refetch).
   const prefill = prefillForNextSet({
     touched,
     sessionLastSet,
@@ -263,8 +269,9 @@ export function ActiveExerciseCard({
               accessibilityLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
               value={loadFieldValue(weight, units.loadUnit)}
               step={loadStep(units.loadUnit)}
+              onEditStart={touch}
               onChange={(next) => {
-                setTouched(true);
+                touch();
                 setWeight(loadToKg(next, units.loadUnit));
               }}
             />
@@ -282,8 +289,9 @@ export function ActiveExerciseCard({
               value={reps}
               step={STEPS.reps}
               integer
+              onEditStart={touch}
               onChange={(next) => {
-                setTouched(true);
+                touch();
                 setReps(next);
               }}
             />

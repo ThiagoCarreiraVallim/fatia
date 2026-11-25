@@ -17,6 +17,11 @@ import { cn } from './utils';
  *
  * `snapToInterval` (em vez de `pagingEnabled` puro) é o que permite card com
  * largura menor que a tela e uma prévia do próximo — o desenho que o PWA usa.
+ *
+ * `bleed` é o padding horizontal do pai (#477): a lista sai dele com margem
+ * negativa e o devolve por dentro, no `contentContainerStyle`. Assim o primeiro
+ * card continua alinhado ao resto da tela, mas os cards rolam até a borda em vez
+ * de sumirem cortados no padding.
  */
 export function Carousel<T>({
   data,
@@ -26,6 +31,7 @@ export function Carousel<T>({
   gap = 12,
   className,
   showDots = true,
+  bleed = 0,
 }: {
   data: T[];
   renderItem: ListRenderItem<T>;
@@ -34,6 +40,7 @@ export function Carousel<T>({
   gap?: number;
   className?: string;
   showDots?: boolean;
+  bleed?: number;
 }) {
   const [active, setActive] = useState(0);
   const interval = itemWidth + gap;
@@ -58,6 +65,8 @@ export function Carousel<T>({
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         showsHorizontalScrollIndicator={false}
+        style={bleed ? { marginHorizontal: -bleed } : undefined}
+        contentContainerStyle={bleed ? { paddingHorizontal: bleed } : undefined}
         snapToInterval={interval}
         decelerationRate="fast"
         ItemSeparatorComponent={() => <View style={{ width: gap }} />}
@@ -67,7 +76,7 @@ export function Carousel<T>({
         // aparece como engasgo no primeiro swipe.
         getItemLayout={(_, index) => ({
           length: interval,
-          offset: interval * index,
+          offset: bleed + interval * index,
           index,
         })}
       />

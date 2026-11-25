@@ -154,3 +154,42 @@ export function figureViewBox(view: 'front' | 'back'): string {
 
 /** Largura sobre altura do quadro comum, para o `aspect-ratio` da vista. */
 export const FIGURE_ASPECT = FIGURE_FRAME.width / FIGURE_FRAME.height;
+
+/** Intensidade da figura: 1 até meia meta, 2 até a meta, 3 na meta ou acima. Sem série fica de fora. */
+export type SetsLevel = 1 | 2 | 3;
+
+export interface WeeklySetsOverview {
+  /** Nível por músculo do diagrama (chave `data-muscle`); sem série não entra, e o diagrama o apaga. */
+  muscleLevels: Record<string, SetsLevel>;
+  /** Até três grupos com série, do mais treinado para o menos. */
+  top: { group: StrengthMuscleGroup; label: string; sets: number }[];
+  /** A linha dos esquecidos ("Braços e Core sem série"). */
+  forgottenText: string;
+}
+
+/**
+ * O card "Séries por músculo" (#476) como figura: o corpo pintado pela
+ * intensidade da semana e um resumo curto (os mais treinados e os esquecidos).
+ * Os números de cada grupo continuam em `weeklySetsBars`, a um toque.
+ */
+export function weeklySetsOverview(summary: WeeklyMuscleSummary): WeeklySetsOverview {
+  const muscleLevels: Record<string, SetsLevel> = {};
+  for (const s of summary.sets) {
+    if (s.sets <= 0) continue;
+    const level: SetsLevel = s.sets >= summary.target ? 3 : s.sets >= summary.target / 2 ? 2 : 1;
+    for (const m of MUSCLES_OF_GROUP[s.group]) muscleLevels[m] = level;
+  }
+  const trained = summary.sets.filter((s) => s.sets > 0);
+  const top = [...trained]
+    .sort((a, b) => b.sets - a.sets)
+    .slice(0, 3)
+    .map((s) => ({ group: s.group, label: GROUP_LABEL[s.group], sets: s.sets }));
+  const forgotten = summary.sets.filter((s) => s.sets <= 0).map((s) => GROUP_LABEL[s.group]);
+  const forgottenText =
+    trained.length === 0
+      ? 'Nenhuma série nesta semana'
+      : forgotten.length === 0
+        ? 'Todos os grupos tiveram série'
+        : `${joinPt(forgotten)} sem série`;
+  return { muscleLevels, top, forgottenText };
+}

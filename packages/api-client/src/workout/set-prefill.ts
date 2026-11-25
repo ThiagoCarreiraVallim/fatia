@@ -8,10 +8,15 @@ import type { PrescribedSet, SessionSet } from '../workout';
  * da regra são a forma mais barata de recriar a divergência que a auditoria
  * fechou. A dependência é só `SessionSet`, que já é daqui.
  *
- * A ordem é: série já registrada **nesta** sessão manda, inclusive por cima do
- * que a pessoa digitou — acabou de levantar aquilo, é o sinal mais recente que
- * existe. Sem série nesta sessão, e enquanto ninguém tiver mexido nos campos,
- * vale a última série do exercício numa sessão **anterior**.
+ * A ordem é: o que a pessoa digitou para a série em andamento manda (`touched`,
+ * que vale só para essa série — ver `isTouchedForSet`). Fora isso, a série já
+ * registrada **nesta** sessão — acabou de levantar aquilo, é o sinal mais
+ * recente que existe. Sem série nesta sessão, vale a última série do exercício
+ * numa sessão **anterior**.
+ *
+ * Até a #485 a série da sessão passava por cima do que estava digitado: corrigir
+ * uma série feita, ou o refetch que traz a série recém-registrada, trocava o
+ * número no meio da digitação.
  *
  * O recorde pessoal ficou de fora de propósito (#190). Ele é a maior carga já
  * levantada na vida: propô-la na série de abertura ancora a pessoa no teto
@@ -40,10 +45,10 @@ export function prefillForNextSet({
   previousSessionSet?: SessionSet | null;
   prescription?: PrescribedSet | null;
 }): SetPrefill {
+  if (touched) return { weightKg: null, reps: null };
   if (sessionLastSet) {
     return { weightKg: sessionLastSet.weightKg, reps: sessionLastSet.reps };
   }
-  if (touched) return { weightKg: null, reps: null };
   if (prescription) {
     return { weightKg: prescription.weightKg, reps: prescription.reps };
   }
@@ -51,6 +56,15 @@ export function prefillForNextSet({
     weightKg: previousSessionSet?.weightKg ?? null,
     reps: previousSessionSet?.reps ?? null,
   };
+}
+
+/**
+ * A pessoa mexeu nos campos da série em andamento? `touchedAt` é quantas séries
+ * estavam registradas quando ela mexeu: registrada mais uma, o toque fica para
+ * trás e a série seguinte volta a herdar a que acabou de sair.
+ */
+export function isTouchedForSet(touchedAt: number | null, doneSets: number): boolean {
+  return touchedAt === doneSets;
 }
 
 /** Palpite para os campos da próxima série. `null` num campo = não mexer nele. */

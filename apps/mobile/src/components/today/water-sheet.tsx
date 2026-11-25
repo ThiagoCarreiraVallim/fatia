@@ -105,6 +105,7 @@ export function WaterSheet({
       }}
     >
       <DrawerScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32, gap: 16 }}
       >
         <View className="flex-row items-center justify-between gap-3 pt-1">

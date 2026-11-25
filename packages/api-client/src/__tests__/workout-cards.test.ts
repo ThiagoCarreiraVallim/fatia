@@ -5,9 +5,11 @@ import {
   musclesOfGroups,
   restedHeadline,
   weeklySetsBars,
+  weeklySetsOverview,
   figureTone,
   figureViewBox,
 } from '../workout-cards';
+import type { StrengthMuscleGroup } from '../workout';
 
 describe('cards da aba Treino', () => {
   it('"há N dias", ontem, hoje e sem treino', () => {
@@ -130,5 +132,67 @@ describe('figureViewBox — frente e costas no mesmo quadro', () => {
     const [bx, by] = box('back');
     expect(fy).toBe(by);
     expect(258.7 - fx).toBeCloseTo(263.2 - bx, 1);
+  });
+});
+
+describe('séries por músculo na figura (#476)', () => {
+  const summary = (sets: [StrengthMuscleGroup, number][]) => ({
+    from: '2026-11-17',
+    target: 12,
+    sets: sets.map(([group, n]) => ({ group, sets: n })),
+    rested: [],
+    suggestedPlan: null,
+  });
+
+  it('pinta cada músculo do grupo no nível das séries contra a meta', () => {
+    const o = weeklySetsOverview(
+      summary([
+        ['peito', 12],
+        ['costas', 7],
+        ['pernas', 3],
+        ['core', 0],
+      ]),
+    );
+    expect(o.muscleLevels.chest).toBe(3);
+    expect(o.muscleLevels.lats).toBe(2);
+    expect(o.muscleLevels.traps).toBe(2);
+    expect(o.muscleLevels.quadriceps).toBe(1);
+    expect(o.muscleLevels.abdominals).toBeUndefined();
+  });
+
+  it('os três mais treinados, do maior para o menor, e os esquecidos', () => {
+    const o = weeklySetsOverview(
+      summary([
+        ['peito', 4],
+        ['costas', 9],
+        ['pernas', 12],
+        ['ombro', 2],
+        ['braço', 0],
+        ['core', 0],
+      ]),
+    );
+    expect(o.top.map((t) => `${t.label} ${t.sets}`)).toEqual(['Pernas 12', 'Costas 9', 'Peito 4']);
+    expect(o.forgottenText).toBe('Braços e Core sem série');
+  });
+
+  it('semana vazia diz isso em vez de listar todos como esquecidos', () => {
+    const o = weeklySetsOverview(
+      summary([
+        ['peito', 0],
+        ['core', 0],
+      ]),
+    );
+    expect(o.top).toEqual([]);
+    expect(o.forgottenText).toBe('Nenhuma série nesta semana');
+  });
+
+  it('sem esquecido, diz que todos tiveram série', () => {
+    const o = weeklySetsOverview(
+      summary([
+        ['peito', 1],
+        ['core', 2],
+      ]),
+    );
+    expect(o.forgottenText).toBe('Todos os grupos tiveram série');
   });
 });

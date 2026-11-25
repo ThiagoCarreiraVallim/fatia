@@ -1,16 +1,13 @@
-import { useRef } from 'react';
-import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { historyDaysForWeek, nutritionApi, nutritionWeek, shiftWeek } from '@fatia/api-client';
+import { historyDaysForWeek, nutritionApi, nutritionWeek } from '@fatia/api-client';
 import { DayStrip } from '@/components/ui';
-
-/** Arrasto mínimo, em px, para trocar de semana. */
-const SWIPE = 48;
+import { WeekPager } from '@/components/ui/week-pager';
 
 /**
  * A semana do dia escolhido (prancha Al-N1), espelho de
  * `apps/web/src/components/nutrition/week-strip.tsx`: o dia escolhido em verde,
- * os dias com refeição contornados, e arrastar para o lado troca de semana.
+ * os dias com refeição contornados, e a faixa arrasta de semana em semana
+ * acompanhando o dedo (#479, `WeekPager`, o mesmo do Treino).
  */
 export function NutritionWeekStrip({
   date,
@@ -21,32 +18,43 @@ export function NutritionWeekStrip({
   today: string;
   onChange: (date: string) => void;
 }) {
-  const days = historyDaysForWeek(date, today);
+  return (
+    <WeekPager
+      anchor={date}
+      today={today}
+      onAnchorChange={onChange}
+      // A Nutrição tem `px-5`: a semana vizinha entra pela borda da tela.
+      bleed={20}
+      renderWeek={(monday) => (
+        <NutritionWeek monday={monday} date={date} today={today} onChange={onChange} />
+      )}
+    />
+  );
+}
+
+function NutritionWeek({
+  monday,
+  date,
+  today,
+  onChange,
+}: {
+  monday: string;
+  date: string;
+  today: string;
+  onChange: (date: string) => void;
+}) {
+  const days = historyDaysForWeek(monday, today);
   const history = useQuery({
     queryKey: ['nutrition', 'history', days],
     queryFn: () => nutritionApi.history(days),
   });
-  const week = nutritionWeek(date, history.data?.series ?? []);
-  const startX = useRef<number | null>(null);
-
+  const week = nutritionWeek(monday, history.data?.series ?? []);
   return (
-    <View
-      onTouchStart={(e) => {
-        startX.current = e.nativeEvent.pageX;
-      }}
-      onTouchEnd={(e) => {
-        const from = startX.current;
-        startX.current = null;
-        if (from == null) return;
-        const dx = e.nativeEvent.pageX - from;
-        if (Math.abs(dx) >= SWIPE) onChange(shiftWeek(date, dx > 0 ? -1 : 1));
-      }}
-    >
-      <DayStrip
-        days={week}
-        selected={week.findIndex((d) => d.iso === date)}
-        onSelect={(i) => onChange(week[i]!.iso)}
-      />
-    </View>
+    <DayStrip
+      days={week}
+      // Na semana vizinha, durante o arrasto, nenhum dia está escolhido.
+      selected={week.findIndex((d) => d.iso === date)}
+      onSelect={(i) => onChange(week[i]!.iso)}
+    />
   );
 }

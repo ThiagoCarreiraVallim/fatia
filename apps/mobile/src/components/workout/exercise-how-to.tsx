@@ -167,6 +167,7 @@ export function ExerciseHowTo({ exerciseId }: { exerciseId: number | null }) {
   return (
     <View className="flex-1 bg-background">
       <ScrollView
+        showsVerticalScrollIndicator={false}
         className="flex-1"
         contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         // Com o vídeo tocando, o arrasto vertical é do player só dentro dele.

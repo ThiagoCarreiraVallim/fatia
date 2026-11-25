@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -9,9 +10,12 @@ import {
 } from '@fatia/api-client';
 import { Icon, Text, cn } from '@/components/ui';
 import { TABULAR, todayCard, toneSoft } from '@/components/today/parts';
+import { centeredScrollX } from '@/components/ui/scroll-into-view';
 import { colors } from '@/theme/colors';
 
 const MACROS = ['protein_g', 'carbs_g', 'fat_g'];
+/** A chave do chip "Todos" na faixa (nenhum nutriente tem chave vazia). */
+const ALL = '';
 
 const number = (n: DayNutrient) => formatNutrientAmount(n.value, '').trim();
 
@@ -37,21 +41,53 @@ export function DayNutrientsCard({
   const macros = nutrients.filter((n) => MACROS.includes(n.key));
   const micros = nutrients.filter((n) => n.key !== 'kcal' && !MACROS.includes(n.key));
 
+  // O chip escolhido rola para o meio da faixa (#478): tocar num micro lá do fim
+  // do cartão escolhe um chip que estava fora da tela.
+  const chips = useRef<ScrollView>(null);
+  const chipLayouts = useRef(new Map<string, { x: number; width: number }>());
+  const viewport = useRef(0);
+  const content = useRef(0);
+  const activeKey = one?.key ?? ALL;
+  const scrollToActive = (animated: boolean) => {
+    const layout = chipLayouts.current.get(activeKey);
+    if (!layout || !viewport.current) return;
+    const x = centeredScrollX(layout, viewport.current, content.current);
+    chips.current?.scrollTo({ x, animated });
+  };
+  useEffect(() => {
+    scrollToActive(true);
+    // Só a troca de chip rola; as medidas chegam pelos `onLayout`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey]);
+
   return (
     <View className="gap-3">
       <ScrollView
+        ref={chips}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-1.5"
+        // Até a borda da tela (#477): a Nutrição tem `px-5`.
+        className="-mx-5"
+        contentContainerClassName="gap-1.5 px-5"
         accessibilityLabel="Nutriente"
+        onLayout={(e) => {
+          viewport.current = e.nativeEvent.layout.width;
+        }}
+        onContentSizeChange={(w) => {
+          content.current = w;
+        }}
       >
-        <NutrientChip label="Todos" selected={!one} onPress={() => onSelect(null)} />
-        {nutrients.map((n) => (
+        {[{ key: ALL, label: 'Todos' }, ...nutrients].map((n) => (
           <NutrientChip
             key={n.key}
             label={n.label}
-            selected={one?.key === n.key}
-            onPress={() => onSelect(n.key)}
+            selected={activeKey === n.key}
+            onPress={() => onSelect(n.key === ALL ? null : n.key)}
+            onLayout={(layout) => {
+              chipLayouts.current.set(n.key, layout);
+              // Chegou a medida do chip ativo (ex.: voltou com um micro escolhido).
+              if (n.key === activeKey) scrollToActive(false);
+            }}
           />
         ))}
         <Pressable
@@ -216,16 +252,19 @@ function NutrientChip({
   label,
   selected,
   onPress,
+  onLayout,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  onLayout: (layout: { x: number; width: number }) => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
+      onLayout={(e) => onLayout(e.nativeEvent.layout)}
       className={cn(
         'h-9 items-center justify-center rounded-chip px-3.5',
         selected ? 'bg-foreground' : 'bg-card',

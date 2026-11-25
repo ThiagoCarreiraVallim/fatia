@@ -15,6 +15,42 @@ import { Notifications } from '@/notifications/native';
  * roteiro está na PR da issue.
  */
 
+/**
+ * As ações do aviso do fim do descanso no iOS (#472): lá não há notificação
+ * fixa (seria Live Activity), então o aviso que já existe ganha botões. Os ids
+ * são os mesmos da notificação do Android e passam pelo mesmo
+ * `resolveWorkoutAction` (`workout-notification-sync.tsx`).
+ */
+export const WORKOUT_REST_CATEGORY = 'workout-rest';
+
+let categoryReady: Promise<void> | null = null;
+
+function ensureCategory(): Promise<void> {
+  if (Platform.OS !== 'ios' || !Notifications) return Promise.resolve();
+  categoryReady ??= Notifications.setNotificationCategoryAsync(WORKOUT_REST_CATEGORY, [
+    {
+      identifier: 'log-set',
+      buttonTitle: 'Registrar série',
+      // Em segundo plano: o sistema acorda o app por alguns segundos.
+      options: { opensAppToForeground: false },
+    },
+    { identifier: 'rest-plus', buttonTitle: '+15 s', options: { opensAppToForeground: false } },
+  ])
+    .then(() => undefined)
+    .catch(() => {
+      // Sem categoria o aviso chega sem botões; tenta de novo no próximo.
+      categoryReady = null;
+    });
+  return categoryReady;
+}
+
+/** O exercício em foco, que o "Registrar série" do aviso registra. Quem atualiza é a sessão. */
+let restExerciseId: number | null = null;
+
+export function setRestNotificationExercise(exerciseId: number | null): void {
+  restExerciseId = exerciseId;
+}
+
 export const expoRestNotifier: RestNotifier = {
   async ensurePermission() {
     // Expo Go do Android: sem o módulo, o descanso fica só na tela (`native.ts`).
@@ -44,13 +80,18 @@ export const expoRestNotifier: RestNotifier = {
 
   async schedule(seconds: number) {
     if (!Notifications) throw new Error('Avisos indisponíveis neste app.');
+    await ensureCategory();
     return Notifications.scheduleNotificationAsync({
       content: {
         title: 'Descanso terminado',
         body: 'Hora da próxima série.',
         sound: 'default',
-        // É o que o handler de primeiro plano lê para silenciar só este aviso.
-        data: { kind: REST_NOTIFICATION_KIND },
+        // `kind` é o que o handler de primeiro plano lê para silenciar só este
+        // aviso; `exerciseId`, o exercício do "Registrar série".
+        data: { kind: REST_NOTIFICATION_KIND, exerciseId: restExerciseId },
+        ...(Platform.OS === 'ios' && restExerciseId != null
+          ? { categoryIdentifier: WORKOUT_REST_CATEGORY }
+          : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
