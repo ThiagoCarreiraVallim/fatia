@@ -43,9 +43,7 @@ from collections.abc import Mapping
 
 from .settings import AgentSettings, endpoint_host
 
-# As quatro capacidades da `providers/base.py`. Transcrição ainda não tem
-# implementação (#141), mas entra aqui hoje: a lista precisa existir *antes* do
-# primeiro modelo de áudio, senão ele nasce sem revisão.
+# As quatro capacidades da `providers/base.py`.
 CAPABILITIES: tuple[str, ...] = ("text", "vision", "embedding", "transcription")
 
 CAPABILITY_ENV_VARS: Mapping[str, str] = {
@@ -72,7 +70,10 @@ ALLOWED_MODELS: Mapping[str, frozenset[str]] = {
     "text": frozenset({"z-ai/glm-5.3-flash"}),
     "vision": frozenset({"z-ai/glm-5.3-flash"}),
     "embedding": frozenset(),
-    "transcription": frozenset(),
+    # Gemini 3.5 Flash Lite (Google), pela OpenRouter em endpoint de retenção zero do próprio
+    # Google: recebe só o áudio do ditado e devolve o texto (#488). O GLM não aceita áudio.
+    # É o padrão de `settings.OPENROUTER_TRANSCRIPTION_MODEL`.
+    "transcription": frozenset({"google/gemini-3.5-flash-lite"}),
 }
 
 # Hosts de `AI_BASE_URL` revisados como subprocessador. Mesmo peso da lista

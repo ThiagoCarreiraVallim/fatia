@@ -147,7 +147,7 @@ async function subirApp(): Promise<Cenario> {
   const capabilities = jest.fn(async () => ({ vision: true, transcription: false }));
   const transcribe = jest.fn(async (_audio: Buffer, _tipo: string) => ({
     text: 'registra 200 g de frango',
-    usage: { model: 'whisper-1', inputUnits: 3.4 },
+    usage: { model: 'google/gemini-3.5-flash-lite', inputUnits: 150, outputUnits: 22 },
   }));
   const record = jest.fn(async () => undefined);
   const aiTierForUser = jest.fn(
@@ -747,7 +747,7 @@ describe('POST /api/chat/transcribe', () => {
       body: new Blob([corpo]),
     });
 
-  it('repassa os bytes intactos, devolve o texto e lança o custo em segundos de áudio', async () => {
+  it('repassa os bytes intactos, devolve o texto e lança o custo em tokens (#488)', async () => {
     const audio = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0xff, 0x00, 0x80]);
 
     const resposta = await ditar(audio, 'audio/webm;codecs=opus');
@@ -762,8 +762,8 @@ describe('POST /api/chat/transcribe', () => {
       feature: 'transcription',
       paidBy: 'INSTANCE',
       groupId: null,
-      model: 'whisper-1',
-      units: { inputUnits: 3.4, outputUnits: 0 },
+      model: 'google/gemini-3.5-flash-lite',
+      units: { inputUnits: 150, outputUnits: 22 },
     });
   });
 

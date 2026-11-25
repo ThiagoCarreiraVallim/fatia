@@ -595,7 +595,9 @@ describe('HttpAgentAdapter.readLabel (#375)', () => {
 
 describe('HttpAgentAdapter.transcribe', () => {
   it('manda o áudio cru, sem Bearer, e lê o texto e o usage', async () => {
-    dublarFetch(json({ text: 'almocei arroz', usage: { model: 'whisper-1', inputUnits: 4.2 } }));
+    dublarFetch(
+      json({ text: 'almocei arroz', usage: { model: 'g', inputUnits: 150, outputUnits: 12 } }),
+    );
 
     const lido = await montar({ AGENT_API_KEY: 'k' }).transcribe(Buffer.from('ogg'), 'audio/ogg');
 
@@ -604,7 +606,7 @@ describe('HttpAgentAdapter.transcribe', () => {
     expect(init.headers).toEqual({ 'X-Fatia-Agent-Key': 'k', 'Content-Type': 'audio/ogg' });
     expect(lido).toEqual({
       text: 'almocei arroz',
-      usage: { model: 'whisper-1', inputUnits: 4.2 },
+      usage: { model: 'g', inputUnits: 150, outputUnits: 12 },
     });
   });
 

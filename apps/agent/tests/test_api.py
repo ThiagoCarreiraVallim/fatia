@@ -83,7 +83,7 @@ def test_capabilities_lista_o_modelo_de_cada_capacidade(settings_factory):
         "text": "ornith-1.0-9b",
         "vision": "google/gemma-4-12b-qat",
         "embedding": "text-embedding-nomic-embed-text-v1.5",
-        # Sem implementação até #141 — declarada como ausente, não omitida.
+        # Local (LM Studio) não tem padrão de voz (#488) — declarada como ausente, não omitida.
         "transcription": None,
     }
 

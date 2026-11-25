@@ -8,6 +8,7 @@ que sabe disso.
 
 from urllib.parse import urlparse
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Endereços que não exigem credencial: LM Studio em dev, direto ou visto de
@@ -21,6 +22,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
 
 LM_STUDIO_URL = "http://localhost:1234/v1"
+
+# O modelo da voz quando a IA é a OpenRouter e `AI_MODEL_TRANSCRIPTION` está vazia (#488): se a
+# IA funciona, a voz funciona, sem variável nova. Está em `allowed_models.ALLOWED_MODELS` (a
+# revisão de privacidade) e é servido pelo Google em endpoint de retenção zero.
+OPENROUTER_TRANSCRIPTION_MODEL = "google/gemini-3.5-flash-lite"
 
 
 class AgentSettings(BaseSettings):
@@ -43,7 +49,8 @@ class AgentSettings(BaseSettings):
     ai_model_text: str = ""
     ai_model_vision: str = ""
     ai_model_embedding: str = ""
-    # O ditado do chat (#141). Endpoint OpenAI-compatível de `/audio/transcriptions`.
+    # O ditado do chat (#141). Um modelo de chat que aceita áudio (`input_audio`, #488). Vazia
+    # na OpenRouter, vale `OPENROUTER_TRANSCRIPTION_MODEL`: a variável é só override.
     ai_model_transcription: str = ""
 
     # Visão em CPU local leva dezenas de segundos. O default do httpx (5s) faria
@@ -93,6 +100,20 @@ class AgentSettings(BaseSettings):
     langfuse_sample_rate: float = 1.0
     # `production`, `staging`, `dev`… — separa os traces no mesmo projeto.
     langfuse_environment: str = "default"
+
+    @model_validator(mode="after")
+    def _transcription_follows_the_ai(self) -> "AgentSettings":
+        """A voz funciona sempre que a IA funciona (#488), sem configuração própria.
+
+        Só na OpenRouter: o padrão é um nome dela, revisado em `allowed_models`. No LM Studio
+        local o nome não existe, e a capacidade fica desligada até alguém configurar uma.
+        """
+        if (
+            not self.ai_model_transcription.strip()
+            and endpoint_host(self.ai_base_url) == "openrouter.ai"
+        ):
+            self.ai_model_transcription = OPENROUTER_TRANSCRIPTION_MODEL
+        return self
 
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"

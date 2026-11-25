@@ -16,7 +16,7 @@ import { z } from 'zod';
 /**
  * Preço de um modelo, em **micro-unidades da moeda por milhão de unidades**.
  *
- * "Unidade" é token para texto e visão, e segundo de áudio para transcrição — o provedor decide, e
+ * "Unidade" é token (texto, visão e, desde a #488, a transcrição) ou o que outro provedor medir — e
  * a tabela só multiplica.
  *
  * A escala importa e é fácil de errar por uma ordem de grandeza. Um modelo a US$ 3,00 por milhão

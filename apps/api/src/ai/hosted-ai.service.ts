@@ -94,11 +94,8 @@ export class HostedAiService {
   async transcribe(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
     const payer = await this.gate(userId);
     const { text, usage } = await this.agent.transcribe(audio, contentType);
-    // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
-    await this.record(userId, payer, 'transcription', usage?.model ?? null, {
-      inputUnits: usage?.inputUnits,
-      outputUnits: 0,
-    });
+    // A transcrição é uma chamada de chat com o áudio (#488): tokens de entrada e de saída.
+    await this.record(userId, payer, 'transcription', ...modelAndUnits(usage));
     return { text };
   }
 

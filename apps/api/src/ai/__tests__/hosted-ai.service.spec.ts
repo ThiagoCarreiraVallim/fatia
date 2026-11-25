@@ -231,7 +231,7 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
     });
   });
 
-  it('ditado grava os segundos de áudio, com saída zero', async () => {
+  it('ditado grava os tokens de entrada e de saída, como qualquer chamada de chat (#488)', async () => {
     const { service, usage } = build();
 
     await expect(service.transcribe(USER, Buffer.from('a'), 'audio/webm')).resolves.toEqual({
@@ -241,8 +241,8 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
     expect(usage.record).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
       ...comunidade,
-      model: 'whisper-1',
-      units: { inputUnits: 3.4, outputUnits: 0 },
+      model: 'google/gemini-3.5-flash-lite',
+      units: { inputUnits: 150, outputUnits: 22 },
     });
   });
 

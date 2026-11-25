@@ -602,16 +602,11 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             input={"media_type": media_type, "bytes": len(audio)},
             output=transcricao.text,
         )
+        # Sem `usage`, o modelo vai mesmo assim: o `apps/api` lança a chamada como custo não
+        # medido daquele modelo, e não como chamada sem dono.
         return {
             "text": transcricao.text,
-            "usage": {
-                "model": transcricao.model,
-                **(
-                    {"inputUnits": transcricao.duration_seconds}
-                    if transcricao.duration_seconds is not None
-                    else {}
-                ),
-            },
+            "usage": _usage_body(transcricao.usage) or {"model": transcricao.model},
         }
 
     @app.post("/feedback")

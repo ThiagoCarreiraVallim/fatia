@@ -28,10 +28,10 @@ Brief: /home/thiago/.cache/fatia-briefs/A.md
 
 ## Checklist
 
-- [ ] agente: testes vermelhos (transcrição por chat, padrão, formato) → implementação
-- [ ] API: hosted-ai grava tokens de entrada e saída do ditado
+- [x] agente: testes vermelhos (transcrição por chat, padrão, formato) → implementação (red em ~/.cache/fatia-vis/488/red-agent.txt)
+- [x] API: hosted-ai grava tokens de entrada e saída do ditado (red-api.txt)
 - [ ] /privacy + aceite (nome do modelo da voz)
-- [ ] .env.example, apps/agent/.env.example, .env.production.example, README do agente
+- [x] .env.example, apps/agent/.env.example, .env.production.example (AI_PRICE_TABLE), README do agente
 - [ ] lint/typecheck/testes
 - [ ] teste ao vivo: /transcribe do agente 8114 com o m4a
 - [ ] prints do app (microfone aparecendo, transcrição no campo) — trava do emulador
@@ -39,4 +39,4 @@ Brief: /home/thiago/.cache/fatia-briefs/A.md
 
 ## Estado atual
 
-Começando os testes do agente.
+Agente e API feitos e verdes. Falta aceite + /privacy, teste ao vivo, prints, PR.

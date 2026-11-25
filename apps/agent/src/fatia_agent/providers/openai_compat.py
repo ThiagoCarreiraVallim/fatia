@@ -64,6 +64,33 @@ RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 # Teto do `Retry-After` honrado: mais que isso e a pessoa acha que o chat travou.
 MAX_RETRY_AFTER_S = 8.0
 
+# O pedido da transcrição (#488). O modelo é de chat: sem a instrução, ele responde ao que ouviu
+# ("Que bom que você almoçou!") em vez de devolver o que foi dito.
+TRANSCRIPTION_PROMPT = (
+    "Transcreva o áudio em português do Brasil, literalmente. Devolva só o texto falado, sem "
+    "comentário, aspas ou tradução. Números como algarismos (200 g). Se não houver fala, "
+    "devolva vazio."
+)
+
+# `Content-Type` do áudio → o `format` da parte `input_audio`. O app grava AAC em MP4 e a web
+# grava webm/opus; o Gemini lê os dois como vêm (conferido na OpenRouter, #488).
+_AUDIO_FORMATS = {
+    "audio/mp4": "m4a",
+    "audio/x-m4a": "m4a",
+    "audio/aac": "aac",
+    "audio/webm": "webm",
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+}
+
+
+def audio_format(media_type: str) -> str:
+    """O `format` da parte `input_audio` para um `Content-Type` (parâmetros como `codecs` saem)."""
+    tipo = media_type.split(";")[0].strip().lower()
+    return _AUDIO_FORMATS.get(tipo, tipo.split("/")[-1] or "webm")
+
 
 class OpenAICompatProvider:
     """Atende texto, visão, embedding, chat com tools e transcrição."""
@@ -379,37 +406,31 @@ class OpenAICompatProvider:
         yield TurnEnd(tool_calls=acumulador.result(), finish_reason=finish_reason, usage=uso)
 
     async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
-        """Áudio → texto, pelo `/audio/transcriptions` do contrato OpenAI. Atende a #141.
+        """Áudio → texto por um modelo de chat que aceita áudio (#141, #488).
 
-        `verbose_json` porque é o único formato que devolve `duration`, e a
-        duração é a unidade de preço da transcrição (`ai-pricing.ts`). O nome do
-        arquivo leva a extensão do formato: há servidor compatível que escolhe o
-        decodificador por ela, e não pelo `content-type`.
-
-        O áudio vive nesta chamada e em mais lugar nenhum (ADR 020).
+        O áudio vai em base64 numa parte `input_audio`, com o formato tirado do `Content-Type`.
+        É o caminho do `/chat/completions`, e por isso leva a mesma exigência de retenção zero
+        (`provider.zdr`) das outras chamadas: o `/audio/transcriptions` da OpenRouter é
+        multipart e não a carrega. O áudio vive nesta chamada e em mais lugar nenhum (ADR 020).
         """
         model = self._require_model("transcription", self._transcription_model)
-        extensao = media_type.split("/")[-1].split(";")[0] or "webm"
-        response = await self._request(
-            "POST",
-            "audio/transcriptions",
-            files={"file": (f"audio.{extensao}", audio, media_type)},
-            data={"model": model, "response_format": "verbose_json", "language": "pt"},
+        dados = base64.b64encode(audio).decode("ascii")
+        descricao = await self._chat(
+            model,
+            [
+                {"role": "system", "content": TRANSCRIPTION_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_audio",
+                            "input_audio": {"data": dados, "format": audio_format(media_type)},
+                        }
+                    ],
+                },
+            ],
         )
-        body = _json_body(response)
-        texto = body.get("text")
-        if not isinstance(texto, str):
-            raise AIResponseUnparseable(
-                f"'/audio/transcriptions' devolveu {_describe(texto)} em 'text'."
-            )
-        duracao = body.get("duration")
-        return Transcription(
-            text=texto.strip(),
-            duration_seconds=float(duracao)
-            if isinstance(duracao, (int, float)) and not isinstance(duracao, bool)
-            else None,
-            model=model,
-        )
+        return Transcription(text=descricao.text.strip(), model=model, usage=descricao.usage)
 
     @property
     def supports_web_search(self) -> bool:
@@ -568,16 +589,11 @@ class OpenAICompatProvider:
         method: str,
         path: str,
         json: dict[str, object] | None = None,
-        *,
-        files: dict[str, tuple[str, bytes, str]] | None = None,
-        data: dict[str, str] | None = None,
     ) -> httpx.Response:
         pending: AIProviderError | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                response = await self._client.request(
-                    method, path, json=json, files=files, data=data
-                )
+                response = await self._client.request(method, path, json=json)
             except httpx.TimeoutException as exc:
                 pending = AIProviderTimeout(
                     f"O provedor não respondeu {method} {path} dentro de AI_TIMEOUT_S ({exc})."

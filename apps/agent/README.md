@@ -270,7 +270,7 @@ curl -s localhost:8100/transcribe \
   -H 'Content-Type: audio/webm' \
   -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
   --data-binary @fala.webm
-# {"text":"almocei arroz e feijão","usage":{"model":"…","inputUnits":4.2}}
+# {"text":"almocei arroz e feijão","usage":{"model":"…","inputUnits":150,"outputUnits":12}}
 ```
 
 - **O corpo é o áudio, e não JSON com base64.** Base64 cresce um terço à toa, e o `apps/api` já
@@ -279,9 +279,12 @@ curl -s localhost:8100/transcribe \
 - **O teto de 4 MB é conferido durante a leitura**, e não depois (`_ler_audio`): ler tudo e só então
   medir deixaria qualquer um com a chave do agente encher a memória do processo. É teto de bytes
   porque a duração só se sabe depois de pagar a transcrição.
-- **O provedor é o `/audio/transcriptions` do contrato OpenAI**, com `verbose_json` e o modelo
-  `AI_MODEL_TRANSCRIPTION`: é o formato que devolve a duração, e a duração é a unidade de preço
-  (`inputUnits` em segundos).
+- **A transcrição é um `/chat/completions` com o áudio numa parte `input_audio`** (base64 e o
+  formato tirado do `Content-Type`), pelo modelo `AI_MODEL_TRANSCRIPTION` (#488). Vazia na
+  OpenRouter, vale `google/gemini-3.5-flash-lite`: se a IA funciona, a voz funciona. É o caminho
+  que leva o `provider.zdr` como as outras chamadas; o `/audio/transcriptions` da OpenRouter é
+  multipart e não o leva. O preço é em tokens (`inputUnits` e `outputUnits`), como no `/title`.
+  O AAC do app e o webm/opus da web vão como estão, sem conversão.
 - **Não grava nem envia nada.** O texto volta ao campo de mensagem e é a pessoa quem decide mandar.
   O áudio vive em memória e morre com a requisição (ADR 020).
 
@@ -353,7 +356,7 @@ Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 | `AI_MODEL_TEXT`                 | Modelo da capacidade de texto.                                                        |
 | `AI_MODEL_VISION`               | Modelo da capacidade de visão. Com foto no chat, precisa aceitar tools.               |
 | `AI_MODEL_EMBEDDING`            | Modelo da capacidade de embedding.                                                    |
-| `AI_MODEL_TRANSCRIPTION`        | Modelo do ditado (`/audio/transcriptions`). Vazio = o microfone some do chat.         |
+| `AI_MODEL_TRANSCRIPTION`        | Override do modelo do ditado. Vazio: o padrão revisado na OpenRouter; local, sem voz. |
 | `AI_TIMEOUT_S`                  | Timeout por chamada. Default folgado: visão em CPU é lenta.                           |
 | `AI_MAX_RETRIES`                | Repetições em 429 e 5xx. 401/403 não são repetidos.                                   |
 | `AGENT_API_KEY`                 | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.                    |
