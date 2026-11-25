@@ -20,6 +20,7 @@ import {
   isDestructiveChatTool,
   previewChatAction,
   questionAnswer,
+  WEB_SEARCH_CONSENT_FOOTNOTE,
 } from '@fatia/api-client';
 import { useAceitar, useAceitesDaIa, useCatalogoDasTools } from './catalogo';
 import { Input } from '@/components/ui/input';
@@ -304,7 +305,7 @@ function AceiteDaBusca({
           {textos.decline}
         </button>
       </div>
-      <p className="text-[11px] text-muted-foreground">{textos.footnote}</p>
+      <p className="text-[11px] text-muted-foreground">{WEB_SEARCH_CONSENT_FOOTNOTE}</p>
     </section>
   );
 }

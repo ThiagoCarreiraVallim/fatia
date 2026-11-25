@@ -504,7 +504,7 @@ export function groupConversationsByDay<T extends { updatedAt: string }>(
  * As versões dos textos; as mesmas de `AI_CONSENT_VERSIONS` na API. Mudar o texto é mudar a
  * versão aqui e lá — o teste amarra um hash do texto à versão, para não esquecer.
  */
-export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-24' } as const;
+export const AI_CONSENT_VERSIONS = { chat: '2026-11-17', webSearch: '2026-11-17' } as const;
 
 /**
  * Os textos dos aceites. Os nomes (`{provider}`, `{model}`, `{searchEngine}`) não moram aqui:
@@ -532,9 +532,16 @@ export const AI_CONSENT_TEXTS = {
       'cartão no fim.',
     accept: 'Concordo e buscar',
     decline: 'Responder sem a web',
-    footnote: 'Dá para desligar em Configurações da IA, na lista de conversas.',
   },
 } as const;
+
+/**
+ * O rodapé do aceite da busca: onde fica a chave, e não o que vai a quem. Por isso mora fora de
+ * `AI_CONSENT_TEXTS` e do hash da versão: mudar a chave de lugar (#487) não pede o aceite de
+ * novo, nem recusa o aceite do app que ainda mostra o rodapé antigo.
+ */
+export const WEB_SEARCH_CONSENT_FOOTNOTE =
+  'Dá para desligar em Configurações da IA, na lista de conversas.';
 
 /** Quem recebe: o provedor, o modelo e a busca, como a API os nomeia (`AI_CONSENT_*`). */
 export interface AiProcessor {

@@ -83,6 +83,28 @@ describe('createFollowEnd', () => {
     f.scroll(em(120));
     expect(f.following).toBe(true);
   });
+  // Arremesso curto saindo do fim: o dedo solta a menos de 96 px dele, e a inércia é da pessoa.
+  // Um pedaço da resposta que chegue no meio não pode puxá-la de volta.
+  it('não rola sozinho durante a inércia que a pessoa deixou', () => {
+    const f = createFollowEnd();
+    f.dragStart();
+    f.dragEnd(em(340));
+    f.momentumStart();
+    expect(f.shouldAutoScroll).toBe(false);
+    f.momentumEnd(em(400));
+    expect(f.shouldAutoScroll).toBe(true);
+  });
+  it('a inércia da pessoa decide mesmo com um pedaço da resposta chegando no meio', () => {
+    const f = createFollowEnd();
+    f.dragStart();
+    f.dragEnd(em(340));
+    f.momentumStart();
+    // O que a tela faz a cada pedaço (`followIfAtEnd`).
+    if (f.shouldAutoScroll) f.appScroll();
+    f.scroll(em(50));
+    f.momentumEnd(em(0));
+    expect(f.following).toBe(false);
+  });
   it('não rola sozinho enquanto a pessoa arrasta', () => {
     const f = createFollowEnd();
     f.dragStart();

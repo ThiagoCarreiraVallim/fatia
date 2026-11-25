@@ -98,12 +98,31 @@ def test_capacidade_sem_modelo_aparece_como_ausente(settings_factory):
 
 
 def test_visao_sem_modelo_proprio_anuncia_o_de_texto(settings_factory):
-    """#482: a foto do chat aparece sempre que a IA funciona, pelo mesmo provedor."""
+    """#482: no gateway revisado, a foto do chat aparece sempre que a IA funciona, pelo mesmo
+    provedor — o modelo de texto também está na lista de visão."""
+    client = TestClient(
+        create_app(
+            settings_factory(
+                ai_base_url="https://openrouter.ai/api/v1",
+                ai_api_key="or-token",
+                ai_model_text="z-ai/glm-5.3-flash",
+                ai_model_vision="",
+            )
+        )
+    )
+
+    corpo = client.get("/capabilities").json()
+
+    assert corpo["capabilities"]["vision"] == "z-ai/glm-5.3-flash"
+
+
+def test_visao_vazia_no_destino_local_continua_sem_foto(settings_factory):
+    """No local não há lista que diga se o modelo de texto lê imagem: sem câmera (#482)."""
     client = TestClient(create_app(settings_factory(ai_model_vision="")))
 
     corpo = client.get("/capabilities").json()
 
-    assert corpo["capabilities"]["vision"] == "ornith-1.0-9b"
+    assert corpo["capabilities"]["vision"] is None
 
 
 def test_capabilities_nao_ecoa_o_caminho_da_base_url(settings_factory):

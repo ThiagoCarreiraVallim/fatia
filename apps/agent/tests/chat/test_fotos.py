@@ -92,14 +92,18 @@ def test_sem_modelo_de_visao_proprio_a_foto_vai_ao_modelo_de_texto(
 ) -> None:
     """#482: a câmera do chat funciona sempre que a IA funciona, pelo mesmo provedor.
 
-    `AI_MODEL_VISION` vira só um override: vazio, a foto vai ao modelo de texto, que passa pela
-    revisão da lista de visão como qualquer outro.
+    `AI_MODEL_VISION` vira só um override no gateway revisado: vazio, a foto vai ao modelo de
+    texto, que passa pela revisão da lista de visão como qualquer outro.
     """
     client, provider, _ = app_com(
         settings_factory,
         turnos=[_responde("Parece uma salada.")],
         monkeypatch=monkeypatch,
+        ai_base_url="https://openrouter.ai/api/v1",
+        ai_api_key="or-token",
+        ai_model_text="z-ai/glm-5.3-flash",
         ai_model_vision="",
+        agent_api_key="segredo",
     )
 
     resposta = client.post(
@@ -107,11 +111,11 @@ def test_sem_modelo_de_visao_proprio_a_foto_vai_ao_modelo_de_texto(
         json=corpo(
             message="o que é isso?", photos=[{"mediaType": "image/jpeg", "data": FOTO.base64}]
         ),
-        headers=BEARER,
+        headers={**BEARER, "X-Fatia-Agent-Key": "segredo"},
     )
 
-    assert resposta.status_code == 200
-    assert provider.corpos[0]["model"] == "ornith-1.0-9b"
+    assert resposta.status_code == 200, resposta.text
+    assert provider.corpos[0]["model"] == "z-ai/glm-5.3-flash"
 
 
 def test_rota_recusa_foto_sem_modelo_nenhum(settings_factory, monkeypatch) -> None:

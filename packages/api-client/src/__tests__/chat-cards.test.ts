@@ -23,6 +23,7 @@ import {
   groupConversationsByDay,
   groupToolCalls,
   quickReplies,
+  WEB_SEARCH_CONSENT_FOOTNOTE,
   type ChatToolCatalogEntry,
 } from '../chat-cards';
 import { CHAT_ERROR_CODES, textoDeErroDoChat, type ChatArtifact } from '../chat';
@@ -175,7 +176,8 @@ describe('groupConversationsByDay — Hoje, Esta semana e Antes (#384)', () => {
 });
 
 const HASH_CHAT = '4e35b2fd';
-const HASH_BUSCA = 'd104c22f';
+// Sem o rodapé (#487): o título, o corpo e os botões são os mesmos da versão 2026-11-17.
+const HASH_BUSCA = 'be8ab6fd';
 
 describe('textos dos aceites (#384)', () => {
   // FNV-1a de 32 bits do texto: basta para notar que ele mudou.
@@ -198,12 +200,19 @@ describe('textos dos aceites (#384)', () => {
     expect({
       versao: AI_CONSENT_VERSIONS.webSearch,
       texto: sha(AI_CONSENT_TEXTS.webSearch),
-    }).toEqual({ versao: '2026-11-24', texto: HASH_BUSCA });
+    }).toEqual({ versao: '2026-11-17', texto: HASH_BUSCA });
   });
 
   it('o rodapé da busca aponta para onde a chave mora agora, não para o globo que saiu do topo (#487)', () => {
-    expect(AI_CONSENT_TEXTS.webSearch.footnote).not.toMatch(/globo|topo do chat/);
-    expect(AI_CONSENT_TEXTS.webSearch.footnote).toContain(AI_SETTINGS_COPY.title);
+    expect(WEB_SEARCH_CONSENT_FOOTNOTE).not.toMatch(/globo|topo do chat/);
+    expect(WEB_SEARCH_CONSENT_FOOTNOTE).toContain(AI_SETTINGS_COPY.title);
+  });
+
+  it('o rodapé diz onde fica a chave, não o que vai a quem: fica fora do texto versionado (#487)', () => {
+    // Mudar onde a chave mora não pode pedir o aceite de novo, nem recusar (409) o aceite do
+    // app que já está na loja com o texto anterior.
+    expect(AI_CONSENT_TEXTS.webSearch).not.toHaveProperty('footnote');
+    expect(AI_CONSENT_VERSIONS.webSearch).toBe('2026-11-17');
   });
 
   it('os nomes do provedor, do modelo e da busca vêm da API, não do texto', () => {

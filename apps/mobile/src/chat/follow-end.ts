@@ -35,9 +35,12 @@ export function createFollowEnd() {
     get following() {
       return following;
     },
-    /** Rolar sozinho só seguindo o fim e nunca contra o dedo de quem arrasta. */
+    /**
+     * Rolar sozinho só seguindo o fim e nunca contra a pessoa: nem durante o arrasto, nem
+     * durante a inércia que ele deixou (o `appScroll` no meio dela apagaria o arremesso).
+     */
     get shouldAutoScroll() {
-      return following && !arrastando;
+      return following && !arrastando && !inerciaDaPessoa;
     },
     /** O app vai rolar (`scrollToEnd`): a inércia que vier é dele. */
     appScroll() {

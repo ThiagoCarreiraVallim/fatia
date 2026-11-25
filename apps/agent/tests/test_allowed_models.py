@@ -425,3 +425,16 @@ def test_visao_emprestada_do_texto_passa_pela_lista_de_visao(settings_factory, m
 
     _permitir(monkeypatch, "vision", "ornith-1.0-9b")
     assert usable_models(settings)["vision"] == "ornith-1.0-9b"
+
+
+def test_visao_vazia_no_destino_local_nao_empresta_o_texto(settings_factory):
+    """No destino local a lista de visão não vale: emprestar o modelo de texto ali anunciaria
+    visão num modelo que pode nem ler imagem (#482).
+
+    Sem a lista para dizer "este aceita foto", a câmera do chat e a foto do prato apareceriam e
+    toda foto falharia no provedor. Visão vazia no local continua sem foto, como antes.
+    """
+    settings = settings_factory(ai_model_text="qwen3-8b-so-texto", ai_model_vision="")
+
+    assert configured_models(settings)["vision"] == ""
+    assert usable_models(settings)["vision"] is None

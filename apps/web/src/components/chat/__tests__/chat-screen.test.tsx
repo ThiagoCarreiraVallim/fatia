@@ -1488,6 +1488,37 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
       expect(await screen.findByRole('button', { name: 'Consultei 2 coisas' })).toBeInTheDocument();
     });
 
+    it('o "Gravado" com Desfazer que chega depois de o grupo aparecer abre o grupo (#487)', async () => {
+      montar();
+      await enviar('registra 200 g de frango');
+      // As duas chamadas chegam ainda rodando: o grupo nasce ao vivo, sem artefato nenhum.
+      fontes[0].emitir(
+        pedido('ai-1', [
+          { id: 'c1', name: 'list_meals' },
+          { id: 'c2', name: 'log_meal' },
+        ]),
+      );
+      await screen.findByRole('button', { name: 'Consultei 2 coisas' });
+
+      fontes[0].emitir(feita('c1', 'list_meals'), feita('c2', 'log_meal'), {
+        event: 'artifact',
+        data: {
+          toolCallId: 'c2',
+          kind: 'saved',
+          label: 'Gravado',
+          at: '2026-11-24T12:00:00Z',
+          lines: [{ label: 'Frango grelhado', after: '200 g' }],
+          undoable: true,
+          autoWriteId: 'w1',
+        },
+      });
+      fontes[0].emitir(fragmento('ai-2', 'Registrei.'), fim());
+      fontes[0].fechar();
+      await screen.findByText('Registrei.');
+
+      expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeInTheDocument();
+    });
+
     it('consulta sem nada fica neutra, "nada encontrado"', async () => {
       montar();
       await enviar('o que comi?');
