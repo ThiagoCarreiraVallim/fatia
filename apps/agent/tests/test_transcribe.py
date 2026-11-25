@@ -318,7 +318,7 @@ def test_o_pedido_desliga_o_raciocinio_e_limita_a_saida(settings_factory, monkey
     client.post("/transcribe", content=AUDIO, headers={"content-type": "audio/mp4"})
 
     corpo = json.loads(pedidos[0].content)
-    assert corpo["reasoning"] == {"effort": "none"}
+    assert corpo["reasoning"] == {"effort": "minimal"}
     assert 0 < corpo["max_tokens"] <= 4096
     assert corpo["provider"] == {"zdr": True, "data_collection": "deny"}
 
@@ -392,3 +392,26 @@ def test_off_desliga_o_ditado_sem_alerta_de_modelo_nao_revisado(
 
     assert client.get("/capabilities").json()["capabilities"]["transcription"] is None
     assert "transcription" not in client.get("/health").json()["ai"]["unreviewed_models"]
+
+
+def test_audio_sem_fala_volta_vazio_e_nao_erro(settings_factory, monkeypatch) -> None:
+    """O Gemini responde silêncio com `content: null` e `finish_reason: stop`.
+
+    Visto ao vivo na OpenRouter em 2026-11-24, com um tom de 2 s: 200, `content` nulo e
+    zero tokens de saída. Não é resposta quebrada: não há o que transcrever, e o campo
+    fica vazio, como o prompt pede.
+    """
+    silencio = httpx.Response(
+        200,
+        json={
+            "model": OPENROUTER_TRANSCRIPTION_MODEL,
+            "choices": [{"message": {"content": None}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 70, "completion_tokens": 0},
+        },
+    )
+    client, _ = _app(settings_factory, monkeypatch, silencio)
+
+    resposta = client.post("/transcribe", content=AUDIO, headers={"content-type": "audio/mp4"})
+
+    assert resposta.status_code == 200
+    assert resposta.json()["text"] == ""

@@ -82,8 +82,10 @@ TRANSCRIPTION_PROMPT = (
 TRANSCRIPTION_MAX_TOKENS = 2048
 
 # Só para a OpenRouter: transcrever não pede raciocínio, e cada token dele é saída cobrada.
-# `effort: "none"` é a forma documentada de desligar; a OpenAI recusaria o campo com 400.
-TRANSCRIPTION_OPENROUTER_EXTRA: Mapping[str, Any] = {"reasoning": {"effort": "none"}}
+# `effort: "minimal"`, não "none": o Gemini da voz recusa "none" ("Reasoning is
+# mandatory for this endpoint", conferido ao vivo em 2026-11-24); "minimal" sai com
+# 0 tokens de raciocínio.
+TRANSCRIPTION_OPENROUTER_EXTRA: Mapping[str, Any] = {"reasoning": {"effort": "minimal"}}
 
 # A moldura que um modelo de chat põe em volta da fala, apesar do prompt.
 _CERCA = re.compile(r"^```[\w-]*[ \t]*\n?(.*?)\n?\s*```$", re.DOTALL)
@@ -486,6 +488,7 @@ class OpenAICompatProvider:
                 },
             ],
             extra=extra,
+            empty_ok=True,
         )
         return Transcription(
             text=clean_transcription(descricao.text), model=model, usage=descricao.usage
@@ -617,6 +620,7 @@ class OpenAICompatProvider:
         messages: list[dict[str, Any]],
         *,
         extra: Mapping[str, Any] | None = None,
+        empty_ok: bool = False,
     ) -> Description:
         response = await self._request(
             "POST",
@@ -646,6 +650,10 @@ class OpenAICompatProvider:
 
         message = choice.get("message")
         content = message.get("content") if isinstance(message, dict) else None
+        # Quem aceita resposta vazia (a transcrição) recebe silêncio como texto vazio: o
+        # Gemini responde áudio sem fala com `content: null` e `finish_reason: stop`.
+        if empty_ok and content is None and choice.get("finish_reason") == "stop":
+            content = ""
         if not isinstance(content, str):
             raise fora_de_forma(
                 AIResponseUnparseable(

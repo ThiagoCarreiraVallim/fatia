@@ -746,7 +746,7 @@ endpoint padrão de 24/11/2026). Sem isso, a 20ª transcrição do dia fecharia 
 tolerância de não medidos. Uma entrada com o mesmo nome na `AI_PRICE_TABLE` vale por cima, e um
 sufixo de variante na resposta (`:nitro`, `:floor`) cai no preço do modelo base. O agente recusa
 áudio acima de 150 s antes do provedor (o preço acompanha a duração), corta a saída em 2 048 tokens e
-manda `reasoning.effort: none`. Para desligar só a voz: `AI_MODEL_TRANSCRIPTION=off`.
+manda `reasoning.effort: minimal`. Para desligar só a voz: `AI_MODEL_TRANSCRIPTION=off`.
 
 **Quanto custa, medido no formato da tabela:**
 
