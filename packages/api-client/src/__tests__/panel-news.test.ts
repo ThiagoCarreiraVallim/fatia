@@ -76,8 +76,10 @@ describe('menu do painel: Novidades e Integrações no rodapé (#413)', () => {
   });
 
   it('o rodapé na ordem da prancha, com os nomes', () => {
-    expect(PANEL_FOOTER_SECTIONS).toEqual(['updates', 'integrations', 'settings']);
-    expect(PANEL_FOOTER_SECTIONS.map(panelFooterLabel)).toEqual([
+    // A demonstração (#412) abre o rodapé, na seção Início.
+    expect(PANEL_FOOTER_SECTIONS).toEqual(['demo', 'updates', 'integrations', 'settings']);
+    expect(PANEL_FOOTER_SECTIONS.map((s) => panelFooterLabel(s))).toEqual([
+      'Demonstração',
       'Novidades',
       'Integrações',
       'Configurações',

@@ -114,3 +114,4 @@ export * from './plan-programs';
 export * from './plan-library';
 export * from './community-offers';
 export * from './month-report';
+export * from './community-demo';

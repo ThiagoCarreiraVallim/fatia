@@ -96,6 +96,8 @@ export interface MyGroup {
   avatarUrl: string | null;
   /** Cor da comunidade (#413). Nula = a padrão. Ausente em API antiga. */
   brandColor?: string | null;
+  /** A comunidade de demonstração da dona (#412): o painel mostra a faixa "dados fictícios". */
+  isDemo?: boolean;
   /** Capa da comunidade (#413), URL assinada. */
   coverUrl?: string | null;
   /** Seções escondidas para os membros (#413). Só visual. */

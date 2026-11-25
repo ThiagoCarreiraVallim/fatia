@@ -48,6 +48,7 @@ export type PanelSection =
   | 'offers'
   | 'benefits'
   | 'welcome'
+  | 'demo'
   | 'updates'
   | 'integrations'
   | 'settings';
@@ -84,6 +85,8 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   offers: { section: 'offers', label: 'Ofertas', path: '/offers' },
   benefits: { section: 'benefits', label: 'Benefícios', path: '/benefits' },
   welcome: { section: 'welcome', label: 'Boas-vindas', path: '/welcome' },
+  // A demo e os primeiros passos (#412): só a dona.
+  demo: { section: 'demo', label: 'Demonstração', path: '/demo' },
   updates: { section: 'updates', label: 'Novidades', path: '/updates' },
   integrations: { section: 'integrations', label: 'Integrações', path: '/integrations' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
