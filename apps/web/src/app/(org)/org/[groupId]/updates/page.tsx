@@ -51,7 +51,7 @@ export default function PanelUpdatesPage() {
     },
   });
 
-  const abrirIdeia = () => {
+  const openIdea = () => {
     if (side) {
       side.open({ title: 'Sugerir uma ideia', body: <IdeaForm onDone={side.close} /> });
     } else {
@@ -67,7 +67,7 @@ export default function PanelUpdatesPage() {
           <h1 className="font-display text-h3 font-bold">Novidades</h1>
           <p className="text-sm text-muted-foreground">O que mudou no Fatia para a equipe.</p>
         </div>
-        <Button variant="secondary" className="gap-1.5" onClick={abrirIdeia}>
+        <Button variant="secondary" className="gap-1.5" onClick={openIdea}>
           <Icon name="spark" size={16} /> Sugerir uma ideia
         </Button>
       </div>

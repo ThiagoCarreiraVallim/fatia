@@ -180,9 +180,9 @@ export class IntegrationReadService {
     q: PageQuery & { kind?: ApiSendKind },
   ): Promise<{ items: ApiSend[] }> {
     const take = pageSize(q.limit);
-    const quer = (k: ApiSendKind) => !q.kind || q.kind === k;
+    const wants = (k: ApiSendKind) => !q.kind || q.kind === k;
     const [treinos, alimentares, vendas] = await Promise.all([
-      quer('WORKOUT_PLAN')
+      wants('WORKOUT_PLAN')
         ? this.prisma.planOfferVersion.findMany({
             where: {
               offer: { groupId: ctx.groupId, removedAt: null },
@@ -199,7 +199,7 @@ export class IntegrationReadService {
             take,
           })
         : [],
-      quer('NUTRITION_PLAN')
+      wants('NUTRITION_PLAN')
         ? this.prisma.nutritionPlan.findMany({
             where: {
               groupId: ctx.groupId,
@@ -216,7 +216,7 @@ export class IntegrationReadService {
             take,
           })
         : [],
-      quer('PROGRAM_SALE')
+      wants('PROGRAM_SALE')
         ? this.prisma.groupOfferPurchase.findMany({
             where: {
               offer: { groupId: ctx.groupId },

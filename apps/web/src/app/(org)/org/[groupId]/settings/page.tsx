@@ -259,7 +259,7 @@ export default function OrgSettingsPage() {
 
 /** O código de entrada não muda: só copiar. */
 function EntryCode({ slug }: { slug: string }) {
-  async function copiar() {
+  async function copyCode() {
     try {
       await navigator.clipboard.writeText(slug);
       toast('Código copiado.');
@@ -275,7 +275,7 @@ function EntryCode({ slug }: { slug: string }) {
         <button
           type="button"
           aria-label="Copiar código"
-          onClick={() => void copiar()}
+          onClick={() => void copyCode()}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-3 hover:text-foreground"
         >
           <Copy size={16} aria-hidden />
@@ -475,7 +475,7 @@ function SectionsCard() {
   });
   const pode = groupCan(g, 'group.update');
 
-  function alternar(s: CommunitySection) {
+  function toggle(s: CommunitySection) {
     const antes = ocultas;
     const next = toggleSection(antes, s);
     const escondeu = next.includes(s);
@@ -515,7 +515,7 @@ function SectionsCard() {
                 label={s.label}
                 checked={!escondida}
                 disabled={!pode}
-                onCheckedChange={() => alternar(s.key)}
+                onCheckedChange={() => toggle(s.key)}
               />
             </li>
           );

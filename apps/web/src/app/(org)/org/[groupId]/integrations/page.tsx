@@ -360,7 +360,7 @@ function SecretDialog({
   created: CreatedApiKey | null;
   onClose: () => void;
 }) {
-  async function copiar() {
+  async function copyKey() {
     if (!created) return;
     try {
       await navigator.clipboard.writeText(created.secret);
@@ -387,7 +387,7 @@ function SecretDialog({
             <button
               type="button"
               aria-label="Copiar chave"
-              onClick={() => void copiar()}
+              onClick={() => void copyKey()}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-surface-3"
             >
               <Copy size={16} aria-hidden />

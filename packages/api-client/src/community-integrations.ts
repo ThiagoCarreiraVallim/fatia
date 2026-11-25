@@ -82,10 +82,10 @@ export function apiKeyNameError(name: string): string | null {
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const milhar = (n: number) => n.toLocaleString('pt-BR');
+const thousands = (n: number) => n.toLocaleString('pt-BR');
 
 /** "1 dez", de um AAAA-MM-DD. */
-function diaMes(day: string): string {
+function dayMonth(day: string): string {
   const [, m, d] = day.split('-').map(Number);
   return m && d ? `${d} ${MESES[m - 1]}` : day;
 }
@@ -98,7 +98,7 @@ export function apiKeyDateLabel(iso: string): string {
 
 /** "3.210 de 10.000". */
 export function quotaLabel(q: ApiQuota): string {
-  return `${milhar(q.used)} de ${milhar(q.limit)}`;
+  return `${thousands(q.used)} de ${thousands(q.limit)}`;
 }
 
 export function quotaPercent(q: ApiQuota): number {
@@ -107,11 +107,11 @@ export function quotaPercent(q: ApiQuota): number {
 }
 
 export function quotaRenewsLabel(q: ApiQuota): string {
-  return `renova ${diaMes(q.renewsOn)}`;
+  return `renova ${dayMonth(q.renewsOn)}`;
 }
 
 export function quotaHint(q: ApiQuota): string {
-  const dia = diaMes(q.renewsOn);
+  const dia = dayMonth(q.renewsOn);
   if (q.state === 'limit') {
     return `A cota do mês acabou. As chamadas pausam até ${dia}; nada no app muda.`;
   }
