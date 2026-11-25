@@ -11,7 +11,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
-import { RequireGroupAction } from './decorators/require-group-action.decorator';
+import { RequireGroupAction, SelfOnly } from './decorators/require-group-action.decorator';
 import { DemoService } from './demo.service';
 import { GroupRoleGuard } from './guards/group-role.guard';
 
@@ -31,12 +31,14 @@ export class DemoController {
   constructor(private readonly demo: DemoService) {}
 
   @Get('demo')
+  @SelfOnly()
   get(@CurrentUser() user: CurrentUserPayload) {
     return this.demo.get(user.id);
   }
 
   /** Idempotente: a segunda chamada devolve a demo que já existe. */
   @Post('demo')
+  @SelfOnly()
   @HttpCode(200)
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
@@ -45,12 +47,14 @@ export class DemoController {
   }
 
   @Delete('demo')
+  @SelfOnly()
   remove(@CurrentUser() user: CurrentUserPayload) {
     return this.demo.remove(user.id);
   }
 
   /** "Abrir no app como Ana Exemplo": um token de 30 minutos, só leitura. */
   @Post('demo/session')
+  @SelfOnly()
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   openSession(@CurrentUser() user: CurrentUserPayload) {

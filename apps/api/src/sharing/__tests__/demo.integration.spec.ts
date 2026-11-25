@@ -14,6 +14,7 @@ import { DemoService } from '../demo.service';
 import { MemberFileService } from '../member-file.service';
 import { MemberNoteService } from '../member-note.service';
 import { PlanMaterializerService } from '../plan-materializer.service';
+import { ProfessionalLinkService } from '../professional-link.service';
 import { ProfessionalAccessService } from '../professional-access.service';
 
 /**
@@ -29,6 +30,7 @@ describe('comunidade de demonstração (integração, #412)', () => {
     prisma,
     sessions,
     new PlanMaterializerService(prisma, new ExerciseService(prisma)),
+    new ProfessionalLinkService(prisma),
   );
   const file = new MemberFileService(
     prisma,

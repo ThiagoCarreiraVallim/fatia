@@ -6724,6 +6724,7 @@ describe('isolamento entre usuários', () => {
       prisma,
       demoSessions,
       new PlanMaterializerService(prisma, exercises),
+      new ProfessionalLinkService(prisma),
     );
     const studentView412 = new StudentViewService(
       prisma,

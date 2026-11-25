@@ -50,6 +50,7 @@ import {
 } from './demo-seed';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { PlanMaterializerService } from './plan-materializer.service';
+import { ProfessionalLinkService } from './professional-link.service';
 import { offerState } from './plan-offer-state';
 
 export interface DemoSummary {
@@ -104,6 +105,7 @@ export class DemoService {
     private readonly prisma: PrismaService,
     private readonly sessions: DemoSessionService,
     private readonly materializer: PlanMaterializerService,
+    private readonly links: ProfessionalLinkService,
     @Optional()
     @Inject(GROUP_DELETION_HOOKS)
     private readonly deletionHooks: GroupDeletionHook[] = [],
@@ -312,6 +314,15 @@ export class DemoService {
       select: { id: true },
     });
 
+    // O vínculo pela porta única (`ProfessionalLinkService`): a Ana "consentiu"
+    // Treino, Alimentação e Corpo para a dona, como na prancha.
+    await this.links.grant({
+      subjectUserId: anaId,
+      professionalId: ownerId,
+      groupId,
+      scopes: DEMO_SCOPES,
+    });
+
     const catalog = new Map(
       (
         await this.prisma.exercise.findMany({
@@ -340,15 +351,6 @@ export class DemoService {
 
     await this.prisma.$transaction([
       this.prisma.userGoals.create({ data: { userId: anaId, ...DEMO_GOALS } }),
-      this.prisma.professionalLink.create({
-        data: {
-          subjectUserId: anaId,
-          professionalId: ownerId,
-          groupId,
-          scopes: DEMO_SCOPES,
-          grantedAt: joinedAt,
-        },
-      }),
       this.prisma.planOffer.create({
         data: {
           id: offerId,

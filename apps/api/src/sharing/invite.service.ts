@@ -1129,16 +1129,16 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async valido(token: string) {
-    const found = await this.prisma.groupInvite.findUnique({
+    const convite = await this.prisma.groupInvite.findUnique({
       where: { tokenHash: hashInviteToken(token) },
-      include: { group: { select: { isDemo: true } } },
     });
-    // Convite da demo (#412) é como convite que não existe: ela não recebe ninguém.
-    if (!found || found.group.isDemo || inviteStatus(found) !== 'active') {
+    if (!convite || inviteStatus(convite) !== 'active') {
       throw new NotFoundException(INVITE_NOT_FOUND);
     }
-    const { group: _group, ...convite } = found;
-    void _group;
+    // Convite da demo (#412) é como convite que não existe: ela não recebe ninguém.
+    if (await this.prisma.group.count({ where: { id: convite.groupId, isDemo: true } })) {
+      throw new NotFoundException(INVITE_NOT_FOUND);
+    }
     return convite;
   }
 
@@ -1156,7 +1156,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     if (!can(eu.role, action)) {
       throw new ForbiddenException('Seu papel nesta comunidade não permite cuidar de convites');
     }
-    assertAllowedInDemo(eu.group.isDemo, action);
+    assertAllowedInDemo(eu.group, action);
     return { role: eu.role, status: eu.status };
   }
 

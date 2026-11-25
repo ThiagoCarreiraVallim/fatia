@@ -7,7 +7,15 @@ import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service
 import { AccountService, DELETE_CONFIRMATION } from '../account.service';
 
 const makePrisma = () => ({
-  user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+  user: {
+    findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  // A demo da pessoa (#412) e o lote que apaga a conta.
+  group: { findUnique: jest.fn().mockResolvedValue(null) },
+  $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   userGoals: { findUnique: jest.fn().mockResolvedValue(null) },
   userGoalsHistory: { findMany: jest.fn().mockResolvedValue([]) },
   nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
@@ -15,8 +23,8 @@ const makePrisma = () => ({
   meal: { findMany: jest.fn().mockResolvedValue([]) },
   food: { findMany: jest.fn().mockResolvedValue([]) },
   exercise: { findMany: jest.fn().mockResolvedValue([]) },
-  workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
-  workoutSession: { findMany: jest.fn().mockResolvedValue([]) },
+  workoutPlan: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
+  workoutSession: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
   weightLog: { findMany: jest.fn().mockResolvedValue([]) },
   stepLog: { findMany: jest.fn().mockResolvedValue([]) },
   waterLog: { findMany: jest.fn().mockResolvedValue([]) },
@@ -74,6 +82,8 @@ const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.pris
  * despercebida pela portabilidade que o README promete como "devolve tudo".
  */
 const CHAVE_NO_EXPORT: Record<string, string> = {
+  // A demo que a pessoa criou (#412): o nome e a aluna fictícia, sem o conteúdo inventado.
+  demoCommunity: 'demoCommunity',
   goals: 'nutritionGoals',
   // As metas de antes de cada troca (#396), inclusive a troca por um plano da comunidade.
   goalsHistory: 'nutritionGoalsHistory',
@@ -161,6 +171,12 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
  * legítima; ficar de fora em silêncio não é.
  */
 const FORA_DO_EXPORT: Record<string, string> = {
+  demoGroup:
+    'Só a aluna fictícia da demo (#412) tem: ela não exporta, e a dona leva a demo em `demoCommunity`.',
+  demoSessions:
+    'Sessão de 30 min da aluna fictícia (#412), só o hash do token; sai na próxima sessão e com a demo.',
+  demoSessionsMade:
+    'Sessão de 30 min que a dona abriu na demo (#412), só o hash do token; sai na próxima sessão e com a demo.',
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
   reviewedCheckins:

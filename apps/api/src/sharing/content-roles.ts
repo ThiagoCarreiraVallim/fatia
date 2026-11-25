@@ -22,7 +22,7 @@ export async function requireContentRole(
   });
   if (!m || m.status !== MembershipStatus.ACTIVE) throw new NotFoundException('Group not found');
   if (!can(m.role, action)) throw new ForbiddenException(forbidden);
-  assertAllowedInDemo(m.group.isDemo, action);
+  assertAllowedInDemo(m.group, action);
   return m.role;
 }
 

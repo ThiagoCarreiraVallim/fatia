@@ -92,7 +92,7 @@ export class GroupRoleGuard implements CanActivate {
       throw new ForbiddenException('Seu papel neste grupo não permite esta ação');
     }
     // A demo (#412) não convida, não cobra e não mexe em gente de verdade.
-    assertAllowedInDemo(membership.group.isDemo, action);
+    assertAllowedInDemo(membership.group, action);
 
     return true;
   }

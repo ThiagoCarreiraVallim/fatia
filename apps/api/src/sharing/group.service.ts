@@ -794,7 +794,7 @@ export class GroupService {
     if (!can(found.role, action)) {
       throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
     }
-    assertAllowedInDemo(found.group.isDemo, action);
+    assertAllowedInDemo(found.group, action);
     const { group: _group, ...eu } = found;
     void _group;
     return eu;

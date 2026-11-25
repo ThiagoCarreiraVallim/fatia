@@ -4,7 +4,7 @@ import { ReportController } from './report.controller';
 import { ReportService } from './report.service';
 import { ReportEmailService } from './report-email.service';
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { DemoSessionModule } from '../auth/demo-session.module';
 import { DemoController } from './demo.controller';
 import { DemoService } from './demo.service';
 import { CommonModule } from '../common/common.module';
@@ -147,7 +147,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     StorageModule,
     SocialModule,
     BillingModule,
-    AuthModule,
+    DemoSessionModule,
   ],
   controllers: [
     DemoController,

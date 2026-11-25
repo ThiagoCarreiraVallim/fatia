@@ -199,6 +199,7 @@ describe('GroupService', () => {
       expect(prisma.groupMembership.findMany.mock.calls[0][0].where).toEqual({
         userId: OWNER,
         status: { in: [MembershipStatus.INVITED, MembershipStatus.ACTIVE] },
+        group: { isDemo: false },
       });
     });
   });

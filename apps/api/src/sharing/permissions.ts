@@ -533,6 +533,13 @@ export function blockedInDemo(action: GroupAction): boolean {
 /** O 403 da demo, igual em todo lugar que confere a ação. */
 export const DEMO_FORBIDDEN = 'A demonstração não faz isso: ela é só para experimentar';
 
-export function assertAllowedInDemo(isDemo: boolean, action: GroupAction): void {
-  if (isDemo && blockedInDemo(action)) throw new ForbiddenException(DEMO_FORBIDDEN);
+/**
+ * Recebe o grupo lido junto com a associação. Opcional de propósito: quem lê a
+ * associação sem o grupo (dublês de teste antigos) não está numa demo.
+ */
+export function assertAllowedInDemo(
+  group: { isDemo?: boolean } | null | undefined,
+  action: GroupAction,
+): void {
+  if (group?.isDemo && blockedInDemo(action)) throw new ForbiddenException(DEMO_FORBIDDEN);
 }

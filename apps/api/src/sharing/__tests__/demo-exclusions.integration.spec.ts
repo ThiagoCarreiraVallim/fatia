@@ -45,6 +45,7 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
     prisma,
     new DemoSessionService(prisma),
     new PlanMaterializerService(prisma, new ExerciseService(prisma)),
+    links,
   );
   const memberships = new MembershipService(prisma, links, silentNotifications);
   const config = {

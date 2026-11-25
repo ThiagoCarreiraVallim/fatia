@@ -10,16 +10,15 @@ import { LogtoManagementService } from './logto-management.service';
 import { IdentitySyncService } from './identity-sync.service';
 import { McpConnectionRecorder } from './mcp-connection.service';
 import { McpConnectionsModule } from './mcp-connections.module';
-import { DemoSessionService } from './demo-session.service';
+import { DemoSessionModule } from './demo-session.module';
 
 @Module({
-  imports: [McpConnectionsModule],
+  imports: [McpConnectionsModule, DemoSessionModule],
   controllers: [OAuthDiscoveryController, OAuthFacadeController],
   providers: [
     JwtValidationService,
     UserProvisioningService,
     JwtAuthGuard,
-    DemoSessionService,
     OAuthFacadeService,
     LogtoManagementService,
     IdentitySyncService,
@@ -30,7 +29,7 @@ import { DemoSessionService } from './demo-session.service';
     },
   ],
   exports: [
-    DemoSessionService,
+    DemoSessionModule,
     JwtValidationService,
     UserProvisioningService,
     JwtAuthGuard,
