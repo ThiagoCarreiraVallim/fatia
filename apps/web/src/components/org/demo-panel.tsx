@@ -85,13 +85,17 @@ export function DemoBanner() {
       role="note"
       className="sticky top-0 z-20 mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card bg-[hsl(var(--warning)/0.12)] px-4 py-3 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.45)] backdrop-blur"
     >
-      <Icon name="eye" size={18} className="shrink-0 text-primary" />
-      <b className="text-sm text-primary">{DEMO_BANNER_TITLE}</b>
-      <span className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+      <Icon name="eye" size={18} className="shrink-0 text-info" />
+      <b className="min-w-0 flex-1 text-sm text-info md:flex-none">{DEMO_BANNER_TITLE}</b>
+      {/* No celular o texto desce para uma linha só dele, em vez de virar coluna estreita. */}
+      <span className="order-last min-w-0 basis-full text-[13px] text-muted-foreground md:order-none md:basis-auto md:flex-1">
         {demoBannerText(homeName)}
       </span>
       {home && (
-        <Link href={panelHref(home)} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+        <Link
+          href={panelHref(home)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'ml-auto md:ml-0')}
+        >
           Sair da demo
         </Link>
       )}
@@ -127,7 +131,7 @@ export function DemoOverview({ g }: { g: MyGroup }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 basis-full md:basis-auto md:flex-1">
           <h1 className="font-display text-2xl font-extrabold md:text-3xl">{d.name}</h1>
           <p className="text-sm text-muted-foreground">
             É assim que o painel fica com alunos registrando.
@@ -289,7 +293,8 @@ function DemoCard({ d, onRemoved }: { d: DemoSummary; onRemoved: () => void }) {
             </span>
             <span className="min-w-0">
               <b className="block truncate">{c.title}</b>
-              <span className="block truncate text-[13px] text-muted-foreground">{c.sub}</span>
+              {/* Quebra em vez de cortar: "6 de 16 sessões" some no 1440 com reticências. */}
+              <span className="block text-[13px] leading-snug text-muted-foreground">{c.sub}</span>
             </span>
           </li>
         ))}

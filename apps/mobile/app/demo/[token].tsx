@@ -75,9 +75,9 @@ export default function DemoSessionScreen() {
     <Screen title="Demonstração">
       <View className="gap-4 px-5 pt-2 pb-8">
         <View className="flex-row items-start gap-3 rounded-card border border-warning/45 bg-warning/10 px-4 py-3">
-          <Icon name="eye" size={18} color={colors.primary} />
+          <Icon name="eye" size={18} color={colors.info} />
           <View className="flex-1">
-            <Text className="text-sm font-bold text-primary">{DEMO_BANNER_TITLE}</Text>
+            <Text className="text-sm font-bold text-info">{DEMO_BANNER_TITLE}</Text>
             <Text className="text-[13px] text-muted-foreground">
               É assim que a aluna vê o Hoje. É só leitura: nada é gravado e ninguém recebe aviso.
             </Text>

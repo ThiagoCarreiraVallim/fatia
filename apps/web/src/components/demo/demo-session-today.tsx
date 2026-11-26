@@ -57,9 +57,9 @@ export function DemoSessionToday({ token }: { token: string }) {
         role="note"
         className="flex items-start gap-3 rounded-card bg-[hsl(var(--warning)/0.12)] px-4 py-3 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.45)]"
       >
-        <Icon name="eye" size={18} className="mt-0.5 shrink-0 text-primary" />
+        <Icon name="eye" size={18} className="mt-0.5 shrink-0 text-info" />
         <div className="min-w-0">
-          <b className="block text-sm text-primary">{DEMO_BANNER_TITLE}</b>
+          <b className="block text-sm text-info">{DEMO_BANNER_TITLE}</b>
           <span className="block text-[13px] text-muted-foreground">
             É assim que a aluna vê o Hoje. É só leitura: nada é gravado e ninguém recebe aviso.
           </span>
