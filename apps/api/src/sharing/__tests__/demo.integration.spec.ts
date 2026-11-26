@@ -183,12 +183,26 @@ describe('comunidade de demonstração (integração, #412)', () => {
   });
 
   it('é idempotente: uma demo por dona, mesmo com dois cliques juntos', async () => {
-    const antes = (await demo.get(u.dona)).demo!.groupId;
-    const [a, b] = await Promise.all([demo.create(u.dona), demo.create(u.dona)]);
-    expect(a.demo!.groupId).toBe(antes);
-    expect(b.demo!.groupId).toBe(antes);
-    expect(await prisma.group.count({ where: { demoOwnerId: u.dona } })).toBe(1);
-    expect(await prisma.user.count({ where: { demoGroupId: antes } })).toBe(1);
+    // Parte de uma dona SEM demo: os dois pedidos correm juntos desde o início.
+    // Antes, o segundo achava o grupo já criado mas ainda sem a semente e
+    // devolvia `plan: null`, que a web gravava no cache.
+    const apressada = await pessoa('Dona Apressada');
+    await comunidade(apressada, 'Academia Apressada');
+    expect((await demo.get(apressada)).demo).toBeNull();
+
+    const [a, b] = await Promise.all([demo.create(apressada), demo.create(apressada)]);
+    expect(a.demo).not.toBeNull();
+    expect(b.demo).not.toBeNull();
+    expect(a.demo!.groupId).toBe(b.demo!.groupId);
+    // Os dois recebem o estado completo, não a demo pela metade.
+    expect(a.demo!.plan).not.toBeNull();
+    expect(b.demo!.plan).not.toBeNull();
+    expect(b.demo).toEqual(a.demo);
+    expect(await prisma.group.count({ where: { demoOwnerId: apressada } })).toBe(1);
+    expect(await prisma.user.count({ where: { demoGroupId: a.demo!.groupId } })).toBe(1);
+
+    // E um terceiro clique, depois, devolve a mesma.
+    expect((await demo.create(apressada)).demo!.groupId).toBe(a.demo!.groupId);
   });
 
   it('a sessão do app vale 30 minutos e resolve só para a Ana', async () => {

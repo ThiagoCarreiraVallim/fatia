@@ -128,17 +128,33 @@ export class DemoService {
   }
 
   /**
-   * Cria a demo, ou devolve a que já existe: dois cliques juntos dão uma só
-   * (o segundo bate no `@unique` de `demoOwnerId`).
+   * Cria a demo, ou devolve a que já existe: dois cliques juntos dão uma só.
+   *
+   * A criação (grupo, Ana e a semente) roda presa a uma trava do Postgres por
+   * dona (`pg_advisory_xact_lock`, como o checkout da #386): o segundo pedido
+   * espera o primeiro terminar e devolve a demo inteira. Sem a trava, ele
+   * achava o grupo já criado mas ainda sem a semente e devolvia `plan: null`,
+   * que a web gravava no cache. A transação só segura a trava; a semente usa
+   * as escritas em lote de sempre (ADR 010).
    */
   async create(ownerId: string): Promise<DemoState> {
     const home = await this.homeGroup(ownerId);
     if (!home) {
       throw new ForbiddenException('Só quem é dona de uma comunidade cria a demonstração');
     }
-    if (await this.prisma.group.findUnique({ where: { demoOwnerId: ownerId } })) {
-      return this.get(ownerId);
-    }
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`demo:${ownerId}`}))`;
+        await this.createLocked(ownerId);
+      },
+      { maxWait: 10_000, timeout: 60_000 },
+    );
+    return this.get(ownerId);
+  }
+
+  /** Só com a trava da dona: cria e semeia, ou não faz nada se a demo já existe. */
+  private async createLocked(ownerId: string): Promise<void> {
+    if (await this.prisma.group.findUnique({ where: { demoOwnerId: ownerId } })) return;
     const owner = await this.prisma.user.findUniqueOrThrow({
       where: { id: ownerId },
       select: { timezone: true },
@@ -186,7 +202,8 @@ export class DemoService {
         select: { id: true, demoStudent: { select: { id: true } } },
       });
     } catch (err: unknown) {
-      if ((err as { code?: string })?.code === 'P2002') return this.get(ownerId);
+      // Rede de segurança: o `@unique` de `demoOwnerId` segura mesmo sem a trava.
+      if ((err as { code?: string })?.code === 'P2002') return;
       throw err;
     }
 
@@ -197,7 +214,6 @@ export class DemoService {
       await this.purge(group.id, ownerId);
       throw err;
     }
-    return this.get(ownerId);
   }
 
   /** Apaga a demo da dona. Apagar de novo devolve `removed: false`. */
