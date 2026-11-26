@@ -70,6 +70,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `group.delete`         | sim   | não   | não          | não     | não       | não    |
 | `group.transfer`       | sim   | não   | não          | não     | não       | não    |
 | `group.sharing`        | sim   | não   | não          | não     | não       | não    |
+| `group.setup`          | sim   | não   | não          | não     | não       | não    |
 | `member.grant_reader`  | sim   | não   | não          | não     | não       | não    |
 | `invite.create`        | sim   | sim   | sim          | não     | não       | não    |
 | `invite.revoke`        | sim   | sim   | sim          | não     | não       | não    |
@@ -311,6 +312,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.delete`         | não                  |
 | `group.transfer`       | não                  |
 | `group.sharing`        | não                  |
+| `group.setup`          | não                  |
 | `member.grant_reader`  | não                  |
 | `invite.create`        | não                  |
 | `invite.revoke`        | não                  |

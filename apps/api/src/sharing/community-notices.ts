@@ -17,6 +17,27 @@ export function inviteNotice(p: { groupName: string; inviterName: string; token:
   };
 }
 
+/**
+ * A pessoa convidada recusou (#372, Onb-E1: "O Bruno vai ver que você recusou").
+ * Vai para quem convidou e para o dono. Equipe abre a Equipe; membro, a
+ * Ativação pendente, onde o convite aparece como "recusou".
+ */
+export function inviteDeclinedNotice(p: {
+  groupId: string;
+  groupName: string;
+  personName: string;
+  team: boolean;
+}): Notice {
+  return {
+    kind: NotificationKind.COMMUNITY,
+    title: `Convite recusado em ${p.groupName}`,
+    body: p.team
+      ? `${p.personName} recusou o convite para a equipe.`
+      : `${p.personName} recusou o convite.`,
+    url: `/org/${p.groupId}/${p.team ? 'team' : 'activation'}`,
+  };
+}
+
 export function joinRequestNotice(p: {
   groupId: string;
   groupName: string;

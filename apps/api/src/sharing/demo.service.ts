@@ -24,7 +24,6 @@ import { DEMO_EMAIL_DOMAIN, DEMO_SUB_PREFIX } from '../common/demo';
 import { PrismaService } from '../common/prisma.service';
 import { demoStudentPurge } from '../common/workout-purge';
 import { addDaysIso, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz';
-import { COMMUNITY_ACTIVE_MIN_MEMBERS, isCommunityActive } from './community-active';
 import {
   at,
   DEMO_BRAND_COLORS,
@@ -77,12 +76,6 @@ export interface DemoState {
   canCreate: boolean;
   /** A comunidade de verdade para onde "Sair da demo" volta. */
   homeGroupId: string | null;
-}
-
-export interface FirstSteps {
-  active: boolean;
-  activeMembers: number;
-  threshold: number;
 }
 
 const DEMO_NOT_FOUND = 'Demonstração não encontrada';
@@ -241,33 +234,6 @@ export class DemoService {
       userId: group.demoStudent.id,
       createdById: ownerId,
     });
-  }
-
-  /**
-   * "Primeiros passos" (Pn-21d): a comunidade de verdade da dona, com o
-   * critério provisório de `community-active.ts`. A demo e a comunidade de
-   * outra pessoa respondem como inexistentes.
-   */
-  async firstSteps(ownerId: string, groupId: string): Promise<FirstSteps> {
-    const mine = await this.prisma.groupMembership.findFirst({
-      where: {
-        groupId,
-        userId: ownerId,
-        role: GroupRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-        group: { isDemo: false },
-      },
-      select: { id: true },
-    });
-    if (!mine) throw new NotFoundException('Group not found');
-    const activeMembers = await this.prisma.groupMembership.count({
-      where: { groupId, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
-    });
-    return {
-      active: isCommunityActive(activeMembers),
-      activeMembers,
-      threshold: COMMUNITY_ACTIVE_MIN_MEMBERS,
-    };
   }
 
   /**

@@ -2051,6 +2051,18 @@ model Group {
   /// A aluna fictícia (a conta sai junto com a demo).
   demoStudent            User?                   @relation("DemoStudent")
   demoSessions           DemoSession[]
+  /// Academia ou personal/nutri (#372, Onb-C1). Só nas patrocinadas: a social é
+  /// "influencer ou grupo" e fica nula. Decide se o passo "Equipamentos" aparece
+  /// no checklist; nula numa patrocinada conta como academia (as de antes).
+  kind                   GroupKind?
+  /// Passos do checklist do dono (#372) marcados pela ação (salvar a marca, o
+  /// acesso, as categorias) ou à mão. Os que o dado já mostra (convites,
+  /// desafios, planos, equipamentos) são derivados na leitura e não ficam aqui.
+  setupSteps             SetupStep[]             @default([])
+  /// O dono fechou o guia (ou a comunidade é anterior a ele). "Repetir o guia" limpa.
+  setupHiddenAt          DateTime?
+  /// "Repetir o guia": mostra o checklist mesmo completo, até o dono fechar.
+  setupRepeatedAt        DateTime?
 
   @@index([ownerId])
   @@index([type])
@@ -2078,6 +2090,27 @@ model DemoSession {
   @@index([groupId])
   @@index([userId])
   @@index([createdById])
+}
+
+/// O subtipo da patrocinada (#372, Onb-C1). `GroupType` continua o que cobra.
+enum GroupKind {
+  /// Academia: equipe e equipamentos.
+  GYM
+  /// Personal ou nutricionista: os próprios alunos.
+  COACH
+}
+
+/// Os passos do checklist do dono (#372) que ficam gravados. "Criar" não entra:
+/// existir a comunidade já é o passo feito.
+enum SetupStep {
+  BRAND
+  CATEGORIES
+  TEAM
+  MEMBERS
+  CHALLENGE
+  PLAN
+  EQUIPMENT
+  ACCESS
 }
 
 /// Seções da comunidade que a equipe pode esconder dos membros (#413, Pn-15).

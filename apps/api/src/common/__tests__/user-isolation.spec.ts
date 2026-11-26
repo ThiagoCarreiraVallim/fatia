@@ -14,7 +14,14 @@ import {
   UnauthorizedException,
   type ExecutionContext,
 } from '@nestjs/common';
-import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
+import {
+  GroupRole,
+  GroupType,
+  MealType,
+  MembershipStatus,
+  SetupStep,
+  ShareScope,
+} from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
 import { ConsentService } from '../../sharing/consent.service';
@@ -105,6 +112,7 @@ import { MemberAdminService } from '../../sharing/member-admin.service';
 import { SeatPoolService } from '../../billing/seat-pool.service';
 import { DemoSessionService } from '../../auth/demo-session.service';
 import { DemoService } from '../../sharing/demo.service';
+import { CommunitySetupService } from '../../sharing/community-setup.service';
 import {
   announcementUnsubscribeToken,
   AnnouncementEmailService,
@@ -6851,6 +6859,61 @@ describe('isolamento entre usuários', () => {
       expect(await prisma.group.findUnique({ where: { id: d.demoA } })).toBeNull();
       expect(await prisma.workoutSession.count({ where: { userId: d.ana } })).toBe(0);
       expect(await prisma.group.findUnique({ where: { id: d.realB } })).not.toBeNull();
+    });
+  });
+
+  describe('checklist de primeiros passos do dono (#372)', () => {
+    const setup372 = new CommunitySetupService(prisma);
+    const c = { donoA: '', donoB: '', proA: '', grupoA: '' };
+
+    beforeAll(async () => {
+      const stamp = `iso372-${Date.now()}`;
+      const [donoA, donoB, proA] = await Promise.all(
+        ['donoA', 'donoB', 'proA'].map((n) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${n}`, email: `${stamp}-${n}@test.local`, name: n },
+          }),
+        ),
+      );
+      Object.assign(c, { donoA: donoA.id, donoB: donoB.id, proA: proA.id });
+      c.grupoA = (await groups.create(c.donoA, { type: GroupType.SPONSORED, name: 'Grupo A' })).id;
+      await prisma.groupMembership.create({
+        data: {
+          groupId: c.grupoA,
+          userId: c.proA,
+          role: GroupRole.PROFESSIONAL,
+          status: MembershipStatus.ACTIVE,
+          joinedAt: new Date(),
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.group.deleteMany({ where: { id: c.grupoA } });
+      await prisma.user.deleteMany({ where: { id: { in: [c.donoA, c.donoB, c.proA] } } });
+    });
+
+    it('o dono de outra comunidade não lê, não marca e não fecha o guia (404)', async () => {
+      await expect(setup372.get(c.donoB, c.grupoA)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        setup372.setStep(c.donoB, c.grupoA, SetupStep.PLAN, true),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(setup372.setGuide(c.donoB, c.grupoA, false)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(setup372.firstSteps(c.donoB, c.grupoA)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      const g = await prisma.group.findUniqueOrThrow({ where: { id: c.grupoA } });
+      expect(g.setupSteps).toEqual([]);
+      expect(g.setupHiddenAt).toBeNull();
+    });
+
+    it('a profissional da comunidade não mexe no checklist do dono (403)', async () => {
+      await expect(setup372.get(c.proA, c.grupoA)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(setup372.setStep(c.proA, c.grupoA, SetupStep.TEAM, true)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
   });
 

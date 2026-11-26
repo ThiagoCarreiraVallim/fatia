@@ -9,7 +9,6 @@ import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
 import { ExerciseService } from '../../workout/exercise.service';
 import { AccessAuditService } from '../access-audit.service';
-import { COMMUNITY_ACTIVE_MIN_MEMBERS, isCommunityActive } from '../community-active';
 import { DemoService } from '../demo.service';
 import { MemberFileService } from '../member-file.service';
 import { MemberNoteService } from '../member-note.service';
@@ -20,8 +19,8 @@ import { ProfessionalAccessService } from '../professional-access.service';
 /**
  * A comunidade de demonstração (#412, Pn-21 a Pn-21d), contra Postgres real:
  * criar (idempotente, uma por dono), a Ana Exemplo já preenchida, apagar em
- * cascata sem tocar a comunidade de verdade, a sessão curta do app e o
- * critério provisório de "comunidade ativa".
+ * cascata sem tocar a comunidade de verdade e a sessão curta do app. Os
+ * primeiros passos estão em `community-setup.integration.spec.ts` (#372).
  */
 describe('comunidade de demonstração (integração, #412)', () => {
   const prisma = new PrismaService();
@@ -269,33 +268,5 @@ describe('comunidade de demonstração (integração, #412)', () => {
     const { demo: d } = await demo.create(u.dona);
     expect(d!.name).toBe('Academia Exemplo');
     expect(await prisma.group.count({ where: { demoOwnerId: u.dona } })).toBe(1);
-  });
-
-  it('primeiros passos: a comunidade fica ativa com 5 membros (critério provisório)', async () => {
-    expect(isCommunityActive(COMMUNITY_ACTIVE_MIN_MEMBERS - 1)).toBe(false);
-    expect(isCommunityActive(COMMUNITY_ACTIVE_MIN_MEMBERS)).toBe(true);
-
-    expect(await demo.firstSteps(u.dona, real)).toEqual({
-      active: false,
-      activeMembers: 1,
-      threshold: COMMUNITY_ACTIVE_MIN_MEMBERS,
-    });
-    const novos: string[] = [];
-    for (const i of [1, 2, 3, 4]) novos.push(await pessoa(`Membro ${i}`));
-    await prisma.groupMembership.createMany({
-      data: novos.map((userId) => ({
-        groupId: real,
-        userId,
-        role: GroupRole.MEMBER,
-        status: MembershipStatus.ACTIVE,
-        joinedAt: new Date(),
-      })),
-    });
-    expect((await demo.firstSteps(u.dona, real)).active).toBe(true);
-
-    // A demo não é "a comunidade", e a comunidade de outra dona não abre.
-    const { demo: d } = await demo.get(u.dona);
-    await expect(demo.firstSteps(u.dona, d!.groupId)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(demo.firstSteps(u.outraDona, real)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
