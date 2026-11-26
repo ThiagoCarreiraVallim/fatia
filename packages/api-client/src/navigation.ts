@@ -542,6 +542,10 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/exercises/:exerciseId', title: 'Exercício', parent: '/org/:id/exercises' },
   { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
   { pattern: '/org/:id/challenges/first', title: 'Primeiro desafio', parent: '/org/:id' },
+  // Só no app (#372): as telas do guia que na web moram dentro de uma seção.
+  { pattern: '/org/:id/first-challenge', title: 'Primeiro desafio', parent: '/org/:id' },
+  { pattern: '/org/:id/invite-members', title: 'Convidar alunos', parent: '/org/:id' },
+  { pattern: '/org/:id/what-you-see', title: 'O que você vê', parent: '/org/:id' },
   { pattern: '/org/:id/moderation', title: 'Moderação', parent: '/org/:id' },
   { pattern: '/org/:id/announcements', title: 'Comunicados e enquetes', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,6 +14,7 @@ import {
 } from '@fatia/api-client';
 import { InsightsCard } from '@/components/org/insights-card';
 import { OrgPanel, orgKeys } from '@/components/org/org-panel';
+import { RepeatGuideButton, SetupChecklist, useSetup } from '@/components/org/setup-guide';
 import { LoadingState } from '@/components/ui';
 
 function Numero({
@@ -39,6 +41,25 @@ function Numero({
       {detalhe ? <Text className="text-xs text-muted-foreground">{detalhe}</Text> : null}
     </Pressable>
   );
+}
+
+/**
+ * O Início do painel no app. Com o guia de primeiros passos à vista (#372,
+ * Onb-C3), ele toma o lugar dos números; sem a marca salva, volta à Marca
+ * (os passos 1 e 2 bloqueiam).
+ */
+function Inicio({ g }: { g: MyGroup }) {
+  const router = useRouter();
+  const setup = useSetup(g);
+  const brandPending = Boolean(setup.data?.visible && setup.data.brandPending);
+  useEffect(() => {
+    if (brandPending) router.replace(`/community/new/${g.id}`);
+  }, [brandPending, g.id, router]);
+  if (g.role === 'OWNER' && !g.isDemo && setup.isPending) {
+    return <LoadingState label="Carregando…" />;
+  }
+  if (setup.data?.visible) return <SetupChecklist g={g} setup={setup.data} />;
+  return <VisaoGeral g={g} />;
 }
 
 function VisaoGeral({ g }: { g: MyGroup }) {
@@ -97,7 +118,10 @@ function VisaoGeral({ g }: { g: MyGroup }) {
         )}
       </View>
       {dono ? (
-        <InsightsCard groupId={g.id} panel="retention" title="Retenção" />
+        <>
+          <InsightsCard groupId={g.id} panel="retention" title="Retenção" />
+          {!g.isDemo ? <RepeatGuideButton groupId={g.id} /> : null}
+        </>
       ) : (
         <Text className="text-xs text-muted-foreground">
           Os números agregados da comunidade são do dono. Você vê cada membro pelo que ele
@@ -113,7 +137,7 @@ export default function OrgOverviewScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   return (
     <OrgPanel groupId={groupId} title={(g) => g.name}>
-      {(g) => <VisaoGeral g={g} />}
+      {(g) => <Inicio g={g} />}
     </OrgPanel>
   );
 }
