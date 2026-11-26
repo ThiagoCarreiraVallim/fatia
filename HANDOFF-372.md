@@ -21,7 +21,7 @@
 
 - [x] API: migration, setup service/controller, kind na criação, slug-check, notify no desafio, auto-marcação, first-steps
 - [x] api-client: community-setup.ts (vermelho: os 7 testes contra stub, cada um na própria asserção)
-- [ ] Web: C1/C2, checklist no Início, Repetir o guia, Pn-21d, C5, cartaz, E1, E2, E3
+- [x] Web: C1/C2 (/community/new e /community/new/[id]), guia no Início (setup-guide.tsx), Repetir o guia (UserMenu), redirect da marca (PanelFrame), Pn-21d (SetupStatCards), C5 (/org/[id]/challenges/first), cartaz (/cartaz/[token]), E1 (invite.tsx TeamInviteAccept), E2 (/org/[id]/review/what-you-see), E3 (ReviewTips)
 - [ ] Mobile: C1/C2, C3, C4, C5, E1, E2, Repetir o guia
 - [ ] Docs: PERMISSIONS, DATA_RETENTION, MOBILE_PARITY, REDESIGN_PROGRESS
 - [ ] Passada visual em ~/.cache/fatia-vis/372/
@@ -29,4 +29,5 @@
 
 ## Estado atual
 
-Começando pela API.
+API, api-client e web prontos e commitados. Próximo: mobile (community/new → C1/C2, C3 no org/[groupId]/index, C4 invite-members, C5 first-challenge, E1 em c/[token], E2 what-you-see, Repetir o guia no perfil).
+Decisões da web: "Fazer" leva à tela do passo; o ícone do item é o círculo para marcar à mão; dicas do Para revisar só para PROFESSIONAL; cartaz é /cartaz/<token> público como o link.
