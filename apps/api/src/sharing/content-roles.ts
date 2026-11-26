@@ -1,7 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MembershipStatus, type GroupRole } from '@fatia/db';
 import type { PrismaService } from '../common/prisma.service';
-import { assertAllowedInDemo, can, type GroupAction } from './permissions';
+import { assertGroupAction, can, type GroupAction } from './permissions';
 
 /**
  * O papel de quem mexe no conteúdo da comunidade, conferido de novo no
@@ -21,8 +21,7 @@ export async function requireContentRole(
     select: { role: true, status: true, group: { select: { isDemo: true } } },
   });
   if (!m || m.status !== MembershipStatus.ACTIVE) throw new NotFoundException('Group not found');
-  if (!can(m.role, action)) throw new ForbiddenException(forbidden);
-  assertAllowedInDemo(m.group, action);
+  assertGroupAction(m, action, forbidden);
   return m.role;
 }
 

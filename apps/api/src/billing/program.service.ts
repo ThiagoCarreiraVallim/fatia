@@ -3,7 +3,6 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -13,7 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Prisma, ProgramKind } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
-import { can } from '../sharing/permissions';
+import { assertGroupAction } from '../sharing/permissions';
 import type { SeatProvider } from './billing-provider.port';
 import { listPrograms, type ProgramView } from './program-view';
 import {
@@ -296,13 +295,11 @@ export class ProgramService {
   private async assertManager(actorId: string, groupId: string): Promise<void> {
     const membership = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId: actorId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new NotFoundException('Comunidade não encontrada.');
     }
-    if (!can(membership.role, 'billing.manage')) {
-      throw new ForbiddenException('Só o dono da comunidade cuida dos programas.');
-    }
+    assertGroupAction(membership, 'billing.manage', 'Só o dono da comunidade cuida dos programas.');
   }
 }

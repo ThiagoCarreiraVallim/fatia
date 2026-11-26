@@ -1,13 +1,8 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { GroupRole, MembershipStatus } from '@fatia/db';
 import { SeatPoolService } from '../billing/seat-pool.service';
 import { PrismaService } from '../common/prisma.service';
-import { can, type GroupAction } from './permissions';
+import { assertGroupAction, type GroupAction } from './permissions';
 
 const NOT_FOUND = 'Group not found';
 const MEMBER_NOT_FOUND = 'Membro não encontrado nesta comunidade';
@@ -173,11 +168,9 @@ export class MemberAdminService {
   private async assertCan(userId: string, groupId: string, action: GroupAction) {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (!can(eu.role, action)) {
-      throw new ForbiddenException('Seu papel nesta comunidade não permite esta ação');
-    }
+    assertGroupAction(eu, action, 'Seu papel nesta comunidade não permite esta ação');
   }
 }

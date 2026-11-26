@@ -2,10 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { ForbiddenException, NotFoundException, type ExecutionContext } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { Reflector } from '@nestjs/core';
-import { GroupRole, GroupType } from '@fatia/db';
+import { GroupRole, GroupType, normalizeSearchText } from '@fatia/db';
 import { DemoSessionService } from '../../auth/demo-session.service';
 import { DEMO_EMAIL_DOMAIN } from '../../common/demo';
 import { PrismaService } from '../../common/prisma.service';
+import { OfferService } from '../../billing/offer.service';
+import { ProgramService } from '../../billing/program.service';
+import { SeatPoolService } from '../../billing/seat-pool.service';
 import { ApiKeyService } from '../../integrations/api-key.service';
 import { AnnouncementEmailService } from '../../notifications/announcement-email.service';
 import { EmailService, type EmailMessage } from '../../notifications/email.service';
@@ -19,17 +22,21 @@ import { ExerciseService } from '../../workout/exercise.service';
 import { AnnouncementService } from '../announcement.service';
 import { challengeCreatedNotice } from '../community-notices';
 import { DemoService } from '../demo.service';
+import { GroupAgentService } from '../group-agent.service';
 import { GroupService } from '../group.service';
 import { GroupRoleGuard } from '../guards/group-role.guard';
 import { InviteService } from '../invite.service';
 import { MembershipService } from '../membership.service';
 import { offerSentNotice } from '../plan-offer-notices';
 import type { GroupAction } from '../permissions';
+import { DEMO_FORBIDDEN } from '../permissions';
+import { MemberAdminService } from '../member-admin.service';
 import { PlanMaterializerService } from '../plan-materializer.service';
 import { PostService } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 import { ReportEmailService } from '../report-email.service';
 import { ReportService } from '../report.service';
+import { TeamService } from '../team.service';
 
 /**
  * O que a comunidade de demonstração **não** faz (#412): não aparece em
@@ -192,6 +199,73 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
     });
   });
 
+  /**
+   * A dona é membro ativo da demo, e as telas pessoais dela olham "as
+   * comunidades em que estou". A demo não entra: nem o agente dela no seletor
+   * do chat, nem os exercícios e o equipamento na biblioteca pessoal.
+   */
+  describe('telas pessoais da dona', () => {
+    const exercises = new ExerciseService(prisma);
+    const agents = new GroupAgentService(prisma, new MediaService(prisma, new MemoryObjectStore()));
+    const exIds: number[] = [];
+    let demoEx = 0;
+
+    beforeAll(async () => {
+      for (const [groupId, nome] of [
+        [demoId, 'demo'],
+        [real, 'real'],
+      ]) {
+        await prisma.groupAgent.create({
+          data: { groupId, name: `Agente ${nome}`, enabled: true },
+        });
+        await prisma.group.update({
+          where: { id: groupId },
+          data: { customEquipment: [`Aparelho ${nome} ${stamp}`] },
+        });
+        const ex = await prisma.exercise.create({
+          data: {
+            name: `Remada ${nome} ${stamp}`,
+            searchName: normalizeSearchText(`Remada ${nome} ${stamp}`),
+            muscleGroup: 'costas',
+            groupOwned: true,
+            groupId,
+          },
+        });
+        exIds.push(ex.id);
+        if (groupId === demoId) demoEx = ex.id;
+      }
+    });
+
+    afterAll(async () => {
+      await prisma.exercise.deleteMany({ where: { id: { in: exIds } } });
+    });
+
+    it('o agente da demo não aparece no seletor do chat pessoal', async () => {
+      const { agents: lista } = await agents.listForChat(u.dona, null);
+      const ids = lista.map((a) => a.groupId);
+      expect(ids).toContain(real);
+      expect(ids).not.toContain(demoId);
+      // Nem escolhido pelo id: a conversa nova com o agente da demo é 404.
+      await expect(agents.assertSelectable(u.dona, demoId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(await agents.personaFor(u.dona, demoId)).toBeNull();
+      await expect(agents.assertSelectable(u.dona, real)).resolves.toBeUndefined();
+    });
+
+    it('o exercício da demo não entra na busca nem abre pela biblioteca pessoal', async () => {
+      const achados = await exercises.search(u.dona, { q: stamp } as never);
+      expect(achados.map((e) => e.name)).toEqual([`Remada real ${stamp}`]);
+      await expect(exercises.get(u.dona, demoEx)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('o equipamento da demo não vira o da academia dela', async () => {
+      const { customEquipment } = await exercises.gymEquipment(u.dona);
+      expect(customEquipment).toContain(`Aparelho real ${stamp}`);
+      expect(customEquipment).not.toContain(`Aparelho demo ${stamp}`);
+    });
+  });
+
   describe('avisos', () => {
     it('a Ana nunca recebe push, mesmo com celular cadastrado; a central dela guarda o aviso', async () => {
       notifications.notify(
@@ -314,6 +388,73 @@ describe('a demo fica fora de listagens, avisos e cobrança (integração, #412)
         new ApiKeyService(prisma).create(u.dona, demoId, { name: 'Zapier' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(await prisma.groupApiKey.count({ where: { groupId: demoId } })).toBe(0);
+    });
+
+    it('o tipo não muda: PATCH com SPONSORED não faz da demo uma patrocinada', async () => {
+      await expect(groups.update(u.dona, demoId, { type: GroupType.SPONSORED })).rejects.toThrow(
+        DEMO_FORBIDDEN,
+      );
+      const g = await prisma.group.findUniqueOrThrow({ where: { id: demoId } });
+      expect(g.type).toBe(GroupType.SOCIAL);
+    });
+
+    /**
+     * As portas dos services que conferem a ação sem o guarda (a rota pode
+     * pedir uma ação liberada, como `group.update` ou `member.assign`, e o
+     * service cobrar outra). Todas recusam com o 403 da demo, antes de tocar em
+     * qualquer coisa. Por último no arquivo: sem a correção, algumas mexem na Ana.
+     */
+    describe('as portas dos services também recusam', () => {
+      const seats = new SeatPoolService(prisma, config, null);
+      const memberAdmin = new MemberAdminService(prisma, seats);
+      const team = new TeamService(prisma, links);
+      let ana = '';
+      beforeAll(async () => {
+        ana = (
+          await prisma.groupMembership.findUniqueOrThrow({
+            where: { groupId_userId: { groupId: demoId, userId: u.ana } },
+          })
+        ).id;
+      });
+
+      it.each<[string, () => Promise<unknown>]>([
+        [
+          'dar assento em lote (rota member.assign)',
+          () => memberAdmin.bulk(u.dona, demoId, { action: 'seat', membershipIds: [ana] }),
+        ],
+        [
+          'comprar assentos',
+          () => seats.checkout(u.dona, demoId, { seats: 5, taxId: '00000000000' }),
+        ],
+        ['atribuir assento', () => seats.assign(u.dona, demoId, ana)],
+        [
+          'criar programa',
+          () =>
+            new ProgramService(prisma, config, null).create(u.dona, demoId, {
+              name: 'Programa',
+            } as never),
+        ],
+        [
+          'criar oferta',
+          () =>
+            new OfferService(prisma, config, email).create(u.dona, demoId, {
+              title: 'Oferta',
+              priceCents: 1000,
+            } as never),
+        ],
+        ['aprovar entrada', () => memberships.approve(u.dona, demoId, ana)],
+        ['trocar papel', () => memberships.changeRole(u.dona, demoId, ana, GroupRole.PROFESSIONAL)],
+        ['remover', () => memberships.removeMember(u.dona, demoId, ana)],
+        ['banir', () => memberships.ban(u.dona, demoId, ana)],
+        ['ver a equipe', () => team.staff(u.dona, demoId)],
+      ])('%s: 403 da demo', async (_nome, chamar) => {
+        await expect(chamar()).rejects.toThrow(DEMO_FORBIDDEN);
+      });
+
+      it('a Ana segue aluna ativa da demo', async () => {
+        const m = await prisma.groupMembership.findUniqueOrThrow({ where: { id: ana } });
+        expect(m).toMatchObject({ role: GroupRole.MEMBER, status: 'ACTIVE' });
+      });
     });
 
     it('a demo não passa para outra pessoa (o banco também recusa)', async () => {

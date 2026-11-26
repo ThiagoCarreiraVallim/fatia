@@ -7,7 +7,7 @@ import {
 import { GroupRole, MembershipStatus } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import {
-  can,
+  assertGroupAction,
   canManageMember,
   permissionTable,
   rolesGrantableBy,
@@ -245,12 +245,10 @@ export class TeamService {
   ): Promise<{ id: string; role: GroupRole }> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, role: true, status: true },
+      select: { id: true, role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (!can(eu.role, action)) {
-      throw new ForbiddenException('Seu papel nesta comunidade não cuida da equipe');
-    }
-    return eu;
+    assertGroupAction(eu, action, 'Seu papel nesta comunidade não cuida da equipe');
+    return { id: eu.id, role: eu.role };
   }
 }

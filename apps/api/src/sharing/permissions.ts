@@ -543,3 +543,20 @@ export function assertAllowedInDemo(
 ): void {
   if (group?.isDemo && blockedInDemo(action)) throw new ForbiddenException(DEMO_FORBIDDEN);
 }
+
+/**
+ * A porta dos services: o papel pela matriz e a demo na mesma chamada. Todo
+ * service que confere ação passa por aqui, para nenhum `can` esquecer a demo:
+ * a rota pode pedir uma ação liberada (`group.update`, `member.assign`) e o
+ * service cobrar outra (`billing.manage` para o tipo e o assento), e era por
+ * essa fresta que a demo virava patrocinada. Leia a associação com
+ * `group: { select: { isDemo: true } }`.
+ */
+export function assertGroupAction(
+  membership: { role: GroupRole; group?: { isDemo?: boolean } | null },
+  action: GroupAction,
+  forbidden = 'Seu papel nesta comunidade não permite isso',
+): void {
+  if (!can(membership.role, action)) throw new ForbiddenException(forbidden);
+  assertAllowedInDemo(membership.group, action);
+}

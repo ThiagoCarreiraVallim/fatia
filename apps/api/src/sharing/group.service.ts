@@ -38,7 +38,7 @@ import { assertRequirableScopes, normalizarEscopos } from './consent-scopes';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import {
   actionsOf,
-  assertAllowedInDemo,
+  assertGroupAction,
   can,
   canReceiveLink,
   type GroupAction,
@@ -614,13 +614,12 @@ export class GroupService {
    * saem antes, em Assentos e faturas.
    */
   private async assertTypeChange(
-    eu: GroupMembership,
+    eu: GroupMembership & { group: { isDemo: boolean } },
     groupId: string,
     type: GroupType,
   ): Promise<void> {
-    if (!can(eu.role, 'billing.manage')) {
-      throw new ForbiddenException('Só o dono muda o tipo da comunidade');
-    }
+    // Na demo, `billing.manage` é barrado: o tipo não muda (#412).
+    assertGroupAction(eu, 'billing.manage', 'Só o dono muda o tipo da comunidade');
     if (type !== GroupType.SOCIAL) return;
     const pool = await this.prisma.groupSeatPool.findUnique({
       where: { groupId },
@@ -785,19 +784,14 @@ export class GroupService {
     userId: string,
     groupId: string,
     action: GroupAction,
-  ): Promise<GroupMembership> {
+  ): Promise<GroupMembership & { group: { isDemo: boolean } }> {
     const found = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
       include: { group: { select: { isDemo: true } } },
     });
     if (!found || found.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (!can(found.role, action)) {
-      throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
-    }
-    assertAllowedInDemo(found.group, action);
-    const { group: _group, ...eu } = found;
-    void _group;
-    return eu;
+    assertGroupAction(found, action);
+    return found;
   }
 
   /**
