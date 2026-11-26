@@ -13,6 +13,8 @@ import {
   reviewFiltersFor,
   reviewKindLabel,
   reviewLine,
+  REVIEW_TIPS,
+  REVIEW_TIPS_SEEN_KEY,
   reviewWhatsappText,
   riskDaysOptions,
   riskKindLabel,
@@ -122,6 +124,53 @@ const TAB_TITLE: Record<Tab, string> = {
   risk: 'Em risco',
 };
 
+function tipsSeen(): boolean {
+  try {
+    return window.localStorage.getItem(REVIEW_TIPS_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * As 2 dicas de primeiro uso do profissional (#372, prancha Onb-E3). Vistas,
+ * não voltam neste navegador (preferência de tela, não dado).
+ */
+function ReviewTips() {
+  const [step, setStep] = useState(() => (tipsSeen() ? -1 : 0));
+  if (step < 0 || step >= REVIEW_TIPS.length) return null;
+  const tip = REVIEW_TIPS[step]!;
+  const last = step === REVIEW_TIPS.length - 1;
+  const label = `Dica ${step + 1} de ${REVIEW_TIPS.length}`;
+  return (
+    <section
+      aria-label={label}
+      className="flex flex-wrap items-center gap-3 rounded-2xl bg-primary-soft p-4 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.5)]"
+    >
+      <span className="min-w-0 flex-1">
+        <b className="block text-[14.5px]">{tip.title}</b>
+        <span className="text-[13px] text-muted-foreground">{tip.body}</span>
+      </span>
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <Button
+        size="sm"
+        onClick={() => {
+          if (last) {
+            try {
+              window.localStorage.setItem(REVIEW_TIPS_SEEN_KEY, '1');
+            } catch {
+              // Sem armazenamento: as dicas só somem nesta visita.
+            }
+          }
+          setStep(step + 1);
+        }}
+      >
+        {last ? 'Entendi' : 'Próxima'}
+      </Button>
+    </section>
+  );
+}
+
 export function ReviewScreen({
   initialTab,
   subpage = false,
@@ -225,6 +274,8 @@ export function ReviewScreen({
           </div>
         )}
       </div>
+
+      {tab === 'open' && g.role === 'PROFESSIONAL' && open.length > 0 && <ReviewTips />}
 
       {tab === 'risk' ? (
         <RiskTab

@@ -10,14 +10,20 @@ import {
   ApiError,
   groupsApi,
   initialsOf,
+  isTeamInvite,
   onboardingPending,
+  panelHref,
+  TEAM_INVITE_ROLE,
+  teamInviteDeclinedText,
+  teamInviteHeadline,
   teamRoleLabel,
   usersApi,
   type InvitePreview,
   type JoinConsent,
   type SocialTarget,
 } from '@fatia/api-client';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { AccountForm } from '@/components/auth/account-form';
 import { signInHref } from '@/lib/next-path';
 import { brandStyle } from './brand-cover';
@@ -146,7 +152,14 @@ export function InviteAccept({ token, preview }: { token: string; preview: Invit
     mutationFn: (consent: JoinConsent) => groupsApi.acceptInvite(token, consent),
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: ['community'] });
-      router.replace(`/community/${r.groupId}`);
+      // Equipe vai ao painel; o profissional passa antes pelo "O que você vê" (Onb-E2).
+      router.replace(
+        preview.role === 'PROFESSIONAL'
+          ? `${panelHref(r.groupId, 'review')}/what-you-see`
+          : isTeamInvite(preview.role)
+            ? panelHref(r.groupId)
+            : `/community/${r.groupId}`,
+      );
     },
     onError: (err) => {
       const groupId = alreadyMemberGroupId(err);
@@ -166,6 +179,17 @@ export function InviteAccept({ token, preview }: { token: string; preview: Invit
       : null;
 
   if (toOnboarding) return null;
+  if (isTeamInvite(preview.role)) {
+    return (
+      <TeamInviteAccept
+        preview={preview}
+        pending={accept.isPending}
+        error={error}
+        onAccept={() => accept.mutate({ scopes: [], statsOptIn: false })}
+        token={token}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -183,6 +207,125 @@ export function InviteAccept({ token, preview }: { token: string; preview: Invit
           </Button>
         }
       />
+    </div>
+  );
+}
+
+/**
+ * Convite da equipe (#372, prancha Onb-E1): quem convidou, o papel e o que ele
+ * deixa fazer, aceitos de forma explícita. "Recusar" avisa quem convidou e o
+ * dono (a API manda o aviso); o convite recusado não volta a valer.
+ */
+function TeamInviteAccept({
+  token,
+  preview,
+  pending,
+  error,
+  onAccept,
+}: {
+  token: string;
+  preview: InvitePreview;
+  pending: boolean;
+  error: string | null;
+  onAccept: () => void;
+}) {
+  const decline = useMutation({ mutationFn: () => groupsApi.declineInvite(token) });
+  const papel = TEAM_INVITE_ROLE[preview.role];
+  const capa = preview.group.coverUrl;
+
+  if (decline.isSuccess) {
+    return (
+      <section className="flex flex-col items-center gap-3 rounded-card bg-card px-6 py-12 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+          <Icon name="x" size={22} />
+        </span>
+        <h1 className="font-display text-2xl font-extrabold">Convite recusado</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {teamInviteDeclinedText(preview.invitedBy)}
+        </p>
+        <Link href="/" className={buttonVariants({ variant: 'outline' })}>
+          Ir para o Fatia
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4" style={brandStyle(preview.group.brandColor)}>
+      <div className="relative isolate -mx-4 -mt-4 flex h-[200px] items-end overflow-hidden bg-[linear-gradient(160deg,hsl(var(--brand)),#1a0c02)] px-6 pb-5 sm:mx-0 sm:mt-0 sm:rounded-card">
+        {capa && (
+          // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador
+          <img src={capa} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        )}
+        <span
+          aria-hidden
+          className="inline-flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-brand font-display text-2xl font-extrabold text-brand-foreground shadow-[0_0_0_4px_rgba(0,0,0,.25)]"
+        >
+          {initialsOf(preview.group.name)}
+        </span>
+      </div>
+      <div>
+        <p className="text-sm text-muted-foreground">{teamInviteHeadline(preview.invitedBy)}</p>
+        <h1 className="font-display text-[30px] font-extrabold leading-tight">
+          {preview.group.name}
+        </h1>
+      </div>
+      {papel && (
+        <>
+          <div className="flex items-center gap-3 rounded-card bg-card p-4">
+            <span
+              aria-hidden
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--info)/0.15)] text-info"
+            >
+              <Icon name="dumbbell" size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <b className="block">{papel.title}</b>
+              <span className="text-[13px] text-muted-foreground">{papel.sub}</span>
+            </span>
+            <span className="rounded-full bg-[hsl(var(--info)/0.15)] px-2.5 py-1 text-[11px] font-bold uppercase text-info">
+              Papel
+            </span>
+          </div>
+          <ul
+            aria-label="O que o papel deixa fazer"
+            className="divide-y divide-border rounded-card bg-card"
+          >
+            {papel.permissions.map((p) => (
+              <li key={p} className="flex items-center gap-3 px-4 py-3.5 text-[15px]">
+                <Icon name="check" size={18} className="shrink-0 text-primary" />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {preview.emailBound && (
+        <p className="text-xs text-muted-foreground">
+          Este convite vale só para a conta do e-mail que o recebeu.
+        </p>
+      )}
+      {(error || decline.isError) && (
+        <p role="alert" className="text-sm text-danger">
+          {error ?? 'Não deu para recusar agora. Tente de novo.'}
+        </p>
+      )}
+      <Button
+        variant="brand"
+        size="xl"
+        full
+        disabled={pending || decline.isPending}
+        onClick={onAccept}
+      >
+        {pending ? 'Entrando…' : 'Aceitar e entrar'}
+      </Button>
+      <Button
+        variant="text"
+        disabled={pending || decline.isPending}
+        onClick={() => decline.mutate()}
+      >
+        Recusar
+      </Button>
     </div>
   );
 }

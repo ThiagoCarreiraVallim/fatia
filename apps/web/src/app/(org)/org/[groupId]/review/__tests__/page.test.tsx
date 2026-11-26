@@ -251,3 +251,30 @@ describe('Para revisar (#399, Pn-02)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('dicas de primeiro uso do profissional (#372, Onb-E3)', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('duas dicas na primeira vez, e não voltam depois de "Entendi"', async () => {
+    ctx.group = grupo({ id: 'g1', role: 'PROFESSIONAL' });
+    const { unmount } = renderWithClient(<ReviewPage />);
+    const dica = await screen.findByRole('region', { name: 'Dica 1 de 2' });
+    expect(within(dica).getByText('Abra a ficha do aluno')).toBeInTheDocument();
+    await userEvent.click(within(dica).getByRole('button', { name: 'Próxima' }));
+    const segunda = screen.getByRole('region', { name: 'Dica 2 de 2' });
+    expect(within(segunda).getByText('Visto tira da lista')).toBeInTheDocument();
+    await userEvent.click(within(segunda).getByRole('button', { name: 'Entendi' }));
+    expect(screen.queryByRole('region', { name: /Dica/ })).toBeNull();
+    unmount();
+
+    renderWithClient(<ReviewPage />);
+    expect(await screen.findByRole('tab', { name: /Para revisar · 2/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Dica/ })).toBeNull();
+  });
+
+  it('o dono não recebe as dicas do profissional', async () => {
+    renderWithClient(<ReviewPage />);
+    expect(await screen.findByRole('tab', { name: /Para revisar · 2/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Dica/ })).toBeNull();
+  });
+});
