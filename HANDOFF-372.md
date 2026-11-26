@@ -19,15 +19,16 @@
 
 ## Checklist
 
-- [x] API: migration, setup service/controller, kind na criação, slug-check, notify no desafio, auto-marcação, first-steps
-- [x] api-client: community-setup.ts (vermelho: os 7 testes contra stub, cada um na própria asserção)
-- [x] Web: C1/C2 (/community/new e /community/new/[id]), guia no Início (setup-guide.tsx), Repetir o guia (UserMenu), redirect da marca (PanelFrame), Pn-21d (SetupStatCards), C5 (/org/[id]/challenges/first), cartaz (/cartaz/[token]), E1 (invite.tsx TeamInviteAccept), E2 (/org/[id]/review/what-you-see), E3 (ReviewTips)
-- [ ] Mobile: C1/C2, C3, C4, C5, E1, E2, Repetir o guia
-- [ ] Docs: PERMISSIONS, DATA_RETENTION, MOBILE_PARITY, REDESIGN_PROGRESS
-- [ ] Passada visual em ~/.cache/fatia-vis/372/
-- [ ] PR, CI verde
+- [x] API, api-client, web, mobile, docs (commitados)
+- [x] Passada visual web (390 e 1440, escuro) em ~/.cache/fatia-vis/372/web; correções em c5b4f1ed
+- [ ] Passada visual app (emulador): C1, C2, C3, C4, C5 e E1 vistos; falta E1 com o logo corrigido, E2 e C3 de novo; correções em fc8fa0db
+- [ ] REDESIGN_PROGRESS: "Verificado" e "Passada visual"; checks completos; apagar HANDOFF e scripts/tmp-*.mjs
+- [ ] PR [Redesign 48/50], CI verde, DROP DATABASE fatia_t372
 
-## Estado atual
+## Como subir (scripts no scratchpad da sessão; refazer se sumirem)
 
-API, api-client e web prontos e commitados. Próximo: mobile (community/new → C1/C2, C3 no org/[groupId]/index, C4 invite-members, C5 first-challenge, E1 em c/[token], E2 what-you-see, Repetir o guia no perfil).
-Decisões da web: "Fazer" leva à tela do passo; o ícone do item é o círculo para marcar à mão; dicas do Para revisar só para PROFESSIONAL; cartaz é /cartaz/<token> público como o link.
+- API: env do .env da raiz + DATABASE_URL=.../fatia_t372, API_PORT=3172, WEB_ORIGIN=http://localhost:3182, `pnpm exec nest start` em apps/api.
+- Web: NEXT_PUBLIC_API_URL=http://localhost:3172, LOGTO_BASE_URL=http://localhost:3182, `next dev -p 3182`.
+- Sessão do demo: e2e/.auth/demo.json do worktree (login feito com a web da worktree na 3030; o Logto só aceita callback na 3030).
+- Metro: EXPO_PUBLIC_API_URL=http://192.168.18.37:3172, `expo start --port 8081` em apps/mobile (apps/mobile/.env copiado da main, ignorado pelo git). O Expo Go está logado com a conta pessoal do dono, não com o demo: no banco descartável ela ganhou onboardedAt e criou a "Estudio Norte".
+- Seed do demo no fatia_t372 (Academia Demo); convites de profissional por `community-invite.ts academia-demo --role PROFESSIONAL`.
