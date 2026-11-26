@@ -8,6 +8,7 @@ import {
   communitySlug,
   emailsFromPaste,
   invitePosterPath,
+  invitePosterUrl,
   inviteModeStat,
   inviteModeTitle,
   mondayLabel,
@@ -103,6 +104,7 @@ describe('onboarding de quem cria a comunidade (#372)', () => {
       complete: false,
       visible: true,
       brandPending: false,
+      webUrl: 'https://fatia.app/org/g1',
     };
     expect(nextSetupItem(s)).toBe('TEAM');
     expect(setupPercent(s)).toBe('33%');
@@ -179,6 +181,7 @@ describe('onboarding de quem cria a comunidade (#372)', () => {
     const tok = 'a'.repeat(43);
     expect(invitePosterPath(`https://fatia.app/c/${tok}`)).toBe(`/cartaz/${tok}`);
     expect(invitePosterPath('https://fatia.app/qualquer')).toBeNull();
+    expect(invitePosterUrl(`https://fatia.app/c/${tok}`)).toBe(`https://fatia.app/cartaz/${tok}`);
     expect(emailsFromPaste('ana@email.com\nBia@Email.com; ana@email.com, nada\n')).toEqual([
       'ana@email.com',
       'bia@email.com',

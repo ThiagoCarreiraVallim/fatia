@@ -117,6 +117,7 @@ const guia = (p: Partial<CommunitySetup> = {}): CommunitySetup => ({
   complete: false,
   visible: true,
   brandPending: false,
+  webUrl: 'http://localhost:3030/org/g1',
   ...p,
 });
 

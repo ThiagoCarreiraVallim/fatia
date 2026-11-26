@@ -47,6 +47,7 @@ const guia = (p: Partial<CommunitySetup> = {}): CommunitySetup => ({
   complete: true,
   visible: false,
   brandPending: false,
+  webUrl: 'http://localhost:3030/org/g1',
   ...p,
 });
 import { OrgShell, useOrgGroup } from '../org-shell';

@@ -47,6 +47,8 @@ export interface CommunitySetup {
   visible: boolean;
   /** A marca (passo 2) não foi salva: o painel abre a tela da marca. */
   brandPending: boolean;
+  /** O painel desta comunidade na web ("Ver na web" do app). */
+  webUrl: string;
 }
 
 export interface SlugCheck {
@@ -471,6 +473,13 @@ export function inviteModeTitle(mode: InviteMode, qrName: string): string {
 export function invitePosterPath(inviteUrl: string): string | null {
   const m = /\/c\/([A-Za-z0-9_-]{43})(?:[/?#]|$)/.exec(inviteUrl);
   return m ? `/cartaz/${m[1]}` : null;
+}
+
+/** O cartaz A4 com endereço completo, na mesma origem do link (o app abre no navegador). */
+export function invitePosterUrl(inviteUrl: string): string | null {
+  const path = invitePosterPath(inviteUrl);
+  const origin = /^(https?:\/\/[^/]+)/.exec(inviteUrl)?.[1];
+  return path && origin ? `${origin}${path}` : null;
 }
 
 /** E-mails de uma colagem (um por linha, ou a coluna da planilha), sem repetir. */

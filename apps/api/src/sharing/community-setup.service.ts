@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { GroupRole, MembershipStatus, SetupStep, type Prisma } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import {
@@ -19,6 +20,11 @@ export interface FirstSteps {
   activeMembers: number;
   done: number;
   total: number;
+}
+
+/** O estado do guia, com o endereço do painel na web ("Ver na web" do app, Onb-C3). */
+export interface SetupView extends SetupState {
+  webUrl: string;
 }
 
 export interface SlugCheck {
@@ -54,9 +60,19 @@ export async function markSetupSteps(
  */
 @Injectable()
 export class CommunitySetupService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly webOrigin: string;
 
-  async get(userId: string, groupId: string): Promise<SetupState> {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() config?: ConfigService,
+  ) {
+    this.webOrigin = (config?.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030').replace(
+      /\/+$/,
+      '',
+    );
+  }
+
+  async get(userId: string, groupId: string): Promise<SetupView> {
     await this.owner(userId, groupId);
     return this.state(groupId);
   }
@@ -67,7 +83,7 @@ export class CommunitySetupService {
     groupId: string,
     step: SetupStep,
     done: boolean,
-  ): Promise<SetupState> {
+  ): Promise<SetupView> {
     await this.owner(userId, groupId);
     if (!MANUAL_SETUP_STEPS.includes(step)) throw new NotFoundException('Step not found');
     if (done) {
@@ -81,7 +97,7 @@ export class CommunitySetupService {
   }
 
   /** Fechar o guia, ou "Repetir o guia" (volta mesmo completo, até fechar). */
-  async setGuide(userId: string, groupId: string, visible: boolean): Promise<SetupState> {
+  async setGuide(userId: string, groupId: string, visible: boolean): Promise<SetupView> {
     await this.owner(userId, groupId);
     const now = new Date();
     await this.prisma.group.update({
@@ -150,7 +166,7 @@ export class CommunitySetupService {
     assertGroupAction(m, 'group.setup');
   }
 
-  private async state(groupId: string): Promise<SetupState> {
+  private async state(groupId: string): Promise<SetupView> {
     const g = await this.prisma.group.findUniqueOrThrow({
       where: { id: groupId },
       select: {
@@ -207,6 +223,9 @@ export class CommunitySetupService {
       plan: Boolean(plan || tip),
       equipment: g.equipment.length > 0 || g.customEquipment.length > 0,
     };
-    return computeSetup(facts, g.setupSteps, g.setupHiddenAt, g.setupRepeatedAt);
+    return {
+      ...computeSetup(facts, g.setupSteps, g.setupHiddenAt, g.setupRepeatedAt),
+      webUrl: `${this.webOrigin}/org/${groupId}`,
+    };
   }
 }

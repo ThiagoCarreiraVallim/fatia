@@ -125,6 +125,8 @@ describe('onboarding de quem cria a comunidade (#372, integração)', () => {
     const id = await criar(u.bruno, GroupKind.GYM);
     const antes = await setup.get(u.bruno, id);
     expect(antes).toMatchObject({ done: 1, total: 9, brandPending: true, visible: true });
+    // "Ver na web" do app (Onb-C3): o painel desta comunidade na web.
+    expect(antes.webUrl).toMatch(new RegExp(`/org/${id}$`));
     // O editor da Marca avisa e manda o tom corrigido; a API só aceita 4,5:1 (ADR 041).
     await expect(groups.update(u.bruno, id, { brandColor: '#7c5cff' })).rejects.toBeInstanceOf(
       BadRequestException,
