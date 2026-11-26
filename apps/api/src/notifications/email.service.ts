@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
+import { isDemoEmail } from '../common/demo';
 
 export interface EmailMessage {
   to: string;
@@ -36,6 +37,9 @@ export class EmailService {
   }
 
   async send(message: EmailMessage): Promise<boolean> {
+    // A aluna fictícia da demo (#412) não recebe e-mail. O domínio `.invalid`
+    // já não entrega, mas o servidor de envio nem chega a ser chamado.
+    if (isDemoEmail(message.to)) return false;
     if (!this.transport) {
       this.logger.log(`E-mail não enviado (MAIL_SMTP_URL vazio): "${message.subject}"`);
       return false;

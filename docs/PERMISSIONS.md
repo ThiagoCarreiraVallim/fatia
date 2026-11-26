@@ -263,6 +263,30 @@ futura:
   vendidos**. Plano alimentar fica de fora de propósito: diz o que a pessoa come e encosta em dado
   de saúde, que nunca sai por chave. Cada consulta é amarrada ao `groupId` da chave; nada vem da
   URL nem do corpo.
+- **Comunidade de demonstração (#412): a dona manda, mas não convida, não cobra e não integra.**
+  A demo (`Group.isDemo`, uma por dona, `demoOwnerId`) tem a dona como `OWNER` e a Ana Exemplo
+  (`User.demoGroupId`) como única aluna. Dentro dela, `actionsOf(role, isDemo)` tira
+  `DEMO_BLOCKED_ACTIONS` — `invite.create`, `member.grant_reader`, `member.approve`,
+  `member.remove`, `member.role`, `member.ban`, `group.transfer`, `billing.manage` e
+  `integration.manage` — e `assertAllowedInDemo` recusa com 403 em toda porta que confere ação: o
+  `GroupRoleGuard` na rota e, nos services, `assertGroupAction` (papel e demo numa chamada só), que
+  é o que usam o `requireContentRole`, o `assertAction` do `GroupService`, do `MembershipService` e
+  do `TeamService`, o `assertCan` do `MemberAdminService`, o `assertManager` do `SeatPoolService`
+  e do `ProgramService` e o `assertOwner` do `OfferService` (o `assertCan` do `InviteService`
+  chama `assertAllowedInDemo` direto). A conferência no service importa porque a rota pode pedir
+  uma ação liberada e o service cobrar outra: `PATCH /groups/:id` é `group.update`, mas trocar o
+  `type` cobra `billing.manage`, então na demo o tipo não muda; o lote de membros é
+  `member.assign`, mas dar assento cobra `billing.manage`. A tabela acima segue valendo para a
+  comunidade de verdade; a demo só tira.
+  `GET/POST/DELETE /groups/demo` e `POST /groups/demo/session` são `@SelfOnly`: a demo é achada
+  pela dona logada, nunca por id vindo da requisição. `GET /groups/:groupId/first-steps` é
+  `panel.overview`.
+- **Sessão de demo ("Abrir no app como Ana Exemplo", #412): só leitura e só o Hoje.** O token
+  `fatia_demo_…` (30 min, guardado só o hash em `DemoSession`) autentica como a Ana apenas em rota
+  `@DemoReadable` — `GET /dashboard/today` e `GET /users/me`, o que a web e o app pedem
+  (`DEMO_SESSION_ROUTES`) — e só em `GET`; em qualquer outra rota, ou com outro método, é 403
+  ("A demonstração é só leitura"). Token vencido ou apagado é 401. Não carrega a sessão de quem abriu: a web lê por `/api/demo/*`, que
+  repassa só o token, e o app vai direto à API com ele. Sem push, sem cobrança, sem IA.
 
 **Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
 grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.

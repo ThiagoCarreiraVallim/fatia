@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { MembershipStatus, type GroupAgent, type MediaFile } from '@fatia/db';
+import { MembershipStatus, type GroupAgent, type MediaFile, type Prisma } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService, type MediaView } from '../storage/media.service';
 import { requireContentRole } from './content-roles';
@@ -132,7 +132,7 @@ export class GroupAgentService {
     const linhas = await this.prisma.groupAgent.findMany({
       where: {
         enabled: true,
-        group: { memberships: { some: { userId, status: MembershipStatus.ACTIVE } } },
+        group: chatGroupOf(userId),
       },
       include: { avatarFile: true, group: { select: { name: true, avatarFile: true } } },
       orderBy: { group: { name: 'asc' } },
@@ -167,7 +167,7 @@ export class GroupAgentService {
       where: {
         groupId,
         enabled: true,
-        group: { memberships: { some: { userId, status: MembershipStatus.ACTIVE } } },
+        group: chatGroupOf(userId),
       },
       include: { group: { select: { name: true } } },
     });
@@ -190,7 +190,7 @@ export class GroupAgentService {
       where: {
         groupId,
         enabled: true,
-        group: { memberships: { some: { userId, status: MembershipStatus.ACTIVE } } },
+        group: chatGroupOf(userId),
       },
       include: { avatarFile: true, group: { select: { avatarFile: true } } },
     });
@@ -226,4 +226,13 @@ export class GroupAgentService {
       updatedAt: a.updatedAt,
     };
   }
+}
+
+/**
+ * A comunidade cujo agente a pessoa pode escolher no chat: ativa nela, e não a
+ * demo (#412), em que a dona é membro mas o chat é o pessoal. A mesma regra na
+ * lista, na escolha e em cada turno.
+ */
+function chatGroupOf(userId: string): Prisma.GroupWhereInput {
+  return { isDemo: false, memberships: { some: { userId, status: MembershipStatus.ACTIVE } } };
 }

@@ -3,7 +3,6 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -20,7 +19,7 @@ import {
   type SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { can } from '../sharing/permissions';
+import { assertGroupAction } from '../sharing/permissions';
 import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { CARENCIA_DIAS, resolveAiEntitlement } from './ai-entitlement';
 import type { ResultadoDeWebhookDeAssinatura, SeatProvider } from './billing-provider.port';
@@ -656,14 +655,16 @@ export class SeatPoolService {
   private async assertManager(actorId: string, groupId: string): Promise<void> {
     const membership = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId: actorId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new NotFoundException('Comunidade não encontrada.');
     }
-    if (!can(membership.role, 'billing.manage')) {
-      throw new ForbiddenException('Só o dono da comunidade gerencia os assentos.');
-    }
+    assertGroupAction(
+      membership,
+      'billing.manage',
+      'Só o dono da comunidade gerencia os assentos.',
+    );
   }
 
   /**

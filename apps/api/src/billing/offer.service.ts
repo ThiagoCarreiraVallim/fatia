@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type OfferStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
-import { can } from '../sharing/permissions';
+import { assertGroupAction } from '../sharing/permissions';
 import { escapeHtml } from './seat-invoice-email';
 
 export interface OfferInput {
@@ -424,12 +423,10 @@ export class OfferService {
   private async assertOwner(actorId: string, groupId: string): Promise<void> {
     const m = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId: actorId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!m || m.status !== 'ACTIVE') throw new NotFoundException('Comunidade não encontrada.');
-    if (!can(m.role, 'billing.manage')) {
-      throw new ForbiddenException('Só o dono da comunidade cuida das ofertas.');
-    }
+    assertGroupAction(m, 'billing.manage', 'Só o dono da comunidade cuida das ofertas.');
   }
 }
 

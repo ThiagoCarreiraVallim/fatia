@@ -15,9 +15,14 @@ export const CATALOG_EXERCISE = {
   groupOwned: false,
 } as const satisfies Prisma.ExerciseWhereInput;
 
-/** Comunidades em que a pessoa está ativa. */
+/**
+ * Comunidades em que a pessoa está ativa, fora a demo (#412): a dona é membro
+ * dela, mas o exercício de dados fictícios não entra na biblioteca pessoal. A
+ * Ana segue lendo os da demo pelo plano dela.
+ */
 export const activeMemberOf = (userId: string) =>
   ({
+    isDemo: false,
     memberships: { some: { userId, status: MembershipStatus.ACTIVE } },
   }) satisfies Prisma.GroupWhereInput;
 

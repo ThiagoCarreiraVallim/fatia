@@ -218,6 +218,8 @@ export class StudentViewService {
         // Sem `ACTIVE` aqui o ex-funcionário continuaria com a lista de alunos
         // da academia que o demitiu — nome por nome, mesmo sem ler dado nenhum.
         status: MembershipStatus.ACTIVE,
+        // A Ana Exemplo (#412) aparece só no painel da demo.
+        group: { isDemo: false },
       },
       select: {
         id: true,

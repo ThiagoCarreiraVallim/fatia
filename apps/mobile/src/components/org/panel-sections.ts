@@ -30,6 +30,10 @@ export const MOBILE_MISSING_SECTIONS: readonly PanelSection[] = [
   // Novidades e Integrações (#413): telas do painel na web; no celular, com a #414.
   'updates',
   'integrations',
+  // Demonstração e Primeiros passos (#412): criar, apagar e o QR ficam no painel
+  // da web; o app só abre o Hoje da Ana pelo link (`app/demo/[token]`). O resto
+  // entra com o painel no celular (#414).
+  'demo',
 ];
 
 /** As abas do painel no app: as do papel, menos as que não têm tela aqui. */

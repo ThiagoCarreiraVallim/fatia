@@ -1,6 +1,7 @@
 import type { GroupRole, MembershipStatus } from './community';
 import { panelHref, panelSections, activePanelSection, type PanelSection } from './community-panel';
 import type { AnnouncementSettings } from './community-feed';
+import { demoMenuLabel } from './community-demo';
 import { apiFetch } from './http';
 
 /**
@@ -149,7 +150,21 @@ const NAV: { key: PanelNavGroupKey; label: string; items: [PanelSection, string]
 ];
 
 /** Fora dos grupos: no rodapé do menu. */
-export const PANEL_FOOTER_SECTIONS: PanelSection[] = ['updates', 'integrations', 'settings'];
+export const PANEL_FOOTER_SECTIONS: PanelSection[] = [
+  'demo',
+  'updates',
+  'integrations',
+  'settings',
+];
+
+/**
+ * O rodapé do menu para quem abriu: as seções do papel, sem "Demonstração"
+ * dentro da própria demo (#412).
+ */
+export function panelFooterSections(g: { role: GroupRole; isDemo?: boolean }): PanelSection[] {
+  const pode = new Set(panelSections(g.role).map((s) => s.section));
+  return PANEL_FOOTER_SECTIONS.filter((s) => pode.has(s) && !(s === 'demo' && g.isDemo));
+}
 
 function countOf(section: PanelSection, counts: PanelCounts | undefined): number | null {
   if (!counts) return null;
@@ -179,6 +194,7 @@ export function panelNav(role: GroupRole, counts?: PanelCounts): PanelNavGroup[]
 }
 
 const FOOTER_LABEL: Partial<Record<PanelSection, string>> = {
+  demo: 'Demonstração',
   updates: 'Novidades',
   integrations: 'Integrações',
   settings: 'Configurações',
@@ -186,18 +202,36 @@ const FOOTER_LABEL: Partial<Record<PanelSection, string>> = {
 
 /** A migalha das telas do rodapé: "Configurações › Integrações", "Início › Novidades". */
 const FOOTER_GROUP: Partial<Record<PanelSection, string>> = {
+  demo: 'Início',
   updates: 'Início',
   integrations: 'Configurações',
 };
 
+/** O que muda o nome do item da demo e a migalha (#412). */
+export interface PanelLabelOptions {
+  /** A comunidade de verdade já está ativa: o item vira "Primeiros passos". */
+  communityActive?: boolean;
+  /** Dentro da demo: o nome dela, para a migalha "Demonstração › Academia Exemplo". */
+  demoName?: string;
+}
+
 /** O nome de uma seção do rodapé do menu. */
-export function panelFooterLabel(section: PanelSection): string {
+export function panelFooterLabel(section: PanelSection, opts: PanelLabelOptions = {}): string {
+  if (section === 'demo') return demoMenuLabel({ active: Boolean(opts.communityActive) });
   return FOOTER_LABEL[section] ?? section;
 }
 
 /** "Acompanhar › Visão geral" no topo da página. */
-export function panelBreadcrumb(pathname: string): { group: string | null; label: string } {
+export function panelBreadcrumb(
+  pathname: string,
+  opts: PanelLabelOptions = {},
+): { group: string | null; label: string } {
   const section = activePanelSection(pathname);
+  if (opts.demoName && section === 'overview') {
+    return { group: panelFooterLabel('demo'), label: opts.demoName };
+  }
+  if (section === 'demo')
+    return { group: FOOTER_GROUP.demo!, label: panelFooterLabel('demo', opts) };
   for (const g of NAV) {
     const item = g.items.find(([s]) => s === section);
     if (item) return { group: g.label, label: item[1] };

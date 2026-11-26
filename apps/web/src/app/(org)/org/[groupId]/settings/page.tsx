@@ -18,6 +18,7 @@ import {
   JOIN_POLICY_OPTIONS,
   MEAL_PHOTOS_LOCKED,
   orgApi,
+  panelFooterSections,
   panelHref,
   REQUIRED_SCOPE_ITEMS,
   REQUIRED_SCOPES_HINT,
@@ -555,10 +556,21 @@ const MORE: {
     label: 'Integrações e API',
     sub: 'chaves, cota do mês, Zapier e Make',
   },
+  {
+    // A demo (#412) é da dona: o item segue o menu (só OWNER, fora da demo).
+    section: 'demo',
+    action: 'group.transfer',
+    icon: 'eye',
+    label: 'Comunidade de demonstração',
+    sub: 'rever como tudo funciona com dados fictícios',
+  },
 ];
 
 function MoreCard({ g }: { g: MyGroup }) {
-  const links = MORE.filter((m) => groupCan(g, m.action));
+  const links = MORE.filter(
+    (m) =>
+      groupCan(g, m.action) && (m.section !== 'demo' || panelFooterSections(g).includes('demo')),
+  );
   if (links.length === 0) return null;
   return (
     <section aria-labelledby="mais" className={cn(card, 'gap-1.5')}>

@@ -952,17 +952,17 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 
 **Ordem (orquestrador):** #410 → #413 → #412 → #372; depois a #391 e a #397 são puxadas da etapa 11 e entram antes de #409, #411 e #414, que dependem delas.
 
-| Issue | Título                                       | Estado  | Superfícies                            |
-| ----- | -------------------------------------------- | ------- | -------------------------------------- |
-| #410  | Painel: páginas de boas-vindas da comunidade | PR #469 | api, db, api-client, web, mobile, docs |
-| #413  | Painel: configurações                        | PR #498 | api, db, api-client, web, mobile, docs |
-| #412  | Painel: demo                                 | a fazer |                                        |
-| #372  | Onboarding da equipe                         | a fazer |                                        |
-| #391  | Questionários (puxada da etapa 11)           | a fazer |                                        |
-| #397  | Agenda (puxada da etapa 11)                  | a fazer |                                        |
-| #409  | Painel: automações                           | a fazer |                                        |
-| #411  | Painel: assistente da equipe                 | a fazer |                                        |
-| #414  | Painel no celular                            | a fazer |                                        |
+| Issue | Título                                       | Estado             | Superfícies                            |
+| ----- | -------------------------------------------- | ------------------ | -------------------------------------- |
+| #410  | Painel: páginas de boas-vindas da comunidade | mergeado (PR #469) | api, db, api-client, web, mobile, docs |
+| #413  | Painel: configurações                        | mergeado (PR #498) | api, db, api-client, web, mobile, docs |
+| #412  | Painel: demo                                 | PR aberto          | api, db, api-client, web, mobile, docs |
+| #372  | Onboarding da equipe                         | a fazer            |                                        |
+| #391  | Questionários (puxada da etapa 11)           | a fazer            |                                        |
+| #397  | Agenda (puxada da etapa 11)                  | a fazer            |                                        |
+| #409  | Painel: automações                           | a fazer            |                                        |
+| #411  | Painel: assistente da equipe                 | a fazer            |                                        |
+| #414  | Painel no celular                            | a fazer            |                                        |
 
 #410 (branch `redesign/410-boas-vindas`; migration `20261121100000_group_welcome_pages`, só aditiva; nenhuma env nova; MCP: nada muda, a administração da comunidade fica fora do MCP e o aluno não ganha tool; sem ADR nova, segue a 010 e a 026):
 
@@ -998,6 +998,20 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
 - **Verificado:** api 4379 testes (jest, banco descartável `fatia_t413`), web 1313, api-client 1377, mobile 724, lint e typecheck. Critério de pronto conferido de ponta a ponta no banco descartável: chave "Zapier" criada pelo painel, quatro chamadas por chave subiram a cota de 0 para 4, no teto a API respondeu 429 e a tela mostrou o aviso de Pn-38b; com o mural escondido, o membro vê o aviso e o resto das abas.
 - **Passada visual (2026-11-24):** web 1440 e 390 (escuro, e claro no membro) e app (Expo Go, emulador), lado a lado com Pn-15, Pn-38, Pn-38b, Pn-27 e Pn-27b; prints em `~/.cache/fatia-vis/413/` (`board/`, `web/`, `app/`). Corrigidos: carregamento eterno com o mural escondido (web e app), tabela de chaves rolando de lado no celular (o "Revogar" sumia; a data desce para baixo do nome), o aviso de dado de saúde, e as abas, os avisos fixados e os filtros do mural no app indo até a borda (#477), com os três arquivos da comunidade fora do `ignores` da regra da barra de rolagem. Fica como está, de propósito: o "Salvar" no cabeçalho da página e não na barra de cima (a barra tem as ações globais, como no resto do painel), o título da página no tamanho do resto do painel.
 - **Fica para depois:** "Comunidade de demonstração" em "Mais da comunidade" (#412); "Recepção" e o QR de check-in no cartão da Equipe (sem tela ainda; #390); as telas novas no app (configurações novas, Integrações e Novidades entram com o painel no celular, #414); a marca no topo da comunidade do membro, nos cards compartilháveis e na página pública (#416, #392); o convite de quem já tem conta segue sem a cor da comunidade, nas duas pontas.
+
+#412 (branch `redesign/412-demo`; migration `20261126100000_demo_community`, só aditiva; nenhuma env nova; MCP: nada muda, a demo é do painel e não ganha tool; sem ADR nova, segue a 010 e a 043):
+
+- **O que entrou:** em `Group`, `isDemo` e `demoOwnerId` (uma demo por dona, CHECK amarrando os dois ao `ownerId`); em `User`, `demoGroupId` (a aluna fictícia); tabela `DemoSession`. Rotas `GET/POST/DELETE /groups/demo` (o POST é idempotente), `POST /groups/demo/session` e `GET /groups/:groupId/first-steps`. Web: item "Demonstração" no rodapé do menu da dona (Pn-21), "Entrar na demo" com a faixa fixa "Demonstração · dados fictícios" e "Sair da demo" em toda tela da demo (Pn-21b), "Apagar demo" com confirmação e "Criar a demo de novo" (Pn-21c), "Primeiros passos" com "Abrir a demonstração" quando a comunidade fica ativa (Pn-21d), e o link em Configurações › Mais da comunidade (Pn-15). "Abrir no app como Ana Exemplo" abre um QR e um link `/demo/<token>`: Hoje da Ana só leitura na web (`(demo)/demo/[token]`, pelo proxy `/api/demo/*`) e no app (`app/demo/[token].tsx`, `pathPrefix: '/demo/'`).
+- **Decisões:**
+  - **Comunidade ativa = 5 membros ativos** (`community-active.ts`, `isCommunityActive`), isolado numa função só. **Depende da #372**, que troca o critério pelo checklist de 9 passos; a lista não foi construída aqui.
+  - **A demo é uma comunidade de verdade marcada**, não um mock na tela: as telas reais ("Experimente": enviar para a Ana, a ficha dela, Para revisar, avisos) funcionam nela. Por isso a exclusão é na API: fora de `GET /groups` (a dona chega pelo item "Demonstração"), da prévia por código e por slug, de alunos e modelos do aluno, dos relatórios mensais, de push, e-mail e inbox de pessoa de verdade, e das telas pessoais da dona (agente no chat, exercícios e equipamento da biblioteca); 9 ações barradas dentro dela (convidar, aprovar, remover, papel, banir, liberar leitura, transferir, cobrança e integrações), no guarda e em toda porta de service que confere ação (`assertGroupAction`): na demo o tipo não muda e o lote não dá assento. Sem convite, chave de API nem assento, a demo não entra em assento, cota nem métrica.
+  - **Ana Exemplo** é uma conta sem login (`logtoSub` `demo|…`, e-mail `.invalid`, que o `EmailService` nunca envia), com vínculo pela porta única (`ProfessionalLinkService.grant`), plano A/B aceito, 6 treinos feitos, peso de 72,7 a 70,2 kg em 30 dias, refeições e água de hoje e um desafio "Constância 30 dias". O seed usa o catálogo e cai em exercício próprio quando falta.
+  - **Pn-21b:** o 4º cartão é Água, não Hábitos (sem modelo de hábitos, #390), e "Avaliação" mostra só o peso (sem avaliação física, #383). A regra dos 5 mostra "amostra pequena demais para mostrar" nos números da demo.
+  - **Sessão "Abrir no app":** token `fatia_demo_…` de 30 min, só o hash no banco; vale só em rota `@DemoReadable` e só em `GET` (`/dashboard/today` e `/users/me`, as duas que a tela pede); o resto é 403. Sem push, sem cobrança, sem IA. Não usa a sessão de quem abre: o Expo Go pode estar logado em outra conta.
+  - **Exclusão de conta:** a Ana sai antes da dona, na mesma transação. De quebra, conserta um bug anterior à #412: quem tinha exercício próprio usado no próprio plano ou treino não conseguia apagar a conta (FK `RESTRICT`); agora treinos e planos próprios saem antes do usuário.
+- **Verificado:** api 4436 testes (jest, banco descartável `fatia_t412`), web 1323, api-client 1391, mobile 724, lint e typecheck. De ponta a ponta no banco descartável: criar pelo painel, entrar, abrir o Hoje da Ana pelo link na web e no app, apagar e criar de novo; com 5 membros ativos o item vira "Primeiros passos".
+- **Passada visual (2026-11-25):** web 1440 e 390 no escuro e app (Expo Go, emulador), lado a lado com Pn-21, 21b, 21c, 21d e Pn-15; prints em `~/.cache/fatia-vis/412/` (`board/`, `web/`, `app/`). Corrigidos: a faixa no azul da prancha, a faixa e o cabeçalho da Visão geral da demo quebrando em coluna estreita no celular, e o "6 de 16 sessões" cortado com reticências no 1440.
+- **Fica para depois:** o checklist de 9 passos dos Primeiros passos e os quatro números do Pn-21d (#372; hoje a tela aponta para a Visão geral, que já os mostra); criar, apagar e o QR da demo no app (painel no celular, #414); Hábitos e Avaliação nos cartões da demo (#390, #383).
 
 ## Etapas seguintes
 

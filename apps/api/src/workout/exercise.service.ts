@@ -264,7 +264,7 @@ export class ExerciseService {
    */
   private async communityContext(userId: string): Promise<CommunityContext> {
     const vinculos = await this.prisma.groupMembership.findMany({
-      where: { userId, status: MembershipStatus.ACTIVE },
+      where: { userId, status: MembershipStatus.ACTIVE, group: { isDemo: false } },
       select: {
         groupId: true,
         group: { select: { name: true, equipment: true, customEquipment: true } },
@@ -328,7 +328,7 @@ export class ExerciseService {
    */
   async gymEquipment(userId: string): Promise<{ equipment: string[]; customEquipment: string[] }> {
     const vinculos = await this.prisma.groupMembership.findMany({
-      where: { userId, status: MembershipStatus.ACTIVE },
+      where: { userId, status: MembershipStatus.ACTIVE, group: { isDemo: false } },
       select: { group: { select: { equipment: true, customEquipment: true } } },
       orderBy: { createdAt: 'asc' },
     });

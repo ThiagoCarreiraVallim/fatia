@@ -62,7 +62,7 @@ import { ProfileService } from '../../users/profile.service';
 import { YouService } from '../../you/you.service';
 import { ApiKeyService } from '../../integrations/api-key.service';
 import { IntegrationReadService } from '../../integrations/integration-read.service';
-import { AccountService } from '../../users/account.service';
+import { AccountService, DELETE_CONFIRMATION } from '../../users/account.service';
 import { DataExportService } from '../../users/data-export.service';
 import type { LogtoManagementService } from '../../auth/logto-management.service';
 import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
@@ -103,6 +103,8 @@ import { TeamService } from '../../sharing/team.service';
 import { InviteService } from '../../sharing/invite.service';
 import { MemberAdminService } from '../../sharing/member-admin.service';
 import { SeatPoolService } from '../../billing/seat-pool.service';
+import { DemoSessionService } from '../../auth/demo-session.service';
+import { DemoService } from '../../sharing/demo.service';
 import {
   announcementUnsubscribeToken,
   AnnouncementEmailService,
@@ -6713,6 +6715,142 @@ describe('isolamento entre usuários', () => {
     it('o membro não lê as novidades do painel; a equipe lê', async () => {
       await expect(you413.panelNews(k.membroB)).rejects.toThrow(NotFoundException);
       expect((await you413.panelNews(k.adminA)).items.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('comunidade de demonstração (#412)', () => {
+    const demoSessions = new DemoSessionService(prisma);
+    const demos = new DemoService(
+      prisma,
+      demoSessions,
+      new PlanMaterializerService(prisma, exercises),
+      new ProfessionalLinkService(prisma),
+    );
+    const studentView412 = new StudentViewService(
+      prisma,
+      access,
+      plans,
+      sessions,
+      progress,
+      nutritionSummary,
+      goals,
+      meals,
+      nutritionPlans,
+    );
+    const content412 = new ContentService(
+      prisma,
+      plans,
+      mealTemplates,
+      userGoals,
+      new PlanMaterializerService(prisma, exercises),
+      new MediaService(prisma, new MemoryObjectStore()),
+    );
+    const conta412 = new AccountService(
+      prisma,
+      { deleteUser: async () => true } as unknown as LogtoManagementService,
+      { apagarDoUsuario: async () => undefined } as unknown as CheckpointPurgeService,
+    );
+    const d = { donaA: '', donaB: '', alunaA: '', realA: '', realB: '', demoA: '', ana: '' };
+
+    beforeAll(async () => {
+      const stamp = `iso412-${Date.now()}`;
+      const [donaA, donaB, alunaA] = await Promise.all(
+        ['donaA', 'donaB', 'alunaA'].map((n) =>
+          prisma.user.create({
+            data: { logtoSub: `${stamp}-${n}`, email: `${stamp}-${n}@test.local`, name: n },
+          }),
+        ),
+      );
+      Object.assign(d, { donaA: donaA.id, donaB: donaB.id, alunaA: alunaA.id });
+      d.realA = (await groups.create(d.donaA, { type: GroupType.SPONSORED, name: 'Real A' })).id;
+      d.realB = (await groups.create(d.donaB, { type: GroupType.SPONSORED, name: 'Real B' })).id;
+      await prisma.groupMembership.create({
+        data: {
+          groupId: d.realA,
+          userId: d.alunaA,
+          role: GroupRole.MEMBER,
+          status: MembershipStatus.ACTIVE,
+          joinedAt: new Date(),
+        },
+      });
+      const criada = await demos.create(d.donaA);
+      d.demoA = criada.demo!.groupId;
+      d.ana = criada.demo!.student.userId;
+      // Um plano publicado na demo: não pode virar "modelo" da dona no app.
+      await prisma.groupPlanTemplate.create({
+        data: {
+          groupId: d.demoA,
+          authorId: d.donaA,
+          kind: 'WORKOUT',
+          title: 'Modelo da demo',
+          snapshot: { version: 1, name: 'Modelo da demo', exercises: [] },
+          snapshotVersion: 1,
+          publishedAt: new Date(),
+        },
+      });
+    });
+
+    afterAll(async () => {
+      for (const id of [d.donaA, d.donaB]) await demos.remove(id);
+      await prisma.group.deleteMany({ where: { id: { in: [d.realA, d.realB] } } });
+      await prisma.user.deleteMany({ where: { id: { in: [d.donaA, d.donaB, d.alunaA] } } });
+    });
+
+    it('outra dona não vê, não abre e não apaga a demo da dona A', async () => {
+      expect((await demos.get(d.donaB)).demo).toBeNull();
+      await expect(groups.findByIdForMember(d.donaB, d.demoA)).rejects.toThrow(NotFoundException);
+      expect((await groups.listMine(d.donaB)).map((g) => g.id)).toEqual([d.realB]);
+      expect(await demos.remove(d.donaB)).toEqual({ removed: false });
+      expect(await prisma.group.findUnique({ where: { id: d.demoA } })).not.toBeNull();
+    });
+
+    it('nenhum membro de verdade vê a demo nem a Ana', async () => {
+      expect((await groups.listMine(d.alunaA)).map((g) => g.id)).toEqual([d.realA]);
+      await expect(groups.findByIdForMember(d.alunaA, d.demoA)).rejects.toThrow(NotFoundException);
+      // Nem a própria dona tem a demo em "Minhas comunidades".
+      expect((await groups.listMine(d.donaA)).map((g) => g.id)).toEqual([d.realA]);
+    });
+
+    it('a Ana não entra na lista de alunos nem nos modelos da dona fora da demo', async () => {
+      const alunos = await studentView412.listStudents(d.donaA);
+      expect(alunos.map((a) => a.groupId)).not.toContain(d.demoA);
+      expect(JSON.stringify(alunos)).not.toContain('Ana Exemplo');
+      expect(JSON.stringify(alunos)).toContain('alunaA');
+      const modelos = await content412.listWorkoutTemplatesForMe(d.donaA);
+      expect(JSON.stringify(modelos)).not.toContain('Modelo da demo');
+    });
+
+    it('a sessão do app da demo resolve só para a Ana, nunca para a dona ou outra conta', async () => {
+      const s = await demos.openSession(d.donaA);
+      const quem = await demoSessions.authenticate(s.token);
+      expect(quem.id).toBe(d.ana);
+      expect([d.donaA, d.donaB, d.alunaA]).not.toContain(quem.id);
+      await expect(demos.openSession(d.donaB)).rejects.toThrow(NotFoundException);
+    });
+
+    it('a Ana só entra no export da dona que criou a demo', async () => {
+      const deA = await conta412.exportData(d.donaA);
+      expect(deA.demoCommunity).toMatchObject({
+        name: 'Academia Exemplo',
+        student: { name: 'Ana Exemplo' },
+      });
+      for (const outra of [d.donaB, d.alunaA]) {
+        const exp = await conta412.exportData(outra);
+        expect(exp.demoCommunity).toBeNull();
+        expect(JSON.stringify(exp)).not.toContain('Ana Exemplo');
+        expect(JSON.stringify(exp)).not.toContain('Academia Exemplo');
+      }
+    });
+
+    it('apagar a conta da dona leva a demo e a Ana; a conta de outra pessoa não toca nelas', async () => {
+      await conta412.deleteAccount(d.alunaA, DELETE_CONFIRMATION);
+      expect(await prisma.user.findUnique({ where: { id: d.ana } })).not.toBeNull();
+
+      await conta412.deleteAccount(d.donaA, DELETE_CONFIRMATION);
+      expect(await prisma.user.findUnique({ where: { id: d.ana } })).toBeNull();
+      expect(await prisma.group.findUnique({ where: { id: d.demoA } })).toBeNull();
+      expect(await prisma.workoutSession.count({ where: { userId: d.ana } })).toBe(0);
+      expect(await prisma.group.findUnique({ where: { id: d.realB } })).not.toBeNull();
     });
   });
 

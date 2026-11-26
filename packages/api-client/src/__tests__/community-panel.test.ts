@@ -68,6 +68,7 @@ describe('quem abre o painel e com que seções', () => {
       'offers',
       'benefits',
       'welcome',
+      'demo',
       'updates',
       'integrations',
       'settings',

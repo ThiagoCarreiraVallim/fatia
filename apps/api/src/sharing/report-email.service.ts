@@ -198,7 +198,8 @@ export class ReportEmailService implements OnModuleInit, OnModuleDestroy {
   async sendMonthlyReports(now: Date, only?: string[]): Promise<number> {
     if (!this.available) return 0;
     const grupos = await this.prisma.group.findMany({
-      where: { reportEmailEnabled: true, ...(only ? { id: { in: only } } : {}) },
+      // A demo (#412) não manda relatório, nem com o interruptor ligado.
+      where: { reportEmailEnabled: true, isDemo: false, ...(only ? { id: { in: only } } : {}) },
       select: { id: true, timezone: true, createdAt: true, reportEmailMonth: true },
     });
     let sent = 0;

@@ -24,6 +24,7 @@ import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scop
 import { cancelScheduledAnnouncementsOp } from './announcement-schedule';
 import { findGroupByEntryCode } from './entry-code';
 import {
+  assertGroupAction,
   can,
   canManageMember,
   canReceiveLink,
@@ -977,13 +978,11 @@ export class MembershipService {
   ): Promise<{ id: string; role: GroupRole }> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, role: true, status: true },
+      select: { id: true, role: true, status: true, group: { select: { isDemo: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (!can(eu.role, action)) {
-      throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
-    }
-    return eu;
+    assertGroupAction(eu, action);
+    return { id: eu.id, role: eu.role };
   }
 }
 

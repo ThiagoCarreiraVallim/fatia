@@ -96,6 +96,11 @@ const DEVICE_SELECT = { id: true, platform: true, createdAt: true, lastSeenAt: t
 
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
+/** A comunidade de um link de aviso (`/community/<id>/…` ou `/org/<id>/…`), se houver. */
+const GROUP_URL =
+  /^\/(?:community|org)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
+const groupOfUrl = (url: string | undefined): string | null => url?.match(GROUP_URL)?.[1] ?? null;
+
 /**
  * Avisos no celular (Fase 8c, ADR 033): os aparelhos de cada pessoa, o que ela
  * quer receber e a entrega.
@@ -502,20 +507,48 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     while (this.pending.size > 0) await Promise.all([...this.pending]);
   }
 
-  private async deliver(userIds: string[], notice: Notice): Promise<void> {
-    if (userIds.length === 0) return;
+  /**
+   * A demo (#412) não interrompe ninguém. O aviso de dentro dela (o link aponta
+   * para a comunidade de demonstração) não sai para pessoa de verdade, nem na
+   * central; e a aluna fictícia fica só com a central, sem push. É aqui, e não
+   * em cada chamador, porque todo aviso passa por `deliver`.
+   */
+  private async withoutDemo(
+    userIds: string[],
+    url: string | undefined,
+  ): Promise<{ inbox: string[]; push: string[] }> {
+    const [demoUsers, demoGroup] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: userIds }, demoGroupId: { not: null } },
+        select: { id: true },
+      }),
+      groupOfUrl(url)
+        ? this.prisma.group.count({ where: { id: groupOfUrl(url)!, isDemo: true } })
+        : Promise.resolve(0),
+    ]);
+    const fictitious = new Set(demoUsers.map((u) => u.id));
+    if (demoGroup > 0) return { inbox: userIds.filter((id) => fictitious.has(id)), push: [] };
+    return { inbox: userIds, push: userIds.filter((id) => !fictitious.has(id)) };
+  }
+
+  private async deliver(allUserIds: string[], notice: Notice): Promise<void> {
+    if (allUserIds.length === 0) return;
+    const { inbox, push: userIds } = await this.withoutDemo(allUserIds, notice.url);
     const title = cut(notice.title, TITLE_MAX);
     const body = cut(notice.body, BODY_MAX);
     // A central do sino (#373) guarda o aviso de todo destinatário, inclusive de
     // quem desligou o push do tipo: desligar é não ser interrompido, não deixar
     // de saber. Falha aqui não pode calar o push — vira log.
     try {
-      await recordInbox(this.prisma, userIds, { kind: notice.kind, title, body, url: notice.url });
+      if (inbox.length > 0) {
+        await recordInbox(this.prisma, inbox, { kind: notice.kind, title, body, url: notice.url });
+      }
     } catch (err: unknown) {
       this.logger.warn(
         `Aviso "${notice.kind}" não entrou na central: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+    if (userIds.length === 0) return;
     // Tipo que nasce ligado: sai quem desligou. Tipo "Opcional": só quem ligou.
     const optIn = OPT_IN_KINDS.includes(notice.kind);
     const marcados = await this.prisma.notificationPreference.findMany({

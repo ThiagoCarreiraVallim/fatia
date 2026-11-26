@@ -38,11 +38,12 @@ import { assertRequirableScopes, normalizarEscopos } from './consent-scopes';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import {
   actionsOf,
+  assertGroupAction,
   can,
   canReceiveLink,
-  TEAM_ROLES,
   type GroupAction,
   type Specialty,
+  TEAM_ROLES,
 } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 import { revokeCreatedTeamInvitesOp, specialtyClearedAuditOp } from './team-invites';
@@ -156,6 +157,8 @@ export interface GroupSummary {
   timezone: string;
   /** Cor de destaque da comunidade (#413). Nula = a cor padrão. */
   brandColor: string | null;
+  /** A comunidade de demonstração da dona (#412): o painel mostra a faixa "dados fictícios". */
+  isDemo: boolean;
   /** Capa da comunidade (#413), por URL assinada de curta duração. */
   coverUrl: string | null;
   /** Seções escondidas para os membros (#413). Só visual. */
@@ -257,7 +260,8 @@ function toSummary(
     description: m.group.description,
     joinPolicy: m.group.joinPolicy,
     role: m.role,
-    actions: m.status === MembershipStatus.ACTIVE ? actionsOf(m.role) : ['group.read'],
+    actions:
+      m.status === MembershipStatus.ACTIVE ? actionsOf(m.role, m.group.isDemo) : ['group.read'],
     specialty: m.specialty,
     proSeeOnlyAssigned: m.group.proSeeOnlyAssigned,
     status: m.status,
@@ -275,6 +279,7 @@ function toSummary(
     visibility: m.group.visibility,
     timezone: m.group.timezone,
     brandColor: m.group.brandColor,
+    isDemo: m.group.isDemo,
     coverUrl,
     hiddenSections: m.group.hiddenSections,
     ...extras,
@@ -451,6 +456,9 @@ export class GroupService {
         // Quem saiu ou foi removido não vê mais o grupo na própria lista; a
         // linha continua no banco para o histórico.
         status: { in: [...STATUS_VIVOS] },
+        // A demo (#412) não é uma comunidade: fica fora do seletor e da lista,
+        // e a dona chega a ela pela entrada "Demonstração" do painel.
+        group: { isDemo: false },
       },
       include: INCLUIR,
       orderBy: { createdAt: 'desc' },
@@ -606,13 +614,12 @@ export class GroupService {
    * saem antes, em Assentos e faturas.
    */
   private async assertTypeChange(
-    eu: GroupMembership,
+    eu: GroupMembership & { group: { isDemo: boolean } },
     groupId: string,
     type: GroupType,
   ): Promise<void> {
-    if (!can(eu.role, 'billing.manage')) {
-      throw new ForbiddenException('Só o dono muda o tipo da comunidade');
-    }
+    // Na demo, `billing.manage` é barrado: o tipo não muda (#412).
+    assertGroupAction(eu, 'billing.manage', 'Só o dono muda o tipo da comunidade');
     if (type !== GroupType.SOCIAL) return;
     const pool = await this.prisma.groupSeatPool.findUnique({
       where: { groupId },
@@ -777,15 +784,14 @@ export class GroupService {
     userId: string,
     groupId: string,
     action: GroupAction,
-  ): Promise<GroupMembership> {
-    const eu = await this.prisma.groupMembership.findUnique({
+  ): Promise<GroupMembership & { group: { isDemo: boolean } }> {
+    const found = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
+      include: { group: { select: { isDemo: true } } },
     });
-    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (!can(eu.role, action)) {
-      throw new ForbiddenException('Seu papel nesta comunidade não permite isso');
-    }
-    return eu;
+    if (!found || found.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+    assertGroupAction(found, action);
+    return found;
   }
 
   /**

@@ -37,6 +37,7 @@ Nenhum placeholder restante no código.
 | `(app)/community/[groupId]/content`  | `app/(app)/community/[groupId]/content/index.tsx`        | ✅  | planos prontos e dicas publicados (pílulas Planos/Dicas)                                                                                                                                        |
 | `(app)/…/content/[templateId]`       | `app/(app)/community/[groupId]/content/[templateId].tsx` | ✅  | prévia e "Adotar"; nutrição escolhe o que copiar, metas com a comparação                                                                                                                        |
 | `(invite)/c/[token]`                 | `app/c/[token].tsx`                                      | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login                                                                                                                     |
+| `(demo)/demo/[token]`                | `app/demo/[token].tsx`                                   | ✅  | Hoje da Ana Exemplo, só leitura (#412); fora do `(app)` e sem a sessão de quem está logado: só o token curto da demo                                                                            |
 | `(app)/community/new`                | `app/(app)/community/new.tsx`                            | ✅  | criar comunidade; leva aos convites do painel                                                                                                                                                   |
 | `(org)/org/[groupId]`                | `app/(app)/org/[groupId]/index.tsx`                      | ✅  | painel: visão geral e retenção agregada (dono)                                                                                                                                                  |
 | `(org)/org/[groupId]/members`        | `app/(app)/org/[groupId]/members/index.tsx`              | ✅  | aprovar, recusar; "Gerenciar" (`Alert`) muda papel, assento e remove                                                                                                                            |
@@ -279,6 +280,15 @@ viram pílulas (`Choice`). Diferenças de propósito:
   ao lado. Publicar com até 4 imagens da galeria, reagir, comentar e denunciar são
   iguais; o menu do post é um `Alert` (a web abre um diálogo). A Moderação do painel (regra do
   mural, denúncias, removidos e banidos) existe nos dois.
+
+- **Comunidade de demonstração (#412):** criar, entrar, apagar e o QR de "Abrir no app como Ana
+  Exemplo" ficam no painel da web; a seção `demo` está em `MOBILE_MISSING_SECTIONS` até o painel no
+  celular (#414). O app abre o link (`fatia://demo/<token>` ou, com `APP_LINKS_HOST`,
+  `https://<app>/demo/<token>`: `pathPrefix: '/demo/'` no Android e `/demo/*` no
+  `apple-app-site-association` do iPhone) e mostra o Hoje da Ana com os
+  mesmos cartões, sem toque: os links dos cartões levariam à conta de quem está logado. O pedido vai
+  direto à API com o token como Bearer (`demoSessionRequest`, só `GET`, só as rotas do Hoje), nunca
+  pelo transporte do app, que carrega a sessão do Logto.
 
 ## Chat no app (Fase 9e)
 

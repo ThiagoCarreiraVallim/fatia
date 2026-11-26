@@ -43,7 +43,8 @@ export interface ResolvedEntry {
 /**
  * A comunidade de um código, ou `null`. Código revogado, vencido, esgotado e
  * comunidade só por convite dão `null` igual a código que não existe: a rota
- * não pode virar oráculo de existência de academia.
+ * não pode virar oráculo de existência de academia. A demo (#412) também: ela
+ * não recebe ninguém, nem pública e aberta.
  */
 export async function findGroupByEntryCode(
   prisma: Pick<PrismaService, 'group' | 'groupInvite'>,
@@ -59,7 +60,8 @@ export async function findGroupByEntryCode(
     if (
       convite &&
       isInviteUsable(convite, now) &&
-      convite.group.joinPolicy !== JoinPolicy.INVITE_ONLY
+      convite.group.joinPolicy !== JoinPolicy.INVITE_ONLY &&
+      !convite.group.isDemo
     ) {
       return { group: convite.group, inviteId: convite.id, inviteMaxUses: convite.maxUses, code };
     }
@@ -68,6 +70,7 @@ export async function findGroupByEntryCode(
   const group = await prisma.group.findUnique({ where: { slug } });
   if (
     !group ||
+    group.isDemo ||
     group.visibility !== GroupVisibility.PUBLIC ||
     group.joinPolicy === JoinPolicy.INVITE_ONLY
   ) {
