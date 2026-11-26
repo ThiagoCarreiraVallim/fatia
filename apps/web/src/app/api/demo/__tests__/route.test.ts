@@ -41,7 +41,14 @@ describe('proxy da demo', () => {
   });
 
   it('só as rotas da tela Hoje: o resto nem sai daqui', async () => {
-    for (const path of ['groups', 'users/me/export', 'chat', 'meals', '../admin']) {
+    for (const path of [
+      'groups',
+      'users/me/export',
+      'users/me/inbox',
+      'chat',
+      'meals',
+      '../admin',
+    ]) {
       const res = await route.GET(pedido(path, TOKEN), ctx(path.split('/')));
       expect(res.status).toBe(404);
     }

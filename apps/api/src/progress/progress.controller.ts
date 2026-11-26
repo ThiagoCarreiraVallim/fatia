@@ -97,7 +97,6 @@ export class ProgressController {
   }
 
   @Get('water-logs')
-  @DemoReadable()
   listWater(@CurrentUser() user: CurrentUserPayload, @Query() q: ListWaterLogsDto) {
     return this.waters.list(q, user.id);
   }
@@ -123,7 +122,6 @@ export class ProgressController {
 
   // -------- Progress queries --------
   @Get('progress/weight')
-  @DemoReadable()
   weightProgress(
     @CurrentUser() user: CurrentUserPayload,
     @Query('days', new ParseIntPipe({ optional: true })) days?: number,

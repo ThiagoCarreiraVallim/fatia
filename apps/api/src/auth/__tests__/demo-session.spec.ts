@@ -131,15 +131,9 @@ describe('sessão de demonstração no guard (#412)', () => {
     );
   });
 
-  it('só estas leituras aceitam a sessão de demo, todas GET e do próprio usuário', () => {
-    expect(demoReadableRoutes()).toEqual([
-      'GET /dashboard/today',
-      'GET /goals',
-      'GET /progress/weight',
-      'GET /users/me',
-      'GET /users/me/inbox',
-      'GET /users/me/onboarding/first-steps',
-      'GET /water-logs',
-    ]);
+  it('só as duas leituras do Hoje da Ana aceitam a sessão de demo', () => {
+    // O que a web e o app pedem (`DEMO_SESSION_ROUTES`), e nada além: o
+    // primeiros-passos, por exemplo, grava `firstStepsDoneAt` num GET.
+    expect(demoReadableRoutes()).toEqual(['GET /dashboard/today', 'GET /users/me']);
   });
 });

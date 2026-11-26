@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEMO_SESSION_ROUTES,
   demoApi,
   demoBannerText,
   demoCards,
@@ -202,6 +203,8 @@ describe('sessão da demo fora do painel (web e app)', () => {
       },
     });
     expect(demoSessionRequest('https://api', TOKEN, 'users/me/export')).toBeNull();
+    expect(demoSessionRequest('https://api', TOKEN, 'users/me/inbox')).toBeNull();
+    expect(DEMO_SESSION_ROUTES).toEqual(['dashboard/today', 'users/me']);
     expect(demoSessionRequest('https://api', 'eyJ.jwt', 'users/me')).toBeNull();
   });
 });

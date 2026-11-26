@@ -296,11 +296,7 @@ const DEMO_SESSION_TOKEN = /^fatia_demo_[A-Za-z0-9]{16,64}$/;
  * O que a sessão de demo lê: o Hoje da Ana e nada mais. A API confere de novo
  * (o token só vale em rota `@DemoReadable`); aqui o cliente nem tenta o resto.
  */
-export const DEMO_SESSION_ROUTES: readonly string[] = [
-  'dashboard/today',
-  'users/me',
-  'users/me/inbox',
-];
+export const DEMO_SESSION_ROUTES: readonly string[] = ['dashboard/today', 'users/me'];
 
 export function isDemoSessionToken(value: string | null | undefined): value is string {
   return typeof value === 'string' && DEMO_SESSION_TOKEN.test(value);

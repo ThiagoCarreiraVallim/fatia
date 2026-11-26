@@ -11,7 +11,6 @@ import {
 } from './dto/notification.dto';
 import { NotificationService } from './notification.service';
 import { InboxService } from './inbox.service';
-import { DemoReadable } from '../common/decorators/demo-readable.decorator';
 
 /**
  * Os celulares, as preferências de aviso e a central do sino de quem está
@@ -26,7 +25,6 @@ export class NotificationsController {
 
   /** A central de avisos do sino no Hoje (#373): os mais recentes e quantos não foram lidos. */
   @Get('inbox')
-  @DemoReadable()
   inboxList(@CurrentUser() user: CurrentUserPayload) {
     return this.inbox.list(user.id);
   }

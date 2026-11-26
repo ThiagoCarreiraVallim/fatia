@@ -2,7 +2,6 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { GoalsService } from './goals.service';
 import { CreateGoalDto, ListGoalsDto, UpdateGoalDto } from './dto/goal.dto';
-import { DemoReadable } from '../common/decorators/demo-readable.decorator';
 
 @Controller('goals')
 export class GoalsController {
@@ -14,7 +13,6 @@ export class GoalsController {
   }
 
   @Get()
-  @DemoReadable()
   list(@CurrentUser() user: CurrentUserPayload, @Query() q: ListGoalsDto) {
     return this.goals.list(q, user.id, user.timezone);
   }
