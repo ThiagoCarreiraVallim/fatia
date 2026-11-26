@@ -1009,7 +1009,9 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - **Pn-21b:** o 4º cartão é Água, não Hábitos (sem modelo de hábitos, #390), e "Avaliação" mostra só o peso (sem avaliação física, #383). A regra dos 5 mostra "amostra pequena demais para mostrar" nos números da demo.
   - **Sessão "Abrir no app":** token `fatia_demo_…` de 30 min, só o hash no banco; vale só em rota `@DemoReadable` e só em `GET` (Hoje, perfil, avisos, metas, peso, água, primeiros passos). Sem push, sem cobrança, sem IA. Não usa a sessão de quem abre: o Expo Go pode estar logado em outra conta.
   - **Exclusão de conta:** a Ana sai antes da dona, na mesma transação. De quebra, conserta um bug anterior à #412: quem tinha exercício próprio usado no próprio plano ou treino não conseguia apagar a conta (FK `RESTRICT`); agora treinos e planos próprios saem antes do usuário.
-- **Fica para depois:** o checklist de 9 passos dos Primeiros passos (#372); criar, apagar e o QR da demo no app (painel no celular, #414); Hábitos e Avaliação nos cartões da demo (#390, #383).
+- **Verificado:** api 4436 testes (jest, banco descartável `fatia_t412`), web 1323, api-client 1391, mobile 724, lint e typecheck. De ponta a ponta no banco descartável: criar pelo painel, entrar, abrir o Hoje da Ana pelo link na web e no app, apagar e criar de novo; com 5 membros ativos o item vira "Primeiros passos".
+- **Passada visual (2026-11-25):** web 1440 e 390 no escuro e app (Expo Go, emulador), lado a lado com Pn-21, 21b, 21c, 21d e Pn-15; prints em `~/.cache/fatia-vis/412/` (`board/`, `web/`, `app/`). Corrigidos: a faixa no azul da prancha, a faixa e o cabeçalho da Visão geral da demo quebrando em coluna estreita no celular, e o "6 de 16 sessões" cortado com reticências no 1440.
+- **Fica para depois:** o checklist de 9 passos dos Primeiros passos e os quatro números do Pn-21d (#372; hoje a tela aponta para a Visão geral, que já os mostra); criar, apagar e o QR da demo no app (painel no celular, #414); Hábitos e Avaliação nos cartões da demo (#390, #383).
 
 ## Etapas seguintes
 
