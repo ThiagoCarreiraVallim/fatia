@@ -1,8 +1,9 @@
 import { ForbiddenException, UnauthorizedException, type ExecutionContext } from '@nestjs/common';
-import { METHOD_METADATA, MODULE_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AppModule } from '../../app.module';
 import { DEMO_READABLE_KEY } from '../../common/decorators/demo-readable.decorator';
 import { DEMO_TOKEN_PREFIX } from '../../common/demo';
 import type { DemoSessionService } from '../demo-session.service';
@@ -12,23 +13,26 @@ import type { UserProvisioningService } from '../user-provisioning.service';
 
 type Ctor = abstract new (...args: never[]) => unknown;
 
-/** Todos os controllers do app, andando pelos `imports` dos módulos a partir do `AppModule`. */
+/**
+ * Todos os controllers do app, lidos dos arquivos `*.controller.ts`. Não parte do
+ * `AppModule`: importá-lo roda o `ConfigModule.forRoot`, que valida o ambiente e
+ * derruba o worker do jest no CI, onde não há variável do Logto.
+ */
 function allControllers(): Ctor[] {
-  const vistos = new Set<unknown>();
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) return e.name === '__tests__' ? [] : files(p);
+      return e.name.endsWith('.controller.ts') ? [p] : [];
+    });
   const out = new Set<Ctor>();
-  const visita = (m: unknown) => {
-    const mod = (m as { module?: unknown })?.module ?? m;
-    if (!mod || vistos.has(mod)) return;
-    vistos.add(mod);
-    const controllers =
-      (Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, mod as object) as Ctor[]) ?? [];
-    controllers.forEach((c) => out.add(c));
-    const imports =
-      (Reflect.getMetadata(MODULE_METADATA.IMPORTS, mod as object) as unknown[]) ?? [];
-    const dinamicos = ((m as { imports?: unknown[] })?.imports ?? []) as unknown[];
-    [...imports, ...dinamicos].forEach(visita);
-  };
-  visita(AppModule);
+  for (const f of files(resolve(__dirname, '..', '..'))) {
+    for (const exported of Object.values(require(f) as Record<string, unknown>)) {
+      if (typeof exported === 'function' && Reflect.hasMetadata(PATH_METADATA, exported)) {
+        out.add(exported as unknown as Ctor);
+      }
+    }
+  }
   return [...out];
 }
 
