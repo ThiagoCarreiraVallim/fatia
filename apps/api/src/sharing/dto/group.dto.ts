@@ -21,6 +21,7 @@ import {
 import {
   AutoPostKind,
   CommunitySection,
+  GroupKind,
   GroupRole,
   InviteOrigin,
   GroupType,
@@ -55,6 +56,11 @@ export const GRANTABLE_ROLE_VALUES = [
 export class CreateGroupDto {
   @IsEnum(GroupType)
   type!: GroupType;
+
+  /** Academia ou personal/nutri (#372, Onb-C1). Só na patrocinada; o service confere. */
+  @IsOptional()
+  @IsEnum(GroupKind)
+  kind?: GroupKind;
 
   @IsString()
   @MinLength(2)

@@ -1,179 +1,159 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
-  GROUP_TYPES,
-  groupTypeLabel,
-  joinPolicyLabel,
+  canCreateCommunity,
+  COMMUNITY_KIND_OPTIONS,
+  COMMUNITY_SHORT_HOST,
+  communitySlug,
   orgApi,
-  panelHref,
-  type GroupType,
-  type JoinPolicy,
-  type ShareScope,
+  setupApi,
+  type CommunityKindOption,
 } from '@fatia/api-client';
-import { RequiredScopesField } from '@/components/community/required-scopes-field';
+import { CreateSteps } from '@/components/community/create-steps';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
-const JOIN_POLICIES: JoinPolicy[] = ['APPROVAL', 'OPEN', 'INVITE_ONLY'];
-
-const schema = z.object({
-  name: z.string().trim().min(2, 'Dê um nome com ao menos 2 letras').max(120),
-  type: z.enum(['SPONSORED', 'SOCIAL']),
-  joinPolicy: z.enum(['OPEN', 'APPROVAL', 'INVITE_ONLY']),
-  description: z.string().trim().max(500),
-});
-type FormValues = z.infer<typeof schema>;
+/** Espera a pessoa parar de digitar antes de perguntar o endereço à API. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
 
 /**
- * Criar uma comunidade. Quem cria é a dona, e cai direto no painel para
- * convidar a equipe e os membros.
+ * Criar uma comunidade, passo 1 (#372, prancha Onb-C1): o tipo, o nome e o
+ * endereço `fat.ia.br/<slug>` gerado sem acento. "Criar" só com tipo e nome.
+ * Daqui segue para a Marca (passo 2); os dois bloqueiam o painel.
  */
 export default function NewCommunityPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: '', type: 'SPONSORED', joinPolicy: 'APPROVAL', description: '' },
+  const nameId = useId();
+  const [kind, setKind] = useState<CommunityKindOption | null>(null);
+  const [name, setName] = useState('');
+  const ready = canCreateCommunity(kind, name);
+  const asked = useDebounced(name.trim(), 350);
+
+  const slug = useQuery({
+    queryKey: ['community', 'slug-check', asked],
+    queryFn: () => setupApi.slugCheck(asked),
+    enabled: asked.length >= 2,
+    staleTime: 30_000,
   });
-  // Fora do zod: são toggles, sem o que validar além do tipo.
-  const [requiredScopes, setRequiredScopes] = useState<ShareScope[]>([]);
+  // Enquanto a API não responde, o endereço sai do nome (mesma regra).
+  const shown =
+    slug.data && asked === name.trim() ? slug.data.slug : communitySlug(name || 'sua comunidade');
 
   const create = useMutation({
-    mutationFn: (v: FormValues) =>
-      orgApi.create({
-        name: v.name,
-        type: v.type,
-        joinPolicy: v.joinPolicy,
-        ...(v.description ? { description: v.description } : {}),
-        requiredSharingScopes: requiredScopes,
+    mutationFn: async () => {
+      const o = COMMUNITY_KIND_OPTIONS.find((x) => x.key === kind)!;
+      const nome = name.trim();
+      // O endereço que foi mostrado; se a pergunta ainda não voltou, pergunta agora.
+      const livre = slug.data && asked === nome ? slug.data : await setupApi.slugCheck(nome);
+      return orgApi.create({
+        name: nome,
+        type: o.type,
+        ...(o.kind ? { kind: o.kind } : {}),
+        slug: livre.slug,
+        joinPolicy: 'APPROVAL',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      }),
+      });
+    },
     onSuccess: (g) => {
       void qc.invalidateQueries({ queryKey: ['community'] });
-      router.replace(panelHref(g.id, 'invites'));
+      router.replace(`/community/new/${g.id}`);
     },
   });
 
   return (
-    <div className="p-4">
-      <Form {...form}>
-        <form className="space-y-5" onSubmit={form.handleSubmit((v) => create.mutate(v))}>
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input autoComplete="off" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <Select value={field.value} onValueChange={(v) => field.onChange(v as GroupType)}>
-                  <FormControl>
-                    <SelectTrigger className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {GROUP_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {groupTypeLabel(t)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="joinPolicy"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Como se entra</FormLabel>
-                <Select value={field.value} onValueChange={(v) => field.onChange(v as JoinPolicy)}>
-                  <FormControl>
-                    <SelectTrigger className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {JOIN_POLICIES.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {joinPolicyLabel(p)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  Com aprovação, quem usa o código espera você aceitar. Convites entram direto.
-                </FormDescription>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição (opcional)</FormLabel>
-                <FormControl>
-                  <Textarea rows={3} {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <RequiredScopesField
-            value={requiredScopes}
-            onChange={setRequiredScopes}
-            hint="Quem entrar como membro já vem com isso marcado e não consegue desmarcar; o resto continua escolha de cada um. A equipe (profissionais e criadores) não precisa. Nada marcado: ninguém é obrigado a compartilhar."
-          />
-          {create.isError && (
-            <p role="alert" className="text-sm text-danger">
-              {create.error instanceof ApiError && create.error.status < 500
-                ? create.error.message
-                : 'Não deu para criar agora. Tente de novo.'}
-            </p>
+    <div className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-xl flex-col gap-5 px-4 pb-6 pt-4">
+      <div className="flex items-center gap-3">
+        <CreateSteps step={1} />
+      </div>
+      <h1 className="font-display text-[32px] font-extrabold leading-tight">
+        Que tipo de comunidade?
+      </h1>
+
+      <div role="radiogroup" aria-label="Tipo de comunidade" className="flex flex-col gap-2.5">
+        {COMMUNITY_KIND_OPTIONS.map((o) => {
+          const on = kind === o.key;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setKind(o.key)}
+              className={cn(
+                'flex items-center gap-4 rounded-card bg-card p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                on && 'bg-primary-soft shadow-[inset_0_0_0_2px_hsl(var(--primary))]',
+              )}
+            >
+              <span
+                aria-hidden
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-primary-soft text-primary"
+              >
+                <Icon name={o.icon} size={22} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-base">{o.title}</b>
+                <span className="block text-[13.5px] text-muted-foreground">{o.sub}</span>
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2',
+                  on ? 'border-primary bg-primary text-primary-foreground' : 'border-border-strong',
+                )}
+              >
+                {on && <Icon name="check" size={14} />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={nameId} className="text-[13px] font-semibold text-muted-foreground">
+          Nome
+        </label>
+        <Input
+          id={nameId}
+          value={name}
+          maxLength={120}
+          autoComplete="off"
+          placeholder="Academia Demo"
+          onChange={(e) => setName(e.target.value)}
+        />
+        <p className="text-[13px] text-muted-foreground" aria-live="polite">
+          {COMMUNITY_SHORT_HOST}/<b className="font-semibold text-foreground">{shown}</b>
+          {slug.data?.taken && asked === name.trim() && (
+            <span className="block">O endereço do nome já é de outra comunidade.</span>
           )}
-          <Button type="submit" size="lg" className="w-full" disabled={create.isPending}>
-            {create.isPending ? 'Criando...' : 'Criar comunidade'}
-          </Button>
-        </form>
-      </Form>
+        </p>
+      </div>
+
+      {create.isError && (
+        <p role="alert" className="text-sm text-danger">
+          {create.error instanceof ApiError && create.error.status < 500
+            ? create.error.message
+            : 'Não deu para criar agora. Tente de novo.'}
+        </p>
+      )}
+
+      <div className="flex-1" />
+      <Button size="xl" full disabled={!ready || create.isPending} onClick={() => create.mutate()}>
+        {create.isPending ? 'Criando…' : 'Criar'}
+      </Button>
     </div>
   );
 }

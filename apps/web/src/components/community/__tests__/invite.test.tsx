@@ -10,7 +10,7 @@ vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    groupsApi: { acceptInvite: vi.fn() },
+    groupsApi: { acceptInvite: vi.fn(), declineInvite: vi.fn() },
     usersApi: { me: vi.fn() },
   };
 });
@@ -157,5 +157,57 @@ describe('convite', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Para entrar nesta comunidade é preciso compartilhar: Metas.',
     );
+  });
+
+  describe('convite da equipe (#372, Onb-E1)', () => {
+    const EQUIPE: InvitePreview = {
+      ...PREVIEW,
+      role: 'PROFESSIONAL',
+      invitedBy: 'Bruno Lima',
+      group: { ...PREVIEW.group, brandColor: '#ff7a1a' },
+    };
+
+    it('mostra quem convidou, o papel e as 3 permissões; aceitar leva ao "O que você vê"', async () => {
+      vi.mocked(groupsApi.acceptInvite).mockResolvedValue({ groupId: 'g1' } as never);
+      renderAccept(EQUIPE);
+      expect(await screen.findByText('Bruno te convidou para a equipe')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Academia Demo' })).toBeInTheDocument();
+      expect(screen.getByText('Profissional')).toBeInTheDocument();
+      expect(screen.getByText('Instrutor, personal ou nutricionista')).toBeInTheDocument();
+      for (const p of [
+        'Ficha dos seus alunos',
+        'Publicar planos, dicas e desafios',
+        'Para revisar e alunos em risco',
+      ]) {
+        expect(screen.getByText(p)).toBeInTheDocument();
+      }
+      // Equipe não escolhe o que compartilhar: o cartão de consentimento é do membro.
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: 'Aceitar e entrar' }));
+      expect(groupsApi.acceptInvite).toHaveBeenCalledWith(TOKEN, { scopes: [], statsOptIn: false });
+      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/org/g1/review/what-you-see'));
+    });
+
+    it('recusar avisa o dono e mostra o estado recusado', async () => {
+      vi.mocked(groupsApi.declineInvite).mockResolvedValue({ declined: true } as never);
+      renderAccept(EQUIPE);
+      await userEvent.click(await screen.findByRole('button', { name: 'Recusar' }));
+      expect(groupsApi.declineInvite).toHaveBeenCalledWith(TOKEN);
+      expect(await screen.findByRole('heading', { name: 'Convite recusado' })).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Bruno vai ver que você recusou. Se mudar de ideia, peça um novo convite.',
+        ),
+      ).toBeInTheDocument();
+      expect(groupsApi.acceptInvite).not.toHaveBeenCalled();
+    });
+
+    it('outro papel da equipe vai ao painel', async () => {
+      vi.mocked(groupsApi.acceptInvite).mockResolvedValue({ groupId: 'g1' } as never);
+      renderAccept({ ...EQUIPE, role: 'RECEPTION' });
+      expect(await screen.findByText('Recepção')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Aceitar e entrar' }));
+      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/org/g1'));
+    });
   });
 });

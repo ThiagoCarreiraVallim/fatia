@@ -119,6 +119,11 @@ export class ChallengeDto {
   @ArrayMaxSize(8)
   @IsIn(Object.values(StepSource), { each: true })
   allowedStepSources?: StepSource[];
+
+  /** "Avisar todos por push" (#372, Onb-C5). Ausente = avisa. Ignorado ao editar. */
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 }
 
 export class JoinChallengeDto {

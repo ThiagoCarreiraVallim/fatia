@@ -30,7 +30,7 @@ import { dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
 import { NotificationService } from '../notifications/notification.service';
-import { inviteNotice } from './community-notices';
+import { inviteDeclinedNotice, inviteNotice } from './community-notices';
 import { assertJoinMeetsRequiredScopes } from './consent-scopes';
 import { newEntryCode } from './entry-code';
 import {
@@ -949,15 +949,36 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     if (!convite.email) throw new NotFoundException(INVITE_NOT_FOUND);
     const eu = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, name: true },
     });
     if (!eu || eu.email.toLowerCase() !== convite.email) {
       throw new NotFoundException(INVITE_NOT_FOUND);
     }
-    await this.prisma.groupInvite.updateMany({
+    const { count } = await this.prisma.groupInvite.updateMany({
       where: { id: convite.id, declinedAt: null, uses: 0 },
       data: { declinedAt: new Date() },
     });
+    // "O Bruno vai ver que você recusou" (#372, Onb-E1): quem convidou e o dono.
+    if (count === 1) {
+      const grupo = await this.prisma.group.findUniqueOrThrow({
+        where: { id: convite.groupId },
+        select: { name: true, ownerId: true },
+      });
+      const avisar = [...new Set([convite.createdById, grupo.ownerId])].filter(
+        (id): id is string => Boolean(id) && id !== userId,
+      );
+      if (avisar.length > 0) {
+        this.notifications.notify(
+          avisar,
+          inviteDeclinedNotice({
+            groupId: convite.groupId,
+            groupName: grupo.name,
+            personName: eu.name?.trim() || convite.email,
+            team: convite.role !== GroupRole.MEMBER,
+          }),
+        );
+      }
+    }
     return { declined: true };
   }
 

@@ -18,6 +18,7 @@ import {
   panelSections,
   seatSummary,
   seatsApi,
+  type CommunitySetup,
   type MyGroup,
   type OverviewCell,
   type OverviewColumn,
@@ -27,6 +28,7 @@ import {
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { DemoOverview } from '@/components/org/demo-panel';
+import { SetupHome, useSetup } from '@/components/org/setup-guide';
 import { InsightsCard } from '@/components/org/insights-card';
 import { AnnouncementEditor } from '@/components/org/announcement-editor';
 import { linePaths } from '@/components/org/chart-paths';
@@ -466,7 +468,22 @@ export default function OrgOverviewPage() {
   const g = useOrgGroup();
   // A demo (#412) tem a Visão geral dela: a Ana, a regra dos 5 e "Experimente".
   if (g.isDemo) return <DemoOverviewPage g={g} />;
+  return <OwnerSetupGate g={g} />;
+}
+
+/** O guia de primeiros passos (#372) toma o Início do dono enquanto está à vista. */
+function OwnerSetupGate({ g }: { g: MyGroup }) {
+  const setup = useSetup(g);
+  if (g.role === 'OWNER' && setup.isPending) {
+    return <Skeleton className="h-96 rounded-2xl bg-card" />;
+  }
+  if (setup.data?.visible) return <SetupHomePage g={g} setup={setup.data} />;
   return <RealOverviewPage />;
+}
+
+function SetupHomePage({ g, setup }: { g: MyGroup; setup: CommunitySetup }) {
+  useTopBarTitle(g.name);
+  return <SetupHome g={g} setup={setup} />;
 }
 
 function DemoOverviewPage({ g }: { g: MyGroup }) {

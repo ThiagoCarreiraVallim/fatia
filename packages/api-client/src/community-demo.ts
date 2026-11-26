@@ -37,11 +37,13 @@ export interface DemoState {
   homeGroupId: string | null;
 }
 
-/** "Primeiros passos": o critério provisório de comunidade ativa (troca na #372). */
+/** "Primeiros passos" (Pn-21d): a comunidade está ativa quando o checklist do dono fica completo (#372). */
 export interface FirstSteps {
   active: boolean;
   activeMembers: number;
-  threshold: number;
+  /** Passos do checklist feitos e o total (9 na academia, 8 nas outras). */
+  done: number;
+  total: number;
 }
 
 export interface DemoSession {
@@ -264,13 +266,12 @@ export function firstStepsSummary(
   title: string;
   sub: string;
 } {
-  const membros = fs.activeMembers === 1 ? '1 membro ativo' : `${fs.activeMembers} membros ativos`;
-  return fs.active
-    ? { title: `${groupName} está ativa`, sub: membros }
-    : {
-        title: `${groupName} está começando`,
-        sub: `${membros} · ativa a partir de ${fs.threshold}`,
-      };
+  const membros = fs.activeMembers === 1 ? '1 membro' : `${fs.activeMembers} membros`;
+  const passos = `${fs.done} de ${fs.total} passos feitos`;
+  return {
+    title: fs.active ? `${groupName} está ativa` : `${groupName} está começando`,
+    sub: `${membros} · ${passos}`,
+  };
 }
 
 // ---------------------------------------------------------------- sessão do app

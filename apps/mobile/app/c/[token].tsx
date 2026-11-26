@@ -8,7 +8,11 @@ import {
   ApiError,
   groupsApi,
   initialsOf,
+  isTeamInvite,
   onboardingPending,
+  TEAM_INVITE_ROLE,
+  teamInviteDeclinedText,
+  teamInviteHeadline,
   teamRoleLabel,
   usersApi,
   type InvitePreview,
@@ -20,7 +24,8 @@ import { clearPendingInvite, savePendingInvite } from '@/community/pending-invit
 import { AccountForm } from '@/components/auth/account-form';
 import { ConsentForm } from '@/components/community/consent-form';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Icon, LoadingState } from '@/components/ui';
+import { colors } from '@/theme/colors';
 import { brandColors } from '@/components/ui/ds-math';
 import { hexToHslTriplet } from '@fatia/design';
 import { vars } from 'nativewind';
@@ -97,7 +102,11 @@ export default function InviteScreen() {
     onSuccess: (r) => {
       void clearPendingInvite();
       void qc.invalidateQueries({ queryKey: ['community'] });
-      router.replace(`/community/${r.groupId}`);
+      // Equipe vai ao painel; o profissional passa antes pelo "O que você vê" (Onb-E2).
+      const role = preview.data?.role ?? 'MEMBER';
+      if (role === 'PROFESSIONAL') router.replace(`/org/${r.groupId}/what-you-see`);
+      else if (isTeamInvite(role)) router.replace(`/org/${r.groupId}`);
+      else router.replace(`/community/${r.groupId}`);
     },
     onError: (err) => {
       const groupId = alreadyMemberGroupId(err);
@@ -135,6 +144,17 @@ export default function InviteScreen() {
           ? accept.error.message
           : 'Não deu para aceitar agora. Tente de novo.'
       : null;
+  if (status === 'signedIn' && isTeamInvite(preview.data.role)) {
+    return (
+      <TeamInvite
+        token={token}
+        preview={preview.data}
+        pending={accept.isPending}
+        error={erro}
+        onAccept={() => accept.mutate({ scopes: [], statsOptIn: false })}
+      />
+    );
+  }
   const marca = brandColors(preview.data.group.brandColor);
   const textoCapa = preview.data.group.coverUrl ? '#ffffff' : marca.foreground;
 
@@ -210,6 +230,156 @@ export default function InviteScreen() {
             <AccountForm brandCta />
           </View>
         )}
+      </View>
+    </Screen>
+  );
+}
+
+/**
+ * Convite da equipe (#372, prancha Onb-E1) — equivalente do
+ * `TeamInviteAccept` da web: quem convidou, o papel e o que ele deixa fazer.
+ * "Recusar" avisa quem convidou e o dono; o convite recusado não volta a valer.
+ */
+function TeamInvite({
+  token,
+  preview,
+  pending,
+  error,
+  onAccept,
+}: {
+  token: string;
+  preview: InvitePreview;
+  pending: boolean;
+  error: string | null;
+  onAccept: () => void;
+}) {
+  const router = useRouter();
+  const decline = useMutation({ mutationFn: () => groupsApi.declineInvite(token) });
+  const papel = TEAM_INVITE_ROLE[preview.role];
+  const marca = brandColors(preview.group.brandColor);
+
+  if (decline.isSuccess) {
+    return (
+      <Screen title="Convite">
+        <View className="items-center gap-3 px-5 pt-16">
+          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <Icon name="x" size={22} color={colors.foreground} />
+          </View>
+          <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
+            Convite recusado
+          </Text>
+          <Text className="text-center text-sm text-muted-foreground">
+            {teamInviteDeclinedText(preview.invitedBy)}
+          </Text>
+          <Button variant="outline" onPress={() => router.replace('/')}>
+            Ir para o início
+          </Button>
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen
+      title="Convite"
+      footer={
+        <View
+          className="flex-1 gap-2"
+          style={vars({
+            '--brand': hexToHslTriplet(marca.background),
+            '--brand-foreground': hexToHslTriplet(marca.foreground),
+          })}
+        >
+          <Button
+            size="xl"
+            variant="brand"
+            loading={pending}
+            disabled={decline.isPending}
+            onPress={onAccept}
+          >
+            Aceitar e entrar
+          </Button>
+          <Button
+            variant="text"
+            disabled={pending}
+            loading={decline.isPending}
+            onPress={() => decline.mutate()}
+          >
+            Recusar
+          </Button>
+        </View>
+      }
+    >
+      <View className="gap-4 px-5 pb-4 pt-2">
+        <View
+          className="h-[170px] justify-end overflow-hidden rounded-card px-6 pb-5"
+          style={{ backgroundColor: marca.background }}
+        >
+          {preview.group.coverUrl ? (
+            <Image
+              source={{ uri: preview.group.coverUrl }}
+              accessibilityIgnoresInvertColors
+              className="absolute inset-0"
+              resizeMode="cover"
+            />
+          ) : (
+            // Sem capa, a cor escurecida: o logo na mesma cor precisa se destacar dela.
+            <View className="absolute inset-0 bg-black/35" />
+          )}
+          <View
+            className="h-[72px] w-[72px] items-center justify-center rounded-[22px] border-4 border-black/25"
+            style={{ backgroundColor: marca.background }}
+          >
+            <Text className="font-display text-2xl" style={{ color: marca.foreground }}>
+              {initialsOf(preview.group.name)}
+            </Text>
+          </View>
+        </View>
+        <View>
+          <Text className="text-sm text-muted-foreground">
+            {teamInviteHeadline(preview.invitedBy)}
+          </Text>
+          <Text accessibilityRole="header" className="font-display text-[30px] text-foreground">
+            {preview.group.name}
+          </Text>
+        </View>
+        {papel ? (
+          <>
+            <View className="flex-row items-center gap-3 rounded-card bg-card p-4">
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-info/15">
+                <Icon name="dumbbell" size={18} color={colors.info} />
+              </View>
+              <View className="flex-1">
+                <Text className="font-bold text-foreground">{papel.title}</Text>
+                <Text className="text-[13px] text-muted-foreground">{papel.sub}</Text>
+              </View>
+              <View className="rounded-full bg-info/15 px-2.5 py-1">
+                <Text className="text-[11px] font-bold uppercase text-info">Papel</Text>
+              </View>
+            </View>
+            <View className="rounded-card bg-card">
+              {papel.permissions.map((p, i) => (
+                <View
+                  key={p}
+                  className={`flex-row items-center gap-3 px-4 py-3.5 ${i ? 'border-t border-border' : ''}`}
+                >
+                  <Icon name="check" size={18} color={colors.primaryText} />
+                  <Text className="flex-1 text-[15px] text-foreground">{p}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+        {preview.emailBound ? (
+          <Text className="text-xs text-muted-foreground">
+            Este convite vale só para a conta do e-mail que o recebeu.
+          </Text>
+        ) : null}
+        {error || decline.isError ? (
+          <Text accessibilityRole="alert" className="text-sm text-destructive">
+            {error ?? 'Não deu para recusar agora. Tente de novo.'}
+          </Text>
+        ) : null}
       </View>
     </Screen>
   );

@@ -50,6 +50,11 @@ export const GROUP_PERMISSIONS = {
    */
   'group.sharing': [GroupRole.OWNER],
   /**
+   * O checklist de primeiros passos do dono (#372): ver, marcar à mão, fechar e
+   * repetir o guia. É o roteiro de quem responde pela comunidade, então só o dono.
+   */
+  'group.setup': [GroupRole.OWNER],
+  /**
    * Dar papel que recebe vínculo (`PROFESSIONAL`, `CREATOR`) — por convite,
    * link, aprovação ou troca de papel. Quem define a equipe é o dono (ADR 043):
    * sem isto, o admin abriria dado de aluno para uma conta dele (#404).
@@ -524,6 +529,8 @@ export const DEMO_BLOCKED_ACTIONS = [
   'group.transfer',
   'billing.manage',
   'integration.manage',
+  // A demo já vem pronta: não tem checklist de primeiros passos (#372).
+  'group.setup',
 ] as const satisfies readonly GroupAction[];
 
 export function blockedInDemo(action: GroupAction): boolean {

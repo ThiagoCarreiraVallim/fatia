@@ -70,6 +70,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `group.delete`         | sim   | não   | não          | não     | não       | não    |
 | `group.transfer`       | sim   | não   | não          | não     | não       | não    |
 | `group.sharing`        | sim   | não   | não          | não     | não       | não    |
+| `group.setup`          | sim   | não   | não          | não     | não       | não    |
 | `member.grant_reader`  | sim   | não   | não          | não     | não       | não    |
 | `invite.create`        | sim   | sim   | sim          | não     | não       | não    |
 | `invite.revoke`        | sim   | sim   | sim          | não     | não       | não    |
@@ -267,8 +268,8 @@ futura:
   A demo (`Group.isDemo`, uma por dona, `demoOwnerId`) tem a dona como `OWNER` e a Ana Exemplo
   (`User.demoGroupId`) como única aluna. Dentro dela, `actionsOf(role, isDemo)` tira
   `DEMO_BLOCKED_ACTIONS` — `invite.create`, `member.grant_reader`, `member.approve`,
-  `member.remove`, `member.role`, `member.ban`, `group.transfer`, `billing.manage` e
-  `integration.manage` — e `assertAllowedInDemo` recusa com 403 em toda porta que confere ação: o
+  `member.remove`, `member.role`, `member.ban`, `group.transfer`, `billing.manage`,
+  `integration.manage` e `group.setup` — e `assertAllowedInDemo` recusa com 403 em toda porta que confere ação: o
   `GroupRoleGuard` na rota e, nos services, `assertGroupAction` (papel e demo numa chamada só), que
   é o que usam o `requireContentRole`, o `assertAction` do `GroupService`, do `MembershipService` e
   do `TeamService`, o `assertCan` do `MemberAdminService`, o `assertManager` do `SeatPoolService`
@@ -280,7 +281,18 @@ futura:
   comunidade de verdade; a demo só tira.
   `GET/POST/DELETE /groups/demo` e `POST /groups/demo/session` são `@SelfOnly`: a demo é achada
   pela dona logada, nunca por id vindo da requisição. `GET /groups/:groupId/first-steps` é
-  `panel.overview`.
+  `panel.overview` (no `SetupController` desde a #372) e responde 404 na demo e para quem não é
+  a dona.
+- **Guia de primeiros passos (#372): `group.setup` é `OWNER` e só, e não vale na demo.**
+  `GET /groups/:groupId/setup`, `PUT .../setup/steps/:step` e `PUT .../setup/guide` leem e marcam
+  o checklist de 9 passos da comunidade. O passo vem da URL e só os que se marcam à mão passam
+  (`CATEGORIES`…`ACCESS`; "Nome e tipo" e "Marca" não); o corpo leva só `done`/`visible`, nunca
+  id. O service confere a associação viva antes (404 para quem é de fora) e o papel depois (403
+  para a equipe). Os passos feitos pela ação (convite, desafio, plano, equipamentos) saem do dado
+  da própria comunidade da URL. `GET /groups/slug-check?name=` é `@SelfOnly` com throttle: diz se
+  o endereço `fat.ia.br/<slug>` do nome está livre — o slug já é público (link de convite), então
+  não vaza nada. Criar com `kind` (academia ou personal) só vale na patrocinada. Recusar um
+  convite (`POST /groups/invites/:token/decline`) avisa quem convidou e o dono.
 - **Sessão de demo ("Abrir no app como Ana Exemplo", #412): só leitura e só o Hoje.** O token
   `fatia_demo_…` (30 min, guardado só o hash em `DemoSession`) autentica como a Ana apenas em rota
   `@DemoReadable` — `GET /dashboard/today` e `GET /users/me`, o que a web e o app pedem
@@ -311,6 +323,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.delete`         | não                  |
 | `group.transfer`       | não                  |
 | `group.sharing`        | não                  |
+| `group.setup`          | não                  |
 | `member.grant_reader`  | não                  |
 | `invite.create`        | não                  |
 | `invite.revoke`        | não                  |

@@ -160,13 +160,13 @@ describe('comunidade de demonstração (#412, Pn-21)', () => {
       'Nada do que você fizer aqui aparece na Academia Demo.',
     );
     expect(
-      firstStepsSummary({ active: true, activeMembers: 124, threshold: 5 }, 'Academia Demo'),
-    ).toEqual({ title: 'Academia Demo está ativa', sub: '124 membros ativos' });
+      firstStepsSummary({ active: true, activeMembers: 124, done: 9, total: 9 }, 'Academia Demo'),
+    ).toEqual({ title: 'Academia Demo está ativa', sub: '124 membros · 9 de 9 passos feitos' });
     expect(
-      firstStepsSummary({ active: false, activeMembers: 1, threshold: 5 }, 'Academia Demo'),
+      firstStepsSummary({ active: false, activeMembers: 1, done: 3, total: 8 }, 'Academia Demo'),
     ).toEqual({
       title: 'Academia Demo está começando',
-      sub: '1 membro ativo · ativa a partir de 5',
+      sub: '1 membro · 3 de 8 passos feitos',
     });
     expect(demoSessionPath('fatia_demo_abc')).toBe('/demo/fatia_demo_abc');
     const agora = new Date('2026-11-25T12:00:00.000Z');

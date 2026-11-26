@@ -18,6 +18,7 @@ import {
   type AutoPostKind,
   type CommunitySection,
   type GroupAiMode,
+  type GroupKind,
   type GroupMembership,
   type Prisma,
   type GroupVisibility,
@@ -35,6 +36,8 @@ import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { assertRequirableScopes, normalizarEscopos } from './consent-scopes';
+import { communitySlug, stepsFromSettings } from './community-setup';
+import { markSetupSteps } from './community-setup.service';
 import { findGroupByEntryCode, groupProOffer } from './entry-code';
 import {
   actionsOf,
@@ -64,6 +67,8 @@ const STATUS_VIVOS = [MembershipStatus.INVITED, MembershipStatus.ACTIVE] as cons
 
 export interface CreateGroupInput {
   type: GroupType;
+  /** Academia ou personal/nutri (#372). Só na patrocinada. */
+  kind?: GroupKind;
   name: string;
   /** Opcional: sem slug, deriva do nome com sufixo aleatório. */
   slug?: string;
@@ -414,12 +419,17 @@ export class GroupService {
    */
   async create(ownerId: string, input: CreateGroupInput): Promise<Group> {
     assertRequirableScopes(input.requiredSharingScopes);
-    const slug = input.slug ?? this.derivarSlug(input.name);
+    // "Influencer ou grupo" é a social: academia × personal só existe na patrocinada.
+    if (input.kind && input.type !== GroupType.SPONSORED) {
+      throw new BadRequestException('Academia ou personal só na comunidade patrocinada');
+    }
+    const slug = input.slug ?? this.deriveSlug(input.name);
 
     try {
       return await this.prisma.group.create({
         data: {
           type: input.type,
+          kind: input.kind ?? null,
           name: input.name,
           slug,
           ownerId,
@@ -605,6 +615,8 @@ export class GroupService {
       }),
       ...trilha,
     ])) as [Group, ...unknown[]];
+    // Salvar marca, categorias ou acesso conta como o passo do checklist (#372).
+    await markSetupSteps(this.prisma, groupId, stepsFromSettings({ ...input, brandColor: cor }));
     return grupo;
   }
 
@@ -800,15 +812,7 @@ export class GroupService {
    * O sufixo não é enfeite: sem ele "academia central" colide entre cidades
    * diferentes e o segundo dono recebe um erro que não sabe resolver.
    */
-  private derivarSlug(name: string): string {
-    const base = name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40);
-
-    return `${base || 'grupo'}-${randomBytes(4).toString('hex')}`;
+  private deriveSlug(name: string): string {
+    return `${communitySlug(name)}-${randomBytes(4).toString('hex')}`;
   }
 }

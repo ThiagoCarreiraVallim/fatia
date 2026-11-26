@@ -114,6 +114,8 @@ export interface ChallengeInput {
   stepsGoal?: number | null;
   dailyCap?: number | null;
   allowedStepSources?: StepSource[] | null;
+  /** "Avisar todos por push" (#372, Onb-C5). Ausente = avisa, como sempre foi. Só na criação. */
+  notify?: boolean;
 }
 
 /** As regras do tipo, como a tela mostra (Regras, Pn-13). Nulo onde não se aplica. */
@@ -618,10 +620,13 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       title: criado.title,
       meta: null,
     });
-    const avisar = await this.prisma.groupMembership.findMany({
-      where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },
-      select: { userId: true, group: { select: { name: true } } },
-    });
+    const avisar =
+      input.notify === false
+        ? []
+        : await this.prisma.groupMembership.findMany({
+            where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },
+            select: { userId: true, group: { select: { name: true } } },
+          });
     if (avisar.length > 0) {
       this.notifications.notify(
         avisar.map((m) => m.userId),

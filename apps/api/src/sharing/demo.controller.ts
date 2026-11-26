@@ -1,22 +1,13 @@
-import {
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
-import { RequireGroupAction, SelfOnly } from './decorators/require-group-action.decorator';
+import { SelfOnly } from './decorators/require-group-action.decorator';
 import { DemoService } from './demo.service';
-import { GroupRoleGuard } from './guards/group-role.guard';
 
 /**
- * A comunidade de demonstração e os primeiros passos (#412, Pn-21 a Pn-21d).
+ * A comunidade de demonstração (#412, Pn-21 a Pn-21c). Os primeiros passos
+ * (Pn-21d) estão no `SetupController` (#372).
  *
  * A demo é **da pessoa**, não de uma comunidade: as rotas de `groups/demo`
  * olham só o usuário autenticado (uma demo por dona), e nenhum id chega pelo
@@ -59,15 +50,5 @@ export class DemoController {
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   openSession(@CurrentUser() user: CurrentUserPayload) {
     return this.demo.openSession(user.id);
-  }
-
-  @Get(':groupId/first-steps')
-  @UseGuards(GroupRoleGuard)
-  @RequireGroupAction('panel.overview')
-  firstSteps(
-    @CurrentUser() user: CurrentUserPayload,
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-  ) {
-    return this.demo.firstSteps(user.id, groupId);
   }
 }

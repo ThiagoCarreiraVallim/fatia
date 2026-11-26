@@ -5,7 +5,9 @@ import { ReportService } from './report.service';
 import { ReportEmailService } from './report-email.service';
 import { Module } from '@nestjs/common';
 import { DemoSessionModule } from '../auth/demo-session.module';
+import { CommunitySetupService } from './community-setup.service';
 import { DemoController } from './demo.controller';
+import { SetupController } from './setup.controller';
 import { DemoService } from './demo.service';
 import { CommonModule } from '../common/common.module';
 import { GoalsModule } from '../goals/goals.module';
@@ -150,6 +152,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     DemoSessionModule,
   ],
   controllers: [
+    SetupController,
     DemoController,
     SharingController,
     ConsentController,
@@ -175,6 +178,7 @@ import { DeclinePlanOfferTool } from './mcp/decline-plan-offer.tool';
     ReportController,
   ],
   providers: [
+    CommunitySetupService,
     ProfessionalAccessService,
     ProfessionalLinkService,
     StudentViewService,
