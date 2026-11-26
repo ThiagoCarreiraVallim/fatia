@@ -393,6 +393,11 @@ export const groupsApi = {
     }),
   previewInvite: (token: string) =>
     apiFetch<InvitePreview>(`${base}/invites/${encodeURIComponent(token)}`),
+  /** Recusar o convite (#372, Onb-E1): quem convidou e o dono ficam sabendo. */
+  declineInvite: (token: string) =>
+    apiFetch<{ declined: true }>(`${base}/invites/${encodeURIComponent(token)}/decline`, {
+      method: 'POST',
+    }),
   acceptInvite: (token: string, consent: JoinConsent) =>
     apiFetch<MembershipChange>(`${base}/invites/${encodeURIComponent(token)}/accept`, {
       method: 'POST',

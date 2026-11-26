@@ -20,7 +20,7 @@
 ## Checklist
 
 - [x] API: migration, setup service/controller, kind na criação, slug-check, notify no desafio, auto-marcação, first-steps
-- [ ] api-client: community-setup.ts
+- [x] api-client: community-setup.ts (vermelho: os 7 testes contra stub, cada um na própria asserção)
 - [ ] Web: C1/C2, checklist no Início, Repetir o guia, Pn-21d, C5, cartaz, E1, E2, E3
 - [ ] Mobile: C1/C2, C3, C4, C5, E1, E2, Repetir o guia
 - [ ] Docs: PERMISSIONS, DATA_RETENTION, MOBILE_PARITY, REDESIGN_PROGRESS

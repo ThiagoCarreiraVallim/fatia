@@ -67,9 +67,16 @@ export interface PermissionTable {
   rows: { key: string; label: string; roles: GroupRole[] }[];
 }
 
+/** O subtipo da patrocinada (#372): academia ou personal/nutri. */
+export type GroupKind = 'GYM' | 'COACH';
+
 export interface CreateGroupInput {
   type: GroupType;
+  /** Academia ou personal/nutri (#372). Só na patrocinada. */
+  kind?: GroupKind;
   name: string;
+  /** O endereço `fat.ia.br/<slug>` (de `setupApi.slugCheck`). Ausente = derivado com sufixo. */
+  slug?: string;
   description?: string;
   joinPolicy?: JoinPolicy;
   visibility?: GroupVisibility;

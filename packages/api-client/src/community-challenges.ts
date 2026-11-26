@@ -224,6 +224,8 @@ export interface ChallengeInput {
   stepsGoal?: number;
   dailyCap?: number;
   allowedStepSources?: StepSource[];
+  /** "Avisar todos por push" (#372). Ausente = avisa. Só na criação. */
+  notify?: boolean;
 }
 
 export type CheckinBlock =
