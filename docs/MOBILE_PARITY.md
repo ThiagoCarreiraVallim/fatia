@@ -284,7 +284,8 @@ viram pílulas (`Choice`). Diferenças de propósito:
 - **Comunidade de demonstração (#412):** criar, entrar, apagar e o QR de "Abrir no app como Ana
   Exemplo" ficam no painel da web; a seção `demo` está em `MOBILE_MISSING_SECTIONS` até o painel no
   celular (#414). O app abre o link (`fatia://demo/<token>` ou, com `APP_LINKS_HOST`,
-  `https://<app>/demo/<token>`, `pathPrefix: '/demo/'` no Android) e mostra o Hoje da Ana com os
+  `https://<app>/demo/<token>`: `pathPrefix: '/demo/'` no Android e `/demo/*` no
+  `apple-app-site-association` do iPhone) e mostra o Hoje da Ana com os
   mesmos cartões, sem toque: os links dos cartões levariam à conta de quem está logado. O pedido vai
   direto à API com o token como Bearer (`demoSessionRequest`, só `GET`, só as rotas do Hoje), nunca
   pelo transporte do app, que carrega a sessão do Logto.

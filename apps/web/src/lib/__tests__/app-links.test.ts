@@ -8,10 +8,16 @@ describe('links universais do convite', () => {
     expect(androidAssetLinks(' , ')).toBeNull();
   });
 
-  it('a Apple recebe o app e só o caminho do convite', () => {
+  it('a Apple recebe o app e só os caminhos do convite e da demo (#412)', () => {
     expect(appleAppSiteAssociation('ABCDE12345')).toEqual({
       applinks: {
-        details: [{ appIDs: ['ABCDE12345.br.ia.fat.app'], components: [{ '/': '/c/*' }] }],
+        details: [
+          {
+            appIDs: ['ABCDE12345.br.ia.fat.app'],
+            // "Abrir no app como Ana Exemplo": sem `/demo/*` o QR abre a web no iPhone.
+            components: [{ '/': '/c/*' }, { '/': '/demo/*' }],
+          },
+        ],
       },
     });
   });
