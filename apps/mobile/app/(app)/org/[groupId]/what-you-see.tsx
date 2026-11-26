@@ -36,7 +36,11 @@ export default function WhatYouSeeScreen() {
   return (
     <Screen
       footer={
-        <Button size="xl" onPress={() => router.replace(panelHref(groupId) as never)}>
+        <Button
+          size="xl"
+          className="flex-1"
+          onPress={() => router.replace(panelHref(groupId) as never)}
+        >
           Entendi
         </Button>
       }
@@ -86,7 +90,7 @@ export default function WhatYouSeeScreen() {
                           key={c.label}
                           className={cn(
                             'rounded-full px-3 py-1',
-                            c.shared ? 'bg-primary-soft' : 'bg-muted',
+                            c.shared ? 'bg-primary/15' : 'bg-muted',
                           )}
                         >
                           <Text

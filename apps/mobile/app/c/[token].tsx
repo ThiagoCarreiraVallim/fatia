@@ -284,7 +284,7 @@ function TeamInvite({
       title="Convite"
       footer={
         <View
-          className="gap-2"
+          className="flex-1 gap-2"
           style={vars({
             '--brand': hexToHslTriplet(marca.background),
             '--brand-foreground': hexToHslTriplet(marca.foreground),
@@ -322,7 +322,10 @@ function TeamInvite({
               className="absolute inset-0"
               resizeMode="cover"
             />
-          ) : null}
+          ) : (
+            // Sem capa, a cor escurecida: o logo na mesma cor precisa se destacar dela.
+            <View className="absolute inset-0 bg-black/35" />
+          )}
           <View
             className="h-[72px] w-[72px] items-center justify-center rounded-[22px] border-4 border-black/25"
             style={{ backgroundColor: marca.background }}

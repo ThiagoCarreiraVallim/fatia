@@ -73,6 +73,7 @@ export default function NewCommunityScreen() {
       footer={
         <Button
           size="xl"
+          className="flex-1"
           disabled={!canCreateCommunity(kind, name)}
           loading={create.isPending}
           onPress={() => create.mutate()}
@@ -102,10 +103,10 @@ export default function NewCommunityScreen() {
                 onPress={() => setKind(o.key)}
                 className={cn(
                   'flex-row items-center gap-4 rounded-card bg-card p-4 active:opacity-80',
-                  on && 'border-2 border-primary bg-primary-soft',
+                  on && 'border-2 border-primary bg-primary/15',
                 )}
               >
-                <View className="h-12 w-12 items-center justify-center rounded-[14px] bg-primary-soft">
+                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
                   <Icon name={o.icon} size={22} color={colors.primaryText} />
                 </View>
                 <View className="flex-1">

@@ -106,6 +106,7 @@ export default function InviteMembersScreen() {
         <Button
           variant="secondary"
           size="xl"
+          className="flex-1"
           onPress={() => router.replace(panelHref(groupId) as never)}
         >
           Voltar ao checklist

@@ -83,13 +83,13 @@ export default function FirstChallengeScreen() {
       <Screen
         title="Primeiro desafio"
         footer={
-          <Button size="xl" onPress={voltar}>
+          <Button size="xl" className="flex-1" onPress={voltar}>
             Voltar ao checklist
           </Button>
         }
       >
         <View className="items-center gap-3 px-5 pt-16">
-          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary-soft">
+          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
             <Icon name="trophy" size={24} color={colors.primaryText} />
           </View>
           <Text accessibilityRole="header" className="font-display text-2xl text-foreground">
@@ -107,7 +107,7 @@ export default function FirstChallengeScreen() {
     <Screen
       title="Primeiro desafio"
       footer={
-        <View className="gap-2">
+        <View className="flex-1 gap-2">
           <Button
             size="xl"
             disabled={!startDate}

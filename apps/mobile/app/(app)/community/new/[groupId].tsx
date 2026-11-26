@@ -95,6 +95,7 @@ function BrandStep({ g }: { g: MyGroup }) {
     <Screen
       footer={
         <View
+          className="flex-1"
           style={vars({
             '--brand': hexToHslTriplet(bg),
             '--brand-foreground': hexToHslTriplet(ink),
