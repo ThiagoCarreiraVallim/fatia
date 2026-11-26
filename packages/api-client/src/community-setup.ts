@@ -467,6 +467,12 @@ export function inviteModeTitle(mode: InviteMode, qrName: string): string {
   return mode === 'link' ? 'Link da bio' : 'Lista de e-mails';
 }
 
+/** O cartaz A4 do QR (`/cartaz/<token>` na web), a partir do link do convite. */
+export function invitePosterPath(inviteUrl: string): string | null {
+  const m = /\/c\/([A-Za-z0-9_-]{43})(?:[/?#]|$)/.exec(inviteUrl);
+  return m ? `/cartaz/${m[1]}` : null;
+}
+
 /** E-mails de uma colagem (um por linha, ou a coluna da planilha), sem repetir. */
 export function emailsFromPaste(text: string): string[] {
   const achados = text.match(/[^\s,;<>"']+@[^\s,;<>"']+\.[^\s,;<>"']+/g) ?? [];

@@ -276,6 +276,8 @@ const FOCUS_ROUTES = [
   '/you/delete',
   '/you/email',
   '/community/new',
+  // #372: a Marca (passo 2 de criar) tem "Salvar e abrir o painel" embaixo.
+  '/community/new/:id',
   // Al-T19: o Novo plano fecha no X e tem o "Criar plano" embaixo, sem a barra.
   '/workout/plans/new',
   // Al-T12: o Bloco de treino fecha no X e tem o "Começar bloco" embaixo, sem a barra.
@@ -453,6 +455,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/community', title: 'Comunidade', parent: null },
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
+  { pattern: '/community/new/:id', title: 'Marca', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
   { pattern: '/community/:id/content', title: 'Conteúdo', parent: '/community/:id' },
   { pattern: '/community/:id/for-you', title: 'Para você', parent: '/community/:id' },
@@ -500,6 +503,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id', title: 'Painel', parent: '/community/:id' },
   { pattern: '/org/:id/review', title: 'Para revisar', parent: '/org/:id' },
   { pattern: '/org/:id/review/at-risk', title: 'Em risco', parent: '/org/:id' },
+  { pattern: '/org/:id/review/what-you-see', title: 'O que você vê', parent: '/org/:id/review' },
   {
     pattern: '/org/:id/review/sessions/:sessionId',
     title: 'Sessão',
@@ -537,6 +541,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/exercises', title: 'Exercícios', parent: '/org/:id' },
   { pattern: '/org/:id/exercises/:exerciseId', title: 'Exercício', parent: '/org/:id/exercises' },
   { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
+  { pattern: '/org/:id/challenges/first', title: 'Primeiro desafio', parent: '/org/:id' },
   { pattern: '/org/:id/moderation', title: 'Moderação', parent: '/org/:id' },
   { pattern: '/org/:id/announcements', title: 'Comunicados e enquetes', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },

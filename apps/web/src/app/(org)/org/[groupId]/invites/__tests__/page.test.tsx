@@ -223,6 +223,25 @@ describe('painel › convites (Pn-06)', () => {
       'href',
       expect.stringContaining('https://wa.me/?text='),
     );
+    // Link de teste sem token no formato: sem cartaz.
+    expect(within(p).queryByRole('link', { name: /Cartaz A4/ })).toBeNull();
+  });
+
+  it('QR com token: "Cartaz A4" abre o cartaz para imprimir (#372, Onb-C4)', async () => {
+    const tok = 'q'.repeat(43);
+    vi.mocked(orgApi.createInvite).mockResolvedValue({
+      invite: base({ id: 'i9', label: 'Recepção', origin: 'QR' }),
+      url: `http://localhost:3030/c/${tok}`,
+      emailSent: false,
+    });
+    abrir();
+    await screen.findByText('Recepção');
+    await userEvent.click(screen.getByRole('button', { name: 'Novo link' }));
+    const p = painel();
+    await userEvent.click(within(p).getByRole('button', { name: 'Criar link' }));
+    const cartaz = await within(p).findByRole('link', { name: /Cartaz A4/ });
+    expect(cartaz).toHaveAttribute('href', `/cartaz/${tok}`);
+    expect(cartaz).toHaveAttribute('target', '_blank');
   });
 
   it('e-mail: lote com prévia, sem "sem prazo", com acompanhamento e assento', async () => {

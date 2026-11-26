@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Download, Link2, Upload, Users } from 'lucide-react';
+import { Copy, Download, Link2, Printer, Upload, Users } from 'lucide-react';
 import {
   ApiError,
   accompanyOptions,
@@ -11,6 +11,7 @@ import {
   batchSkipLabel,
   grantableRolesFor,
   groupCan,
+  invitePosterPath,
   inviteValidityNote,
   orgApi,
   parseInviteEmails,
@@ -337,6 +338,13 @@ export function InvitePanel({
               >
                 <Download size={14} aria-hidden /> Baixar QR
               </Button>
+              {invitePosterPath(criado.url) && (
+                <Button size="sm" variant="outline" className="gap-1" asChild>
+                  <a href={invitePosterPath(criado.url)!} target="_blank" rel="noopener noreferrer">
+                    <Printer size={14} aria-hidden /> Cartaz A4
+                  </a>
+                </Button>
+              )}
               <Button size="sm" variant="outline" asChild>
                 <a href={whatsappHref(mensagem)} target="_blank" rel="noopener noreferrer">
                   Enviar no WhatsApp

@@ -7,6 +7,7 @@ import {
   CHALLENGE_TEMPLATES,
   communitySlug,
   emailsFromPaste,
+  invitePosterPath,
   inviteModeStat,
   inviteModeTitle,
   mondayLabel,
@@ -175,6 +176,9 @@ describe('onboarding de quem cria a comunidade (#372)', () => {
     expect(inviteModeStat(origins, 'link', '')).toBeNull();
     expect(inviteModeStat(origins, 'list', '')).toBeNull();
     expect(inviteModeTitle('qr', 'recepção')).toBe('QR · recepção');
+    const tok = 'a'.repeat(43);
+    expect(invitePosterPath(`https://fatia.app/c/${tok}`)).toBe(`/cartaz/${tok}`);
+    expect(invitePosterPath('https://fatia.app/qualquer')).toBeNull();
     expect(emailsFromPaste('ana@email.com\nBia@Email.com; ana@email.com, nada\n')).toEqual([
       'ana@email.com',
       'bia@email.com',
