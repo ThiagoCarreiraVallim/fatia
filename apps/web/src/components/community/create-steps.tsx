@@ -10,7 +10,7 @@ export function CreateSteps({ step }: { step: 1 | 2 }) {
       aria-valuemax={2}
       aria-valuenow={step}
       aria-valuetext={`Passo ${step} de 2`}
-      className="flex flex-1 gap-1.5"
+      className="flex w-full gap-1.5"
     >
       {[1, 2].map((n) => (
         <span

@@ -41,7 +41,7 @@ export default async function PosterPage({ params }: Props) {
         <h1 className="font-display text-[clamp(28px,6vw,56px)] font-extrabold leading-tight">
           {preview.group.name} no Fatia
         </h1>
-        <div className="w-[62%] rounded-[8%] bg-white p-[5%]">
+        <div className="w-[62%] rounded-3xl bg-white p-[3%] [&>svg]:h-auto [&>svg]:w-full">
           <InviteQr url={url} size={512} />
         </div>
         <p className="font-display text-[clamp(20px,4vw,36px)] font-bold">

@@ -147,7 +147,7 @@ export function SetupHome({ g, setup }: { g: MyGroup; setup: CommunitySetup }) {
           </div>
         </div>
 
-        <ul className="mt-5 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-5 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
           {setup.items.map((i) => (
             <SetupItem
               key={i.key}
@@ -272,7 +272,7 @@ function DemoInvite() {
       >
         <Icon name="eye" size={18} />
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 basis-56">
         <b className="block">Ver a comunidade de demonstração</b>
         <span className="text-[13px] text-muted-foreground">
           Uma academia pronta, com membros, planos e desafio de exemplo. Nada do que você fizer lá

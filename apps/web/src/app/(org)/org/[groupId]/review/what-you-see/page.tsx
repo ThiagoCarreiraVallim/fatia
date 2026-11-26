@@ -38,13 +38,6 @@ export default function WhatYouSeePage() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-5">
-      <Link
-        href={panelHref(g.id, 'review')}
-        aria-label="Voltar para Para revisar"
-        className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-card hover:bg-muted md:hidden"
-      >
-        <Icon name="chevL" size={20} />
-      </Link>
       <h1 className="font-display text-[32px] font-extrabold leading-tight">
         Você vê só o que cada aluno liberou
       </h1>

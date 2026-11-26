@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, type RefObject } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -98,16 +97,7 @@ function BrandStep({ g }: { g: MyGroup }) {
       style={style}
       className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-xl flex-col gap-5 px-4 pb-6 pt-4"
     >
-      <div className="flex items-center gap-3">
-        <Link
-          href="/community"
-          aria-label="Sair para Minhas comunidades"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-card text-foreground hover:bg-muted"
-        >
-          <Icon name="chevL" size={20} />
-        </Link>
-        <CreateSteps step={2} />
-      </div>
+      <CreateSteps step={2} />
       <h1 className="font-display text-[32px] font-extrabold leading-tight">
         A cara da sua comunidade
       </h1>
@@ -232,13 +222,13 @@ function Preview({ g }: { g: MyGroup }) {
           {coverUp.enviando ? 'Enviando…' : 'Capa'}
         </button>
       </div>
-      <div className="flex items-end gap-3 px-4 pb-4">
+      <div className="relative z-10 -mt-8 flex items-start gap-3 px-4 pb-4">
         <button
           type="button"
           aria-label={g.avatarUrl ? 'Trocar o logo' : 'Escolher o logo'}
           onClick={avatarUp.pick}
           disabled={avatarUp.enviando || avatar.isPending}
-          className="-mt-8 shrink-0 rounded-[18px] ring-4 ring-card focus-visible:outline-none focus-visible:ring-ring"
+          className="shrink-0 rounded-[18px] ring-4 ring-card focus-visible:outline-none focus-visible:ring-ring"
         >
           {g.avatarUrl ? (
             <GroupAvatar name={g.name} url={g.avatarUrl} size={60} className="rounded-[16px]" />
@@ -248,7 +238,7 @@ function Preview({ g }: { g: MyGroup }) {
             </span>
           )}
         </button>
-        <div className="min-w-0 flex-1 pt-2">
+        <div className="min-w-0 flex-1 pt-9">
           <b className="block truncate text-base">{g.name}</b>
           <div aria-hidden className="mt-1 flex gap-4 text-[13.5px]">
             <span className="border-b-2 border-brand pb-1 font-semibold">Mural</span>

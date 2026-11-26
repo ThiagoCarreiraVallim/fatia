@@ -147,11 +147,11 @@ function ReviewTips() {
       aria-label={label}
       className="flex flex-wrap items-center gap-3 rounded-2xl bg-primary-soft p-4 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.5)]"
     >
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 basis-64">
         <b className="block text-[14.5px]">{tip.title}</b>
         <span className="text-[13px] text-muted-foreground">{tip.body}</span>
       </span>
-      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <span className="ml-auto text-xs font-semibold text-muted-foreground">{label}</span>
       <Button
         size="sm"
         onClick={() => {
