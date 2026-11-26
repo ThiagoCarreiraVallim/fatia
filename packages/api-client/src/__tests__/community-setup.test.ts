@@ -15,6 +15,10 @@ import {
   nextSetupItem,
   setupApi,
   setupItemAction,
+  setupItemHref,
+  setupKicker,
+  setupStats,
+  whatYouSeeNotes,
   setupItemSub,
   setupPercent,
   sharedCategories,
@@ -189,5 +193,72 @@ describe('onboarding de quem cria a comunidade (#372)', () => {
       { label: 'água e passos', shared: true },
       { label: 'metas · bloqueado', shared: false },
     ]);
+  });
+
+  it('painel (Onb-Criador-Web, Pn-21d): cada item leva à tela dele', () => {
+    expect(setupItemHref('g1', 'CREATE')).toBe('/org/g1/settings');
+    expect(setupItemHref('g1', 'BRAND')).toBe('/community/new/g1');
+    expect(setupItemHref('g1', 'TEAM')).toBe('/org/g1/team');
+    expect(setupItemHref('g1', 'MEMBERS')).toBe('/org/g1/invites');
+    expect(setupItemHref('g1', 'CHALLENGE')).toBe('/org/g1/challenges/first');
+    expect(setupItemHref('g1', 'PLAN')).toBe('/org/g1/content');
+    expect(setupItemHref('g1', 'EQUIPMENT')).toBe('/org/g1/exercises');
+    expect(setupItemHref('g1', 'ACCESS')).toBe('/org/g1/settings');
+    const hoje = new Date(2026, 10, 25, 15);
+    expect(setupKicker(new Date(2026, 10, 25, 9).toISOString(), hoje)).toBe(
+      'Comunidade criada hoje',
+    );
+    expect(setupKicker(new Date(2026, 10, 24, 23).toISOString(), hoje)).toBe(
+      'Comunidade criada ontem',
+    );
+    expect(setupKicker(new Date(2026, 10, 20).toISOString(), hoje)).toBe(
+      'Comunidade criada há 5 dias',
+    );
+    expect(setupKicker(new Date(2026, 8, 1).toISOString(), hoje)).toBe('Guia de primeiros passos');
+  });
+
+  it('os 4 números: vazios com a regra dos 5, cheios na comunidade ativa', () => {
+    const agora = new Date(2026, 10, 25);
+    expect(
+      setupStats({
+        activeMembers: 2,
+        active7d: { value: null, percent: null },
+        review: 0,
+        risk: 0,
+        riskDays: 10,
+        first: true,
+        now: agora,
+      }),
+    ).toEqual([
+      { key: 'active', label: 'Ativos em 7 dias', value: '—', sub: 'aparece com 5 membros' },
+      { key: 'review', label: 'Para revisar', value: '0', sub: 'treinos dos membros caem aqui' },
+      { key: 'risk', label: 'Em risco', value: '0', sub: 'quem sumir aparece aqui' },
+      { key: 'report', label: 'Relatório', value: '1º dez', sub: 'primeiro envio' },
+    ]);
+    expect(
+      setupStats({
+        activeMembers: 124,
+        active7d: { value: 97, percent: 78 },
+        review: 6,
+        risk: 9,
+        riskDays: 10,
+        first: false,
+        now: agora,
+      }).map((c) => [c.value, c.sub]),
+    ).toEqual([
+      ['78%', '97 de quem compartilha estatísticas'],
+      ['6', 'esperando você'],
+      ['9', 'sem registro há 10 dias'],
+      ['1º dez', 'próximo envio'],
+    ]);
+  });
+
+  it('o que você vê: o registro do acesso leva o nome de quem abre', () => {
+    expect(whatYouSeeNotes('Helena Souza')[0]).toEqual({
+      icon: 'eye',
+      title: 'Cada acesso fica registrado',
+      body: 'O aluno vê "Helena abriu sua ficha · 09:12"',
+    });
+    expect(whatYouSeeNotes(null)[0]!.body).toBe('O aluno vê "Você abriu sua ficha · 09:12"');
   });
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   BadgeDollarSign,
@@ -39,6 +39,7 @@ import {
   User,
   Users,
   type LucideIcon,
+  Repeat,
 } from 'lucide-react';
 import {
   activePanelSection,
@@ -79,6 +80,7 @@ import { orgKeys, panelNewsKey } from '@/components/community/query-keys';
 import { AnnouncementEditor } from './announcement-editor';
 import { DemoBanner, useFirstSteps } from './demo-panel';
 import { PanelSearch } from './panel-search';
+import { useRepeatGuide, useSetup } from './setup-guide';
 import { readNavPrefs, writeNavPrefs, type NavPrefs } from './panel-prefs';
 import { SidePanel, SidePanelProvider, useSidePanel } from './side-panel';
 
@@ -198,6 +200,13 @@ export function OrgShell({ children }: { children: ReactNode }) {
 
 function PanelFrame({ g, children }: { g: MyGroup; children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  // Os passos 1 e 2 bloqueiam (#372): sem a marca salva, o painel abre a Marca.
+  const setup = useSetup(g);
+  const brandPending = Boolean(setup.data?.visible && setup.data.brandPending);
+  useEffect(() => {
+    if (brandPending) router.replace(`/community/new/${g.id}`);
+  }, [brandPending, g.id, router]);
   const painel = useSidePanel();
   const [prefs, setPrefs] = useState<NavPrefs>(() => readNavPrefs(g.membershipId));
   const [busca, setBusca] = useState(false);
@@ -520,7 +529,7 @@ function Sidebar({
         icon={Eye}
         collapsed={recolhido}
       />
-      <UserMenu role={g.role} collapsed={recolhido} />
+      <UserMenu g={g} collapsed={recolhido} />
     </aside>
   );
 }
@@ -544,7 +553,10 @@ function usePanelNewsUnread(): number | null {
   return news.data?.unreadCount || null;
 }
 
-function UserMenu({ role, collapsed }: { role: MyGroup['role']; collapsed: boolean }) {
+function UserMenu({ g, collapsed }: { g: MyGroup; collapsed: boolean }) {
+  const role = g.role;
+  // "Repetir o guia" (#372): o checklist volta ao Início, mesmo completo.
+  const repeatGuide = useRepeatGuide(g.id);
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
   const nome = me.data?.name ?? '';
   const iniciais =
@@ -592,6 +604,11 @@ function UserMenu({ role, collapsed }: { role: MyGroup['role']; collapsed: boole
             <User aria-hidden className="h-4 w-4" /> Meu perfil
           </Link>
         </DropdownMenuItem>
+        {role === 'OWNER' && !g.isDemo && (
+          <DropdownMenuItem onSelect={repeatGuide}>
+            <Repeat aria-hidden className="h-4 w-4" /> Repetir o guia
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void sair()}>
           <LogOut aria-hidden className="h-4 w-4" /> Sair

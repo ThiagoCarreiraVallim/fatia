@@ -6,6 +6,7 @@ import type { GroupRole, GroupType } from './community';
 import type { InviteOrigins, OriginRow } from './month-report';
 import { SHARE_SCOPE_LABEL, type ShareScope } from './sharing';
 import { apiFetch } from './http';
+import { panelHref, type PanelSection } from './community-panel';
 
 /**
  * Onboarding de quem cria a comunidade e do profissional convidado (#372,
@@ -246,6 +247,89 @@ export function nextReportLabel(now: Date = new Date()): string {
   return `1º ${nome}`;
 }
 
+const SETUP_ITEM_SECTION: Record<Exclude<SetupItemKey, 'BRAND' | 'CHALLENGE'>, PanelSection> = {
+  CREATE: 'settings',
+  CATEGORIES: 'settings',
+  TEAM: 'team',
+  MEMBERS: 'invites',
+  PLAN: 'content',
+  EQUIPMENT: 'exercises',
+  ACCESS: 'settings',
+};
+
+/** Para onde o "Fazer" do item leva (a marca volta ao passo 2; o desafio, ao modelo). */
+export function setupItemHref(groupId: string, key: SetupItemKey): string {
+  if (key === 'BRAND') return `/community/new/${groupId}`;
+  if (key === 'CHALLENGE') return `${panelHref(groupId, 'challenges')}/first`;
+  return panelHref(groupId, SETUP_ITEM_SECTION[key]);
+}
+
+/** O sobretítulo do guia no Início: "Comunidade criada hoje"; guia repetido depois de 30 dias, genérico. */
+export function setupKicker(createdAt: string, now: Date = new Date()): string {
+  const c = new Date(createdAt);
+  const dia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dias = Math.round((dia(now) - dia(c)) / 86_400_000);
+  if (dias <= 0) return 'Comunidade criada hoje';
+  if (dias === 1) return 'Comunidade criada ontem';
+  if (dias <= 30) return `Comunidade criada há ${dias} dias`;
+  return 'Guia de primeiros passos';
+}
+
+export interface SetupStat {
+  key: 'active' | 'review' | 'risk' | 'report';
+  label: string;
+  value: string;
+  sub: string;
+}
+
+/**
+ * Os 4 cartões do Início (Onb-Criador-Web vazios, Pn-21d cheios). Ativos em 7
+ * dias segue a regra dos 5: abaixo disso (ou sem o número, que a API esconde),
+ * "aparece com 5 membros".
+ */
+export function setupStats(input: {
+  activeMembers: number;
+  active7d: { value: number | null; percent: number | null } | null;
+  review: number | null;
+  risk: number | null;
+  riskDays: number | null;
+  /** O relatório ainda não saiu nenhuma vez. */
+  first: boolean;
+  now?: Date;
+}): SetupStat[] {
+  const a = input.active7d;
+  const ativos =
+    input.activeMembers >= INVITE_STAT_MIN && a && a.percent !== null && a.value !== null
+      ? { value: `${a.percent}%`, sub: `${a.value} de quem compartilha estatísticas` }
+      : { value: '—', sub: 'aparece com 5 membros' };
+  const review = input.review ?? 0;
+  const risk = input.risk ?? 0;
+  return [
+    { key: 'active', label: 'Ativos em 7 dias', ...ativos },
+    {
+      key: 'review',
+      label: 'Para revisar',
+      value: String(review),
+      sub: review ? 'esperando você' : 'treinos dos membros caem aqui',
+    },
+    {
+      key: 'risk',
+      label: 'Em risco',
+      value: String(risk),
+      sub:
+        risk && input.riskDays
+          ? `sem registro há ${input.riskDays} dias`
+          : 'quem sumir aparece aqui',
+    },
+    {
+      key: 'report',
+      label: 'Relatório',
+      value: nextReportLabel(input.now),
+      sub: input.first ? 'primeiro envio' : 'próximo envio',
+    },
+  ];
+}
+
 // ---------------------------------------------------------------- Onb-C5
 
 export interface ChallengeTemplate {
@@ -457,12 +541,16 @@ export function sharedCategories(
   });
 }
 
-export const WHAT_YOU_SEE_NOTES: readonly { icon: 'eye' | 'chart'; title: string; body: string }[] =
-  [
+/** As notas do "O que você vê": o registro do acesso leva o primeiro nome de quem abre. */
+export function whatYouSeeNotes(
+  myName: string | null,
+): { icon: 'eye' | 'chart'; title: string; body: string }[] {
+  const quem = myName?.trim().split(/\s+/)[0] || 'Você';
+  return [
     {
       icon: 'eye',
       title: 'Cada acesso fica registrado',
-      body: 'O aluno vê "Helena abriu sua ficha · 09:12"',
+      body: `O aluno vê "${quem} abriu sua ficha · 09:12"`,
     },
     {
       icon: 'chart',
@@ -470,6 +558,7 @@ export const WHAT_YOU_SEE_NOTES: readonly { icon: 'eye' | 'chart'; title: string
       body: 'Contam só quem aceitou entrar nas estatísticas, nunca com nome',
     },
   ];
+}
 
 /** As 2 dicas de primeiro uso do Para revisar (Onb-E3). */
 export const REVIEW_TIPS: readonly { title: string; body: string }[] = [

@@ -32,6 +32,7 @@ import {
 } from '@fatia/api-client';
 import { communityKeys, orgKeys } from '@/components/community/query-keys';
 import { InviteQr } from '@/components/org/invite-qr';
+import { SetupStatCards } from '@/components/org/setup-guide';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -378,6 +379,7 @@ function FirstStepsCard({ g, demo }: { g: MyGroup; demo: DemoSummary | null }) {
           Ir para a visão geral
         </Link>
       </section>
+      <SetupStatCards g={g} first={false} />
       <p className="text-sm text-muted-foreground">
         Quer mostrar o Fatia para alguém da equipe?{' '}
         {demo ? (

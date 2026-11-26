@@ -12,6 +12,7 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 vi.mock('@/components/org/org-shell', () => ({ useOrgGroup: () => ctx.group }));
 vi.mock('@/components/layout/app-top-bar', () => ({ useTopBarTitle: vi.fn() }));
 vi.mock('@/components/org/insights-card', () => ({
@@ -24,10 +25,21 @@ vi.mock('@fatia/api-client', async () => {
     panelApi: { overview: vi.fn(), counts: vi.fn(), search: vi.fn() },
     seatsApi: { get: vi.fn() },
     insightsApi: { panels: vi.fn() },
+    setupApi: { ...actual.setupApi, get: vi.fn(), setStep: vi.fn(), setGuide: vi.fn() },
+    reviewApi: { ...actual.reviewApi, queue: vi.fn(), atRisk: vi.fn() },
+    demoApi: { ...actual.demoApi, get: vi.fn(), create: vi.fn() },
   };
 });
 
-import { insightsApi, panelApi, seatsApi } from '@fatia/api-client';
+import {
+  demoApi,
+  insightsApi,
+  panelApi,
+  reviewApi,
+  seatsApi,
+  setupApi,
+  type CommunitySetup,
+} from '@fatia/api-client';
 import OrgOverviewPage from '../page';
 import { SidePanelProvider, useSidePanel } from '@/components/org/side-panel';
 import { useEffect } from 'react';
@@ -80,11 +92,111 @@ const visao = (p: Partial<PanelOverview> = {}): PanelOverview => ({
 
 function abrir(g: MyGroup, v: PanelOverview = visao(), behavior = false) {
   ctx.group = g;
+  vi.mocked(setupApi.get).mockResolvedValue(guia({ visible: false }));
   vi.mocked(panelApi.overview).mockResolvedValue(v);
   vi.mocked(seatsApi.get).mockResolvedValue(assentos());
   vi.mocked(insightsApi.panels).mockResolvedValue({ retention: true, behavior });
   return renderWithClient(<OrgOverviewPage />);
 }
+
+const guia = (p: Partial<CommunitySetup> = {}): CommunitySetup => ({
+  kind: 'GYM',
+  items: [
+    { key: 'CREATE', done: true, auto: true },
+    { key: 'BRAND', done: true, auto: true },
+    { key: 'CATEGORIES', done: true, auto: false },
+    { key: 'TEAM', done: false, auto: false },
+    { key: 'MEMBERS', done: false, auto: false },
+    { key: 'CHALLENGE', done: false, auto: false },
+    { key: 'PLAN', done: false, auto: false },
+    { key: 'EQUIPMENT', done: false, auto: false },
+    { key: 'ACCESS', done: false, auto: false },
+  ],
+  done: 3,
+  total: 9,
+  complete: false,
+  visible: true,
+  brandPending: false,
+  ...p,
+});
+
+describe('primeiros passos do dono no Início (#372, Onb-Criador-Web)', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  function abrirGuia(setup: CommunitySetup) {
+    ctx.group = grupo({ createdAt: new Date().toISOString() });
+    vi.mocked(setupApi.get).mockResolvedValue(setup);
+    vi.mocked(panelApi.overview).mockResolvedValue(
+      visao({
+        members: { active: 0, joinedLast30Days: 0 },
+        aggregates: {
+          active7d: { value: null, percent: null },
+          notLoggedYet: null,
+          activity: { workouts: [], people: [] },
+        },
+      }),
+    );
+    vi.mocked(reviewApi.queue).mockResolvedValue({ windowDays: 7, items: [] });
+    vi.mocked(reviewApi.atRisk).mockResolvedValue({
+      riskDays: 10,
+      digest: false,
+      canConfigure: true,
+      rows: [],
+    });
+    vi.mocked(demoApi.get).mockResolvedValue({ demo: null, canCreate: true } as never);
+    return renderWithClient(<OrgOverviewPage />);
+  }
+
+  it('o guia toma o Início: n/9, riscados, o próximo em destaque e os 4 números vazios', async () => {
+    abrirGuia(guia());
+    expect(
+      await screen.findByRole('heading', { name: 'Vamos deixar a Academia Demo pronta' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Comunidade criada hoje')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Passos feitos' })).toHaveAttribute(
+      'aria-valuenow',
+      '3',
+    );
+    expect(screen.getByText('Academia · fat.ia.br/academia-demo')).toBeInTheDocument();
+    // O próximo (equipe) é o "Fazer" cheio e leva à tela da equipe.
+    expect(screen.getByRole('link', { name: 'Fazer: Convidar a equipe' })).toHaveAttribute(
+      'href',
+      '/org/g1/team',
+    );
+    expect(screen.getByRole('link', { name: 'Fazer: Primeiro desafio' })).toHaveAttribute(
+      'href',
+      '/org/g1/challenges/first',
+    );
+    // Categorias foi marcada à mão: dá para desfazer.
+    expect(
+      screen.getByRole('button', { name: 'Desfazer: Categorias obrigatórias' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('aparece com 5 membros')).toBeInTheDocument();
+    expect(screen.getByText('quem sumir aparece aqui')).toBeInTheDocument();
+    expect(screen.getByText(/menu do seu perfil → Repetir o guia/)).toBeInTheDocument();
+    expect(screen.queryByText('Membros ativos')).toBeNull();
+  });
+
+  it('marcar no círculo e esconder o guia vão para a API', async () => {
+    abrirGuia(guia());
+    vi.mocked(setupApi.setStep).mockResolvedValue(guia({ done: 4 }));
+    vi.mocked(setupApi.setGuide).mockResolvedValue(guia({ visible: false }));
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: 'Marcar "Equipamentos" como feito' }),
+    );
+    expect(setupApi.setStep).toHaveBeenCalledWith('g1', 'EQUIPMENT', true);
+    await userEvent.click(screen.getByRole('button', { name: 'Esconder o guia' }));
+    expect(setupApi.setGuide).toHaveBeenCalledWith('g1', false);
+    // Guia escondido: volta a visão geral de sempre.
+    expect(await screen.findByText('Membros ativos')).toBeInTheDocument();
+  });
+
+  it('guia escondido ou papel que não é dono: a visão geral de sempre', async () => {
+    abrir(grupo({ role: 'ADMIN' }));
+    expect(await screen.findByText('Membros ativos')).toBeInTheDocument();
+    expect(setupApi.get).not.toHaveBeenCalled();
+  });
+});
 
 describe('painel › visão geral (Pn-01, #398)', () => {
   afterEach(() => {

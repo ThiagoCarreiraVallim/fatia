@@ -33,6 +33,8 @@ export const orgKeys = {
   demo: ['community', 'demo'] as const,
   /** "Primeiros passos" da comunidade de verdade (#412). */
   firstSteps: (groupId: string) => ['community', 'org', groupId, 'first-steps'] as const,
+  /** O guia de primeiros passos do dono (#372). */
+  setup: (groupId: string) => ['community', 'org', groupId, 'setup'] as const,
   group: (groupId: string) => ['community', 'group', groupId] as const,
   members: (groupId: string) => ['community', 'org', groupId, 'members'] as const,
   /** Membros com quem saiu (aba "Saíram", #401): chave própria, sob `members`. */

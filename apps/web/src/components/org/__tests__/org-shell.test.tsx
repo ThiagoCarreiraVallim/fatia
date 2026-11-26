@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@fatia/api-client';
 import { grupo } from '@/app/(org)/org/[groupId]/__tests__/helpers';
 
-const nav = vi.hoisted(() => ({ pathname: '/org/g1/members', push: vi.fn() }));
+const nav = vi.hoisted(() => ({ pathname: '/org/g1/members', push: vi.fn(), replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ groupId: 'g1' }),
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: nav.push }),
+  useRouter: () => ({ push: nav.push, replace: nav.replace }),
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -26,10 +26,29 @@ vi.mock('@fatia/api-client', async () => {
     panelApi: { counts: vi.fn(), search: vi.fn(), overview: vi.fn() },
     usersApi: { me: vi.fn() },
     announcementsApi: { settings: vi.fn(), create: vi.fn() },
+    setupApi: { ...actual.setupApi, get: vi.fn(), setGuide: vi.fn() },
   };
 });
 
-import { announcementsApi, groupsApi, panelApi, usersApi } from '@fatia/api-client';
+import {
+  announcementsApi,
+  groupsApi,
+  panelApi,
+  setupApi,
+  usersApi,
+  type CommunitySetup,
+} from '@fatia/api-client';
+
+const guia = (p: Partial<CommunitySetup> = {}): CommunitySetup => ({
+  kind: 'GYM',
+  items: [],
+  done: 9,
+  total: 9,
+  complete: true,
+  visible: false,
+  brandPending: false,
+  ...p,
+});
 import { OrgShell, useOrgGroup } from '../org-shell';
 
 function Filho() {
@@ -65,6 +84,7 @@ describe('OrgShell', () => {
       pushUsedThisWeek: 0,
       emailAvailable: false,
     });
+    vi.mocked(setupApi.get).mockResolvedValue(guia());
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -178,5 +198,36 @@ describe('OrgShell', () => {
     expect(screen.queryByText('Painel indisponível')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
     expect(await screen.findByText('dentro de Academia Demo')).toBeInTheDocument();
+  });
+
+  it('passos 1 e 2 bloqueiam (#372): sem a marca salva, o painel manda para a Marca', async () => {
+    vi.mocked(groupsApi.get).mockResolvedValue(grupo());
+    vi.mocked(setupApi.get).mockResolvedValue(
+      guia({ complete: false, visible: true, brandPending: true }),
+    );
+    abrir();
+    await vi.waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/community/new/g1'));
+  });
+
+  it('"Repetir o guia" no menu do perfil do dono volta o checklist ao Início', async () => {
+    vi.mocked(groupsApi.get).mockResolvedValue(grupo());
+    vi.mocked(setupApi.setGuide).mockResolvedValue(guia({ visible: true }));
+    abrir();
+    await screen.findByText('dentro de Academia Demo');
+    expect(nav.replace).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Menu do perfil' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Repetir o guia' }));
+    expect(setupApi.setGuide).toHaveBeenCalledWith('g1', true);
+    await vi.waitFor(() => expect(nav.push).toHaveBeenCalledWith('/org/g1'));
+  });
+
+  it('quem não é dono não tem "Repetir o guia" nem pergunta pelo guia', async () => {
+    vi.mocked(groupsApi.get).mockResolvedValue(grupo({ role: 'ADMIN' }));
+    abrir();
+    await screen.findByText('dentro de Academia Demo');
+    await userEvent.click(screen.getByRole('button', { name: 'Menu do perfil' }));
+    expect(await screen.findByRole('menuitem', { name: 'Meu perfil' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Repetir o guia' })).toBeNull();
+    expect(setupApi.get).not.toHaveBeenCalled();
   });
 });
