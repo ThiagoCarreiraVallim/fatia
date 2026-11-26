@@ -1030,7 +1030,7 @@ Sobras da conferência da etapa 6 (branch `fix/chat-etapa6-sobras`, sem migratio
   - web: o logo da Marca não subia sobre a capa; a barra dos passos crescia na coluna e abria um vão; dois "voltar" no celular (na Marca e no "O que você vê"); o QR do cartaz estourava a moldura; a grade do guia vazava à direita no 390 e o cartão da demo espremia o texto; a dica do Para revisar desce os botões para baixo do texto no celular;
   - app: os botões do rodapé (Criar, Salvar, Publicar, Entendi, Voltar ao checklist, Aceitar) ocupavam só a largura do texto; `bg-primary-soft` não existe no app (o fundo dos ícones sumia), virou `bg-primary/15`; no convite da equipe sem capa, o logo sumia na cor da capa (a capa agora escurece).
   - Fica como está, de propósito: a dica do Para revisar é um cartão no topo da lista, não um balão sobre a tela escurecida (não tira a pessoa do que está fazendo); a capa do app é a cor lisa (sem `expo-linear-gradient`, como no resto do app).
-- **Verificado:** api 4300+ testes (jest no banco descartável), web 1349, api-client 1401, mobile 724; lint e typecheck de api, web, mobile, api-client, db e design.
+- **Verificado:** api 4477 testes (jest no banco descartável), web 1349, api-client 1401, mobile 724; lint e typecheck de api, web, mobile, api-client, db e design.
 - **Dependências:** "Aberto para não membros" do desafio depende da página pública (#416) e ficou fora; "Plano pronto ou dica" leva à biblioteca de conteúdo (o plano de iniciante pronto não foi semeado, como a #320 já previa); o item da agenda que o Onb-Criador-Web liga (`Pn-39`) é da #397 e não entrou no checklist; as dicas de primeiro uso no app esperam o Para revisar no celular (#414).
 
 ## Etapas seguintes
